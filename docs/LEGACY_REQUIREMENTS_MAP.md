@@ -65,6 +65,51 @@ The old repository is evidence. `PRODUCT.md` owns the permanent V1 product defin
 | provider wrappers/adapters | Replaceable external mechanics | CAP-049 | Preserve as permanent architecture principle |
 | research-first development policy, architecture audits, test suites | Avoid rebuilding commodity tech blindly; validate real behaviour | CAP-050 | Preserve as permanent process |
 
+## Explicit Legacy CAP Coverage Check
+
+The old authoritative capability inventory contained CAP-001 through CAP-036. This table confirms that every one is either preserved as V1 product intent or deliberately retired as an implementation pattern.
+
+| Old CAP | Old capability | V1 coverage |
+| --- | --- | --- |
+| 001 | Owner Voice Authentication | CAP-004 Identity and Presence + CAP-035 Graduated Trust |
+| 002 | Wake Word and Conversational Follow Mode | CAP-002 Wake and Conversational Presence + CAP-003 Audio Robustness |
+| 003 | Speech-to-Text | CAP-001 Natural Voice Conversation / provider mechanics researched in Step 1-2 |
+| 004 | Speech Output, Barge-In, Spoken Response Boundary | CAP-001, CAP-003, CAP-005 |
+| 005 | Generic Conversational Understanding | CAP-006 Conversation Intelligence |
+| 006 | Conversation Continuity and Context Guardian | Behaviour preserved in CAP-006/CAP-007; old separate ownership architecture rejected |
+| 007 | Deterministic Brain Governance and Decision Handling | Product intent split into CAP-006 reasoning + CAP-034/CAP-036 authority/execution; no giant Brain requirement |
+| 008 | Universal GPT Composer and Response Contract | Behaviour preserved by CAP-005/CAP-006/CAP-017; separate Composer architecture is not mandatory |
+| 009 | Working and Session Memory | CAP-008 Live Session Context |
+| 010 | Confirmed Local Memory V1 | CAP-009 Long-Term Personal Memory + CAP-034 authority |
+| 011 | Generic Memory-Capture Shadow Observation | Memory-write safety/evaluation preserved in CAP-009/CAP-050; shadow component itself not mandatory |
+| 012 | Episodic and Semantic Retrieval Context | CAP-010/CAP-011 |
+| 013 | Live Semantic Memory Write Authority | CAP-009/CAP-011 with future governed write policy; no unrestricted write authority |
+| 014 | Generic Capability Planning, Policy, Guard, Bridge, Result Envelope | CAP-032 Generic Capability Runtime + CAP-034/CAP-036 |
+| 015 | Approved Local-System Safe Reads | CAP-021/CAP-022 |
+| 016 | Temporal Activity Recall | CAP-008/CAP-021 |
+| 017 | Notes Read and Note Lifecycle | CAP-027 Notes |
+| 018 | Knowledge Source Router V1 | CAP-014 Knowledge and Source Routing |
+| 019 | Governed Local Project Document Retrieval | CAP-018 Local Project and Document Intelligence |
+| 020 | Governed External Current-Information Retrieval | CAP-015 Current Information and Deep Research |
+| 021 | Trusted Domain Knowledge Sources | CAP-016 Trusted Domain Knowledge |
+| 022 | Evidence Verification and Fact-Checking | CAP-017 Fact Checking and Truthfulness |
+| 023 | Source Truthfulness Guard V1 | CAP-017 + permanent truthfulness contract |
+| 024 | Phase, Policy, Approval, and Execution Guarding | CAP-034/CAP-035/CAP-036; old Phase bureaucracy not preserved |
+| 025 | Passive Runtime Observability | CAP-037 Runtime Observability |
+| 026 | World Snapshot and Aware-but-Quiet Context | CAP-019/CAP-020 |
+| 027 | Runtime Health Reporting and Diagnostics | CAP-038 Health and Diagnostics |
+| 028 | Skill Discovery and Capability Registry | CAP-032/CAP-033 |
+| 029 | Approval-Gated Skill Staging and Lifecycle | CAP-033/CAP-045 |
+| 030 | Controlled Manual Sandbox Repair | CAP-046 Self-Diagnostics and Repair |
+| 031 | Autonomous or Normal Live Repair | Governed goal represented by CAP-046/CAP-047; unrestricted old form explicitly rejected |
+| 032 | Local System, Application, Device, and File Actions | CAP-023/CAP-024/CAP-026 and later action steps |
+| 033 | JARVIS Web/HUD Interface | CAP-039 HUD and Visual Workspace |
+| 034 | Scheduling, Proactive Monitoring, and Background Autonomy | CAP-028/CAP-040/CAP-041 |
+| 035 | Repository Validation and Development Operations | CAP-031/CAP-050 |
+| 036 | Legacy Autonomous Development Agents | **RETIRED implementation.** Useful intent is CAP-044 through CAP-047 under explicit governance. |
+
+This coverage check means there is no known old authoritative capability with no V1 destination.
+
 ## Concrete Old Features/Experiments Not To Forget
 
 The old repository also contained or tested concrete examples that should remain represented by the broader V1 capabilities even if they are not implemented as dedicated modules:
@@ -95,6 +140,20 @@ The old repository also contained or tested concrete examples that should remain
 - issues/alerts and live communications UI;
 - project/repository validation and anti-hardcoding checks.
 
+## Old Strategic Outcomes Preserved
+
+The old strategic roadmap targeted more than isolated features. V1 explicitly preserves these outcomes:
+
+- source-aware knowledge orchestration rather than storing all world knowledge locally;
+- perception from local/external evidence;
+- approved personal/project memory with correction and forgetting;
+- reliable governed action;
+- a useful daily assistant;
+- multi-capability orchestration without a second decision authority;
+- bounded/governed agents where they provide real value;
+- governed learning and improvement;
+- a final Personal Intelligence Runtime that remains trustworthy, private, source-aware, reversible, and user-governed.
+
 ## Old Lessons That Become V1 Rules
 
 1. Do not build custom infrastructure before researching strong current alternatives.
@@ -114,6 +173,9 @@ The old repository also contained or tested concrete examples that should remain
 15. Do not embed normal development/repair machinery into ordinary runtime startup.
 16. Do not recreate giant control-document hierarchies; Git and small authoritative docs are enough.
 17. Do not preserve dead implementations merely because they were expensive to build.
+18. Introduce a common capability execution boundary before broad action expansion so each new capability does not create its own router/policy/result architecture.
+19. Separate read, draft/proposal, and commit/write authority for external or persistent actions.
+20. Treat data retention/privacy as product behaviour, not an afterthought.
 
 ## Explicit Non-Migrations
 
