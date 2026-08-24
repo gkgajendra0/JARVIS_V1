@@ -8,11 +8,32 @@ Step 0 repository bootstrap is complete at baseline commit:
 
 `c626d863b5be7821da467175a0c466fdd90ca185` — `Bootstrap clean JARVIS V1 foundation`
 
+## Foundation Reconciliation Status
+
+**COMPLETE — READY FOR STEP 1 TECHNOLOGY RESEARCH**
+
+Before beginning implementation, JARVIS V1 has now been reconciled against the old JARVIS repository's authoritative capability inventory, strategic roadmap, runtime architecture, tests, issue/failure evidence, memory/context systems, capability/authority work, world-awareness work, HUD, diagnostics, skill/evolution/repair work, and relevant historical experiments.
+
+The permanent V1 product catalogue has a destination for every old authoritative CAP-001 through CAP-036. Old CAP-036 autonomous development agents are deliberately retired as an implementation pattern while their useful self-diagnosis/self-improvement goal is preserved under governed future capabilities.
+
+The reconciliation also established:
+
+- a dependency-correct roadmap rather than a direct copy of the old build order;
+- a minimal common capability-runtime foundation before broad safe-read/action expansion;
+- permanent truthfulness and semantic-fidelity requirements;
+- graduated trust and proportional action-risk expectations;
+- explicit privacy/data-lifecycle principles;
+- provider/model/framework replacement boundaries;
+- a final product definition of JARVIS as a coherent Personal Intelligence Runtime;
+- preservation of old product intent without preserving old documentation or architecture sprawl.
+
+No further broad old-repository audit is required before Step 1. When a later subsystem becomes active, only the old evidence relevant to that subsystem should be revisited.
+
 ## Current Stage
 
-**REQUIREMENTS / PLANNING**
+**RESEARCH READY — IMPLEMENTATION NOT AUTHORIZED**
 
-Implementation is **not started** and is not authorized by this document update.
+Implementation is **not started** and is not authorized by this documentation reconciliation.
 
 Step lifecycle:
 
@@ -301,6 +322,6 @@ Step 2 begins only after Step 1 is accepted. Step 2 owns wake word, conversation
 
 ## Immediate Next Action
 
-**Documentation/planning checkpoint first.**
+**Perform the bounded Step-1 technology research and verification.**
 
-After this planning checkpoint is accepted, perform the bounded Step-1 technology verification. Do not implement Step 1 before that research and architecture review are complete.
+Do not implement Step 1 before the research output, technology decision, and architecture review are complete.
