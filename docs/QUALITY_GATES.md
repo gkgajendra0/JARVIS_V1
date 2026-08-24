@@ -10,6 +10,7 @@ A step is not `DONE` merely because code exists or unit tests pass.
 - Explicit non-scope remains unimplemented.
 - No unrelated technology or future-capability detour has been smuggled in.
 - No old-JARVIS runtime dependency has been introduced.
+- Future capability ideas are recorded without automatically replacing the current release.
 
 ## 2. Ownership and Architecture Gate
 
@@ -18,6 +19,8 @@ A step is not `DONE` merely because code exists or unit tests pass.
 - Provider-specific SDK types do not leak into core domain/state without a deliberate accepted reason.
 - New external mechanics have a replacement boundary where practical.
 - No giant composition module or broad hidden global state has been introduced.
+- Development/repair tooling is not accidentally initialized as normal runtime authority.
+- Multiple user-facing capabilities reuse the accepted common execution/authority boundary rather than inventing parallel routers and result contracts.
 - `CURRENT_ARCHITECTURE.md` reflects only accepted running architecture.
 
 ## 3. Automated Test Gate
@@ -29,27 +32,90 @@ As appropriate to the slice:
 - failure/timeout/malformed-provider paths are tested;
 - regression tests protect previously accepted behaviour;
 - import/startup safety remains valid;
-- tests prove unauthorized execution cannot occur where authority is involved.
+- tests prove unauthorized execution cannot occur where authority is involved;
+- important legacy failure scenarios relevant to the slice are represented where still applicable.
 
-## 4. Truthfulness Gate
+## 4. Truthfulness and Semantic Fidelity Gate
 
 - JARVIS never reports completion when execution did not complete.
 - Failure, partial completion, unavailable providers, stale information, and unverified results are represented truthfully.
 - Fallback behavior preserves the original user intent instead of answering a nearby question.
 - Current/fresh claims have source/freshness evidence when the product slice requires it.
+- A source/router/provider classification cannot become a false spoken claim merely because the requested source/capability was unavailable.
+- Read-only evidence is not described as though a write/action occurred.
 
-## 5. Authority and Safety Gate
+## 5. Authority and Risk Gate
 
-For any slice with reads/actions:
+The exact implementation is researched in Step 3, but all future capability work must preserve a proportional-risk model.
 
-- low-risk reads remain bounded;
-- writes/external/destructive actions use the appropriate permission/approval level;
-- approval is bound to the materially relevant action and parameters;
+### Low-risk read
+
+Examples: bounded system status, approved file metadata, trusted-source retrieval.
+
+Expected behaviour:
+
+- bounded target/resource scope;
+- policy permission;
+- usually no repetitive per-turn confirmation when the user has clearly requested the read and the resource class is approved;
+- truthful failure if the target/provider is unavailable.
+
+### Reversible local action
+
+Examples: open an approved application, create a note/reminder, adjust an approved setting.
+
+Expected behaviour:
+
+- clear user intent;
+- bounded adapter rather than arbitrary shell authority;
+- confirmation when ambiguity or meaningful side effects warrant it;
+- undo/rollback where technically practical.
+
+### Persistent write or external communication
+
+Examples: send email, modify calendar, edit/move files, submit browser forms.
+
+Expected behaviour:
+
+- separate read/draft/proposal from commit/send/write authority;
+- explicit approval bound to the materially relevant target/content/parameters;
+- preview/draft-before-commit where practical;
+- stronger confirmation when rollback is unavailable.
+
+### Destructive, financial, security-sensitive, or self-modifying action
+
+Examples: destructive deletion, unrestricted shell/installation/security changes, spending/financial commitment, credential-sensitive changes, self-modification.
+
+Expected behaviour:
+
+- separately designed future governance;
+- exact-action binding;
+- strong step-up trust where appropriate;
+- backup/dry-run/rollback when applicable;
+- remain blocked if the required safety/authority design does not yet exist.
+
+Universal authority rules:
+
 - capabilities cannot self-authorize;
-- UI/model/provider cannot bypass JARVIS authority;
+- model/provider/UI cannot bypass JARVIS authority;
+- approval-like natural-language text cannot silently activate/install a capability;
+- identity evidence is not itself execution permission;
+- approval for one materially specific action cannot be reused for a different action;
 - secrets and sensitive payloads are not unnecessarily logged.
 
-## 6. Resilience Gate
+## 6. Privacy and Data Lifecycle Gate
+
+When a slice touches conversation history, memory, files, email, calendar, provider data, observability, identity, or other personal information:
+
+- collect/persist only data required for the accepted behaviour;
+- distinguish temporary session state from durable storage;
+- raw audio/full provider payloads/full transcripts are not retained by default without a concrete product reason;
+- durable personal memory has a correction/removal path;
+- secrets/tokens do not enter normal logs or model-visible context unnecessarily;
+- observability stores operational evidence rather than becoming hidden surveillance;
+- provider-side retention limitations are understood and not misrepresented as JARVIS-owned deletion guarantees;
+- tests avoid embedding real personal secrets or credentials.
+
+## 7. Resilience Gate
 
 When applicable:
 
@@ -57,9 +123,10 @@ When applicable:
 - resources are cleaned up on shutdown/cancellation;
 - fallback/degraded behavior is explicit;
 - recovery does not leave the runtime stuck in an invalid state;
-- rollback/disable path exists for newly introduced capability authority.
+- rollback/disable path exists for newly introduced capability authority;
+- local/offline fallback is not allowed to weaken trust/permission/truthfulness boundaries merely to remain available.
 
-## 7. Performance Gate
+## 8. Performance Gate
 
 Each active step defines relevant measurable thresholds before implementation when performance matters.
 
@@ -71,17 +138,20 @@ Possible measures include:
 - memory retrieval latency;
 - CPU/RAM/GPU use;
 - startup time;
-- capability execution latency.
+- capability execution latency;
+- background monitoring resource usage.
 
 Do not optimize against imaginary requirements; measure the user-critical path for the active slice.
 
-## 8. Human Acceptance Gate
+## 9. Human Acceptance Gate
 
 The user must be able to use the feature normally, not only through synthetic tests.
 
 The active plan should define concrete human acceptance scenarios. A major slice remains incomplete until those scenarios are accepted or explicitly waived with a documented reason.
 
-## 9. Documentation Reconciliation Gate
+Human testing should validate the product behaviour, not just that a technical provider responds. Examples: conversational naturalness, correction behavior, no repeated unnecessary approvals, truthful failures, useful latency, and predictable cancellation/rollback.
+
+## 10. Documentation Reconciliation Gate
 
 Before a major step is marked `DONE`:
 
@@ -90,19 +160,34 @@ Before a major step is marked `DONE`:
 - `ROADMAP.md` marks the step correctly;
 - `PRODUCT.md` is updated only if permanent product intent changed;
 - a research record exists if a major technology selection required research;
-- an ADR exists if a major architecture/technology decision needs durable reasoning.
+- an ADR exists if a major architecture/technology decision needs durable reasoning;
+- capability status/step mapping remains internally consistent.
 
 Do not create duplicate final/historical copies. Git history is the archive.
 
-## 10. Cleanup Gate
+## 11. Cleanup Gate
 
 - rejected replacement implementations are removed when safe;
 - dead scaffolding is not retained just in case;
 - temporary debug code/data is removed or clearly excluded;
 - abandoned experiments do not remain on the normal runtime path;
-- no unrelated generated artifacts are committed.
+- no unrelated generated artifacts are committed;
+- compatibility paths are retained only when they still have an explicit product/rollback purpose.
 
-## 11. Git Gate
+## 12. Final Goal Coherence Gate
+
+A later step must not optimize its own feature while damaging the final Personal Intelligence Runtime.
+
+Before accepting major architecture, ask:
+
+- Does this preserve one coherent JARVIS rather than introduce a second brain/state owner?
+- Does it strengthen or preserve replaceability?
+- Does it compose with memory, truthfulness, authority, observability, and capability boundaries?
+- Can the user still understand what happened and why?
+- Will this enable future daily-assistant workflows without forcing parallel architecture?
+- Does it keep the user as the final authority over consequential actions and self-modification?
+
+## 13. Git Gate
 
 A coherent accepted product slice should end in a clean, reviewable Git checkpoint.
 
