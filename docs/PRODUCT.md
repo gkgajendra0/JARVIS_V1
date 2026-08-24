@@ -63,6 +63,25 @@ JARVIS retains authority over:
 - durable audit state;
 - self-modification authority.
 
+## Privacy and Data Lifecycle Principles
+
+Personal intelligence is only useful if the user can understand and control what is retained.
+
+Permanent rules:
+
+1. **Minimize by default.** Do not persist raw audio, provider payloads, full transcripts, secrets, or sensitive content merely because they are available.
+2. **Separate session context from durable memory.** Conversation state may be short-lived without becoming long-term personal memory.
+3. **Durable memory needs provenance.** Persisted personal/project facts should retain enough source/time/confidence information to support correction and supersession.
+4. **Correction and forgetting are first-class.** The user must be able to correct, replace, or remove durable personal memory.
+5. **Transient emotion stays transient.** Mood/emotional interpretations may shape the current interaction but should not become permanent identity labels by default.
+6. **Provider data is not automatically JARVIS memory.** External operational history/caches do not become canonical personal memory merely because a provider retains them during a session.
+7. **Sensitive capability access is bounded.** File, email, calendar, device, browser, credential-adjacent, and system access should request only what the active operation requires.
+8. **Audit without surveillance.** Observability should capture state transitions, decisions, result status, and latency while avoiding unnecessary content capture.
+9. **Secrets are never normal model context.** Credentials/tokens should remain in dedicated secret/config boundaries and should not be logged or inserted into prompts unless a provider protocol strictly requires the credential outside model-visible content.
+10. **Deletion means deletion from JARVIS-owned stores.** Where provider-side retention cannot be controlled by JARVIS, that limitation must be understood rather than falsely claiming complete deletion.
+
+Specific retention/storage technology is selected when the relevant memory/knowledge/observability step becomes active.
+
 ## Architectural Invariants
 
 1. One authoritative owner per responsibility.
@@ -80,6 +99,8 @@ JARVIS retains authority over:
 13. Build only what the current product slice needs.
 14. Future architecture is never represented as current architecture.
 15. Replaceable providers must have a clear replacement boundary.
+16. Development/repair tooling is not automatically part of normal user-facing runtime authority.
+17. A shared capability boundary should exist before multiple action families expand, so notes/apps/browser/email/etc. do not each create separate execution architectures.
 
 ## Old JARVIS Policy
 
@@ -153,7 +174,7 @@ Presence here means **planned product intent**, not implementation authorization
 
 | ID | Capability | Purpose | Step | Status |
 | --- | --- | --- | ---: | --- |
-| CAP-032 | Generic Capability Runtime | Discover/select/validate/execute capabilities through one common boundary. | 16 | PLANNED |
+| CAP-032 | Generic Capability Runtime | Discover/select/validate/execute capabilities through one common boundary. | 7 | PLANNED |
 | CAP-033 | Extensible Skills and Plugins | Add/register/enable/disable/replace integrations without rebuilding core JARVIS. | 16 | PLANNED |
 | CAP-034 | Authority, Permissions, and Consent | Decide whether reads/writes/external/destructive actions are permitted. | 3 | PLANNED |
 | CAP-035 | Graduated Trust | Scale identity/approval friction with consequence. | 3 | PLANNED |
@@ -182,6 +203,28 @@ Presence here means **planned product intent**, not implementation authorization
 | CAP-048 | Local and Offline Survival | Preserve useful functionality during cloud/network/provider failure where practical. | 5 | PLANNED |
 | CAP-049 | Provider and Model Replaceability | Keep speech/model/search/memory/browser providers replaceable. | all | PLANNED |
 | CAP-050 | Development Health and Research-First Evolution | Tests, benchmarks, architecture checks, project health, research-first development. | all | ACTIVE |
+
+## Definition of the Final Goal
+
+JARVIS V1 reaches its intended product goal when it behaves as a **Personal Intelligence Runtime**, not merely when all capability rows have implementations.
+
+The integrated end state should satisfy all of the following:
+
+- conversation feels natural enough for daily voice use rather than command prompting;
+- JARVIS can remain present across sessions while preserving correct context/memory boundaries;
+- personal/project memory is selective, correctable, forgettable, and source-aware;
+- JARVIS automatically chooses suitable knowledge/evidence paths without forcing the user to specify tools/providers;
+- current and high-risk claims receive appropriate freshness/source verification;
+- daily reads/actions across computer, files, apps, devices, browser, notes, calendar, email, and project work feel like parts of one assistant;
+- consequential actions remain proportional, visible, auditable, and user-governed;
+- proactive/background behaviour is useful, configured, cancellable, and quiet when nothing matters;
+- multi-capability workflows use shared authority/execution boundaries rather than creating a second autonomous brain;
+- cloud/local/provider failures degrade truthfully and recover without corrupting canonical JARVIS state;
+- providers/models/frameworks remain replaceable as the ecosystem changes;
+- JARVIS can diagnose and eventually improve itself only through explicit, reversible, evidence-backed governance;
+- the user can understand what JARVIS knows, what it inferred, what it did, what failed, and what authority it currently has.
+
+This definition is intentionally product-level. Exact technology should evolve over time while these behavioural outcomes remain stable.
 
 ## Documentation Authority
 
