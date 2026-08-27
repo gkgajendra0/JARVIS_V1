@@ -93,6 +93,7 @@ def create_voice_session(
         ),
         vad=None,
         turn_handling=TurnHandlingOptions(
+            turn_detection=None,
             interruption={"enabled": True},
             preemptive_generation={"enabled": False},
         ),
