@@ -90,6 +90,7 @@ def create_voice_session(
             model=config.realtime_model,
             voice=config.realtime_voice,
             api_key=api_key,
+            input_audio_noise_reduction="far_field",
         ),
         vad=None,
         turn_handling=TurnHandlingOptions(
