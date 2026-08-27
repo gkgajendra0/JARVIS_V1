@@ -197,6 +197,7 @@ The normal sequence is:
 Planning
 -> Research when required
 -> Architecture decision
+-> Human approval
 -> Implementation
 -> Automated validation
 -> Human validation
