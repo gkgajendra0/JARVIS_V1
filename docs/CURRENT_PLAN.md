@@ -10,7 +10,7 @@ Step 0 repository bootstrap is complete at baseline commit:
 
 ## Foundation Reconciliation Status
 
-**COMPLETE — READY FOR STEP 1 TECHNOLOGY RESEARCH**
+**COMPLETE — STEP 1 TECHNOLOGY RESEARCH ACCEPTED; READY FOR ARCHITECTURE DESIGN**
 
 Before beginning implementation, JARVIS V1 has now been reconciled against the old JARVIS repository's authoritative capability inventory, strategic roadmap, runtime architecture, tests, issue/failure evidence, memory/context systems, capability/authority work, world-awareness work, HUD, diagnostics, skill/evolution/repair work, and relevant historical experiments.
 
@@ -31,9 +31,9 @@ No further broad old-repository audit is required before Step 1. When a later su
 
 ## Current Stage
 
-**RESEARCH READY — IMPLEMENTATION NOT AUTHORIZED**
+**ARCHITECTURE READY — IMPLEMENTATION NOT AUTHORIZED**
 
-Implementation is **not started** and is not authorized by this documentation reconciliation.
+Implementation is **not started** and remains unauthorized until the accepted Step-1 technology direction is converted into a reviewed architecture and receives explicit human approval.
 
 Step lifecycle:
 
@@ -193,13 +193,24 @@ Do not reopen unrelated old memory, capability, repair, HUD, or autonomy code du
 7. Do not repeatedly authenticate harmless conversation.
 8. Do not let technology experiments expand Step-1 scope.
 
-## Technology Selection Status
+## Accepted Technology Direction
 
-No framework, provider, model, SDK, or integration approach is selected for Step 1.
+Paper research and human review selected the initial Step-1 direction:
 
-Research current credible technologies capable of satisfying the Step-1 requirements. Compare them objectively against JARVIS requirements and relevant old-JARVIS evidence. Do not treat any previous technology direction as selected. Technology classification (`KEEP_OURS`, `ADOPT`, `ADAPT`, `WRAP`, `REWRITE`, or `REJECT`) and architecture decisions require human approval before implementation.
+- **ADOPT LiveKit Agents** for local realtime media/session orchestration;
+- **WRAP OpenAI Realtime** as the initial native speech-to-speech provider;
+- keep JARVIS-owned canonical conversation and lifecycle truth outside LiveKit/OpenAI operational state;
+- use the existing OpenAI API account, with API usage as the only required Step-1 operating cost;
+- do not require LiveKit Cloud, hosting, telephony, fallback STT/TTS, wake word, memory, or tools;
+- preserve Gemini Live as the first provider replacement candidate if OpenAI fails multilingual, latency, reliability, cost, or availability requirements;
+- preserve Pipecat and direct-provider orchestration as reconsideration candidates, not simultaneous implementations.
 
-Keep the research bounded to serious candidates relevant to this slice.
+Evidence and reasoning:
+
+- `docs/research/STEP_1_REALTIME_VOICE.md`
+- `docs/decisions/ADR-001_STEP_1_VOICE_STACK.md`
+
+This decision authorizes architecture design only. Implementation still requires explicit human approval after architecture review.
 
 ## Planned Responsibility Boundaries
 
@@ -209,8 +220,8 @@ These are requirements-level boundaries and may be refined after research:
 | --- | --- |
 | Canonical accepted conversation record | JARVIS-owned conversation state; exact design pending architecture |
 | Interaction start/stop/coordination | One JARVIS-owned lifecycle boundary; exact design pending architecture |
-| Realtime media/pipeline mechanics | Selected commodity realtime framework |
-| Online speech-to-speech intelligence | Selected provider adapter |
+| Realtime media/session mechanics | LiveKit Agents, behind a JARVIS-owned replacement boundary |
+| Online speech-to-speech intelligence | OpenAI Realtime initially, behind the provider boundary |
 | Provider operational context | Provider/framework internals |
 | Persistent memory | Not implemented in Step 1 |
 | Tools/actions | Not implemented in Step 1 |
@@ -219,7 +230,9 @@ These are requirements-level boundaries and may be refined after research:
 
 ## Step 1 Research Gate
 
-Before implementation, verify only what is required to build this slice:
+**COMPLETE.** The accepted evidence is recorded in `docs/research/STEP_1_REALTIME_VOICE.md` and the decision in `docs/decisions/ADR-001_STEP_1_VOICE_STACK.md`.
+
+The research covered:
 
 1. current supported realtime conversation APIs;
 2. integration shape, platform compatibility, and replacement boundaries of credible candidates;
@@ -234,7 +247,7 @@ Before implementation, verify only what is required to build this slice:
 11. latency/cost/privacy implications important to Step 1;
 12. fallback/error semantics needed to preserve canonical JARVIS state.
 
-Research output should be stored in `docs/research/` and should end with the explicit technology decision.
+The architecture stage must resolve exact packages, pinned versions, event mappings, and local audio composition without reopening the accepted stack unless a documented blocker triggers reconsideration.
 
 ## Architecture Gate
 
@@ -302,6 +315,8 @@ Step 2 begins only after Step 1 is accepted. Step 2 owns wake word, conversation
 
 ## Immediate Next Action
 
-**Perform the bounded Step-1 technology research and verification.**
+**Design the bounded Step-1 architecture for the accepted LiveKit Agents + OpenAI Realtime direction.**
 
-Do not implement Step 1 before the research output, technology decision, and architecture review are complete.
+The architecture must define JARVIS-owned conversation/lifecycle contracts, LiveKit/OpenAI adapter boundaries, accepted-turn and interruption semantics, local audio composition, failure cleanup, configuration, dependency pins, and test seams.
+
+Stop for explicit human approval after architecture review. Do not implement Step 1 yet.
