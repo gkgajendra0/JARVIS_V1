@@ -31,7 +31,7 @@ No further broad old-repository audit is required before Step 1. When a later su
 
 ## Current Stage
 
-**ARCHITECTURE READY — IMPLEMENTATION NOT AUTHORIZED**
+**ARCHITECTURE REVIEW READY — IMPLEMENTATION NOT AUTHORIZED**
 
 Implementation is **not started** and remains unauthorized until the accepted Step-1 technology direction is converted into a reviewed architecture and receives explicit human approval.
 
@@ -209,8 +209,9 @@ Evidence and reasoning:
 
 - `docs/research/STEP_1_REALTIME_VOICE.md`
 - `docs/decisions/ADR-001_STEP_1_VOICE_STACK.md`
+- `docs/research/STEP_1_ARCHITECTURE_PROPOSAL.md`
 
-This decision authorizes architecture design only. Implementation still requires explicit human approval after architecture review.
+The proposed architecture is now ready for human review. Implementation still requires explicit human approval.
 
 ## Planned Responsibility Boundaries
 
@@ -251,7 +252,9 @@ The architecture stage must resolve exact packages, pinned versions, event mappi
 
 ## Architecture Gate
 
-After research and before implementation, review the proposed Step-1 architecture for:
+**READY FOR HUMAN REVIEW.** The bounded proposal is recorded in `docs/research/STEP_1_ARCHITECTURE_PROPOSAL.md`.
+
+Before approval, review the proposed Step-1 architecture for:
 
 - duplicate ownership;
 - unnecessary abstraction;
@@ -315,8 +318,8 @@ Step 2 begins only after Step 1 is accepted. Step 2 owns wake word, conversation
 
 ## Immediate Next Action
 
-**Design the bounded Step-1 architecture for the accepted LiveKit Agents + OpenAI Realtime direction.**
+**Review and explicitly approve or reject `docs/research/STEP_1_ARCHITECTURE_PROPOSAL.md`.**
 
-The architecture must define JARVIS-owned conversation/lifecycle contracts, LiveKit/OpenAI adapter boundaries, accepted-turn and interruption semantics, local audio composition, failure cleanup, configuration, dependency pins, and test seams.
+The proposal defines JARVIS-owned conversation/lifecycle contracts, the LiveKit/OpenAI integration boundary, accepted-turn and interruption semantics, local audio composition, failure cleanup, configuration, dependency strategy, automated tests, human acceptance, and Ponytail-assisted lean-code review.
 
-Stop for explicit human approval after architecture review. Do not implement Step 1 yet.
+Do not implement Step 1 until explicit human approval is recorded.
