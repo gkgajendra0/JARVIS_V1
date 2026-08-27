@@ -42,6 +42,7 @@ REQUIREMENTS
 -> RESEARCH
 -> TECHNOLOGY DECISION
 -> ARCHITECTURE
+-> HUMAN APPROVAL
 -> IMPLEMENTATION
 -> AUTOMATED VALIDATION
 -> REAL HUMAN USE
@@ -118,28 +119,13 @@ The active conversation should yield to the user's correction and continue on Be
 
 JARVIS must own the accepted conversation record rather than treating a provider/framework's internal operational context as permanent product truth.
 
-The minimum planned domain shape is:
-
-```text
-ConversationTurn
-    role
-    content
-    timestamp
-    interrupted
-
-ConversationSession
-    session_id
-    status
-    turns
-```
-
-Exact fields may change during architecture design, but the ownership principle is fixed: provider/framework operational state is not the canonical JARVIS record.
+The exact data structures, fields, and names will be decided after research during architecture design. The fixed requirement is that provider/framework operational state is not the canonical JARVIS record.
 
 ### Interaction Lifecycle
 
-There should be one clear owner coordinating start/stop of the active interaction and synchronization of finalized accepted turns into `ConversationSession`.
+There must be one clear JARVIS-owned lifecycle boundary coordinating interaction start/stop and synchronization of finalized accepted turns into JARVIS's canonical conversation record.
 
-The current working name is `InteractionService`; final naming is an architecture detail, not a requirement.
+The exact component structure and naming will be decided after research during architecture design.
 
 ### Personality
 
@@ -207,19 +193,13 @@ Do not reopen unrelated old memory, capability, repair, HUD, or autonomy code du
 7. Do not repeatedly authenticate harmless conversation.
 8. Do not let technology experiments expand Step-1 scope.
 
-## Preliminary Technology Direction — Not Yet Re-Verified
+## Technology Selection Status
 
-Previous planning selected the following direction as the starting hypothesis:
+No framework, provider, model, SDK, or integration approach is selected for Step 1.
 
-- **ADAPT Pipecat** for commodity realtime interaction/media pipeline mechanics;
-- **WRAP OpenAI Realtime** for the preferred online speech-to-speech intelligence path;
-- keep JARVIS-owned canonical conversation state outside those providers.
+Research current credible technologies capable of satisfying the Step-1 requirements. Compare them objectively against JARVIS requirements and relevant old-JARVIS evidence. Do not treat any previous technology direction as selected. Technology classification (`KEEP_OURS`, `ADOPT`, `ADAPT`, `WRAP`, `REWRITE`, or `REJECT`) and architecture decisions require human approval before implementation.
 
-A previous target model was `gpt-realtime-2.1`.
-
-This is **not yet the final Step-1 technology decision for implementation**. Before coding, perform a bounded official-doc verification of current APIs, model availability, local audio support, finalized turn events, interruption semantics, transcription access, Windows requirements, dependencies, and language behaviour.
-
-Do not broaden that research into every agent/voice framework unless a genuine blocker appears.
+Keep the research bounded to serious candidates relevant to this slice.
 
 ## Planned Responsibility Boundaries
 
@@ -227,8 +207,8 @@ These are requirements-level boundaries and may be refined after research:
 
 | Responsibility | Planned owner |
 | --- | --- |
-| Canonical accepted conversation record | JARVIS `ConversationSession` |
-| Interaction start/stop/coordination | JARVIS interaction lifecycle service |
+| Canonical accepted conversation record | JARVIS-owned conversation state; exact design pending architecture |
+| Interaction start/stop/coordination | One JARVIS-owned lifecycle boundary; exact design pending architecture |
 | Realtime media/pipeline mechanics | Selected commodity realtime framework |
 | Online speech-to-speech intelligence | Selected provider adapter |
 | Provider operational context | Provider/framework internals |
@@ -242,7 +222,7 @@ These are requirements-level boundaries and may be refined after research:
 Before implementation, verify only what is required to build this slice:
 
 1. current supported realtime conversation APIs;
-2. current Pipecat/OpenAI Realtime integration shape if still selected;
+2. integration shape, platform compatibility, and replacement boundaries of credible candidates;
 3. exact package/import/configuration APIs;
 4. Windows microphone/speaker support and prerequisites;
 5. finalized user-turn events/transcription access;
@@ -276,7 +256,7 @@ Only then should implementation be approved.
 
 Final tests will be designed after architecture, but Step 1 must cover at least:
 
-- `ConversationSession` lifecycle/state contracts;
+- canonical conversation lifecycle/state contracts;
 - accepted user/assistant turn recording;
 - interruption representation where applicable;
 - provider/framework event translation;
