@@ -7,36 +7,29 @@ from pathlib import Path
 
 from jarvis import JarvisApp
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_app_can_be_constructed() -> None:
     app = JarvisApp()
-
     assert app.is_running is False
 
 
 def test_start_transitions_app_to_running() -> None:
     app = JarvisApp()
-
     app.start()
-
     assert app.is_running is True
 
 
 def test_stop_transitions_app_to_stopped() -> None:
     app = JarvisApp()
     app.start()
-
     app.stop()
-
     assert app.is_running is False
 
 
 def test_repeated_start_and_stop_preserve_valid_state() -> None:
     app = JarvisApp()
-
     app.stop()
     app.start()
     app.start()
@@ -54,7 +47,7 @@ def test_package_import_has_no_network_audio_or_model_imports() -> None:
 import builtins
 import sys
 
-blocked = {"socket", "requests", "sounddevice", "pyaudio", "torch", "openai"}
+blocked = {"socket", "requests", "sounddevice", "pyaudio", "torch", "openai", "livekit"}
 original_import = builtins.__import__
 
 def guarded_import(name, *args, **kwargs):
@@ -70,7 +63,6 @@ assert blocked.isdisjoint(sys.modules)
 """
     environment = os.environ.copy()
     environment["PYTHONPATH"] = source_root
-
     result = subprocess.run(
         [sys.executable, "-c", script],
         cwd=ROOT,
@@ -79,5 +71,4 @@ assert blocked.isdisjoint(sys.modules)
         text=True,
         check=False,
     )
-
     assert result.returncode == 0, result.stderr

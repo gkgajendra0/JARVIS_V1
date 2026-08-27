@@ -1,6 +1,6 @@
 # Step 1 Architecture Proposal
 
-**Status:** READY FOR HUMAN REVIEW — IMPLEMENTATION NOT AUTHORIZED  
+**Status:** APPROVED 2026-08-27 — BOUNDED IMPLEMENTATION AUTHORIZED  
 **Date:** 2026-08-27  
 **Technology decision:** `docs/decisions/ADR-001_STEP_1_VOICE_STACK.md`
 
@@ -8,7 +8,7 @@
 
 Define the smallest architecture that can prove JARVIS holds a natural local English/Hindi/Hinglish voice conversation using LiveKit Agents and OpenAI Realtime without recreating old-JARVIS state sprawl.
 
-This is a proposed architecture. `docs/CURRENT_ARCHITECTURE.md` must not change until implementation, automated validation, and human acceptance succeed.
+This architecture was explicitly approved on 2026-08-27. `docs/CURRENT_ARCHITECTURE.md` must not change until implementation, automated validation, and human acceptance succeed.
 
 ## Research Findings That Constrain the Design
 
@@ -361,7 +361,7 @@ AudioManager
 
 Do not introduce interfaces for hypothetical future providers beyond the real LiveKit integration boundary. When Gemini or another provider is actually added, extract the smallest common seam proven by both implementations.
 
-## Implementation Order After Approval
+## Approved Implementation Order
 
 1. Dependency resolution and pins.
 2. Pure conversation domain and tests.
@@ -374,8 +374,8 @@ Do not introduce interfaces for hypothetical future providers beyond the real Li
 9. Local human English/Hindi/Hinglish testing.
 10. Corrections, documentation reconciliation, and acceptance.
 
-## Approval Decision Requested
+## Approval Record
 
-Approve or reject this architecture as a whole before implementation.
+The user explicitly approved this architecture and authorized the bounded Step-1 implementation on 2026-08-27.
 
-Approval authorizes only the bounded Step-1 implementation described here. Any need for extra STT/TTS, persistence, tools, wake word, cloud deployment, UI/HUD, or a second provider must return to architecture review.
+Approval covers only the implementation described here. Any need for extra STT/TTS, persistence, tools, wake word, cloud deployment, UI/HUD, or a second provider must return to architecture review.

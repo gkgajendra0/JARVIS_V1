@@ -10,7 +10,7 @@ Step 0 repository bootstrap is complete at baseline commit:
 
 ## Foundation Reconciliation Status
 
-**COMPLETE — STEP 1 TECHNOLOGY RESEARCH ACCEPTED; READY FOR ARCHITECTURE DESIGN**
+**COMPLETE — STEP 1 ARCHITECTURE APPROVED; IMPLEMENTATION VALIDATED; HUMAN TESTING PENDING**
 
 Before beginning implementation, JARVIS V1 has now been reconciled against the old JARVIS repository's authoritative capability inventory, strategic roadmap, runtime architecture, tests, issue/failure evidence, memory/context systems, capability/authority work, world-awareness work, HUD, diagnostics, skill/evolution/repair work, and relevant historical experiments.
 
@@ -31,9 +31,9 @@ No further broad old-repository audit is required before Step 1. When a later su
 
 ## Current Stage
 
-**ARCHITECTURE REVIEW READY — IMPLEMENTATION NOT AUTHORIZED**
+**IMPLEMENTED — AUTOMATED VALIDATION COMPLETE; REAL HUMAN TESTING REQUIRED**
 
-Implementation is **not started** and remains unauthorized until the accepted Step-1 technology direction is converted into a reviewed architecture and receives explicit human approval.
+The Step-1 architecture was explicitly approved on 2026-08-27. The bounded implementation is now present and has passed automated validation. Step 1 is not complete until real Windows voice testing and human acceptance succeed.
 
 Step lifecycle:
 
@@ -252,9 +252,9 @@ The architecture stage must resolve exact packages, pinned versions, event mappi
 
 ## Architecture Gate
 
-**READY FOR HUMAN REVIEW.** The bounded proposal is recorded in `docs/research/STEP_1_ARCHITECTURE_PROPOSAL.md`.
+**COMPLETE.** The bounded proposal in `docs/research/STEP_1_ARCHITECTURE_PROPOSAL.md` was explicitly approved on 2026-08-27.
 
-Before approval, review the proposed Step-1 architecture for:
+The approved architecture was reviewed for:
 
 - duplicate ownership;
 - unnecessary abstraction;
@@ -266,7 +266,7 @@ Before approval, review the proposed Step-1 architecture for:
 - unnecessary framework stacking;
 - recurrence of old-JARVIS conversation architecture problems.
 
-Only then should implementation be approved.
+Implementation was authorized only within the approved Step-1 boundary.
 
 ## Planned Test Areas
 
@@ -318,8 +318,6 @@ Step 2 begins only after Step 1 is accepted. Step 2 owns wake word, conversation
 
 ## Immediate Next Action
 
-**Review and explicitly approve or reject `docs/research/STEP_1_ARCHITECTURE_PROPOSAL.md`.**
+**Run the documented Step-1 voice acceptance scenarios on the real Windows JARVIS machine.**
 
-The proposal defines JARVIS-owned conversation/lifecycle contracts, the LiveKit/OpenAI integration boundary, accepted-turn and interruption semantics, local audio composition, failure cleanup, configuration, dependency strategy, automated tests, human acceptance, and Ponytail-assisted lean-code review.
-
-Do not implement Step 1 until explicit human approval is recorded.
+Automated validation currently passes 22 tests plus Ruff lint and format checks. Human testing must verify English/Hindi/Hinglish quality, contextual follow-ups, interruption truth, controlled failure handling, and clean microphone/speaker shutdown. Record failures before changing architecture or adding dependencies.

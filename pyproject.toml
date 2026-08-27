@@ -8,10 +8,10 @@ version = "0.1.0"
 description = "Clean application foundation for JARVIS V1."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["livekit-agents[openai]==1.7.1"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10"]
+dev = ["pytest>=8,<10", "ruff==0.16.5"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -23,3 +23,7 @@ where = ["src"]
 addopts = "-q"
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88

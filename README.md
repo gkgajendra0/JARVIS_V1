@@ -2,38 +2,61 @@
 
 JARVIS V1 is a clean implementation of a personal, voice-first JARVIS assistant.
 
-The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARVIS V1 does not import it or depend on it at runtime.
+The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARVIS
+V1 does not import it or depend on it at runtime.
 
-Current active work: **Step 1 — Natural Conversational Core (planning/research stage)**.
+Current active work: **Step 1 — Natural Conversational Core (implementation and
+human-testing stage)**.
 
-## Documentation
+## Setup
 
-Primary planning authorities:
+Python 3.11 or newer is required. In Windows PowerShell:
 
-- [Product definition](docs/PRODUCT.md)
-- [Current plan](docs/CURRENT_PLAN.md)
+```powershell
+winget install LiveKit.LiveKitCLI
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+$env:OPENAI_API_KEY = "your-api-key"
+```
 
-Supporting records:
+The API key must stay local. Do not commit `.env` or paste the key into source code.
+The application reads process environment variables directly; `.env.example` is a
+reference and `.env` is not loaded automatically.
 
-- [Roadmap](docs/ROADMAP.md)
-- [Legacy requirements map](docs/LEGACY_REQUIREMENTS_MAP.md)
-- [Current architecture](docs/CURRENT_ARCHITECTURE.md)
-- [Quality gates](docs/QUALITY_GATES.md)
-- [Research records](docs/research/README.md)
-- [Architecture decisions](docs/decisions/README.md)
-
-## Run
-
-With the package installed, or with `src` on `PYTHONPATH`:
+## Run the Step-0 baseline
 
 ```powershell
 python -m jarvis
 ```
 
-## Test
+## Run Step-1 voice mode
+
+```powershell
+lk agent console src/jarvis/voice/entrypoint.py
+```
+
+The local console uses the computer microphone and speakers. Optional settings are
+documented in `.env.example`. Voice mode fails before session start if
+`OPENAI_API_KEY` is absent.
+
+## Validate
 
 ```powershell
 python -m pytest
+ruff check .
+ruff format --check .
 ```
 
-Implementation beyond the clean Step-0 foundation is intentionally deferred until the active Step-1 planning, research, architecture review, and human approval gates are complete.
+Step 1 is not complete until the documented real Windows English/Hindi/Hinglish,
+interruption, failure, and shutdown tests pass.
+
+## Documentation
+
+- [Product definition](docs/PRODUCT.md)
+- [Current plan](docs/CURRENT_PLAN.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Current architecture](docs/CURRENT_ARCHITECTURE.md)
+- [Quality gates](docs/QUALITY_GATES.md)
+- [Research records](docs/research/README.md)
+- [Architecture decisions](docs/decisions/README.md)
