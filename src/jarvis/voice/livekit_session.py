@@ -15,6 +15,7 @@ from livekit.agents import (
 )
 from livekit.agents.llm import ChatMessage
 from livekit.plugins import openai
+from openai.types.beta.realtime.session import TurnDetection
 
 from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationRole, ConversationSession
@@ -91,6 +92,14 @@ def create_voice_session(
             voice=config.realtime_voice,
             api_key=api_key,
             input_audio_noise_reduction="far_field",
+            turn_detection=TurnDetection(
+                type="server_vad",
+                threshold=0.7,
+                prefix_padding_ms=300,
+                silence_duration_ms=500,
+                create_response=True,
+                interrupt_response=True,
+            ),
         ),
         vad=None,
         turn_handling=TurnHandlingOptions(
