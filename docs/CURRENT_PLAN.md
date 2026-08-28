@@ -340,3 +340,9 @@ configuration in addition to the existing conversation contracts. Human testing 
 focus on false self-interruption, English/Hindi/Hinglish quality, controlled failure,
 and clean microphone/speaker shutdown. Record failures before changing architecture or
 adding dependencies.
+
+The next bounded retest contains only:
+
+1. one long assistant response while the user remains silent, checking for false
+   interruption or restart;
+2. one truthfulness question about JARVIS's currently unavailable capabilities.
