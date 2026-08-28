@@ -172,10 +172,32 @@ def test_gemini_model_uses_provider_specific_configuration(
     )
 
     assert model is sentinel
-    assert captured == {
-        "model": "gemini-test",
-        "voice": "Gacrux",
-        "api_key": "test-google-key",
-        "input_audio_transcription": {},
-        "output_audio_transcription": {},
-    }
+    assert captured["model"] == "gemini-test"
+    assert captured["voice"] == "Gacrux"
+    assert captured["api_key"] == "test-google-key"
+    assert captured["input_audio_transcription"] == {}
+    assert captured["output_audio_transcription"] == {}
+    activity = captured["realtime_input_config"].automatic_activity_detection
+    assert activity.start_of_speech_sensitivity == "START_SENSITIVITY_LOW"
+    assert activity.end_of_speech_sensitivity == "END_SENSITIVITY_LOW"
+    assert activity.prefix_padding_ms == 300
+    assert activity.silence_duration_ms == 800
+
+
+def test_openai_model_uses_stricter_vad_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_model(**kwargs: Any) -> object:
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.setattr(
+        "jarvis.voice.livekit_session.openai.realtime.RealtimeModel", fake_model
+    )
+
+    _create_realtime_model(JarvisConfig(realtime_provider="openai"))
+
+    assert captured["turn_detection"].threshold == 0.8
