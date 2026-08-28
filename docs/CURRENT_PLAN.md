@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**PAPER RESEARCH COMPLETE — TECHNOLOGY DIRECTION AWAITS HUMAN REVIEW; IMPLEMENTATION UNAUTHORIZED**
+**ARCHITECTURE PROPOSED — HUMAN APPROVAL REQUIRED; IMPLEMENTATION UNAUTHORIZED**
 
 Step 1 was human-accepted on 2026-08-28 after automated validation and real Windows
 voice testing. Its accepted running architecture is recorded in
@@ -174,6 +174,8 @@ reconciliation all pass.
 
 ## Immediate Next Action
 
-**Review the recommendation in `docs/research/STEP_2_WAKE_AUDIO.md`. If accepted, design
-the single-microphone wake-to-conversation handoff architecture. Stop before
-implementation until that architecture receives explicit human approval.**
+**Review `docs/research/STEP_2_WAKE_AUDIO.md` and the resolved roomless,
+single-microphone proposal in
+`docs/research/STEP_2_WAKE_AUDIO_ARCHITECTURE.md`. If explicitly approved, record the
+Step-2 decision and begin the bounded implementation. Until then, implementation
+remains unauthorized.**
