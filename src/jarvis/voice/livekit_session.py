@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
+from google.genai import types as google_types
 from livekit.agents import (
     AgentSession,
     CloseEvent,
@@ -47,6 +48,18 @@ def _create_realtime_model(config: JarvisConfig):
             api_key=require_google_api_key(),
             input_audio_transcription={},
             output_audio_transcription={},
+            realtime_input_config=google_types.RealtimeInputConfig(
+                automatic_activity_detection=google_types.AutomaticActivityDetection(
+                    start_of_speech_sensitivity=(
+                        google_types.StartSensitivity.START_SENSITIVITY_LOW
+                    ),
+                    end_of_speech_sensitivity=(
+                        google_types.EndSensitivity.END_SENSITIVITY_LOW
+                    ),
+                    prefix_padding_ms=300,
+                    silence_duration_ms=800,
+                )
+            ),
         )
 
     return openai.realtime.RealtimeModel(
@@ -56,7 +69,7 @@ def _create_realtime_model(config: JarvisConfig):
         input_audio_noise_reduction="far_field",
         turn_detection=TurnDetection(
             type="server_vad",
-            threshold=0.7,
+            threshold=0.8,
             prefix_padding_ms=300,
             silence_duration_ms=500,
             create_response=True,
