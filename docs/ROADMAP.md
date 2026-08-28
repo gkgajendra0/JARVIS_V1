@@ -7,8 +7,8 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 | Step | Product slice | Major capabilities | Status |
 | ---: | --- | --- | --- |
 | 0 | Clean Foundation | Minimal app lifecycle, package structure, config, logging, baseline tests | DONE |
-| 1 | Natural Conversational Core | CAP-001, CAP-005, CAP-006, CAP-007 | ACTIVE - PLANNING |
-| 2 | Wake, Voice Session, and Audio Robustness | CAP-002, CAP-003 | PLANNED |
+| 1 | Natural Conversational Core | CAP-001, CAP-005, CAP-006, CAP-007 | DONE |
+| 2 | Wake, Voice Session, and Audio Robustness | CAP-002, CAP-003 | ACTIVE - RESEARCH |
 | 3 | Identity, Graduated Trust, Authority, and Observability Foundation | CAP-004, CAP-034, CAP-035, CAP-036, CAP-037 | PLANNED |
 | 4 | Live Context and Personal Memory | CAP-008 through CAP-013 | PLANNED |
 | 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | PLANNED |
