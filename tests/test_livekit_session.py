@@ -17,7 +17,9 @@ from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationSession, ConversationStatus
 from jarvis.voice.livekit_session import (
     LiveKitConversationBridge,
+    _create_realtime_model,
     create_voice_session,
+    require_google_api_key,
     require_openai_api_key,
 )
 
@@ -133,3 +135,47 @@ def test_api_key_is_required_before_session_construction(
         require_openai_api_key()
     with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
         create_voice_session(JarvisConfig())
+
+
+def test_gemini_api_key_is_required_only_for_gemini(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+
+    with pytest.raises(RuntimeError, match="GOOGLE_API_KEY"):
+        require_google_api_key()
+    with pytest.raises(RuntimeError, match="GOOGLE_API_KEY"):
+        _create_realtime_model(JarvisConfig(realtime_provider="gemini"))
+
+
+def test_gemini_model_uses_provider_specific_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+    sentinel = object()
+
+    def fake_model(**kwargs: Any) -> object:
+        captured.update(kwargs)
+        return sentinel
+
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-google-key")
+    monkeypatch.setattr(
+        "jarvis.voice.livekit_session.google.realtime.RealtimeModel", fake_model
+    )
+
+    model = _create_realtime_model(
+        JarvisConfig(
+            realtime_provider="gemini",
+            gemini_realtime_model="gemini-test",
+            gemini_realtime_voice="Gacrux",
+        )
+    )
+
+    assert model is sentinel
+    assert captured == {
+        "model": "gemini-test",
+        "voice": "Gacrux",
+        "api_key": "test-google-key",
+        "input_audio_transcription": {},
+        "output_audio_transcription": {},
+    }
