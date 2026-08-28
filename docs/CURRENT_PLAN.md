@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**ARCHITECTURE PROPOSED — HUMAN APPROVAL REQUIRED; IMPLEMENTATION UNAUTHORIZED**
+**IMPLEMENTATION AUTHORIZED — IN PROGRESS**
 
 Step 1 was human-accepted on 2026-08-28 after automated validation and real Windows
 voice testing. Its accepted running architecture is recorded in
@@ -174,8 +174,7 @@ reconciliation all pass.
 
 ## Immediate Next Action
 
-**Review `docs/research/STEP_2_WAKE_AUDIO.md` and the resolved roomless,
-single-microphone proposal in
-`docs/research/STEP_2_WAKE_AUDIO_ARCHITECTURE.md`. If explicitly approved, record the
-Step-2 decision and begin the bounded implementation. Until then, implementation
-remains unauthorized.**
+**Implement the accepted decision in
+`docs/decisions/ADR-002_STEP_2_WAKE_AUDIO_RUNTIME.md`, run automated validation, and
+then stop for the documented real Windows wake/audio acceptance tests. Step 2 remains
+in progress until those tests and documentation reconciliation pass.**

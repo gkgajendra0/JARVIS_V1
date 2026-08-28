@@ -10,6 +10,9 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("JARVIS_GEMINI_REALTIME_MODEL", " gemini-x ")
     monkeypatch.setenv("JARVIS_GEMINI_REALTIME_VOICE", " Charon ")
     monkeypatch.setenv("JARVIS_SHOW_TRANSCRIPT", "off")
+    monkeypatch.setenv("JARVIS_WAKE_MODEL_PATH", " C:\\models\\jarvis.onnx ")
+    monkeypatch.setenv("JARVIS_WAKE_THRESHOLD", "0.72")
+    monkeypatch.setenv("JARVIS_AUDIO_PRE_ROLL_SECONDS", "0.8")
 
     config = JarvisConfig.from_environment()
 
@@ -19,6 +22,9 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.gemini_realtime_model == "gemini-x"
     assert config.gemini_realtime_voice == "Charon"
     assert config.show_transcript is False
+    assert config.wake_model_path == "C:\\models\\jarvis.onnx"
+    assert config.wake_threshold == 0.72
+    assert config.audio_pre_roll_seconds == 0.8
 
 
 def test_invalid_boolean_setting_fails_truthfully(
@@ -33,3 +39,10 @@ def test_invalid_boolean_setting_fails_truthfully(
 def test_invalid_realtime_provider_fails_truthfully() -> None:
     with pytest.raises(ValueError, match="JARVIS_REALTIME_PROVIDER"):
         JarvisConfig(realtime_provider="unknown")
+
+
+def test_invalid_wake_and_buffer_settings_fail_truthfully() -> None:
+    with pytest.raises(ValueError, match="wake_threshold"):
+        JarvisConfig(wake_threshold=0)
+    with pytest.raises(ValueError, match="pre-roll"):
+        JarvisConfig(audio_ring_buffer_seconds=1, audio_pre_roll_seconds=2)

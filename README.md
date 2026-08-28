@@ -6,7 +6,7 @@ The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARV
 V1 does not import it or depend on it at runtime.
 
 Step 1 natural conversation is accepted. Current active work: **Step 2 — Wake, Voice
-Session, and Audio Robustness (research stage)**.
+Session, and Audio Robustness (implementation and Windows acceptance)**.
 
 ## Setup
 
@@ -49,6 +49,25 @@ Optional settings are documented in `.env.example`. Voice mode fails before sess
 start if the selected provider's API key is absent. Provider selection is explicit;
 JARVIS does not silently fall back between OpenAI and Gemini.
 
+## Run the Step-2 wake runtime
+
+Step 2 uses one roomless local microphone/speaker runtime. It requires a trained
+LiveKit-compatible `JARVIS` ONNX classifier; no unverified model is committed.
+
+```powershell
+$env:JARVIS_WAKE_MODEL_PATH = "C:\path\to\jarvis.onnx"
+$env:JARVIS_AUDIO_INPUT_DEVICE = "Voicemeeter Out B1 (VB-Audio Voicemeeter VAIO)"
+$env:JARVIS_AUDIO_OUTPUT_DEVICE = "Voicemeeter Input (VB-Audio Voicemeeter VAIO)"
+$env:JARVIS_REALTIME_PROVIDER = "gemini"
+$env:GOOGLE_API_KEY = "your-google-ai-studio-key"
+jarvis-voice
+```
+
+Use device names from the local PortAudio enumeration. The numeric device indices from
+`lk agent console --list-devices` are console-only and are not Step-2 configuration.
+Idle audio remains local; the selected realtime provider starts only after an accepted
+wake detection. `lk agent console` remains available as a Step-1 diagnostic harness.
+
 ## Validate
 
 ```powershell
@@ -57,8 +76,8 @@ ruff check .
 ruff format --check .
 ```
 
-Step 1 is not complete until the documented real Windows English/Hindi/Hinglish,
-interruption, failure, and shutdown tests pass.
+Step 2 is not complete until the custom wake model and documented real Windows
+wake-tail, TV/background, self-echo, interruption, recovery, and shutdown tests pass.
 
 ## Documentation
 

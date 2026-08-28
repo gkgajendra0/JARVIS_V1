@@ -1,0 +1,269 @@
+"""Roomless Step-2 wake-to-conversation runtime."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import re
+from collections.abc import Callable
+from enum import Enum
+from pathlib import Path
+
+from livekit.agents import (
+    AgentSession,
+    AgentStateChangedEvent,
+    CloseEvent,
+    ConversationItemAddedEvent,
+    UserStateChangedEvent,
+)
+from livekit.agents.llm import ChatMessage
+from livekit.agents.voice.io import PlaybackFinishedEvent
+
+from jarvis.config import JarvisConfig
+from jarvis.logging_config import configure_logging
+from jarvis.voice.agent import JarvisVoiceAgent
+from jarvis.voice.audio import LocalAudioRuntime, SessionAudioInput
+from jarvis.voice.livekit_session import (
+    LiveKitConversationBridge,
+    create_voice_session,
+)
+from jarvis.voice.wakeword import LiveKitWakeDetector, load_livekit_predictor
+
+LOGGER = logging.getLogger(__name__)
+
+SessionFactory = Callable[
+    [JarvisConfig], tuple[AgentSession, LiveKitConversationBridge]
+]
+
+
+class VoiceRuntimeState(str, Enum):
+    STOPPED = "stopped"
+    IDLE = "idle"
+    ACTIVATING = "activating"
+    ACTIVE = "active"
+    RECOVERING = "recovering"
+
+
+_EXIT_INTENTS = frozenset(
+    {
+        "go to sleep",
+        "jarvis go to sleep",
+        "end session",
+        "end the session",
+        "सो जाओ",
+        "जार्विस सो जाओ",
+        "सेशन बंद करो",
+    }
+)
+
+
+def _normalized_intent(text: str) -> str:
+    return " ".join(re.sub(r"[^\w\s]", " ", text.casefold()).split())
+
+
+class VoiceRuntimeController:
+    """Own wake, activation, active-session, recovery, and shutdown truth."""
+
+    def __init__(
+        self,
+        config: JarvisConfig,
+        audio: LocalAudioRuntime,
+        *,
+        session_factory: SessionFactory = create_voice_session,
+    ) -> None:
+        self.config = config
+        self.audio = audio
+        self._session_factory = session_factory
+        self._state = VoiceRuntimeState.STOPPED
+        self._shutdown = asyncio.Event()
+        self._active_end: asyncio.Event | None = None
+        self._timeout_handle: asyncio.TimerHandle | None = None
+
+    @property
+    def state(self) -> VoiceRuntimeState:
+        return self._state
+
+    def request_shutdown(self) -> None:
+        self._shutdown.set()
+        if self._active_end is not None:
+            self._active_end.set()
+
+    def _on_audio_overflow(self) -> None:
+        LOGGER.error("Voice session stopped because its microphone queue overflowed")
+        if self._active_end is not None:
+            self._active_end.set()
+
+    def _cancel_timeout(self) -> None:
+        if self._timeout_handle is not None:
+            self._timeout_handle.cancel()
+            self._timeout_handle = None
+
+    def _arm_timeout(self, seconds: float) -> None:
+        self._cancel_timeout()
+        active_end = self._active_end
+        if active_end is None:
+            return
+        self._timeout_handle = asyncio.get_running_loop().call_later(
+            seconds,
+            active_end.set,
+        )
+
+    async def run(self) -> None:
+        self.audio.set_overflow_handler(self._on_audio_overflow)
+        try:
+            await self.audio.start()
+            self._state = VoiceRuntimeState.IDLE
+            LOGGER.info("JARVIS is idle; local wake detection is active")
+            while not self._shutdown.is_set():
+                detection_task = asyncio.create_task(
+                    self.audio.detector.wait_for_detection()
+                )
+                shutdown_task = asyncio.create_task(self._shutdown.wait())
+                done, pending = await asyncio.wait(
+                    {detection_task, shutdown_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*pending, return_exceptions=True)
+                if shutdown_task in done:
+                    break
+                detection = detection_task.result()
+                LOGGER.info(
+                    "Wake detected: %s (confidence %.3f)",
+                    detection.name,
+                    detection.confidence,
+                )
+                try:
+                    await self._run_one_session()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    self._state = VoiceRuntimeState.RECOVERING
+                    LOGGER.exception("Voice activation failed; returning to local idle")
+                finally:
+                    self._cancel_timeout()
+                    self._active_end = None
+                    if not self._shutdown.is_set():
+                        await self.audio.resume_wake(
+                            cooldown_seconds=self.config.wake_cooldown_seconds
+                        )
+                        self._state = VoiceRuntimeState.IDLE
+                        LOGGER.info("JARVIS returned to local wake detection")
+        finally:
+            self._cancel_timeout()
+            self._state = VoiceRuntimeState.STOPPED
+            await self.audio.aclose()
+
+    async def _run_one_session(self) -> None:
+        output = self.audio.output
+        if output is None:
+            raise RuntimeError("local audio output is not available")
+
+        self._state = VoiceRuntimeState.ACTIVATING
+        active_end = asyncio.Event()
+        self._active_end = active_end
+        session, bridge = self._session_factory(self.config)
+        session_input = SessionAudioInput()
+        session.input.audio = session_input
+        session.output.audio = output
+        has_user_turn = False
+
+        def on_user_state(event: UserStateChangedEvent) -> None:
+            if event.new_state == "speaking":
+                self._arm_timeout(self.config.max_utterance_seconds)
+            elif event.new_state == "listening":
+                timeout = (
+                    self.config.follow_up_timeout_seconds
+                    if has_user_turn
+                    else self.config.initial_request_timeout_seconds
+                )
+                self._arm_timeout(timeout)
+
+        def on_agent_state(event: AgentStateChangedEvent) -> None:
+            if has_user_turn and event.new_state in {"thinking", "speaking"}:
+                self._cancel_timeout()
+
+        def on_conversation_item(event: ConversationItemAddedEvent) -> None:
+            nonlocal has_user_turn
+            item = event.item
+            if not isinstance(item, ChatMessage) or item.role != "user":
+                return
+            text = item.text_content.strip()
+            if not text:
+                return
+            has_user_turn = True
+            self._cancel_timeout()
+            if _normalized_intent(text) in _EXIT_INTENTS:
+                LOGGER.info("Explicit voice-session exit accepted")
+                active_end.set()
+
+        def on_playback_finished(event: PlaybackFinishedEvent) -> None:
+            del event
+            if self._state is VoiceRuntimeState.ACTIVE:
+                self._arm_timeout(self.config.follow_up_timeout_seconds)
+
+        def on_close(event: CloseEvent) -> None:
+            del event
+            active_end.set()
+
+        session.on("user_state_changed", on_user_state)
+        session.on("agent_state_changed", on_agent_state)
+        session.on("conversation_item_added", on_conversation_item)
+        session.on("close", on_close)
+        output.on("playback_finished", on_playback_finished)
+
+        bridge.conversation.start()
+        self.audio.activate_session(session_input)
+        self._arm_timeout(self.config.initial_request_timeout_seconds)
+        try:
+            try:
+                await session.start(agent=JarvisVoiceAgent())
+            except Exception:
+                bridge.conversation.fail()
+                raise
+            self._state = VoiceRuntimeState.ACTIVE
+            LOGGER.info("JARVIS realtime conversation is active")
+            await active_end.wait()
+        finally:
+            self._cancel_timeout()
+            output.off("playback_finished", on_playback_finished)
+            self.audio.deactivate_session()
+            await session.aclose()
+
+
+def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
+    if config.wake_model_path is None:
+        raise RuntimeError("JARVIS_WAKE_MODEL_PATH is required for Step-2 wake mode")
+    predictor = load_livekit_predictor(Path(config.wake_model_path))
+    detector = LiveKitWakeDetector(
+        predictor,
+        threshold=config.wake_threshold,
+        debounce_seconds=config.wake_debounce_seconds,
+    )
+    audio = LocalAudioRuntime(
+        detector,
+        input_device_name=config.audio_input_device,
+        output_device_name=config.audio_output_device,
+        pre_roll_seconds=config.audio_pre_roll_seconds,
+        ring_buffer_seconds=config.audio_ring_buffer_seconds,
+    )
+    return VoiceRuntimeController(config, audio)
+
+
+async def _run_from_environment() -> None:
+    config = JarvisConfig.from_environment()
+    configure_logging(config.log_level)
+    runtime = build_voice_runtime(config)
+    await runtime.run()
+
+
+def main() -> None:
+    try:
+        asyncio.run(_run_from_environment())
+    except KeyboardInterrupt:
+        LOGGER.info("JARVIS voice runtime stopped")
+
+
+if __name__ == "__main__":
+    main()

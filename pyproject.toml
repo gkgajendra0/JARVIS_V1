@@ -8,10 +8,17 @@ version = "0.1.0"
 description = "Clean application foundation for JARVIS V1."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["livekit-agents[google,openai]==1.7.1"]
+dependencies = [
+    "livekit==1.1.15",
+    "livekit-agents[google,openai]==1.7.1",
+    "livekit-wakeword==0.2.1",
+]
+
+[project.scripts]
+jarvis-voice = "jarvis.voice.runtime:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10", "ruff==0.16.5"]
+dev = ["pytest>=8,<10", "pytest-asyncio>=0.23,<2", "ruff==0.16.5"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
