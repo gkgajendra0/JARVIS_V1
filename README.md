@@ -36,9 +36,18 @@ python -m jarvis
 lk agent console src/jarvis/voice/entrypoint.py
 ```
 
-The local console uses the computer microphone and speakers. Optional settings are
-documented in `.env.example`. Voice mode fails before session start if
-`OPENAI_API_KEY` is absent.
+The local console uses the computer microphone and speakers. OpenAI remains the
+default provider. For cost-optimized development with Gemini Live, configure:
+
+```powershell
+$env:JARVIS_REALTIME_PROVIDER = "gemini"
+$env:GOOGLE_API_KEY = "your-google-ai-studio-key"
+lk agent console src/jarvis/voice/entrypoint.py
+```
+
+Optional settings are documented in `.env.example`. Voice mode fails before session
+start if the selected provider's API key is absent. Provider selection is explicit;
+JARVIS does not silently fall back between OpenAI and Gemini.
 
 ## Validate
 
