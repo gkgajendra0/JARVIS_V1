@@ -213,6 +213,20 @@ Evidence and reasoning:
 
 The proposed architecture is now ready for human review. Implementation still requires explicit human approval.
 
+### Development-provider amendment — 2026-08-28
+
+OpenAI Realtime passed the initial conversational smoke tests, but repeated development
+testing exhausted paid API credit. The accepted replacement boundary is therefore now
+used to add **Gemini Live as an explicit, cost-optimized development provider**.
+
+- OpenAI remains the provider for the short final acceptance run.
+- Gemini is selected only when `JARVIS_REALTIME_PROVIDER=gemini` is set.
+- No automatic provider fallback or silent switching is allowed.
+- Gemini Free Tier interactions may be used by Google to improve its products; do not
+  use private or sensitive personal data during free-tier development tests.
+- Passing tests on Gemini does not prove OpenAI behavior, so the final provider-specific
+  acceptance scenarios must still be repeated briefly on OpenAI.
+
 ## Planned Responsibility Boundaries
 
 These are requirements-level boundaries and may be refined after research:
@@ -318,6 +332,11 @@ Step 2 begins only after Step 1 is accepted. Step 2 owns wake word, conversation
 
 ## Immediate Next Action
 
-**Run the documented Step-1 voice acceptance scenarios on the real Windows JARVIS machine.**
+**Repeat only the currently failing voice scenarios with Gemini Live on the real Windows
+JARVIS machine, then run one short final provider-specific acceptance pass on OpenAI.**
 
-Automated validation currently passes 22 tests plus Ruff lint and format checks. Human testing must verify English/Hindi/Hinglish quality, contextual follow-ups, interruption truth, controlled failure handling, and clean microphone/speaker shutdown. Record failures before changing architecture or adding dependencies.
+Automated validation covers explicit provider selection and provider-specific key/model
+configuration in addition to the existing conversation contracts. Human testing must
+focus on false self-interruption, English/Hindi/Hinglish quality, controlled failure,
+and clean microphone/speaker shutdown. Record failures before changing architecture or
+adding dependencies.
