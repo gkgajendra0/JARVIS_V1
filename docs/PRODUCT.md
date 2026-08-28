@@ -118,18 +118,18 @@ Presence here means **planned product intent**, not implementation authorization
 
 | ID | Capability | Purpose | Step | Status |
 | --- | --- | --- | ---: | --- |
-| CAP-001 | Natural Voice Conversation | Realtime continuous spoken conversation, multilingual use, natural turn-taking. | 1 | PLANNED |
+| CAP-001 | Natural Voice Conversation | Realtime continuous spoken conversation, multilingual use, natural turn-taking. | 1 | DONE |
 | CAP-002 | Wake and Conversational Presence | Wake by name, enter follow-up conversation, return to idle naturally. | 2 | PLANNED |
 | CAP-003 | Barge-In and Audio Robustness | User interruption, echo/noise/device handling, clean recovery from voice-state faults. | 2 | PLANNED |
 | CAP-004 | Identity and Presence | Owner/session/presence evidence when identity actually matters. | 3 | PLANNED |
-| CAP-005 | JARVIS Personality | Stable natural identity, language adaptation, truthful capability framing. | 1 | PLANNED |
+| CAP-005 | JARVIS Personality | Stable natural identity, language adaptation, truthful capability framing. | 1 | DONE |
 
 ### Conversation, Context, and Memory
 
 | ID | Capability | Purpose | Step | Status |
 | --- | --- | --- | ---: | --- |
-| CAP-006 | Conversation Intelligence | Follow-ups, references, corrections, topic changes, clarification, goals, planning. | 1 | PLANNED |
-| CAP-007 | Canonical Conversation State | One JARVIS-owned accepted record of live conversation turns/lifecycle. | 1 | PLANNED |
+| CAP-006 | Conversation Intelligence | Follow-ups, references, corrections, topic changes, clarification, goals, planning. | 1 | DONE |
+| CAP-007 | Canonical Conversation State | One JARVIS-owned accepted record of live conversation turns/lifecycle. | 1 | DONE |
 | CAP-008 | Live Session Context | Active task, goal, project, recent outcomes/issues/pending work. | 4 | PLANNED |
 | CAP-009 | Long-Term Personal Memory | Durable useful personal/project facts with provenance and correction. | 4 | PLANNED |
 | CAP-010 | Episodic Memory | Recall meaningful past events, sessions, failures, fixes, milestones. | 4 | PLANNED |
