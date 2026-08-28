@@ -1,4 +1,4 @@
-"""LiveKit/OpenAI integration boundary for the Step-1 voice session."""
+"""LiveKit/provider integration boundary for the Step-1 voice session."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from livekit.agents import (
     TurnHandlingOptions,
 )
 from livekit.agents.llm import ChatMessage
-from livekit.plugins import openai
+from livekit.plugins import google, openai
 from openai.types.beta.realtime.session import TurnDetection
 
 from jarvis.config import JarvisConfig
@@ -28,6 +28,41 @@ def require_openai_api_key() -> str:
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is required before starting voice mode")
     return api_key
+
+
+def require_google_api_key() -> str:
+    api_key = os.getenv("GOOGLE_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError(
+            "GOOGLE_API_KEY is required before starting Gemini voice mode"
+        )
+    return api_key
+
+
+def _create_realtime_model(config: JarvisConfig):
+    if config.realtime_provider == "gemini":
+        return google.realtime.RealtimeModel(
+            model=config.gemini_realtime_model,
+            voice=config.gemini_realtime_voice,
+            api_key=require_google_api_key(),
+            input_audio_transcription={},
+            output_audio_transcription={},
+        )
+
+    return openai.realtime.RealtimeModel(
+        model=config.realtime_model,
+        voice=config.realtime_voice,
+        api_key=require_openai_api_key(),
+        input_audio_noise_reduction="far_field",
+        turn_detection=TurnDetection(
+            type="server_vad",
+            threshold=0.7,
+            prefix_padding_ms=300,
+            silence_duration_ms=500,
+            create_response=True,
+            interrupt_response=True,
+        ),
+    )
 
 
 class LiveKitConversationBridge:
@@ -84,23 +119,9 @@ class LiveKitConversationBridge:
 def create_voice_session(
     config: JarvisConfig,
 ) -> tuple[AgentSession, LiveKitConversationBridge]:
-    api_key = require_openai_api_key()
     conversation = ConversationSession()
     livekit_session = AgentSession(
-        llm=openai.realtime.RealtimeModel(
-            model=config.realtime_model,
-            voice=config.realtime_voice,
-            api_key=api_key,
-            input_audio_noise_reduction="far_field",
-            turn_detection=TurnDetection(
-                type="server_vad",
-                threshold=0.7,
-                prefix_padding_ms=300,
-                silence_duration_ms=500,
-                create_response=True,
-                interrupt_response=True,
-            ),
-        ),
+        llm=_create_realtime_model(config),
         vad=None,
         turn_handling=TurnHandlingOptions(
             turn_detection=None,
