@@ -4,6 +4,26 @@
 **Date:** 2026-08-27  
 **Decision owner:** Human-approved JARVIS planning
 
+## Amendment: Gemini development provider (2026-08-28)
+
+Repeated OpenAI Realtime development testing exhausted paid API credit. The existing
+provider-replacement trigger for cost has therefore fired.
+
+Gemini Live is **ADAPTED through the existing LiveKit boundary as a development-only
+provider** using `gemini-3.1-flash-live-preview`. Selection is explicit through
+`JARVIS_REALTIME_PROVIDER`; JARVIS does not automatically fall back or switch providers.
+OpenAI remains the final Step-1 acceptance provider until a separate human decision
+changes that status.
+
+This amendment does not create a second conversation architecture. Both providers feed
+the same LiveKit-to-JARVIS canonical conversation bridge. Provider-specific keys,
+models, voices, and protocol settings remain in the composition boundary.
+
+The Gemini model is preview software. Its Free Tier reduces development API cost, but
+Free Tier content may be used by Google to improve its products. Development tests must
+therefore avoid private or sensitive personal data. A Gemini pass does not replace the
+short final OpenAI-specific acceptance run.
+
 ## Context
 
 Step 1 must deliver a manually started, natural, realtime, multi-turn local voice conversation on Windows. It must support English, Hindi, Hinglish, contextual follow-ups, corrections, interruption, clean lifecycle handling, truthful failure, and JARVIS-owned canonical conversation truth.
