@@ -5,8 +5,8 @@ JARVIS V1 is a clean implementation of a personal, voice-first JARVIS assistant.
 The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARVIS
 V1 does not import it or depend on it at runtime.
 
-Current active work: **Step 1 — Natural Conversational Core (implementation and
-human-testing stage)**.
+Step 1 natural conversation is accepted. Current active work: **Step 2 — Wake, Voice
+Session, and Audio Robustness (research stage)**.
 
 ## Setup
 
