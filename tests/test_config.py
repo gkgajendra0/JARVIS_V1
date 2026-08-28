@@ -4,14 +4,20 @@ from jarvis.config import JarvisConfig
 
 
 def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("JARVIS_REALTIME_PROVIDER", " GEMINI ")
     monkeypatch.setenv("JARVIS_REALTIME_MODEL", " model-x ")
     monkeypatch.setenv("JARVIS_REALTIME_VOICE", " voice-y ")
+    monkeypatch.setenv("JARVIS_GEMINI_REALTIME_MODEL", " gemini-x ")
+    monkeypatch.setenv("JARVIS_GEMINI_REALTIME_VOICE", " Charon ")
     monkeypatch.setenv("JARVIS_SHOW_TRANSCRIPT", "off")
 
     config = JarvisConfig.from_environment()
 
+    assert config.realtime_provider == "gemini"
     assert config.realtime_model == "model-x"
     assert config.realtime_voice == "voice-y"
+    assert config.gemini_realtime_model == "gemini-x"
+    assert config.gemini_realtime_voice == "Charon"
     assert config.show_transcript is False
 
 
@@ -22,3 +28,8 @@ def test_invalid_boolean_setting_fails_truthfully(
 
     with pytest.raises(ValueError, match="JARVIS_SHOW_TRANSCRIPT"):
         JarvisConfig.from_environment()
+
+
+def test_invalid_realtime_provider_fails_truthfully() -> None:
+    with pytest.raises(ValueError, match="JARVIS_REALTIME_PROVIDER"):
+        JarvisConfig(realtime_provider="unknown")
