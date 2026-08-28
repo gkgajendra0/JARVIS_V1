@@ -1,6 +1,6 @@
 # ADR-001: Step 1 Realtime Voice Stack
 
-**Status:** ACCEPTED FOR ARCHITECTURE DESIGN  
+**Status:** ACCEPTED AND IMPLEMENTED
 **Date:** 2026-08-27  
 **Decision owner:** Human-approved JARVIS planning
 
@@ -21,8 +21,15 @@ models, voices, and protocol settings remain in the composition boundary.
 
 The Gemini model is preview software. Its Free Tier reduces development API cost, but
 Free Tier content may be used by Google to improve its products. Development tests must
-therefore avoid private or sensitive personal data. A Gemini pass does not replace the
-short final OpenAI-specific acceptance run.
+therefore avoid private or sensitive personal data. A Gemini pass does not prove
+OpenAI's post-tuning behavior; that provider-specific run remains required before
+relying on OpenAI as the accepted final provider, but it does not block Step 2.
+
+Step 1 was human-accepted on 2026-08-28 using combined evidence: earlier OpenAI
+multilingual/context/interruption testing and final Gemini false-interruption and
+truthfulness testing. OpenAI's post-tuning VAD/prompt configuration was not rerun after
+paid credit was exhausted; that provider-specific recheck remains deferred and is not
+represented as completed.
 
 ## Context
 
@@ -45,7 +52,7 @@ Paper research compared LiveKit Agents, Pipecat, OpenAI first-party/direct paths
 7. Preserve Pipecat and a direct provider path only as reconsideration candidates, not simultaneous Step-1 implementations.
 8. Do not implement a cascaded STT -> LLM -> TTS fallback in Step 1.
 9. Pin exact dependency/model versions during implementation planning; do not encode model names into permanent JARVIS domain contracts.
-10. Implementation remains blocked until the Step-1 architecture is reviewed and explicitly approved.
+10. At decision time, implementation remained blocked until the Step-1 architecture was reviewed and explicitly approved.
 
 ## Alternatives Considered
 
