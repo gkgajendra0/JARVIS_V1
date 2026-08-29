@@ -75,7 +75,11 @@ def parse_explicit_update_decision(text: str) -> bool | None:
     if first in _YES_CONFIRMATIONS:
         if any(token in _NO_CONFIRMATIONS for token in remainder_tokens):
             return None
-        if "not" in remainder_tokens or "dont" in remainder_tokens or "don t" in remainder:
+        if (
+            "not" in remainder_tokens
+            or "dont" in remainder_tokens
+            or "don t" in remainder
+        ):
             return None
         return True
 
