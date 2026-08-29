@@ -10,6 +10,7 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("JARVIS_GEMINI_REALTIME_MODEL", " gemini-x ")
     monkeypatch.setenv("JARVIS_GEMINI_REALTIME_VOICE", " Charon ")
     monkeypatch.setenv("JARVIS_SHOW_TRANSCRIPT", "off")
+    monkeypatch.setenv("JARVIS_STARTUP_GREETING", "off")
     monkeypatch.setenv("JARVIS_WAKE_MODEL_PATH", " C:\\models\\jarvis.onnx ")
     monkeypatch.setenv("JARVIS_WAKE_THRESHOLD", "0.72")
     monkeypatch.setenv("JARVIS_AUDIO_PRE_ROLL_SECONDS", "0.8")
@@ -24,6 +25,7 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.gemini_realtime_model == "gemini-x"
     assert config.gemini_realtime_voice == "Charon"
     assert config.show_transcript is False
+    assert config.startup_greeting_enabled is False
     assert config.wake_model_path == "C:\\models\\jarvis.onnx"
     assert config.wake_threshold == 0.72
     assert config.audio_pre_roll_seconds == 0.8
@@ -37,6 +39,15 @@ def test_invalid_boolean_setting_fails_truthfully(
     monkeypatch.setenv("JARVIS_SHOW_TRANSCRIPT", "sometimes")
 
     with pytest.raises(ValueError, match="JARVIS_SHOW_TRANSCRIPT"):
+        JarvisConfig.from_environment()
+
+
+def test_invalid_startup_greeting_boolean_setting_fails_truthfully(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("JARVIS_STARTUP_GREETING", "sometimes")
+
+    with pytest.raises(ValueError, match="JARVIS_STARTUP_GREETING"):
         JarvisConfig.from_environment()
 
 

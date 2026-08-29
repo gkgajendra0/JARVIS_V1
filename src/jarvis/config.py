@@ -54,6 +54,7 @@ class JarvisConfig:
     gemini_realtime_model: str = "gemini-3.1-flash-live-preview"
     gemini_realtime_voice: str = "Charon"
     show_transcript: bool = True
+    startup_greeting_enabled: bool = True
     wake_model_path: str | None = None
     wake_threshold: float = 0.68
     wake_debounce_seconds: float = 2.0
@@ -135,6 +136,7 @@ class JarvisConfig:
             ),
             gemini_realtime_voice=os.getenv("JARVIS_GEMINI_REALTIME_VOICE", "Charon"),
             show_transcript=_environment_bool("JARVIS_SHOW_TRANSCRIPT", True),
+            startup_greeting_enabled=_environment_bool("JARVIS_STARTUP_GREETING", True),
             wake_model_path=_optional_environment_text("JARVIS_WAKE_MODEL_PATH"),
             wake_threshold=_environment_float("JARVIS_WAKE_THRESHOLD", 0.68),
             wake_debounce_seconds=_environment_float(
