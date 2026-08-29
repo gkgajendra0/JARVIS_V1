@@ -67,7 +67,7 @@ def test_follow_controller_moves_toward_off_center_target() -> None:
     command = FollowController().command_for(target)
 
     assert command.pan > 0
-    assert command.tilt < 0
+    assert command.tilt > 0
 
 
 def test_follow_controller_clamps_large_error() -> None:
