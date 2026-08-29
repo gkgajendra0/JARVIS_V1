@@ -320,6 +320,23 @@ class LocalAudioRuntime:
         if requested is None:
             return None
         needle = requested.strip().casefold()
+        if needle.startswith("index:"):
+            index_text = needle.removeprefix("index:").strip()
+            try:
+                requested_index = int(index_text)
+            except ValueError as exc:
+                raise RuntimeError(
+                    f"Configured {kind} device index is invalid: {requested}"
+                ) from exc
+            matches = [
+                device for device in devices if int(device["index"]) == requested_index
+            ]
+            if not matches:
+                raise RuntimeError(
+                    f"Configured {kind} device index not found: {requested_index}"
+                )
+            return requested_index
+
         exact = [
             device for device in devices if str(device["name"]).casefold() == needle
         ]
@@ -329,8 +346,15 @@ class LocalAudioRuntime:
         if not matches:
             raise RuntimeError(f"Configured {kind} device not found: {requested}")
         if len(matches) > 1:
-            names = ", ".join(str(device["name"]) for device in matches)
-            raise RuntimeError(f"Configured {kind} device is ambiguous: {names}")
+            choices = ", ".join(
+                f"index:{device['index']} {device['name']} "
+                f"(hostapi {device.get('hostapi', 'unknown')})"
+                for device in matches
+            )
+            raise RuntimeError(
+                f"Configured {kind} device is ambiguous; select an explicit "
+                f"index:<number>: {choices}"
+            )
         return int(matches[0]["index"])
 
     def set_overflow_handler(self, callback: Callable[[], None]) -> None:

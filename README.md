@@ -56,15 +56,18 @@ LiveKit-compatible `JARVIS` ONNX classifier; no unverified model is committed.
 
 ```powershell
 $env:JARVIS_WAKE_MODEL_PATH = "C:\path\to\jarvis.onnx"
-$env:JARVIS_AUDIO_INPUT_DEVICE = "Voicemeeter Out B1 (VB-Audio Voicemeeter VAIO)"
-$env:JARVIS_AUDIO_OUTPUT_DEVICE = "Voicemeeter Input (VB-Audio Voicemeeter VAIO)"
+$env:JARVIS_AUDIO_INPUT_DEVICE = "index:57"
+$env:JARVIS_AUDIO_OUTPUT_DEVICE = "index:45"
 $env:JARVIS_REALTIME_PROVIDER = "gemini"
 $env:GOOGLE_API_KEY = "your-google-ai-studio-key"
 jarvis-voice
 ```
 
-Use device names from the local PortAudio enumeration. The numeric device indices from
-`lk agent console --list-devices` are console-only and are not Step-2 configuration.
+Use a unique device name or `index:<PortAudio index>` from the local
+`rtc.MediaDevices` enumeration. Indices shown by `lk agent console --list-devices` use
+a different enumeration and must not be copied into Step-2 configuration. Explicit
+indices are necessary when Windows exposes the same device name through multiple host
+APIs and may need to be rechecked after audio-driver or device changes.
 Idle audio remains local; the selected realtime provider starts only after an accepted
 wake detection. `lk agent console` remains available as a Step-1 diagnostic harness.
 

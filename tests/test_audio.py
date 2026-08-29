@@ -71,18 +71,21 @@ async def test_activation_sends_pre_roll_in_order_without_reopening_device() -> 
 
 def test_device_name_resolution_rejects_missing_and_ambiguous_devices() -> None:
     devices = [
-        {"index": 1, "name": "Voicemeeter Out B1"},
-        {"index": 2, "name": "Voicemeeter Out B2"},
+        {"index": 6, "name": "Voicemeeter Out B1", "hostapi": 0},
+        {"index": 57, "name": "Voicemeeter Out B1", "hostapi": 2},
+        {"index": 58, "name": "Voicemeeter Out A5", "hostapi": 2},
     ]
 
-    assert (
-        LocalAudioRuntime._resolve_device(devices, "Voicemeeter Out B1", kind="input")
-        == 1
-    )
+    assert LocalAudioRuntime._resolve_device(devices, "index:57", kind="input") == 57
+    assert LocalAudioRuntime._resolve_device(devices, "Out A5", kind="input") == 58
     with pytest.raises(RuntimeError, match="not found"):
         LocalAudioRuntime._resolve_device(devices, "Tribit", kind="input")
-    with pytest.raises(RuntimeError, match="ambiguous"):
-        LocalAudioRuntime._resolve_device(devices, "Voicemeeter", kind="input")
+    with pytest.raises(RuntimeError, match="index not found"):
+        LocalAudioRuntime._resolve_device(devices, "index:45", kind="input")
+    with pytest.raises(RuntimeError, match="index is invalid"):
+        LocalAudioRuntime._resolve_device(devices, "index:B1", kind="input")
+    with pytest.raises(RuntimeError, match=r"index:6.*index:57"):
+        LocalAudioRuntime._resolve_device(devices, "Voicemeeter Out B1", kind="input")
 
 
 @dataclass
