@@ -34,6 +34,7 @@ class VisionDiagnosticStatus:
     framing_source: str | None = None
     last_pan_command: float = 0.0
     last_tilt_command: float = 0.0
+    last_zoom_command: float = 0.0
     last_error: str | None = None
 
 
@@ -112,6 +113,7 @@ class VisionDiagnostics:
             framing_source=framing_source,
             last_pan_command=snapshot.command.pan,
             last_tilt_command=snapshot.command.tilt,
+            last_zoom_command=snapshot.command.zoom,
             last_error=self._status.last_error,
         )
 
@@ -126,7 +128,7 @@ class VisionDiagnostics:
                     message=(
                         "Vision produced its first frame: "
                         f"RF-DETR={new_status.detector_persons} person detection(s), "
-                        f"ByteTrack={new_status.visible_people} track(s), "
+                        f"BoT-SORT={new_status.visible_people} track(s), "
                         f"heads={new_status.visible_heads}."
                     ),
                 )
@@ -140,7 +142,7 @@ class VisionDiagnostics:
                         "Visible person tracks changed from "
                         f"{previous.visible_people} to {new_status.visible_people}; "
                         f"RF-DETR={new_status.detector_persons}, "
-                        f"ByteTrack={new_status.visible_people}, "
+                        f"BoT-SORT={new_status.visible_people}, "
                         f"heads={new_status.visible_heads}."
                     ),
                 )
@@ -216,7 +218,8 @@ class VisionDiagnostics:
                 elif new_status.framing_source == "body":
                     message = (
                         f"Target {new_status.target_id} has no usable head evidence; "
-                        "using the same locked BODY track for horizontal-only fallback."
+                        "using the same locked BODY track for reduced-authority pan/tilt "
+                        "fallback."
                     )
                 else:
                     message = f"Target {new_status.target_id} currently has no framing anchor."
