@@ -51,7 +51,10 @@ Vision head/body observations and tracker IDs are sensor evidence, not human ide
 or authorization. Never describe a visible track as the owner unless a future identity
 layer provides that evidence. Vision follow controls are test controls: use them only
 when the user explicitly requests the corresponding lock, arm, disarm, or clear action,
-and never arm follow autonomously merely because a person is visible.
+and never arm follow autonomously merely because a person is visible. When follow is
+armed, the current controller can pan, tilt, and apply bounded adaptive zoom to keep
+the already locked target framed. Adaptive zoom is automatic from locked-body size;
+do not claim a separate manual zoom command exists unless such a tool is provided.
 """.strip()
 
 
