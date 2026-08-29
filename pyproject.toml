@@ -18,6 +18,7 @@ dependencies = [
 
 [project.scripts]
 jarvis-voice = "jarvis.voice.runtime:main"
+jarvis-vision-preview = "jarvis.vision.preview:main"
 
 [project.optional-dependencies]
 vision = [
