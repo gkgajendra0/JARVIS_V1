@@ -173,7 +173,13 @@ class VisionRuntime:
 
         self.disarm_follow()
         self._clear_trusted_head()
-        return self._target_manager.lock(track)
+        locked = self._target_manager.lock(track)
+        if self._framing_policy is not None and self._latest_frame is not None:
+            direct = self._framing_policy.resolve(locked, self._latest_heads)
+            if direct is not None and direct.source == "head":
+                self._last_trusted_head = direct
+                self._last_trusted_head_at = self._latest_frame.captured_at
+        return locked
 
     def arm_follow(self) -> None:
         target = self._target_manager.target
