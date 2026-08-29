@@ -5,9 +5,10 @@ JARVIS V1 is a clean implementation of a personal, voice-first JARVIS assistant.
 The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARVIS
 V1 does not import it or depend on it at runtime.
 
-Steps 1 and 2 are accepted. Current active work: **Step 2.5 — Vision Sensor & Active
-Target Tracking Foundation**. Step 3 — Identity, Graduated Trust, Authority, and
-Observability Foundation — is paused until Step 2.5 is accepted, then resumes.
+Steps 1, 2, and 2.5 are accepted. Step 2.5 established the vision sensor and active
+target-tracking foundation. Step 3 — Identity, Graduated Trust, Authority, and
+Observability Foundation — is next after the development-supervisor workflow is
+accepted.
 
 ## Setup
 
@@ -71,6 +72,37 @@ indices are necessary when Windows exposes the same device name through multiple
 APIs and may need to be rechecked after audio-driver or device changes.
 Idle audio remains local; the selected realtime provider starts only after an accepted
 wake detection. `lk agent console` remains available as a Step-1 diagnostic harness.
+
+## Run the development supervisor
+
+`jarvis-dev` is a development-only wrapper around the accepted `jarvis-voice`
+runtime. It keeps JARVIS running, watches the configured remote branch, and requires
+one explicit owner approval before applying a fast-forward update and restarting the
+runtime.
+
+```powershell
+jarvis-dev
+```
+
+The normal default is `origin/main`. A temporary branch can be selected while testing
+the supervisor itself:
+
+```powershell
+$env:JARVIS_DEV_BRANCH = "feature/jarvis-dev-supervisor"
+jarvis-dev
+```
+
+When an update becomes available, JARVIS speaks a fixed approval question through a
+dedicated scripted-TTS adapter, while the realtime session is used only to capture and
+transcribe the owner's response. A narrow deterministic parser accepts an explicit Yes
+or No at the start of a natural finalized reply, such as `Yes, sir. I will do it.` or
+`No, leave it.`, while ambiguous or contradictory speech, timeout, or an unavailable
+voice-control channel means No. The realtime model does not generate the approval
+wording and never decides whether the update was approved.
+
+The supervisor uses an authenticated loopback-only control channel, refuses dirty
+working trees and non-fast-forward updates, requests a clean in-process shutdown
+before OS-level fallbacks, and does not continuously restart a crashing child process.
 
 ## Validate
 
