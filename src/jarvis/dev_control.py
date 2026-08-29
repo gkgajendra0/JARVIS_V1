@@ -44,8 +44,7 @@ class DevControlClientConfig:
 def _normalized_confirmation(text: str) -> str:
     normalized = "".join(
         character
-        if character.isspace()
-        or unicodedata.category(character)[0] in {"L", "M", "N"}
+        if character.isspace() or unicodedata.category(character)[0] in {"L", "M", "N"}
         else " "
         for character in text.casefold()
     )
