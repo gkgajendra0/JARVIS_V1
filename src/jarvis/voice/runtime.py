@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
+import unicodedata
 from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
@@ -44,21 +44,60 @@ class VoiceRuntimeState(str, Enum):
     RECOVERING = "recovering"
 
 
-_EXIT_INTENTS = frozenset(
+_EXIT_CORES = frozenset(
     {
         "go to sleep",
-        "jarvis go to sleep",
         "end session",
         "end the session",
         "सो जाओ",
-        "जार्विस सो जाओ",
         "सेशन बंद करो",
     }
 )
+_EXIT_PREFIXES = (
+    "ok ",
+    "okay ",
+    "hey ",
+    "please ",
+    "jarvis ",
+    "ठीक है ",
+    "कृपया ",
+    "जार्विस ",
+)
+_EXIT_SUFFIXES = (" please", " now", " कृपया", " अभी")
 
 
 def _normalized_intent(text: str) -> str:
-    return " ".join(re.sub(r"[^\w\s]", " ", text.casefold()).split())
+    normalized = "".join(
+        character
+        if character.isspace()
+        or character == "_"
+        or unicodedata.category(character)[0] in {"L", "M", "N"}
+        else " "
+        for character in text.casefold()
+    )
+    return " ".join(normalized.split())
+
+
+def _is_exit_intent(text: str) -> bool:
+    """Accept bounded command variants without matching quoted or negated text."""
+    candidate = _normalized_intent(text)
+    changed = True
+    while changed:
+        changed = False
+        for prefix in _EXIT_PREFIXES:
+            if candidate.startswith(prefix):
+                candidate = candidate.removeprefix(prefix).strip()
+                changed = True
+                break
+    changed = True
+    while changed:
+        changed = False
+        for suffix in _EXIT_SUFFIXES:
+            if candidate.endswith(suffix):
+                candidate = candidate.removesuffix(suffix).strip()
+                changed = True
+                break
+    return candidate in _EXIT_CORES
 
 
 class VoiceRuntimeController:
@@ -194,7 +233,7 @@ class VoiceRuntimeController:
                 return
             has_user_turn = True
             self._cancel_timeout()
-            if _normalized_intent(text) in _EXIT_INTENTS:
+            if _is_exit_intent(text):
                 LOGGER.info("Explicit voice-session exit accepted")
                 active_end.set()
 

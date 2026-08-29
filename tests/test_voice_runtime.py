@@ -13,7 +13,11 @@ from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationSession, ConversationStatus
 from jarvis.voice.audio import LocalAudioOutput
 from jarvis.voice.livekit_session import LiveKitConversationBridge
-from jarvis.voice.runtime import VoiceRuntimeController, VoiceRuntimeState
+from jarvis.voice.runtime import (
+    VoiceRuntimeController,
+    VoiceRuntimeState,
+    _is_exit_intent,
+)
 
 
 class FakeSession:
@@ -78,6 +82,33 @@ def runtime_with_session(
         session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
     )
     return runtime, session, conversation, audio
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Go to sleep.",
+        "Ok, Jarvis, go to sleep.",
+        "Jarvis, please go to sleep now.",
+        "Please end the session.",
+        "ठीक है, जार्विस सो जाओ।",
+    ],
+)
+def test_exit_intent_accepts_bounded_polite_variants(text: str) -> None:
+    assert _is_exit_intent(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Do not go to sleep.",
+        "Tell me why you go to sleep.",
+        "What does go to sleep mean?",
+        "Jarvis, continue.",
+    ],
+)
+def test_exit_intent_rejects_negated_or_discussed_phrases(text: str) -> None:
+    assert _is_exit_intent(text) is False
 
 
 @pytest.mark.asyncio
