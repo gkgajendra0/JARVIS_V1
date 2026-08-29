@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -27,7 +28,7 @@ class PtzAxisRange:
 
     def clamp_and_snap(self, value: float) -> int:
         clamped = max(self.minimum, min(self.maximum, value))
-        steps = round((clamped - self.minimum) / self.step)
+        steps = math.floor(((clamped - self.minimum) / self.step) + 0.5)
         return int(self.minimum + steps * self.step)
 
 
@@ -151,17 +152,13 @@ class _ResultApiDuvcBackend:
     def get_axis_value(self, axis: str) -> int:
         result = self._camera.get(self._property(axis))
         if not result.is_ok():
-            raise RuntimeError(
-                f"failed to read {axis}: {result.error().description()}"
-            )
+            raise RuntimeError(f"failed to read {axis}: {result.error().description()}")
         return int(result.value().value)
 
     def set_axis_value(self, axis: str, value: int) -> None:
         result = self._camera.set(self._property(axis), int(value))
         if not result.is_ok():
-            raise RuntimeError(
-                f"failed to set {axis}: {result.error().description()}"
-            )
+            raise RuntimeError(f"failed to set {axis}: {result.error().description()}")
 
     def close(self) -> None:
         close = getattr(self._camera, "close", None)
