@@ -64,9 +64,7 @@ class VisionDiagnostics:
                 observed_at=self._status.captured_at or 0.0,
                 code="vision_started" if running else "vision_stopped",
                 message=(
-                    "Vision runtime started."
-                    if running
-                    else "Vision runtime stopped."
+                    "Vision runtime started." if running else "Vision runtime stopped."
                 ),
             )
 
@@ -202,18 +200,14 @@ class VisionDiagnostics:
                 and previous.framing_source != new_status.framing_source
             ):
                 if new_status.framing_source == "head":
-                    message = (
-                        f"Target {new_status.target_id} framing switched to HEAD anchor."
-                    )
+                    message = f"Target {new_status.target_id} framing switched to HEAD anchor."
                 elif new_status.framing_source == "body":
                     message = (
                         f"Target {new_status.target_id} lost usable head evidence; "
                         "using the same locked BODY track as fallback."
                     )
                 else:
-                    message = (
-                        f"Target {new_status.target_id} currently has no framing anchor."
-                    )
+                    message = f"Target {new_status.target_id} currently has no framing anchor."
                 self._append(
                     observed_at=snapshot.captured_at,
                     code="framing_source_changed",
