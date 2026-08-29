@@ -11,7 +11,7 @@ from jarvis.vision.models import BoundingBox, Detection, FollowCommand, Track
 from jarvis.vision.ptz import DuvcPtzController, PtzAxisRange
 from jarvis.vision.runtime import VisionRuntime, VisionRuntimeConfig
 from jarvis.vision.targeting import TargetManager
-from jarvis.vision.tracker import ByteTrackAdapter
+from jarvis.vision.tracker import BoTSORTAdapter, ByteTrackAdapter
 
 
 class FakeRFModel:
@@ -137,6 +137,45 @@ def test_bytetrack_adapter_preserves_first_seen_timestamp():
     assert second.last_seen_at == 10.1
 
 
+class FakeBoTSORTTracker:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.last_frame = None
+        self.last_timestamp = None
+
+    def update(self, detections, *, frame, timestamp):
+        self.last_frame = frame
+        self.last_timestamp = timestamp
+        output = FakeExternalDetections(
+            xyxy=detections.xyxy,
+            confidence=detections.confidence,
+        )
+        output.tracker_id = np.array([9], dtype=int)
+        return output
+
+
+def test_botsort_adapter_passes_frame_for_camera_motion_compensation():
+    tracker = FakeBoTSORTTracker()
+    adapter = BoTSORTAdapter(
+        tracker_factory=lambda **_: tracker,
+        detections_factory=FakeExternalDetections,
+    )
+    detection = Detection(
+        category="person",
+        confidence=0.92,
+        bounds=BoundingBox(0.1, 0.2, 0.4, 0.8),
+        frame_id=1,
+        observed_at=10.0,
+    )
+    frame = np.zeros((100, 100, 3), dtype=np.uint8)
+
+    track = adapter.update([detection], now=10.0, frame=frame)[0]
+
+    assert tracker.last_frame is frame
+    assert tracker.last_timestamp == 10.0
+    assert track.track_id == 9
+
+
 class FakePtzBackend:
     def __init__(self):
         self.values = {"pan": 0, "tilt": 0}
@@ -201,7 +240,7 @@ class MutableFakeTracker:
     def __init__(self, tracks):
         self.tracks = list(tracks)
 
-    def update(self, detections, *, now):
+    def update(self, detections, *, now, frame=None):
         return list(self.tracks)
 
 
