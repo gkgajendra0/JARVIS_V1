@@ -24,7 +24,7 @@ class FakeRFModel:
 
     def predict(self, image, threshold):
         assert image.shape == (100, 200, 3)
-        assert threshold == 0.5
+        assert threshold == 0.1
         return SimpleNamespace(
             class_id=np.array([1, 2]),
             confidence=np.array([0.9, 0.8]),
