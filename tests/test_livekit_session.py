@@ -15,6 +15,7 @@ from livekit.agents.llm import ChatMessage
 
 from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationSession, ConversationStatus
+from jarvis.voice.agent import INSTRUCTIONS
 from jarvis.voice.livekit_session import (
     LiveKitConversationBridge,
     _create_realtime_model,
@@ -175,6 +176,7 @@ def test_gemini_model_uses_provider_specific_configuration(
     assert captured["model"] == "gemini-test"
     assert captured["voice"] == "Gacrux"
     assert captured["api_key"] == "test-google-key"
+    assert captured["instructions"] == INSTRUCTIONS
     assert captured["input_audio_transcription"] == {}
     assert captured["output_audio_transcription"] == {}
     activity = captured["realtime_input_config"].automatic_activity_detection

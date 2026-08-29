@@ -20,6 +20,7 @@ from openai.types.beta.realtime.session import TurnDetection
 
 from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationRole, ConversationSession
+from jarvis.voice.agent import INSTRUCTIONS
 
 LOGGER = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ def _create_realtime_model(config: JarvisConfig):
             model=config.gemini_realtime_model,
             voice=config.gemini_realtime_voice,
             api_key=require_google_api_key(),
+            instructions=INSTRUCTIONS,
             input_audio_transcription={},
             output_audio_transcription={},
             realtime_input_config=google_types.RealtimeInputConfig(
