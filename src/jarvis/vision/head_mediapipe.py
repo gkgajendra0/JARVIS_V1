@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 
@@ -59,7 +60,7 @@ class MediaPipeBlazeFaceDetector:
         image = self._image_factory(rgb)
         timestamp_ms = max(
             self._last_timestamp_ms + 1,
-            int(round(frame.captured_at * 1000.0)),
+            round(frame.captured_at * 1000.0),
         )
         self._last_timestamp_ms = timestamp_ms
         result = self._detector.detect_for_video(image, timestamp_ms)
@@ -110,8 +111,7 @@ def _default_detector_factory(config: MediaPipeBlazeFaceConfig) -> Any:
         from mediapipe.tasks.python import vision
     except ImportError as exc:
         raise RuntimeError(
-            "MediaPipe is required for BlazeFace head detection; "
-            "install the vision dependencies"
+            "MediaPipe is required for BlazeFace head detection; install the vision dependencies"
         ) from exc
 
     options = vision.FaceDetectorOptions(
@@ -128,8 +128,7 @@ def _default_image_factory(rgb: np.ndarray) -> Any:
         import mediapipe as mp
     except ImportError as exc:
         raise RuntimeError(
-            "MediaPipe is required for BlazeFace head detection; "
-            "install the vision dependencies"
+            "MediaPipe is required for BlazeFace head detection; install the vision dependencies"
         ) from exc
     return mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
