@@ -9,7 +9,7 @@ from jarvis.vision.detector import RFDetrNanoDetector
 from jarvis.vision.follow import FollowController
 from jarvis.vision.models import BoundingBox, Detection, FollowCommand, Track
 from jarvis.vision.ptz import DuvcPtzController, PtzAxisRange
-from jarvis.vision.runtime import VisionRuntime
+from jarvis.vision.runtime import VisionRuntime, VisionRuntimeConfig
 from jarvis.vision.targeting import TargetManager
 from jarvis.vision.tracker import ByteTrackAdapter
 
@@ -197,12 +197,12 @@ class FakeDetector:
         return [self.detection]
 
 
-class FakeTracker:
-    def __init__(self, track):
-        self.track = track
+class MutableFakeTracker:
+    def __init__(self, tracks):
+        self.tracks = list(tracks)
 
     def update(self, detections, *, now):
-        return [self.track]
+        return list(self.tracks)
 
 
 class RecordingPtz:
@@ -217,7 +217,7 @@ class RecordingPtz:
         self.closed = True
 
 
-def test_runtime_requires_explicit_lock_before_movement():
+def _make_runtime_fixture():
     frame = CapturedFrame(
         frame_id=1,
         captured_at=5.0,
@@ -239,32 +239,92 @@ def test_runtime_requires_explicit_lock_before_movement():
         last_seen_at=5.0,
     )
     camera = FakeCamera(frame)
+    tracker = MutableFakeTracker([track])
     ptz = RecordingPtz()
     runtime = VisionRuntime(
         camera=camera,
         detector=FakeDetector(detection),
-        tracker=FakeTracker(track),
-        target_manager=TargetManager(),
+        tracker=tracker,
+        target_manager=TargetManager(lost_timeout_seconds=0.5),
         follow_controller=FollowController(),
         ptz=ptz,
+        config=VisionRuntimeConfig(minimum_ptz_interval_seconds=0.2),
     )
+    return runtime, camera, tracker, ptz
+
+
+def test_runtime_requires_lock_and_separate_arm_before_movement():
+    runtime, camera, tracker, ptz = _make_runtime_fixture()
 
     runtime.start()
     first = runtime.process_once()
     assert first is not None
     assert first.command.is_idle
+    assert not first.armed
+    assert ptz.commands == []
 
     runtime.lock(3)
     camera.frame = CapturedFrame(
         frame_id=2,
         captured_at=5.1,
-        image=frame.image,
+        image=camera.frame.image,
     )
-    second = runtime.process_once()
+    locked = runtime.process_once()
+    assert locked is not None
+    assert locked.target is not None
+    assert locked.command.is_idle
+    assert not runtime.armed
+    assert ptz.commands == []
 
-    assert second is not None
-    assert second.target is not None
-    assert second.command.pan > 0
+    runtime.arm_follow()
+    camera.frame = CapturedFrame(
+        frame_id=3,
+        captured_at=5.2,
+        image=camera.frame.image,
+    )
+    armed = runtime.process_once()
+    assert armed is not None
+    assert armed.armed
+    assert armed.command.pan > 0
+    assert len(ptz.commands) == 1
+
     runtime.close()
     assert camera.closed
     assert ptz.closed
+
+
+def test_runtime_rate_limits_ptz_and_disarms_after_target_expires():
+    runtime, camera, tracker, ptz = _make_runtime_fixture()
+
+    runtime.start()
+    runtime.process_once()
+    runtime.lock(3)
+    runtime.arm_follow()
+
+    camera.frame = CapturedFrame(frame_id=2, captured_at=5.1, image=camera.frame.image)
+    runtime.process_once()
+    assert len(ptz.commands) == 1
+
+    camera.frame = CapturedFrame(frame_id=3, captured_at=5.2, image=camera.frame.image)
+    rate_limited = runtime.process_once()
+    assert rate_limited is not None
+    assert rate_limited.command.is_idle
+    assert len(ptz.commands) == 1
+
+    tracker.tracks = []
+    camera.frame = CapturedFrame(frame_id=4, captured_at=5.3, image=camera.frame.image)
+    missing = runtime.process_once()
+    assert missing is not None
+    assert runtime.armed
+    assert missing.command.is_idle
+    assert len(ptz.commands) == 1
+
+    camera.frame = CapturedFrame(frame_id=5, captured_at=5.9, image=camera.frame.image)
+    expired = runtime.process_once()
+    assert expired is not None
+    assert expired.target is None
+    assert not runtime.armed
+    assert expired.command.is_idle
+    assert len(ptz.commands) == 1
+
+    runtime.close()
