@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -21,7 +21,7 @@ from jarvis.voice.startup_greeting import select_startup_greeting
     ],
 )
 def test_startup_greeting_uses_time_appropriate_pool(hour: int, expected: str) -> None:
-    now = datetime(2026, 8, 30, hour, tzinfo=timezone.utc)
+    now = datetime(2026, 8, 30, hour, tzinfo=UTC)
 
     greeting = select_startup_greeting(now, chooser=lambda options: options[0])
 
@@ -36,7 +36,7 @@ def test_startup_greeting_chooser_receives_multiple_variants() -> None:
         return options[-1]
 
     greeting = select_startup_greeting(
-        datetime(2026, 8, 30, 8, tzinfo=timezone.utc),
+        datetime(2026, 8, 30, 8, tzinfo=UTC),
         chooser=choose_last,
     )
 
