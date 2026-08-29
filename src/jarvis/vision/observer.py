@@ -151,7 +151,7 @@ def render_snapshot(
 
     lines = [
         (
-            f"BoT-SORT tracks: {len(snapshot.tracks)} | heads: {len(snapshot.heads)} "
+            f"Tracker tracks: {len(snapshot.tracks)} | heads: {len(snapshot.heads)} "
             f"| analysis age: {analysis_age_ms} ms"
         ),
         f"target: {target_text} | follow: {'ARMED' if snapshot.armed else 'SAFE'}",
