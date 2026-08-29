@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from jarvis.vision.camera import CameraSource, CapturedFrame
 from jarvis.vision.detector import ObjectDetector
-from jarvis.vision.follow import FollowController
+from jarvis.vision.follow import FollowController, ZoomController
 from jarvis.vision.framing import (
     FramingTarget,
     HeadConfirmationConfig,
@@ -23,17 +23,23 @@ from jarvis.vision.tracker import Tracker
 @dataclass(frozen=True, slots=True)
 class VisionRuntimeConfig:
     minimum_ptz_interval_seconds: float = 0.2
+    minimum_zoom_interval_seconds: float = 0.15
     require_head_for_lock: bool = False
     required_head_confirmation_frames: int = 3
     head_loss_grace_seconds: float = 0.35
+    body_fallback_tilt_scale: float = 0.45
 
     def __post_init__(self) -> None:
         if self.minimum_ptz_interval_seconds <= 0:
             raise ValueError("minimum_ptz_interval_seconds must be positive")
+        if self.minimum_zoom_interval_seconds <= 0:
+            raise ValueError("minimum_zoom_interval_seconds must be positive")
         if self.required_head_confirmation_frames < 1:
             raise ValueError("required_head_confirmation_frames must be at least 1")
         if self.head_loss_grace_seconds < 0:
             raise ValueError("head_loss_grace_seconds must be non-negative")
+        if not 0 <= self.body_fallback_tilt_scale <= 1:
+            raise ValueError("body_fallback_tilt_scale must be in [0, 1]")
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +71,7 @@ class VisionRuntime:
         head_detector: HeadDetector | None = None,
         framing_policy: HeadFirstFramingPolicy | None = None,
         head_confirmation_gate: HeadConfirmationGate | None = None,
+        zoom_controller: ZoomController | None = None,
     ) -> None:
         self.config = config or VisionRuntimeConfig()
         if self.config.require_head_for_lock and head_detector is None:
@@ -75,6 +82,7 @@ class VisionRuntime:
         self._tracker = tracker
         self._target_manager = target_manager
         self._follow_controller = follow_controller
+        self._zoom_controller = zoom_controller
         self._ptz = ptz
         self._head_detector = head_detector
         self._framing_policy = (
@@ -105,6 +113,7 @@ class VisionRuntime:
         self._last_trusted_head: FramingTarget | None = None
         self._last_trusted_head_at: float | None = None
         self._last_ptz_command_at: float | None = None
+        self._last_zoom_command_at: float | None = None
         self._armed = False
         self._started = False
 
@@ -147,6 +156,7 @@ class VisionRuntime:
             raise RuntimeError("vision runtime is already started")
         self._armed = False
         self._last_ptz_command_at = None
+        self._last_zoom_command_at = None
         self._clear_trusted_head()
         if self._head_confirmation_gate is not None:
             self._head_confirmation_gate.reset()
@@ -187,11 +197,13 @@ class VisionRuntime:
         if target is None or not target.visible:
             raise RuntimeError("cannot arm follow without a visible locked target")
         self._last_ptz_command_at = None
+        self._last_zoom_command_at = None
         self._armed = True
 
     def disarm_follow(self) -> None:
         self._armed = False
         self._last_ptz_command_at = None
+        self._last_zoom_command_at = None
 
     def clear_target(self) -> None:
         self.disarm_follow()
@@ -237,11 +249,28 @@ class VisionRuntime:
                 now=frame.captured_at,
             )
             desired = self._follow_controller.command_for_framing_target(framing_target)
-            if framing_target is not None and framing_target.source != "head":
+            if framing_target is not None and framing_target.source == "head_hold":
                 desired = FollowCommand(pan=desired.pan, tilt=0.0)
+            elif framing_target is not None and framing_target.source == "body":
+                desired = FollowCommand(
+                    pan=desired.pan,
+                    tilt=desired.tilt * self.config.body_fallback_tilt_scale,
+                )
         else:
             desired = self._follow_controller.command_for(target)
 
+        zoom = 0.0
+        if self._zoom_controller is not None and target is not None and target.visible:
+            last_zoom_at = self._last_zoom_command_at
+            zoom_interval_elapsed = (
+                last_zoom_at is None
+                or frame.captured_at - last_zoom_at
+                >= self.config.minimum_zoom_interval_seconds
+            )
+            if zoom_interval_elapsed:
+                zoom = self._zoom_controller.command_for(target)
+
+        desired = FollowCommand(pan=desired.pan, tilt=desired.tilt, zoom=zoom)
         self._latest_heads = heads
         self._latest_framing_target = framing_target
 
@@ -262,6 +291,8 @@ class VisionRuntime:
                 command = desired
                 self._ptz.move(command)
                 self._last_ptz_command_at = frame.captured_at
+                if command.zoom != 0:
+                    self._last_zoom_command_at = frame.captured_at
 
         return VisionSnapshot(
             frame_id=frame.frame_id,
