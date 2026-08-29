@@ -62,7 +62,10 @@ class FollowController:
 
     def _command_for_point(self, *, x: float, y: float) -> FollowCommand:
         horizontal_error = x - self.config.desired_x
-        vertical_error = y - self.config.desired_y
+        # Image-space Y increases downward, while the Pocket 3's positive tilt
+        # direction physically moves the camera upward. Invert the vertical error
+        # so movement reduces image-space error instead of amplifying it.
+        vertical_error = self.config.desired_y - y
 
         pan = self._axis_command(horizontal_error, self.config.horizontal_dead_zone)
         tilt = self._axis_command(vertical_error, self.config.vertical_dead_zone)
