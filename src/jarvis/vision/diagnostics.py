@@ -201,10 +201,16 @@ class VisionDiagnostics:
             ):
                 if new_status.framing_source == "head":
                     message = f"Target {new_status.target_id} framing switched to HEAD anchor."
+                elif new_status.framing_source == "head_hold":
+                    message = (
+                        f"Target {new_status.target_id} has a brief head miss; holding the "
+                        "last trusted head height while the same BODY track supplies "
+                        "horizontal continuity."
+                    )
                 elif new_status.framing_source == "body":
                     message = (
-                        f"Target {new_status.target_id} lost usable head evidence; "
-                        "using the same locked BODY track as fallback."
+                        f"Target {new_status.target_id} has no usable head evidence; "
+                        "using the same locked BODY track for horizontal-only fallback."
                     )
                 else:
                     message = f"Target {new_status.target_id} currently has no framing anchor."
