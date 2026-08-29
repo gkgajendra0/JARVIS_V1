@@ -6,6 +6,7 @@ import asyncio
 import logging
 import unicodedata
 from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
@@ -14,12 +15,14 @@ from livekit.agents import (
     AgentStateChangedEvent,
     CloseEvent,
     ConversationItemAddedEvent,
+    UserInputTranscribedEvent,
     UserStateChangedEvent,
 )
 from livekit.agents.llm import ChatMessage
 from livekit.agents.voice.io import PlaybackFinishedEvent
 
 from jarvis.config import JarvisConfig
+from jarvis.dev_control import DevControlClient, parse_explicit_update_decision
 from jarvis.logging_config import configure_logging
 from jarvis.vision.service import VisionService, build_default_vision_service
 from jarvis.voice.agent import JarvisVoiceAgent
@@ -44,6 +47,13 @@ class VoiceRuntimeState(str, Enum):
     ACTIVATING = "activating"
     ACTIVE = "active"
     RECOVERING = "recovering"
+
+
+@dataclass(slots=True)
+class _UpdateApprovalRequest:
+    local_sha: str
+    remote_sha: str
+    response: asyncio.Future[bool]
 
 
 _EXIT_CORES = frozenset(
@@ -142,6 +152,10 @@ class VoiceRuntimeController:
         self._shutdown = asyncio.Event()
         self._active_end: asyncio.Event | None = None
         self._timeout_handle: asyncio.TimerHandle | None = None
+        self._dev_control = DevControlClient.from_environment()
+        self._update_approval_requests: asyncio.Queue[_UpdateApprovalRequest] = (
+            asyncio.Queue()
+        )
 
     @property
     def state(self) -> VoiceRuntimeState:
@@ -155,6 +169,17 @@ class VoiceRuntimeController:
         self._shutdown.set()
         if self._active_end is not None:
             self._active_end.set()
+
+    async def _queue_update_approval(self, local_sha: str, remote_sha: str) -> bool:
+        response = asyncio.get_running_loop().create_future()
+        await self._update_approval_requests.put(
+            _UpdateApprovalRequest(
+                local_sha=local_sha,
+                remote_sha=remote_sha,
+                response=response,
+            )
+        )
+        return await response
 
     def _on_audio_overflow(self) -> None:
         LOGGER.error("Voice session stopped because its microphone queue overflowed")
@@ -179,6 +204,7 @@ class VoiceRuntimeController:
     async def run(self) -> None:
         self.audio.set_overflow_handler(self._on_audio_overflow)
         vision_started = False
+        control_task: asyncio.Task[None] | None = None
         try:
             if self._vision_service is not None:
                 await asyncio.to_thread(self._vision_service.start)
@@ -186,6 +212,16 @@ class VoiceRuntimeController:
                 LOGGER.info("JARVIS integrated vision is active in SAFE mode")
 
             await self.audio.start()
+            if self._dev_control is not None:
+                control_task = asyncio.create_task(
+                    self._dev_control.run(
+                        approval_handler=self._queue_update_approval,
+                        shutdown_handler=self.request_shutdown,
+                    ),
+                    name="jarvis-dev-control",
+                )
+                LOGGER.info("JARVIS development voice-control channel is active")
+
             self._state = VoiceRuntimeState.IDLE
             LOGGER.info("JARVIS is idle; local wake detection is active")
             while not self._shutdown.is_set():
@@ -193,15 +229,55 @@ class VoiceRuntimeController:
                     self.audio.detector.wait_for_detection()
                 )
                 shutdown_task = asyncio.create_task(self._shutdown.wait())
+                waiters: set[asyncio.Task[object]] = {
+                    detection_task,
+                    shutdown_task,
+                }
+                approval_task: asyncio.Task[_UpdateApprovalRequest] | None = None
+                if control_task is not None and not control_task.done():
+                    approval_task = asyncio.create_task(
+                        self._update_approval_requests.get()
+                    )
+                    waiters.add(approval_task)
+
                 done, pending = await asyncio.wait(
-                    {detection_task, shutdown_task},
+                    waiters,
                     return_when=asyncio.FIRST_COMPLETED,
                 )
                 for task in pending:
                     task.cancel()
                 await asyncio.gather(*pending, return_exceptions=True)
+
                 if shutdown_task in done:
                     break
+
+                if approval_task is not None and approval_task in done:
+                    request = approval_task.result()
+                    approved = False
+                    try:
+                        approved = await self._run_update_approval_session(
+                            request.local_sha,
+                            request.remote_sha,
+                        )
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        LOGGER.exception(
+                            "Spoken update approval failed; treating the decision as No"
+                        )
+                    finally:
+                        if not request.response.done():
+                            request.response.set_result(approved)
+                        self._cancel_timeout()
+                        self._active_end = None
+                        if not self._shutdown.is_set():
+                            await self.audio.resume_wake(
+                                cooldown_seconds=self.config.wake_cooldown_seconds
+                            )
+                            self._state = VoiceRuntimeState.IDLE
+                            LOGGER.info("JARVIS returned to local wake detection")
+                    continue
+
                 detection = detection_task.result()
                 LOGGER.info(
                     "Wake detected: %s (confidence %.3f)",
@@ -227,6 +303,9 @@ class VoiceRuntimeController:
         finally:
             self._cancel_timeout()
             self._state = VoiceRuntimeState.STOPPED
+            if control_task is not None:
+                control_task.cancel()
+                await asyncio.gather(control_task, return_exceptions=True)
             await self.audio.aclose()
             if vision_started and self._vision_service is not None:
                 try:
@@ -235,6 +314,69 @@ class VoiceRuntimeController:
                     LOGGER.exception(
                         "JARVIS integrated vision did not shut down cleanly"
                     )
+
+    async def _run_update_approval_session(
+        self,
+        local_sha: str,
+        remote_sha: str,
+    ) -> bool:
+        del local_sha, remote_sha
+        output = self.audio.output
+        if output is None:
+            raise RuntimeError("local audio output is not available")
+
+        self._state = VoiceRuntimeState.ACTIVATING
+        active_end = asyncio.Event()
+        self._active_end = active_end
+        decision = asyncio.get_running_loop().create_future()
+        session, bridge = self._session_factory(self.config)
+        session_input = SessionAudioInput()
+        session.input.audio = session_input
+        session.output.audio = output
+
+        def on_transcript(event: UserInputTranscribedEvent) -> None:
+            if not event.is_final or not event.transcript.strip() or decision.done():
+                return
+            parsed = parse_explicit_update_decision(event.transcript)
+            if parsed is None:
+                LOGGER.info(
+                    "Spoken update response was not an explicit Yes/No; treating as No"
+                )
+                parsed = False
+            decision.set_result(parsed)
+            active_end.set()
+
+        session.on("user_input_transcribed", on_transcript)
+        bridge.conversation.start()
+        self.audio.activate_session(session_input)
+        try:
+            try:
+                await session.start(agent=JarvisVoiceAgent(tools=[]))
+            except Exception:
+                bridge.conversation.fail()
+                raise
+            self._state = VoiceRuntimeState.ACTIVE
+            LOGGER.info("JARVIS is requesting spoken approval for a software update")
+            prompt = session.generate_reply(
+                instructions=(
+                    "Say exactly this sentence and nothing else: "
+                    "'A JARVIS software update is available. Shall I install it and "
+                    "restart now? Please answer yes or no.'"
+                ),
+                allow_interruptions=True,
+                tool_choice="none",
+            )
+            await prompt
+            try:
+                approved = await asyncio.wait_for(decision, timeout=20.0)
+            except TimeoutError:
+                LOGGER.info("Spoken update approval timed out; treating as No")
+                approved = False
+            return bool(approved)
+        finally:
+            active_end.set()
+            self.audio.deactivate_session()
+            await session.aclose()
 
     async def _run_one_session(self) -> None:
         output = self.audio.output
