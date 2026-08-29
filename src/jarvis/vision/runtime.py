@@ -121,6 +121,18 @@ class VisionRuntime:
     def latest_frame(self) -> CapturedFrame | None:
         return self._latest_frame
 
+    def latest_camera_frame(
+        self,
+        *,
+        after_frame_id: int | None = None,
+        timeout_seconds: float | None = None,
+    ) -> CapturedFrame | None:
+        """Read the camera's newest capture without running inference again."""
+        return self._camera.latest(
+            after_frame_id=after_frame_id,
+            timeout_seconds=timeout_seconds,
+        )
+
     @property
     def latest_tracks(self) -> tuple[Track, ...]:
         return tuple(self._latest_tracks)
