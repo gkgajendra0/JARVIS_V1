@@ -205,11 +205,15 @@ class VoiceRuntimeController:
             return
         output = self.audio.output
         if output is None:
-            LOGGER.warning("JARVIS startup greeting skipped because audio output is unavailable")
+            LOGGER.warning(
+                "JARVIS startup greeting skipped because audio output is unavailable"
+            )
             return
         greeting = self._startup_greeting_factory().strip()
         if not greeting:
-            LOGGER.warning("JARVIS startup greeting skipped because no greeting was selected")
+            LOGGER.warning(
+                "JARVIS startup greeting skipped because no greeting was selected"
+            )
             return
         try:
             await self._get_scripted_speech().speak(output, greeting)
