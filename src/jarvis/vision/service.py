@@ -194,10 +194,10 @@ def build_default_vision_service(
         target_manager=TargetManager(lost_timeout_seconds=0.5),
         follow_controller=FollowController(
             FollowConfig(
-                horizontal_dead_zone=0.14,
-                vertical_dead_zone=0.14,
-                gain=1.0,
-                max_command=0.20,
+                horizontal_dead_zone=0.12,
+                vertical_dead_zone=0.12,
+                gain=1.5,
+                max_command=0.35,
                 minimum_confidence=0.5,
                 desired_x=0.50,
                 desired_y=0.40,
@@ -205,15 +205,15 @@ def build_default_vision_service(
         ),
         ptz=DuvcPtzController(
             DuvcPtzConfig(
-                pan_step_fraction=0.02,
-                tilt_step_fraction=0.02,
+                pan_step_fraction=0.01,
+                tilt_step_fraction=0.01,
             )
         ),
         head_detector=MediaPipeBlazeFaceDetector(
             MediaPipeBlazeFaceConfig(model_path=model_path)
         ),
         config=VisionRuntimeConfig(
-            minimum_ptz_interval_seconds=0.20,
+            minimum_ptz_interval_seconds=0.05,
             require_head_for_lock=True,
             required_head_confirmation_frames=3,
         ),
