@@ -1,4 +1,4 @@
-"""Tracking boundary plus Roboflow ByteTrack and BoT-SORT adapters."""
+"""Tracking boundary plus mature Roboflow tracker adapters."""
 
 from __future__ import annotations
 
@@ -45,6 +45,19 @@ class BoTSORTConfig:
     cmc_method: str = "sparseOptFlow"
     cmc_downscale: int = 2
     instant_first_frame_activation: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class OCSORTConfig:
+    """Fast-motion profile for observation-centric person tracking."""
+
+    frame_rate: float = 30.0
+    lost_track_buffer: int = 60
+    minimum_consecutive_frames: int = 2
+    minimum_iou_threshold: float = -0.30
+    direction_consistency_weight: float = 0.20
+    high_conf_det_threshold: float = 0.40
+    delta_t: int = 2
 
 
 class _RoboflowTrackerAdapter:
@@ -244,5 +257,57 @@ class BoTSORTAdapter(_RoboflowTrackerAdapter):
         return self._tracker.update(
             self._to_external(detections, frame=frame),
             frame=frame,
+            timestamp=now,
+        )
+
+
+class OCSORTAdapter(_RoboflowTrackerAdapter):
+    """Use OC-SORT + DIoU for fast, non-linear target motion."""
+
+    def __init__(
+        self,
+        config: OCSORTConfig | None = None,
+        *,
+        tracker_factory: Callable[..., object] | None = None,
+        detections_factory: Callable[..., object] | None = None,
+        iou_factory: Callable[[], object] | None = None,
+        state_estimator_class: type | None = None,
+    ) -> None:
+        self.config = config or OCSORTConfig()
+        if tracker_factory is None:
+            from trackers import OCSORTTracker
+
+            tracker_factory = OCSORTTracker
+        if iou_factory is None:
+            from trackers.utils.iou import DIoU
+
+            iou_factory = DIoU
+        if state_estimator_class is None:
+            from trackers.utils.state_representations import XYXYStateEstimator
+
+            state_estimator_class = XYXYStateEstimator
+
+        tracker = tracker_factory(
+            lost_track_buffer=self.config.lost_track_buffer,
+            frame_rate=self.config.frame_rate,
+            minimum_consecutive_frames=self.config.minimum_consecutive_frames,
+            minimum_iou_threshold=self.config.minimum_iou_threshold,
+            direction_consistency_weight=self.config.direction_consistency_weight,
+            high_conf_det_threshold=self.config.high_conf_det_threshold,
+            delta_t=self.config.delta_t,
+            state_estimator_class=state_estimator_class,
+            iou=iou_factory(),
+        )
+        super().__init__(tracker=tracker, detections_factory=detections_factory)
+
+    def _update_external(
+        self,
+        detections: list[Detection],
+        *,
+        now: float,
+        frame: np.ndarray | None,
+    ) -> object:
+        return self._tracker.update(
+            self._to_external(detections, frame=frame),
             timestamp=now,
         )
