@@ -1,4 +1,4 @@
-"""Bounded movement policy for keeping one visual target near composition point."""
+"""Bounded movement policies for keeping one visual target framed."""
 
 from __future__ import annotations
 
@@ -35,8 +35,31 @@ class FollowConfig:
             raise ValueError("desired_y must be in [0, 1]")
 
 
+@dataclass(frozen=True, slots=True)
+class ZoomConfig:
+    """Keep the locked body's apparent height inside a comfortable framing band."""
+
+    desired_body_height: float = 0.56
+    dead_zone: float = 0.08
+    gain: float = 1.4
+    max_command: float = 0.30
+    minimum_confidence: float = 0.5
+
+    def __post_init__(self) -> None:
+        if not 0 < self.desired_body_height <= 1:
+            raise ValueError("desired_body_height must be in (0, 1]")
+        if not 0 <= self.dead_zone < 0.5:
+            raise ValueError("dead_zone must be in [0, 0.5)")
+        if self.gain <= 0:
+            raise ValueError("gain must be positive")
+        if not 0 < self.max_command <= 1:
+            raise ValueError("max_command must be in (0, 1]")
+        if not 0 <= self.minimum_confidence <= 1:
+            raise ValueError("minimum_confidence must be in [0, 1]")
+
+
 class FollowController:
-    """Convert target geometry into normalized, bounded PTZ movement intent."""
+    """Convert target geometry into normalized, bounded pan/tilt intent."""
 
     def __init__(self, config: FollowConfig | None = None) -> None:
         self.config = config or FollowConfig()
@@ -73,6 +96,26 @@ class FollowController:
 
     def _axis_command(self, error: float, dead_zone: float) -> float:
         if abs(error) <= dead_zone:
+            return 0.0
+        raw = error * self.config.gain
+        limit = self.config.max_command
+        return max(-limit, min(limit, raw))
+
+
+class ZoomController:
+    """Generate conservative adaptive zoom from the locked body track only."""
+
+    def __init__(self, config: ZoomConfig | None = None) -> None:
+        self.config = config or ZoomConfig()
+
+    def command_for(self, target: TargetState | None) -> float:
+        if target is None or target.track is None:
+            return 0.0
+        if target.track.confidence < self.config.minimum_confidence:
+            return 0.0
+
+        error = self.config.desired_body_height - target.track.bounds.height
+        if abs(error) <= self.config.dead_zone:
             return 0.0
         raw = error * self.config.gain
         limit = self.config.max_command
