@@ -30,12 +30,16 @@ class TargetManager:
         if target is None:
             return None
 
-        matching = next((track for track in tracks if track.track_id == target.track_id), None)
+        matching = next(
+            (track for track in tracks if track.track_id == target.track_id), None
+        )
         if matching is not None:
             self._target = TargetState(track_id=target.track_id, track=matching)
             return self._target
 
-        missing_since = target.missing_since if target.missing_since is not None else now
+        missing_since = (
+            target.missing_since if target.missing_since is not None else now
+        )
         if now - missing_since >= self._lost_timeout_seconds:
             self._target = None
             return None
