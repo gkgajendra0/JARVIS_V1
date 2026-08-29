@@ -6,7 +6,12 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from livekit.agents import CloseEvent, CloseReason, ConversationItemAddedEvent
+from livekit.agents import (
+    CloseEvent,
+    CloseReason,
+    ConversationItemAddedEvent,
+    UserInputTranscribedEvent,
+)
 from livekit.agents.llm import ChatMessage
 
 from jarvis.config import JarvisConfig
@@ -20,6 +25,26 @@ from jarvis.voice.runtime import (
 )
 
 
+class FakeSpeechHandle:
+    def __init__(self) -> None:
+        self._done = asyncio.Event()
+        self._error: BaseException | None = None
+
+    def finish(self) -> None:
+        self._done.set()
+
+    async def wait_for_playout(self) -> None:
+        await self._done.wait()
+
+    def __await__(self):
+        return self.wait_for_playout().__await__()
+
+    def exception(self) -> BaseException | None:
+        if not self._done.is_set():
+            raise asyncio.InvalidStateError
+        return self._error
+
+
 class FakeSession:
     def __init__(self, *, start_error: Exception | None = None) -> None:
         self.handlers: dict[str, list] = defaultdict(list)
@@ -28,6 +53,9 @@ class FakeSession:
         self.started = asyncio.Event()
         self.closed = False
         self.start_error = start_error
+        self.prompt_requested = asyncio.Event()
+        self.prompt_handle = FakeSpeechHandle()
+        self.generated_reply_kwargs: dict[str, Any] | None = None
 
     def on(self, event: str, callback):
         self.handlers[event].append(callback)
@@ -42,6 +70,11 @@ class FakeSession:
         self.started.set()
         if self.start_error is not None:
             raise self.start_error
+
+    def generate_reply(self, **kwargs: Any) -> FakeSpeechHandle:
+        self.generated_reply_kwargs = kwargs
+        self.prompt_requested.set()
+        return self.prompt_handle
 
     async def aclose(self) -> None:
         self.closed = True
@@ -157,3 +190,37 @@ async def test_provider_start_failure_marks_conversation_failed_and_cleans_up() 
     assert session.closed is True
     assert audio.deactivated is True
     assert conversation.status is ConversationStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_update_approval_uses_text_trigger_and_waits_for_real_spoken_yes() -> None:
+    runtime, session, _, audio = runtime_with_session()
+    task = asyncio.create_task(
+        runtime._run_update_approval_session("a" * 40, "b" * 40)
+    )
+    await asyncio.wait_for(session.prompt_requested.wait(), timeout=1)
+
+    assert session.generated_reply_kwargs is not None
+    assert session.generated_reply_kwargs["user_input"].startswith(
+        "JARVIS internal control request:"
+    )
+    assert session.generated_reply_kwargs["allow_interruptions"] is False
+
+    session.emit(
+        "user_input_transcribed",
+        UserInputTranscribedEvent(transcript="yes", is_final=True),
+    )
+    await asyncio.sleep(0)
+    assert task.done() is False
+
+    session.prompt_handle.finish()
+    await asyncio.sleep(0)
+    session.emit(
+        "user_input_transcribed",
+        UserInputTranscribedEvent(transcript="yes", is_final=True),
+    )
+
+    assert await asyncio.wait_for(task, timeout=1) is True
+    assert audio.activated is True
+    assert audio.deactivated is True
+    assert session.closed is True
