@@ -31,6 +31,14 @@ class BoundingBox:
     def center_y(self) -> float:
         return (self.top + self.bottom) / 2
 
+    @property
+    def width(self) -> float:
+        return self.right - self.left
+
+    @property
+    def height(self) -> float:
+        return self.bottom - self.top
+
 
 @dataclass(frozen=True, slots=True)
 class Detection:
@@ -96,13 +104,16 @@ class FollowCommand:
 
     pan: float = 0.0
     tilt: float = 0.0
+    zoom: float = 0.0
 
     def __post_init__(self) -> None:
         if not -1 <= self.pan <= 1:
             raise ValueError("pan command must be in [-1, 1]")
         if not -1 <= self.tilt <= 1:
             raise ValueError("tilt command must be in [-1, 1]")
+        if not -1 <= self.zoom <= 1:
+            raise ValueError("zoom command must be in [-1, 1]")
 
     @property
     def is_idle(self) -> bool:
-        return self.pan == 0 and self.tilt == 0
+        return self.pan == 0 and self.tilt == 0 and self.zoom == 0
