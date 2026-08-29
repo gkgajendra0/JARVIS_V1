@@ -87,7 +87,13 @@ def _draw(image, snapshot, runtime: VisionRuntime):
         bottom = int(track.bounds.bottom * height)
         selected = track.track_id == target_id
         eligible = runtime.head_lock_eligible(track.track_id)
-        color = (0, 165, 255) if selected else (0, 255, 0) if eligible else (128, 128, 128)
+        color = (
+            (0, 165, 255)
+            if selected
+            else (0, 255, 0)
+            if eligible
+            else (128, 128, 128)
+        )
         thickness = 3 if selected else 2
         cv2.rectangle(preview, (left, top), (right, bottom), color, thickness)
         suffix = " LOCKED" if selected else ""
@@ -212,8 +218,12 @@ def main() -> int:
     selection = _SelectionState()
 
     print("JARVIS head-first armed vision follow")
-    print("Starts SAFE: body tracks need 3 consecutive linked face frames before lock.")
-    print("Cyan box = BlazeFace head; gray body = not head-confirmed; green = eligible.")
+    print(
+        "Starts SAFE: body tracks need 3 consecutive linked face frames before lock."
+    )
+    print(
+        "Cyan box = BlazeFace head; gray body = not head-confirmed; green = eligible."
+    )
     print("Click an eligible person to lock them, then press A to arm follow.")
     print("Press SPACE to disarm immediately, C to clear target, Q/Esc to quit.")
 
