@@ -23,7 +23,9 @@ class ScriptedSpeech(Protocol):
 class LiveKitScriptedSpeech:
     """Synthesize a fixed script and play it through the existing local output."""
 
-    def __init__(self, engine: tts.TTS, *, playback_timeout_seconds: float = 20.0) -> None:
+    def __init__(
+        self, engine: tts.TTS, *, playback_timeout_seconds: float = 20.0
+    ) -> None:
         if playback_timeout_seconds <= 0:
             raise ValueError("playback timeout must be positive")
         self._engine = engine
