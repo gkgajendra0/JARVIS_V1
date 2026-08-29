@@ -9,7 +9,8 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 | 0 | Clean Foundation | Minimal app lifecycle, package structure, config, logging, baseline tests | DONE |
 | 1 | Natural Conversational Core | CAP-001, CAP-005, CAP-006, CAP-007 | DONE |
 | 2 | Wake, Voice Session, and Audio Robustness | CAP-002, CAP-003 | DONE |
-| 3 | Identity, Graduated Trust, Authority, and Observability Foundation | CAP-004, CAP-034, CAP-035, CAP-036, CAP-037 | ACTIVE - RESEARCH |
+| 2.5 | Vision Sensor & Active Target Tracking Foundation | Camera/PTZ boundaries, local person detection/tracking, deterministic target lock, active following | ACTIVE |
+| 3 | Identity, Graduated Trust, Authority, and Observability Foundation | CAP-004, CAP-034, CAP-035, CAP-036, CAP-037 | PAUSED - RESEARCH CONTINUES AFTER 2.5 |
 | 4 | Live Context and Personal Memory | CAP-008 through CAP-013 | PLANNED |
 | 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | PLANNED |
 | 6 | Knowledge, Current Research, and Truthfulness | CAP-014 through CAP-017 | PLANNED |
@@ -28,11 +29,11 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 | 19 | Governed Self-Diagnostics and Repair | CAP-046 | PLANNED |
 | 20 | Governed Self-Improvement and Advanced Autonomy | CAP-047 | PLANNED |
 
-## Why CAP-032 Moves To Step 7
+## Why Step 2.5 Exists
 
-The old JARVIS learned that useful reads/actions should not each invent a separate router, policy path, result shape, or execution boundary. A **minimal governed capability runtime** therefore arrives with the first real safe-read expansion, before notes, apps, browser, calendar, email, files, or device actions.
+Step 2.5 is a deliberately bounded roadmap interlude approved after Step 2. It establishes a reusable visual sensor and active-attention foundation before Step 3 is completed. The immediate reason is practical: the available DJI Pocket 3 has experimentally proven USB webcam and programmable PTZ behavior, and visual presence will later provide one evidence source to Step 3.
 
-This does **not** mean building a giant universal agent framework in Step 7. It means defining the smallest common contract needed by real capabilities at that point: capability identity/description, bounded input, policy/authority check, execution adapter boundary, structured result, and truthful failure state. Extensibility/plugin lifecycle remains later at Step 16.
+Step 2.5 does **not** grant identity, authentication, permission, passive surveillance, semantic scene memory, or consequential device authority. Vision may later emit evidence; Step 3 remains the owner of trust and authority decisions.
 
 ## Universal Step Lifecycle
 
@@ -54,21 +55,6 @@ REQUIREMENTS
 
 Research for future steps is intentionally deferred until those steps become active. This keeps decisions current and avoids speculative architecture.
 
-## Strategic Evolution Milestones
-
-The old JARVIS strategic roadmap expressed the desired evolution as governed foundation -> perception -> memory -> reliable action -> daily assistant -> multi-capability orchestration -> governed agents -> governed learning/improvement -> personal intelligence runtime. V1 preserves that product direction while simplifying the implementation sequence.
-
-The V1 milestones are:
-
-1. **Conversational Presence** — Steps 1-2.
-2. **Governed Personal Foundation** — Steps 3-5.
-3. **Source-Aware Intelligence** — Steps 6-7.
-4. **Reliable Daily Actions** — Steps 8-12.
-5. **Visible and Aware Assistant** — Steps 13-15.
-6. **Extensible Daily Assistant** — Steps 16-17.
-7. **Governed Learning and Improvement** — Steps 18-20.
-8. **Personal Intelligence Runtime** — the integrated end state after the mature capabilities above work together coherently.
-
 ## Step 0 - Clean Foundation
 
 Completed baseline:
@@ -85,50 +71,22 @@ Completed baseline:
 
 Goal: prove that JARVIS can hold a natural, realtime, multi-turn conversation before wake word, memory, tools, autonomy, or HUD are added.
 
-High-level completion means:
-
-- manual start works;
-- natural multi-turn conversation works;
-- English, Hindi, and Hinglish are usable;
-- contextual references and corrections work naturally;
-- interruptions are handled by the selected realtime stack where in scope;
-- JARVIS owns the canonical accepted conversation record;
-- real human usage is acceptable;
-- no duplicated conversation/context owners are introduced.
-
-The exact technology and architecture must be confirmed through the Step-1 planning/research process before implementation.
-
 ## Step 2 - Wake, Voice Session, and Audio Robustness
 
-Completed outcome: local wake detection, one JARVIS-owned audio path, preserved wake
-tail, realtime follow-up conversation, explicit return to idle, and clean re-wake work
-on the target Windows system. Extended endurance and device-failure trials were
-explicitly waived and remain recorded as unverified residual risks.
+Completed outcome: local wake detection, one JARVIS-owned audio path, preserved wake tail, realtime follow-up conversation, explicit return to idle, and clean re-wake work on the target Windows system. Extended endurance and device-failure trials were explicitly waived and remain recorded as unverified residual risks.
+
+## Step 2.5 - Vision Sensor & Active Target Tracking Foundation
+
+Goal: establish one JARVIS-owned camera path, replaceable detector/tracker/PTZ boundaries, deterministic target locking, and safe closed-loop target following on the validated Pocket 3 hardware. Technology-specific detector/tracker choices must be benchmarked on the real Windows + RTX 5060 Ti environment before being frozen.
 
 ## Step 3 - Identity, Graduated Trust, Authority, and Observability
 
-Goal: research and define the minimum trustworthy governance foundation required
-before later capabilities may read, write, communicate, or control anything. Step 3
-does not implement those actions or the Step-7 capability runtime.
+Goal: research and define the minimum trustworthy governance foundation required before later capabilities may read, write, communicate, or control anything. Step 3 does not implement those actions or the Step-7 capability runtime. Step-3 research is paused only while Step 2.5 is active and resumes after Step 2.5 acceptance.
 
 ## Final Target - Personal Intelligence Runtime
 
 The roadmap is not complete merely because all steps have code. The final target is one coherent personal intelligence runtime in which mature capabilities cooperate under shared conversation, context, memory, truthfulness, authority, observability, and execution boundaries.
 
-At that point JARVIS should be able to:
-
-- converse naturally and remain present across sessions;
-- know approved personal/project context and correct it when the user corrects JARVIS;
-- choose whether a request needs model reasoning, fresh external information, trusted sources, memory, local project evidence, or a capability;
-- verify current/high-risk claims appropriately;
-- perform routine daily computer, file, browser, device, note, calendar, email, and project workflows with proportional consent;
-- monitor explicitly selected topics/conditions and do bounded background work;
-- coordinate mature capabilities without creating an uncontrolled second brain;
-- degrade truthfully when cloud/provider/network/device capability is unavailable;
-- expose understandable state through the HUD/workspace;
-- diagnose faults and eventually propose/apply only governed, reversible, auditable improvements;
-- remain replaceable at provider boundaries rather than becoming permanently coupled to one model/framework/provider.
-
 ## Roadmap Change Rule
 
-A future idea may be added here when it represents real product intent, but it must not automatically interrupt the active step. The active step changes only through deliberate planning and human approval.
+A future idea may be added here when it represents real product intent, but it must not automatically interrupt the active step. The active step changes only through deliberate planning and human approval. Step 2.5 is such an explicitly approved interruption.
