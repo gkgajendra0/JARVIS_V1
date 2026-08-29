@@ -19,14 +19,35 @@ class VisionAgentTools:
 
     @function_tool()
     async def inspect_vision(self, context: RunContext) -> dict[str, object]:
-        """Read current camera/follow state and recent meaningful vision events.
+        """Read current tracking/head state and recent meaningful vision events.
 
-        Use this when the user asks what the camera is seeing, what just happened,
-        why tracking changed, whether a target was lost/reacquired, or requests
-        diagnosis of the local vision test. This is sensor state, not identity proof.
+        This tool does not expose image pixels or general scene understanding. Use it
+        for person-track counts, head-detection counts, target/follow state, framing
+        source, and recent tracking transitions. Do not use it to infer clothing
+        colour, arbitrary objects, text, furniture, facial appearance, identity, or
+        any other visual detail absent from the returned fields.
         """
         del context
-        return self._service.report(event_limit=16)
+        report = self._service.report(event_limit=16)
+        return {
+            "capabilities": [
+                "person_track_count",
+                "head_detection_count",
+                "target_visibility",
+                "follow_armed_state",
+                "head_or_body_framing_source",
+                "recent_tracking_transitions",
+            ],
+            "not_available": [
+                "raw_image_pixels",
+                "clothing_colour",
+                "general_object_recognition",
+                "text_or_ocr",
+                "scene_description",
+                "facial_appearance_or_identity",
+            ],
+            **report,
+        }
 
     @function_tool()
     async def control_vision_follow(
