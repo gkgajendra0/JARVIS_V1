@@ -212,7 +212,11 @@ class VisionRuntime:
         self._last_frame_id = frame.frame_id
         self._latest_frame = frame
         detections = self._detector.detect(frame)
-        tracks = self._tracker.update(detections, now=frame.captured_at)
+        tracks = self._tracker.update(
+            detections,
+            now=frame.captured_at,
+            frame=frame.image,
+        )
         self._latest_tracks = tracks
         target = self._target_manager.update(tracks, now=frame.captured_at)
         if target is None:
