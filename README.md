@@ -92,11 +92,12 @@ $env:JARVIS_DEV_BRANCH = "feature/jarvis-dev-supervisor"
 jarvis-dev
 ```
 
-When an update becomes available, the running JARVIS voice runtime asks the owner
-aloud whether to apply it. A narrow deterministic parser accepts only an explicit
+When an update becomes available, JARVIS speaks a fixed approval question through a
+dedicated scripted-TTS adapter, while the realtime session is used only to capture and
+transcribe the owner's response. A narrow deterministic parser accepts only an explicit
 spoken Yes or No from the finalized transcript; ambiguous speech, timeout, or an
-unavailable voice-control channel means No. The realtime model may speak the prompt,
-but it does not decide whether the update was approved.
+unavailable voice-control channel means No. The realtime model does not generate the
+approval wording and never decides whether the update was approved.
 
 The supervisor uses an authenticated loopback-only control channel, refuses dirty
 working trees and non-fast-forward updates, requests a clean in-process shutdown
