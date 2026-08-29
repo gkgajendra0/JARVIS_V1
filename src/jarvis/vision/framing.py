@@ -81,8 +81,7 @@ class HeadFirstFramingPolicy:
         if candidates:
             expected_x = body.center_x
             expected_y = (
-                body.top
-                + body_height * self.config.body_fallback_vertical_fraction
+                body.top + body_height * self.config.body_fallback_vertical_fraction
             )
             head = min(
                 candidates,
