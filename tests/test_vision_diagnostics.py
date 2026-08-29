@@ -128,7 +128,9 @@ def test_diagnostics_exposes_detector_tracker_counts_on_track_dropout() -> None:
 
     report = diagnostics.report(event_limit=10)
     event = next(
-        item for item in report["recent_events"] if item["code"] == "people_count_changed"
+        item
+        for item in report["recent_events"]
+        if item["code"] == "people_count_changed"
     )
 
     assert "RF-DETR=1" in event["message"]
