@@ -9,8 +9,8 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 | 0 | Clean Foundation | Minimal app lifecycle, package structure, config, logging, baseline tests | DONE |
 | 1 | Natural Conversational Core | CAP-001, CAP-005, CAP-006, CAP-007 | DONE |
 | 2 | Wake, Voice Session, and Audio Robustness | CAP-002, CAP-003 | DONE |
-| 2.5 | Vision Sensor & Active Target Tracking Foundation | Camera/PTZ boundaries, local person detection/tracking, deterministic target lock, active following | ACTIVE |
-| 3 | Identity, Graduated Trust, Authority, and Observability Foundation | CAP-004, CAP-034, CAP-035, CAP-036, CAP-037 | PAUSED - RESEARCH CONTINUES AFTER 2.5 |
+| 2.5 | Vision Sensor & Active Target Tracking Foundation | Camera/PTZ boundaries, local person detection/tracking, deterministic target lock, active following | DONE |
+| 3 | Identity, Graduated Trust, Authority, and Observability Foundation | CAP-004, CAP-034, CAP-035, CAP-036, CAP-037 | ACTIVE |
 | 4 | Live Context and Personal Memory | CAP-008 through CAP-013 | PLANNED |
 | 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | PLANNED |
 | 6 | Knowledge, Current Research, and Truthfulness | CAP-014 through CAP-017 | PLANNED |
@@ -31,9 +31,26 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 
 ## Why Step 2.5 Exists
 
-Step 2.5 is a deliberately bounded roadmap interlude approved after Step 2. It establishes a reusable visual sensor and active-attention foundation before Step 3 is completed. The available DJI Pocket 3 has experimentally proven USB webcam and programmable PTZ behavior, and visual presence can later provide one evidence source to Step 3.
+Step 2.5 was a deliberately bounded roadmap interlude approved after Step 2. It established a reusable visual sensor and active-attention foundation before Step 3. The DJI Pocket 3 experimentally proved USB webcam and programmable PTZ behavior, and the accepted visual runtime now provides presence/tracking/head evidence that Step 3 may consume.
 
-Step 2.5 does **not** grant identity, authentication, permission, passive surveillance, semantic scene memory, or consequential device authority. Vision may later emit evidence; Step 3 remains the owner of trust and authority decisions.
+Step 2.5 does **not** grant identity, authentication, permission, passive surveillance, semantic scene memory, or consequential device authority. Vision emits evidence; Step 3 owns trust and authority decisions.
+
+## Development Supervisor Interlude
+
+After Step 2.5 acceptance and before Step 3 implementation, the development workflow received one bounded infrastructure improvement: `jarvis-dev`.
+
+This is **not** a new product step and does not change roadmap numbering. It is development tooling that:
+
+- watches protected `origin/main` for new commits;
+- never pulls/restarts without one explicit owner approval;
+- asks through JARVIS voice using fixed scripted TTS;
+- keeps approval interpretation deterministic and outside model authority;
+- performs clean child shutdown and restart;
+- verifies restarted-child readiness through the authenticated local control channel;
+- restores the previous last-known-good revision if the updated child fails readiness;
+- relies on protected `main` PR flow with required `ruff` and `pytest` gates.
+
+The normal user-facing runtime does not gain Git/self-update authority merely because this development supervisor exists.
 
 ## Why CAP-032 Moves To Step 7
 
@@ -56,6 +73,8 @@ REQUIREMENTS
 -> REAL HUMAN USE
 -> CORRECTION IF NEEDED
 -> HUMAN ACCEPTANCE
+-> DOCUMENTATION RECONCILIATION
+-> PROTECTED-MAIN MERGE
 -> DONE
 ```
 
@@ -91,37 +110,21 @@ Completed baseline:
 
 ## Step 1 - Natural Conversational Core
 
-Goal: prove that JARVIS can hold a natural, realtime, multi-turn conversation before wake word, memory, tools, autonomy, or HUD are added.
-
-High-level completion means:
-
-- manual start works;
-- natural multi-turn conversation works;
-- English, Hindi, and Hinglish are usable;
-- contextual references and corrections work naturally;
-- interruptions are handled by the selected realtime stack where in scope;
-- JARVIS owns the canonical accepted conversation record;
-- real human usage is acceptable;
-- no duplicated conversation/context owners are introduced.
-
-The exact technology and architecture must be confirmed through the Step-1 planning/research process before implementation.
+Completed outcome: manual realtime conversation, multilingual English/Hindi/Hinglish use, contextual follow-ups/corrections, provider-backed interruption support where available, canonical accepted conversation state, and real human acceptance.
 
 ## Step 2 - Wake, Voice Session, and Audio Robustness
 
-Completed outcome: local wake detection, one JARVIS-owned audio path, preserved wake
-tail, realtime follow-up conversation, explicit return to idle, and clean re-wake work
-on the target Windows system. Extended endurance and device-failure trials were
-explicitly waived and remain recorded as unverified residual risks.
+Completed outcome: local wake detection, one JARVIS-owned audio path, preserved wake tail, realtime follow-up conversation, explicit return to idle, and clean re-wake work on the target Windows system. Extended endurance and device-failure trials were explicitly waived and remain recorded as unverified residual risks.
 
 ## Step 2.5 - Vision Sensor & Active Target Tracking Foundation
 
-Goal: establish one JARVIS-owned camera path, replaceable detector/tracker/PTZ boundaries, deterministic target locking, and safe closed-loop target following on the validated Pocket 3 hardware. Technology-specific detector/tracker choices must be benchmarked on the real Windows + RTX 5060 Ti environment before being frozen.
+Completed outcome: one JARVIS-owned Pocket 3 camera path, replaceable detector/tracker/PTZ boundaries, RF-DETR Nano person detection, OC-SORT tracking, head-first framing evidence, deterministic target locking, safe pan/tilt/adaptive-zoom follow, canonical visual state, and real Windows + RTX 5060 Ti + Pocket 3 human acceptance.
 
 ## Step 3 - Identity, Graduated Trust, Authority, and Observability
 
-Goal: research and define the minimum trustworthy governance foundation required
-before later capabilities may read, write, communicate, or control anything. Step 3
-does not implement those actions or the Step-7 capability runtime. Step-3 research is paused only while Step 2.5 is active and resumes after Step 2.5 acceptance.
+Goal: research and define the minimum trustworthy governance foundation required before later capabilities may read, write, communicate, or control anything. Step 3 does not implement those later actions or the Step-7 capability runtime.
+
+Step 3 is now active. Vision/head/person tracking may provide evidence, but no sensor/model/provider may grant permission directly. Current research, threat modeling, trust vocabulary, authority/approval contracts, privacy-aware observability, and realistic identity-evidence technology comparisons must be completed before implementation is approved.
 
 ## Final Target - Personal Intelligence Runtime
 
@@ -143,4 +146,4 @@ At that point JARVIS should be able to:
 
 ## Roadmap Change Rule
 
-A future idea may be added here when it represents real product intent, but it must not automatically interrupt the active step. The active step changes only through deliberate planning and human approval. Step 2.5 is such an explicitly approved interruption.
+A future idea may be added here when it represents real product intent, but it must not automatically interrupt the active step. The active step changes only through deliberate planning and human approval. Step 2.5 was such an explicitly approved interruption and is now complete.
