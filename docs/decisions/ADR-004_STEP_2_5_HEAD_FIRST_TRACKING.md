@@ -85,7 +85,9 @@ Positive:
 Costs:
 
 - MediaPipe becomes a production vision dependency;
-- MediaPipe depends on `opencv-contrib-python`, so JARVIS uses that single OpenCV distribution instead of installing both base and contrib wheels;
+- current upstream dependency metadata creates an OpenCV packaging conflict: `trackers==2.6.0` requires `opencv-python`, while `mediapipe==1.0.1` requires `opencv-contrib-python`;
+- JARVIS therefore pins both OpenCV distributions to the exact same `5.0.0.93` build as a temporary compatibility compromise so package metadata and `pip check` remain valid; both expose the same `cv2` namespace and this must be revisited if the versions diverge;
+- Roboflow's own current inference requirements explicitly use the same dual-wheel workaround because its dependencies require both distributions;
 - partial face occlusion is weaker than YuNet in the controlled clip, so the body-linked fallback remains necessary;
 - head-first target selection does not solve long-gap human identity; that remains Step 3.
 
@@ -96,6 +98,7 @@ Revisit the detector or thresholds if:
 - integrated live Pocket 3 testing shows materially different false positives from the recorded benchmark;
 - room-scale profile/occlusion performance is insufficient even with same-body fallback;
 - MediaPipe becomes incompatible with the target Python/OpenCV runtime;
+- either `trackers` or MediaPipe relaxes its OpenCV package requirement so JARVIS can return to one OpenCV wheel;
 - another permissively usable detector materially improves the measured accuracy/latency/safety tradeoff;
 - Step 3 face recognition requires a different face alignment detector and consolidating the stack produces a measured advantage.
 
