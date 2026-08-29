@@ -91,6 +91,8 @@ def runtime_with_session(
         "Ok, Jarvis, go to sleep.",
         "Jarvis, please go to sleep now.",
         "Please end the session.",
+        "No, leave it. Go to sleep now.",
+        "No, leave it, Jarvis, go to sleep now.",
         "ठीक है, जार्विस सो जाओ।",
     ],
 )
@@ -102,6 +104,7 @@ def test_exit_intent_accepts_bounded_polite_variants(text: str) -> None:
     "text",
     [
         "Do not go to sleep.",
+        "No. Do not go to sleep.",
         "Tell me why you go to sleep.",
         "What does go to sleep mean?",
         "Jarvis, continue.",

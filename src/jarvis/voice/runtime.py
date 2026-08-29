@@ -78,9 +78,27 @@ def _normalized_intent(text: str) -> str:
     return " ".join(normalized.split())
 
 
+def _final_spoken_clause(text: str) -> str:
+    """Return the final non-empty punctuation-delimited clause."""
+    clauses: list[str] = []
+    current: list[str] = []
+    for character in text:
+        if unicodedata.category(character).startswith("P"):
+            clause = "".join(current).strip()
+            if clause:
+                clauses.append(clause)
+            current.clear()
+        else:
+            current.append(character)
+    clause = "".join(current).strip()
+    if clause:
+        clauses.append(clause)
+    return clauses[-1] if clauses else text
+
+
 def _is_exit_intent(text: str) -> bool:
     """Accept bounded command variants without matching quoted or negated text."""
-    candidate = _normalized_intent(text)
+    candidate = _normalized_intent(_final_spoken_clause(text))
     changed = True
     while changed:
         changed = False
