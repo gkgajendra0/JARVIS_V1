@@ -5,8 +5,9 @@ JARVIS V1 is a clean implementation of a personal, voice-first JARVIS assistant.
 The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARVIS
 V1 does not import it or depend on it at runtime.
 
-Steps 1 and 2 are accepted. Current active work: **Step 3 — Identity, Graduated Trust,
-Authority, and Observability Foundation (research only)**.
+Steps 1 and 2 are accepted. Current active work: **Step 2.5 — Vision Sensor & Active
+Target Tracking Foundation**. Step 3 — Identity, Graduated Trust, Authority, and
+Observability Foundation — is paused until Step 2.5 is accepted, then resumes.
 
 ## Setup
 
@@ -55,7 +56,7 @@ Step 2 uses one roomless local microphone/speaker runtime. It requires a trained
 LiveKit-compatible `JARVIS` ONNX classifier; no unverified model is committed.
 
 ```powershell
-$env:JARVIS_WAKE_MODEL_PATH = "C:\path\to\jarvis.onnx"
+$env:JARVIS_WAKE_MODEL_PATH = "C:\\path\\to\\jarvis.onnx"
 $env:JARVIS_AUDIO_INPUT_DEVICE = "index:57"
 $env:JARVIS_AUDIO_OUTPUT_DEVICE = "index:45"
 $env:JARVIS_REALTIME_PROVIDER = "gemini"
