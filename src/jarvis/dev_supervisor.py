@@ -2,13 +2,23 @@
 
 from __future__ import annotations
 
+import json
 import os
+import secrets
 import signal
+import socket
 import subprocess
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+from jarvis.dev_control import (
+    DEV_CONTROL_HOST_ENV,
+    DEV_CONTROL_PORT_ENV,
+    DEV_CONTROL_TOKEN_ENV,
+)
 
 _BRANCH_ENV = "JARVIS_DEV_BRANCH"
 
@@ -19,6 +29,7 @@ class DevSupervisorConfig:
     branch: str = "main"
     poll_seconds: float = 5.0
     shutdown_timeout_seconds: float = 10.0
+    approval_timeout_seconds: float = 45.0
 
     def __post_init__(self) -> None:
         if not self.remote.strip():
@@ -29,6 +40,8 @@ class DevSupervisorConfig:
             raise ValueError("poll_seconds must be positive")
         if self.shutdown_timeout_seconds <= 0:
             raise ValueError("shutdown_timeout_seconds must be positive")
+        if self.approval_timeout_seconds <= 0:
+            raise ValueError("approval_timeout_seconds must be positive")
 
 
 class GitRepo:
@@ -91,6 +104,134 @@ class GitRepo:
         )
 
 
+class VoiceControlServer:
+    """Loopback-only supervisor endpoint used by the running voice child."""
+
+    def __init__(self) -> None:
+        self._listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._listener.bind(("127.0.0.1", 0))
+        self._listener.listen(1)
+        self._host, self._port = self._listener.getsockname()
+        self._token = secrets.token_urlsafe(32)
+        self._connection: socket.socket | None = None
+        self._stream: Any = None
+        self._request_sequence = 0
+
+    def child_environment(self) -> dict[str, str]:
+        return {
+            DEV_CONTROL_HOST_ENV: str(self._host),
+            DEV_CONTROL_PORT_ENV: str(self._port),
+            DEV_CONTROL_TOKEN_ENV: self._token,
+        }
+
+    def _next_request_id(self) -> str:
+        self._request_sequence += 1
+        return str(self._request_sequence)
+
+    def _reset_child(self) -> None:
+        stream = self._stream
+        connection = self._connection
+        self._stream = None
+        self._connection = None
+        if stream is not None:
+            try:
+                stream.close()
+            except OSError:
+                pass
+        if connection is not None:
+            try:
+                connection.close()
+            except OSError:
+                pass
+
+    def _send(self, payload: dict[str, object]) -> None:
+        if self._stream is None:
+            raise RuntimeError("JARVIS voice control connection is unavailable")
+        data = (json.dumps(payload, separators=(",", ":")) + "\n").encode()
+        self._stream.write(data)
+        self._stream.flush()
+
+    def _receive(self) -> dict[str, object]:
+        if self._stream is None:
+            raise RuntimeError("JARVIS voice control connection is unavailable")
+        line = self._stream.readline()
+        if not line:
+            raise RuntimeError("JARVIS voice control connection closed")
+        payload = json.loads(line.decode())
+        if not isinstance(payload, dict):
+            raise RuntimeError("invalid JARVIS voice control response")
+        return payload
+
+    def _ensure_child(self, *, timeout_seconds: float) -> None:
+        if self._connection is not None:
+            self._connection.settimeout(timeout_seconds)
+            return
+        self._listener.settimeout(timeout_seconds)
+        connection, _ = self._listener.accept()
+        connection.settimeout(timeout_seconds)
+        stream = connection.makefile("rwb")
+        self._connection = connection
+        self._stream = stream
+        try:
+            hello = self._receive()
+            if hello.get("type") != "hello" or hello.get("token") != self._token:
+                raise RuntimeError("JARVIS voice control authentication failed")
+        except Exception:
+            self._reset_child()
+            raise
+
+    def request_update_approval(
+        self,
+        local_sha: str,
+        remote_sha: str,
+        *,
+        timeout_seconds: float,
+    ) -> bool:
+        try:
+            self._ensure_child(timeout_seconds=timeout_seconds)
+            request_id = self._next_request_id()
+            self._send(
+                {
+                    "type": "update_approval_request",
+                    "request_id": request_id,
+                    "local_sha": local_sha,
+                    "remote_sha": remote_sha,
+                }
+            )
+            response = self._receive()
+            if (
+                response.get("type") != "update_approval_response"
+                or response.get("request_id") != request_id
+            ):
+                raise RuntimeError("unexpected JARVIS update approval response")
+            return response.get("approved") is True
+        except (OSError, TimeoutError, RuntimeError, json.JSONDecodeError) as exc:
+            self._reset_child()
+            raise RuntimeError(f"voice approval failed: {exc}") from exc
+
+    def request_shutdown(self, *, timeout_seconds: float = 3.0) -> bool:
+        try:
+            self._ensure_child(timeout_seconds=timeout_seconds)
+            request_id = self._next_request_id()
+            self._send({"type": "shutdown_request", "request_id": request_id})
+            response = self._receive()
+            return (
+                response.get("type") == "shutdown_ack"
+                and response.get("request_id") == request_id
+            )
+        except (OSError, TimeoutError, RuntimeError, json.JSONDecodeError):
+            self._reset_child()
+            return False
+
+    def child_stopped(self) -> None:
+        self._reset_child()
+
+    def close(self) -> None:
+        self._reset_child()
+        self._listener.close()
+
+
 def _config_from_environment() -> DevSupervisorConfig:
     branch = os.environ.get(_BRANCH_ENV, "main").strip() or "main"
     return DevSupervisorConfig(branch=branch)
@@ -106,8 +247,13 @@ def _find_repo_root() -> Path:
     return Path(result.stdout.strip())
 
 
-def _start_jarvis(root: Path) -> subprocess.Popen[bytes]:
-    kwargs: dict[str, object] = {"cwd": root}
+def _start_jarvis(
+    root: Path,
+    control: VoiceControlServer,
+) -> subprocess.Popen[bytes]:
+    child_env = os.environ.copy()
+    child_env.update(control.child_environment())
+    kwargs: dict[str, object] = {"cwd": root, "env": child_env}
     if os.name == "nt":
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
     process = subprocess.Popen(
@@ -122,17 +268,28 @@ def _stop_jarvis(
     process: subprocess.Popen[bytes],
     *,
     timeout_seconds: float,
+    control: VoiceControlServer,
 ) -> None:
     if process.poll() is not None:
+        control.child_stopped()
         return
 
     print("Stopping JARVIS gracefully...")
+    if control.request_shutdown():
+        try:
+            process.wait(timeout=timeout_seconds)
+            control.child_stopped()
+            return
+        except subprocess.TimeoutExpired:
+            pass
+
     try:
         if os.name == "nt":
             process.send_signal(signal.CTRL_BREAK_EVENT)
         else:
             process.send_signal(signal.SIGINT)
         process.wait(timeout=timeout_seconds)
+        control.child_stopped()
         return
     except (OSError, subprocess.TimeoutExpired):
         pass
@@ -144,15 +301,8 @@ def _stop_jarvis(
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=3.0)
-
-
-def _owner_approves_update(local_sha: str, remote_sha: str) -> bool:
-    print()
-    print("New validated JARVIS update detected:")
-    print(f"  current: {local_sha[:10]}")
-    print(f"  remote : {remote_sha[:10]}")
-    answer = input("Apply update and restart JARVIS now? [y/N]: ").strip().lower()
-    return answer in {"y", "yes"}
+    finally:
+        control.child_stopped()
 
 
 def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
@@ -174,10 +324,11 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
 
     print("JARVIS development supervisor")
     print(f"Watching {config.remote}/{config.branch} every {config.poll_seconds:g}s.")
-    print("Updates require one explicit owner Yes/No decision.")
-    print("Anything except y/yes is treated as No.")
+    print("Updates require one explicit spoken owner Yes/No decision.")
+    print("Ambiguous speech, timeout, or unavailable voice approval means No.")
 
-    process = _start_jarvis(root)
+    control = VoiceControlServer()
+    process = _start_jarvis(root, control)
     declined_sha: str | None = None
 
     try:
@@ -219,26 +370,41 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                 declined_sha = remote_sha
                 continue
 
-            if not _owner_approves_update(local_sha, remote_sha):
+            print()
+            print("New JARVIS update detected; requesting spoken owner approval.")
+            try:
+                approved = control.request_update_approval(
+                    local_sha,
+                    remote_sha,
+                    timeout_seconds=config.approval_timeout_seconds,
+                )
+            except RuntimeError as exc:
+                print(f"{exc}. Current JARVIS keeps running.")
+                declined_sha = remote_sha
+                continue
+
+            if not approved:
                 print("Update declined. Current JARVIS keeps running.")
                 declined_sha = remote_sha
                 continue
 
+            print("Spoken update approval accepted.")
             _stop_jarvis(
                 process,
                 timeout_seconds=config.shutdown_timeout_seconds,
+                control=control,
             )
             try:
                 repo.pull_fast_forward()
             except subprocess.CalledProcessError as exc:
                 print(f"Update failed: {exc}")
                 print("Restarting the existing local JARVIS version.")
-                process = _start_jarvis(root)
+                process = _start_jarvis(root, control)
                 declined_sha = remote_sha
                 continue
 
             print(f"Updated JARVIS to {repo.local_sha()[:10]}.")
-            process = _start_jarvis(root)
+            process = _start_jarvis(root, control)
             declined_sha = None
     except KeyboardInterrupt:
         print("\nStopping JARVIS development supervisor...")
@@ -247,7 +413,9 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
         _stop_jarvis(
             process,
             timeout_seconds=config.shutdown_timeout_seconds,
+            control=control,
         )
+        control.close()
 
 
 def main() -> int:
