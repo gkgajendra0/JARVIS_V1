@@ -19,6 +19,7 @@ dependencies = [
 [project.scripts]
 jarvis-voice = "jarvis.voice.runtime:main"
 jarvis-vision-preview = "jarvis.vision.preview:main"
+jarvis-vision-follow = "jarvis.vision.follow_live:main"
 
 [project.optional-dependencies]
 vision = [
