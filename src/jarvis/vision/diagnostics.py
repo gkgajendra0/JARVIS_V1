@@ -128,7 +128,7 @@ class VisionDiagnostics:
                     message=(
                         "Vision produced its first frame: "
                         f"RF-DETR={new_status.detector_persons} person detection(s), "
-                        f"BoT-SORT={new_status.visible_people} track(s), "
+                        f"Tracker={new_status.visible_people} track(s), "
                         f"heads={new_status.visible_heads}."
                     ),
                 )
@@ -142,7 +142,7 @@ class VisionDiagnostics:
                         "Visible person tracks changed from "
                         f"{previous.visible_people} to {new_status.visible_people}; "
                         f"RF-DETR={new_status.detector_persons}, "
-                        f"BoT-SORT={new_status.visible_people}, "
+                        f"Tracker={new_status.visible_people}, "
                         f"heads={new_status.visible_heads}."
                     ),
                 )
