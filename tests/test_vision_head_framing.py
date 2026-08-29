@@ -206,8 +206,11 @@ class _MutableHeadDetector:
 
 
 class _RecordingPtz:
+    def __init__(self) -> None:
+        self.commands = []
+
     def move(self, command) -> None:
-        pass
+        self.commands.append(command)
 
     def close(self) -> None:
         pass
@@ -250,3 +253,76 @@ def test_runtime_requires_confirmed_linked_head_before_lock():
     assert runtime.head_lock_eligible(7)
     runtime.close()
     assert heads.closed
+
+
+def test_runtime_holds_head_briefly_and_makes_fallback_horizontal_only():
+    camera = _FakeCamera()
+    heads = _MutableHeadDetector()
+    ptz = _RecordingPtz()
+    runtime = VisionRuntime(
+        camera=camera,
+        detector=_FakeDetector(),
+        tracker=_FakeTracker(),
+        target_manager=TargetManager(),
+        follow_controller=FollowController(
+            FollowConfig(
+                horizontal_dead_zone=0.01,
+                vertical_dead_zone=0.01,
+                gain=1.0,
+                max_command=0.5,
+                desired_x=0.4,
+                desired_y=0.4,
+            )
+        ),
+        ptz=ptz,
+        head_detector=heads,
+        config=VisionRuntimeConfig(
+            minimum_ptz_interval_seconds=0.05,
+            require_head_for_lock=True,
+            required_head_confirmation_frames=3,
+            head_loss_grace_seconds=0.25,
+        ),
+    )
+
+    runtime.start()
+    heads.heads = [_head(BoundingBox(0.42, 0.18, 0.58, 0.38))]
+    runtime.process_once()
+    camera.advance()
+    runtime.process_once()
+    camera.advance()
+    runtime.process_once()
+    runtime.lock(7)
+    runtime.arm_follow()
+
+    camera.advance()
+    heads.heads = []
+    held = runtime.process_once()
+
+    assert held is not None
+    assert held.framing_target is not None
+    assert held.framing_target.source == "head_hold"
+    assert held.command.pan > 0
+    assert held.command.tilt == 0
+
+    camera.advance()
+    runtime.process_once()
+    camera.advance()
+    body = runtime.process_once()
+
+    assert body is not None
+    assert body.framing_target is not None
+    assert body.framing_target.source == "body"
+    assert body.command.pan > 0
+    assert body.command.tilt == 0
+
+    camera.advance()
+    heads.heads = [_head(BoundingBox(0.42, 0.18, 0.58, 0.38))]
+    resumed = runtime.process_once()
+
+    assert resumed is not None
+    assert resumed.framing_target is not None
+    assert resumed.framing_target.source == "head"
+    assert runtime.head_confirmation_frames(7) == 1
+    assert resumed.command.tilt != 0
+
+    runtime.close()
