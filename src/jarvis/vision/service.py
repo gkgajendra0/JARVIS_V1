@@ -196,8 +196,8 @@ def build_default_vision_service(
             FollowConfig(
                 horizontal_dead_zone=0.12,
                 vertical_dead_zone=0.12,
-                gain=1.5,
-                max_command=0.35,
+                gain=1.8,
+                max_command=0.45,
                 minimum_confidence=0.5,
                 desired_x=0.50,
                 desired_y=0.40,
@@ -205,8 +205,10 @@ def build_default_vision_service(
         ),
         ptz=DuvcPtzController(
             DuvcPtzConfig(
-                pan_step_fraction=0.01,
-                tilt_step_fraction=0.01,
+                pan_step_fraction=0.02,
+                tilt_step_fraction=0.015,
+                pan_negative_scale=1.25,
+                pan_positive_scale=1.75,
             )
         ),
         head_detector=MediaPipeBlazeFaceDetector(
