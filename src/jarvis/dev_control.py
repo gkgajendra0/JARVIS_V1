@@ -16,6 +16,9 @@ DEV_CONTROL_TOKEN_ENV = "JARVIS_DEV_CONTROL_TOKEN"
 ApprovalHandler = Callable[[str, str], Awaitable[bool]]
 ShutdownHandler = Callable[[], None]
 
+_YES_CONFIRMATIONS = frozenset({"yes", "yeah", "yep", "haan", "han", "हाँ", "हां"})
+_NO_CONFIRMATIONS = frozenset({"no", "nope", "nah", "nahi", "nahin", "नहीं", "नही"})
+
 
 @dataclass(frozen=True, slots=True)
 class DevControlClientConfig:
@@ -59,12 +62,28 @@ def _normalized_confirmation(text: str) -> str:
 
 
 def parse_explicit_update_decision(text: str) -> bool | None:
-    """Return an explicit Yes/No decision; ambiguous speech stays undecided."""
+    """Return a leading explicit Yes/No unless later wording contradicts it."""
     candidate = _normalized_confirmation(text)
-    if candidate in {"yes", "yeah", "yep", "haan", "han", "हाँ", "हां"}:
+    tokens = candidate.split()
+    if not tokens:
+        return None
+
+    first = tokens[0]
+    remainder_tokens = tokens[1:]
+    remainder = " ".join(remainder_tokens)
+
+    if first in _YES_CONFIRMATIONS:
+        if any(token in _NO_CONFIRMATIONS for token in remainder_tokens):
+            return None
+        if "not" in remainder_tokens or "dont" in remainder_tokens or "don t" in remainder:
+            return None
         return True
-    if candidate in {"no", "nope", "nah", "nahi", "nahin", "नहीं", "नही"}:
+
+    if first in _NO_CONFIRMATIONS:
+        if any(token in _YES_CONFIRMATIONS for token in remainder_tokens):
+            return None
         return False
+
     return None
 
 
