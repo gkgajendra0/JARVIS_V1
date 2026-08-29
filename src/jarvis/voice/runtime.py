@@ -21,12 +21,14 @@ from livekit.agents.voice.io import PlaybackFinishedEvent
 
 from jarvis.config import JarvisConfig
 from jarvis.logging_config import configure_logging
+from jarvis.vision.service import VisionService, build_default_vision_service
 from jarvis.voice.agent import JarvisVoiceAgent
 from jarvis.voice.audio import LocalAudioRuntime, SessionAudioInput
 from jarvis.voice.livekit_session import (
     LiveKitConversationBridge,
     create_voice_session,
 )
+from jarvis.voice.vision_tools import VisionAgentTools
 from jarvis.voice.wakeword import LiveKitWakeDetector, load_livekit_predictor
 
 LOGGER = logging.getLogger(__name__)
@@ -127,10 +129,15 @@ class VoiceRuntimeController:
         audio: LocalAudioRuntime,
         *,
         session_factory: SessionFactory = create_voice_session,
+        vision_service: VisionService | None = None,
     ) -> None:
         self.config = config
         self.audio = audio
         self._session_factory = session_factory
+        self._vision_service = vision_service
+        self._vision_tools = (
+            VisionAgentTools(vision_service) if vision_service is not None else None
+        )
         self._state = VoiceRuntimeState.STOPPED
         self._shutdown = asyncio.Event()
         self._active_end: asyncio.Event | None = None
@@ -139,6 +146,10 @@ class VoiceRuntimeController:
     @property
     def state(self) -> VoiceRuntimeState:
         return self._state
+
+    @property
+    def vision_service(self) -> VisionService | None:
+        return self._vision_service
 
     def request_shutdown(self) -> None:
         self._shutdown.set()
@@ -167,7 +178,13 @@ class VoiceRuntimeController:
 
     async def run(self) -> None:
         self.audio.set_overflow_handler(self._on_audio_overflow)
+        vision_started = False
         try:
+            if self._vision_service is not None:
+                await asyncio.to_thread(self._vision_service.start)
+                vision_started = True
+                LOGGER.info("JARVIS integrated vision is active in SAFE mode")
+
             await self.audio.start()
             self._state = VoiceRuntimeState.IDLE
             LOGGER.info("JARVIS is idle; local wake detection is active")
@@ -211,6 +228,13 @@ class VoiceRuntimeController:
             self._cancel_timeout()
             self._state = VoiceRuntimeState.STOPPED
             await self.audio.aclose()
+            if vision_started and self._vision_service is not None:
+                try:
+                    await asyncio.to_thread(self._vision_service.stop)
+                except Exception:
+                    LOGGER.exception(
+                        "JARVIS integrated vision did not shut down cleanly"
+                    )
 
     async def _run_one_session(self) -> None:
         output = self.audio.output
@@ -273,9 +297,10 @@ class VoiceRuntimeController:
         bridge.conversation.start()
         self.audio.activate_session(session_input)
         self._arm_timeout(self.config.initial_request_timeout_seconds)
+        tools = self._vision_tools.tools if self._vision_tools is not None else []
         try:
             try:
-                await session.start(agent=JarvisVoiceAgent())
+                await session.start(agent=JarvisVoiceAgent(tools=tools))
             except Exception:
                 bridge.conversation.fail()
                 raise
@@ -305,7 +330,16 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         pre_roll_seconds=config.audio_pre_roll_seconds,
         ring_buffer_seconds=config.audio_ring_buffer_seconds,
     )
-    return VoiceRuntimeController(config, audio)
+    vision_service = (
+        build_default_vision_service(head_model_path=config.vision_head_model_path)
+        if config.vision_enabled
+        else None
+    )
+    return VoiceRuntimeController(
+        config,
+        audio,
+        vision_service=vision_service,
+    )
 
 
 async def _run_from_environment() -> None:

@@ -12,12 +12,25 @@ dependencies = [
     "livekit==1.1.15",
     "livekit-agents[google,openai]==1.7.1",
     "livekit-wakeword==0.2.1",
+    "numpy>=2,<3",
+    "opencv-python==5.0.0.93",
+    "opencv-contrib-python==5.0.0.93",
 ]
 
 [project.scripts]
 jarvis-voice = "jarvis.voice.runtime:main"
+jarvis-vision-preview = "jarvis.vision.preview:main"
+jarvis-vision-follow = "jarvis.vision.follow_live:main"
 
 [project.optional-dependencies]
+vision = [
+    "torch==2.13.0",
+    "torchvision==0.28.0",
+    "rfdetr==1.9.4",
+    "trackers==2.6.0",
+    "mediapipe==1.0.1",
+    "duvc-ctl==2.1.0; platform_system == 'Windows'",
+]
 dev = ["pytest>=8,<10", "pytest-asyncio>=0.23,<2", "ruff==0.16.5"]
 
 [tool.setuptools]

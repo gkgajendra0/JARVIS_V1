@@ -2,118 +2,171 @@
 
 ## Active Step
 
-**Step 3 — Identity, Graduated Trust, Authority, and Observability Foundation**
+**Step 2.5 — Vision Sensor & Active Target Tracking Foundation**
 
 ## Current Stage
 
-**RESEARCH READY — IMPLEMENTATION UNAUTHORIZED**
+**IMPLEMENTED + AUTOMATED-VALIDATED + HUMAN-ACCEPTED — FINAL MERGE GATE**
 
-Step 2 was human-accepted on 2026-08-29 after automated validation and real Windows
-use. The implemented wake/audio architecture is recorded in
-`docs/CURRENT_ARCHITECTURE.md` and ADR-002.
+Step 2 was human-accepted on 2026-08-29. Step 3 research began immediately afterward, but the human owner explicitly approved a bounded roadmap interlude to establish JARVIS visual sensing and active target tracking before Step 3 implementation continues.
 
-The human owner explicitly waived the extended endurance matrix because the working
-runtime had already demonstrated the required core path. The two-hour TV trial,
-20-cycle repetition trials, device unplug/reconnect trial, and measured latency trials
-remain **unverified**, not passed. They are residual reliability work and
-reconsideration triggers if field use exposes problems.
+Step 2.5 is now functionally complete and human-accepted. The only remaining action is final repository quality validation and merge. After merge, development workflow improvements such as supervised auto-sync/restart may be implemented before Step 3 begins.
 
-## Step 3 Objective
+## Accepted Objective
 
-Define the smallest trustworthy foundation that later capabilities can use to answer:
+JARVIS now has a reusable visual foundation that can:
 
-- who or what is present, when identity actually matters;
-- what an operation would do and how risky it is;
-- whether the user has authorized that exact operation;
-- what was proposed, attempted, completed, failed, or remains unverified;
-- what operational evidence may be recorded without leaking secrets or personal data.
+- own one Pocket 3 camera capture path;
+- receive fresh frames without unbounded backlog;
+- detect people through a replaceable detector adapter;
+- maintain stable target tracks through a replaceable tracker adapter;
+- require explicit target lock and separate follow arming;
+- use head-first framing with bounded body fallback;
+- pan, tilt, and adaptively zoom the Pocket 3 through a replaceable PTZ adapter;
+- stop/disarm safely on target expiry without silently switching people;
+- expose canonical visual state to voice tools;
+- display an optional live observer window using the same camera/runtime state as JARVIS.
 
-Step 3 must establish governance boundaries before JARVIS gains tools or computer
-control. It must not pre-build the Step-7 capability runtime or a speculative universal
-policy engine.
+## Frozen Architecture
 
-## Required Behaviour
+```text
+Pocket 3 / OpenCV DirectShow / latest-frame capture
+                    |
+                    +--> MediaPipe BlazeFace Full-Range --> head evidence
+                    |
+                    +--> RF-DETR Nano BF16 --> OC-SORT + DIoU --> person tracks
+                                                       |
+                                                TargetManager
+                                                       |
+                                           Head-first framing policy
+                                                       |
+                                      Follow + adaptive zoom controllers
+                                                       |
+                                            duvc-ctl PTZ adapter
+                                                       |
+                                                Pocket 3 gimbal
 
-### Identity and Presence
+Canonical runtime state --> diagnostics / voice tools / optional observer window
+```
 
-- represent identity, session, and presence evidence without treating evidence as permission;
-- distinguish unknown, claimed, observed, and verified identity states;
-- never claim voice identity from wake-word recognition;
-- allow stronger verification to be requested only when consequence requires it.
+## Frozen Technology Decisions
 
-### Graduated Trust and Consent
+### Capture
 
-- classify proposed operations by consequence using a small, explainable risk model;
-- bind approval to the exact operation, target, important parameters, and validity period;
-- support denial, expiry, cancellation, and revocation;
-- prevent a model, provider, prompt, or tool from granting its own authority;
-- keep low-risk conversation free from unnecessary authentication friction.
+- JARVIS-owned `CameraSource` contract.
+- OpenCV DirectShow (`CAP_DSHOW`) on Windows.
+- 1280x720 initial tracking mode.
+- One physical camera owner.
+- Latest-frame / bounded-overwrite semantics.
+- Controlled Pocket 3 test sustained about 29.34 FPS over 300/300 frames.
 
-### Truthful Execution State
+### Person detector
 
-- distinguish proposal, approval, attempt, success, partial success, failure,
-  cancellation, rollback, and unverified outcome;
-- never convert intent, provider text, or an attempted call into a success claim;
-- preserve enough evidence for later capability implementations to explain outcomes.
+- JARVIS-owned `ObjectDetector` contract.
+- RF-DETR Nano.
+- Native PyTorch/CUDA BF16.
+- Low candidate floor retained for tracker association; raw detector candidate count is engineering telemetry and is not treated as canonical visible-person count.
 
-### Privacy-Safe Observability
+### Head detector
 
-- define useful session/event correlation without recording secrets by default;
-- specify redaction, retention, and access boundaries before durable audit data exists;
-- keep operational logs separate from canonical conversation and future personal memory;
-- make degraded or unavailable governance state explicit.
+- MediaPipe BlazeFace Full-Range through a JARVIS-owned head boundary.
+- Initial lock requires three consecutive linked-head frames.
+- Head evidence is framing/identity evidence only; it is not authentication.
 
-## Explicit Non-Scope
+### Tracker
 
-- actual computer, browser, file, email, calendar, device, or external-service actions;
-- durable personal memory;
-- a production speaker-biometric system unless research proves a narrowly required
-  identity mechanism and it receives separate approval;
-- the common capability runtime planned for Step 7;
-- HUD, proactive monitoring, self-repair, or self-improvement;
-- autonomous permission changes or model-authored policy;
-- speculative abstractions for capabilities that do not yet exist.
+- JARVIS-owned `Tracker` contract.
+- Production default: Roboflow OC-SORT with DIoU association and XYXY state estimation for fast/non-linear body motion.
+- Timestamp-aware updates.
+- Lost-track buffering retained for short gaps.
+- BoT-SORT and ByteTrack adapters remain replaceable fallbacks behind the same contract.
+- Human fast sit/stand testing preserved the same track ID after the OC-SORT change.
 
-## Required Research
+### Target and framing policy
 
-Research must be technology-neutral and use current primary sources plus relevant
-old-JARVIS evidence. It must answer:
+- `TargetManager` owns deterministic explicit target selection.
+- No automatic target switching.
+- Lock requires exactly one visible head-confirmed candidate in the current test surface.
+- Follow requires a separate explicit arm action.
+- HEAD is the primary framing anchor.
+- HEAD_HOLD briefly preserves trusted head height while the same body track supplies horizontal continuity.
+- BODY fallback uses the same locked body track with reduced-authority tilt.
+- Target expiry clears selection and disarms follow.
 
-1. Which identity and presence signals are useful on the local Windows/voice runtime,
-   and what can each signal actually prove?
-2. What small graduated-risk model can be applied consistently to future reads,
-   writes, external effects, and destructive actions?
-3. How should approvals be scoped, expired, revoked, and protected from replay or
-   confused-deputy behavior?
-4. Which security and privacy standards should inform authentication, authorization,
-   consent, audit, secret handling, and data minimization?
-5. What minimum event/result schema truthfully represents proposals, attempts,
-   outcomes, evidence, and rollback without building the Step-7 runtime?
-6. Which observability data is necessary for diagnosis, and which content must be
-   redacted, bounded, or excluded?
-7. Which old-JARVIS identity, permission, authentication, audit, and failure lessons
-   should become requirements or tests rather than copied architecture?
-8. What threat model and measurable acceptance gates are appropriate before any later
-   capability can perform consequential work?
+### PTZ and zoom
 
-## Architecture and Approval Gate
+- JARVIS-owned `PtzController` contract.
+- `duvc-ctl` adapter for Pocket 3 pan, tilt, and zoom.
+- Hardware ranges are queried dynamically and treated as device units, not degrees.
+- Pocket 3 tilt polarity is calibrated and regression-tested.
+- Direction-specific pan scaling compensates measured left/right response asymmetry.
+- Adaptive zoom uses the already locked BODY track size with hysteresis and a conservative range cap; zoom never selects or changes a target.
 
-After research, document candidate comparisons and proposed ownership boundaries.
-Record `KEEP_OURS / ADOPT / ADAPT / WRAP / REWRITE / REJECT` decisions in research and
-ADR documents—not in this plan.
+### Observer and truthfulness
 
-Architecture must define identity evidence ownership, risk classification, scoped
-approval, truthful outcome state, observability/redaction, replacement boundaries, and
-tests. Human approval is required after architecture review and before implementation.
+- Optional `JARVIS_VISION_PREVIEW=true` observer window shares the same camera/runtime instead of opening a second pipeline.
+- Display refresh is decoupled from inference refresh so the camera view can remain smooth while showing the latest completed interpretation.
+- The window exposes track boxes/IDs, head boxes, lock state, framing source, pan/tilt/zoom commands, and analysis age.
+- Voice-facing state uses canonical tracked-person counts rather than raw RF-DETR candidate counts.
+- Step 2.5 does not provide general scene understanding, face identity, OCR, or authorization.
+
+## Human Acceptance Evidence
+
+Human testing on the actual Windows + RTX 5060 Ti + DJI Pocket 3 setup confirmed:
+
+- integrated camera capture and vision runtime start reliably;
+- one visible person can be explicitly locked and separately armed;
+- head-first framing operates and degrades through HEAD -> HEAD_HOLD -> BODY safely;
+- pan/tilt/zoom follow works in real use;
+- target loss stops/clears follow rather than silently switching targets;
+- multiple-person handling does not intentionally retarget away from the locked track;
+- live observer reflects the same canonical JARVIS runtime state;
+- fast sit/stand body motion preserves the same OC-SORT track ID;
+- final owner feedback: Step 2.5 is working well with no remaining blocking functional issue.
+
+## Long-Run / Cleanup Status
+
+- Tracker first-seen bookkeeping is bounded so an always-running process does not retain historical track IDs indefinitely.
+- Camera shutdown uses a stop signal, bounded thread join, and capture release; no human-observed shutdown failure remains open.
+- Benchmark-only alternatives remain outside the production architecture.
+
+## Explicitly Deferred to Step 3 or Later
+
+- face recognition / owner identity;
+- liveness / anti-spoofing;
+- voice identity;
+- trust scoring and authorization;
+- OCR;
+- gesture/pose/pointing;
+- local/cloud VLM scene reasoning;
+- visual memory;
+- proactive surveillance or continuous recording;
+- multi-camera fusion/registry;
+- smart glasses/HUD.
+
+## Step-3 Boundary
+
+Vision outputs remain evidence, never authority:
+
+```text
+vision / face / presence evidence
+            |
+            v
+Step 3 identity + graduated trust
+            |
+            v
+future authorization policy
+```
+
+Wake word, person tracking, head detection, and future face recognition must never grant permission directly.
 
 ## Completion Gate
 
-Step 3 is `DONE` only after research, a recorded decision, approved architecture,
-implementation, automated validation, real human acceptance, cleanup, and documentation
-reconciliation.
+Step 2.5 has satisfied implementation, automated validation, real Pocket 3 closed-loop use, and human acceptance. Final completion requires only a green final branch quality gate and merge into `main`.
 
-## Immediate Next Action
+## Immediate Next Actions
 
-**Research Step 3 only. Do not implement identity, permissions, audit storage, or
-capability execution until the research and architecture receive explicit human
-approval.**
+1. Run the final GitHub quality gate on the exact accepted branch head.
+2. Merge Step 2.5 into `main`.
+3. Implement the development-only supervised Git auto-sync/restart workflow.
+4. Begin Step 3 Identity + Graduated Trust + Authority, with face recognition introduced as identity evidence rather than direct authentication.
