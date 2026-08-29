@@ -69,9 +69,7 @@ def test_rf_detr_adapter_uses_duplicate_suppressor_for_person_candidates():
             return SimpleNamespace(
                 class_id=np.array([1, 1]),
                 confidence=np.array([0.95, 0.53]),
-                xyxy=np.array(
-                    [[20, 10, 180, 95], [40, 30, 100, 80]], dtype=float
-                ),
+                xyxy=np.array([[20, 10, 180, 95], [40, 30, 100, 80]], dtype=float),
             )
 
     def keep_highest(boxes, confidences, threshold):
