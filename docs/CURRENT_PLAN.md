@@ -6,11 +6,17 @@
 
 ## Current Stage
 
-**ACTIVE — RESEARCH / ARCHITECTURE DEFINITION**
+**RESEARCH COMPLETE — ARCHITECTURE PROPOSED — AWAITING HUMAN APPROVAL**
 
-Step 0, Step 1, Step 2, and Step 2.5 are complete. The development-only `jarvis-dev` supervisor is also implemented, automated-validated, human-accepted, merged to protected `main`, and now watches `origin/main` by default.
+Step 0, Step 1, Step 2, and Step 2.5 are complete. The development-only `jarvis-dev` supervisor and time-aware startup greetings are implemented, automated-validated, human-accepted, and merged to protected `main`.
 
-Step 3 is the next product slice. Earlier working research established the core direction, but no Step-3 implementation or final technology selection is accepted yet. The first Step-3 task is to complete and record current research, threat/risk assumptions, and the minimum architecture required before later capabilities may read, write, communicate, or control consequential resources.
+Step-3 implementation has **not** started. Current research, security/privacy threat modeling, technology comparisons, canonical governance contracts, trust/risk vocabulary, degraded behavior, and validation gates are recorded on the Step-3 research branch. The proposal must receive explicit human approval before ADRs are accepted or runtime code is written.
+
+Research artifacts:
+
+- `docs/research/STEP_3_IDENTITY_TRUST_AUTHORITY_RESEARCH.md`
+- `docs/research/STEP_3_THREAT_PRIVACY_MODEL.md`
+- `docs/research/STEP_3_ARCHITECTURE_PROPOSAL.md`
 
 ## Step-3 Objective
 
@@ -35,7 +41,8 @@ The following are already accepted and must be treated as inputs, not redesigned
 - `jarvis-dev` as development tooling outside model authority;
 - protected `main` requiring PR flow plus `ruff` and `pytest` checks;
 - explicit spoken software-update approval parsed deterministically outside the realtime model;
-- last-known-good rollback for failed development updates.
+- last-known-good rollback for failed development updates;
+- deterministic JARVIS-owned scripted speech for startup/system prompts.
 
 ## Step-3 Non-Negotiable Invariants
 
@@ -50,31 +57,61 @@ The following are already accepted and must be treated as inputs, not redesigned
 - Raw audio/video, full transcripts, biometric material, secrets, and sensitive payloads are not retained merely because they are available.
 - Provider/device/model implementations remain replaceable behind JARVIS-owned contracts.
 
-## Step-3 Research Questions
+## Proposed Step-3 Architecture — Pending Approval
 
-Before architecture is frozen, research must cover at least:
+The research proposes:
 
-- owner identity and presence evidence sources suitable for the current Windows + Pocket 3 environment;
-- current face-recognition/embedding options, local inference performance, licensing, and spoof/liveness limitations;
-- voice identity/speaker-verification options and their limitations in TV/background/multi-speaker conditions;
-- session continuity and identity-evidence fusion rather than single-sensor authentication;
-- graduated-trust models appropriate for read, reversible, persistent, external, destructive, security-sensitive, and self-modifying actions;
-- approval/consent state machines and exact-action binding;
-- local policy/authority engine design that remains outside LLM authority;
-- audit/observability event design, retention, redaction, and privacy boundaries;
-- threat cases: replay, spoofed face/voice, nearby person saying “yes”, stale identity evidence, device/session changes, provider hallucination, compromised capability, and confused-deputy behavior;
-- failure/degraded behavior when sensors, providers, or identity signals are unavailable.
+- one persistent `OWNER` identity plus ephemeral `UNKNOWN` subjects for v1;
+- typed local identity evidence rather than a universal confidence score;
+- OpenCV YuNet + SFace as the initial face deployment candidate, benchmarked against InsightFace `buffalo_l` as an accuracy reference;
+- randomized active face liveness through MediaPipe Face Landmarker instead of relying on uncertain passive-PAD weights;
+- sherpa-onnx speaker embedding candidate benchmarked against SpeechBrain ECAPA, with voice remaining corroborating evidence only;
+- Windows session/lock state as contextual evidence only;
+- Windows Hello `UserConsentVerifier` as the initial strong verifier, with WebAuthn/FIDO2 behind the same future-facing interface;
+- four deterministic trust tiers: T0 `UNVERIFIED`, T1 `PRESENT_CONTEXT`, T2 `CORROBORATED_OWNER`, T3 `VERIFIED_OWNER`;
+- deterministic risk classes R0 `ROUTINE`, R1 `PRIVATE_READ`, R2 `REVERSIBLE_LOCAL_CHANGE`, R3 `PERSISTENT_OR_EXTERNAL`, R4 `CRITICAL`, R5 `RESTRICTED_DEV_ONLY`;
+- Open Policy Agent behind a fail-closed JARVIS `PolicyEngine` adapter;
+- immutable exact-action proposals, one-time approval receipts, and final pre-execution revalidation;
+- SQLite local state/audit with envelope-encrypted biometric templates and user-scoped DPAPI key sealing;
+- privacy-aware structured audit plus optional tamper-evident chaining, with OpenTelemetry restricted to operational telemetry;
+- STRIDE + LINDDUN PRO as the security/privacy threat-model baseline.
+
+No item in this section is accepted architecture yet.
+
+## Research Completion Coverage
+
+The research package now covers:
+
+- owner identity/presence evidence for Windows + Pocket 3;
+- current face-recognition/embedding candidates, local deployment shape, licensing/provenance, and thresholds;
+- face liveness/PAD limitations and randomized active challenge-response;
+- speaker-verification candidates plus replay/deepfake limitations;
+- multi-person ambiguity, active-speaker options, and safe escalation behavior;
+- Windows Hello/WebAuthn strong-verification options;
+- session continuity and typed evidence fusion;
+- graduated-trust semantics and freshness/invalidation;
+- action-risk classification and approval/consent state machines;
+- exact-action binding, one-time receipts, expiry, mutation invalidation, and TOCTOU revalidation;
+- policy-engine comparison (OPA/Cedar/Casbin) and fail-closed behavior;
+- enrollment/re-enrollment/deletion and model-version lifecycle;
+- encrypted biometric storage, DPAPI/TPM options, audit retention/redaction/integrity;
+- STRIDE security threats and LINDDUN privacy threats;
+- degraded behavior for camera/mic/model/policy/Hello/audit failures;
+- measurable face/liveness/voice/Hello/policy/audit/resource benchmarks;
+- explicit human acceptance scenarios;
+- implementation sequencing that builds authority before biometrics can influence it.
 
 ## Expected Step-3 Deliverables
 
-Before implementation begins, produce:
+Before implementation begins:
 
-- a Step-3 research record with current evidence and realistic alternatives;
-- one or more ADRs for major accepted identity/trust/authority/observability decisions;
-- a concrete threat model and trust-level vocabulary;
-- canonical JARVIS-owned contracts for identity evidence, trust/session state, authority decisions, approvals, and audit events;
-- explicit scope/non-scope and human acceptance scenarios;
-- measurable validation criteria for security, privacy, latency, and false-accept/false-reject behavior where applicable.
+- current research record — **DONE on research branch**;
+- concrete STRIDE + LINDDUN threat/privacy model — **DONE on research branch**;
+- trust/risk vocabulary and canonical contracts — **DONE as proposal**;
+- scope/non-scope and human acceptance scenarios — **DONE as proposal**;
+- measurable security/privacy/latency/false-accept/false-reject validation gates — **DONE as proposal**;
+- explicit human architecture approval — **PENDING**;
+- accepted ADRs for the approved major decisions — **PENDING APPROVAL**.
 
 ## Explicitly Out of Scope for Step 3
 
@@ -86,7 +123,9 @@ Before implementation begins, produce:
 - proactive surveillance or continuous recording;
 - smart-glasses/HUD work;
 - unrestricted shell authority;
-- autonomous self-modification.
+- autonomous self-modification;
+- persistent guest/family identity roles;
+- cloud biometric recognition.
 
 ## Completion Gate
 
@@ -94,9 +133,11 @@ Step 3 is complete only after:
 
 ```text
 requirements
--> current research
--> technology/architecture decisions
--> human approval
+-> current research                         DONE
+-> threat/privacy model                     DONE
+-> technology/architecture proposal         DONE
+-> human approval                           CURRENT GATE
+-> accepted ADRs
 -> implementation
 -> automated validation
 -> real human acceptance
@@ -108,7 +149,7 @@ No Step-3 component becomes authoritative merely because a model/provider API wo
 
 ## Immediate Next Actions
 
-1. Complete current Step-3 research, including face/voice identity evidence, liveness limits, trust models, authority policy, approvals, observability, privacy, and threat cases.
-2. Compare mature 2026 technologies before choosing any implementation.
-3. Propose the minimum Step-3 architecture and trust-level model.
-4. Obtain explicit human approval before implementation.
+1. Review the complete Step-3 research/threat/architecture proposal with the human owner.
+2. Resolve any requested architecture changes.
+3. Obtain explicit human approval.
+4. Only then create accepted ADRs and begin Phase 3A authority-foundation implementation.
