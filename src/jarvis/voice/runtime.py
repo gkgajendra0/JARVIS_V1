@@ -32,6 +32,7 @@ from jarvis.voice.livekit_session import (
     create_voice_session,
 )
 from jarvis.voice.scripted_speech import ScriptedSpeech, build_scripted_speech
+from jarvis.voice.startup_greeting import select_startup_greeting
 from jarvis.voice.vision_tools import VisionAgentTools
 from jarvis.voice.wakeword import LiveKitWakeDetector, load_livekit_predictor
 
@@ -40,6 +41,7 @@ LOGGER = logging.getLogger(__name__)
 SessionFactory = Callable[
     [JarvisConfig], tuple[AgentSession, LiveKitConversationBridge]
 ]
+StartupGreetingFactory = Callable[[], str]
 
 _UPDATE_APPROVAL_PROMPT = (
     "A JARVIS software update is available. Shall I install it and restart now? "
@@ -147,6 +149,7 @@ class VoiceRuntimeController:
         session_factory: SessionFactory = create_voice_session,
         vision_service: VisionService | None = None,
         scripted_speech: ScriptedSpeech | None = None,
+        startup_greeting_factory: StartupGreetingFactory = select_startup_greeting,
     ) -> None:
         self.config = config
         self.audio = audio
@@ -165,6 +168,7 @@ class VoiceRuntimeController:
         )
         self._scripted_speech = scripted_speech
         self._owns_scripted_speech = False
+        self._startup_greeting_factory = startup_greeting_factory
 
     @property
     def state(self) -> VoiceRuntimeState:
@@ -195,6 +199,25 @@ class VoiceRuntimeController:
             self._scripted_speech = build_scripted_speech(self.config)
             self._owns_scripted_speech = True
         return self._scripted_speech
+
+    async def _speak_startup_greeting(self) -> None:
+        if not self.config.startup_greeting_enabled:
+            return
+        output = self.audio.output
+        if output is None:
+            LOGGER.warning("JARVIS startup greeting skipped because audio output is unavailable")
+            return
+        greeting = self._startup_greeting_factory().strip()
+        if not greeting:
+            LOGGER.warning("JARVIS startup greeting skipped because no greeting was selected")
+            return
+        try:
+            await self._get_scripted_speech().speak(output, greeting)
+            LOGGER.info("JARVIS startup greeting finished playing")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            LOGGER.exception("JARVIS startup greeting failed; continuing without it")
 
     def _on_audio_overflow(self) -> None:
         LOGGER.error("Voice session stopped because its microphone queue overflowed")
@@ -237,6 +260,7 @@ class VoiceRuntimeController:
                 )
                 LOGGER.info("JARVIS development voice-control channel is active")
 
+            await self._speak_startup_greeting()
             self._state = VoiceRuntimeState.IDLE
             LOGGER.info("JARVIS is idle; local wake detection is active")
             while not self._shutdown.is_set():
