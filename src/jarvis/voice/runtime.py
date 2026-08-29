@@ -232,7 +232,9 @@ class VoiceRuntimeController:
                 try:
                     await asyncio.to_thread(self._vision_service.stop)
                 except Exception:
-                    LOGGER.exception("JARVIS integrated vision did not shut down cleanly")
+                    LOGGER.exception(
+                        "JARVIS integrated vision did not shut down cleanly"
+                    )
 
     async def _run_one_session(self) -> None:
         output = self.audio.output
