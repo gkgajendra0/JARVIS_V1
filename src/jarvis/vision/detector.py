@@ -12,6 +12,11 @@ import numpy as np
 from jarvis.vision.camera import CapturedFrame
 from jarvis.vision.models import BoundingBox, Detection
 
+DuplicateSuppressor = Callable[
+    [np.ndarray, np.ndarray, float],
+    tuple[np.ndarray, np.ndarray],
+]
+
 
 class ObjectDetector(Protocol):
     def detect(self, frame: CapturedFrame) -> list[Detection]: ...
@@ -42,6 +47,7 @@ class RFDetrNanoDetector:
         config: RFDetrNanoConfig | None = None,
         *,
         model_factory: Callable[..., object] | None = None,
+        duplicate_suppressor: DuplicateSuppressor | None = None,
     ) -> None:
         self.config = config or RFDetrNanoConfig()
         if model_factory is None:
@@ -49,6 +55,9 @@ class RFDetrNanoDetector:
 
             model_factory = RFDETRNano
 
+        self._duplicate_suppressor = (
+            duplicate_suppressor or self._supervision_ios_suppressor
+        )
         self._model = model_factory(device=self.config.device)
         inference = getattr(self._model, "inference", None)
         if inference is not None:
@@ -69,9 +78,10 @@ class RFDetrNanoDetector:
         person_mask = class_ids == self.config.person_class_id
         person_boxes = boxes[person_mask]
         person_confidences = confidences[person_mask]
-        person_boxes, person_confidences = self._suppress_nested_duplicates(
+        person_boxes, person_confidences = self._duplicate_suppressor(
             person_boxes,
             person_confidences,
+            self.config.duplicate_ios_threshold,
         )
 
         detections: list[Detection] = []
@@ -96,10 +106,11 @@ class RFDetrNanoDetector:
             )
         return detections
 
-    def _suppress_nested_duplicates(
-        self,
+    @staticmethod
+    def _supervision_ios_suppressor(
         boxes: np.ndarray,
         confidences: np.ndarray,
+        threshold: float,
     ) -> tuple[np.ndarray, np.ndarray]:
         if len(boxes) < 2:
             return boxes, confidences
@@ -112,7 +123,7 @@ class RFDetrNanoDetector:
         )
         keep = sv.box_non_max_suppression(
             predictions=predictions,
-            iou_threshold=self.config.duplicate_ios_threshold,
+            iou_threshold=threshold,
             overlap_metric=sv.OverlapMetric.IOS,
         )
         return boxes[keep], confidences[keep]
