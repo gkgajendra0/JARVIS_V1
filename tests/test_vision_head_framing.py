@@ -87,7 +87,7 @@ def test_head_first_policy_returns_none_without_locked_visible_target():
     )
 
 
-def test_follow_controller_can_compose_head_above_frame_center():
+def test_follow_controller_maps_image_y_to_pocket3_tilt_direction():
     controller = FollowController(
         FollowConfig(
             horizontal_dead_zone=0.05,
@@ -100,13 +100,19 @@ def test_follow_controller_can_compose_head_above_frame_center():
     )
     track = _track()
     target = TargetState(track_id=track.track_id, track=track)
-    head = _head(BoundingBox(0.60, 0.45, 0.70, 0.55))
-    framing = HeadFirstFramingPolicy().resolve(target, [head])
 
-    command = controller.command_for_framing_target(framing)
+    below_target = _head(BoundingBox(0.60, 0.45, 0.70, 0.55))
+    below_framing = HeadFirstFramingPolicy().resolve(target, [below_target])
+    below_command = controller.command_for_framing_target(below_framing)
 
-    assert command.pan > 0
-    assert command.tilt > 0
+    assert below_command.pan > 0
+    assert below_command.tilt < 0
+
+    above_target = _head(BoundingBox(0.42, 0.15, 0.58, 0.25))
+    above_framing = HeadFirstFramingPolicy().resolve(target, [above_target])
+    above_command = controller.command_for_framing_target(above_framing)
+
+    assert above_command.tilt > 0
 
 
 def test_head_confirmation_gate_requires_three_consecutive_linked_frames():
