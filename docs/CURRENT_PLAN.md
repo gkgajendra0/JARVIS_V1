@@ -6,212 +6,167 @@
 
 ## Current Stage
 
-**TECHNOLOGY SELECTION COMPLETE — INTEGRATED IMPLEMENTATION NEXT**
+**IMPLEMENTED + AUTOMATED-VALIDATED + HUMAN-ACCEPTED — FINAL MERGE GATE**
 
 Step 2 was human-accepted on 2026-08-29. Step 3 research began immediately afterward, but the human owner explicitly approved a bounded roadmap interlude to establish JARVIS visual sensing and active target tracking before Step 3 implementation continues.
 
-Step 3 is paused, not discarded. Its identity/trust/authority work resumes after Step 2.5 human acceptance.
+Step 2.5 is now functionally complete and human-accepted. The only remaining action is final repository quality validation and merge. After merge, development workflow improvements such as supervised auto-sync/restart may be implemented before Step 3 begins.
 
-## Objective
+## Accepted Objective
 
-Build the smallest reusable visual foundation that lets JARVIS:
+JARVIS now has a reusable visual foundation that can:
 
-- own one camera capture path;
+- own one Pocket 3 camera capture path;
 - receive fresh frames without unbounded backlog;
-- detect people with a replaceable detector adapter;
-- maintain stable tracks with a replaceable tracker adapter;
-- deterministically lock one target;
-- convert target position into bounded movement intent;
-- control the proven DJI Pocket 3 PTZ path through a replaceable adapter;
-- expose small canonical visual state for later conversation and Step-3 identity evidence.
+- detect people through a replaceable detector adapter;
+- maintain stable target tracks through a replaceable tracker adapter;
+- require explicit target lock and separate follow arming;
+- use head-first framing with bounded body fallback;
+- pan, tilt, and adaptively zoom the Pocket 3 through a replaceable PTZ adapter;
+- stop/disarm safely on target expiry without silently switching people;
+- expose canonical visual state to voice tools;
+- display an optional live observer window using the same camera/runtime state as JARVIS.
 
-## Architectural Rules
+## Frozen Architecture
 
-- JARVIS owns canonical `Detection`, `Track`, target state, movement policy, and visual state.
-- External detector/tracker SDK types stay behind adapters.
-- The detector and tracker never command hardware directly.
-- Camera capture and PTZ movement are separate responsibilities even when one physical device provides both.
-- Vision evidence is not authentication or permission.
-- One camera owner uses latest-frame semantics; no unbounded frame queues.
-- Do not create speculative registries, event buses, model resource managers, or multi-camera orchestration before a real second requirement exists.
-- Do not commit model weights, personal face data, raw captures, generated logs, or benchmark garbage.
+```text
+Pocket 3 / OpenCV DirectShow / latest-frame capture
+                    |
+                    +--> MediaPipe BlazeFace Full-Range --> head evidence
+                    |
+                    +--> RF-DETR Nano BF16 --> OC-SORT + DIoU --> person tracks
+                                                       |
+                                                TargetManager
+                                                       |
+                                           Head-first framing policy
+                                                       |
+                                      Follow + adaptive zoom controllers
+                                                       |
+                                            duvc-ctl PTZ adapter
+                                                       |
+                                                Pocket 3 gimbal
 
-## Proven Hardware Evidence
-
-The actual Windows + DJI Osmo Pocket 3 setup has established:
-
-- Pocket 3 USB webcam mode works;
-- Windows exposes the device as a camera;
-- Python can access camera-control properties;
-- `duvc-ctl` can physically pan, tilt, and zoom the gimbal;
-- reported device-control ranges were pan `-35..215`, tilt `-90..90`, zoom `100..400`;
-- OpenCV DirectShow sustained 1280x720 capture at ~29.34 FPS with 300/300 successful frames.
-
-These PTZ ranges are adapter/device values, not assumed physical degrees. Production code must query capabilities dynamically.
+Canonical runtime state --> diagnostics / voice tools / optional observer window
+```
 
 ## Frozen Technology Decisions
 
 ### Capture
 
-- `CameraSource` — JARVIS-owned contract.
-- OpenCV — selected capture adapter mechanism.
-- DirectShow (`CAP_DSHOW`) — selected initial Pocket 3 Windows backend from measured MSMF-vs-DSHOW evidence.
-- 1280x720 — initial low-latency tracking mode.
-- latest-frame / bounded-overwrite semantics — mandatory.
+- JARVIS-owned `CameraSource` contract.
+- OpenCV DirectShow (`CAP_DSHOW`) on Windows.
+- 1280x720 initial tracking mode.
+- One physical camera owner.
+- Latest-frame / bounded-overwrite semantics.
+- Controlled Pocket 3 test sustained about 29.34 FPS over 300/300 frames.
 
-### PTZ
+### Person detector
 
-- `PtzController` — JARVIS-owned contract.
-- `duvc-ctl` — selected and wrapped for Pocket 3 pan/tilt/zoom.
+- JARVIS-owned `ObjectDetector` contract.
+- RF-DETR Nano.
+- Native PyTorch/CUDA BF16.
+- Low candidate floor retained for tracker association; raw detector candidate count is engineering telemetry and is not treated as canonical visible-person count.
 
-### Detector
+### Head detector
 
-- `ObjectDetector` — JARVIS-owned contract.
-- RF-DETR Nano — selected initial detector.
-- native PyTorch/CUDA BF16 — selected initial inference mode.
-
-Measured RF-DETR Nano evidence on RTX 5060 Ti:
-
-- 36.97 ms mean detector latency;
-- 41.96 ms p95;
-- 27.05 FPS;
-- 114.8 MiB peak allocated VRAM;
-- 100% person coverage at confidence 0.25 and 0.50 across the controlled 900-frame Pocket 3 clip;
-- zero miss streaks on that controlled clip.
-
-RF-DETR Small matched coverage but was slower; RT-DETRv4-S was materially slower and required an upstream native-PyTorch workaround.
+- MediaPipe BlazeFace Full-Range through a JARVIS-owned head boundary.
+- Initial lock requires three consecutive linked-head frames.
+- Head evidence is framing/identity evidence only; it is not authentication.
 
 ### Tracker
 
-- `Tracker` — JARVIS-owned contract.
-- Roboflow `trackers` ByteTrack — selected initial tracker.
+- JARVIS-owned `Tracker` contract.
+- Production default: Roboflow OC-SORT with DIoU association and XYXY state estimation for fast/non-linear body motion.
+- Timestamp-aware updates.
+- Lost-track buffering retained for short gaps.
+- BoT-SORT and ByteTrack adapters remain replaceable fallbacks behind the same contract.
+- Human fast sit/stand testing preserved the same track ID after the OC-SORT change.
 
-Controlled tracker evidence using the exact same cached RF-DETR Nano detections:
+### Target and framing policy
 
-Full rate (~30 FPS):
+- `TargetManager` owns deterministic explicit target selection.
+- No automatic target switching.
+- Lock requires exactly one visible head-confirmed candidate in the current test surface.
+- Follow requires a separate explicit arm action.
+- HEAD is the primary framing anchor.
+- HEAD_HOLD briefly preserves trusted head height while the same body track supplies horizontal continuity.
+- BODY fallback uses the same locked body track with reduced-authority tilt.
+- Target expiry clears selection and disarms follow.
 
-- ByteTrack: 99.89% confirmed coverage, 0 ID switches, 899-frame continuous primary ID, ~0.345 ms mean / 0.479 ms p95 tracker latency;
-- BoT-SORT + CMC: identical continuity, ~8.843 ms mean / 9.597 ms p95.
+### PTZ and zoom
 
-Stress rate (~15 FPS using original timestamps):
+- JARVIS-owned `PtzController` contract.
+- `duvc-ctl` adapter for Pocket 3 pan, tilt, and zoom.
+- Hardware ranges are queried dynamically and treated as device units, not degrees.
+- Pocket 3 tilt polarity is calibrated and regression-tested.
+- Direction-specific pan scaling compensates measured left/right response asymmetry.
+- Adaptive zoom uses the already locked BODY track size with hysteresis and a conservative range cap; zoom never selects or changes a target.
 
-- ByteTrack: 99.78% confirmed coverage, 0 ID switches, 449-frame continuous primary ID, ~0.366 ms mean / 0.493 ms p95;
-- BoT-SORT + CMC: identical continuity, ~8.908 ms mean / 9.663 ms p95.
+### Observer and truthfulness
 
-Decision: ByteTrack wins because CMC produced no measured continuity benefit on the current workload while adding substantial overhead.
+- Optional `JARVIS_VISION_PREVIEW=true` observer window shares the same camera/runtime instead of opening a second pipeline.
+- Display refresh is decoupled from inference refresh so the camera view can remain smooth while showing the latest completed interpretation.
+- The window exposes track boxes/IDs, head boxes, lock state, framing source, pan/tilt/zoom commands, and analysis age.
+- Voice-facing state uses canonical tracked-person counts rather than raw RF-DETR candidate counts.
+- Step 2.5 does not provide general scene understanding, face identity, OCR, or authorization.
 
-### JARVIS-owned policy
+## Human Acceptance Evidence
 
-- `TargetManager` — deterministic explicit target lock/loss behavior.
-- `FollowController` — bounded proportional/dead-zone policy.
-- no automatic person switching;
-- no movement on missing/uncertain target.
+Human testing on the actual Windows + RTX 5060 Ti + DJI Pocket 3 setup confirmed:
 
-## Deferred / Not Selected for Step 2.5
+- integrated camera capture and vision runtime start reliably;
+- one visible person can be explicitly locked and separately armed;
+- head-first framing operates and degrades through HEAD -> HEAD_HOLD -> BODY safely;
+- pan/tilt/zoom follow works in real use;
+- target loss stops/clears follow rather than silently switching targets;
+- multiple-person handling does not intentionally retarget away from the locked track;
+- live observer reflects the same canonical JARVIS runtime state;
+- fast sit/stand body motion preserves the same OC-SORT track ID;
+- final owner feedback: Step 2.5 is working well with no remaining blocking functional issue.
 
-- TensorRT unless integrated measurements show a real need;
-- Roboflow Inference server as a mandatory runtime dependency;
-- RF-DETR Small as the initial detector;
-- RT-DETRv4-S as the initial detector;
-- BoT-SORT + CMC as the initial tracker;
-- YOLO26 as default due licensing tradeoff;
-- face recognition/authentication;
+## Long-Run / Cleanup Status
+
+- Tracker first-seen bookkeeping is bounded so an always-running process does not retain historical track IDs indefinitely.
+- Camera shutdown uses a stop signal, bounded thread join, and capture release; no human-observed shutdown failure remains open.
+- Benchmark-only alternatives remain outside the production architecture.
+
+## Explicitly Deferred to Step 3 or Later
+
+- face recognition / owner identity;
+- liveness / anti-spoofing;
+- voice identity;
+- trust scoring and authorization;
 - OCR;
-- pose/gesture/pointing;
-- local/cloud VLM integration;
+- gesture/pose/pointing;
+- local/cloud VLM scene reasoning;
 - visual memory;
-- continuous recording;
-- passive world awareness;
-- multi-camera registry/fusion;
-- generic vision event bus;
-- generic GPU/model resource manager;
-- HUD integration;
-- Step-3 authority logic.
-
-## Selected Vertical Slice
-
-```text
-CameraSource
--> latest frame
--> RF-DETR Nano BF16 adapter
--> canonical Detection[]
--> ByteTrack adapter
--> canonical Track[]
--> TargetManager
--> TargetState
--> FollowController
--> bounded movement intent
--> PtzController
--> Pocket 3
-```
-
-## Implementation Sequence
-
-Completed:
-
-1. Record Step 2.5 roadmap/research/ADR and preserve Step 3 as paused.
-2. Implement provider-neutral canonical vision domain contracts and deterministic target/follow policy.
-3. Benchmark OpenCV capture backend behavior on Pocket 3.
-4. Validate native PyTorch/CUDA on the RTX 5060 Ti.
-5. Benchmark detector candidates on real Pocket 3 footage and controlled same-clip quality input.
-6. Benchmark ByteTrack vs BoT-SORT+CMC at full and skipped-frame rates.
-7. Freeze capture/detector/tracker/runtime technology from measured evidence.
-
-Next:
-
-8. Reconcile production dependencies for RF-DETR/PyTorch/trackers without carrying benchmark-only packages.
-9. Implement RF-DETR Nano detector adapter translating outputs into canonical `Detection` values.
-10. Implement ByteTrack tracker adapter translating outputs into canonical `Track` values.
-11. Implement Pocket 3 PTZ adapter with dynamic capability/range discovery and safe clamping.
-12. Compose minimal `VisionRuntime` around latest-frame capture, detector, tracker, target manager, follow controller, and PTZ.
-13. Add automated adapter/runtime failure, target-loss, cleanup, and recovery tests.
-14. Measure integrated frame age, detector+tracker loop rate, CPU/RAM/GPU/VRAM, and target-loss-to-stop latency.
-15. Validate camera disconnect/reopen and clean shutdown.
-16. Run long-enough resource/thermal stability test.
-17. Perform real human closed-loop target-follow acceptance tests.
-18. Cleanup benchmark-only environment artifacts and reconcile documentation before merge.
-
-## Initial Human Acceptance Scenarios
-
-- selected person can be centered and followed left/right smoothly;
-- another person entering does not cause random target switching;
-- temporary occlusion does not cause immediate unsafe retargeting;
-- target loss stops camera movement within a bounded interval;
-- camera/PTZ failure degrades safely;
-- no unbounded frame backlog or memory growth occurs;
-- shutdown releases camera/PTZ resources cleanly;
-- long-enough real use exposes no unacceptable thermal or runtime instability.
-
-## Performance Evidence Still Required
-
-Before final acceptance, measure the integrated runtime:
-
-- frame age from capture to control decision;
-- end-to-end detector + tracker effective rate;
-- PTZ response behavior;
-- CPU/RAM/GPU/VRAM use;
-- target-loss-to-stop latency;
-- dropped/stale frame behavior;
-- startup/shutdown timing and resource release;
-- disconnect/reopen behavior;
-- long-run memory/resource stability.
-
-Exact final acceptance gates should be frozen from the integrated baseline rather than invented before measurement.
+- proactive surveillance or continuous recording;
+- multi-camera fusion/registry;
+- smart glasses/HUD.
 
 ## Step-3 Boundary
 
-Step 2.5 may later expose presence or identity evidence, but it cannot grant trust or authority. The future relationship remains:
+Vision outputs remain evidence, never authority:
 
 ```text
-Vision evidence
--> Step 3 identity/trust evaluation
--> future authorization decision
+vision / face / presence evidence
+            |
+            v
+Step 3 identity + graduated trust
+            |
+            v
+future authorization policy
 ```
+
+Wake word, person tracking, head detection, and future face recognition must never grant permission directly.
 
 ## Completion Gate
 
-Step 2.5 is `DONE` only after measured technology selection, integrated implementation, automated validation, real Pocket 3 closed-loop use, human acceptance, cleanup, and documentation reconciliation.
+Step 2.5 has satisfied implementation, automated validation, real Pocket 3 closed-loop use, and human acceptance. Final completion requires only a green final branch quality gate and merge into `main`.
 
-## Immediate Next Action
+## Immediate Next Actions
 
-Implement the selected RF-DETR Nano detector adapter, ByteTrack tracker adapter, and Pocket 3 PTZ adapter behind the already-defined JARVIS boundaries, then compose and validate the minimal `VisionRuntime`.
+1. Run the final GitHub quality gate on the exact accepted branch head.
+2. Merge Step 2.5 into `main`.
+3. Implement the development-only supervised Git auto-sync/restart workflow.
+4. Begin Step 3 Identity + Graduated Trust + Authority, with face recognition introduced as identity evidence rather than direct authentication.
