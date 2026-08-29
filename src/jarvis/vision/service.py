@@ -65,7 +65,9 @@ class VisionService:
             self._stop_requested.set()
         thread.join(timeout=join_timeout_seconds)
         if thread.is_alive():
-            raise RuntimeError("vision service did not stop within the shutdown timeout")
+            raise RuntimeError(
+                "vision service did not stop within the shutdown timeout"
+            )
         with self._lifecycle_lock:
             self._thread = None
 
