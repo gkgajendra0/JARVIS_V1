@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from jarvis.vision.head import HeadObservation
-from jarvis.vision.models import TargetState
+from jarvis.vision.models import TargetState, Track
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,7 +31,7 @@ class FramingTarget:
 
 @dataclass(frozen=True, slots=True)
 class HeadFirstFramingConfig:
-    minimum_head_confidence: float = 0.5
+    minimum_head_confidence: float = 0.65
     association_margin: float = 0.03
     maximum_head_vertical_fraction: float = 0.70
     body_fallback_vertical_fraction: float = 0.22
@@ -46,6 +46,15 @@ class HeadFirstFramingConfig:
             raise ValueError("maximum_head_vertical_fraction must be in (0, 1]")
         if not 0 <= self.body_fallback_vertical_fraction <= 1:
             raise ValueError("body_fallback_vertical_fraction must be in [0, 1]")
+
+
+@dataclass(frozen=True, slots=True)
+class HeadConfirmationConfig:
+    required_consecutive_frames: int = 3
+
+    def __post_init__(self) -> None:
+        if self.required_consecutive_frames < 1:
+            raise ValueError("required_consecutive_frames must be at least 1")
 
 
 class HeadFirstFramingPolicy:
@@ -111,4 +120,44 @@ class HeadFirstFramingPolicy:
             confidence=track.confidence,
             source="body",
             track_id=track.track_id,
+        )
+
+
+class HeadConfirmationGate:
+    """Require repeated linked-head evidence before head-driven framing or locking."""
+
+    def __init__(self, config: HeadConfirmationConfig | None = None) -> None:
+        self.config = config or HeadConfirmationConfig()
+        self._counts: dict[int, int] = {}
+
+    def reset(self) -> None:
+        self._counts.clear()
+
+    def update(
+        self,
+        tracks: list[Track],
+        heads: list[HeadObservation],
+        policy: HeadFirstFramingPolicy,
+    ) -> None:
+        next_counts: dict[int, int] = {}
+        required = self.config.required_consecutive_frames
+        for track in tracks:
+            target = TargetState(track_id=track.track_id, track=track)
+            anchor = policy.resolve(target, heads)
+            if anchor is not None and anchor.source == "head":
+                next_counts[track.track_id] = min(
+                    required,
+                    self._counts.get(track.track_id, 0) + 1,
+                )
+            else:
+                next_counts[track.track_id] = 0
+        self._counts = next_counts
+
+    def confirmation_frames(self, track_id: int) -> int:
+        return self._counts.get(track_id, 0)
+
+    def eligible(self, track_id: int) -> bool:
+        return (
+            self.confirmation_frames(track_id)
+            >= self.config.required_consecutive_frames
         )
