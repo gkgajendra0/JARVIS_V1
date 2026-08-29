@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from jarvis.vision.camera import CameraSource, CapturedFrame
 from jarvis.vision.detector import ObjectDetector
 from jarvis.vision.follow import FollowController
+from jarvis.vision.framing import FramingTarget, HeadFirstFramingPolicy
+from jarvis.vision.head import HeadDetector, HeadObservation
 from jarvis.vision.models import FollowCommand, TargetState, Track
 from jarvis.vision.ptz import PtzController
 from jarvis.vision.targeting import TargetManager
@@ -16,6 +18,7 @@ from jarvis.vision.tracker import Tracker
 @dataclass(frozen=True, slots=True)
 class VisionRuntimeConfig:
     minimum_ptz_interval_seconds: float = 0.2
+    require_head_for_lock: bool = False
 
     def __post_init__(self) -> None:
         if self.minimum_ptz_interval_seconds <= 0:
@@ -30,10 +33,12 @@ class VisionSnapshot:
     target: TargetState | None
     command: FollowCommand
     armed: bool
+    heads: tuple[HeadObservation, ...] = ()
+    framing_target: FramingTarget | None = None
 
 
 class VisionRuntime:
-    """Compose capture, detection, tracking, target policy, and PTZ control."""
+    """Compose capture, perception, target policy, framing, and PTZ control."""
 
     def __init__(
         self,
@@ -45,17 +50,32 @@ class VisionRuntime:
         follow_controller: FollowController,
         ptz: PtzController,
         config: VisionRuntimeConfig | None = None,
+        head_detector: HeadDetector | None = None,
+        framing_policy: HeadFirstFramingPolicy | None = None,
     ) -> None:
         self.config = config or VisionRuntimeConfig()
+        if self.config.require_head_for_lock and head_detector is None:
+            raise ValueError("require_head_for_lock needs a configured head detector")
+
         self._camera = camera
         self._detector = detector
         self._tracker = tracker
         self._target_manager = target_manager
         self._follow_controller = follow_controller
         self._ptz = ptz
+        self._head_detector = head_detector
+        self._framing_policy = (
+            framing_policy
+            if framing_policy is not None
+            else HeadFirstFramingPolicy()
+            if head_detector is not None
+            else None
+        )
         self._last_frame_id: int | None = None
         self._latest_frame: CapturedFrame | None = None
         self._latest_tracks: list[Track] = []
+        self._latest_heads: list[HeadObservation] = []
+        self._latest_framing_target: FramingTarget | None = None
         self._last_ptz_command_at: float | None = None
         self._armed = False
         self._started = False
@@ -67,6 +87,14 @@ class VisionRuntime:
     @property
     def latest_tracks(self) -> tuple[Track, ...]:
         return tuple(self._latest_tracks)
+
+    @property
+    def latest_heads(self) -> tuple[HeadObservation, ...]:
+        return tuple(self._latest_heads)
+
+    @property
+    def framing_target(self) -> FramingTarget | None:
+        return self._latest_framing_target
 
     @property
     def target(self) -> TargetState | None:
@@ -95,6 +123,14 @@ class VisionRuntime:
         )
         if track is None:
             raise ValueError(f"track {track_id} is not currently visible")
+
+        if self.config.require_head_for_lock:
+            assert self._framing_policy is not None
+            candidate_target = TargetState(track_id=track.track_id, track=track)
+            anchor = self._framing_policy.resolve(candidate_target, self._latest_heads)
+            if anchor is None or anchor.source != "head":
+                raise ValueError(f"track {track_id} has no valid linked head")
+
         self.disarm_follow()
         return self._target_manager.lock(track)
 
@@ -112,6 +148,7 @@ class VisionRuntime:
     def clear_target(self) -> None:
         self.disarm_follow()
         self._target_manager.clear()
+        self._latest_framing_target = None
 
     def process_once(self, *, timeout_seconds: float = 1.0) -> VisionSnapshot | None:
         if not self._started:
@@ -132,14 +169,21 @@ class VisionRuntime:
         if target is None:
             self.disarm_follow()
 
+        heads: list[HeadObservation] = []
+        framing_target: FramingTarget | None = None
+        if self._head_detector is not None:
+            heads = self._head_detector.detect(frame)
+            assert self._framing_policy is not None
+            framing_target = self._framing_policy.resolve(target, heads)
+            desired = self._follow_controller.command_for_framing_target(framing_target)
+        else:
+            desired = self._follow_controller.command_for(target)
+
+        self._latest_heads = heads
+        self._latest_framing_target = framing_target
+
         command = FollowCommand()
-        desired = self._follow_controller.command_for(target)
-        if (
-            self._armed
-            and target is not None
-            and target.visible
-            and not desired.is_idle
-        ):
+        if self._armed and target is not None and target.visible and not desired.is_idle:
             last_command_at = self._last_ptz_command_at
             interval_elapsed = (
                 last_command_at is None
@@ -158,6 +202,8 @@ class VisionRuntime:
             target=target,
             command=command,
             armed=self._armed,
+            heads=tuple(heads),
+            framing_target=framing_target,
         )
 
     def close(self) -> None:
@@ -167,4 +213,5 @@ class VisionRuntime:
         finally:
             self._camera.close()
             self._latest_frame = None
+            self._latest_heads = []
             self._started = False
