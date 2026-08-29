@@ -5,7 +5,12 @@ import pytest
 
 from jarvis.vision.camera import CapturedFrame
 from jarvis.vision.follow import FollowConfig, FollowController
-from jarvis.vision.framing import HeadFirstFramingConfig, HeadFirstFramingPolicy
+from jarvis.vision.framing import (
+    HeadConfirmationConfig,
+    HeadConfirmationGate,
+    HeadFirstFramingConfig,
+    HeadFirstFramingPolicy,
+)
 from jarvis.vision.head import HeadObservation
 from jarvis.vision.models import BoundingBox, Detection, TargetState, Track
 from jarvis.vision.runtime import VisionRuntime, VisionRuntimeConfig
@@ -104,12 +109,42 @@ def test_follow_controller_can_compose_head_above_frame_center():
     assert command.tilt > 0
 
 
+def test_head_confirmation_gate_requires_three_consecutive_linked_frames():
+    policy = HeadFirstFramingPolicy()
+    gate = HeadConfirmationGate(HeadConfirmationConfig(required_consecutive_frames=3))
+    track = _track()
+    linked = _head(BoundingBox(0.42, 0.14, 0.58, 0.34), confidence=0.90)
+
+    gate.update([track], [linked], policy)
+    assert gate.confirmation_frames(track.track_id) == 1
+    assert not gate.eligible(track.track_id)
+
+    gate.update([track], [linked], policy)
+    assert gate.confirmation_frames(track.track_id) == 2
+    assert not gate.eligible(track.track_id)
+
+    gate.update([track], [linked], policy)
+    assert gate.confirmation_frames(track.track_id) == 3
+    assert gate.eligible(track.track_id)
+
+    gate.update([track], [], policy)
+    assert gate.confirmation_frames(track.track_id) == 0
+    assert not gate.eligible(track.track_id)
+
+
 class _FakeCamera:
     def __init__(self) -> None:
         self.frame = CapturedFrame(
             frame_id=1,
             captured_at=1.0,
             image=np.zeros((100, 100, 3), dtype=np.uint8),
+        )
+
+    def advance(self) -> None:
+        self.frame = CapturedFrame(
+            frame_id=self.frame.frame_id + 1,
+            captured_at=self.frame.captured_at + 0.1,
+            image=self.frame.image,
         )
 
     def start(self) -> None:
@@ -155,9 +190,13 @@ class _FakeTracker:
 class _MutableHeadDetector:
     def __init__(self) -> None:
         self.heads: list[HeadObservation] = []
+        self.closed = False
 
     def detect(self, frame):
         return list(self.heads)
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class _RecordingPtz:
@@ -168,28 +207,40 @@ class _RecordingPtz:
         pass
 
 
-def test_runtime_can_require_linked_head_before_lock():
+def test_runtime_requires_confirmed_linked_head_before_lock():
+    camera = _FakeCamera()
     heads = _MutableHeadDetector()
     runtime = VisionRuntime(
-        camera=_FakeCamera(),
+        camera=camera,
         detector=_FakeDetector(),
         tracker=_FakeTracker(),
         target_manager=TargetManager(),
         follow_controller=FollowController(),
         ptz=_RecordingPtz(),
         head_detector=heads,
-        config=VisionRuntimeConfig(require_head_for_lock=True),
+        config=VisionRuntimeConfig(
+            require_head_for_lock=True,
+            required_head_confirmation_frames=3,
+        ),
     )
 
     runtime.start()
-    runtime.process_once()
+    heads.heads = [_head(BoundingBox(0.42, 0.14, 0.58, 0.34))]
 
-    with pytest.raises(ValueError, match="no valid linked head"):
+    runtime.process_once()
+    with pytest.raises(ValueError, match=r"not confirmed \(1/3\)"):
         runtime.lock(7)
 
-    heads.heads = [_head(BoundingBox(0.42, 0.14, 0.58, 0.34))]
-    runtime._latest_heads = list(heads.heads)
+    camera.advance()
+    runtime.process_once()
+    with pytest.raises(ValueError, match=r"not confirmed \(2/3\)"):
+        runtime.lock(7)
+
+    camera.advance()
+    runtime.process_once()
     locked = runtime.lock(7)
 
     assert locked.track_id == 7
+    assert runtime.head_lock_eligible(7)
     runtime.close()
+    assert heads.closed
