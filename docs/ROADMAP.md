@@ -31,9 +31,15 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 
 ## Why Step 2.5 Exists
 
-Step 2.5 is a deliberately bounded roadmap interlude approved after Step 2. It establishes a reusable visual sensor and active-attention foundation before Step 3 is completed. The immediate reason is practical: the available DJI Pocket 3 has experimentally proven USB webcam and programmable PTZ behavior, and visual presence will later provide one evidence source to Step 3.
+Step 2.5 is a deliberately bounded roadmap interlude approved after Step 2. It establishes a reusable visual sensor and active-attention foundation before Step 3 is completed. The available DJI Pocket 3 has experimentally proven USB webcam and programmable PTZ behavior, and visual presence can later provide one evidence source to Step 3.
 
 Step 2.5 does **not** grant identity, authentication, permission, passive surveillance, semantic scene memory, or consequential device authority. Vision may later emit evidence; Step 3 remains the owner of trust and authority decisions.
+
+## Why CAP-032 Moves To Step 7
+
+The old JARVIS learned that useful reads/actions should not each invent a separate router, policy path, result shape, or execution boundary. A **minimal governed capability runtime** therefore arrives with the first real safe-read expansion, before notes, apps, browser, calendar, email, files, or device actions.
+
+This does **not** mean building a giant universal agent framework in Step 7. It means defining the smallest common contract needed by real capabilities at that point: capability identity/description, bounded input, policy/authority check, execution adapter boundary, structured result, and truthful failure state. Extensibility/plugin lifecycle remains later at Step 16.
 
 ## Universal Step Lifecycle
 
@@ -55,6 +61,22 @@ REQUIREMENTS
 
 Research for future steps is intentionally deferred until those steps become active. This keeps decisions current and avoids speculative architecture.
 
+## Strategic Evolution Milestones
+
+The old JARVIS strategic roadmap expressed the desired evolution as governed foundation -> perception -> memory -> reliable action -> daily assistant -> multi-capability orchestration -> governed agents -> governed learning/improvement -> personal intelligence runtime. V1 preserves that product direction while simplifying the implementation sequence.
+
+The V1 milestones are:
+
+1. **Conversational Presence** — Steps 1-2.
+2. **Perception Foundation** — Step 2.5.
+3. **Governed Personal Foundation** — Steps 3-5.
+4. **Source-Aware Intelligence** — Steps 6-7.
+5. **Reliable Daily Actions** — Steps 8-12.
+6. **Visible and Aware Assistant** — Steps 13-15.
+7. **Extensible Daily Assistant** — Steps 16-17.
+8. **Governed Learning and Improvement** — Steps 18-20.
+9. **Personal Intelligence Runtime** — the integrated end state after the mature capabilities above work together coherently.
+
 ## Step 0 - Clean Foundation
 
 Completed baseline:
@@ -71,9 +93,25 @@ Completed baseline:
 
 Goal: prove that JARVIS can hold a natural, realtime, multi-turn conversation before wake word, memory, tools, autonomy, or HUD are added.
 
+High-level completion means:
+
+- manual start works;
+- natural multi-turn conversation works;
+- English, Hindi, and Hinglish are usable;
+- contextual references and corrections work naturally;
+- interruptions are handled by the selected realtime stack where in scope;
+- JARVIS owns the canonical accepted conversation record;
+- real human usage is acceptable;
+- no duplicated conversation/context owners are introduced.
+
+The exact technology and architecture must be confirmed through the Step-1 planning/research process before implementation.
+
 ## Step 2 - Wake, Voice Session, and Audio Robustness
 
-Completed outcome: local wake detection, one JARVIS-owned audio path, preserved wake tail, realtime follow-up conversation, explicit return to idle, and clean re-wake work on the target Windows system. Extended endurance and device-failure trials were explicitly waived and remain recorded as unverified residual risks.
+Completed outcome: local wake detection, one JARVIS-owned audio path, preserved wake
+tail, realtime follow-up conversation, explicit return to idle, and clean re-wake work
+on the target Windows system. Extended endurance and device-failure trials were
+explicitly waived and remain recorded as unverified residual risks.
 
 ## Step 2.5 - Vision Sensor & Active Target Tracking Foundation
 
@@ -81,11 +119,27 @@ Goal: establish one JARVIS-owned camera path, replaceable detector/tracker/PTZ b
 
 ## Step 3 - Identity, Graduated Trust, Authority, and Observability
 
-Goal: research and define the minimum trustworthy governance foundation required before later capabilities may read, write, communicate, or control anything. Step 3 does not implement those actions or the Step-7 capability runtime. Step-3 research is paused only while Step 2.5 is active and resumes after Step 2.5 acceptance.
+Goal: research and define the minimum trustworthy governance foundation required
+before later capabilities may read, write, communicate, or control anything. Step 3
+does not implement those actions or the Step-7 capability runtime. Step-3 research is paused only while Step 2.5 is active and resumes after Step 2.5 acceptance.
 
 ## Final Target - Personal Intelligence Runtime
 
 The roadmap is not complete merely because all steps have code. The final target is one coherent personal intelligence runtime in which mature capabilities cooperate under shared conversation, context, memory, truthfulness, authority, observability, and execution boundaries.
+
+At that point JARVIS should be able to:
+
+- converse naturally and remain present across sessions;
+- know approved personal/project context and correct it when the user corrects JARVIS;
+- choose whether a request needs model reasoning, fresh external information, trusted sources, memory, local project evidence, or a capability;
+- verify current/high-risk claims appropriately;
+- perform routine daily computer, file, browser, device, note, calendar, email, and project workflows with proportional consent;
+- monitor explicitly selected topics/conditions and do bounded background work;
+- coordinate mature capabilities without creating an uncontrolled second brain;
+- degrade truthfully when cloud/provider/network/device capability is unavailable;
+- expose understandable state through the HUD/workspace;
+- diagnose faults and eventually propose/apply only governed, reversible, auditable improvements;
+- remain replaceable at provider boundaries rather than becoming permanently coupled to one model/framework/provider.
 
 ## Roadmap Change Rule
 
