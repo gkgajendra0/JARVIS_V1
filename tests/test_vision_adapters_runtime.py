@@ -24,7 +24,7 @@ class FakeRFModel:
 
     def predict(self, image, threshold):
         assert image.shape == (100, 200, 3)
-        assert threshold == 0.25
+        assert threshold == 0.5
         return SimpleNamespace(
             class_id=np.array([1, 2]),
             confidence=np.array([0.9, 0.8]),
@@ -32,9 +32,17 @@ class FakeRFModel:
         )
 
 
+def identity_suppressor(boxes, confidences, threshold):
+    assert threshold == 0.98
+    return boxes, confidences
+
+
 def test_rf_detr_adapter_filters_person_and_normalizes_box():
     model = FakeRFModel()
-    detector = RFDetrNanoDetector(model_factory=lambda **_: model)
+    detector = RFDetrNanoDetector(
+        model_factory=lambda **_: model,
+        duplicate_suppressor=identity_suppressor,
+    )
     frame = CapturedFrame(
         frame_id=7,
         captured_at=12.5,
@@ -50,6 +58,43 @@ def test_rf_detr_adapter_filters_person_and_normalizes_box():
     assert detection.bounds == BoundingBox(0.1, 0.1, 0.5, 0.9)
     assert detection.frame_id == 7
     assert detection.observed_at == 12.5
+
+
+def test_rf_detr_adapter_uses_duplicate_suppressor_for_person_candidates():
+    class DuplicateRFModel:
+        def inference(self, **kwargs):
+            pass
+
+        def predict(self, image, threshold):
+            return SimpleNamespace(
+                class_id=np.array([1, 1]),
+                confidence=np.array([0.95, 0.53]),
+                xyxy=np.array(
+                    [[20, 10, 180, 95], [40, 30, 100, 80]], dtype=float
+                ),
+            )
+
+    def keep_highest(boxes, confidences, threshold):
+        assert len(boxes) == 2
+        assert threshold == 0.98
+        index = int(np.argmax(confidences))
+        return boxes[[index]], confidences[[index]]
+
+    detector = RFDetrNanoDetector(
+        model_factory=lambda **_: DuplicateRFModel(),
+        duplicate_suppressor=keep_highest,
+    )
+    frame = CapturedFrame(
+        frame_id=8,
+        captured_at=13.0,
+        image=np.zeros((100, 200, 3), dtype=np.uint8),
+    )
+
+    detections = detector.detect(frame)
+
+    assert len(detections) == 1
+    assert detections[0].confidence == 0.95
+    assert detections[0].bounds == BoundingBox(0.1, 0.1, 0.9, 0.95)
 
 
 class FakeExternalDetections:
