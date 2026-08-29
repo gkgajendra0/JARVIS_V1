@@ -66,7 +66,9 @@ class RFDetrNanoDetector:
         mask = class_ids == self.config.person_class_id
         detections: list[Detection] = []
         for box, confidence in zip(boxes[mask], confidences[mask], strict=True):
-            normalized = self._normalize_box(box, width=frame.width, height=frame.height)
+            normalized = self._normalize_box(
+                box, width=frame.width, height=frame.height
+            )
             if normalized is None:
                 continue
             detections.append(
