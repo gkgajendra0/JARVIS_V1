@@ -18,7 +18,7 @@ class VisionObserver(Protocol):
 
 
 class OpenCVVisionObserver:
-    """Render the same frame and canonical state consumed by JARVIS."""
+    """Render smooth camera frames with the latest canonical JARVIS interpretation."""
 
     def __init__(
         self,
@@ -44,7 +44,11 @@ class OpenCVVisionObserver:
             )
             self._window_created = True
 
-        preview = render_snapshot(frame.image, snapshot)
+        preview = render_snapshot(
+            frame.image,
+            snapshot,
+            display_captured_at=frame.captured_at,
+        )
         cv2.imshow(self._window_name, preview)
         cv2.waitKey(1)
 
@@ -59,8 +63,13 @@ class OpenCVVisionObserver:
             self._window_created = False
 
 
-def render_snapshot(image: np.ndarray, snapshot: VisionSnapshot) -> np.ndarray:
-    """Draw canonical tracking, head, target and follow state onto one frame."""
+def render_snapshot(
+    image: np.ndarray,
+    snapshot: VisionSnapshot,
+    *,
+    display_captured_at: float | None = None,
+) -> np.ndarray:
+    """Draw the latest canonical interpretation onto a camera frame."""
     preview = image.copy()
     height, width = preview.shape[:2]
     target_id = snapshot.target.track_id if snapshot.target is not None else None
@@ -133,8 +142,18 @@ def render_snapshot(image: np.ndarray, snapshot: VisionSnapshot) -> np.ndarray:
         visibility = "visible" if snapshot.target.visible else "missing"
         target_text = f"{snapshot.target.track_id} ({visibility})"
 
+    analysis_age_ms = 0
+    if display_captured_at is not None:
+        analysis_age_ms = max(
+            0,
+            int((display_captured_at - snapshot.captured_at) * 1000),
+        )
+
     lines = [
-        f"BoT-SORT tracks: {len(snapshot.tracks)} | heads: {len(snapshot.heads)}",
+        (
+            f"BoT-SORT tracks: {len(snapshot.tracks)} | heads: {len(snapshot.heads)} "
+            f"| analysis age: {analysis_age_ms} ms"
+        ),
         f"target: {target_text} | follow: {'ARMED' if snapshot.armed else 'SAFE'}",
         (
             "framing: "
