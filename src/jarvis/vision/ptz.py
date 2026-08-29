@@ -53,6 +53,8 @@ class DuvcPtzConfig:
     device_index: int = 0
     pan_step_fraction: float = 0.04
     tilt_step_fraction: float = 0.04
+    pan_negative_scale: float = 1.0
+    pan_positive_scale: float = 1.0
 
     def __post_init__(self) -> None:
         if self.device_index < 0:
@@ -61,6 +63,10 @@ class DuvcPtzConfig:
             value = getattr(self, name)
             if not 0 < value <= 0.25:
                 raise ValueError(f"{name} must be in (0, 0.25]")
+        for name in ("pan_negative_scale", "pan_positive_scale"):
+            value = getattr(self, name)
+            if not 0 < value <= 4:
+                raise ValueError(f"{name} must be in (0, 4]")
 
 
 class DuvcPtzController:
@@ -89,9 +95,14 @@ class DuvcPtzController:
         if command.is_idle:
             return
         if command.pan != 0:
+            pan_scale = (
+                self.config.pan_positive_scale
+                if command.pan > 0
+                else self.config.pan_negative_scale
+            )
             self._move_axis(
                 "pan",
-                command.pan,
+                command.pan * pan_scale,
                 self._pan_range,
                 self.config.pan_step_fraction,
             )
