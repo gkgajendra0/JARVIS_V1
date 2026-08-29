@@ -179,7 +179,7 @@ class _FakeDetector:
 
 
 class _FakeTracker:
-    def update(self, detections, *, now):
+    def update(self, detections, *, now, frame=None):
         track = _track()
         return [
             Track(
