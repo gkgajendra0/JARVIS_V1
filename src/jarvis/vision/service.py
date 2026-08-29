@@ -184,13 +184,13 @@ def build_default_vision_service(
     from jarvis.vision.ptz import DuvcPtzConfig, DuvcPtzController
     from jarvis.vision.runtime import VisionRuntimeConfig
     from jarvis.vision.targeting import TargetManager
-    from jarvis.vision.tracker import ByteTrackAdapter
+    from jarvis.vision.tracker import BoTSORTAdapter
 
     model_path = resolve_blazeface_model_path(head_model_path)
     runtime = VisionRuntime(
         camera=OpenCVCameraSource(),
         detector=RFDetrNanoDetector(),
-        tracker=ByteTrackAdapter(),
+        tracker=BoTSORTAdapter(),
         target_manager=TargetManager(lost_timeout_seconds=0.5),
         follow_controller=FollowController(
             FollowConfig(
