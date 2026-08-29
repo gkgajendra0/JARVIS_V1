@@ -97,12 +97,7 @@ class _RoboflowTrackerAdapter:
             track_id = int(track_id)
             if track_id < 0:
                 continue
-            bounds = BoundingBox(
-                left=float(box[0]),
-                top=float(box[1]),
-                right=float(box[2]),
-                bottom=float(box[3]),
-            )
+            bounds = self._from_external_box(box, frame=frame)
             first_seen = self._first_seen.setdefault(track_id, now)
             output.append(
                 Track(
@@ -116,20 +111,27 @@ class _RoboflowTrackerAdapter:
             )
         return output
 
-    def _to_external(self, detections: list[Detection]) -> object:
+    def _to_external(
+        self,
+        detections: list[Detection],
+        *,
+        frame: np.ndarray | None = None,
+    ) -> object:
         if not detections:
             return self._detections_factory(
                 xyxy=np.empty((0, 4), dtype=np.float32),
                 confidence=np.empty((0,), dtype=np.float32),
             )
 
+        width = float(frame.shape[1]) if frame is not None else 1.0
+        height = float(frame.shape[0]) if frame is not None else 1.0
         boxes = np.asarray(
             [
                 [
-                    detection.bounds.left,
-                    detection.bounds.top,
-                    detection.bounds.right,
-                    detection.bounds.bottom,
+                    detection.bounds.left * width,
+                    detection.bounds.top * height,
+                    detection.bounds.right * width,
+                    detection.bounds.bottom * height,
                 ]
                 for detection in detections
             ],
@@ -140,6 +142,21 @@ class _RoboflowTrackerAdapter:
             dtype=np.float32,
         )
         return self._detections_factory(xyxy=boxes, confidence=confidences)
+
+    @staticmethod
+    def _from_external_box(
+        box: np.ndarray,
+        *,
+        frame: np.ndarray | None,
+    ) -> BoundingBox:
+        width = float(frame.shape[1]) if frame is not None else 1.0
+        height = float(frame.shape[0]) if frame is not None else 1.0
+        return BoundingBox(
+            left=float(box[0]) / width,
+            top=float(box[1]) / height,
+            right=float(box[2]) / width,
+            bottom=float(box[3]) / height,
+        )
 
 
 class ByteTrackAdapter(_RoboflowTrackerAdapter):
@@ -225,7 +242,7 @@ class BoTSORTAdapter(_RoboflowTrackerAdapter):
         if self.config.enable_cmc and frame is None:
             raise ValueError("BoT-SORT camera-motion compensation requires a frame")
         return self._tracker.update(
-            self._to_external(detections),
+            self._to_external(detections, frame=frame),
             frame=frame,
             timestamp=now,
         )
