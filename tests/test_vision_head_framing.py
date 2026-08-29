@@ -255,7 +255,7 @@ def test_runtime_requires_confirmed_linked_head_before_lock():
     assert heads.closed
 
 
-def test_runtime_holds_head_briefly_and_makes_fallback_horizontal_only():
+def test_runtime_holds_head_briefly_then_uses_reduced_body_tilt():
     camera = _FakeCamera()
     heads = _MutableHeadDetector()
     ptz = _RecordingPtz()
@@ -281,6 +281,7 @@ def test_runtime_holds_head_briefly_and_makes_fallback_horizontal_only():
             require_head_for_lock=True,
             required_head_confirmation_frames=3,
             head_loss_grace_seconds=0.25,
+            body_fallback_tilt_scale=0.45,
         ),
     )
 
@@ -313,7 +314,8 @@ def test_runtime_holds_head_briefly_and_makes_fallback_horizontal_only():
     assert body.framing_target is not None
     assert body.framing_target.source == "body"
     assert body.command.pan > 0
-    assert body.command.tilt == 0
+    assert body.command.tilt > 0
+    assert body.command.tilt < 0.13
 
     camera.advance()
     heads.heads = [_head(BoundingBox(0.42, 0.18, 0.58, 0.38))]
