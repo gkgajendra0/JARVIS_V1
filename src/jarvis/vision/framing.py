@@ -80,7 +80,10 @@ class HeadFirstFramingPolicy:
 
         if candidates:
             expected_x = body.center_x
-            expected_y = body.top + body_height * self.config.body_fallback_vertical_fraction
+            expected_y = (
+                body.top
+                + body_height * self.config.body_fallback_vertical_fraction
+            )
             head = min(
                 candidates,
                 key=lambda candidate: (
@@ -100,7 +103,9 @@ class HeadFirstFramingPolicy:
         if not self.config.allow_body_fallback:
             return None
 
-        fallback_y = body.top + body_height * self.config.body_fallback_vertical_fraction
+        fallback_y = (
+            body.top + body_height * self.config.body_fallback_vertical_fraction
+        )
         return FramingTarget(
             x=body.center_x,
             y=fallback_y,
