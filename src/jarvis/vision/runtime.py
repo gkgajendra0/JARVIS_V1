@@ -7,7 +7,12 @@ from dataclasses import dataclass
 from jarvis.vision.camera import CameraSource, CapturedFrame
 from jarvis.vision.detector import ObjectDetector
 from jarvis.vision.follow import FollowController
-from jarvis.vision.framing import FramingTarget, HeadFirstFramingPolicy
+from jarvis.vision.framing import (
+    FramingTarget,
+    HeadConfirmationConfig,
+    HeadConfirmationGate,
+    HeadFirstFramingPolicy,
+)
 from jarvis.vision.head import HeadDetector, HeadObservation
 from jarvis.vision.models import FollowCommand, TargetState, Track
 from jarvis.vision.ptz import PtzController
@@ -19,10 +24,13 @@ from jarvis.vision.tracker import Tracker
 class VisionRuntimeConfig:
     minimum_ptz_interval_seconds: float = 0.2
     require_head_for_lock: bool = False
+    required_head_confirmation_frames: int = 3
 
     def __post_init__(self) -> None:
         if self.minimum_ptz_interval_seconds <= 0:
             raise ValueError("minimum_ptz_interval_seconds must be positive")
+        if self.required_head_confirmation_frames < 1:
+            raise ValueError("required_head_confirmation_frames must be at least 1")
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +60,7 @@ class VisionRuntime:
         config: VisionRuntimeConfig | None = None,
         head_detector: HeadDetector | None = None,
         framing_policy: HeadFirstFramingPolicy | None = None,
+        head_confirmation_gate: HeadConfirmationGate | None = None,
     ) -> None:
         self.config = config or VisionRuntimeConfig()
         if self.config.require_head_for_lock and head_detector is None:
@@ -68,6 +77,19 @@ class VisionRuntime:
             framing_policy
             if framing_policy is not None
             else HeadFirstFramingPolicy()
+            if head_detector is not None
+            else None
+        )
+        self._head_confirmation_gate = (
+            head_confirmation_gate
+            if head_confirmation_gate is not None
+            else HeadConfirmationGate(
+                HeadConfirmationConfig(
+                    required_consecutive_frames=(
+                        self.config.required_head_confirmation_frames
+                    )
+                )
+            )
             if head_detector is not None
             else None
         )
@@ -104,11 +126,23 @@ class VisionRuntime:
     def armed(self) -> bool:
         return self._armed
 
+    def head_confirmation_frames(self, track_id: int) -> int:
+        if self._head_confirmation_gate is None:
+            return 0
+        return self._head_confirmation_gate.confirmation_frames(track_id)
+
+    def head_lock_eligible(self, track_id: int) -> bool:
+        if self._head_confirmation_gate is None:
+            return not self.config.require_head_for_lock
+        return self._head_confirmation_gate.eligible(track_id)
+
     def start(self) -> None:
         if self._started:
             raise RuntimeError("vision runtime is already started")
         self._armed = False
         self._last_ptz_command_at = None
+        if self._head_confirmation_gate is not None:
+            self._head_confirmation_gate.reset()
         self._camera.start()
         self._started = True
 
@@ -124,12 +158,12 @@ class VisionRuntime:
         if track is None:
             raise ValueError(f"track {track_id} is not currently visible")
 
-        if self.config.require_head_for_lock:
-            assert self._framing_policy is not None
-            candidate_target = TargetState(track_id=track.track_id, track=track)
-            anchor = self._framing_policy.resolve(candidate_target, self._latest_heads)
-            if anchor is None or anchor.source != "head":
-                raise ValueError(f"track {track_id} has no valid linked head")
+        if self.config.require_head_for_lock and not self.head_lock_eligible(track_id):
+            confirmed = self.head_confirmation_frames(track_id)
+            required = self.config.required_head_confirmation_frames
+            raise ValueError(
+                f"track {track_id} head is not confirmed ({confirmed}/{required})"
+            )
 
         self.disarm_follow()
         return self._target_manager.lock(track)
@@ -174,7 +208,13 @@ class VisionRuntime:
         if self._head_detector is not None:
             heads = self._head_detector.detect(frame)
             assert self._framing_policy is not None
-            framing_target = self._framing_policy.resolve(target, heads)
+            assert self._head_confirmation_gate is not None
+            self._head_confirmation_gate.update(tracks, heads, self._framing_policy)
+
+            confirmed_heads = heads
+            if target is not None and not self.head_lock_eligible(target.track_id):
+                confirmed_heads = []
+            framing_target = self._framing_policy.resolve(target, confirmed_heads)
             desired = self._follow_controller.command_for_framing_target(framing_target)
         else:
             desired = self._follow_controller.command_for(target)
@@ -216,7 +256,13 @@ class VisionRuntime:
         try:
             self._ptz.close()
         finally:
-            self._camera.close()
-            self._latest_frame = None
-            self._latest_heads = []
-            self._started = False
+            try:
+                if self._head_detector is not None:
+                    self._head_detector.close()
+            finally:
+                self._camera.close()
+                self._latest_frame = None
+                self._latest_heads = []
+                if self._head_confirmation_gate is not None:
+                    self._head_confirmation_gate.reset()
+                self._started = False
