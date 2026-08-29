@@ -160,7 +160,7 @@ class VoiceControlServer:
             raise RuntimeError("JARVIS voice control connection closed")
         payload = json.loads(line.decode())
         if not isinstance(payload, dict):
-            raise RuntimeError("invalid JARVIS voice control response")
+            raise TypeError("invalid JARVIS voice control response")
         return payload
 
     def _ensure_child(self, *, timeout_seconds: float) -> None:
@@ -206,7 +206,7 @@ class VoiceControlServer:
             ):
                 raise RuntimeError("unexpected JARVIS update approval response")
             return response.get("approved") is True
-        except (OSError, TimeoutError, RuntimeError, json.JSONDecodeError) as exc:
+        except (OSError, TimeoutError, RuntimeError, TypeError, json.JSONDecodeError) as exc:
             self._reset_child()
             raise RuntimeError(f"voice approval failed: {exc}") from exc
 
@@ -220,7 +220,7 @@ class VoiceControlServer:
                 response.get("type") == "shutdown_ack"
                 and response.get("request_id") == request_id
             )
-        except (OSError, TimeoutError, RuntimeError, json.JSONDecodeError):
+        except (OSError, TimeoutError, RuntimeError, TypeError, json.JSONDecodeError):
             self._reset_child()
             return False
 
