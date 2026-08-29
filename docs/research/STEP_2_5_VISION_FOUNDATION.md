@@ -55,7 +55,15 @@ OpenCV remains the practical initial Python capture boundary because it can sele
 
 Microsoft classifies DirectShow as legacy and recommends Media Foundation for new Windows media development. However, the actual Pocket 3 path has already proven DirectShow/UVC camera-control compatibility, and real OpenCV Media Foundation camera behavior can vary by device/driver.
 
-Decision: benchmark both on the real camera. Prefer Media Foundation if it is equally reliable; allow DirectShow as an adapter-level compatibility choice. Neither backend becomes a JARVIS domain concept.
+Measured result on the actual Pocket 3:
+
+- MSMF 1280x720: 5/5 open/read success, ~2.96 s average open-to-first-frame;
+- MSMF 1920x1080: 4/5 first-read success, ~4.834 s average, one grab failure;
+- DSHOW 1280x720: 5/5 success, ~0.968 s average;
+- DSHOW 1920x1080: 5/5 success, ~0.847 s average;
+- DSHOW 1280x720 sustained: 300/300 frames, 0 failures, ~29.34 FPS.
+
+Decision: OpenCV + DirectShow as the initial Pocket 3 adapter path, with backend kept configurable. 1280x720 is the initial low-latency default; 1080p remains available for later sustained end-to-end evaluation.
 
 ### Buffering
 
@@ -71,17 +79,68 @@ Decision: `ADOPT + WRAP` for the Pocket 3 adapter. Core logic sees a JARVIS `Ptz
 
 ## Detector Research
 
-### RF-DETR
+### RF-DETR Nano
 
-RF-DETR Nano/Small are strong current realtime candidates with permissive Apache-2.0 licensing for the core model family and direct Python use. The ecosystem also supports ONNX/TensorRT export if later optimization is justified.
+RF-DETR Nano was benchmarked on the actual Windows + RTX 5060 Ti + Pocket 3 system using native PyTorch CUDA and BF16 inference.
 
-Status: primary benchmark candidate.
+Measured performance:
+
+- mean latency: 36.97 ms;
+- median latency: 36.65 ms;
+- p95 latency: 41.96 ms;
+- inference rate: 27.05 FPS;
+- peak allocated VRAM: 114.8 MiB;
+- warm-start load + optimize: 3.716 s in the tested process.
+
+Controlled same-clip quality test on a 900-frame, 1280x720 Pocket 3 recording:
+
+- person coverage at confidence 0.25: 100%;
+- person coverage at confidence 0.50: 100%;
+- longest miss streak at both thresholds: 0 frames;
+- mean positive person confidence: 0.9514;
+- median positive person confidence: 0.9570.
+
+Status: `SELECT` initial detector.
+
+### RF-DETR Small
+
+Measured performance on the same target hardware:
+
+- mean latency: 40.67 ms;
+- median latency: 40.07 ms;
+- p95 latency: 45.47 ms;
+- inference rate: 24.59 FPS;
+- peak allocated VRAM: 129.3 MiB in the isolated performance run.
+
+Controlled same-clip quality test:
+
+- person coverage at confidence 0.25: 100%;
+- person coverage at confidence 0.50: 100%;
+- longest miss streak at both thresholds: 0 frames;
+- mean positive person confidence: 0.9601;
+- median positive person confidence: 0.9648;
+- disagreement frames vs Nano at confidence 0.50: 0.
+
+Small showed no continuity or coverage improvement over Nano on the controlled clip. The confidence increase was small and did not justify slower throughput and higher resource use.
+
+Status: `DO NOT SELECT` for the initial path; retain as a future reevaluation candidate if later difficult-scene evidence changes the tradeoff.
 
 ### RT-DETRv4-S
 
-RT-DETRv4 provides another current permissive real-time detector path with ONNX/TensorRT/PyTorch deployment options.
+RT-DETRv4-S was benchmarked as the permissive comparison candidate.
 
-Status: comparison candidate.
+Measured performance:
+
+- mean latency: 56.97 ms;
+- median latency: 56.15 ms;
+- p95 latency: 65.29 ms;
+- inference rate: 17.55 FPS;
+- peak allocated VRAM: 133.2 MiB;
+- model load: ~0.569 s after checkpoint availability.
+
+The tested upstream native PyTorch inference path also required a benchmark-wrapper workaround because a cached positional embedding was left on CPU while the model was moved to CUDA.
+
+Status: `REJECT` for the initial detector path because it is materially slower on the target and adds integration friction without a measured quality need.
 
 ### Ultralytics YOLO26
 
@@ -93,15 +152,17 @@ Status: `REJECT` as the default Step-2.5 dependency. Reconsider only if future e
 
 ### Direct native Python/PyTorch CUDA
 
-This is the smallest runtime path and the most debuggable starting point for one local camera and one detector.
+PyTorch 2.13.0 + CUDA 13.2 was validated on the RTX 5060 Ti with `torch.cuda.is_available() == True` and a real 4096x4096 CUDA matrix multiplication.
 
-Status: preferred initial production path if benchmarks are acceptable.
+RF-DETR BF16 inference also passed sustained live and recorded-clip testing.
+
+Status: `ADOPT` initial production runtime.
 
 ### TensorRT
 
 Potentially useful for latency/VRAM optimization, but adds conversion/runtime complexity.
 
-Status: `DEFER`; use only when measurements show a real need.
+Status: `DEFER`; the selected detector already meets the initial real-time direction without TensorRT. Revisit only if end-to-end capture + detector + tracker + control measurements demonstrate a real need.
 
 ### Roboflow Inference
 
@@ -183,34 +244,44 @@ Future compatibility comes from narrow interfaces and canonical state, not empty
 
 Step 2.5 must not persist room video by default. Benchmark clips, if captured manually, are development artifacts and must stay outside the normal committed runtime. Model weights, raw frames, personal face datasets, and generated logs are not repository content.
 
+The controlled detector comparison clip contained 900 frames at 1280x720 and was captured outside the repository strictly for local benchmarking.
+
 ## Measured Benchmark Matrix Required
 
-Before freezing detector/tracker/runtime technology, capture on the actual Windows + RTX 5060 Ti 8 GB + Pocket 3 setup:
+Completed so far on the actual Windows + RTX 5060 Ti 8 GB + Pocket 3 setup:
 
 - capture backend reliability;
-- resolution/FPS;
-- frame age/latency;
-- detector latency and effective Hz;
-- detector quality for near/far/partial/blur/low-light people;
-- VRAM/RAM/CPU use;
+- capture resolution/FPS;
+- native CUDA viability;
+- detector latency/effective Hz;
+- detector same-clip person continuity/coverage;
+- detector VRAM allocation;
+- detector startup behavior.
+
+Still required before Step 2.5 acceptance:
+
 - tracker ID switches;
 - moving-camera continuity;
-- startup/shutdown behavior;
+- end-to-end frame age/latency;
+- CPU/RAM/VRAM in the integrated loop;
+- startup/shutdown behavior for the integrated runtime;
 - disconnect/reopen behavior;
-- long-run resource stability.
+- long-run resource stability;
+- physical PTZ closed-loop following behavior.
 
 ## Technology Decisions Summary
 
 | Area | Decision |
 | --- | --- |
 | Camera contract | BUILD JARVIS boundary |
-| OpenCV capture | WRAP, benchmark MSMF vs DSHOW |
+| OpenCV capture | WRAP; DSHOW selected for Pocket 3 |
 | Pocket 3 PTZ | ADOPT + WRAP `duvc-ctl` |
 | Detector contract | BUILD JARVIS boundary |
-| RF-DETR Nano/Small | BENCHMARK primary |
-| RT-DETRv4-S | BENCHMARK comparison |
+| RF-DETR Nano | SELECT, BF16 native PyTorch/CUDA |
+| RF-DETR Small | NOT SELECTED initially |
+| RT-DETRv4-S | REJECT initial path from measured performance/integration friction |
 | YOLO26 | REJECT default due licensing tradeoff |
-| Direct PyTorch/CUDA | ADOPT if benchmark passes |
+| Direct PyTorch/CUDA | ADOPT |
 | TensorRT | DEFER until justified |
 | Roboflow Inference server | DEFER |
 | Tracker contract | BUILD JARVIS boundary |
@@ -228,7 +299,7 @@ Before freezing detector/tracker/runtime technology, capture on the actual Windo
 ```text
 CameraSource
 -> latest frame
--> ObjectDetector
+-> RF-DETR Nano adapter
 -> canonical Detection[]
 -> Tracker
 -> canonical Track[]
