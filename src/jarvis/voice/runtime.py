@@ -320,7 +320,6 @@ class VoiceRuntimeController:
         local_sha: str,
         remote_sha: str,
     ) -> bool:
-        del local_sha, remote_sha
         output = self.audio.output
         if output is None:
             raise RuntimeError("local audio output is not available")
@@ -329,13 +328,19 @@ class VoiceRuntimeController:
         active_end = asyncio.Event()
         self._active_end = active_end
         decision = asyncio.get_running_loop().create_future()
+        accepting_decision = False
         session, bridge = self._session_factory(self.config)
         session_input = SessionAudioInput()
         session.input.audio = session_input
         session.output.audio = output
 
         def on_transcript(event: UserInputTranscribedEvent) -> None:
-            if not event.is_final or not event.transcript.strip() or decision.done():
+            if (
+                not accepting_decision
+                or not event.is_final
+                or not event.transcript.strip()
+                or decision.done()
+            ):
                 return
             parsed = parse_explicit_update_decision(event.transcript)
             if parsed is None:
@@ -358,15 +363,34 @@ class VoiceRuntimeController:
             self._state = VoiceRuntimeState.ACTIVE
             LOGGER.info("JARVIS is requesting spoken approval for a software update")
             prompt = session.generate_reply(
+                user_input=(
+                    "JARVIS internal control request: a software update is available. "
+                    "Ask the owner whether to install it and restart now, and request "
+                    "an explicit yes or no answer."
+                ),
                 instructions=(
                     "Say exactly this sentence and nothing else: "
                     "'A JARVIS software update is available. Shall I install it and "
                     "restart now? Please answer yes or no.'"
                 ),
-                allow_interruptions=True,
+                allow_interruptions=False,
                 tool_choice="none",
             )
             await prompt
+            prompt_exception = getattr(prompt, "exception", None)
+            if callable(prompt_exception):
+                error = prompt_exception()
+                if error is not None:
+                    raise RuntimeError(
+                        "JARVIS update approval prompt generation failed"
+                    ) from error
+            accepting_decision = True
+            LOGGER.info(
+                "Spoken update approval prompt finished playing; awaiting owner Yes/No "
+                "for %s -> %s",
+                local_sha[:10],
+                remote_sha[:10],
+            )
             try:
                 approved = await asyncio.wait_for(decision, timeout=20.0)
             except TimeoutError:
