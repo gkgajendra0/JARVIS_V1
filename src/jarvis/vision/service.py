@@ -176,7 +176,12 @@ def build_default_vision_service(
     """Compose the benchmark-selected Step 2.5 hardware/runtime stack lazily."""
     from jarvis.vision.camera import OpenCVCameraSource
     from jarvis.vision.detector import RFDetrNanoDetector
-    from jarvis.vision.follow import FollowConfig, FollowController
+    from jarvis.vision.follow import (
+        FollowConfig,
+        FollowController,
+        ZoomConfig,
+        ZoomController,
+    )
     from jarvis.vision.head_mediapipe import (
         MediaPipeBlazeFaceConfig,
         MediaPipeBlazeFaceDetector,
@@ -184,29 +189,49 @@ def build_default_vision_service(
     from jarvis.vision.ptz import DuvcPtzConfig, DuvcPtzController
     from jarvis.vision.runtime import VisionRuntimeConfig
     from jarvis.vision.targeting import TargetManager
-    from jarvis.vision.tracker import BoTSORTAdapter
+    from jarvis.vision.tracker import BoTSORTAdapter, BoTSORTConfig
 
     model_path = resolve_blazeface_model_path(head_model_path)
     runtime = VisionRuntime(
         camera=OpenCVCameraSource(),
         detector=RFDetrNanoDetector(),
-        tracker=BoTSORTAdapter(),
-        target_manager=TargetManager(lost_timeout_seconds=0.5),
+        tracker=BoTSORTAdapter(
+            BoTSORTConfig(
+                lost_track_buffer=60,
+                minimum_iou_threshold_first_assoc=0.10,
+                minimum_iou_threshold_second_assoc=0.30,
+                minimum_iou_threshold_unconfirmed_assoc=0.20,
+                enable_cmc=True,
+                cmc_method="sparseOptFlow",
+            )
+        ),
+        target_manager=TargetManager(lost_timeout_seconds=1.25),
         follow_controller=FollowController(
             FollowConfig(
-                horizontal_dead_zone=0.12,
-                vertical_dead_zone=0.12,
-                gain=1.8,
-                max_command=0.45,
+                horizontal_dead_zone=0.08,
+                vertical_dead_zone=0.08,
+                gain=2.2,
+                max_command=0.65,
                 minimum_confidence=0.5,
                 desired_x=0.50,
                 desired_y=0.40,
             )
         ),
+        zoom_controller=ZoomController(
+            ZoomConfig(
+                desired_body_height=0.56,
+                dead_zone=0.08,
+                gain=1.4,
+                max_command=0.30,
+                minimum_confidence=0.5,
+            )
+        ),
         ptz=DuvcPtzController(
             DuvcPtzConfig(
-                pan_step_fraction=0.02,
-                tilt_step_fraction=0.015,
+                pan_step_fraction=0.025,
+                tilt_step_fraction=0.025,
+                zoom_step_fraction=0.025,
+                zoom_max_fraction=0.50,
                 pan_negative_scale=1.25,
                 pan_positive_scale=1.75,
             )
@@ -216,8 +241,10 @@ def build_default_vision_service(
         ),
         config=VisionRuntimeConfig(
             minimum_ptz_interval_seconds=0.05,
+            minimum_zoom_interval_seconds=0.15,
             require_head_for_lock=True,
             required_head_confirmation_frames=3,
+            body_fallback_tilt_scale=0.45,
         ),
     )
     return VisionService(runtime)
