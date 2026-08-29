@@ -13,6 +13,7 @@ dependencies = [
     "livekit-agents[google,openai]==1.7.1",
     "livekit-wakeword==0.2.1",
     "numpy>=2,<3",
+    "opencv-python==5.0.0.93",
     "opencv-contrib-python==5.0.0.93",
 ]
 
