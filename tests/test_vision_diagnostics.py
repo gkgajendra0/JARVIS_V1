@@ -40,7 +40,9 @@ def _snapshot(
     return VisionSnapshot(
         frame_id=frame_id,
         captured_at=float(frame_id),
-        tracks=people if people is not None else ((track,) if track is not None else ()),
+        tracks=people
+        if people is not None
+        else ((track,) if track is not None else ()),
         target=target,
         command=FollowCommand(pan=0.1 if armed else 0.0),
         armed=armed,
