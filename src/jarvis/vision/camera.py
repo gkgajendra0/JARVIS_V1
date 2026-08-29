@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
 import cv2
 import numpy as np
+
+CaptureFactory = Callable[[int, int], object]
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +19,14 @@ class CapturedFrame:
     frame_id: int
     captured_at: float
     image: np.ndarray
+
+    def __post_init__(self) -> None:
+        if self.frame_id < 0:
+            raise ValueError("frame_id must be non-negative")
+        if self.captured_at < 0:
+            raise ValueError("captured_at must be non-negative")
+        if self.image.ndim < 2:
+            raise ValueError("captured frame image must have at least two dimensions")
 
     @property
     def width(self) -> int:
@@ -60,11 +71,19 @@ class OpenCVCameraConfig:
 class OpenCVCameraSource:
     """Capture continuously into a single overwrite slot."""
 
-    def __init__(self, config: OpenCVCameraConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: OpenCVCameraConfig | None = None,
+        *,
+        capture_factory: CaptureFactory = cv2.VideoCapture,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self.config = config or OpenCVCameraConfig()
+        self._capture_factory = capture_factory
+        self._clock = clock
         self._condition = threading.Condition()
         self._stop = threading.Event()
-        self._capture: cv2.VideoCapture | None = None
+        self._capture: object | None = None
         self._thread: threading.Thread | None = None
         self._latest: CapturedFrame | None = None
         self._next_frame_id = 0
@@ -80,7 +99,7 @@ class OpenCVCameraSource:
             raise RuntimeError("camera source is already started")
 
         backend = cv2.CAP_DSHOW if self.config.backend == "dshow" else cv2.CAP_MSMF
-        capture = cv2.VideoCapture(self.config.device_index, backend)
+        capture = self._capture_factory(self.config.device_index, backend)
         if not capture.isOpened():
             capture.release()
             raise RuntimeError("camera failed to open")
@@ -168,7 +187,7 @@ class OpenCVCameraSource:
     def _publish(self, image: np.ndarray) -> None:
         frame = CapturedFrame(
             frame_id=self._next_frame_id,
-            captured_at=time.monotonic(),
+            captured_at=self._clock(),
             image=image,
         )
         self._next_frame_id += 1
