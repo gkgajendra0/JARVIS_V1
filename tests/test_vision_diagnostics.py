@@ -24,8 +24,10 @@ def _snapshot(
     source: str | None,
     armed: bool = False,
     people: tuple[Track, ...] | None = None,
+    detector_persons: int | None = None,
 ) -> VisionSnapshot:
     track = target.track if target is not None else None
+    tracks = people if people is not None else ((track,) if track is not None else ())
     framing_target = (
         FramingTarget(
             x=0.5,
@@ -40,12 +42,11 @@ def _snapshot(
     return VisionSnapshot(
         frame_id=frame_id,
         captured_at=float(frame_id),
-        tracks=people
-        if people is not None
-        else ((track,) if track is not None else ()),
+        tracks=tracks,
         target=target,
         command=FollowCommand(pan=0.1 if armed else 0.0),
         armed=armed,
+        detector_persons=len(tracks) if detector_persons is None else detector_persons,
         heads=(),
         framing_target=framing_target,
     )
@@ -100,6 +101,40 @@ def test_diagnostics_records_head_body_loss_and_reacquisition_transitions() -> N
     assert report["status"]["target_id"] == 7
     assert report["status"]["target_visible"] is True
     assert report["status"]["framing_source"] == "head"
+
+
+def test_diagnostics_exposes_detector_tracker_counts_on_track_dropout() -> None:
+    diagnostics = VisionDiagnostics()
+    diagnostics.set_running(True)
+    track = _track()
+
+    diagnostics.observe(
+        _snapshot(
+            1,
+            target=TargetState(track_id=7, track=track),
+            source="head",
+            detector_persons=1,
+        )
+    )
+    diagnostics.observe(
+        _snapshot(
+            2,
+            target=TargetState(track_id=7, track=None, missing_since=2.0),
+            source=None,
+            people=(),
+            detector_persons=1,
+        )
+    )
+
+    report = diagnostics.report(event_limit=10)
+    event = next(
+        item for item in report["recent_events"] if item["code"] == "people_count_changed"
+    )
+
+    assert "RF-DETR=1" in event["message"]
+    assert "ByteTrack=0" in event["message"]
+    assert report["status"]["detector_persons"] == 1
+    assert report["status"]["visible_people"] == 0
 
 
 def test_diagnostics_history_is_bounded() -> None:
