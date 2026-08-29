@@ -32,6 +32,15 @@ class FakeDetector:
         self.enabled = False
 
 
+class FakeMediaDevices:
+    def __init__(self) -> None:
+        self.input_options = None
+
+    def open_input(self, **options):
+        self.input_options = options
+        return object()
+
+
 @pytest.mark.asyncio
 async def test_session_audio_input_is_bounded_and_closes() -> None:
     audio_input = SessionAudioInput(capacity_frames=1)
@@ -67,6 +76,29 @@ async def test_activation_sends_pre_roll_in_order_without_reopening_device() -> 
     assert np.frombuffer(first.data, dtype=np.int16)[0] == 2
     assert np.frombuffer(second.data, dtype=np.int16)[0] == 3
     assert runtime.detector.enabled is False
+
+
+def test_input_capture_has_bounded_provider_startup_cushion() -> None:
+    runtime = LocalAudioRuntime(
+        FakeDetector(),  # type: ignore[arg-type]
+        input_device_name=None,
+        output_device_name=None,
+        pre_roll_seconds=0.02,
+        ring_buffer_seconds=0.05,
+    )
+    media_devices = FakeMediaDevices()
+    runtime._media_devices = media_devices
+
+    runtime._open_input_capture(57)
+
+    assert media_devices.input_options == {
+        "input_device": 57,
+        "queue_capacity": 500,
+        "enable_aec": True,
+        "noise_suppression": True,
+        "high_pass_filter": True,
+        "auto_gain_control": True,
+    }
 
 
 def test_device_name_resolution_rejects_missing_and_ambiguous_devices() -> None:

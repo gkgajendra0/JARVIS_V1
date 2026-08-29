@@ -20,6 +20,11 @@ DEVICE_SAMPLE_RATE = 48_000
 DEVICE_CHANNELS = 1
 FRAME_SIZE_MS = 10
 FRAME_SAMPLES = DEVICE_SAMPLE_RATE * FRAME_SIZE_MS // 1000
+# LiveKit MediaDevices defaults to 50 frames (0.5 seconds). Realtime-provider
+# startup can temporarily delay its async capture pump for longer than that,
+# while the PortAudio callback continues producing frames. Keep this bounded,
+# but large enough to absorb the observed wake-to-session startup burst.
+CAPTURE_QUEUE_CAPACITY_FRAMES = 500
 _INPUT_CLOSED = object()
 
 
@@ -360,6 +365,17 @@ class LocalAudioRuntime:
     def set_overflow_handler(self, callback: Callable[[], None]) -> None:
         self._overflow_handler = callback
 
+    def _open_input_capture(self, input_device: int | None) -> Any:
+        assert self._media_devices is not None
+        return self._media_devices.open_input(
+            input_device=input_device,
+            queue_capacity=CAPTURE_QUEUE_CAPACITY_FRAMES,
+            enable_aec=True,
+            noise_suppression=True,
+            high_pass_filter=True,
+            auto_gain_control=True,
+        )
+
     async def start(self) -> None:
         if self._router_task is not None:
             raise RuntimeError("local audio runtime is already started")
@@ -379,13 +395,7 @@ class LocalAudioRuntime:
             self._output_device_name,
             kind="output",
         )
-        self._input_capture = self._media_devices.open_input(
-            input_device=input_device,
-            enable_aec=True,
-            noise_suppression=True,
-            high_pass_filter=True,
-            auto_gain_control=True,
-        )
+        self._input_capture = self._open_input_capture(input_device)
         self._input_track = rtc.LocalAudioTrack.create_audio_track(
             "jarvis-local-microphone",
             self._input_capture.source,
