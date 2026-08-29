@@ -20,7 +20,9 @@ class VisionObserver(Protocol):
 class OpenCVVisionObserver:
     """Render the same frame and canonical state consumed by JARVIS."""
 
-    def __init__(self, *, window_name: str = "JARVIS Vision - live interpretation") -> None:
+    def __init__(
+        self, *, window_name: str = "JARVIS Vision - live interpretation"
+    ) -> None:
         self._window_name = window_name
 
     def observe(self, frame: CapturedFrame, snapshot: VisionSnapshot) -> None:
