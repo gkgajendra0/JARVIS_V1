@@ -134,7 +134,7 @@ def test_diagnostics_exposes_detector_tracker_counts_on_track_dropout() -> None:
     )
 
     assert "RF-DETR=1" in event["message"]
-    assert "ByteTrack=0" in event["message"]
+    assert "BoT-SORT=0" in event["message"]
     assert report["status"]["detector_persons"] == 1
     assert report["status"]["visible_people"] == 0
 
