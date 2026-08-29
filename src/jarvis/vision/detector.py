@@ -20,15 +20,18 @@ class ObjectDetector(Protocol):
 @dataclass(frozen=True, slots=True)
 class RFDetrNanoConfig:
     device: str = "cuda"
-    threshold: float = 0.25
+    threshold: float = 0.5
     dtype: str = "bfloat16"
     person_class_id: int = 1
+    duplicate_ios_threshold: float = 0.98
 
     def __post_init__(self) -> None:
         if not 0 <= self.threshold <= 1:
             raise ValueError("threshold must be in [0, 1]")
         if self.person_class_id < 0:
             raise ValueError("person_class_id must be non-negative")
+        if not 0 <= self.duplicate_ios_threshold <= 1:
+            raise ValueError("duplicate_ios_threshold must be in [0, 1]")
 
 
 class RFDetrNanoDetector:
@@ -63,9 +66,20 @@ class RFDetrNanoDetector:
         confidences = np.asarray(raw.confidence)
         boxes = np.asarray(raw.xyxy)
 
-        mask = class_ids == self.config.person_class_id
+        person_mask = class_ids == self.config.person_class_id
+        person_boxes = boxes[person_mask]
+        person_confidences = confidences[person_mask]
+        person_boxes, person_confidences = self._suppress_nested_duplicates(
+            person_boxes,
+            person_confidences,
+        )
+
         detections: list[Detection] = []
-        for box, confidence in zip(boxes[mask], confidences[mask], strict=True):
+        for box, confidence in zip(
+            person_boxes,
+            person_confidences,
+            strict=True,
+        ):
             normalized = self._normalize_box(
                 box, width=frame.width, height=frame.height
             )
@@ -81,6 +95,27 @@ class RFDetrNanoDetector:
                 )
             )
         return detections
+
+    def _suppress_nested_duplicates(
+        self,
+        boxes: np.ndarray,
+        confidences: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        if len(boxes) < 2:
+            return boxes, confidences
+
+        import supervision as sv
+
+        predictions = np.column_stack((boxes, confidences)).astype(
+            np.float32,
+            copy=False,
+        )
+        keep = sv.box_non_max_suppression(
+            predictions=predictions,
+            iou_threshold=self.config.duplicate_ios_threshold,
+            overlap_metric=sv.OverlapMetric.IOS,
+        )
+        return boxes[keep], confidences[keep]
 
     @staticmethod
     def _normalize_box(
