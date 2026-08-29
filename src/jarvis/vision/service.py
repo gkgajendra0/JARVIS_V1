@@ -9,7 +9,7 @@ from threading import Event, RLock, Thread
 
 from jarvis.vision.diagnostics import VisionDiagnostics
 from jarvis.vision.observer import VisionObserver
-from jarvis.vision.runtime import VisionRuntime
+from jarvis.vision.runtime import VisionRuntime, VisionSnapshot
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,9 +34,12 @@ class VisionService:
         self._observer = observer
         self._process_timeout_seconds = process_timeout_seconds
         self._runtime_lock = RLock()
+        self._snapshot_lock = RLock()
         self._lifecycle_lock = RLock()
         self._stop_requested = Event()
         self._thread: Thread | None = None
+        self._observer_thread: Thread | None = None
+        self._latest_snapshot: VisionSnapshot | None = None
 
     @property
     def running(self) -> bool:
@@ -48,6 +51,8 @@ class VisionService:
             if self.running:
                 return
             self._stop_requested.clear()
+            with self._snapshot_lock:
+                self._latest_snapshot = None
             with self._runtime_lock:
                 self.runtime.start()
             self.diagnostics.set_running(True)
@@ -57,12 +62,20 @@ class VisionService:
                 daemon=True,
             )
             self._thread.start()
+            if self._observer is not None:
+                self._observer_thread = Thread(
+                    target=self._observer_loop,
+                    name="jarvis-vision-observer",
+                    daemon=True,
+                )
+                self._observer_thread.start()
 
     def stop(self, *, join_timeout_seconds: float = 3.0) -> None:
         if join_timeout_seconds <= 0:
             raise ValueError("join_timeout_seconds must be positive")
         with self._lifecycle_lock:
             thread = self._thread
+            observer_thread = self._observer_thread
             if thread is None:
                 return
             self._stop_requested.set()
@@ -71,8 +84,15 @@ class VisionService:
             raise RuntimeError(
                 "vision service did not stop within the shutdown timeout"
             )
+        if observer_thread is not None:
+            observer_thread.join(timeout=join_timeout_seconds)
+            if observer_thread.is_alive():
+                raise RuntimeError(
+                    "vision observer did not stop within the shutdown timeout"
+                )
         with self._lifecycle_lock:
             self._thread = None
+            self._observer_thread = None
 
     def report(self, *, event_limit: int = 12) -> dict[str, object]:
         return self.diagnostics.report(event_limit=event_limit)
@@ -141,21 +161,14 @@ class VisionService:
                     snapshot = self.runtime.process_once(
                         timeout_seconds=self._process_timeout_seconds
                     )
-                    frame = self.runtime.latest_frame
                 if snapshot is not None:
+                    with self._snapshot_lock:
+                        self._latest_snapshot = snapshot
                     self.diagnostics.observe(snapshot)
-                    if self._observer is not None and frame is not None:
-                        self._observer.observe(frame, snapshot)
         except Exception as exc:
             self.diagnostics.record_error(exc)
             LOGGER.exception("Integrated vision service failed")
         finally:
-            try:
-                if self._observer is not None:
-                    self._observer.close()
-            except Exception as exc:
-                self.diagnostics.record_error(exc)
-                LOGGER.exception("Integrated vision observer shutdown failed")
             try:
                 with self._runtime_lock:
                     self.runtime.close()
@@ -164,6 +177,34 @@ class VisionService:
                 LOGGER.exception("Integrated vision shutdown failed")
             finally:
                 self.diagnostics.set_running(False)
+                self._stop_requested.set()
+
+    def _observer_loop(self) -> None:
+        assert self._observer is not None
+        last_frame_id: int | None = None
+        try:
+            while not self._stop_requested.is_set():
+                frame = self.runtime.latest_camera_frame(
+                    after_frame_id=last_frame_id,
+                    timeout_seconds=0.05,
+                )
+                if frame is None:
+                    continue
+                last_frame_id = frame.frame_id
+                with self._snapshot_lock:
+                    snapshot = self._latest_snapshot
+                if snapshot is not None:
+                    self._observer.observe(frame, snapshot)
+        except Exception as exc:
+            if not self._stop_requested.is_set():
+                self.diagnostics.record_error(exc)
+                LOGGER.exception("Integrated vision observer failed")
+        finally:
+            try:
+                self._observer.close()
+            except Exception as exc:
+                self.diagnostics.record_error(exc)
+                LOGGER.exception("Integrated vision observer shutdown failed")
 
 
 def resolve_blazeface_model_path(configured: str | Path | None = None) -> Path:
@@ -179,11 +220,6 @@ def resolve_blazeface_model_path(configured: str | Path | None = None) -> Path:
     if not path.is_file():
         raise FileNotFoundError(path)
     return path
-
-
-def _env_enabled(name: str) -> bool:
-    value = os.environ.get(name, "").strip().lower()
-    return value in {"1", "true", "yes", "on"}
 
 
 def build_default_vision_service(
@@ -265,5 +301,10 @@ def build_default_vision_service(
             body_fallback_tilt_scale=0.45,
         ),
     )
-    observer = OpenCVVisionObserver() if _env_enabled("JARVIS_VISION_PREVIEW") else None
+    observer = (
+        OpenCVVisionObserver()
+        if os.environ.get("JARVIS_VISION_PREVIEW", "").strip().lower()
+        in {"1", "true", "yes", "on"}
+        else None
+    )
     return VisionService(runtime, observer=observer)
