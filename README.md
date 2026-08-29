@@ -76,7 +76,7 @@ wake detection. `lk agent console` remains available as a Step-1 diagnostic harn
 ## Run the development supervisor
 
 `jarvis-dev` is a development-only wrapper around the accepted `jarvis-voice`
-runtime. It keeps JARVIS running, watches the configured remote branch, and asks for
+runtime. It keeps JARVIS running, watches the configured remote branch, and requires
 one explicit owner approval before applying a fast-forward update and restarting the
 runtime.
 
@@ -92,9 +92,15 @@ $env:JARVIS_DEV_BRANCH = "feature/jarvis-dev-supervisor"
 jarvis-dev
 ```
 
-Only `y` or `yes` approves an update. Any other input is treated as No. The supervisor
-refuses dirty working trees and non-fast-forward updates, and it does not continuously
-restart a crashing child process.
+When an update becomes available, the running JARVIS voice runtime asks the owner
+aloud whether to apply it. A narrow deterministic parser accepts only an explicit
+spoken Yes or No from the finalized transcript; ambiguous speech, timeout, or an
+unavailable voice-control channel means No. The realtime model may speak the prompt,
+but it does not decide whether the update was approved.
+
+The supervisor uses an authenticated loopback-only control channel, refuses dirty
+working trees and non-fast-forward updates, requests a clean in-process shutdown
+before OS-level fallbacks, and does not continuously restart a crashing child process.
 
 ## Validate
 
