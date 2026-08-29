@@ -53,16 +53,20 @@ class DuvcPtzConfig:
     device_index: int = 0
     pan_step_fraction: float = 0.04
     tilt_step_fraction: float = 0.04
+    zoom_step_fraction: float = 0.025
+    zoom_max_fraction: float = 0.50
     pan_negative_scale: float = 1.0
     pan_positive_scale: float = 1.0
 
     def __post_init__(self) -> None:
         if self.device_index < 0:
             raise ValueError("device_index must be non-negative")
-        for name in ("pan_step_fraction", "tilt_step_fraction"):
+        for name in ("pan_step_fraction", "tilt_step_fraction", "zoom_step_fraction"):
             value = getattr(self, name)
             if not 0 < value <= 0.25:
                 raise ValueError(f"{name} must be in (0, 0.25]")
+        if not 0 < self.zoom_max_fraction <= 1:
+            raise ValueError("zoom_max_fraction must be in (0, 1]")
         for name in ("pan_negative_scale", "pan_positive_scale"):
             value = getattr(self, name)
             if not 0 < value <= 4:
@@ -82,6 +86,7 @@ class DuvcPtzController:
         self._backend = backend or _ResultApiDuvcBackend(self.config.device_index)
         self._pan_range = self._backend.get_axis_range("pan")
         self._tilt_range = self._backend.get_axis_range("tilt")
+        self._zoom_range: PtzAxisRange | None = None
 
     @property
     def pan_range(self) -> PtzAxisRange:
@@ -113,6 +118,8 @@ class DuvcPtzController:
                 self._tilt_range,
                 self.config.tilt_step_fraction,
             )
+        if command.zoom != 0:
+            self._move_zoom(command.zoom)
 
     def close(self) -> None:
         self._backend.close()
@@ -129,6 +136,24 @@ class DuvcPtzController:
         target = axis_range.clamp_and_snap(current + delta)
         if target != current:
             self._backend.set_axis_value(axis, target)
+
+    def _move_zoom(self, normalized_command: float) -> None:
+        zoom_range = self._zoom_range
+        if zoom_range is None:
+            zoom_range = self._backend.get_axis_range("zoom")
+            self._zoom_range = zoom_range
+
+        current = self._backend.get_axis_value("zoom")
+        safe_maximum = zoom_range.minimum + (
+            zoom_range.span * self.config.zoom_max_fraction
+        )
+        delta = normalized_command * zoom_range.span * self.config.zoom_step_fraction
+        unclamped = current + delta
+        target = zoom_range.clamp_and_snap(
+            max(zoom_range.minimum, min(safe_maximum, unclamped))
+        )
+        if target != current:
+            self._backend.set_axis_value("zoom", target)
 
 
 class _ResultApiDuvcBackend:
@@ -181,4 +206,6 @@ class _ResultApiDuvcBackend:
             return self._duvc.CamProp.Pan
         if axis == "tilt":
             return self._duvc.CamProp.Tilt
+        if axis == "zoom":
+            return self._duvc.CamProp.Zoom
         raise ValueError(f"unsupported PTZ axis: {axis}")
