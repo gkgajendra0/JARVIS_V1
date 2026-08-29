@@ -22,10 +22,12 @@ class VisionAgentTools:
         """Read current tracking/head state and recent meaningful vision events.
 
         This tool does not expose image pixels or general scene understanding. Use it
-        for person-track counts, head-detection counts, target/follow state, framing
-        source, and recent tracking transitions. Do not use it to infer clothing
-        colour, arbitrary objects, text, furniture, facial appearance, identity, or
-        any other visual detail absent from the returned fields.
+        for person-track counts, head-detection counts, target/follow state, current
+        framing source, and recent tracking transitions. `framing_source` may be
+        `head`, `head_hold`, `body`, or null; do not describe a current head detection
+        when the status says `head_hold` or `body`. Do not use this tool to infer
+        clothing colour, arbitrary objects, text, furniture, facial appearance,
+        identity, or any other visual detail absent from the returned fields.
         """
         del context
         report = self._service.report(event_limit=16)
@@ -35,7 +37,7 @@ class VisionAgentTools:
                 "head_detection_count",
                 "target_visibility",
                 "follow_armed_state",
-                "head_or_body_framing_source",
+                "framing_source",
                 "recent_tracking_transitions",
             ],
             "not_available": [
