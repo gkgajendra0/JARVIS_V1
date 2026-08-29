@@ -47,13 +47,7 @@ These device ranges must be dynamically discovered in production and are not tre
 
 ## Capture Research
 
-### OpenCV
-
-OpenCV remains the practical initial Python capture boundary because it can select Windows backends and is easy to benchmark. It should be wrapped behind `CameraSource` so no other component depends on `cv2.VideoCapture`.
-
-### Windows Media Foundation vs DirectShow
-
-Microsoft classifies DirectShow as legacy and recommends Media Foundation for new Windows media development. However, the actual Pocket 3 path has already proven DirectShow/UVC camera-control compatibility, and real OpenCV Media Foundation camera behavior can vary by device/driver.
+### OpenCV + DirectShow
 
 Measured result on the actual Pocket 3:
 
@@ -63,7 +57,7 @@ Measured result on the actual Pocket 3:
 - DSHOW 1920x1080: 5/5 success, ~0.847 s average;
 - DSHOW 1280x720 sustained: 300/300 frames, 0 failures, ~29.34 FPS.
 
-Decision: OpenCV + DirectShow as the initial Pocket 3 adapter path, with backend kept configurable. 1280x720 is the initial low-latency default; 1080p remains available for later sustained end-to-end evaluation.
+Decision: OpenCV + DirectShow as the initial Pocket 3 adapter path, backend configurable. 1280x720 is the initial low-latency default; 1080p remains configurable for later end-to-end evaluation.
 
 ### Buffering
 
@@ -81,9 +75,7 @@ Decision: `ADOPT + WRAP` for the Pocket 3 adapter. Core logic sees a JARVIS `Ptz
 
 ### RF-DETR Nano
 
-RF-DETR Nano was benchmarked on the actual Windows + RTX 5060 Ti + Pocket 3 system using native PyTorch CUDA and BF16 inference.
-
-Measured performance:
+Measured on the actual Windows + RTX 5060 Ti + Pocket 3 system using native PyTorch CUDA and BF16:
 
 - mean latency: 36.97 ms;
 - median latency: 36.65 ms;
@@ -104,7 +96,7 @@ Status: `SELECT` initial detector.
 
 ### RF-DETR Small
 
-Measured performance on the same target hardware:
+Measured performance:
 
 - mean latency: 40.67 ms;
 - median latency: 40.07 ms;
@@ -112,7 +104,7 @@ Measured performance on the same target hardware:
 - inference rate: 24.59 FPS;
 - peak allocated VRAM: 129.3 MiB in the isolated performance run.
 
-Controlled same-clip quality test:
+Controlled same-clip quality:
 
 - person coverage at confidence 0.25: 100%;
 - person coverage at confidence 0.50: 100%;
@@ -121,13 +113,9 @@ Controlled same-clip quality test:
 - median positive person confidence: 0.9648;
 - disagreement frames vs Nano at confidence 0.50: 0.
 
-Small showed no continuity or coverage improvement over Nano on the controlled clip. The confidence increase was small and did not justify slower throughput and higher resource use.
-
-Status: `DO NOT SELECT` for the initial path; retain as a future reevaluation candidate if later difficult-scene evidence changes the tradeoff.
+Status: `DO NOT SELECT` initially. It showed no continuity/coverage improvement over Nano and did not justify slower throughput/higher resource use.
 
 ### RT-DETRv4-S
-
-RT-DETRv4-S was benchmarked as the permissive comparison candidate.
 
 Measured performance:
 
@@ -138,61 +126,91 @@ Measured performance:
 - peak allocated VRAM: 133.2 MiB;
 - model load: ~0.569 s after checkpoint availability.
 
-The tested upstream native PyTorch inference path also required a benchmark-wrapper workaround because a cached positional embedding was left on CPU while the model was moved to CUDA.
+The tested native PyTorch path also required a benchmark-wrapper workaround because a cached positional embedding remained on CPU while the model moved to CUDA.
 
-Status: `REJECT` for the initial detector path because it is materially slower on the target and adds integration friction without a measured quality need.
+Status: `REJECT` initial detector path.
 
 ### Ultralytics YOLO26
 
-Technically strong, but the standard Ultralytics distribution uses AGPL-3.0 with a separate Enterprise licensing path for non-AGPL commercial/private embedding. JARVIS has credible permissive alternatives, so inheriting this licensing constraint is unnecessary.
+Technically strong, but the standard Ultralytics distribution uses AGPL-3.0 with a separate Enterprise path. Strong permissive alternatives already meet the need.
 
-Status: `REJECT` as the default Step-2.5 dependency. Reconsider only if future evidence shows a material technical advantage worth the licensing tradeoff.
+Status: `REJECT` default Step 2.5 dependency.
 
 ## Inference Runtime Research
 
 ### Direct native Python/PyTorch CUDA
 
-PyTorch 2.13.0 + CUDA 13.2 was validated on the RTX 5060 Ti with `torch.cuda.is_available() == True` and a real 4096x4096 CUDA matrix multiplication.
-
-RF-DETR BF16 inference also passed sustained live and recorded-clip testing.
+PyTorch 2.13.0 + CUDA 13.2 was validated on the RTX 5060 Ti with a real CUDA matrix multiplication. RF-DETR BF16 inference passed sustained live and recorded-clip tests.
 
 Status: `ADOPT` initial production runtime.
 
 ### TensorRT
 
-Potentially useful for latency/VRAM optimization, but adds conversion/runtime complexity.
+Potentially useful for optimization but adds conversion/runtime complexity.
 
-Status: `DEFER`; the selected detector already meets the initial real-time direction without TensorRT. Revisit only if end-to-end capture + detector + tracker + control measurements demonstrate a real need.
+Status: `DEFER`; selected detector already meets the initial real-time direction.
 
 ### Roboflow Inference
 
-Roboflow Inference is mature and supports local/server workflows on Windows. It becomes more compelling with multiple cameras, distributed inference, remote streams, or reusable visual workflows.
+Useful later for distributed/multi-camera/server workflows, but unnecessary for the current one-camera local slice.
 
-For the current one-camera Step 2.5 slice, requiring a separate inference service/server would add lifecycle and dependency complexity that direct model integration does not need.
-
-Status: `DEFER`, not rejected.
+Status: `DEFER`.
 
 ## Tracker Research
 
 ### ByteTrack
 
-Simple, fast, proven detector-based multi-object tracking. Good baseline.
+Roboflow `trackers` 2.6.0 ByteTrack was tested against the exact same cached RF-DETR Nano person detections as BoT-SORT.
 
-Status: benchmark baseline.
+Full rate (~30 FPS), 900 processed frames:
+
+- confirmed-track coverage: 99.89%;
+- mean tracker latency: 0.345 ms;
+- p95 tracker latency: 0.479 ms;
+- primary-person ID switches: 0;
+- longest same primary ID run: 899 frames;
+- one dominant track ID for 899 frames.
+
+Stress rate (~15 FPS), 450 processed frames using original timestamps:
+
+- confirmed-track coverage: 99.78%;
+- mean tracker latency: 0.366 ms;
+- p95 tracker latency: 0.493 ms;
+- primary-person ID switches: 0;
+- longest same primary ID run: 449 frames;
+- one dominant track ID for 449 frames.
+
+Status: `SELECT` initial tracker.
 
 ### BoT-SORT + Camera Motion Compensation
 
-Pocket 3 actively pans/tilts, so the full frame moves when the camera moves. Camera-motion compensation is therefore directly relevant. BoT-SORT provides a stronger moving-camera candidate than plain ByteTrack.
+Tested with `sparseOptFlow` CMC and the same detections/frames.
 
-Status: primary benchmark candidate.
+Full rate (~30 FPS), 900 processed frames:
 
-Decision must be based on real ID continuity while the Pocket 3 is stationary and while it pans/tilts.
+- confirmed-track coverage: 99.89%;
+- mean tracker latency: 8.843 ms;
+- p95 tracker latency: 9.597 ms;
+- primary-person ID switches: 0;
+- longest same primary ID run: 899 frames.
+
+Stress rate (~15 FPS), 450 processed frames:
+
+- confirmed-track coverage: 99.78%;
+- mean tracker latency: 8.908 ms;
+- p95 tracker latency: 9.663 ms;
+- primary-person ID switches: 0;
+- longest same primary ID run: 449 frames.
+
+BoT-SORT+CMC produced no measured continuity benefit over ByteTrack on the controlled workload while adding ~8.5 ms/frame tracker overhead.
+
+Status: `DO NOT SELECT` initially. Reconsider only if future real multi-person occlusion or stronger camera motion produces ByteTrack ID fragmentation.
 
 ## Target Selection Research
 
 A tracker only supplies tracks; it must not decide what JARVIS cares about.
 
-JARVIS needs a small `TargetManager` that owns:
+JARVIS `TargetManager` owns:
 
 - explicit active track ID;
 - lock/unlock state;
@@ -209,46 +227,27 @@ Decision: `BUILD`.
 
 Detector/tracker output must not directly issue motor commands.
 
-A deterministic JARVIS follow policy converts target-center error into bounded PTZ movement. Initial policy should use:
+Initial deterministic JARVIS follow policy uses:
 
 - horizontal/vertical dead zones;
-- hysteresis where needed;
-- minimum command interval;
-- maximum per-command movement;
+- bounded proportional gain;
 - confidence requirement;
-- device range clamps;
-- immediate stop/no-command on target uncertainty/loss.
+- maximum command limits;
+- immediate idle/no-command on target uncertainty/loss.
 
-A PID controller is not justified until real gimbal behavior demonstrates proportional control is inadequate.
+PID remains unjustified until physical gimbal behavior shows proportional control is insufficient.
 
 Decision: `BUILD` simple proportional/dead-zone controller first.
 
-## Future Extension Compatibility
-
-The architecture must make these later capabilities possible without implementing them now:
-
-- fixed observer webcam;
-- smart glasses / first-person camera;
-- face detection/recognition as identity evidence;
-- hand/pose/gesture/pointing;
-- OCR;
-- local/cloud VLM;
-- recent visual buffer;
-- multi-camera selection;
-- visual memory;
-- passive world awareness.
-
-Future compatibility comes from narrow interfaces and canonical state, not empty registries/managers created in advance.
-
 ## Privacy
 
-Step 2.5 must not persist room video by default. Benchmark clips, if captured manually, are development artifacts and must stay outside the normal committed runtime. Model weights, raw frames, personal face datasets, and generated logs are not repository content.
+Step 2.5 must not persist room video by default. Benchmark clips are development artifacts outside the repository. Model weights, raw frames, personal face datasets, and generated logs are not repository content.
 
-The controlled detector comparison clip contained 900 frames at 1280x720 and was captured outside the repository strictly for local benchmarking.
+The controlled comparison clip contained 900 frames at 1280x720 and was captured outside the repository strictly for local benchmarking.
 
-## Measured Benchmark Matrix Required
+## Measured Benchmark Matrix
 
-Completed so far on the actual Windows + RTX 5060 Ti 8 GB + Pocket 3 setup:
+Completed on the actual Windows + RTX 5060 Ti 8 GB + Pocket 3 setup:
 
 - capture backend reliability;
 - capture resolution/FPS;
@@ -256,18 +255,23 @@ Completed so far on the actual Windows + RTX 5060 Ti 8 GB + Pocket 3 setup:
 - detector latency/effective Hz;
 - detector same-clip person continuity/coverage;
 - detector VRAM allocation;
-- detector startup behavior.
+- detector startup behavior;
+- tracker ID continuity;
+- tracker skipped-frame stress behavior;
+- tracker latency;
+- moving-camera clip behavior.
 
-Still required before Step 2.5 acceptance:
+Still required before Step 2.5 human acceptance:
 
-- tracker ID switches;
-- moving-camera continuity;
-- end-to-end frame age/latency;
-- CPU/RAM/VRAM in the integrated loop;
+- integrated end-to-end frame age/latency;
+- CPU/RAM/GPU/VRAM in the complete loop;
 - startup/shutdown behavior for the integrated runtime;
-- disconnect/reopen behavior;
+- camera disconnect/reopen behavior;
 - long-run resource stability;
-- physical PTZ closed-loop following behavior.
+- Pocket 3 PTZ adapter production implementation;
+- physical closed-loop target-follow behavior;
+- target-loss-to-stop behavior;
+- multi-person no-random-switch acceptance.
 
 ## Technology Decisions Summary
 
@@ -279,14 +283,14 @@ Still required before Step 2.5 acceptance:
 | Detector contract | BUILD JARVIS boundary |
 | RF-DETR Nano | SELECT, BF16 native PyTorch/CUDA |
 | RF-DETR Small | NOT SELECTED initially |
-| RT-DETRv4-S | REJECT initial path from measured performance/integration friction |
+| RT-DETRv4-S | REJECT initial path |
 | YOLO26 | REJECT default due licensing tradeoff |
 | Direct PyTorch/CUDA | ADOPT |
-| TensorRT | DEFER until justified |
+| TensorRT | DEFER |
 | Roboflow Inference server | DEFER |
 | Tracker contract | BUILD JARVIS boundary |
-| ByteTrack | BENCHMARK baseline |
-| BoT-SORT + CMC | BENCHMARK primary |
+| ByteTrack | SELECT initial tracker |
+| BoT-SORT + CMC | NOT SELECTED initially; reevaluate if real continuity fails |
 | TargetManager | BUILD |
 | FollowController | BUILD |
 | Multi-camera registry | DEFER |
@@ -294,14 +298,14 @@ Still required before Step 2.5 acceptance:
 | Generic resource manager | DEFER |
 | Face/OCR/gesture/VLM/memory | DEFER |
 
-## Proposed Step 2.5 Vertical Slice
+## Selected Step 2.5 Vertical Slice
 
 ```text
 CameraSource
 -> latest frame
--> RF-DETR Nano adapter
+-> RF-DETR Nano BF16 adapter
 -> canonical Detection[]
--> Tracker
+-> ByteTrack adapter
 -> canonical Track[]
 -> TargetManager
 -> TargetState
@@ -315,4 +319,4 @@ A minimal `VisionSnapshot` may expose camera health, tracks, active target, and 
 
 ## Acceptance Direction
 
-Step 2.5 is successful only when the selected target follows smoothly enough for real use, another person does not trigger random switching, target loss stops movement safely, resources clean up correctly, and measured performance is stable enough on the actual machine.
+Step 2.5 is successful only when the selected target follows smoothly enough for real use, another person does not trigger random target switching, target loss stops movement safely, resources clean up correctly, and measured performance remains stable on the actual machine.
