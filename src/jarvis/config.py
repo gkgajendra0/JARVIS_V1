@@ -65,6 +65,8 @@ class JarvisConfig:
     initial_request_timeout_seconds: float = 8.0
     follow_up_timeout_seconds: float = 15.0
     max_utterance_seconds: float = 15.0
+    vision_enabled: bool = False
+    vision_head_model_path: str | None = None
 
     def __post_init__(self) -> None:
         normalized = str(self.log_level).strip().upper()
@@ -90,9 +92,11 @@ class JarvisConfig:
                 raise ValueError(f"{name} must not be empty")
             object.__setattr__(self, name, value)
 
-        if self.wake_model_path is not None:
-            wake_model_path = str(self.wake_model_path).strip()
-            object.__setattr__(self, "wake_model_path", wake_model_path or None)
+        for name in ("wake_model_path", "vision_head_model_path"):
+            value = getattr(self, name)
+            if value is not None:
+                normalized_value = str(value).strip()
+                object.__setattr__(self, name, normalized_value or None)
 
         for name in ("audio_input_device", "audio_output_device"):
             value = getattr(self, name)
@@ -157,5 +161,9 @@ class JarvisConfig:
             ),
             max_utterance_seconds=_environment_float(
                 "JARVIS_MAX_UTTERANCE_SECONDS", 15.0
+            ),
+            vision_enabled=_environment_bool("JARVIS_VISION_ENABLED", False),
+            vision_head_model_path=_optional_environment_text(
+                "JARVIS_BLAZEFACE_MODEL_PATH"
             ),
         )
