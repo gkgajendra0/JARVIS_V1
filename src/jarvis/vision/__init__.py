@@ -10,10 +10,16 @@ from jarvis.vision.detector import ObjectDetector, RFDetrNanoConfig, RFDetrNanoD
 from jarvis.vision.follow import FollowConfig, FollowController
 from jarvis.vision.framing import (
     FramingTarget,
+    HeadConfirmationConfig,
+    HeadConfirmationGate,
     HeadFirstFramingConfig,
     HeadFirstFramingPolicy,
 )
 from jarvis.vision.head import HeadDetector, HeadObservation, NormalizedPoint
+from jarvis.vision.head_mediapipe import (
+    MediaPipeBlazeFaceConfig,
+    MediaPipeBlazeFaceDetector,
+)
 from jarvis.vision.models import (
     BoundingBox,
     Detection,
@@ -44,10 +50,14 @@ __all__ = [
     "FollowConfig",
     "FollowController",
     "FramingTarget",
+    "HeadConfirmationConfig",
+    "HeadConfirmationGate",
     "HeadDetector",
     "HeadFirstFramingConfig",
     "HeadFirstFramingPolicy",
     "HeadObservation",
+    "MediaPipeBlazeFaceConfig",
+    "MediaPipeBlazeFaceDetector",
     "NormalizedPoint",
     "ObjectDetector",
     "OpenCVCameraConfig",
