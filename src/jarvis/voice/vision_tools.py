@@ -19,15 +19,16 @@ class VisionAgentTools:
 
     @function_tool()
     async def inspect_vision(self, context: RunContext) -> dict[str, object]:
-        """Read current tracking/head state and recent meaningful vision events.
+        """Read current tracking/head/framing state and recent vision events.
 
         This tool does not expose image pixels or general scene understanding. Use it
         for person-track counts, head-detection counts, target/follow state, current
-        framing source, and recent tracking transitions. `framing_source` may be
-        `head`, `head_hold`, `body`, or null; do not describe a current head detection
-        when the status says `head_hold` or `body`. Do not use this tool to infer
-        clothing colour, arbitrary objects, text, furniture, facial appearance,
-        identity, or any other visual detail absent from the returned fields.
+        framing source, adaptive zoom command state, and recent tracking transitions.
+        `framing_source` may be `head`, `head_hold`, `body`, or null; do not describe
+        a current head detection when the status says `head_hold` or `body`. Do not
+        use this tool to infer clothing colour, arbitrary objects, text, furniture,
+        facial appearance, identity, or any other visual detail absent from the
+        returned fields.
         """
         del context
         report = self._service.report(event_limit=16)
@@ -38,6 +39,7 @@ class VisionAgentTools:
                 "target_visibility",
                 "follow_armed_state",
                 "framing_source",
+                "adaptive_target_zoom",
                 "recent_tracking_transitions",
             ],
             "not_available": [
@@ -63,6 +65,8 @@ class VisionAgentTools:
         tool when the user explicitly asks for that control. `lock` is deliberately
         restricted to exactly one visible head-confirmed person and does not assert
         that person's identity. Never arm follow merely because a person is visible.
+        When follow is armed, adaptive zoom is automatic and uses only the already
+        locked BODY track's apparent size; zoom never selects or changes a target.
         """
         del context
         normalized = action.strip().lower()
