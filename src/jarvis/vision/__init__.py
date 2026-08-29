@@ -21,7 +21,7 @@ from jarvis.vision.ptz import (
     PtzAxisRange,
     PtzController,
 )
-from jarvis.vision.runtime import VisionRuntime, VisionSnapshot
+from jarvis.vision.runtime import VisionRuntime, VisionRuntimeConfig, VisionSnapshot
 from jarvis.vision.targeting import TargetManager
 from jarvis.vision.tracker import ByteTrackAdapter, ByteTrackConfig, Tracker
 
@@ -49,5 +49,6 @@ __all__ = [
     "Track",
     "Tracker",
     "VisionRuntime",
+    "VisionRuntimeConfig",
     "VisionSnapshot",
 ]
