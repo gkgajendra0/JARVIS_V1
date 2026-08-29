@@ -10,6 +10,8 @@ import numpy as np
 
 from jarvis.vision.models import BoundingBox, Detection, Track
 
+_FIRST_SEEN_RETENTION_SECONDS = 120.0
+
 
 class Tracker(Protocol):
     def update(
@@ -76,6 +78,7 @@ class _RoboflowTrackerAdapter:
         self._detections_factory = detections_factory
         self._tracker = tracker
         self._first_seen: dict[int, float] = {}
+        self._last_seen: dict[int, float] = {}
 
     def _update_external(
         self,
@@ -99,6 +102,7 @@ class _RoboflowTrackerAdapter:
         tracked = self._update_external(detections, now=now, frame=frame)
         tracker_ids = getattr(tracked, "tracker_id", None)
         if tracker_ids is None:
+            self._prune_track_history(now)
             return []
 
         xyxy = np.asarray(tracked.xyxy)
@@ -112,6 +116,7 @@ class _RoboflowTrackerAdapter:
                 continue
             bounds = self._from_external_box(box, frame=frame)
             first_seen = self._first_seen.setdefault(track_id, now)
+            self._last_seen[track_id] = now
             output.append(
                 Track(
                     track_id=track_id,
@@ -122,7 +127,20 @@ class _RoboflowTrackerAdapter:
                     last_seen_at=now,
                 )
             )
+
+        self._prune_track_history(now)
         return output
+
+    def _prune_track_history(self, now: float) -> None:
+        cutoff = now - _FIRST_SEEN_RETENTION_SECONDS
+        stale_ids = [
+            track_id
+            for track_id, last_seen in self._last_seen.items()
+            if last_seen < cutoff
+        ]
+        for track_id in stale_ids:
+            self._last_seen.pop(track_id, None)
+            self._first_seen.pop(track_id, None)
 
     def _to_external(
         self,
