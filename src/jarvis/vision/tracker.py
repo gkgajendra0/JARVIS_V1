@@ -1,4 +1,4 @@
-"""Tracking boundary and ByteTrack adapter."""
+"""Tracking boundary plus Roboflow ByteTrack and BoT-SORT adapters."""
 
 from __future__ import annotations
 
@@ -12,7 +12,13 @@ from jarvis.vision.models import BoundingBox, Detection, Track
 
 
 class Tracker(Protocol):
-    def update(self, detections: list[Detection], *, now: float) -> list[Track]: ...
+    def update(
+        self,
+        detections: list[Detection],
+        *,
+        now: float,
+        frame: np.ndarray | None = None,
+    ) -> list[Track]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,43 +31,59 @@ class ByteTrackConfig:
     high_conf_det_threshold: float = 0.6
 
 
-class ByteTrackAdapter:
-    """Translate JARVIS detections to/from Roboflow ByteTrack."""
+@dataclass(frozen=True, slots=True)
+class BoTSORTConfig:
+    frame_rate: float = 30.0
+    lost_track_buffer: int = 30
+    track_activation_threshold: float = 0.7
+    minimum_consecutive_frames: int = 2
+    minimum_iou_threshold_first_assoc: float = 0.2
+    minimum_iou_threshold_second_assoc: float = 0.5
+    minimum_iou_threshold_unconfirmed_assoc: float = 0.3
+    high_conf_det_threshold: float = 0.6
+    enable_cmc: bool = True
+    cmc_method: str = "sparseOptFlow"
+    cmc_downscale: int = 2
+    instant_first_frame_activation: bool = True
+
+
+class _RoboflowTrackerAdapter:
+    """Shared translation between canonical JARVIS and supervision detections."""
 
     def __init__(
         self,
-        config: ByteTrackConfig | None = None,
         *,
-        tracker_factory: Callable[..., object] | None = None,
+        tracker: object,
         detections_factory: Callable[..., object] | None = None,
     ) -> None:
-        self.config = config or ByteTrackConfig()
-        if tracker_factory is None:
-            from trackers import ByteTrackTracker
-
-            tracker_factory = ByteTrackTracker
         if detections_factory is None:
             import supervision as sv
 
             detections_factory = sv.Detections
-
         self._detections_factory = detections_factory
-        self._tracker = tracker_factory(
-            lost_track_buffer=self.config.lost_track_buffer,
-            frame_rate=self.config.frame_rate,
-            track_activation_threshold=self.config.track_activation_threshold,
-            minimum_consecutive_frames=self.config.minimum_consecutive_frames,
-            minimum_iou_threshold=self.config.minimum_iou_threshold,
-            high_conf_det_threshold=self.config.high_conf_det_threshold,
-        )
+        self._tracker = tracker
         self._first_seen: dict[int, float] = {}
 
-    def update(self, detections: list[Detection], *, now: float) -> list[Track]:
+    def _update_external(
+        self,
+        detections: list[Detection],
+        *,
+        now: float,
+        frame: np.ndarray | None,
+    ) -> object:
+        raise NotImplementedError
+
+    def update(
+        self,
+        detections: list[Detection],
+        *,
+        now: float,
+        frame: np.ndarray | None = None,
+    ) -> list[Track]:
         if now < 0:
             raise ValueError("now must be non-negative")
 
-        external = self._to_external(detections)
-        tracked = self._tracker.update(external, timestamp=now)
+        tracked = self._update_external(detections, now=now, frame=frame)
         tracker_ids = getattr(tracked, "tracker_id", None)
         if tracker_ids is None:
             return []
@@ -118,3 +140,92 @@ class ByteTrackAdapter:
             dtype=np.float32,
         )
         return self._detections_factory(xyxy=boxes, confidence=confidences)
+
+
+class ByteTrackAdapter(_RoboflowTrackerAdapter):
+    """Translate JARVIS detections to/from Roboflow ByteTrack."""
+
+    def __init__(
+        self,
+        config: ByteTrackConfig | None = None,
+        *,
+        tracker_factory: Callable[..., object] | None = None,
+        detections_factory: Callable[..., object] | None = None,
+    ) -> None:
+        self.config = config or ByteTrackConfig()
+        if tracker_factory is None:
+            from trackers import ByteTrackTracker
+
+            tracker_factory = ByteTrackTracker
+        tracker = tracker_factory(
+            lost_track_buffer=self.config.lost_track_buffer,
+            frame_rate=self.config.frame_rate,
+            track_activation_threshold=self.config.track_activation_threshold,
+            minimum_consecutive_frames=self.config.minimum_consecutive_frames,
+            minimum_iou_threshold=self.config.minimum_iou_threshold,
+            high_conf_det_threshold=self.config.high_conf_det_threshold,
+        )
+        super().__init__(tracker=tracker, detections_factory=detections_factory)
+
+    def _update_external(
+        self,
+        detections: list[Detection],
+        *,
+        now: float,
+        frame: np.ndarray | None,
+    ) -> object:
+        del frame
+        return self._tracker.update(self._to_external(detections), timestamp=now)
+
+
+class BoTSORTAdapter(_RoboflowTrackerAdapter):
+    """Use Roboflow BoT-SORT with camera-motion compensation for Pocket 3."""
+
+    def __init__(
+        self,
+        config: BoTSORTConfig | None = None,
+        *,
+        tracker_factory: Callable[..., object] | None = None,
+        detections_factory: Callable[..., object] | None = None,
+    ) -> None:
+        self.config = config or BoTSORTConfig()
+        if tracker_factory is None:
+            from trackers import BoTSORTTracker
+
+            tracker_factory = BoTSORTTracker
+        tracker = tracker_factory(
+            lost_track_buffer=self.config.lost_track_buffer,
+            frame_rate=self.config.frame_rate,
+            track_activation_threshold=self.config.track_activation_threshold,
+            minimum_consecutive_frames=self.config.minimum_consecutive_frames,
+            minimum_iou_threshold_first_assoc=(
+                self.config.minimum_iou_threshold_first_assoc
+            ),
+            minimum_iou_threshold_second_assoc=(
+                self.config.minimum_iou_threshold_second_assoc
+            ),
+            minimum_iou_threshold_unconfirmed_assoc=(
+                self.config.minimum_iou_threshold_unconfirmed_assoc
+            ),
+            high_conf_det_threshold=self.config.high_conf_det_threshold,
+            enable_cmc=self.config.enable_cmc,
+            cmc_method=self.config.cmc_method,
+            cmc_downscale=self.config.cmc_downscale,
+            instant_first_frame_activation=self.config.instant_first_frame_activation,
+        )
+        super().__init__(tracker=tracker, detections_factory=detections_factory)
+
+    def _update_external(
+        self,
+        detections: list[Detection],
+        *,
+        now: float,
+        frame: np.ndarray | None,
+    ) -> object:
+        if self.config.enable_cmc and frame is None:
+            raise ValueError("BoT-SORT camera-motion compensation requires a frame")
+        return self._tracker.update(
+            self._to_external(detections),
+            frame=frame,
+            timestamp=now,
+        )
