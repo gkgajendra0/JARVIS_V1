@@ -23,8 +23,10 @@ class FramingTarget:
             raise ValueError("framing target coordinates must be in [0, 1]")
         if not 0 <= self.confidence <= 1:
             raise ValueError("framing target confidence must be in [0, 1]")
-        if self.source not in {"head", "body"}:
-            raise ValueError("framing target source must be 'head' or 'body'")
+        if self.source not in {"head", "head_hold", "body"}:
+            raise ValueError(
+                "framing target source must be 'head', 'head_hold', or 'body'"
+            )
         if self.track_id < 0:
             raise ValueError("track_id must be non-negative")
 
@@ -124,7 +126,7 @@ class HeadFirstFramingPolicy:
 
 
 class HeadConfirmationGate:
-    """Require repeated linked-head evidence before head-driven framing or locking."""
+    """Require repeated linked-head evidence before a body track may be locked."""
 
     def __init__(self, config: HeadConfirmationConfig | None = None) -> None:
         self.config = config or HeadConfirmationConfig()
