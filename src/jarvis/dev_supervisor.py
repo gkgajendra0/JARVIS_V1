@@ -206,7 +206,13 @@ class VoiceControlServer:
             ):
                 raise RuntimeError("unexpected JARVIS update approval response")
             return response.get("approved") is True
-        except (OSError, TimeoutError, RuntimeError, TypeError, json.JSONDecodeError) as exc:
+        except (
+            OSError,
+            TimeoutError,
+            RuntimeError,
+            TypeError,
+            json.JSONDecodeError,
+        ) as exc:
             self._reset_child()
             raise RuntimeError(f"voice approval failed: {exc}") from exc
 
@@ -220,7 +226,13 @@ class VoiceControlServer:
                 response.get("type") == "shutdown_ack"
                 and response.get("request_id") == request_id
             )
-        except (OSError, TimeoutError, RuntimeError, TypeError, json.JSONDecodeError):
+        except (
+            OSError,
+            TimeoutError,
+            RuntimeError,
+            TypeError,
+            json.JSONDecodeError,
+        ):
             self._reset_child()
             return False
 
