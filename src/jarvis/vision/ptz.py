@@ -120,7 +120,7 @@ class DuvcPtzController:
 
 
 class _ResultApiDuvcBackend:
-    """Small wrapper around duvc-ctl's explicit Result-based API."""
+    """Small wrapper around duvc-ctl 2.1.0's Result-based API."""
 
     def __init__(self, device_index: int) -> None:
         import duvc_ctl as duvc
@@ -141,12 +141,11 @@ class _ResultApiDuvcBackend:
                 f"failed to query {axis} range: {result.error().description()}"
             )
         value = result.value()
-        default = getattr(value, "default", getattr(value, "default_val", 0))
         return PtzAxisRange(
             minimum=int(value.min),
             maximum=int(value.max),
             step=int(value.step),
-            default=int(default),
+            default=int(value.default_val),
         )
 
     def get_axis_value(self, axis: str) -> int:
@@ -158,8 +157,7 @@ class _ResultApiDuvcBackend:
         return int(result.value().value)
 
     def set_axis_value(self, axis: str, value: int) -> None:
-        setting = self._duvc.PropSetting(value, self._duvc.CamMode.MANUAL)
-        result = self._camera.set(self._property(axis), setting)
+        result = self._camera.set(self._property(axis), int(value))
         if not result.is_ok():
             raise RuntimeError(
                 f"failed to set {axis}: {result.error().description()}"
@@ -172,7 +170,7 @@ class _ResultApiDuvcBackend:
 
     def _property(self, axis: str):
         if axis == "pan":
-            return self._duvc.CamProp.PAN
+            return self._duvc.CamProp.Pan
         if axis == "tilt":
-            return self._duvc.CamProp.TILT
+            return self._duvc.CamProp.Tilt
         raise ValueError(f"unsupported PTZ axis: {axis}")
