@@ -25,8 +25,10 @@ class ObjectDetector(Protocol):
 @dataclass(frozen=True, slots=True)
 class RFDetrNanoConfig:
     device: str = "cuda"
-    threshold: float = 0.5
-    probe_threshold: float = 0.25
+    # ByteTrack is designed to recover established tracks from low-confidence
+    # detections. Keep detector recall broad and let the tracker decide whether a
+    # candidate may recover an existing track or create a new one.
+    threshold: float = 0.10
     dtype: str = "bfloat16"
     person_class_id: int = 1
     duplicate_ios_threshold: float = 0.98
@@ -34,8 +36,6 @@ class RFDetrNanoConfig:
     def __post_init__(self) -> None:
         if not 0 <= self.threshold <= 1:
             raise ValueError("threshold must be in [0, 1]")
-        if not 0 <= self.probe_threshold <= self.threshold:
-            raise ValueError("probe_threshold must be in [0, threshold]")
         if self.person_class_id < 0:
             raise ValueError("person_class_id must be non-negative")
         if not 0 <= self.duplicate_ios_threshold <= 1:
@@ -62,7 +62,6 @@ class RFDetrNanoDetector:
             duplicate_suppressor or self._supervision_ios_suppressor
         )
         self._model = model_factory(device=self.config.device)
-        self._latest_max_person_candidate_confidence: float | None = None
         inference = getattr(self._model, "inference", None)
         if inference is not None:
             inference(
@@ -71,13 +70,9 @@ class RFDetrNanoDetector:
                 dtype=self.config.dtype,
             )
 
-    @property
-    def latest_max_person_candidate_confidence(self) -> float | None:
-        return self._latest_max_person_candidate_confidence
-
     def detect(self, frame: CapturedFrame) -> list[Detection]:
         rgb = cv2.cvtColor(frame.image, cv2.COLOR_BGR2RGB)
-        raw = self._model.predict(rgb, threshold=self.config.probe_threshold)
+        raw = self._model.predict(rgb, threshold=self.config.threshold)
 
         class_ids = np.asarray(raw.class_id)
         confidences = np.asarray(raw.confidence)
@@ -91,13 +86,6 @@ class RFDetrNanoDetector:
             person_confidences,
             self.config.duplicate_ios_threshold,
         )
-        self._latest_max_person_candidate_confidence = (
-            float(np.max(person_confidences)) if len(person_confidences) else None
-        )
-
-        accepted = person_confidences >= self.config.threshold
-        person_boxes = person_boxes[accepted]
-        person_confidences = person_confidences[accepted]
 
         detections: list[Detection] = []
         for box, confidence in zip(
