@@ -10,6 +10,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+_BRANCH_ENV = "JARVIS_DEV_BRANCH"
+
 
 @dataclass(frozen=True, slots=True)
 class DevSupervisorConfig:
@@ -19,6 +21,10 @@ class DevSupervisorConfig:
     shutdown_timeout_seconds: float = 10.0
 
     def __post_init__(self) -> None:
+        if not self.remote.strip():
+            raise ValueError("remote must not be empty")
+        if not self.branch.strip():
+            raise ValueError("branch must not be empty")
         if self.poll_seconds <= 0:
             raise ValueError("poll_seconds must be positive")
         if self.shutdown_timeout_seconds <= 0:
@@ -85,6 +91,11 @@ class GitRepo:
         )
 
 
+def _config_from_environment() -> DevSupervisorConfig:
+    branch = os.environ.get(_BRANCH_ENV, "main").strip() or "main"
+    return DevSupervisorConfig(branch=branch)
+
+
 def _find_repo_root() -> Path:
     result = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
@@ -145,14 +156,15 @@ def _owner_approves_update(local_sha: str, remote_sha: str) -> bool:
 
 
 def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
-    config = config or DevSupervisorConfig()
+    config = config or _config_from_environment()
     root = _find_repo_root()
     repo = GitRepo(root, config)
 
     if repo.current_branch() != config.branch:
         raise RuntimeError(
             f"jarvis-dev must run on {config.branch!r}; "
-            f"current branch is {repo.current_branch()!r}"
+            f"current branch is {repo.current_branch()!r}. "
+            f"For an intentional development-branch test, set {_BRANCH_ENV}."
         )
     if not repo.is_clean():
         raise RuntimeError(
