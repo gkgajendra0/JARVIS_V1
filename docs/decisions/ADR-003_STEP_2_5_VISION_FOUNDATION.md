@@ -1,7 +1,7 @@
 # ADR-003 — Step 2.5 Vision Foundation Boundaries
 
 Date: 2026-08-29
-Status: Accepted for implementation; capture backend and detector selected; tracker choice pending measured benchmark
+Status: Accepted for implementation; capture, detector, tracker, and inference runtime selected from measured benchmarks
 
 ## Context
 
@@ -24,105 +24,115 @@ Adopt the following ownership boundaries:
 9. Vision exposes only small canonical state required by the active slice. No generic event bus, multi-camera registry, or GPU resource manager is introduced yet.
 10. Vision evidence cannot authorize actions. Step 3 remains the owner of identity/trust/authority semantics.
 
-## Technology Status
+## Selected Technology
 
-Accepted immediately:
+- Capture adapter: OpenCV.
+- Pocket 3 Windows capture backend: DirectShow (`CAP_DSHOW`).
+- Initial tracking resolution: 1280x720.
+- PTZ adapter transport: `duvc-ctl`.
+- Detector: RF-DETR Nano.
+- Detector runtime mode: native PyTorch/CUDA BF16.
+- Tracker: Roboflow `trackers` ByteTrack.
+- Target selection: JARVIS-owned `TargetManager`.
+- Follow policy: JARVIS-owned bounded proportional/dead-zone `FollowController`.
 
-- OpenCV as the initial capture adapter mechanism;
-- DirectShow (`CAP_DSHOW`) as the initial Pocket 3 Windows capture backend;
-- 1280x720 as the initial low-latency tracking mode;
-- `duvc-ctl` for the Pocket 3 PTZ adapter;
-- RF-DETR Nano as the initial detector;
-- BF16 native PyTorch/CUDA as the initial RF-DETR inference mode;
-- provider-neutral domain contracts and JARVIS target/follow policy.
+## Measured Evidence
 
-The capture choice is based on the actual Windows + Pocket 3 benchmark:
+### Capture
+
+Actual Windows + Pocket 3 results:
 
 - MSMF 1280x720: 5/5 open/read success, ~2.96 s average open-to-first-frame;
 - MSMF 1920x1080: 4/5 successful first reads with one grab failure, ~4.834 s average;
 - DSHOW 1280x720: 5/5 success, ~0.968 s average open-to-first-frame;
 - DSHOW 1920x1080: 5/5 success, ~0.847 s average open-to-first-frame;
-- DSHOW 1280x720 sustained run: 300/300 successful frames in 10.226 s, ~29.34 effective FPS.
+- DSHOW 1280x720 sustained: 300/300 frames in 10.226 s, ~29.34 effective FPS.
 
-DSHOW FPS metadata returned `-1`, so JARVIS must rely on measured frame timing rather than treating backend FPS metadata as authoritative. 1080p remains supported as a configurable candidate but is not the default until sustained processing evidence justifies it.
+DSHOW FPS metadata returned `-1`, so JARVIS must rely on measured timestamps rather than backend FPS metadata. 1080p remains configurable, but 1280x720 is the initial low-latency default.
 
-The detector choice is based on the actual Windows + RTX 5060 Ti + Pocket 3 benchmarks.
+### Detector
 
-Performance results:
+Actual Windows + RTX 5060 Ti + Pocket 3 results:
 
-- RF-DETR Nano BF16: 36.97 ms mean latency, 41.96 ms p95, 27.05 FPS, 114.8 MiB peak allocated VRAM;
-- RF-DETR Small BF16: 40.67 ms mean latency, 45.47 ms p95, 24.59 FPS, 129.3 MiB peak allocated VRAM in the isolated live benchmark;
-- RT-DETRv4-S BF16: 56.97 ms mean latency, 65.29 ms p95, 17.55 FPS, 133.2 MiB peak allocated VRAM, plus an upstream cached positional-embedding device-placement workaround in the tested native PyTorch path.
+- RF-DETR Nano BF16: 36.97 ms mean, 41.96 ms p95, 27.05 FPS, 114.8 MiB peak allocated VRAM;
+- RF-DETR Small BF16: 40.67 ms mean, 45.47 ms p95, 24.59 FPS, 129.3 MiB peak allocated VRAM in the isolated live benchmark;
+- RT-DETRv4-S BF16: 56.97 ms mean, 65.29 ms p95, 17.55 FPS, 133.2 MiB peak allocated VRAM, plus an upstream cached positional-embedding device-placement workaround.
 
-Controlled quality results used the same 900-frame, 1280x720 Pocket 3 clip for RF-DETR Nano and Small:
+Controlled Nano-vs-Small quality comparison used the exact same 900-frame, 1280x720 Pocket 3 clip:
 
-- Nano person coverage at confidence 0.25: 100%; at 0.50: 100%; longest miss streak: 0 frames;
-- Small person coverage at confidence 0.25: 100%; at 0.50: 100%; longest miss streak: 0 frames;
-- Nano vs Small disagreement frames at confidence 0.50: 0;
+- Nano person coverage at confidence 0.25 and 0.50: 100%;
+- Small person coverage at confidence 0.25 and 0.50: 100%;
+- longest miss streak for both at both thresholds: 0 frames;
+- Nano-vs-Small disagreement frames at confidence 0.50: 0;
 - Nano mean/median positive person confidence: 0.9514 / 0.9570;
 - Small mean/median positive person confidence: 0.9601 / 0.9648.
 
-Small therefore showed no continuity/coverage advantage on the controlled clip. Its confidence increase was small and did not justify its lower throughput and higher measured resource use. RF-DETR Nano BF16 is selected as the initial detector.
+Small showed no continuity/coverage advantage, so its small confidence increase did not justify lower throughput and higher measured resource use. RF-DETR Nano BF16 is selected.
 
-Not yet frozen:
+### Tracker
 
-- tracker winner: ByteTrack vs BoT-SORT + camera-motion compensation.
+Roboflow `trackers` 2.6.0 was benchmarked using the exact same cached RF-DETR Nano person detections for both trackers. The recorded clip contained camera movement and was evaluated at both full-rate and skipped-frame stress rate.
 
-Deferred:
+Full rate (~30 FPS), 900 processed frames:
 
-- TensorRT optimization unless later end-to-end measurements justify the added complexity;
-- Roboflow Inference server as a mandatory runtime dependency;
-- RT-DETRv4-S for the initial detector path;
-- RF-DETR Small for the initial detector path;
-- face recognition/authentication;
-- OCR/pose/gesture/VLM;
-- visual memory and continuous recording;
-- multi-camera orchestration;
-- passive world awareness;
-- generic vision event/resource infrastructure.
+- ByteTrack: 99.89% confirmed-track coverage, 0 primary ID switches, 899-frame continuous primary ID run, ~0.345 ms mean / 0.479 ms p95 tracker latency;
+- BoT-SORT + sparseOptFlow CMC: 99.89% coverage, 0 primary ID switches, 899-frame continuous primary ID run, ~8.843 ms mean / 9.597 ms p95 tracker latency.
+
+Stress rate (~15 FPS), 450 processed frames with original timestamps:
+
+- ByteTrack: 99.78% confirmed-track coverage, 0 primary ID switches, 449-frame continuous primary ID run, ~0.366 ms mean / 0.493 ms p95 tracker latency;
+- BoT-SORT + sparseOptFlow CMC: 99.78% coverage, 0 primary ID switches, 449-frame continuous primary ID run, ~8.908 ms mean / 9.663 ms p95 tracker latency.
+
+BoT-SORT + CMC produced no measurable continuity benefit on the controlled target workload while adding roughly 8.5 ms/frame of tracker overhead. ByteTrack is therefore selected for the initial tracker.
+
+## Deferred / Not Selected
+
+- TensorRT optimization: defer unless integrated end-to-end measurements justify the added complexity.
+- Roboflow Inference server: defer; direct local integration is simpler for the current one-camera slice.
+- RF-DETR Small: not selected initially; reconsider only if future difficult-scene evidence materially changes the quality tradeoff.
+- RT-DETRv4-S: not selected for the initial path due slower measured performance and integration friction.
+- BoT-SORT + CMC: not selected initially; reconsider if future camera motion or multi-person scenarios expose ByteTrack continuity failures.
+- YOLO26: reject as default because the standard Ultralytics licensing path is unnecessarily restrictive when strong permissive alternatives meet the need.
+- face recognition/authentication, OCR, pose/gesture/VLM, visual memory, continuous recording, multi-camera orchestration, passive world awareness, and generic event/resource infrastructure remain out of Step 2.5.
 
 ## Rationale
 
-This preserves replacement boundaries while avoiding speculative framework code. The important future-proofing comes from canonical JARVIS semantics and narrow device/model interfaces, not from empty registries or managers created before a second real requirement exists.
+This preserves replacement boundaries while avoiding speculative framework code. Future-proofing comes from canonical JARVIS semantics and narrow device/model interfaces, not empty managers created before a second requirement exists.
 
-Although Microsoft classifies DirectShow as legacy, backend age is hidden inside the adapter and the actual Pocket 3 evidence materially favors DirectShow today. This does not make DirectShow a JARVIS domain concept; the backend remains configurable and replaceable.
+Although DirectShow is legacy, it materially outperformed MSMF on the actual Pocket 3 and remains hidden behind the capture adapter.
 
-RF-DETR Nano is selected because it matched RF-DETR Small on controlled person-detection continuity across the exact same 900 frames while providing better measured latency/throughput and lower resource use. RT-DETRv4-S was materially slower on the target machine and required an upstream inference workaround, so it does not justify the additional integration friction for this slice.
+RF-DETR Nano matched Small on controlled person continuity while being faster and lighter. RT-DETRv4-S was materially slower and needed a native-PyTorch workaround.
 
-A moving PTZ camera changes the tracker problem: camera motion shifts the entire frame. Therefore BoT-SORT with camera-motion compensation is a first-class benchmark candidate rather than assuming ByteTrack is sufficient.
+ByteTrack matched BoT-SORT+CMC on measured ID continuity at both full and skipped-frame rates while being about 25x cheaper in tracker-only latency. CMC therefore did not earn its complexity on the current workload.
 
 ## Consequences
 
 Positive:
 
-- camera, detector, tracker, and PTZ implementations can evolve independently;
-- no ML library controls physical hardware directly;
-- current code remains useful if detector/tracker technology changes;
-- later identity evidence can consume vision state without granting vision authority;
-- the Step 2.5 implementation remains small enough to test and clean up;
-- capture freshness is protected by one overwrite/latest-frame slot rather than a growing queue;
-- the initial detector now has measured performance and quality evidence on the real target hardware.
+- capture, detector, tracker, target policy, and PTZ can evolve independently;
+- no ML library commands physical hardware directly;
+- the selected initial stack has real hardware evidence rather than benchmark-by-reputation;
+- latest-frame capture plus timestamp-aware tracking avoids stale backlog assumptions;
+- later identity evidence can consume visual state without granting vision authority.
 
 Costs:
 
-- adapters add small translation overhead;
-- tracker selection remains open until real benchmarks run;
-- the initial version intentionally omits broader visual capabilities;
-- the initial Pocket 3 Windows path relies on a legacy Windows capture backend because that backend currently performs better on the real device;
-- RF-DETR introduces a model/runtime dependency that must remain behind the JARVIS detector adapter.
+- RF-DETR/PyTorch and `trackers` become production dependencies once their adapters are implemented;
+- the initial Pocket 3 path uses a legacy Windows capture backend because it performs better on the real device;
+- ByteTrack may need reevaluation if future multi-person occlusion or stronger camera motion produces ID fragmentation.
 
 ## Reconsideration Triggers
 
 Revisit this ADR if:
 
 - a second concurrent camera is added;
-- another Windows/backend path equals or exceeds DSHOW reliability/latency on the actual hardware;
-- another detector materially exceeds Nano on controlled person-detection quality or end-to-end resource efficiency;
+- another Windows backend equals or exceeds DSHOW on the actual hardware;
+- another detector materially exceeds Nano on controlled quality or end-to-end efficiency;
+- ByteTrack shows unacceptable ID switches/fragmentation in real target-follow use;
 - remote/distributed camera inference becomes required;
-- direct Python inference cannot meet measured latency/resource gates;
-- tracker continuity remains unacceptable with BoT-SORT/CMC;
-- later visual consumers create a real need for an event stream or shared model resource manager.
+- direct Python inference cannot meet integrated latency/resource gates;
+- later consumers create a real need for a shared event stream or model resource manager.
 
 ## Acceptance
 
-The human owner approved the Step 2.5 roadmap insertion and authorized implementation on 2026-08-29 after the research review. The OpenCV/DSHOW capture choice was subsequently accepted from measured local Pocket 3 evidence on the same date. RF-DETR Nano BF16 was subsequently selected from measured local detector performance plus the controlled same-clip Nano-vs-Small quality comparison on the same date.
+The human owner approved the Step 2.5 roadmap insertion and authorized implementation on 2026-08-29. OpenCV/DSHOW, RF-DETR Nano BF16, and ByteTrack were subsequently selected from measured local evidence on the actual target hardware and controlled recorded footage on the same date. Step 2.5 itself is not yet human-accepted: integrated detector/tracker/PTZ implementation, automated validation, recovery testing, and real closed-loop target-follow acceptance still remain.
