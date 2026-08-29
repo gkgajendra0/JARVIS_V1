@@ -53,7 +53,7 @@ def _draw_tracks(image, tracks: list[Track]):
 def main() -> int:
     camera = OpenCVCameraSource()
     detector = RFDetrNanoDetector()
-    tracker = ByteTrackAdapter(frame_rate=30.0)
+    tracker = ByteTrackAdapter()
     last_frame_id: int | None = None
 
     print("JARVIS live vision preview")
