@@ -84,7 +84,10 @@ def _draw(image, snapshot, runtime: VisionRuntime):
 
     state = "ARMED" if runtime.armed else "SAFE"
     target_text = "none" if target_id is None else str(target_id)
-    status = f"{state} | target: {target_text} | click: lock | A: arm | SPACE: disarm | C: clear | Q: quit"
+    status = (
+        f"{state} | target: {target_text} | click: lock | A: arm | "
+        "SPACE: disarm | C: clear | Q: quit"
+    )
     cv2.putText(
         preview,
         status,
@@ -128,7 +131,9 @@ def main() -> int:
     selection = _SelectionState()
 
     print("JARVIS armed vision follow")
-    print("Starts SAFE: the camera will not move until a target is locked and follow is armed.")
+    print(
+        "Starts SAFE: the camera will not move until a target is locked and follow is armed."
+    )
     print("Click a visible person to lock them, press A to arm follow.")
     print("Press SPACE to disarm immediately, C to clear target, Q/Esc to quit.")
 
@@ -153,7 +158,9 @@ def main() -> int:
             if selection.clicked_track_id is not None:
                 try:
                     runtime.lock(selection.clicked_track_id)
-                    print(f"Locked track {selection.clicked_track_id}; follow remains SAFE.")
+                    print(
+                        f"Locked track {selection.clicked_track_id}; follow remains SAFE."
+                    )
                 except ValueError as exc:
                     print(exc)
                 finally:
