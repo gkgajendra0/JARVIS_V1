@@ -254,7 +254,7 @@ def _make_runtime_fixture():
 
 
 def test_runtime_requires_lock_and_separate_arm_before_movement():
-    runtime, camera, tracker, ptz = _make_runtime_fixture()
+    runtime, camera, _tracker, ptz = _make_runtime_fixture()
 
     runtime.start()
     first = runtime.process_once()
