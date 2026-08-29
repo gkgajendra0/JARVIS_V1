@@ -8,6 +8,7 @@ from pathlib import Path
 from threading import Event, RLock, Thread
 
 from jarvis.vision.diagnostics import VisionDiagnostics
+from jarvis.vision.observer import VisionObserver
 from jarvis.vision.runtime import VisionRuntime
 
 LOGGER = logging.getLogger(__name__)
@@ -23,12 +24,14 @@ class VisionService:
         runtime: VisionRuntime,
         *,
         diagnostics: VisionDiagnostics | None = None,
+        observer: VisionObserver | None = None,
         process_timeout_seconds: float = 0.20,
     ) -> None:
         if process_timeout_seconds <= 0:
             raise ValueError("process_timeout_seconds must be positive")
         self.runtime = runtime
         self.diagnostics = diagnostics or VisionDiagnostics()
+        self._observer = observer
         self._process_timeout_seconds = process_timeout_seconds
         self._runtime_lock = RLock()
         self._lifecycle_lock = RLock()
@@ -138,12 +141,21 @@ class VisionService:
                     snapshot = self.runtime.process_once(
                         timeout_seconds=self._process_timeout_seconds
                     )
+                    frame = self.runtime.latest_frame
                 if snapshot is not None:
                     self.diagnostics.observe(snapshot)
+                    if self._observer is not None and frame is not None:
+                        self._observer.observe(frame, snapshot)
         except Exception as exc:
             self.diagnostics.record_error(exc)
             LOGGER.exception("Integrated vision service failed")
         finally:
+            try:
+                if self._observer is not None:
+                    self._observer.close()
+            except Exception as exc:
+                self.diagnostics.record_error(exc)
+                LOGGER.exception("Integrated vision observer shutdown failed")
             try:
                 with self._runtime_lock:
                     self.runtime.close()
@@ -169,6 +181,11 @@ def resolve_blazeface_model_path(configured: str | Path | None = None) -> Path:
     return path
 
 
+def _env_enabled(name: str) -> bool:
+    value = os.environ.get(name, "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
 def build_default_vision_service(
     *,
     head_model_path: str | Path | None = None,
@@ -186,6 +203,7 @@ def build_default_vision_service(
         MediaPipeBlazeFaceConfig,
         MediaPipeBlazeFaceDetector,
     )
+    from jarvis.vision.observer import OpenCVVisionObserver
     from jarvis.vision.ptz import DuvcPtzConfig, DuvcPtzController
     from jarvis.vision.runtime import VisionRuntimeConfig
     from jarvis.vision.targeting import TargetManager
@@ -247,4 +265,5 @@ def build_default_vision_service(
             body_fallback_tilt_scale=0.45,
         ),
     )
-    return VisionService(runtime)
+    observer = OpenCVVisionObserver() if _env_enabled("JARVIS_VISION_PREVIEW") else None
+    return VisionService(runtime, observer=observer)
