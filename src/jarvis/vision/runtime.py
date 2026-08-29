@@ -44,6 +44,7 @@ class VisionSnapshot:
     target: TargetState | None
     command: FollowCommand
     armed: bool
+    detector_persons: int = 0
     heads: tuple[HeadObservation, ...] = ()
     framing_target: FramingTarget | None = None
 
@@ -265,6 +266,7 @@ class VisionRuntime:
             target=target,
             command=command,
             armed=self._armed,
+            detector_persons=len(detections),
             heads=tuple(heads),
             framing_target=framing_target,
         )
