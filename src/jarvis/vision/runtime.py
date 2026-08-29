@@ -183,7 +183,12 @@ class VisionRuntime:
         self._latest_framing_target = framing_target
 
         command = FollowCommand()
-        if self._armed and target is not None and target.visible and not desired.is_idle:
+        if (
+            self._armed
+            and target is not None
+            and target.visible
+            and not desired.is_idle
+        ):
             last_command_at = self._last_ptz_command_at
             interval_elapsed = (
                 last_command_at is None
