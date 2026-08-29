@@ -193,11 +193,11 @@ async def test_provider_start_failure_marks_conversation_failed_and_cleans_up() 
 
 
 @pytest.mark.asyncio
-async def test_update_approval_uses_text_trigger_and_waits_for_real_spoken_yes() -> None:
+async def test_update_approval_uses_text_trigger_and_waits_for_real_spoken_yes() -> (
+    None
+):
     runtime, session, _, audio = runtime_with_session()
-    task = asyncio.create_task(
-        runtime._run_update_approval_session("a" * 40, "b" * 40)
-    )
+    task = asyncio.create_task(runtime._run_update_approval_session("a" * 40, "b" * 40))
     await asyncio.wait_for(session.prompt_requested.wait(), timeout=1)
 
     assert session.generated_reply_kwargs is not None
