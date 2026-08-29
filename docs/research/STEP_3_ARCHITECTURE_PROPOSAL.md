@@ -117,14 +117,14 @@ class IdentityEvidence:
     evidence_id: str
     session_id: str
     modality: EvidenceModality
-    subject: SubjectCandidate       # OWNER or UNKNOWN/none
+    subject: SubjectCandidate  # OWNER or UNKNOWN/none
     observed_at_monotonic: float
     expires_at_monotonic: float
-    source_id: str                  # camera/mic/windows/verifier
+    source_id: str  # camera/mic/windows/verifier
     provider_id: str
     model_id: str | None
     quality: EvidenceQuality
-    score: float | None             # ephemeral; not necessarily audited
+    score: float | None  # ephemeral; not necessarily audited
     threshold_id: str | None
     visual_track_id: int | None
     audio_turn_id: str | None
@@ -471,9 +471,9 @@ class ActionProposal:
     material_summary: str
     risk_attributes: ActionRiskAttributes
     risk_class: RiskClass
-    origin: ActionOrigin             # direct_user / model_suggested / proactive / system
+    origin: ActionOrigin  # direct_user / model_suggested / proactive / system
     origin_turn_id: str | None
-    proposal_hash: str               # SHA-256 over canonical material fields
+    proposal_hash: str  # SHA-256 over canonical material fields
 ```
 
 The material summary is user-facing. The canonical hash is machine-facing. Approval binds the hash, not merely human-language text.
