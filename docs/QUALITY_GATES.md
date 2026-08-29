@@ -35,6 +35,13 @@ As appropriate to the slice:
 - tests prove unauthorized execution cannot occur where authority is involved;
 - important legacy failure scenarios relevant to the slice are represented where still applicable.
 
+Repository baseline automation on protected `main` currently requires both:
+
+- `ruff` — formatting and lint;
+- `pytest` — the repository unit/regression suite on a clean Ubuntu runner.
+
+A green PR head is necessary but not always sufficient. Hardware/provider/Windows-only behavior still needs slice-specific validation and real human acceptance where CI cannot prove it.
+
 ## 4. Truthfulness and Semantic Fidelity Gate
 
 - JARVIS never reports completion when execution did not complete.
@@ -155,13 +162,14 @@ Human testing should validate the product behaviour, not just that a technical p
 
 Before a major step is marked `DONE`:
 
-- `CURRENT_PLAN.md` reflects the final accepted state;
+- `CURRENT_PLAN.md` reflects the final accepted state and the next active slice;
 - `CURRENT_ARCHITECTURE.md` reflects the architecture that actually exists;
-- `ROADMAP.md` marks the step correctly;
+- `ROADMAP.md` marks the completed and active steps correctly;
 - `PRODUCT.md` is updated only if permanent product intent changed;
 - a research record exists if a major technology selection required research;
 - an ADR exists if a major architecture/technology decision needs durable reasoning;
-- capability status/step mapping remains internally consistent.
+- capability status/step mapping remains internally consistent;
+- accepted development/runtime infrastructure that changes future workflow or authority boundaries is documented rather than left only in PR history.
 
 Do not create duplicate final/historical copies. Git history is the archive.
 
@@ -189,7 +197,7 @@ Before accepting major architecture, ask:
 
 ## 13. Git Gate
 
-A coherent accepted product slice should end in a clean, reviewable Git checkpoint.
+A coherent accepted product slice should end in a clean, reviewable, protected Git checkpoint.
 
 The normal sequence is:
 
@@ -203,7 +211,19 @@ Planning
 -> Human validation
 -> Documentation reconciliation
 -> Review diff
--> Commit
+-> PR to protected main
+-> Required status checks
+-> Merge
+-> Post-merge verification when warranted
 ```
 
-Commit/push policy can be tightened for consequential future self-modification work, but normal development should remain reviewable and deliberate.
+Current repository baseline:
+
+- `main` is targeted by the active `Main safety gate` ruleset;
+- changes require pull-request flow;
+- `ruff` and `pytest` are strict required status checks;
+- the branch must be up to date before merge;
+- branch deletion/non-fast-forward changes are blocked by the ruleset;
+- no bypass actors are configured.
+
+The development supervisor may detect new `main` commits, but it must not weaken this repository gate or treat model-generated approval as Git authority. Consequential future self-modification work may require even stronger rules, but normal development should remain reviewable, deliberate, and reversible.
