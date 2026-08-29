@@ -5,9 +5,10 @@ JARVIS V1 is a clean implementation of a personal, voice-first JARVIS assistant.
 The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARVIS
 V1 does not import it or depend on it at runtime.
 
-Steps 1 and 2 are accepted. Current active work: **Step 2.5 — Vision Sensor & Active
-Target Tracking Foundation**. Step 3 — Identity, Graduated Trust, Authority, and
-Observability Foundation — is paused until Step 2.5 is accepted, then resumes.
+Steps 1, 2, and 2.5 are accepted. Step 2.5 established the vision sensor and active
+target-tracking foundation. Step 3 — Identity, Graduated Trust, Authority, and
+Observability Foundation — is next after the development-supervisor workflow is
+accepted.
 
 ## Setup
 
@@ -71,6 +72,29 @@ indices are necessary when Windows exposes the same device name through multiple
 APIs and may need to be rechecked after audio-driver or device changes.
 Idle audio remains local; the selected realtime provider starts only after an accepted
 wake detection. `lk agent console` remains available as a Step-1 diagnostic harness.
+
+## Run the development supervisor
+
+`jarvis-dev` is a development-only wrapper around the accepted `jarvis-voice`
+runtime. It keeps JARVIS running, watches the configured remote branch, and asks for
+one explicit owner approval before applying a fast-forward update and restarting the
+runtime.
+
+```powershell
+jarvis-dev
+```
+
+The normal default is `origin/main`. A temporary branch can be selected while testing
+the supervisor itself:
+
+```powershell
+$env:JARVIS_DEV_BRANCH = "feature/jarvis-dev-supervisor"
+jarvis-dev
+```
+
+Only `y` or `yes` approves an update. Any other input is treated as No. The supervisor
+refuses dirty working trees and non-fast-forward updates, and it does not continuously
+restart a crashing child process.
 
 ## Validate
 
