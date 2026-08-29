@@ -20,6 +20,13 @@ dependencies = [
 jarvis-voice = "jarvis.voice.runtime:main"
 
 [project.optional-dependencies]
+vision = [
+    "torch==2.13.0",
+    "torchvision==0.28.0",
+    "rfdetr==1.9.4",
+    "trackers==2.6.0",
+    "duvc-ctl==2.1.0; platform_system == 'Windows'",
+]
 dev = ["pytest>=8,<10", "pytest-asyncio>=0.23,<2", "ruff==0.16.5"]
 
 [tool.setuptools]
