@@ -21,20 +21,42 @@ class OpenCVVisionObserver:
     """Render the same frame and canonical state consumed by JARVIS."""
 
     def __init__(
-        self, *, window_name: str = "JARVIS Vision - live interpretation"
+        self,
+        *,
+        window_name: str = "JARVIS Vision - live interpretation",
+        window_width: int = 640,
+        window_height: int = 360,
     ) -> None:
+        if window_width <= 0 or window_height <= 0:
+            raise ValueError("observer window dimensions must be positive")
         self._window_name = window_name
+        self._window_width = window_width
+        self._window_height = window_height
+        self._window_created = False
 
     def observe(self, frame: CapturedFrame, snapshot: VisionSnapshot) -> None:
+        if not self._window_created:
+            cv2.namedWindow(self._window_name, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(
+                self._window_name,
+                self._window_width,
+                self._window_height,
+            )
+            self._window_created = True
+
         preview = render_snapshot(frame.image, snapshot)
         cv2.imshow(self._window_name, preview)
         cv2.waitKey(1)
 
     def close(self) -> None:
+        if not self._window_created:
+            return
         try:
             cv2.destroyWindow(self._window_name)
         except cv2.error:
             pass
+        finally:
+            self._window_created = False
 
 
 def render_snapshot(image: np.ndarray, snapshot: VisionSnapshot) -> np.ndarray:
