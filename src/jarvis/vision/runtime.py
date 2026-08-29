@@ -25,12 +25,15 @@ class VisionRuntimeConfig:
     minimum_ptz_interval_seconds: float = 0.2
     require_head_for_lock: bool = False
     required_head_confirmation_frames: int = 3
+    head_loss_grace_seconds: float = 0.35
 
     def __post_init__(self) -> None:
         if self.minimum_ptz_interval_seconds <= 0:
             raise ValueError("minimum_ptz_interval_seconds must be positive")
         if self.required_head_confirmation_frames < 1:
             raise ValueError("required_head_confirmation_frames must be at least 1")
+        if self.head_loss_grace_seconds < 0:
+            raise ValueError("head_loss_grace_seconds must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +101,8 @@ class VisionRuntime:
         self._latest_tracks: list[Track] = []
         self._latest_heads: list[HeadObservation] = []
         self._latest_framing_target: FramingTarget | None = None
+        self._last_trusted_head: FramingTarget | None = None
+        self._last_trusted_head_at: float | None = None
         self._last_ptz_command_at: float | None = None
         self._armed = False
         self._started = False
@@ -141,6 +146,7 @@ class VisionRuntime:
             raise RuntimeError("vision runtime is already started")
         self._armed = False
         self._last_ptz_command_at = None
+        self._clear_trusted_head()
         if self._head_confirmation_gate is not None:
             self._head_confirmation_gate.reset()
         self._camera.start()
@@ -166,6 +172,7 @@ class VisionRuntime:
             )
 
         self.disarm_follow()
+        self._clear_trusted_head()
         return self._target_manager.lock(track)
 
     def arm_follow(self) -> None:
@@ -183,6 +190,7 @@ class VisionRuntime:
         self.disarm_follow()
         self._target_manager.clear()
         self._latest_framing_target = None
+        self._clear_trusted_head()
 
     def process_once(self, *, timeout_seconds: float = 1.0) -> VisionSnapshot | None:
         if not self._started:
@@ -202,6 +210,7 @@ class VisionRuntime:
         target = self._target_manager.update(tracks, now=frame.captured_at)
         if target is None:
             self.disarm_follow()
+            self._clear_trusted_head()
 
         heads: list[HeadObservation] = []
         framing_target: FramingTarget | None = None
@@ -211,11 +220,14 @@ class VisionRuntime:
             assert self._head_confirmation_gate is not None
             self._head_confirmation_gate.update(tracks, heads, self._framing_policy)
 
-            confirmed_heads = heads
-            if target is not None and not self.head_lock_eligible(target.track_id):
-                confirmed_heads = []
-            framing_target = self._framing_policy.resolve(target, confirmed_heads)
+            framing_target = self._resolve_framing_target(
+                target,
+                heads,
+                now=frame.captured_at,
+            )
             desired = self._follow_controller.command_for_framing_target(framing_target)
+            if framing_target is not None and framing_target.source != "head":
+                desired = FollowCommand(pan=desired.pan, tilt=0.0)
         else:
             desired = self._follow_controller.command_for(target)
 
@@ -250,6 +262,45 @@ class VisionRuntime:
             heads=tuple(heads),
             framing_target=framing_target,
         )
+
+    def _resolve_framing_target(
+        self,
+        target: TargetState | None,
+        heads: list[HeadObservation],
+        *,
+        now: float,
+    ) -> FramingTarget | None:
+        assert self._framing_policy is not None
+        if target is None or target.track is None:
+            return None
+
+        direct = self._framing_policy.resolve(target, heads)
+        if direct is not None and direct.source == "head":
+            self._last_trusted_head = direct
+            self._last_trusted_head_at = now
+            return direct
+
+        last_head = self._last_trusted_head
+        last_head_at = self._last_trusted_head_at
+        if (
+            last_head is not None
+            and last_head_at is not None
+            and last_head.track_id == target.track_id
+            and now - last_head_at <= self.config.head_loss_grace_seconds
+        ):
+            return FramingTarget(
+                x=target.track.bounds.center_x,
+                y=last_head.y,
+                confidence=min(last_head.confidence, target.track.confidence),
+                source="head_hold",
+                track_id=target.track_id,
+            )
+
+        return direct
+
+    def _clear_trusted_head(self) -> None:
+        self._last_trusted_head = None
+        self._last_trusted_head_at = None
 
     def close(self) -> None:
         self.clear_target()
