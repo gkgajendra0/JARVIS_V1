@@ -196,8 +196,10 @@ async def test_update_approval_uses_scripted_speech_then_real_spoken_yes() -> No
     await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
 
     assert scripted_speech.spoken == [
-        "A JARVIS software update is available. Shall I install it and restart now? "
-        "Please answer yes or no."
+        (
+            "A JARVIS software update is available. Shall I install it and restart now? "
+            "Please answer yes or no."
+        )
     ]
     assert session.output.audio is None
 
