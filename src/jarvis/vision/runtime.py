@@ -61,7 +61,11 @@ class VisionRuntime:
 
     def lock(self, track_id: int) -> TargetState:
         track = next(
-            (candidate for candidate in self._latest_tracks if candidate.track_id == track_id),
+            (
+                candidate
+                for candidate in self._latest_tracks
+                if candidate.track_id == track_id
+            ),
             None,
         )
         if track is None:
