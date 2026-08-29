@@ -25,6 +25,7 @@ class VisionDiagnosticStatus:
     running: bool = False
     frame_id: int | None = None
     captured_at: float | None = None
+    detector_persons: int = 0
     visible_people: int = 0
     visible_heads: int = 0
     target_id: int | None = None
@@ -102,6 +103,7 @@ class VisionDiagnostics:
             running=self._status.running,
             frame_id=snapshot.frame_id,
             captured_at=snapshot.captured_at,
+            detector_persons=snapshot.detector_persons,
             visible_people=len(snapshot.tracks),
             visible_heads=len(snapshot.heads),
             target_id=target_id,
@@ -123,8 +125,9 @@ class VisionDiagnostics:
                     code="vision_ready",
                     message=(
                         "Vision produced its first frame: "
-                        f"{new_status.visible_people} person track(s), "
-                        f"{new_status.visible_heads} head detection(s)."
+                        f"RF-DETR={new_status.detector_persons} person detection(s), "
+                        f"ByteTrack={new_status.visible_people} track(s), "
+                        f"heads={new_status.visible_heads}."
                     ),
                 )
                 return
@@ -135,7 +138,10 @@ class VisionDiagnostics:
                     code="people_count_changed",
                     message=(
                         "Visible person tracks changed from "
-                        f"{previous.visible_people} to {new_status.visible_people}."
+                        f"{previous.visible_people} to {new_status.visible_people}; "
+                        f"RF-DETR={new_status.detector_persons}, "
+                        f"ByteTrack={new_status.visible_people}, "
+                        f"heads={new_status.visible_heads}."
                     ),
                 )
 
