@@ -5,8 +5,8 @@ JARVIS V1 is a clean implementation of a personal, voice-first JARVIS assistant.
 The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARVIS
 V1 does not import it or depend on it at runtime.
 
-Step 1 natural conversation is accepted. Current active work: **Step 2 — Wake, Voice
-Session, and Audio Robustness (implementation and Windows acceptance)**.
+Steps 1 and 2 are accepted. Current active work: **Step 3 — Identity, Graduated Trust,
+Authority, and Observability Foundation (research only)**.
 
 ## Setup
 
@@ -79,8 +79,9 @@ ruff check .
 ruff format --check .
 ```
 
-Step 2 is not complete until the custom wake model and documented real Windows
-wake-tail, TV/background, self-echo, interruption, recovery, and shutdown tests pass.
+Step 2 is accepted after automated validation and successful real Windows wake,
+conversation, idle, and re-wake use. Extended TV/endurance/device-failure trials were
+explicitly waived and remain documented as unverified residual risks.
 
 ## Documentation
 

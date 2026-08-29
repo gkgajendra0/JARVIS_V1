@@ -1,6 +1,6 @@
 # ADR-002: Step 2 Wake and Local Audio Runtime
 
-**Status:** ACCEPTED — IMPLEMENTATION AUTHORIZED
+**Status:** ACCEPTED — IMPLEMENTED
 
 **Date:** 2026-08-28
 
@@ -69,8 +69,19 @@ permanently connected paid session. AEC quality remains dependent on the real de
 and room.
 
 The runtime must fail clearly when the configured ONNX model or audio device is absent.
-Step 2 cannot be marked complete until the custom model and real Windows audio path pass
-the documented acceptance trials.
+
+## Implementation and Acceptance Outcome
+
+The bounded runtime was implemented with the accepted ownership boundaries. The target
+Windows system demonstrated custom-model wake detection, preserved immediate requests,
+Gemini conversation and follow-ups, explicit sleep, inactivity return, re-wake,
+provider failure recovery, and stable audio capture after the startup-buffer fix.
+Automated validation passes 52 tests plus Ruff checks.
+
+On 2026-08-29 the human owner accepted Step 2 and explicitly waived the extended
+two-hour TV, 20-trial repetition, device unplug/reconnect, and measured latency matrix
+because the core product path was working. Those trials are unverified—not passed—and
+remain reconsideration triggers if real use exposes reliability problems.
 
 ## Replacement Boundary
 

@@ -2,179 +2,118 @@
 
 ## Active Step
 
-**Step 2 — Wake, Voice Session, and Audio Robustness**
+**Step 3 — Identity, Graduated Trust, Authority, and Observability Foundation**
 
 ## Current Stage
 
-**IMPLEMENTATION AUTHORIZED — IN PROGRESS**
+**RESEARCH READY — IMPLEMENTATION UNAUTHORIZED**
 
-Step 1 was human-accepted on 2026-08-28 after automated validation and real Windows
-voice testing. Its accepted running architecture is recorded in
-`docs/CURRENT_ARCHITECTURE.md`.
+Step 2 was human-accepted on 2026-08-29 after automated validation and real Windows
+use. The implemented wake/audio architecture is recorded in
+`docs/CURRENT_ARCHITECTURE.md` and ADR-002.
 
-The Gemini development path passed the final false-interruption and truthfulness
-checks. OpenAI also passed earlier multilingual, contextual, interruption, and failure
-smoke tests; its post-tuning VAD/prompt settings remain available but were not rerun
-after paid credit was exhausted. That provider-specific recheck does not block Step 2
-and must not be represented as completed.
+The human owner explicitly waived the extended endurance matrix because the working
+runtime had already demonstrated the required core path. The two-hour TV trial,
+20-cycle repetition trials, device unplug/reconnect trial, and measured latency trials
+remain **unverified**, not passed. They are residual reliability work and
+reconsideration triggers if field use exposes problems.
 
-Step lifecycle:
+## Step 3 Objective
 
-```text
-REQUIREMENTS
--> RESEARCH
--> TECHNOLOGY DECISION
--> ARCHITECTURE
--> HUMAN APPROVAL
--> IMPLEMENTATION
--> AUTOMATED VALIDATION
--> REAL HUMAN USE
--> CORRECTION IF NEEDED
--> HUMAN ACCEPTANCE
--> DONE
-```
+Define the smallest trustworthy foundation that later capabilities can use to answer:
 
-## Step 2 Objective
+- who or what is present, when identity actually matters;
+- what an operation would do and how risky it is;
+- whether the user has authorized that exact operation;
+- what was proposed, attempted, completed, failed, or remains unverified;
+- what operational evidence may be recorded without leaking secrets or personal data.
 
-Allow JARVIS to wait locally for its wake name, enter the accepted realtime
-conversation naturally, support follow-up turns and barge-in, and return to idle
-without audio ownership, echo, device, timeout, or lifecycle faults.
-
-Step 2 must extend the accepted Step-1 conversation foundation. It must not create a
-second conversation owner or replace the working realtime stack without evidence.
+Step 3 must establish governance boundaries before JARVIS gains tools or computer
+control. It must not pre-build the Step-7 capability runtime or a speculative universal
+policy engine.
 
 ## Required Behaviour
 
-### Wake and Session Entry
+### Identity and Presence
 
-- recognize the approved JARVIS wake name without rigid command phrasing;
-- keep idle wake detection local where technically practical;
-- avoid streaming continuous idle-room audio to a cloud provider;
-- preserve speech immediately following the wake name so the user's request is not
-  clipped or discarded;
-- start exactly one conversational session for one accepted wake event;
-- reject duplicate/replayed wake events during an active session.
+- represent identity, session, and presence evidence without treating evidence as permission;
+- distinguish unknown, claimed, observed, and verified identity states;
+- never claim voice identity from wake-word recognition;
+- allow stronger verification to be requested only when consequence requires it.
 
-### Conversational Presence
+### Graduated Trust and Consent
 
-- allow natural follow-up turns after the initial request;
-- keep the session active only while real conversational activity justifies it;
-- return to idle after an accepted inactivity/end condition;
-- allow an explicit spoken or application stop path;
-- wake again cleanly after the prior session closes.
+- classify proposed operations by consequence using a small, explainable risk model;
+- bind approval to the exact operation, target, important parameters, and validity period;
+- support denial, expiry, cancellation, and revocation;
+- prevent a model, provider, prompt, or tool from granting its own authority;
+- keep low-risk conversation free from unnecessary authentication friction.
 
-### Audio Robustness
+### Truthful Execution State
 
-- one authoritative component owns microphone acquisition at any time;
-- JARVIS speaker output must not repeatedly trigger wake detection or false user turns;
-- user barge-in must stop or truncate assistant output truthfully;
-- expected room noise, TV audio, and ordinary silence must not create uncontrolled
-  session churn;
-- supported input/output devices and sample rates must be validated before session use;
-- device disconnect, provider failure, cancellation, and shutdown must release audio
-  resources and return to a truthful state.
+- distinguish proposal, approval, attempt, success, partial success, failure,
+  cancellation, rollback, and unverified outcome;
+- never convert intent, provider text, or an attempted call into a success claim;
+- preserve enough evidence for later capability implementations to explain outcomes.
 
-### State and Ownership
+### Privacy-Safe Observability
 
-- JARVIS owns wake/session lifecycle truth;
-- the existing `ConversationSession` remains the canonical accepted-turn owner;
-- LiveKit/provider objects remain operational state;
-- exact state names, interfaces, buffering strategy, and wake technology are architecture
-  decisions to make after research.
+- define useful session/event correlation without recording secrets by default;
+- specify redaction, retention, and access boundaries before durable audit data exists;
+- keep operational logs separate from canonical conversation and future personal memory;
+- make degraded or unavailable governance state explicit.
 
 ## Explicit Non-Scope
 
-- owner voice authentication or speaker identification;
-- camera/presence authentication;
+- actual computer, browser, file, email, calendar, device, or external-service actions;
 - durable personal memory;
-- tools, capabilities, or computer control;
-- local/offline conversational LLM, STT, or TTS fallback;
-- HUD redesign;
-- cloud deployment, telephony, browser/mobile clients, or remote rooms;
-- arbitrary always-streaming cloud microphone mode;
-- Step-3 permissions, audit, or identity architecture;
-- speculative future audio framework abstractions.
+- a production speaker-biometric system unless research proves a narrowly required
+  identity mechanism and it receives separate approval;
+- the common capability runtime planned for Step 7;
+- HUD, proactive monitoring, self-repair, or self-improvement;
+- autonomous permission changes or model-authored policy;
+- speculative abstractions for capabilities that do not yet exist.
 
 ## Required Research
 
-Research must use current primary documentation and relevant old-JARVIS evidence. It
-must compare credible candidates without preselecting technology in this plan.
+Research must be technology-neutral and use current primary sources plus relevant
+old-JARVIS evidence. It must answer:
 
-Answer at minimum:
+1. Which identity and presence signals are useful on the local Windows/voice runtime,
+   and what can each signal actually prove?
+2. What small graduated-risk model can be applied consistently to future reads,
+   writes, external effects, and destructive actions?
+3. How should approvals be scoped, expired, revoked, and protected from replay or
+   confused-deputy behavior?
+4. Which security and privacy standards should inform authentication, authorization,
+   consent, audit, secret handling, and data minimization?
+5. What minimum event/result schema truthfully represents proposals, attempts,
+   outcomes, evidence, and rollback without building the Step-7 runtime?
+6. Which observability data is necessary for diagnosis, and which content must be
+   redacted, bounded, or excluded?
+7. Which old-JARVIS identity, permission, authentication, audit, and failure lessons
+   should become requirements or tests rather than copied architecture?
+8. What threat model and measurable acceptance gates are appropriate before any later
+   capability can perform consequential work?
 
-1. Which maintained local wake-word engines support Windows, Python, a custom JARVIS
-   wake name, acceptable latency, and the required license/cost?
-2. Can the engine use the actual 16 kHz Tribit/Voicemeeter input path reliably, or is a
-   controlled resampling boundary required?
-3. How should one microphone stream feed idle wake detection and then hand off to
-   LiveKit without two components opening the device concurrently?
-4. How much pre-roll/wake-tail audio must be buffered so the first request is complete?
-5. Which component owns idle, wake, active-conversation, stopping, failure, and recovery
-   transitions?
-6. How should follow-up expiry distinguish real user activity from provider updates,
-   silence, echo, and TV/background speech?
-7. What AEC/noise/device behavior should remain in LiveKit, provider configuration,
-   Windows/Voicemeeter, or a small JARVIS audio boundary?
-8. Which old-JARVIS tests and failure lessons should be rewritten rather than copied?
-9. What measurable false-accept, false-reject, wake latency, barge-in, and cleanup gates
-   are realistic on the actual Windows machine?
+## Architecture and Approval Gate
 
-## Relevant Old-JARVIS Evidence
+After research, document candidate comparisons and proposed ownership boundaries.
+Record `KEEP_OURS / ADOPT / ADAPT / WRAP / REWRITE / REJECT` decisions in research and
+ADR documents—not in this plan.
 
-Inspect only wake/audio/session material, especially:
-
-- custom wake-word research and recordings;
-- wake-tail/pre-roll handling;
-- follow-mode expiry and session-state tests;
-- microphone ownership and invalid-state acquisition failures;
-- AEC/self-hearing/false-barge-in evidence;
-- device selection, sample-rate, disconnect, cancellation, and cleanup tests;
-- lessons from keyword-only interruption and large voice-state controllers.
-
-The old runtime is evidence, not architecture to import.
-
-## Architecture Gate
-
-Before implementation, the proposal must define:
-
-- one wake/session lifecycle owner;
-- one microphone acquisition owner and handoff model;
-- wake detector replacement boundary;
-- pre-roll/wake-tail buffering boundary;
-- follow-up timeout semantics;
-- interaction with the accepted LiveKit/provider session;
-- echo/noise/device responsibility boundaries;
-- failure and deterministic cleanup paths;
-- exact dependencies and pinned versions;
-- tests mapped to old failure evidence and Step-2 acceptance requirements.
-
-Human approval is required after this architecture is documented. No Step-2 production
-code or dependency is authorized before that approval.
-
-## Human Acceptance Scenarios
-
-Step 2 must eventually prove on the real Windows machine:
-
-1. wake JARVIS by name from idle and speak the request without losing its beginning;
-2. complete multiple follow-up turns without repeating the wake name unnecessarily;
-3. return to idle after the approved inactivity/end behavior;
-4. wake again successfully after returning to idle;
-5. interrupt JARVIS naturally and continue;
-6. play ordinary TV/background audio without uncontrolled false activations;
-7. hear JARVIS through the Tribit speaker without repeated self-wake/self-interruption;
-8. recover truthfully from input/output device and provider failures;
-9. stop cleanly with no microphone or worker left active;
-10. confirm idle privacy and expected local/cloud audio boundaries.
+Architecture must define identity evidence ownership, risk classification, scoped
+approval, truthful outcome state, observability/redaction, replacement boundaries, and
+tests. Human approval is required after architecture review and before implementation.
 
 ## Completion Gate
 
-Step 2 is `DONE` only after research, a recorded decision, approved architecture,
+Step 3 is `DONE` only after research, a recorded decision, approved architecture,
 implementation, automated validation, real human acceptance, cleanup, and documentation
-reconciliation all pass.
+reconciliation.
 
 ## Immediate Next Action
 
-**Implement the accepted decision in
-`docs/decisions/ADR-002_STEP_2_WAKE_AUDIO_RUNTIME.md`, run automated validation, and
-then stop for the documented real Windows wake/audio acceptance tests. Step 2 remains
-in progress until those tests and documentation reconciliation pass.**
+**Research Step 3 only. Do not implement identity, permissions, audit storage, or
+capability execution until the research and architecture receive explicit human
+approval.**

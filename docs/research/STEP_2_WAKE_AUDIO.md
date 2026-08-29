@@ -1,8 +1,8 @@
 # Step 2 Wake, Session, and Audio Research
 
 **Date:** 2026-08-28  
-**Status:** RESEARCH AND AUDIO TOPOLOGY RESOLVED — HUMAN REVIEW REQUIRED  
-**Implementation:** NOT AUTHORIZED
+**Status:** ACCEPTED — IMPLEMENTED 2026-08-29
+**Implementation:** COMPLETE
 
 ## Required Outcome
 
@@ -130,9 +130,9 @@ The full proposed component and state design is recorded in
   outcomes;
 - retain old failure scenarios as tests, not the old voice controller.
 
-## Proposed Acceptance Gates for Architecture Review
+## Proposed Acceptance Gates
 
-These values require human approval before implementation:
+These values guided the architecture but were not all completed during human acceptance:
 
 - no cloud streaming while idle;
 - one microphone owner at every instant;
@@ -158,10 +158,20 @@ These values require human approval before implementation:
 - solving AEC completely in software may be impossible with the current Bluetooth
   speakerphone profile and physical room path.
 
-## Recommendation
+## Implementation Outcome
 
-Approve **ADAPT LiveKit WakeWord 0.2.1 model inference**, **ADAPT LiveKit RTC 1.1.15
-local media**, and **PRESERVE Porcupine as the replacement fallback**. Approve the
-roomless single-microphone architecture in
-`docs/research/STEP_2_WAKE_AUDIO_ARCHITECTURE.md`. Do not implement until that
-architecture is explicitly approved.
+The recommended roomless, single-microphone architecture was implemented. Real Windows
+use proved the core idle/wake/conversation/sleep/re-wake path, immediate-request
+preservation, multilingual follow-ups, and truthful recovery. Automated validation
+passes 52 tests plus Ruff checks.
+
+The human owner explicitly waived the long endurance matrix on 2026-08-29. The
+two-hour TV trial, 20-trial detection/self-wake/cycle sets, device unplug/reconnect,
+and measured latency remain unverified residual risks.
+
+## Accepted Direction
+
+**ADAPT LiveKit WakeWord 0.2.1 model inference**, **ADAPT LiveKit RTC 1.1.15 local
+media**, and **PRESERVE Porcupine as the replacement fallback**. The roomless
+single-microphone architecture is recorded in
+`docs/research/STEP_2_WAKE_AUDIO_ARCHITECTURE.md`.

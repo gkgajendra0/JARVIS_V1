@@ -119,9 +119,9 @@ Presence here means **planned product intent**, not implementation authorization
 | ID | Capability | Purpose | Step | Status |
 | --- | --- | --- | ---: | --- |
 | CAP-001 | Natural Voice Conversation | Realtime continuous spoken conversation, multilingual use, natural turn-taking. | 1 | DONE |
-| CAP-002 | Wake and Conversational Presence | Wake by name, enter follow-up conversation, return to idle naturally. | 2 | PLANNED |
-| CAP-003 | Barge-In and Audio Robustness | User interruption, echo/noise/device handling, clean recovery from voice-state faults. | 2 | PLANNED |
-| CAP-004 | Identity and Presence | Owner/session/presence evidence when identity actually matters. | 3 | PLANNED |
+| CAP-002 | Wake and Conversational Presence | Wake by name, enter follow-up conversation, return to idle naturally. | 2 | DONE |
+| CAP-003 | Barge-In and Audio Robustness | User interruption, echo/noise/device handling, clean recovery from voice-state faults. | 2 | DONE |
+| CAP-004 | Identity and Presence | Owner/session/presence evidence when identity actually matters. | 3 | ACTIVE |
 | CAP-005 | JARVIS Personality | Stable natural identity, language adaptation, truthful capability framing. | 1 | DONE |
 
 ### Conversation, Context, and Memory
@@ -176,15 +176,15 @@ Presence here means **planned product intent**, not implementation authorization
 | --- | --- | --- | ---: | --- |
 | CAP-032 | Generic Capability Runtime | Discover/select/validate/execute capabilities through one common boundary. | 7 | PLANNED |
 | CAP-033 | Extensible Skills and Plugins | Add/register/enable/disable/replace integrations without rebuilding core JARVIS. | 16 | PLANNED |
-| CAP-034 | Authority, Permissions, and Consent | Decide whether reads/writes/external/destructive actions are permitted. | 3 | PLANNED |
-| CAP-035 | Graduated Trust | Scale identity/approval friction with consequence. | 3 | PLANNED |
-| CAP-036 | Auditable Action Execution | Proposal, approval, attempt, result, evidence, rollback state. | 3 | PLANNED |
+| CAP-034 | Authority, Permissions, and Consent | Decide whether reads/writes/external/destructive actions are permitted. | 3 | ACTIVE |
+| CAP-035 | Graduated Trust | Scale identity/approval friction with consequence. | 3 | ACTIVE |
+| CAP-036 | Auditable Action Execution | Proposal, approval, attempt, result, evidence, rollback state. | 3 | ACTIVE |
 
 ### Runtime Operations, UI, and Proactivity
 
 | ID | Capability | Purpose | Step | Status |
 | --- | --- | --- | ---: | --- |
-| CAP-037 | Runtime Observability | Trace sessions, turns, latency, provider/capability results, authority decisions safely. | 3 | PLANNED |
+| CAP-037 | Runtime Observability | Trace sessions, turns, latency, provider/capability results, authority decisions safely. | 3 | ACTIVE |
 | CAP-038 | Health and Diagnostics | Explain degraded audio/network/provider/capability/runtime state and recovery options. | 13 | PLANNED |
 | CAP-039 | HUD and Visual Workspace | Present conversation, status, context, world feed, memory, skills, execution, diagnostics. | 13 | PLANNED |
 | CAP-040 | Proactive Monitoring | Watch approved topics/conditions and surface meaningful changes. | 15 | PLANNED |

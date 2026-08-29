@@ -1,8 +1,8 @@
 # Step 2 Wake and Audio Architecture Proposal
 
 **Date:** 2026-08-28  
-**Status:** PROPOSED — HUMAN APPROVAL REQUIRED  
-**Implementation:** NOT AUTHORIZED
+**Status:** ACCEPTED — IMPLEMENTED 2026-08-29
+**Implementation:** COMPLETE
 
 ## Decision Summary
 
@@ -159,7 +159,7 @@ room captures, and generated datasets must not be committed. The exported classi
 may be committed only after license, size, provenance, and real evaluation evidence are
 recorded.
 
-## Validation Required After Approval
+## Validation Plan and Outcome
 
 ### Automated
 
@@ -197,8 +197,18 @@ recorded.
   paid/cloud session permanently connected. This is the correct privacy/cost tradeoff.
 - AEC quality remains hardware/room dependent even with correct software ownership.
 
-## Approval Requested
+## Accepted Implementation Notes
 
-Approve this architecture for implementation. Approval authorizes the bounded Step-2
-runtime, detector model provisioning, automated tests, and real Windows acceptance. It
-does not authorize speaker identification, memory, tools, remote rooms, or Step 3.
+- Explicit PortAudio `index:<number>` selection resolves duplicate Windows device names.
+- A bounded five-second capture queue absorbs provider startup without losing live PCM.
+- The external production model was used at threshold `0.82`; it is not committed.
+- Gemini receives canonical instructions during model construction because its preview
+  runtime has limited mid-session update support.
+- Exit parsing accepts polite and final-clause sleep requests without broad keyword exits.
+- Automated validation passes 52 tests plus Ruff checks.
+
+Human acceptance on 2026-08-29 covered the core wake, immediate-request, conversation,
+sleep, idle, and re-wake flow. The two-hour TV, 20-trial repetition, device
+unplug/reconnect, and measured latency tests were explicitly waived and remain
+unverified. This acceptance does not authorize speaker identification, memory, tools,
+remote rooms, or Step 3 implementation.

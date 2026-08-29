@@ -8,8 +8,8 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 | ---: | --- | --- | --- |
 | 0 | Clean Foundation | Minimal app lifecycle, package structure, config, logging, baseline tests | DONE |
 | 1 | Natural Conversational Core | CAP-001, CAP-005, CAP-006, CAP-007 | DONE |
-| 2 | Wake, Voice Session, and Audio Robustness | CAP-002, CAP-003 | ACTIVE - RESEARCH |
-| 3 | Identity, Graduated Trust, Authority, and Observability Foundation | CAP-004, CAP-034, CAP-035, CAP-036, CAP-037 | PLANNED |
+| 2 | Wake, Voice Session, and Audio Robustness | CAP-002, CAP-003 | DONE |
+| 3 | Identity, Graduated Trust, Authority, and Observability Foundation | CAP-004, CAP-034, CAP-035, CAP-036, CAP-037 | ACTIVE - RESEARCH |
 | 4 | Live Context and Personal Memory | CAP-008 through CAP-013 | PLANNED |
 | 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | PLANNED |
 | 6 | Knowledge, Current Research, and Truthfulness | CAP-014 through CAP-017 | PLANNED |
@@ -97,6 +97,19 @@ High-level completion means:
 - no duplicated conversation/context owners are introduced.
 
 The exact technology and architecture must be confirmed through the Step-1 planning/research process before implementation.
+
+## Step 2 - Wake, Voice Session, and Audio Robustness
+
+Completed outcome: local wake detection, one JARVIS-owned audio path, preserved wake
+tail, realtime follow-up conversation, explicit return to idle, and clean re-wake work
+on the target Windows system. Extended endurance and device-failure trials were
+explicitly waived and remain recorded as unverified residual risks.
+
+## Step 3 - Identity, Graduated Trust, Authority, and Observability
+
+Goal: research and define the minimum trustworthy governance foundation required
+before later capabilities may read, write, communicate, or control anything. Step 3
+does not implement those actions or the Step-7 capability runtime.
 
 ## Final Target - Personal Intelligence Runtime
 
