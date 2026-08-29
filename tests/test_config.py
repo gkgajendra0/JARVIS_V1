@@ -14,9 +14,7 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("JARVIS_WAKE_THRESHOLD", "0.72")
     monkeypatch.setenv("JARVIS_AUDIO_PRE_ROLL_SECONDS", "0.8")
     monkeypatch.setenv("JARVIS_VISION_ENABLED", "true")
-    monkeypatch.setenv(
-        "JARVIS_BLAZEFACE_MODEL_PATH", " C:\\models\\blazeface.tflite "
-    )
+    monkeypatch.setenv("JARVIS_BLAZEFACE_MODEL_PATH", " C:\\models\\blazeface.tflite ")
 
     config = JarvisConfig.from_environment()
 
