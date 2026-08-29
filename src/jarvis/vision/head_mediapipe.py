@@ -110,7 +110,8 @@ def _default_detector_factory(config: MediaPipeBlazeFaceConfig) -> Any:
         from mediapipe.tasks.python import vision
     except ImportError as exc:
         raise RuntimeError(
-            "MediaPipe is required for BlazeFace head detection; install the vision dependencies"
+            "MediaPipe is required for BlazeFace head detection; "
+            "install the vision dependencies"
         ) from exc
 
     options = vision.FaceDetectorOptions(
@@ -127,7 +128,8 @@ def _default_image_factory(rgb: np.ndarray) -> Any:
         import mediapipe as mp
     except ImportError as exc:
         raise RuntimeError(
-            "MediaPipe is required for BlazeFace head detection; install the vision dependencies"
+            "MediaPipe is required for BlazeFace head detection; "
+            "install the vision dependencies"
         ) from exc
     return mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
