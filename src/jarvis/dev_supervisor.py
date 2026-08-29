@@ -378,7 +378,7 @@ def _apply_approved_update(
     process = _start_jarvis(root, control)
     try:
         control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
-    except RuntimeError as ready_exc:
+    except RuntimeError:
         print(
             f"Updated JARVIS {remote_sha[:10]} failed startup readiness; "
             "restoring the last-known-good revision."
