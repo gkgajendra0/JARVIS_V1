@@ -26,7 +26,9 @@ class _FakeRuntime:
         return track_id in self._eligible_ids
 
     def lock(self, track_id: int) -> TargetState:
-        track = next(track for track in self.latest_tracks if track.track_id == track_id)
+        track = next(
+            track for track in self.latest_tracks if track.track_id == track_id
+        )
         self.target = TargetState(track_id=track_id, track=track)
         self.armed = False
         return self.target
