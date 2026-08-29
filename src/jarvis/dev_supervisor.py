@@ -30,6 +30,7 @@ class DevSupervisorConfig:
     poll_seconds: float = 5.0
     shutdown_timeout_seconds: float = 10.0
     approval_timeout_seconds: float = 45.0
+    startup_timeout_seconds: float = 45.0
 
     def __post_init__(self) -> None:
         if not self.remote.strip():
@@ -42,6 +43,8 @@ class DevSupervisorConfig:
             raise ValueError("shutdown_timeout_seconds must be positive")
         if self.approval_timeout_seconds <= 0:
             raise ValueError("approval_timeout_seconds must be positive")
+        if self.startup_timeout_seconds <= 0:
+            raise ValueError("startup_timeout_seconds must be positive")
 
 
 class GitRepo:
@@ -102,6 +105,10 @@ class GitRepo:
             self.config.remote,
             self.config.branch,
         )
+
+    def reset_hard(self, sha: str) -> None:
+        """Restore the clean repository to a previously known-good revision."""
+        self._run("reset", "--hard", sha)
 
 
 class VoiceControlServer:
@@ -180,6 +187,20 @@ class VoiceControlServer:
         except Exception:
             self._reset_child()
             raise
+
+    def wait_for_child_ready(self, *, timeout_seconds: float) -> None:
+        """Require the child to establish its authenticated control connection."""
+        try:
+            self._ensure_child(timeout_seconds=timeout_seconds)
+        except (
+            OSError,
+            TimeoutError,
+            RuntimeError,
+            TypeError,
+            json.JSONDecodeError,
+        ) as exc:
+            self._reset_child()
+            raise RuntimeError(f"JARVIS startup readiness failed: {exc}") from exc
 
     def request_update_approval(
         self,
@@ -317,6 +338,83 @@ def _stop_jarvis(
         control.child_stopped()
 
 
+def _apply_approved_update(
+    repo: GitRepo,
+    root: Path,
+    process: subprocess.Popen[bytes],
+    control: VoiceControlServer,
+    config: DevSupervisorConfig,
+    *,
+    previous_sha: str,
+    remote_sha: str,
+) -> tuple[subprocess.Popen[bytes], bool]:
+    """Apply an approved update and restore the previous revision if startup fails."""
+    _stop_jarvis(
+        process,
+        timeout_seconds=config.shutdown_timeout_seconds,
+        control=control,
+    )
+    try:
+        repo.pull_fast_forward()
+    except subprocess.CalledProcessError as exc:
+        print(f"Update failed: {exc}")
+        print("Restarting the existing local JARVIS version.")
+        process = _start_jarvis(root, control)
+        try:
+            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+        except RuntimeError as ready_exc:
+            _stop_jarvis(
+                process,
+                timeout_seconds=config.shutdown_timeout_seconds,
+                control=control,
+            )
+            raise RuntimeError(
+                "existing JARVIS version failed to restart after update failure"
+            ) from ready_exc
+        return process, False
+
+    updated_sha = repo.local_sha()
+    print(f"Updated JARVIS to {updated_sha[:10]}.")
+    process = _start_jarvis(root, control)
+    try:
+        control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+    except RuntimeError as ready_exc:
+        print(
+            f"Updated JARVIS {remote_sha[:10]} failed startup readiness; "
+            "restoring the last-known-good revision."
+        )
+        _stop_jarvis(
+            process,
+            timeout_seconds=config.shutdown_timeout_seconds,
+            control=control,
+        )
+        try:
+            repo.reset_hard(previous_sha)
+        except subprocess.CalledProcessError as rollback_exc:
+            raise RuntimeError(
+                f"failed to restore last-known-good JARVIS {previous_sha[:10]}"
+            ) from rollback_exc
+
+        print(f"Rolled back JARVIS to {previous_sha[:10]}.")
+        process = _start_jarvis(root, control)
+        try:
+            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+        except RuntimeError as rollback_ready_exc:
+            _stop_jarvis(
+                process,
+                timeout_seconds=config.shutdown_timeout_seconds,
+                control=control,
+            )
+            raise RuntimeError(
+                "last-known-good JARVIS failed to restart after rollback"
+            ) from rollback_ready_exc
+        print("Last-known-good JARVIS startup readiness confirmed.")
+        return process, False
+
+    print("JARVIS update startup readiness confirmed.")
+    return process, True
+
+
 def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
     config = config or _config_from_environment()
     root = _find_repo_root()
@@ -401,22 +499,18 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                 continue
 
             print("Spoken update approval accepted.")
-            _stop_jarvis(
+            process, update_healthy = _apply_approved_update(
+                repo,
+                root,
                 process,
-                timeout_seconds=config.shutdown_timeout_seconds,
-                control=control,
+                control,
+                config,
+                previous_sha=local_sha,
+                remote_sha=remote_sha,
             )
-            try:
-                repo.pull_fast_forward()
-            except subprocess.CalledProcessError as exc:
-                print(f"Update failed: {exc}")
-                print("Restarting the existing local JARVIS version.")
-                process = _start_jarvis(root, control)
+            if not update_healthy:
                 declined_sha = remote_sha
                 continue
-
-            print(f"Updated JARVIS to {repo.local_sha()[:10]}.")
-            process = _start_jarvis(root, control)
             declined_sha = None
     except KeyboardInterrupt:
         print("\nStopping JARVIS development supervisor...")
