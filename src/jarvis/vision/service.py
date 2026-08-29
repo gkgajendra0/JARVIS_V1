@@ -243,20 +243,20 @@ def build_default_vision_service(
     from jarvis.vision.ptz import DuvcPtzConfig, DuvcPtzController
     from jarvis.vision.runtime import VisionRuntimeConfig
     from jarvis.vision.targeting import TargetManager
-    from jarvis.vision.tracker import BoTSORTAdapter, BoTSORTConfig
+    from jarvis.vision.tracker import OCSORTAdapter, OCSORTConfig
 
     model_path = resolve_blazeface_model_path(head_model_path)
     runtime = VisionRuntime(
         camera=OpenCVCameraSource(),
         detector=RFDetrNanoDetector(),
-        tracker=BoTSORTAdapter(
-            BoTSORTConfig(
+        tracker=OCSORTAdapter(
+            OCSORTConfig(
                 lost_track_buffer=60,
-                minimum_iou_threshold_first_assoc=0.10,
-                minimum_iou_threshold_second_assoc=0.30,
-                minimum_iou_threshold_unconfirmed_assoc=0.20,
-                enable_cmc=True,
-                cmc_method="sparseOptFlow",
+                minimum_consecutive_frames=2,
+                minimum_iou_threshold=-0.30,
+                direction_consistency_weight=0.20,
+                high_conf_det_threshold=0.40,
+                delta_t=2,
             )
         ),
         target_manager=TargetManager(lost_timeout_seconds=1.25),
