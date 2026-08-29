@@ -31,6 +31,7 @@ from jarvis.voice.livekit_session import (
     LiveKitConversationBridge,
     create_voice_session,
 )
+from jarvis.voice.scripted_speech import ScriptedSpeech, build_scripted_speech
 from jarvis.voice.vision_tools import VisionAgentTools
 from jarvis.voice.wakeword import LiveKitWakeDetector, load_livekit_predictor
 
@@ -39,6 +40,11 @@ LOGGER = logging.getLogger(__name__)
 SessionFactory = Callable[
     [JarvisConfig], tuple[AgentSession, LiveKitConversationBridge]
 ]
+
+_UPDATE_APPROVAL_PROMPT = (
+    "A JARVIS software update is available. Shall I install it and restart now? "
+    "Please answer yes or no."
+)
 
 
 class VoiceRuntimeState(str, Enum):
@@ -140,6 +146,7 @@ class VoiceRuntimeController:
         *,
         session_factory: SessionFactory = create_voice_session,
         vision_service: VisionService | None = None,
+        scripted_speech: ScriptedSpeech | None = None,
     ) -> None:
         self.config = config
         self.audio = audio
@@ -156,6 +163,8 @@ class VoiceRuntimeController:
         self._update_approval_requests: asyncio.Queue[_UpdateApprovalRequest] = (
             asyncio.Queue()
         )
+        self._scripted_speech = scripted_speech
+        self._owns_scripted_speech = False
 
     @property
     def state(self) -> VoiceRuntimeState:
@@ -180,6 +189,12 @@ class VoiceRuntimeController:
             )
         )
         return await response
+
+    def _get_scripted_speech(self) -> ScriptedSpeech:
+        if self._scripted_speech is None:
+            self._scripted_speech = build_scripted_speech(self.config)
+            self._owns_scripted_speech = True
+        return self._scripted_speech
 
     def _on_audio_overflow(self) -> None:
         LOGGER.error("Voice session stopped because its microphone queue overflowed")
@@ -306,6 +321,11 @@ class VoiceRuntimeController:
             if control_task is not None:
                 control_task.cancel()
                 await asyncio.gather(control_task, return_exceptions=True)
+            if self._owns_scripted_speech and self._scripted_speech is not None:
+                try:
+                    await self._scripted_speech.aclose()
+                except Exception:
+                    LOGGER.exception("JARVIS scripted speech did not shut down cleanly")
             await self.audio.aclose()
             if vision_started and self._vision_service is not None:
                 try:
@@ -332,7 +352,6 @@ class VoiceRuntimeController:
         session, bridge = self._session_factory(self.config)
         session_input = SessionAudioInput()
         session.input.audio = session_input
-        session.output.audio = output
 
         def on_transcript(event: UserInputTranscribedEvent) -> None:
             if (
@@ -362,28 +381,7 @@ class VoiceRuntimeController:
                 raise
             self._state = VoiceRuntimeState.ACTIVE
             LOGGER.info("JARVIS is requesting spoken approval for a software update")
-            prompt = session.generate_reply(
-                user_input=(
-                    "JARVIS internal control request: a software update is available. "
-                    "Ask the owner whether to install it and restart now, and request "
-                    "an explicit yes or no answer."
-                ),
-                instructions=(
-                    "Say exactly this sentence and nothing else: "
-                    "'A JARVIS software update is available. Shall I install it and "
-                    "restart now? Please answer yes or no.'"
-                ),
-                allow_interruptions=False,
-                tool_choice="none",
-            )
-            await prompt
-            prompt_exception = getattr(prompt, "exception", None)
-            if callable(prompt_exception):
-                error = prompt_exception()
-                if error is not None:
-                    raise RuntimeError(
-                        "JARVIS update approval prompt generation failed"
-                    ) from error
+            await self._get_scripted_speech().speak(output, _UPDATE_APPROVAL_PROMPT)
             accepting_decision = True
             LOGGER.info(
                 "Spoken update approval prompt finished playing; awaiting owner Yes/No "
