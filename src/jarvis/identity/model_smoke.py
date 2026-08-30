@@ -82,6 +82,8 @@ def run_smoke(*, iterations: int = 30) -> None:
     )
     print()
 
+    # OpenCV 5's new graph engine currently ignores explicit target selection.
+    # Use the documented default CPU path instead of requesting DNN_TARGET_CPU.
     started = time.perf_counter()
     detector = cv2.FaceDetectorYN.create(
         str(detector_path),
@@ -90,8 +92,6 @@ def run_smoke(*, iterations: int = 30) -> None:
         0.9,
         0.3,
         5000,
-        cv2.dnn.DNN_BACKEND_OPENCV,
-        cv2.dnn.DNN_TARGET_CPU,
     )
     detector_load_ms = (time.perf_counter() - started) * 1000.0
 
@@ -99,8 +99,6 @@ def run_smoke(*, iterations: int = 30) -> None:
     recognizer = cv2.FaceRecognizerSF.create(
         str(recognizer_path),
         "",
-        cv2.dnn.DNN_BACKEND_OPENCV,
-        cv2.dnn.DNN_TARGET_CPU,
     )
     recognizer_load_ms = (time.perf_counter() - started) * 1000.0
 
