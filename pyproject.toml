@@ -23,6 +23,7 @@ jarvis-voice = "jarvis.voice.runtime:main"
 jarvis-dev = "jarvis.dev_supervisor:main"
 jarvis-vision-preview = "jarvis.vision.preview:main"
 jarvis-vision-follow = "jarvis.vision.follow_live:main"
+jarvis-face-model-smoke = "jarvis.identity.model_smoke:main"
 
 [project.optional-dependencies]
 vision = [
