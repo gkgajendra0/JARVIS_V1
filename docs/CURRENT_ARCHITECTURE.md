@@ -10,8 +10,9 @@ This document describes implemented, validated, and human-accepted architecture 
 - Step 2.5 — Vision Sensor & Active Target Tracking Foundation: accepted on 2026-08-29 and merged to `main`.
 - Development supervisor (`jarvis-dev`) — accepted on 2026-08-30 and merged to protected `main`.
 - Time-aware startup greeting interaction — accepted on 2026-08-30.
+- Step 3A — Deterministic Authority Foundation + Windows strong verification/session invalidation: accepted on 2026-08-30; pending protected-main merge of PR #7.
 
-Step 3 identity/trust/authority/observability is active planning/research and is **not** current architecture yet.
+Step 3 is not complete. Owner biometric identity, liveness, attention-provider integration, speaker identity, and full T0/T1/T2 trust derivation remain future Step-3 slices.
 
 ## Runtime Entry Points
 
@@ -68,7 +69,7 @@ authenticated readiness handshake
 
 The realtime model does not decide whether a software update is approved. A fixed scripted-TTS adapter speaks the update question, the realtime voice path supplies finalized transcription, and deterministic JARVIS code parses explicit approval. Ambiguous speech, timeout, contradictory wording, or unavailable approval means No.
 
-Until Step 3 provides verified identity, spoken update approval is a development-owner interaction gate rather than strong biometric authentication. The control channel is loopback-only and authenticated with a parent-generated token.
+The development supervisor remains separate from the Step-3 authority runtime. Step 3A adds the reusable user-facing authority foundation; the supervisor does not silently inherit stronger identity semantics until explicitly integrated in a later accepted slice.
 
 ### Git/update safety
 
@@ -88,6 +89,135 @@ The supervisor:
 Repository `main` is protected by the active `Main safety gate` ruleset. Changes require PR flow, strict required status checks `ruff` and `pytest`, deletion protection, non-fast-forward protection, and no bypass actors.
 
 The parent supervisor intentionally does not replace its own running Python process during a child update. Supervisor-code changes take effect after the parent itself is restarted.
+
+## Authority Foundation — Step 3A
+
+Step 3A owns deterministic action authority before biometric providers are allowed to influence protected decisions.
+
+```text
+Action request
+    |
+    v
+immutable ActionProposal
+(canonical material + fingerprint + expiry + session binding)
+    |
+    v
+RiskClassifier hard floor
+    |
+    +--> R5 RESTRICTED_DEV_ONLY -> deny normal runtime
+    |
+    v
+PolicyEngine (OPA adapter available, fail closed)
+    |
+    v
+Approval requirement + trust requirement + obligations
+    |
+    +--> direct / explicit approval paths
+    |
+    +--> R4 strong path
+             |
+             v
+      StrongApprovalService
+             |
+             v
+      StrongVerifier
+      (Windows Hello v1)
+             |
+      VERIFIED only
+             |
+             v
+ proposal/session-bound one-time STRONG approval
+    |
+    v
+AuthorityService
+    |
+    +--> audit-before-protected-execution
+    |
+    v
+short-lived ExecutionPermit
+    |
+    v
+final pre-execution revalidation
+    |
+    v
+consume approval + permit exactly once
+```
+
+### Canonical authority types
+
+`src/jarvis/authority/types.py` owns the accepted deterministic vocabulary:
+
+- trust tiers T0 `UNVERIFIED`, T1 `PRESENT_CONTEXT`, T2 `CORROBORATED_OWNER`, T3 `VERIFIED_OWNER`;
+- risk classes R0 `ROUTINE`, R1 `PRIVATE_READ`, R2 `REVERSIBLE_LOCAL_CHANGE`, R3 `PERSISTENT_OR_EXTERNAL`, R4 `CRITICAL`, R5 `RESTRICTED_DEV_ONLY`;
+- approval requirements `NONE`, `DIRECT_INTENT`, `EXPLICIT`, `STRONG`;
+- attention states and typed evidence modalities.
+
+Model/provider confidence cannot directly set these authority states.
+
+### Exact-action proposals
+
+`src/jarvis/authority/proposal.py` owns immutable `ActionProposal` creation and validation. Material target/parameter content is canonicalized before SHA-256 fingerprinting. Proposal IDs, sessions, expiry, action origin, and risk-relevant attributes remain explicit. Unicode-normalized-key collisions are rejected, and the fingerprint is recomputed at authority boundaries so object mutation cannot silently preserve an old approval.
+
+A material parameter or target change requires a different proposal fingerprint and therefore a new approval.
+
+### Risk hard floors
+
+`src/jarvis/authority/risk.py` owns deterministic risk classification. Policy may add friction but cannot reduce the JARVIS hard floor. Critical security/financial/legal/destructive classes cannot be downgraded by model output or policy configuration.
+
+### Approval state
+
+`src/jarvis/authority/approval.py` owns pending/granted/denied/canceled/expired/consumed approval state. Approvals bind to proposal ID, proposal fingerprint, and authority session; expire; are invalidated with the session; and are one-time at execution.
+
+The generic grant API is prohibited from claiming `STRONG_VERIFIER`. Strong approval requires a bound `StrongVerificationResult` with a unique verification ID. A successful strong proof can be consumed only once and cannot mint multiple strong approvals.
+
+### Strong verification
+
+`src/jarvis/authority/verifier.py` defines the replaceable `StrongVerifier` boundary and the accepted Windows Hello adapter. The Windows implementation invokes a small .NET 9 desktop helper under `tools/windows/Jarvis.WindowsHelloVerifier`.
+
+The helper uses the desktop `UserConsentVerifierInterop.RequestVerificationForWindowAsync` route with a real WinForms message loop and an application-owned HWND. Its stdout contract is lowercase JSON and is executed/validated by Windows CI.
+
+A `StrongVerificationResult` contains:
+
+- status;
+- verifier ID;
+- unique verification ID;
+- exact proposal fingerprint;
+- exact authority session ID;
+- reason codes.
+
+`src/jarvis/authority/strong_approval.py` owns the only accepted bridge from strong verification to a STRONG approval. `VERIFIED` may grant one matching pending strong approval. Cancel/unavailable/error/mismatch fails closed and cannot fall back to voice, face, attention, or generic explicit approval.
+
+Windows Hello/PIN verification is platform strong verification; JARVIS receives only the verification result, not the PIN or biometric secret.
+
+### Windows session boundary
+
+`src/jarvis/authority/session.py` owns authority-session state and the Windows WTS provider/guard. The Windows adapter uses `WTSSessionInfoEx` explicit session lock state rather than assuming that a logged-on session is safe.
+
+Lock, user/session transition, disconnect/logoff, or other invalidation events cancel active authority state and permits for that JARVIS authority session.
+
+Windows session state is contextual evidence only; an unlocked desktop does not prove that the person in front of the camera/microphone is the OWNER.
+
+### Policy boundary
+
+`src/jarvis/authority/policy.py` owns the JARVIS `PolicyEngine` contract and fail-closed OPA adapter. OPA traffic is restricted to loopback, response shape is strict, and expected policy version is validated. Policy-engine failure, malformed output, unavailable policy, or version mismatch does not authorize protected actions.
+
+### Authority service and execution permit
+
+`src/jarvis/authority/service.py` combines risk hard floors, policy requirements, trust/attention/actor predicates, and bound approval state. Required audit happens before protected execution permission is issued.
+
+`src/jarvis/authority/permit.py` owns short-lived execution permits. Immediately before an executor may act, `AuthorityService.revalidate_and_consume()` checks proposal/session/fingerprint/risk/policy/approval bindings again. Successful execution authorization consumes the permit and approval exactly once. Mutation, expiry, replay, session change, audit failure, or changed authority state invalidates execution.
+
+Step 3A does not yet implement the later generic Step-7 executor. It defines the governance contract that future executors must require.
+
+### Audit boundary
+
+`src/jarvis/authority/audit.py` owns structured security/authority audit events plus in-memory and SQLite implementations. Sensitive metadata-key classes such as biometric embeddings and access tokens are rejected rather than casually logged.
+
+Operational telemetry is not the authority audit source of truth.
+
+### Attention contract only
+
+Step 3A establishes the typed attention evidence/authority predicate boundary but does not yet integrate a gaze/eye model into accepted runtime authority. Face/liveness/attention evidence remains non-authoritative until its later Step-3 slice is implemented and human-accepted.
 
 ## Voice Runtime
 
@@ -216,7 +346,18 @@ Display refresh is decoupled from inference refresh so a smooth camera feed does
 | Development update detection/restart/rollback | `jarvis-dev` supervisor |
 | Development update approval interpretation | deterministic JARVIS parser in `dev_control.py` |
 | Development update distribution gate | protected GitHub `main` + required `ruff`/`pytest` checks |
-| Human identity, trust, permissions | Not implemented; Step 3 |
+| Action proposal/fingerprint | `ActionProposal` |
+| Deterministic risk floor | `RiskClassifier` |
+| Policy evaluation boundary | JARVIS `PolicyEngine` / fail-closed OPA adapter |
+| Approval lifecycle | `ApprovalService` |
+| Strong verification -> strong approval bridge | `StrongApprovalService` |
+| Platform strong verification | `StrongVerifier`; Windows Hello adapter v1 |
+| Authority decision/pre-execution revalidation | `AuthorityService` |
+| Execution authorization receipt | `PermitRegistry` / `ExecutionPermit` |
+| Authority security audit | `AuditEventStore` |
+| Windows authority-session validity | `WindowsWtsSessionProvider` + `WindowsSessionGuard` |
+| Persistent OWNER biometric identity | Not implemented; Step 3B |
+| Face/liveness/attention/speaker-derived trust | Not implemented; later Step 3 |
 
 ## External Dependencies
 
@@ -233,6 +374,8 @@ Core accepted dependencies include:
 - `trackers==2.6.0`;
 - `mediapipe==1.0.1`;
 - `duvc-ctl==2.1.0` on Windows;
+- .NET 9 SDK/runtime to build/run the accepted Windows Hello desktop helper during development;
+- optional local OPA runtime when the OPA `PolicyEngine` adapter is selected;
 - one selected realtime-provider account/key;
 - local wake-word and BlazeFace model assets outside the repository.
 
@@ -255,20 +398,30 @@ Real Windows + RTX 5060 Ti + DJI Pocket 3 use has established:
 - explicit owner confirmation that Step 2.5 is working well with no remaining blocking functional issue;
 - `jarvis-dev` detecting a remote update, speaking the approval question, accepting explicit spoken approval outside model authority, shutting JARVIS down cleanly, applying a fast-forward update, restarting voice/vision, and returning to wake mode without a shutdown timeout;
 - the final supervisor running on `main` while watching `origin/main` in default mode;
-- a real startup on the feature branch speaking the randomly selected late-night line `Online and ready, sir.` and then entering local wake detection normally.
+- a real startup on the feature branch speaking the randomly selected late-night line `Online and ready, sir.` and then entering local wake detection normally;
+- Windows WTS reporting the active session unlocked;
+- `Win+L` producing authority invalidation for that session;
+- Windows Hello/PIN returning a real `VERIFIED` strong-verification result;
+- proposal/session-bound strong proof producing a STRONG approval and R4 `ALLOW`;
+- the execution permit and approval being consumed exactly once at final revalidation;
+- a real canceled Windows Hello verification producing canceled approval, authority `DENY`, `permit=None`, and no execution permission.
 
-Automated supervisor tests cover configuration safety, deterministic approval parsing, update readiness, and last-known-good rollback behavior. Startup-greeting tests cover time bucket selection, multiple variants, environment enable/disable behavior, and non-fatal TTS failure. GitHub CI runs both Ruff and pytest on clean Ubuntu runners.
+Automated authority tests cover proposal canonicalization/integrity, Unicode collision rejection, risk hard floors, direct/spoken/strong approval semantics, attention-bound spoken approval, strong-proof binding and replay protection, policy failure/version validation, loopback restriction, audit failure, proposal/permit expiry, session invalidation, TOCTOU mutation, and one-time permit/approval consumption. Windows CI compiles the .NET 9 helper and executes its JSON contract probe. GitHub CI also runs Ruff and the complete pytest suite on clean runners.
 
 Earlier long endurance matrices from Step 2 remain waived and must not be represented as exhaustively validated.
 
 ## Current Limitations
 
+- Step 3A governs authority but is not yet wired into broad user-facing capability execution; the Step-7 generic executor does not exist yet;
+- no persistent OWNER biometric profile or encrypted face-template store is accepted yet;
+- no face recognition, face liveness/anti-spoofing, gaze/attention model, speaker identity, or active-speaker association is accepted yet;
+- T2/T3 vocabulary exists, but ambient biometric trust derivation is not yet implemented; T3 in Phase 3A is supplied only in bounded strong-verification test/context paths rather than inferred from face/voice;
+- Windows Hello Face is not required by JARVIS; the accepted strong path can use Windows Hello PIN, while Pocket 3 remains ordinary RGB evidence rather than a Hello/TrueDepth-class authenticator;
 - perception updates are slower than raw camera capture; observer `analysis age` exposes that distinction;
 - no tracker can guarantee continuity through complete disappearance or arbitrary long occlusion;
 - head/person observations do not identify a human;
-- startup greetings are time-aware but not identity-aware; until Step 3 establishes identity evidence, greeting text must not imply verified owner recognition;
-- no face recognition, liveness/anti-spoofing, voice identity, trust score, or user-facing authorization layer exists yet;
-- spoken development-update approval is not identity-verified until Step 3 provides stronger identity/trust evidence;
+- startup greetings are time-aware but not identity-aware; greeting text must not imply verified owner recognition;
+- spoken development-update approval is still a development-tool interaction gate and is not automatically upgraded to the Step-3 strong-authority flow;
 - the realtime approval session can still emit provider-side/internal assistant-response noise even though that model output is not routed as approval authority;
 - the running `jarvis-dev` parent must be restarted to load changes to supervisor code itself;
 - no general scene understanding, OCR, gesture understanding, or visual memory exists yet;
@@ -277,4 +430,4 @@ Earlier long endurance matrices from Step 2 remain waived and must not be repres
 
 ## Architecture Update Rule
 
-Step 3 identity/trust/authority architecture may be added here only after research, recorded decisions, human approval, implementation, automated validation, and real human acceptance. Vision, wake word, face recognition, voice recognition, model confidence, or any other sensor evidence must never directly grant permission.
+Only Step-3 slices that have completed research/decision, implementation, automated validation, real human acceptance, and documentation reconciliation may appear here as current architecture. Vision, wake word, face recognition, voice recognition, attention, model confidence, or any other sensor evidence must never directly grant permission.
