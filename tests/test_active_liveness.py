@@ -100,6 +100,34 @@ def test_randomized_challenge_can_pass_all_supported_actions() -> None:
     assert evidence.expires_at_monotonic - evidence.observed_at_monotonic == 8.0
 
 
+def test_pocket3_calibrated_blink_score_crosses_default_action_floor() -> None:
+    challenge = ActiveLivenessChallenge.create(
+        session_id="wts:3",
+        visual_track_id=7,
+        now_monotonic=10.0,
+        ttl_seconds=5.0,
+        actions=(LivenessAction.BLINK,),
+    )
+
+    _feed_twice(
+        challenge,
+        start=10.1,
+        values={"eyeBlinkLeft": 0.08, "eyeBlinkRight": 0.07},
+    )
+    _feed_twice(
+        challenge,
+        start=10.2,
+        values={"eyeBlinkLeft": 0.58, "eyeBlinkRight": 0.57},
+    )
+    _feed_twice(
+        challenge,
+        start=10.3,
+        values={"eyeBlinkLeft": 0.08, "eyeBlinkRight": 0.07},
+    )
+
+    assert challenge.progress.phase is LivenessPhase.PASSED
+
+
 def test_static_action_without_neutral_transition_does_not_pass() -> None:
     challenge = ActiveLivenessChallenge.create(
         session_id="wts:3",
