@@ -62,8 +62,9 @@ def test_live_window_creates_passed_face_liveness_evidence() -> None:
     assert evidence.verdict is EvidenceVerdict.PASSED
     assert evidence.visual_track_id == 7
     assert evidence.session_id == "wts:3"
-    assert evidence.expires_at_monotonic - evidence.observed_at_monotonic == pytest.approx(
-        2.0
+    assert (
+        evidence.expires_at_monotonic - evidence.observed_at_monotonic
+        == pytest.approx(2.0)
     )
 
 
@@ -86,7 +87,9 @@ def test_uncertain_window_requires_active_challenge() -> None:
 
     assert assessment.state is PassiveLivenessState.UNCERTAIN
     assert assessment.requires_active_challenge
-    assert window.to_identity_evidence(assessment).verdict is EvidenceVerdict.INSUFFICIENT
+    assert (
+        window.to_identity_evidence(assessment).verdict is EvidenceVerdict.INSUFFICIENT
+    )
 
 
 def test_long_gap_resets_temporal_window() -> None:
