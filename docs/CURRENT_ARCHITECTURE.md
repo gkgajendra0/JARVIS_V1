@@ -2,9 +2,9 @@
 
 ## Status
 
-**IMPLEMENTED + HUMAN-ACCEPTED ARCHITECTURE THROUGH PHASE 3B.8. PHASE 3B.9 ATTENTION / INTENT-TO-ENGAGE EVIDENCE IS NEXT. T2 REMAINS DISABLED.**
+**IMPLEMENTED + HUMAN-ACCEPTED ARCHITECTURE THROUGH PHASE 3B.8. ATTENTION / INTENT-TO-ENGAGE IMPLEMENTATION IS DEFERRED UNTIL FIXED MONITOR-MOUNTED CAMERA HARDWARE. SPEAKER IDENTITY / ACTIVE-SPEAKER CORROBORATION IS NEXT. T2 REMAINS DISABLED.**
 
-This document records only implemented and human-accepted architecture. Proposed or still-integration-stage behavior belongs in research/plan documents until accepted.
+This document records only implemented and human-accepted architecture. Proposed, deferred, or still-integration-stage behavior belongs in research/plan/decision documents until accepted.
 
 ## Accepted platform foundation
 
@@ -371,38 +371,52 @@ The already accepted real Pocket-3 3B.7B phone-photo/video attack evidence is re
 
 Acceptance evidence is recorded in `docs/research/STEP_3B8_OWNER_LIVENESS_ACCEPTANCE_RESULTS.md`.
 
+## Deferred attention / intent-to-engage provider
+
+ADR-007 remains accepted as an architectural boundary, but implementation is deliberately deferred until JARVIS has a fixed monitor-mounted webcam or stronger accepted attention/eye sensor.
+
+The movable Pocket 3 must not be used to infer stable monitor-relative gaze through repeated calibration. JARVIS therefore currently emits no accepted `OWNER_ATTENTIVE` predicate.
+
+The layering is:
+
+```text
+T2 CORROBORATED_OWNER
+        +
+accepted fresh attention evidence (only when available and required)
+        ↓
+OWNER_ATTENTIVE interaction predicate
+```
+
+Attention is not itself a trust tier and is not a prerequisite for defining T2. Until an attention provider is accepted, policy paths that genuinely require `OWNER_ATTENTIVE` must fail closed or escalate to explicit strong verification rather than infer attention from visibility, face match, liveness, wake word, or conversation state.
+
 ## What is intentionally NOT yet accepted
 
 The following are **not** current accepted runtime architecture yet:
 
-- automatic T2 derivation from face+liveness;
-- attention/intent-to-engage implementation/acceptance;
-- speaker identity/corroboration implementation/acceptance;
+- automatic T2 derivation from current provisional face/liveness evidence;
+- authoritative OWNER-vs-UNKNOWN face threshold based on live non-owner separation;
+- speaker identity/corroboration and active-speaker ambiguity handling;
+- attention/intent-to-engage implementation (deferred until fixed camera hardware);
 - depth/IR/ToF liveness hardware.
 
-These belong to subsequent Phase 3B slices.
+## Next architecture slice — Speaker identity / active-speaker corroboration
 
-## Next architecture slice — 3B.9 Attention / intent-to-engage
+The next independent slice will research and define replaceable local speaker evidence for voice-originated protected interaction.
 
-ADR-007 is already accepted. 3B.9 will implement attention evidence on the same selected/head-associated OWNER track rather than treating visibility as intent.
-
-Target integration:
+Target boundary:
 
 ```text
-same selected OWNER/head track
+microphone speech segment
         ↓
-MediaPipe Face Landmarker
-        ├── eye-open state
-        ├── look blendshapes
-        ├── head pose / facial transform
-        ├── iris/eye geometry
-        └── temporal stability
+replaceable speaker-evidence provider
         ↓
-ATTENTIVE / NOT_ATTENTIVE / AMBIGUOUS
+OWNER_SPEAKER_CANDIDATE / UNKNOWN / AMBIGUOUS
+        +
+active-speaker / playback / actor ambiguity checks
         ↓
-short-lived typed ATTENTION evidence
+typed short-lived speaker evidence
 ```
 
-Looking away removes fresh intent evidence but does not revoke OWNER identity. Attention itself is not permission and does not create a new trust tier.
+Speaker evidence may corroborate an interaction but may not independently create T2/T3, authorize an action, or turn a wake-word match into OWNER identity.
 
-Only after attention/intent evidence is implemented and real-machine accepted should deterministic T2 `CORROBORATED_OWNER` composition be implemented against the full accepted evidence predicate.
+Research must be refreshed against current mature technology before implementation. T2 remains disabled during this slice.
