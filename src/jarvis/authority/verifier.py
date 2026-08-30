@@ -26,11 +26,19 @@ class StrongVerificationStatus(str, Enum):
 class StrongVerificationResult:
     status: StrongVerificationStatus
     verifier_id: str
+    proposal_fingerprint: str | None = None
+    session_id: str | None = None
     reason_codes: tuple[str, ...] = ()
 
     @property
     def verified(self) -> bool:
         return self.status is StrongVerificationStatus.VERIFIED
+
+    def is_bound_to(self, *, proposal: ActionProposal, session_id: str) -> bool:
+        return (
+            self.proposal_fingerprint == proposal.fingerprint
+            and self.session_id == session_id
+        )
 
 
 class StrongVerifier(Protocol):
@@ -63,22 +71,27 @@ class WindowsHelloVerifier:
         proposal: ActionProposal,
         session_id: str,
     ) -> StrongVerificationResult:
+        def result(
+            status: StrongVerificationStatus,
+            reason: str,
+        ) -> StrongVerificationResult:
+            return self._result(
+                status,
+                reason,
+                proposal=proposal,
+                session_id=session_id,
+            )
+
         if sys.platform != "win32":
-            return self._result(StrongVerificationStatus.UNAVAILABLE, "not_windows")
+            return result(StrongVerificationStatus.UNAVAILABLE, "not_windows")
         if proposal.session_id != session_id:
-            return self._result(StrongVerificationStatus.ERROR, "session_mismatch")
+            return result(StrongVerificationStatus.ERROR, "session_mismatch")
         if not proposal.has_valid_fingerprint():
-            return self._result(
-                StrongVerificationStatus.ERROR, "proposal_integrity_invalid"
-            )
+            return result(StrongVerificationStatus.ERROR, "proposal_integrity_invalid")
         if self._helper_path is None:
-            return self._result(
-                StrongVerificationStatus.UNAVAILABLE, "helper_not_configured"
-            )
+            return result(StrongVerificationStatus.UNAVAILABLE, "helper_not_configured")
         if not self._helper_path.is_file():
-            return self._result(
-                StrongVerificationStatus.UNAVAILABLE, "helper_not_found"
-            )
+            return result(StrongVerificationStatus.UNAVAILABLE, "helper_not_found")
 
         request = json.dumps(
             {"message": f"Authorize JARVIS action: {proposal.material_summary}"},
@@ -95,36 +108,41 @@ class WindowsHelloVerifier:
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
         except subprocess.TimeoutExpired:
-            return self._result(StrongVerificationStatus.ERROR, "helper_timeout")
+            return result(StrongVerificationStatus.ERROR, "helper_timeout")
         except OSError:
-            return self._result(StrongVerificationStatus.ERROR, "helper_launch_failed")
+            return result(StrongVerificationStatus.ERROR, "helper_launch_failed")
 
         try:
             payload = json.loads(completed.stdout)
         except (json.JSONDecodeError, TypeError):
-            return self._result(StrongVerificationStatus.ERROR, "helper_invalid_output")
+            return result(StrongVerificationStatus.ERROR, "helper_invalid_output")
         if not isinstance(payload, dict):
-            return self._result(StrongVerificationStatus.ERROR, "helper_invalid_output")
+            return result(StrongVerificationStatus.ERROR, "helper_invalid_output")
 
         raw_status = payload.get("status")
         reason = payload.get("reason")
         if not isinstance(raw_status, str) or not isinstance(reason, str):
-            return self._result(StrongVerificationStatus.ERROR, "helper_invalid_output")
+            return result(StrongVerificationStatus.ERROR, "helper_invalid_output")
         try:
             status = StrongVerificationStatus(raw_status)
         except ValueError:
-            return self._result(StrongVerificationStatus.ERROR, "helper_unknown_status")
+            return result(StrongVerificationStatus.ERROR, "helper_unknown_status")
         if completed.returncode != 0 and status is not StrongVerificationStatus.ERROR:
-            return self._result(StrongVerificationStatus.ERROR, "helper_failed")
-        return self._result(status, reason)
+            return result(StrongVerificationStatus.ERROR, "helper_failed")
+        return result(status, reason)
 
     def _result(
         self,
         status: StrongVerificationStatus,
         reason: str,
+        *,
+        proposal: ActionProposal,
+        session_id: str,
     ) -> StrongVerificationResult:
         return StrongVerificationResult(
             status=status,
             verifier_id=self.verifier_id,
+            proposal_fingerprint=proposal.fingerprint,
+            session_id=session_id,
             reason_codes=(reason,),
         )
