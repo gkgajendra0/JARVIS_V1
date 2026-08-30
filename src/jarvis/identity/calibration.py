@@ -10,11 +10,11 @@ import cv2
 import numpy as np
 
 from jarvis.identity.live_face_benchmark import (
-    _NoOpPtz,
-    _SelectionState,
     _crop_head,
     _face_rows,
+    _NoOpPtz,
     _select_center_face,
+    _SelectionState,
 )
 from jarvis.identity.model_assets import (
     ModelAssetCache,
@@ -145,7 +145,7 @@ def _rolling_accept_rate(
         return 0.0
 
     outcomes: list[bool] = []
-    for start in range(0, len(scores) - window_size + 1):
+    for start in range(len(scores) - window_size + 1):
         window = scores[start : start + window_size]
         accepts = sum(score >= accept_threshold for score in window)
         outcomes.append(
