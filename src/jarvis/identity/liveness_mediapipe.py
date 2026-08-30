@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import numpy as np
 
@@ -110,7 +110,7 @@ class MediaPipeFaceLandmarker:
         self._landmarker.close()
         self._closed = True
 
-    def __enter__(self) -> MediaPipeFaceLandmarker:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
