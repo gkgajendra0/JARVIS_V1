@@ -6,11 +6,16 @@
 
 ## Current Stage
 
-**RESEARCH COMPLETE — ARCHITECTURE + ATTENTION/INTENT AMENDMENT PROPOSED — AWAITING HUMAN APPROVAL**
+**ARCHITECTURE APPROVED — ADRs ACCEPTED — PHASE 3A AUTHORITY FOUNDATION NEXT**
 
 Step 0, Step 1, Step 2, and Step 2.5 are complete. The development-only `jarvis-dev` supervisor and time-aware startup greetings are implemented, automated-validated, human-accepted, and merged to protected `main`.
 
-Step-3 implementation has **not** started. Current research, security/privacy threat modeling, technology comparisons, canonical governance contracts, trust/risk vocabulary, degraded behavior, validation gates, and the Apple-inspired attention/intent amendment are recorded on the Step-3 research branch. The complete proposal package must receive explicit human approval before ADRs are accepted or runtime code is written.
+Step-3 research, security/privacy threat modeling, technology comparisons, canonical governance contracts, trust/risk vocabulary, degraded behavior, validation gates, and the Apple-inspired attention/intent amendment are complete. The combined architecture package received explicit human approval on 2026-08-30.
+
+Accepted ADRs:
+
+- `docs/decisions/ADR-006_STEP_3_IDENTITY_TRUST_AUTHORITY_GOVERNANCE.md`
+- `docs/decisions/ADR-007_STEP_3_ATTENTION_INTENT_EVIDENCE.md`
 
 Research artifacts:
 
@@ -19,6 +24,8 @@ Research artifacts:
 - `docs/research/STEP_3_INDIA_PRIVACY_CONTEXT.md`
 - `docs/research/STEP_3_ARCHITECTURE_PROPOSAL.md`
 - `docs/research/STEP_3_ATTENTION_INTENT_AMENDMENT.md`
+
+Implementation has not yet been human-accepted. Phase 3A must build the deterministic authority foundation before any biometric provider is allowed to influence protected authority.
 
 ## Step-3 Objective
 
@@ -46,7 +53,7 @@ The following are already accepted and must be treated as inputs, not redesigned
 - last-known-good rollback for failed development updates;
 - deterministic JARVIS-owned scripted speech for startup/system prompts.
 
-## Step-3 Non-Negotiable Invariants
+## Accepted Step-3 Non-Negotiable Invariants
 
 - Identity evidence is not execution permission.
 - Attention/gaze evidence is intent-to-engage evidence only; it is not identity, authentication, or execution permission.
@@ -61,9 +68,9 @@ The following are already accepted and must be treated as inputs, not redesigned
 - Provider/device/model implementations remain replaceable behind JARVIS-owned contracts.
 - Pocket-3 RGB attention/liveness must never be represented as Face-ID-equivalent security or as iris authentication; Windows Hello/FIDO2 remains the strong-verification path.
 
-## Proposed Step-3 Architecture — Pending Approval
+## Accepted Step-3 Architecture
 
-The research proposes:
+The approved architecture includes:
 
 - one persistent `OWNER` identity plus ephemeral `UNKNOWN` subjects for v1;
 - typed local identity evidence rather than a universal confidence score;
@@ -71,8 +78,8 @@ The research proposes:
 - randomized active face liveness through MediaPipe Face Landmarker instead of relying on uncertain passive-PAD weights;
 - Apple-inspired attention/intent evidence as a separate short-lived `ATTENTION` modality, using the existing MediaPipe Face Landmarker path first and benchmarking OpenVINO gaze estimation only if needed;
 - deterministic `OWNER_ATTENTIVE = T2 + fresh same-track attention + no relevant ambiguity`, used as an interaction predicate rather than a new trust tier;
-- private ambient disclosure and R3 spoken consequential approval gated by fresh owner attention where the amended policy requires it;
-- explicit ambient biometric-attempt throttling with escalation to Windows Hello rather than weakening requirements after repeated failures;
+- private ambient disclosure and R3 spoken consequential approval gated by fresh owner attention where policy requires it;
+- explicit ambient biometric-attempt throttling with escalation to Windows Hello rather than weakening requirements after repeated failed explicit elevation attempts;
 - sherpa-onnx speaker embedding candidate benchmarked against SpeechBrain ECAPA, with voice remaining corroborating evidence only;
 - Windows session/lock state as contextual evidence only;
 - Windows Hello `UserConsentVerifier` as the initial strong verifier, with WebAuthn/FIDO2 behind the same future-facing interface;
@@ -84,11 +91,28 @@ The research proposes:
 - privacy-aware structured audit plus optional tamper-evident chaining, with OpenTelemetry restricted to operational telemetry;
 - STRIDE + LINDDUN PRO as the security/privacy threat-model baseline, extended by attention-specific spoofing/privacy cases.
 
-No item in this section is accepted architecture yet.
+## Phase 3A — Authority Skeleton First
+
+Phase 3A must be implemented before face/voice/attention evidence can participate in protected decisions.
+
+Required work:
+
+- canonical Step-3 types/contracts;
+- immutable `ActionProposal` canonicalization and fingerprinting;
+- deterministic `RiskClassifier` with hard security floors;
+- fail-closed `PolicyEngine` boundary and initial OPA adapter/policies;
+- `ApprovalService` proposal-bound state machine with expiry, denial, cancellation, one-time consumption, and material-mutation invalidation;
+- `AuthorityService` final decision and pre-execution revalidation contract;
+- structured `AuditEvent` schema and local audit-store boundary;
+- Windows session invalidation boundary;
+- attention-related authority predicates/contracts established before model integration;
+- exhaustive unit/failure-path tests for unauthorized execution, policy failure, approval replay, proposal mutation, expiry, session invalidation, risk-floor downgrade attempts, and TOCTOU revalidation.
+
+**Phase 3A rule:** no face, speaker, liveness, gaze, or LLM output may directly authorize an action. Initial tests should use deterministic synthetic evidence/state only.
 
 ## Research Completion Coverage
 
-The research package now covers:
+The accepted research package covers:
 
 - owner identity/presence evidence for Windows + Pocket 3;
 - current face-recognition/embedding candidates, local deployment shape, licensing/provenance, and thresholds;
@@ -111,19 +135,20 @@ The research package now covers:
 - explicit human acceptance scenarios;
 - implementation sequencing that builds authority before biometrics or attention can influence it.
 
-## Expected Step-3 Deliverables
+## Step-3 Deliverable Status
 
-Before implementation begins:
-
-- current research record — **DONE on research branch**;
-- concrete STRIDE + LINDDUN threat/privacy model — **DONE on research branch**;
-- India privacy-context record — **DONE on research branch**;
-- trust/risk vocabulary and canonical contracts — **DONE as proposal**;
-- Apple-inspired attention/intent security amendment — **DONE as proposed amendment**;
-- scope/non-scope and human acceptance scenarios — **DONE as proposal + amendment**;
-- measurable security/privacy/latency/false-accept/false-reject/attention validation gates — **DONE as proposal + amendment**;
-- explicit human architecture approval — **PENDING**;
-- accepted ADRs for the approved major decisions — **PENDING APPROVAL**.
+- current research record — **DONE**;
+- concrete STRIDE + LINDDUN threat/privacy model — **DONE**;
+- India privacy-context record — **DONE**;
+- trust/risk vocabulary and canonical contracts — **APPROVED**;
+- Apple-inspired attention/intent security amendment — **APPROVED**;
+- scope/non-scope and human acceptance scenarios — **APPROVED**;
+- measurable security/privacy/latency/false-accept/false-reject/attention validation gates — **APPROVED**;
+- explicit human architecture approval — **DONE 2026-08-30**;
+- accepted ADRs for major decisions — **DONE**;
+- Phase 3A implementation — **NEXT**;
+- automated validation — **PENDING IMPLEMENTATION**;
+- real human acceptance — **PENDING IMPLEMENTATION**.
 
 ## Explicitly Out of Scope for Step 3
 
@@ -151,9 +176,10 @@ requirements
 -> threat/privacy model                     DONE
 -> technology/architecture proposal         DONE
 -> attention/intent amendment               DONE
--> human approval                           CURRENT GATE
--> accepted ADRs
--> implementation
+-> human approval                           DONE
+-> accepted ADRs                            DONE
+-> Phase 3A authority implementation        NEXT
+-> biometric/identity implementation
 -> automated validation
 -> real human acceptance
 -> documentation reconciliation
@@ -164,7 +190,7 @@ No Step-3 component becomes authoritative merely because a model/provider API wo
 
 ## Immediate Next Actions
 
-1. Review the complete Step-3 research/threat/architecture package plus the attention/intent amendment with the human owner.
-2. Resolve any final requested architecture changes.
-3. Obtain explicit human approval of the combined proposal package.
-4. Only then create accepted ADRs and begin Phase 3A authority-foundation implementation, with attention contracts/policy tests established before model integration.
+1. Merge the approved Step-3 research/ADR package through protected-main PR flow after required checks pass.
+2. Start Phase 3A on a dedicated implementation branch from the approved architecture baseline.
+3. Build authority contracts, proposal/risk/policy/approval/audit/session foundations and prove fail-closed behavior before biometric integration.
+4. Only then proceed to owner profile/face/liveness/attention/speaker provider implementation and real-hardware calibration.
