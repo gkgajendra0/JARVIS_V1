@@ -135,6 +135,21 @@ def test_long_gap_resets_owner_temporal_window() -> None:
     assert assessment.sample_count == 1
 
 
+def test_explicit_clear_discards_owner_temporal_window() -> None:
+    window = _window()
+    for index in range(15):
+        assessment = window.observe(_observation(index, 0.82))
+
+    assert assessment.state is OwnerIdentityState.OWNER_CANDIDATE
+
+    window.clear()
+
+    cleared = window.assessment
+    assert cleared.state is OwnerIdentityState.INSUFFICIENT
+    assert cleared.sample_count == 0
+    assert cleared.temporal_similarity is None
+
+
 def test_owner_observation_binding_mismatch_is_rejected() -> None:
     window = _window()
 
