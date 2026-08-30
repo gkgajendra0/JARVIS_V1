@@ -9,7 +9,10 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-from jarvis.identity.model_assets import ModelAssetCache, load_default_face_model_manifest
+from jarvis.identity.model_assets import (
+    ModelAssetCache,
+    load_default_face_model_manifest,
+)
 from jarvis.identity.passive_pad import (
     AntiSpoofMn3Provider,
     MiniFasEnsembleProvider,
@@ -72,7 +75,9 @@ class _FaceSelection:
             if face.left <= x <= face.right and face.top <= y <= face.bottom
         ]
         if containing:
-            self.clicked_face = min(containing, key=lambda face: face.width * face.height)
+            self.clicked_face = min(
+                containing, key=lambda face: face.width * face.height
+            )
 
 
 def _parse_faces(result) -> list[_FaceBox]:
@@ -326,7 +331,8 @@ def run_benchmark(scenario: str) -> int:
                 and selected is not None
                 and (
                     last_analysis_at is None
-                    or frame.captured_at - last_analysis_at >= _ANALYSIS_INTERVAL_SECONDS
+                    or frame.captured_at - last_analysis_at
+                    >= _ANALYSIS_INTERVAL_SECONDS
                 )
             )
             if should_score:
@@ -344,7 +350,9 @@ def run_benchmark(scenario: str) -> int:
                 faces,
                 selected,
                 collecting=collecting,
-                sample_count=min((len(values) for values in samples.values()), default=0),
+                sample_count=min(
+                    (len(values) for values in samples.values()), default=0
+                ),
                 latest_scores=latest_scores,
             )
             cv2.imshow(_WINDOW_NAME, preview)
@@ -368,7 +376,9 @@ def run_benchmark(scenario: str) -> int:
             if key in (ord("d"), ord("D")):
                 count = min((len(values) for values in samples.values()), default=0)
                 if count < _MIN_SAMPLES:
-                    print(f"Need at least {_MIN_SAMPLES} samples before finishing; have {count}.")
+                    print(
+                        f"Need at least {_MIN_SAMPLES} samples before finishing; have {count}."
+                    )
                 else:
                     break
     finally:
