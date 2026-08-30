@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import math
 import statistics
-import time
 from dataclasses import dataclass
 
 import cv2
