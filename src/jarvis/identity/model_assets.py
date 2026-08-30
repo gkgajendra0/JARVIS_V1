@@ -293,7 +293,9 @@ class ModelAssetCache:
             temporary_path = None
             return self.verify(asset)
         except OSError as exc:
-            raise ModelAssetError(f"model download failed for {asset.asset_id}") from exc
+            raise ModelAssetError(
+                f"model download failed for {asset.asset_id}"
+            ) from exc
         finally:
             if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)
