@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import tempfile
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
