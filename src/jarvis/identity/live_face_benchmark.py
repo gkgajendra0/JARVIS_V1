@@ -400,7 +400,7 @@ def run_live_benchmark(*, analysis_interval_seconds: float = 0.12) -> int:
                         successful_embeddings += 1
 
                         x, y, face_width, face_height = (
-                            int(round(float(value))) for value in face[:4]
+                            round(float(value)) for value in face[:4]
                         )
                         last_face_rect = (
                             crop.left + x,
