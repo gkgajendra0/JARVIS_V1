@@ -50,7 +50,9 @@ def test_windows_hello_maps_helper_result(monkeypatch, tmp_path) -> None:
         stdout=json.dumps({"status": "verified", "reason": "verified"}),
         stderr="",
     )
-    monkeypatch.setattr("jarvis.authority.verifier.subprocess.run", lambda *a, **k: completed)
+    monkeypatch.setattr(
+        "jarvis.authority.verifier.subprocess.run", lambda *a, **k: completed
+    )
 
     result = WindowsHelloVerifier(helper).verify(proposal=proposal(), session_id="s1")
     assert result.status is StrongVerificationStatus.VERIFIED
@@ -61,7 +63,9 @@ def test_windows_hello_rejects_session_mismatch(monkeypatch, tmp_path) -> None:
     helper = tmp_path / "helper.exe"
     helper.write_text("placeholder", encoding="utf-8")
     monkeypatch.setattr("jarvis.authority.verifier.sys.platform", "win32")
-    result = WindowsHelloVerifier(helper).verify(proposal=proposal(), session_id="other")
+    result = WindowsHelloVerifier(helper).verify(
+        proposal=proposal(), session_id="other"
+    )
     assert result.status is StrongVerificationStatus.ERROR
     assert result.reason_codes == ("session_mismatch",)
 
@@ -93,7 +97,9 @@ def test_windows_session_guard_invalidates_on_lock() -> None:
             session(windows_id=1, unlocked=False),
         ]
     )
-    guard = WindowsSessionGuard(provider=provider, on_invalidate=lambda *event: events.append(event))
+    guard = WindowsSessionGuard(
+        provider=provider, on_invalidate=lambda *event: events.append(event)
+    )
     guard.poll()
     guard.poll()
     assert events == [("wts:1", SessionSecurityEvent.LOCK)]
