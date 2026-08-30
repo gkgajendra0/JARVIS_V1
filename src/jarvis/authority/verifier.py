@@ -68,11 +68,17 @@ class WindowsHelloVerifier:
         if proposal.session_id != session_id:
             return self._result(StrongVerificationStatus.ERROR, "session_mismatch")
         if not proposal.has_valid_fingerprint():
-            return self._result(StrongVerificationStatus.ERROR, "proposal_integrity_invalid")
+            return self._result(
+                StrongVerificationStatus.ERROR, "proposal_integrity_invalid"
+            )
         if self._helper_path is None:
-            return self._result(StrongVerificationStatus.UNAVAILABLE, "helper_not_configured")
+            return self._result(
+                StrongVerificationStatus.UNAVAILABLE, "helper_not_configured"
+            )
         if not self._helper_path.is_file():
-            return self._result(StrongVerificationStatus.UNAVAILABLE, "helper_not_found")
+            return self._result(
+                StrongVerificationStatus.UNAVAILABLE, "helper_not_found"
+            )
 
         request = json.dumps(
             {"message": f"Authorize JARVIS action: {proposal.material_summary}"},
