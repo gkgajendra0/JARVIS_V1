@@ -27,6 +27,8 @@ from jarvis.authority import (
     RiskClassifier,
     SessionSecurityEvent,
     SqliteAuditEventStore,
+    StrongVerificationResult,
+    StrongVerificationStatus,
     TrustTier,
 )
 
@@ -100,11 +102,19 @@ def test_strong_approval_cannot_be_replayed_after_consumption() -> None:
         requirement=ApprovalRequirement.STRONG,
         ttl_seconds=30,
     )
-    granted = approvals.grant(
+    verification = StrongVerificationResult(
+        status=StrongVerificationStatus.VERIFIED,
+        verifier_id="test-strong-verifier",
+        verification_id="security-edge-proof",
+        proposal_fingerprint=p.fingerprint,
+        session_id="s1",
+        reason_codes=("verified",),
+    )
+    granted = approvals.grant_verified_strong(
         record.approval_id,
         proposal=p,
         session_id="s1",
-        method=ApprovalMethod.STRONG_VERIFIER,
+        verification=verification,
     )
     approvals.consume(
         granted.approval_id,
