@@ -337,6 +337,19 @@ def run_owner_evidence_live(scenario: str) -> int:
 
             target = runtime.target
             if target is None:
+                if (
+                    current_track_id is not None
+                    or identity_window is not None
+                    or liveness_window is not None
+                ):
+                    reset_windows(None)
+                    collecting = False
+                    last_analysis_at = None
+                    last_face_rect = None
+                    print(
+                        "Selected target lost; temporal identity/liveness evidence "
+                        "discarded immediately."
+                    )
                 current_track_id = None
             elif current_track_id is not None and target.track_id != current_track_id:
                 current_track_id = target.track_id
