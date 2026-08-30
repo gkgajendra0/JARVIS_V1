@@ -13,6 +13,10 @@ from typing import Protocol
 from .proposal import ActionProposal
 
 
+class StrongVerifierError(RuntimeError):
+    pass
+
+
 class StrongVerificationStatus(str, Enum):
     VERIFIED = "verified"
     CANCELED = "canceled"
