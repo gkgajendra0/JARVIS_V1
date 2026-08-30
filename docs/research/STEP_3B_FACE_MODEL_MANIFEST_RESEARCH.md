@@ -1,136 +1,156 @@
-# Step 3B Face Model Manifest and Asset Research
+# Step 3B Face Model Manifest Research
 
-**Status:** RESEARCH COMPLETE — 3B.2 MANIFEST/ASSET POLICY FROZEN — PROVIDER BENCHMARK NOT YET ACCEPTED  
-**Date:** 2026-08-30
+## Status
 
-## Purpose
+**3B.2 MODEL MANIFEST / ASSET BOUNDARY AUTOMATED-VALIDATED; 3B.3 REAL OWNER-MACHINE MODEL SMOKE ACCEPTED**
 
-Freeze the exact face-model artifacts, provenance/licensing record, cache policy, and benchmark baseline before JARVIS captures or persists a real OWNER face template.
+This record freezes the exact initial face-detection and face-recognition assets used for the Phase 3B benchmark path. It is intentionally narrower than a general face-recognition technology review; the Step-3 architecture already selected YuNet + SFace as the initial local benchmark pair, subject to real calibration and provenance review.
 
-This is intentionally separate from provider acceptance. A model being downloadable and runnable does not make it trusted identity evidence.
+## Upstream baseline
 
-## Reviewed upstream baseline
+Frozen source repository:
 
-Authoritative model source reviewed:
+- OpenCV Zoo: `https://github.com/opencv/opencv_zoo`
+- revision: `47534e27c9851bb1128ccc0102f1145e27f23f98`
+- revision date: 2026-05-28
+- revision purpose: merged the YuNet dynamic-input model for OpenCV 5.x ONNX Runtime compatibility.
 
-- repository: `opencv/opencv_zoo`;
-- pinned revision: `47534e27c9851bb1128ccc0102f1145e27f23f98`;
-- revision message: `add Face detection model with dynamic input for OpenCV 5.x ORT engine`;
-- JARVIS OpenCV runtime: `opencv-python==5.0.0.93` and `opencv-contrib-python==5.0.0.93`.
+JARVIS must not silently follow OpenCV Zoo `main`. Model changes require a new manifest revision, checksum review, benchmark, and explicit promotion.
 
-The exact artifacts are recorded in:
+## YuNet face detector
 
-- `src/jarvis/identity/manifests/step3_face_models.json`.
+Selected asset:
 
-## YuNet decision
+- role: `face_detector`
+- asset ID: `opencv-yunet-face-detector-2026may`
+- filename: `face_detection_yunet_2026may.onnx`
+- source path: `models/face_detection_yunet/face_detection_yunet_2026may.onnx`
+- exact Git LFS object SHA-256: `ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0`
+- exact size: `229738` bytes
+- model/directory license: MIT
+- intended initial backend: OpenCV 5 default CPU graph-engine path.
 
-### Selected benchmark artifact
+### Why the 2026 model replaces the old 2023 file for JARVIS
 
-- role: face detector;
-- file: `face_detection_yunet_2026may.onnx`;
-- Git LFS SHA-256: `ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0`;
-- size: `229,738` bytes;
-- directory/model license: MIT;
-- upstream training path: YuNet face training on WIDER Face is documented by `ShiqiYu/libfacedetection.train`.
+OpenCV Zoo states that `face_detection_yunet_2026may.onnx` is the default YuNet model with dynamic `height` / `width` input dimensions and is compatible with the OpenCV 5.x ONNX Runtime engine. The older `face_detection_yunet_2023mar.onnx` has fixed input dimensions and is therefore not the correct default for this project's pinned OpenCV 5.0.0.93 runtime.
 
-### Why 2026may instead of 2023mar
+The 2026 asset is a re-export of the 2023 model with the static H/W dimensions replaced by symbolic dimensions; it is not being treated as a newly trained identity model.
 
-OpenCV Zoo now declares `face_detection_yunet_2026may.onnx` the default dynamic-input model for OpenCV 5.x ONNX Runtime. It is a dynamic-input re-export of the 2023mar model and allows variable input shapes without the older fixed-H/W limitation.
+YuNet's upstream research/training path is publicly linked from OpenCV Zoo, and the directory has an MIT license. This is sufficiently documented for the current private local benchmark path.
 
-Because JARVIS is already pinned to OpenCV 5.0.0.93, the 2026may artifact is the correct current benchmark candidate. The older 2023mar file remains historical/reference material only unless a benchmark exposes a regression.
+## SFace recognizer
 
-## SFace decision
+Selected asset:
 
-### Selected benchmark artifact
+- role: `face_recognizer`
+- asset ID: `opencv-sface-recognizer-2021dec`
+- filename: `face_recognition_sface_2021dec.onnx`
+- source path: `models/face_recognition_sface/face_recognition_sface_2021dec.onnx`
+- exact Git LFS object SHA-256: `0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79`
+- exact size: `38696353` bytes
+- OpenCV-Zoo directory license declaration: Apache-2.0
+- feature shape observed on the accepted owner machine: `(1, 128)`.
 
-- role: face recognizer/embedding provider;
-- file: `face_recognition_sface_2021dec.onnx`;
-- Git LFS SHA-256: `0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79`;
-- size: `38,696,353` bytes;
-- OpenCV Zoo directory declaration: Apache-2.0;
-- upstream description: MobileFaceNet instance trained with SFace loss and converted to ONNX.
+OpenCV Zoo describes the model as a MobileFaceNet instance trained with SFace loss and converted from the original SFace code base.
 
 ### Provenance caveat
 
-The exact training dataset used for this exact ONNX weight is not mapped in the OpenCV Zoo model record. The SFace paper evaluates models trained on CASIA-WebFace, VGGFace2, and MS1MV2/MS-Celeb-derived data, but that does not prove which dataset produced this exact OpenCV weight.
+The OpenCV Zoo directory clearly declares Apache-2.0 licensing for its files, but the exact training-dataset provenance/rights for the distributed `face_recognition_sface_2021dec.onnx` weight are not fully documented in the public materials reviewed for this phase.
 
-OpenCV Zoo issue `#313`, opened 2026-07-22, explicitly asks maintainers to clarify the commercial-use and training-data provenance of this exact ONNX checksum. It remained open during this review.
+Therefore:
 
-Therefore JARVIS records:
+- private local JARVIS benchmarking may proceed;
+- the model must not be represented as having fully resolved training-data provenance;
+- any future commercial distribution, redistribution, hosted biometric service, or external productization must re-review the weight's provenance and applicable rights before promotion;
+- this caveat is a model-governance issue, not a reason to weaken local biometric privacy/security controls.
 
-- model-license declaration: Apache-2.0 at the OpenCV Zoo directory level;
-- exact-weight training provenance: **unresolved**;
-- current use: acceptable as a personal-development benchmark candidate;
-- commercial distribution/use: **must be re-reviewed before any commercial distribution or deployment claim**.
+## Thresholds
 
-This avoids silently converting an upstream directory license statement into a claim about unknown training-data rights.
+Any cosine/L2 thresholds published by upstream OpenCV/SFace demos are reference benchmark values only.
 
-## Threshold policy
+They are **not** JARVIS trust thresholds and must not be wired into authority logic.
 
-The upstream SFace demo uses reference same-identity thresholds:
+JARVIS must calibrate its own face-match threshold using the real Pocket 3 pipeline, including:
 
-- cosine similarity `>= 0.363`;
-- normalized L2 distance `<= 1.128`.
+- same-owner positives across ordinary lighting, distance, pose, glasses, and appearance variation;
+- non-owner negatives;
+- photo/screen/video replay conditions;
+- track-association failures and reacquisition;
+- explicit false-accept / false-reject measurements.
 
-JARVIS does **not** adopt either value as an authority threshold.
-
-They are benchmark reference points only. The final JARVIS face threshold must be versioned from the real Pocket 3 calibration set, including owner positives, available non-owner negatives, pose/lighting/glasses/distance variation, and temporal aggregation behavior.
-
-No vendor/demo threshold can directly create T2.
+No face threshold can directly authorize an action; Phase 3A remains the authority boundary.
 
 ## Asset/cache policy
 
 Model binaries are not committed to the JARVIS repository.
 
-JARVIS packages only the immutable manifest and uses an external local cache:
+The packaged manifest pins:
 
-- Windows default: `%LOCALAPPDATA%/JARVIS/models`;
-- explicit override: `JARVIS_MODEL_CACHE`;
-- non-Windows CI fallback: XDG cache or `~/.cache/jarvis/models`.
+- source repository revision;
+- exact immutable source URL;
+- exact filename;
+- exact byte count;
+- SHA-256;
+- role/model identifier;
+- license/provenance notes;
+- deployment/calibration status.
 
-Every asset is bound by:
+The local `ModelAssetCache`:
 
-- exact upstream repository revision;
-- exact filename/source path;
-- expected byte count;
-- exact SHA-256;
-- code/model license record;
-- provenance status;
-- deployment status;
-- minimum OpenCV version;
-- calibration status.
+1. uses an external cache, `%LOCALAPPDATA%/JARVIS/models` on Windows by default;
+2. allows explicit `JARVIS_MODEL_CACHE` override;
+3. verifies an existing cached asset by exact size and SHA-256 before use;
+4. downloads to a temporary file;
+5. rejects an over-size, short, or hash-mismatched download;
+6. atomically replaces the target only after integrity passes;
+7. never silently changes model version;
+8. treats missing/tampered assets as unavailable rather than falling back to an unpinned model.
 
-`ModelAssetCache` behavior:
+## OpenCV 5 backend note
 
-- never trusts an existing file without size + SHA-256 verification;
-- downloads to a temporary file in the same cache directory;
-- rejects over-size, under-size, or hash-mismatched downloads;
-- atomically replaces the cache path only after verification succeeds;
-- does not auto-upgrade to a new model/version;
-- leaves a previously invalid cache file untouched if a replacement download itself fails verification.
+The first real owner-machine smoke used explicit `DNN_TARGET_CPU` arguments. OpenCV 5.0 emitted:
 
-A model-integrity failure means identity evidence is unavailable; it must not degrade into an unverified model or a weaker authority path.
+`Targets are not supported by the new graph engine for now`
 
-## Benchmark execution policy
+The models nevertheless loaded and inferred correctly. The diagnostic was subsequently aligned with the current OpenCV 5 path by removing the unnecessary explicit backend/target overrides and using the default graph-engine execution path.
 
-Initial provider benchmark will use the current mature OpenCV APIs:
+This warning was therefore not treated as a model failure and is not part of the promoted runtime configuration.
 
-- YuNet through `cv.FaceDetectorYN`;
-- SFace through `cv.FaceRecognizerSF`;
-- CPU first to avoid contention with the accepted RF-DETR CUDA path;
-- selected/head crop from the existing vision track rather than a second independent full-frame identity pipeline.
+## Real owner-machine Step 3B.3 acceptance — 2026-08-30
 
-GPU/OpenCV-DNN acceleration is considered only if the CPU benchmark cannot meet the accepted latency budget without harming camera/voice runtime.
+Environment:
 
-## Next acceptance gates
+- OpenCV: `5.0.0`
+- model cache: `%LOCALAPPDATA%/JARVIS/models`
+- OpenCV Zoo revision: `47534e27c9851bb1128ccc0102f1145e27f23f98`
 
-3B.2 is complete when:
+Integrity:
 
-1. packaged manifest loads and validates in installed/editable environments;
-2. exact YuNet/SFace checksum records are locked;
-3. cache tampering/download mismatch tests fail closed;
-4. licensing/provenance caveats are explicit;
-5. model binaries remain outside Git;
-6. CI remains green.
+- YuNet exact pinned SHA-256 matched;
+- SFace exact pinned SHA-256 matched.
 
-After that, 3B.3 may fetch the two pinned models on the real machine and run a non-enrollment smoke/latency benchmark. Real OWNER enrollment still waits until the provider benchmark and enrollment quality gates are defined and passed.
+Observed first-run fetch/verify:
+
+- YuNet: `1035.4 ms`
+- SFace: `10186.7 ms`
+
+Observed CPU smoke timing:
+
+- YuNet load: `47.8 ms`
+- YuNet synthetic inference: median `3.49 ms`, p95 `3.79 ms`, range `3.25–3.80 ms`
+- SFace load: `92.9 ms`
+- SFace synthetic feature: median `6.92 ms`, p95 `7.56 ms`, range `6.51–7.62 ms`
+- SFace feature shape: `(1, 128)`
+
+Privacy/non-enrollment gate:
+
+- no camera opened;
+- no OWNER profile created;
+- no biometric template persisted;
+- final diagnostic: `STEP_3B3_MODEL_SMOKE = PASS`.
+
+This accepts model integrity/load/runtime viability only. It does not accept owner enrollment, face-match accuracy, liveness, T2 trust, or any authority use.
+
+## Next gate
+
+Step 3B.4 uses the real Pocket 3 in a non-persistent read-only benchmark. Identity processing must occur only on the head associated by the existing JARVIS selected-track/head-framing policy. It must not create a second full-frame identity scanner and must not persist frames or feature vectors.
