@@ -5,8 +5,8 @@ import pytest
 
 from jarvis.identity.passive_pad import _probabilities, _scaled_face_crop
 from jarvis.identity.passive_pad_benchmark import (
-    _FaceBox,
     _associate_face,
+    _FaceBox,
     rolling_medians,
 )
 
