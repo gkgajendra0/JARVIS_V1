@@ -10,7 +10,10 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-from jarvis.identity.model_assets import ModelAssetCache, load_default_face_model_manifest
+from jarvis.identity.model_assets import (
+    ModelAssetCache,
+    load_default_face_model_manifest,
+)
 
 _WINDOW_NAME = "JARVIS Face Identity Benchmark"
 
@@ -333,8 +336,7 @@ def run_live_benchmark(*, analysis_interval_seconds: float = 0.12) -> int:
                 and target.visible
                 and (
                     last_analysis_at is None
-                    or frame.captured_at - last_analysis_at
-                    >= analysis_interval_seconds
+                    or frame.captured_at - last_analysis_at >= analysis_interval_seconds
                 )
             )
 
@@ -458,7 +460,11 @@ def run_live_benchmark(*, analysis_interval_seconds: float = 0.12) -> int:
 
     if samples:
         print(_summary_line("YuNet confidence", [s.yunet_confidence for s in samples]))
-        print(_summary_line("YuNet detection", [s.detection_ms for s in samples], suffix=" ms"))
+        print(
+            _summary_line(
+                "YuNet detection", [s.detection_ms for s in samples], suffix=" ms"
+            )
+        )
         print(_summary_line("SFace align", [s.align_ms for s in samples], suffix=" ms"))
         print(
             _summary_line(
