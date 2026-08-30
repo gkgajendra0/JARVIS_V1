@@ -158,10 +158,7 @@ def test_verified_strong_approval_reaches_and_consumes_r4_authority() -> None:
         proposal=action,
         context=context(),
     )
-    assert (
-        approvals.get(outcome.approval.approval_id).status
-        is ApprovalStatus.CONSUMED
-    )
+    assert approvals.get(outcome.approval.approval_id).status is ApprovalStatus.CONSUMED
 
 
 def test_canceled_strong_verification_never_grants() -> None:
