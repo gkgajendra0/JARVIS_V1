@@ -5,13 +5,13 @@ import pytest
 
 from jarvis.authority import EvidenceVerdict
 from jarvis.identity.owner_evidence import (
-    bind_owner_liveness,
-    max_prototype_cosine,
     OwnerIdentityObservation,
     OwnerIdentityState,
     OwnerIdentityThresholds,
     OwnerLivenessBindingState,
     TemporalOwnerIdentity,
+    bind_owner_liveness,
+    max_prototype_cosine,
 )
 from jarvis.identity.passive_liveness import (
     PassiveLivenessAssessment,
