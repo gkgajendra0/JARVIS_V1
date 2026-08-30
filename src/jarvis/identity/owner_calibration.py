@@ -1,9 +1,12 @@
-"""OWNER-only positive calibration for enrollment readiness.
+"""OWNER-only positive calibration for enrollment review.
 
 This module deliberately does not estimate impostor rejection or a non-owner false
-accept rate. It answers one narrower question: is the enrolled OWNER's live SFace
-signal stable enough, under representative conditions, to proceed to secure
-OWNER-template enrollment?
+accept rate. It answers one narrower question: what does the enrolled OWNER's live
+SFace positive distribution look like under representative conditions?
+
+The result is evidence for human enrollment review, not an automatic authority or
+identity threshold. Runtime OWNER-vs-UNKNOWN thresholds remain a separate security
+calibration concern.
 """
 
 from __future__ import annotations
@@ -33,13 +36,9 @@ from jarvis.identity.model_assets import (
     load_default_face_model_manifest,
 )
 
-_MINIMUM_OWNER_P05_FOR_ENROLLMENT = 0.70
-_MINIMUM_OWNER_WINDOW_ACCEPT_RATE = 0.90
-
 
 class OwnerCalibrationStatus(str, Enum):
-    READY_FOR_ENROLLMENT = "ready_for_enrollment"
-    UNSTABLE_OWNER_BASELINE = "unstable_owner_baseline"
+    BASELINE_CAPTURED = "baseline_captured"
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +47,7 @@ class OwnerCalibrationResult:
     owner_reference_count: int
     owner_probe_count: int
     owner_scores: CalibrationDistribution
-    provisional_accept_floor: float
+    provisional_positive_floor: float
     owner_point_accept_rate: float
     owner_window_accept_rate: float
     window_size: int
@@ -67,8 +66,12 @@ def derive_owner_only_calibration(
     OWNER samples are split deterministically into alternating reference/probe sets.
     The reference half builds a normalized mean prototype. The held-out probe half
     measures positive similarity against that prototype. The OWNER p05 is reported
-    as a provisional positive floor for later engineering, but it is *not* an
-    impostor-rejection threshold and must not be used alone to grant authority.
+    as a provisional positive-distribution floor for engineering analysis only.
+
+    No absolute SFace threshold is asserted here because an OWNER-only capture does
+    not measure impostor rejection. Human review decides whether the positive
+    baseline is suitable to proceed to encrypted enrollment; runtime identity and
+    authority remain fail-closed until their later acceptance gates are completed.
     """
     if minimum_samples < 10:
         raise ValueError("minimum_samples must be at least 10")
@@ -86,34 +89,24 @@ def derive_owner_only_calibration(
     reference = _prototype(owner_reference)
     owner_scores = _scores_against(reference, owner_probe)
     distribution = _distribution(owner_scores)
-    provisional_accept_floor = distribution.p05
+    provisional_positive_floor = distribution.p05
 
     point_accept_rate = sum(
-        score >= provisional_accept_floor for score in owner_scores
+        score >= provisional_positive_floor for score in owner_scores
     ) / len(owner_scores)
     window_accept_rate = _rolling_accept_rate(
         owner_scores,
-        accept_threshold=provisional_accept_floor,
+        accept_threshold=provisional_positive_floor,
         window_size=window_size,
         required_accepts=window_required_accepts,
     )
 
-    ready = (
-        provisional_accept_floor >= _MINIMUM_OWNER_P05_FOR_ENROLLMENT
-        and window_accept_rate >= _MINIMUM_OWNER_WINDOW_ACCEPT_RATE
-    )
-    status = (
-        OwnerCalibrationStatus.READY_FOR_ENROLLMENT
-        if ready
-        else OwnerCalibrationStatus.UNSTABLE_OWNER_BASELINE
-    )
-
     return OwnerCalibrationResult(
-        status=status,
+        status=OwnerCalibrationStatus.BASELINE_CAPTURED,
         owner_reference_count=len(owner_reference),
         owner_probe_count=len(owner_probe),
         owner_scores=distribution,
-        provisional_accept_floor=provisional_accept_floor,
+        provisional_positive_floor=provisional_positive_floor,
         owner_point_accept_rate=point_accept_rate,
         owner_window_accept_rate=window_accept_rate,
         window_size=window_size,
@@ -183,32 +176,25 @@ def run_owner_calibration(
     print(_format_distribution("OWNER held-out scores", result.owner_scores))
     print()
     print(
-        "Provisional OWNER positive floor (held-out p05): "
-        f"{result.provisional_accept_floor:.4f}"
+        "Provisional OWNER positive-distribution floor (held-out p05): "
+        f"{result.provisional_positive_floor:.4f}"
+    )
+    print(f"OWNER point rate at p05 floor: {result.owner_point_accept_rate * 100.0:.2f}%")
+    print(
+        f"Temporal diagnostic: {result.window_required_accepts}/"
+        f"{result.window_size} fresh valid scores >= p05 floor and "
+        "window median >= p05 floor"
     )
     print(
-        "Enrollment-quality p05 requirement: "
-        f">= {_MINIMUM_OWNER_P05_FOR_ENROLLMENT:.2f}"
-    )
-    print(f"OWNER point accept rate: {result.owner_point_accept_rate * 100.0:.2f}%")
-    print(
-        f"Temporal stability rule: {result.window_required_accepts}/"
-        f"{result.window_size} fresh valid scores >= positive floor and "
-        "window median >= positive floor"
-    )
-    print(
-        "OWNER rolling-window accept rate: "
+        "OWNER rolling-window rate at p05 floor: "
         f"{result.owner_window_accept_rate * 100.0:.2f}%"
-    )
-    print(
-        "Enrollment readiness requires p05 >= "
-        f"{_MINIMUM_OWNER_P05_FOR_ENROLLMENT:.2f} and at least "
-        f"{_MINIMUM_OWNER_WINDOW_ACCEPT_RATE * 100:.0f}% rolling-window stability."
     )
     print()
     print("IMPORTANT: no non-owner false-accept rate was measured in this run.")
+    print("No absolute OWNER-vs-UNKNOWN threshold is approved by this command.")
     print("Anything not strongly matching OWNER remains UNKNOWN/AMBIGUOUS.")
-    print("This positive floor is not sufficient by itself to grant T2 or authority.")
+    print("This positive baseline is not sufficient by itself to grant T2 or authority.")
+    print("Human review is required before encrypted OWNER enrollment.")
     print()
     print("NO OWNER PROFILE CREATED")
     print("NO BIOMETRIC TEMPLATE PERSISTED")
@@ -216,7 +202,7 @@ def run_owner_calibration(
     print(f"STEP_3B5A_OWNER_CALIBRATION = {result.status.value.upper()}")
 
     owner_features.clear()
-    return 0 if result.status is OwnerCalibrationStatus.READY_FOR_ENROLLMENT else 3
+    return 0
 
 
 def main() -> None:
