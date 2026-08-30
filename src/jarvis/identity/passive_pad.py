@@ -27,7 +27,9 @@ class PassivePadScore:
 class PassivePadProvider(Protocol):
     provider_id: str
 
-    def score(self, frame_bgr: np.ndarray, face_xyxy: tuple[int, int, int, int]) -> PassivePadScore: ...
+    def score(
+        self, frame_bgr: np.ndarray, face_xyxy: tuple[int, int, int, int]
+    ) -> PassivePadScore: ...
 
 
 def _load_ort_session(model_path: str | Path) -> Any:
