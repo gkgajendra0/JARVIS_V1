@@ -144,7 +144,7 @@ class AntiSpoofMn3Provider:
         self,
         model_path: str | Path,
         *,
-        crop_mode: str = _TIGHT,
+        crop_mode: str = _REFERENCE_CONTEXT,
     ) -> None:
         if crop_mode not in {self._TIGHT, self._REFERENCE_CONTEXT}:
             raise ValueError(f"unsupported anti-spoof-mn3 crop mode: {crop_mode}")
