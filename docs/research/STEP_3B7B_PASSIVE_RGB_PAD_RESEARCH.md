@@ -4,7 +4,7 @@ Date: 2026-08-30
 
 ## Status
 
-**RESEARCH COMPLETE FOR BENCHMARK IMPLEMENTATION — NOT YET AN AUTHORITY PROVIDER**
+**RESEARCH COMPLETE FOR BENCHMARK IMPLEMENTATION — REAL POCKET-3 BENCHMARK IN PROGRESS — NOT YET AN AUTHORITY PROVIDER**
 
 This record follows the accepted 3B.7A randomized active-challenge primitive. The active challenge remains a valid fallback, but it is not the intended normal JARVIS experience. Normal presence verification should be passive whenever the available evidence is strong enough.
 
@@ -53,6 +53,8 @@ Model source record:
 OpenVINO 2026.2 still lists this ONNX model as verified, which makes it a useful mature baseline even though Open Model Zoo itself is now in maintenance mode.
 
 The published ACER is reference data only. It is not JARVIS Pocket-3 accuracy and must not become a JARVIS threshold.
+
+The first Pocket-3 live run showed that feeding the tight YuNet face rectangle directly produced near-zero real probability for a genuine live OWNER. Upstream documentation confirms class 0 is genuinely the real class, so the result must not be "fixed" by swapping labels. A public anti-spoof-mn3 webcam integration expands the detected face roughly 10% left/right and 40% above the face before inference. JARVIS therefore added a research-matched contextual crop for a bounded retest. If that retest remains poor, this candidate will be rejected for the Pocket 3 rather than threshold-tuned into a pass.
 
 ## Candidate B — MiniFASNet multi-scale family
 
@@ -133,6 +135,30 @@ For each candidate, report without inventing an accept threshold:
 - 15-frame rolling-median distribution.
 
 Run the benchmark separately for each declared scenario. Human review compares live and attack distributions and decides whether either provider, their fusion, or neither is suitable.
+
+## First real Pocket-3 live baseline — 2026-08-30
+
+Scenario: real live enrolled OWNER, 300 samples, no frame/crop/tensor/output persistence.
+
+Observed tight-crop `anti-spoof-mn3`:
+
+- real probability: min 0.0006, p05 0.0008, median 0.0014, p95 0.0032, max 0.0060;
+- rolling median 5: median 0.0014;
+- rolling median 15: median 0.0013;
+- latency: median 3.00 ms, p95 3.87 ms.
+
+Observed MiniFASNet V1SE/V2 ensemble:
+
+- real probability: min 0.9980, p05 0.9987, median 0.9994, p95 0.9997, max 0.9998;
+- rolling median 5: median 0.9994;
+- rolling median 15: median 0.9994;
+- latency: median 12.37 ms, p95 26.16 ms.
+
+Interpretation:
+
+- MiniFAS is provisionally positive and extremely stable on this live OWNER run, but it is not accepted until phone-photo/video/print attack distributions are measured.
+- tight-crop anti-spoof-mn3 is provisionally unsuitable on Pocket-3 + YuNet integration; contextual-crop retest is required before rejection.
+- no threshold, liveness verdict, provider promotion, or T2 authority upgrade is approved from this run.
 
 ## Decision rule after benchmark
 
