@@ -18,7 +18,6 @@ from jarvis.identity.passive_liveness import (
     PassiveLivenessState,
 )
 
-
 _FACE_PROVIDER = "opencv-sface-prototype-set-v1"
 
 
