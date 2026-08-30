@@ -2,7 +2,7 @@
 
 ## Status
 
-**IMPLEMENTED + HUMAN-ACCEPTED ARCHITECTURE THROUGH PHASE 3B.7B. PHASE 3B.8 RUNTIME OWNER IDENTITY + LIVENESS BINDING IS NEXT AND IS NOT YET PART OF THE ACCEPTED RUNTIME ARCHITECTURE.**
+**IMPLEMENTED + HUMAN-ACCEPTED ARCHITECTURE THROUGH PHASE 3B.8. PHASE 3B.9 ATTENTION / INTENT-TO-ENGAGE EVIDENCE IS NEXT. T2 REMAINS DISABLED.**
 
 This document records only implemented and human-accepted architecture. Proposed or still-integration-stage behavior belongs in research/plan documents until accepted.
 
@@ -19,7 +19,8 @@ JARVIS currently has accepted foundations for:
 - pinned and integrity-verified YuNet/SFace face runtime;
 - real OWNER multi-prototype SFace enrollment;
 - randomized active facial liveness fallback;
-- passive RGB presentation-attack detection using MiniFAS + JARVIS-owned temporal fusion for the current Pocket-3 prototype.
+- passive RGB presentation-attack detection using MiniFAS + JARVIS-owned temporal fusion for the current Pocket-3 prototype;
+- runtime temporal OWNER identity + liveness binding on the same Windows session and visual track, with T2 explicitly disabled.
 
 ## Step 3A — Authority foundation — ACCEPTED + MERGED
 
@@ -274,35 +275,134 @@ Initial passive evidence TTL is `2.0 s`.
 
 The accepted decision is recorded in `docs/decisions/ADR-008_STEP_3_PASSIVE_RGB_LIVENESS.md`.
 
+## Phase 3B.8 — Runtime OWNER identity + liveness binding — ACCEPTED
+
+### Runtime identity contract
+
+The accepted 3B.8 path decrypts the enrolled OWNER face template through the accepted profile-store boundary and requires exact compatibility with the pinned SFace runtime before comparing embeddings.
+
+Compatibility includes:
+
+- face modality;
+- `sface-prototype-set-v1` template format;
+- JARVIS SFace provider id;
+- current model id/revision/SHA-256;
+- embedding dimension;
+- enrollment compatibility version.
+
+Mismatch fails closed.
+
+Temporal identity is bound to exactly one Windows session, visual track, and face provider. A 15-observation median uses the current provisional evidence-only band:
+
+```text
+<15 fresh observations        → INSUFFICIENT
+median max-prototype >= 0.65 → OWNER_CANDIDATE
+median max-prototype <= 0.35 → UNKNOWN
+otherwise                    → AMBIGUOUS
+```
+
+This threshold is **not authoritative OWNER-vs-UNKNOWN authentication** because a consenting live non-owner calibration dataset is still unavailable.
+
+### Same-track OWNER + liveness binding
+
+```text
+active/unlocked Windows session
+        +
+selected stable visual track
+        ↓
+associated head/face
+        ├── YuNet/SFace → temporal OWNER identity
+        └── MiniFAS → temporal passive liveness
+        ↓
+same session + same track + co-fresh observations
+        ↓
+combined evidence state
+```
+
+Accepted combined states:
+
+```text
+OWNER_CANDIDATE + LIVE      → LIVE_OWNER_CANDIDATE
+OWNER_CANDIDATE + UNCERTAIN → ACTIVE_CHALLENGE_ELIGIBLE
+OWNER_CANDIDATE + SPOOF     → SPOOFED_OWNER_PRESENTATION
+UNKNOWN + any liveness      → UNKNOWN_SUBJECT
+AMBIGUOUS + any liveness    → AMBIGUOUS_SUBJECT
+anything insufficient       → INSUFFICIENT
+```
+
+`LIVE_OWNER_CANDIDATE` is deliberately **not** T2.
+
+### Invalidation behavior
+
+- identity/liveness gaps > `0.50 s` clear their temporal windows;
+- cross-session, cross-track, and cross-provider observations are rejected;
+- selected-target loss immediately discards both temporal windows, clears the combined result, stops collection, and requires fresh selection/evidence;
+- target-id change resets both windows;
+- Windows lock/session transition clears evidence and terminates the evidence context fail-closed;
+- stale identity/liveness observations cannot be combined beyond the co-freshness bound.
+
+### Real-machine acceptance
+
+Real Pocket-3 live OWNER integration:
+
+- 300 valid integrated observations;
+- OWNER max-prototype cosine median `0.7982`;
+- MiniFAS real probability median `0.9998`;
+- 272 post-warm-up/reset observations reached `LIVE_OWNER_CANDIDATE`;
+- no raw biometric persistence;
+- T2 remained disabled.
+
+Real Windows WTS lock acceptance produced:
+
+```text
+session_invalidated = True
+STEP_3B8_OWNER_LIVENESS_EVIDENCE = SESSION_INVALIDATED_FAIL_CLOSED
+```
+
+The already accepted real Pocket-3 3B.7B phone-photo/video attack evidence is reused rather than redundantly recollected. Automated 3B.8 tests verify deterministic spoof binding and cross-track/co-freshness behavior.
+
+### Authority boundary
+
+- `FACE_MATCH` evidence is typed but provisional;
+- liveness does not repair ambiguous identity;
+- attention is not inferred from face visibility;
+- `face_evidence_grants_T2 = False` remains invariant;
+- no 3B.8 result directly authorizes any action.
+
+Acceptance evidence is recorded in `docs/research/STEP_3B8_OWNER_LIVENESS_ACCEPTANCE_RESULTS.md`.
+
 ## What is intentionally NOT yet accepted
 
 The following are **not** current accepted runtime architecture yet:
 
-- runtime binding of encrypted OWNER SFace matching and passive liveness on the same subject track;
 - automatic T2 derivation from face+liveness;
-- attention implementation/acceptance;
+- attention/intent-to-engage implementation/acceptance;
 - speaker identity/corroboration implementation/acceptance;
 - depth/IR/ToF liveness hardware.
 
 These belong to subsequent Phase 3B slices.
 
-## Next architecture slice — 3B.8
+## Next architecture slice — 3B.9 Attention / intent-to-engage
 
-3B.8 will integrate OWNER face recognition and passive/active liveness on the same stable visual track while still keeping T2 disabled during acceptance testing.
+ADR-007 is already accepted. 3B.9 will implement attention evidence on the same selected/head-associated OWNER track rather than treating visibility as intent.
 
 Target integration:
 
 ```text
-expected Windows session
-        +
-stable visual track
+same selected OWNER/head track
         ↓
-associated face/head
-        ├── SFace → OWNER / UNKNOWN / AMBIGUOUS evidence
-        └── MiniFAS temporal liveness → LIVE / UNCERTAIN / SPOOF
-                                      └── active challenge fallback if needed
+MediaPipe Face Landmarker
+        ├── eye-open state
+        ├── look blendshapes
+        ├── head pose / facial transform
+        ├── iris/eye geometry
+        └── temporal stability
         ↓
-fresh typed evidence bound to same session + same visual track
+ATTENTIVE / NOT_ATTENTIVE / AMBIGUOUS
+        ↓
+short-lived typed ATTENTION evidence
 ```
 
-Only after that integrated evidence path is real-machine accepted should deterministic T2 corroborated-owner composition be enabled.
+Looking away removes fresh intent evidence but does not revoke OWNER identity. Attention itself is not permission and does not create a new trust tier.
+
+Only after attention/intent evidence is implemented and real-machine accepted should deterministic T2 `CORROBORATED_OWNER` composition be implemented against the full accepted evidence predicate.
