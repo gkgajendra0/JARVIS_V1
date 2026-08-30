@@ -6,13 +6,13 @@
 
 ## Current Stage
 
-**PHASE 3A AUTHORITY FOUNDATION HUMAN-ACCEPTED — PHASE 3B OWNER IDENTITY + FACE/LIVENESS NEXT**
+**PHASE 3A HUMAN-ACCEPTED + DOCUMENTATION-RECONCILED — PROTECTED-MAIN MERGE CANDIDATE; PHASE 3B NEXT**
 
 Step 0, Step 1, Step 2, and Step 2.5 are complete. The development-only `jarvis-dev` supervisor and time-aware startup greetings are implemented, automated-validated, human-accepted, and merged to protected `main`.
 
 Step-3 research, security/privacy threat modeling, technology comparisons, canonical governance contracts, trust/risk vocabulary, degraded behavior, validation gates, and the Apple-inspired attention/intent amendment are complete. The combined architecture package received explicit human approval on 2026-08-30.
 
-Phase 3A is now implemented, automated-validated, and human-accepted on real Windows hardware. The accepted evidence includes a real Windows lock transition invalidating authority state, a real Windows Hello/PIN strong-verification success, proposal/session-bound STRONG approval, R4 authority allow, one-time execution-permit consumption, and a canceled Hello verification that produced DENY with no permit and no weak fallback.
+Phase 3A is implemented, automated-validated, human-accepted on real Windows hardware, and reconciled into current architecture. The accepted evidence includes a real Windows lock transition invalidating authority state, a real Windows Hello/PIN strong-verification success, proposal/session-bound STRONG approval, R4 authority allow, one-time execution-permit consumption, and a canceled Hello verification that produced DENY with no permit and no weak fallback.
 
 Accepted ADRs:
 
@@ -148,31 +148,6 @@ Planned work:
 
 Phase 3B is not complete merely because face recognition works. Persistent owner storage, deletion/re-enrollment, spoof testing, freshness/invalidation, and trust derivation must all pass before face evidence can become accepted architecture.
 
-## Research Completion Coverage
-
-The accepted research package covers:
-
-- owner identity/presence evidence for Windows + Pocket 3;
-- current face-recognition/embedding candidates, local deployment shape, licensing/provenance, and thresholds;
-- face liveness/PAD limitations and randomized active challenge-response;
-- Apple Face ID/Optic ID security lessons relevant to JARVIS, including the distinction between face identity, attention/intent, depth/IR anti-spoofing, iris authentication, and platform strong verification;
-- local attention/eye-open/look-direction evidence, MediaPipe limitations, OpenVINO fallback, privacy boundaries, and real Pocket-3 acceptance gates;
-- speaker-verification candidates plus replay/deepfake limitations;
-- multi-person ambiguity, active-speaker options, attention-bound spoken approval, and safe escalation behavior;
-- Windows Hello/WebAuthn strong-verification options;
-- session continuity and typed evidence fusion;
-- graduated-trust semantics and freshness/invalidation;
-- action-risk classification and approval/consent state machines;
-- exact-action binding, one-time receipts, expiry, mutation invalidation, and TOCTOU revalidation;
-- policy-engine comparison (OPA/Cedar/Casbin) and fail-closed behavior;
-- enrollment/re-enrollment/deletion and model-version lifecycle;
-- encrypted biometric storage, DPAPI/TPM options, audit retention/redaction/integrity;
-- STRIDE security threats and LINDDUN privacy threats, including attention/gaze surveillance and spoofing cases;
-- degraded behavior for camera/mic/model/policy/Hello/audit failures;
-- measurable face/liveness/attention/voice/Hello/policy/audit/resource benchmarks;
-- explicit human acceptance scenarios;
-- implementation sequencing that builds authority before biometrics or attention can influence it.
-
 ## Step-3 Deliverable Status
 
 - current research record — **DONE**;
@@ -187,7 +162,9 @@ The accepted research package covers:
 - Phase 3A implementation — **DONE**;
 - Phase 3A automated validation — **DONE**;
 - Phase 3A real human acceptance — **DONE 2026-08-30**;
-- Phase 3B owner identity + face/liveness implementation — **NEXT**;
+- Phase 3A documentation reconciliation — **DONE**;
+- Phase 3A protected-main merge — **CURRENT GATE**;
+- Phase 3B owner identity + face/liveness implementation — **NEXT AFTER MERGE**;
 - remaining Step-3 identity/attention/speaker validation — **PENDING**;
 - complete Step-3 human acceptance — **PENDING**.
 
@@ -222,6 +199,8 @@ requirements
 -> Phase 3A authority implementation        DONE
 -> Phase 3A automated validation            DONE
 -> Phase 3A real human acceptance           DONE
+-> Phase 3A documentation reconciliation   DONE
+-> Phase 3A protected-main merge            CURRENT GATE
 -> Phase 3B owner identity + face/liveness  NEXT
 -> attention/speaker evidence implementation
 -> full Step-3 automated validation
@@ -234,8 +213,8 @@ No Step-3 component becomes authoritative merely because a model/provider API wo
 
 ## Immediate Next Actions
 
-1. Reconcile Phase 3A accepted implementation into `CURRENT_ARCHITECTURE.md`.
-2. Merge PR #7 through protected `main` after the final documentation head passes required checks.
+1. Let the final documentation head pass the protected checks.
+2. Merge PR #7 into protected `main`.
 3. Create a dedicated Phase 3B implementation branch from the new `main` baseline.
 4. Build OWNER lifecycle + encrypted biometric storage before persisting face templates.
 5. Integrate and benchmark YuNet/SFace + randomized MediaPipe liveness on the existing Pocket 3 selected-track crop.
