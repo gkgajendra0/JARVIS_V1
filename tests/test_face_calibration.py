@@ -19,14 +19,8 @@ def _unit_feature(angle_radians: float) -> np.ndarray:
 
 
 def test_calibration_derives_separated_candidate_band() -> None:
-    owner = [
-        _unit_feature(-0.12 + (0.24 * index / 129))
-        for index in range(130)
-    ]
-    non_owner = [
-        _unit_feature(1.25 + (0.20 * index / 129))
-        for index in range(130)
-    ]
+    owner = [_unit_feature(-0.12 + (0.24 * index / 129)) for index in range(130)]
+    non_owner = [_unit_feature(1.25 + (0.20 * index / 129)) for index in range(130)]
 
     result = derive_face_calibration(owner, non_owner, minimum_samples=120)
 
@@ -43,14 +37,8 @@ def test_calibration_derives_separated_candidate_band() -> None:
 
 
 def test_calibration_fails_closed_when_positive_and_negative_overlap() -> None:
-    owner = [
-        _unit_feature(-0.08 + (0.16 * index / 129))
-        for index in range(130)
-    ]
-    non_owner = [
-        _unit_feature(-0.06 + (0.12 * index / 129))
-        for index in range(130)
-    ]
+    owner = [_unit_feature(-0.08 + (0.16 * index / 129)) for index in range(130)]
+    non_owner = [_unit_feature(-0.06 + (0.12 * index / 129)) for index in range(130)]
 
     result = derive_face_calibration(owner, non_owner, minimum_samples=120)
 
