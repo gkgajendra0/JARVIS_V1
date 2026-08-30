@@ -31,7 +31,9 @@ def test_owner_only_calibration_reports_stable_positive_baseline() -> None:
     assert result.owner_window_accept_rate >= 0.90
 
 
-def test_owner_only_calibration_reports_wide_positive_baseline_without_inventing_threshold() -> None:
+def test_owner_only_calibration_reports_wide_positive_baseline_without_inventing_threshold() -> (
+    None
+):
     owner = []
     for index in range(130):
         owner.append(_unit_feature(0.0 if index % 2 == 0 else 1.2))
