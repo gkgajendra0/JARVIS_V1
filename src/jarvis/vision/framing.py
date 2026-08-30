@@ -82,12 +82,18 @@ class HeadFirstFramingPolicy:
             body_height * self.config.maximum_head_vertical_fraction
         )
 
+        # A person detector and a face/head detector do not necessarily draw boxes
+        # with the same vertical extent. In close/cropped views RF-DETR may start a
+        # person box around the forehead/shoulders while BlazeFace extends above or
+        # below that boundary. Associate by bounded upper-body overlap rather than
+        # requiring the head *center* itself to lie inside the body box.
         candidates = [
             head
             for head in heads
             if head.confidence >= self.config.minimum_head_confidence
             and body.left - margin <= head.bounds.center_x <= body.right + margin
-            and body.top - margin <= head.bounds.center_y <= maximum_head_y + margin
+            and head.bounds.bottom >= body.top - margin
+            and head.bounds.top <= maximum_head_y + margin
         ]
         if not candidates:
             return None
