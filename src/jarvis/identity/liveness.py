@@ -202,7 +202,10 @@ class ActiveLivenessChallenge:
         return self.progress
 
     def check_timeout(self, now_monotonic: float) -> LivenessProgress:
-        if not self.progress.terminal and now_monotonic > self.challenge.expires_at_monotonic:
+        if (
+            not self.progress.terminal
+            and now_monotonic > self.challenge.expires_at_monotonic
+        ):
             return self.fail("challenge_expired")
         return self.progress
 
@@ -249,23 +252,20 @@ class ActiveLivenessChallenge:
             return values.get("jawopen", 1.0) <= self.thresholds.mouth_neutral_max
         return (
             values.get("mouthsmileleft", 1.0) <= self.thresholds.smile_neutral_max
-            and values.get("mouthsmileright", 1.0)
-            <= self.thresholds.smile_neutral_max
+            and values.get("mouthsmileright", 1.0) <= self.thresholds.smile_neutral_max
         )
 
     def _is_action(self, action: LivenessAction, values: Mapping[str, float]) -> bool:
         if action is LivenessAction.BLINK:
             return (
                 values.get("eyeblinkleft", 0.0) >= self.thresholds.blink_action_min
-                and values.get("eyeblinkright", 0.0)
-                >= self.thresholds.blink_action_min
+                and values.get("eyeblinkright", 0.0) >= self.thresholds.blink_action_min
             )
         if action is LivenessAction.OPEN_MOUTH:
             return values.get("jawopen", 0.0) >= self.thresholds.mouth_action_min
         return (
             values.get("mouthsmileleft", 0.0) >= self.thresholds.smile_action_min
-            and values.get("mouthsmileright", 0.0)
-            >= self.thresholds.smile_action_min
+            and values.get("mouthsmileright", 0.0) >= self.thresholds.smile_action_min
         )
 
 
