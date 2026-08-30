@@ -107,7 +107,8 @@ class _VoicePrompter:
             await self._speech.speak(self._output, text)
         except asyncio.CancelledError:
             raise
-        except Exception as exc:
+        # Voice is optional UX. Provider/device failures must not break liveness.
+        except Exception as exc:  # noqa: BLE001
             self._disabled = True
             print(
                 "Voice prompt failed; continuing with compact on-screen prompts only: "
@@ -251,7 +252,8 @@ async def run_live_liveness() -> int:
     try:
         try:
             await voice.start()
-        except Exception as exc:
+        # Voice setup is optional UX; any provider/device failure falls back to text.
+        except Exception as exc:  # noqa: BLE001
             print(
                 "Voice prompt setup failed; continuing with compact on-screen prompts only: "
                 f"{type(exc).__name__}: {exc}"
