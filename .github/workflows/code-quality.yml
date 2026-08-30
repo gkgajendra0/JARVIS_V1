@@ -59,3 +59,16 @@ jobs:
           tools/windows/Jarvis.WindowsHelloVerifier/Jarvis.WindowsHelloVerifier.csproj
           --configuration Release
           --nologo
+
+      - name: Probe Windows Hello helper JSON contract
+        shell: pwsh
+        run: |
+          $helper = ".\tools\windows\Jarvis.WindowsHelloVerifier\bin\Release\net9.0-windows10.0.22000.0\Jarvis.WindowsHelloVerifier.exe"
+          $response = '{}' | & $helper
+          if ($LASTEXITCODE -ne 2) {
+            throw "Expected invalid-request exit code 2, got $LASTEXITCODE"
+          }
+          $payload = $response | ConvertFrom-Json
+          if ($payload.status -ne 'error' -or $payload.reason -ne 'invalid_request') {
+            throw "Windows Hello helper JSON contract mismatch: $response"
+          }
