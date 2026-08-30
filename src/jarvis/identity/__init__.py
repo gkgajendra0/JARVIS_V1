@@ -25,6 +25,13 @@ from .model_assets import (
     default_model_cache_dir,
     load_default_face_model_manifest,
 )
+from .passive_liveness import (
+    PassiveLivenessAssessment,
+    PassiveLivenessObservation,
+    PassiveLivenessState,
+    PassiveLivenessThresholds,
+    TemporalPassiveLiveness,
+)
 from .store import (
     KeyProtectorMismatch,
     OwnerProfileAlreadyExists,
@@ -69,11 +76,16 @@ __all__ = [
     "OwnerProfileMutationResult",
     "OwnerProfileNotFound",
     "OwnerProfileStoreError",
+    "PassiveLivenessAssessment",
+    "PassiveLivenessObservation",
+    "PassiveLivenessState",
+    "PassiveLivenessThresholds",
     "SqliteOwnerProfileStore",
     "TemplateInput",
     "TemplateIntegrityError",
     "TemplateMetadata",
     "TemplateNotFound",
+    "TemporalPassiveLiveness",
     "WindowsDpapiKeyProtector",
     "canonical_aad",
     "default_model_cache_dir",
