@@ -29,7 +29,10 @@ from jarvis.identity.lifecycle import (
     OwnerProfileAuthorizationDenied,
     OwnerProfileLifecycleService,
 )
-from jarvis.identity.model_assets import ModelAssetCache, load_default_face_model_manifest
+from jarvis.identity.model_assets import (
+    ModelAssetCache,
+    load_default_face_model_manifest,
+)
 from jarvis.identity.store import OwnerProfileAlreadyExists, SqliteOwnerProfileStore
 from jarvis.identity.types import BiometricModality, TemplateInput, TemplateMetadata
 
@@ -127,7 +130,9 @@ def run_owner_enrollment(
     try:
         if store.has_owner():
             print(f"OWNER is already enrolled in {identity_db}")
-            print("Use a future re-enrollment command rather than overwriting silently.")
+            print(
+                "Use a future re-enrollment command rather than overwriting silently."
+            )
             return 2
 
         manifest, recognizer_asset, yunet, sface = _load_face_models()
