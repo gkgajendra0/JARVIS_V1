@@ -25,6 +25,7 @@ jarvis-vision-preview = "jarvis.vision.preview:main"
 jarvis-vision-follow = "jarvis.vision.follow_live:main"
 jarvis-face-model-smoke = "jarvis.identity.model_smoke:main"
 jarvis-face-live-benchmark = "jarvis.identity.live_face_benchmark:main"
+jarvis-face-calibrate = "jarvis.identity.calibration:main"
 
 [project.optional-dependencies]
 vision = [
