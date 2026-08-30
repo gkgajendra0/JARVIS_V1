@@ -26,6 +26,8 @@ from jarvis.authority import (
     ProposalValidationError,
     RiskClass,
     RiskClassifier,
+    StrongVerificationResult,
+    StrongVerificationStatus,
     TrustTier,
 )
 from jarvis.authority.types import AuthorityEffect as Effect
@@ -181,6 +183,21 @@ def grant(
         requirement=requirement,
         ttl_seconds=ttl,
     )
+    if method is ApprovalMethod.STRONG_VERIFIER:
+        verification = StrongVerificationResult(
+            status=StrongVerificationStatus.VERIFIED,
+            verifier_id="test-strong-verifier",
+            verification_id=f"test-{record.approval_id}",
+            proposal_fingerprint=p.fingerprint,
+            session_id=p.session_id,
+            reason_codes=("verified",),
+        )
+        return approvals.grant_verified_strong(
+            record.approval_id,
+            proposal=p,
+            session_id=p.session_id,
+            verification=verification,
+        ).approval_id
     return approvals.grant(
         record.approval_id,
         proposal=p,
