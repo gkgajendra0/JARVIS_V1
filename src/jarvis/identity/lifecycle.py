@@ -86,7 +86,6 @@ class OwnerProfileLifecycleService:
         def delete() -> None:
             if not self._store.delete_owner():
                 raise OwnerProfileNotFound("OWNER profile is not enrolled")
-            return None
 
         return self._execute(
             operation="delete_owner",
