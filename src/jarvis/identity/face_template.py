@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import struct
-from dataclasses import dataclass
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -116,7 +116,9 @@ def build_face_prototype_set(
 def serialize_face_prototype_set(template: FacePrototypeSet) -> bytes:
     matrix = np.asarray(template.prototypes, dtype=np.float32)
     if matrix.ndim != 2 or matrix.shape[0] < 2 or matrix.shape[1] <= 0:
-        raise FaceTemplateError("prototype matrix must be two-dimensional and non-empty")
+        raise FaceTemplateError(
+            "prototype matrix must be two-dimensional and non-empty"
+        )
     if not np.isfinite(matrix).all():
         raise FaceTemplateError("prototype matrix must be finite")
 
@@ -138,7 +140,12 @@ def serialize_face_prototype_set(template: FacePrototypeSet) -> bytes:
         separators=(",", ":"),
         ensure_ascii=True,
     ).encode("ascii")
-    return _MAGIC + _HEADER_LENGTH.pack(len(header_bytes)) + header_bytes + normalized.tobytes()
+    return (
+        _MAGIC
+        + _HEADER_LENGTH.pack(len(header_bytes))
+        + header_bytes
+        + normalized.tobytes()
+    )
 
 
 def deserialize_face_prototype_set(payload: bytes) -> np.ndarray:
