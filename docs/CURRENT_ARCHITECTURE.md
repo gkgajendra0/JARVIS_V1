@@ -1,6 +1,6 @@
 # JARVIS V1 Current Architecture
 
-This document describes implemented, validated, and human-accepted architecture only.
+This document describes implemented, validated, human-accepted, and merged architecture only.
 
 ## Accepted Product Slices
 
@@ -10,7 +10,7 @@ This document describes implemented, validated, and human-accepted architecture 
 - Step 2.5 — Vision Sensor & Active Target Tracking Foundation: accepted on 2026-08-29 and merged to `main`.
 - Development supervisor (`jarvis-dev`) — accepted on 2026-08-30 and merged to protected `main`.
 - Time-aware startup greeting interaction — accepted on 2026-08-30.
-- Step 3A — Deterministic Authority Foundation + Windows strong verification/session invalidation: accepted on 2026-08-30 and awaiting the final protected-main merge of PR #7.
+- Step 3A — Deterministic Authority Foundation + Windows strong verification/session invalidation: accepted on 2026-08-30 and merged to protected `main` through PR #7 (`6651de01d0c4ae81a25480ef26d2399181cee870`).
 
 Step 3 is not complete. Owner biometric identity, liveness, attention-provider integration, speaker identity, and full T0/T1/T2 trust derivation remain future Step-3 slices.
 
@@ -430,4 +430,4 @@ Earlier long endurance matrices from Step 2 remain waived and must not be repres
 
 ## Architecture Update Rule
 
-Only Step-3 slices that have completed research/decision, implementation, automated validation, real human acceptance, and documentation reconciliation may appear here as current architecture. Vision, wake word, face recognition, voice recognition, attention, model confidence, or any other sensor evidence must never directly grant permission.
+Only Step-3 slices that have completed research/decision, implementation, automated validation, real human acceptance, documentation reconciliation, and protected-main merge may appear here as current architecture. Vision, wake word, face recognition, voice recognition, attention, model confidence, or any other sensor evidence must never directly grant permission.
