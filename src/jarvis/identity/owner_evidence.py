@@ -104,9 +104,7 @@ class TemporalOwnerIdentity:
         self._observations.clear()
         self._last_observed_at = None
 
-    def observe(
-        self, observation: OwnerIdentityObservation
-    ) -> OwnerIdentityAssessment:
+    def observe(self, observation: OwnerIdentityObservation) -> OwnerIdentityAssessment:
         self._validate_binding(observation)
         if (
             self._last_observed_at is not None
@@ -143,8 +141,7 @@ class TemporalOwnerIdentity:
 
         similarity = float(
             statistics.median(
-                observation.max_prototype_cosine
-                for observation in self._observations
+                observation.max_prototype_cosine for observation in self._observations
             )
         )
         if similarity >= self.thresholds.owner_candidate_min:
