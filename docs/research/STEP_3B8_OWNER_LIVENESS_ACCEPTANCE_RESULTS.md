@@ -4,7 +4,7 @@ Date: 2026-08-30
 
 ## Status
 
-**HUMAN ACCEPTANCE COMPLETE FOR THE NON-REDUNDANT 3B.8 SCOPE — T2 REMAINS DISABLED — FINAL RECONCILIATION PENDING**
+**HUMAN-ACCEPTED + AUTOMATED-VALIDATED FOR THE NON-REDUNDANT 3B.8 SCOPE — T2 REMAINS DISABLED**
 
 This document records real Windows + DJI Pocket 3 acceptance evidence for the Step 3B.8 integrated OWNER identity + passive liveness path.
 
@@ -120,13 +120,13 @@ STEP_3B8_OWNER_LIVENESS_EVIDENCE = SESSION_INVALIDATED_FAIL_CLOSED
 
 PASS for Windows-session invalidation.
 
-The harness detected the real WTS lock transition, cleared identity/liveness evidence, failed closed, and terminated the evidence session. The lock happened before integrated observations were accumulated in this particular run; that does not weaken the security result because the tested invariant is that a lock/session transition immediately invalidates the evidence context rather than allowing it to continue or be reused after unlock.
+The harness detected the real WTS lock transition, cleared identity/liveness evidence, failed closed, and terminated the evidence session. The lock happened before integrated observations were accumulated in this particular run; that does not weaken the tested real-machine property that a lock/session transition is detected and terminates the evidence context rather than allowing it to continue after unlock. Explicit temporal-clear behavior is also covered by automated tests.
 
 `face_evidence_grants_T2 = False` remained intact.
 
 ## Replay-attack acceptance coverage
 
-The user explicitly declined repeating the same phone-photo and phone-video attacks already completed during 3B.7B. Those attacks are therefore not rerun merely to exercise the new wrapper.
+The user explicitly declined repeating the same phone-photo and phone-video attacks already completed during 3B.7B. Those attacks were therefore not rerun merely to exercise the new wrapper.
 
 The accepted evidence is composed as follows:
 
@@ -151,18 +151,25 @@ That was tightened so selected-target loss now immediately:
 - clears the last face rectangle;
 - requires a fresh selected target and new evidence window before collection can resume.
 
-The accepted temporal primitives already fail closed on explicit clear and cross-track binding. Automated validation of the hardened exact head is required before final 3B.8 reconciliation.
+Automated validation on the hardened implementation passed:
+
+- Ruff — PASS;
+- pytest — PASS, including explicit OWNER temporal-clear regression coverage;
+- Windows Hello helper — PASS;
+- Windows DPAPI smoke — PASS.
 
 ## 3B.8 acceptance conclusion
 
-Human acceptance evidence now covers the non-redundant real-machine properties:
+Step 3B.8 is accepted for the current evidence-only prototype boundary.
+
+Accepted scope:
 
 - real OWNER normal-use integration → PASS;
 - real Windows lock/session invalidation → PASS;
-- Pocket-3 phone-photo/video PAD attacks → inherited from accepted 3B.7B real-machine evidence rather than rerun;
+- Pocket-3 phone-photo/video PAD attacks → inherited from accepted 3B.7B real-machine evidence rather than redundantly rerun;
 - same-track spoof mapping, cross-track rejection, co-freshness, provider/session binding, and no-T2 behavior → automated coverage;
-- immediate selected-track-loss clearing → hardened in implementation and subject to final automated validation;
-- raw biometric persistence → absent in all acceptance output;
+- immediate selected-track-loss clearing → implemented and automated-validated;
+- raw biometric persistence → absent in acceptance output;
 - `identity_threshold_authoritative = False` remains explicit because live non-owner calibration is still unavailable;
 - `face_evidence_grants_T2 = False` remains explicit throughout.
 
