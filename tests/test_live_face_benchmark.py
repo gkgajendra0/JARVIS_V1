@@ -5,11 +5,11 @@ import numpy as np
 import pytest
 
 from jarvis.identity.live_face_benchmark import (
-    _SelectionState,
     _cosine_similarity,
     _crop_head,
     _face_rows,
     _select_center_face,
+    _SelectionState,
 )
 from jarvis.vision.framing import HeadFirstFramingPolicy
 from jarvis.vision.head import HeadObservation
