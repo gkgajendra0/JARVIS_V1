@@ -2,9 +2,9 @@
 
 ## Status
 
-**IMPLEMENTED + HUMAN-ACCEPTED ARCHITECTURE THROUGH PHASE 3B.3; PHASE 3B.4 LIVE BENCHMARK IMPLEMENTED/AUTOMATED-VALIDATED BUT NOT YET HUMAN-ACCEPTED**
+**IMPLEMENTED + HUMAN-ACCEPTED ARCHITECTURE THROUGH PHASE 3B.7B. PHASE 3B.8 RUNTIME OWNER IDENTITY + LIVENESS BINDING IS NEXT AND IS NOT YET PART OF THE ACCEPTED RUNTIME ARCHITECTURE.**
 
-This document records only architecture that has been implemented and accepted through the project's required validation lifecycle. Proposed or not-yet-human-accepted components remain in research/plan documents and must not be represented here as authoritative runtime behavior.
+This document records only implemented and human-accepted architecture. Proposed or still-integration-stage behavior belongs in research/plan documents until accepted.
 
 ## Accepted platform foundation
 
@@ -15,41 +15,38 @@ JARVIS currently has accepted foundations for:
 - Pocket 3 visual capture, person detection, persistent person tracking, head evidence, explicit target selection, and safe PTZ follow;
 - development-only supervised update tooling outside model authority;
 - deterministic Step-3 authority, policy, approval, audit, Windows-session, and strong-verification boundaries;
-- secure single-OWNER profile/template storage foundation;
-- pinned/verified local YuNet/SFace model asset boundary, exercised by the accepted real-machine 3B.3 smoke;
-- real-machine non-enrollment OpenCV-5 YuNet/SFace runtime viability.
+- one persistent encrypted OWNER profile;
+- pinned and integrity-verified YuNet/SFace face runtime;
+- real OWNER multi-prototype SFace enrollment;
+- randomized active facial liveness fallback;
+- passive RGB presentation-attack detection using MiniFAS + JARVIS-owned temporal fusion for the current Pocket-3 prototype.
 
-## Step 3A — Identity/Trust/Authority foundation — ACCEPTED
+## Step 3A — Authority foundation — ACCEPTED + MERGED
 
-### Identity evidence, trust, and authority are separate
+Identity/context evidence, graduated trust, and action authority are separate layers:
 
 ```text
 IDENTITY / CONTEXT EVIDENCE
-"Who or what might be present?"
         ↓
 GRADUATED TRUST
-"How strongly do fresh facts support owner authority?"
         ↓
 ACTION AUTHORITY
-"May this exact action execute now?"
 ```
 
 No layer may be skipped.
 
-### Accepted trust vocabulary
+Accepted trust vocabulary:
 
 - `T0 UNVERIFIED`
 - `T1 PRESENT_CONTEXT`
 - `T2 CORROBORATED_OWNER`
 - `T3 VERIFIED_OWNER`
 
-There is no ambient T4/admin-superuser trust state.
+There is no ambient T4/admin-superuser state.
 
 ### Strong verification
 
-Windows Hello is wrapped behind JARVIS's `StrongVerifier` boundary using a desktop .NET 9 helper and Microsoft `UserConsentVerifier` desktop-window interop.
-
-The runtime behavior accepted on real Windows hardware is:
+Windows Hello is wrapped behind JARVIS's `StrongVerifier` boundary using the desktop .NET helper and Microsoft user-consent verification.
 
 ```text
 exact ActionProposal
@@ -57,47 +54,34 @@ exact ActionProposal
         ↓
 Windows Hello / PIN
         ↓
-proposal/session-bound StrongVerificationResult
-+ unique one-time verification_id
+proposal/session-bound strong proof
         ↓
 StrongApprovalService
         ↓
 one proposal-bound STRONG approval
 ```
 
-A generic approval API cannot claim `STRONG_VERIFIER`. Strong proof/approval replay is rejected.
+Cancellation/unavailability never falls back to face, voice, wake word, spoken confirmation, Windows-unlocked state, or LLM confidence.
 
-Cancellation/unavailability never falls back to face, voice, spoken yes, wake word, Windows unlocked state, or LLM confidence.
+### Action authority
 
-### Action proposal and authority
-
-Consequential actions use immutable, expiring, session-bound `ActionProposal` objects with canonical JSON and SHA-256 material fingerprints.
+Consequential actions use immutable, expiring, session-bound `ActionProposal` objects with canonical material fingerprints.
 
 Accepted protections include:
 
-- Unicode NFC canonicalization and normalized-key collision rejection;
 - deterministic hard risk floors;
-- fail-closed policy evaluation;
+- fail-closed OPA policy evaluation;
 - proposal-bound approval;
-- short-lived execution permits;
+- one-time short-lived execution permits;
 - final pre-execution proposal/risk/policy/session revalidation;
-- one-time approval/permit consumption;
-- failure on proposal mutation, replay, expiry, policy changes, session changes, audit failure, and TOCTOU conditions.
+- replay/mutation/expiry/TOCTOU rejection;
+- privacy-aware authoritative audit.
 
 ### Windows session boundary
 
-`WindowsWtsSessionProvider` reads the current WTS session and explicit lock/unlock state. A transition away from the active unlocked session invalidates authority state. This was accepted with a real `Win+L` transition.
+`WindowsWtsSessionProvider` tracks the current Windows session and explicit lock/unlock state. Session lock/switch invalidates authority state.
 
-Windows unlocked is context only; it does not prove that the person on camera/microphone is OWNER.
-
-### Policy and audit
-
-- OPA is wrapped behind JARVIS's `PolicyEngine` boundary.
-- OPA communication is loopback-only with strict response/version validation and fail-closed behavior.
-- JARVIS owns action schemas, risk floors, trust evaluation, approval state, and final enforcement.
-- `AuditEventStore` is the authoritative security audit boundary.
-- audit metadata rejects secret/biometric/raw-media fields.
-- raw A/V, embeddings, credentials, or sensitive action payloads are not retained simply because they are available.
+Windows unlocked is context only; it does not prove the person on camera or microphone is OWNER.
 
 ### Permanent authority invariant
 
@@ -111,63 +95,37 @@ Windows unlocked ≠ owner speaking
 LLM confidence   ≠ permission
 ```
 
-T3 also is not permission by itself:
+T3 also is not permission by itself; exact proposal, deterministic risk/policy, and bound approval are still required.
 
-```text
-T3 VERIFIED_OWNER
-+ exact ActionProposal
-+ deterministic risk/policy
-+ proposal-bound approval
-= possible authority
-```
-
-## Step 2.5 — Accepted visual association boundary reused by identity
-
-The accepted visual pipeline remains provider-neutral at its boundaries:
+## Step 2.5 visual association reused by identity — ACCEPTED
 
 ```text
 Pocket 3 capture
         ↓
 RF-DETR person detection
         ↓
-tracker-based persistent person tracks
+persistent person track
         ↓
 TargetManager explicit selected/locked track
         ↓
 MediaPipe BlazeFace head observations
         ↓
 HeadFirstFramingPolicy body↔head association
-        ↓
-head-first framing / safe follow
 ```
 
-The person track is the stable visual subject handle. Head/face observations are supporting evidence associated to that track; they are not standalone authority identities.
+The persistent visual track is the stable subject handle. Head/face observations are supporting evidence associated with that track; they are not standalone authority identities.
 
-`HeadFirstFramingPolicy` is the canonical body↔head association policy. Phase 3B identity diagnostics reuse this association rather than creating a parallel full-frame identity scanner.
+## Phase 3B.1 — Secure single-OWNER storage — ACCEPTED
 
-## Phase 3B.1 — Secure single-OWNER profile/storage — ACCEPTED
-
-### Subject model
-
-The persistent v1 subject model contains exactly one durable identity:
+Persistent subject model:
 
 ```text
 OWNER
 ```
 
-Unknown people remain ephemeral/session-scoped and are not persisted as biometric profiles.
+Unknown people remain ephemeral/session-scoped.
 
-### OWNER lifecycle
-
-JARVIS implements explicit OWNER create, replace/re-enroll, and delete semantics through `OwnerProfileLifecycleService`.
-
-Each persistent identity mutation is strongly verified using the accepted Step-3A Windows Hello flow and the Windows session is checked both before strong verification and immediately before storage mutation.
-
-The candidate biometric template bytes themselves are SHA-256 committed into the exact authorization proposal. A different template cannot be substituted after Hello while retaining the same metadata/proposal.
-
-### Biometric template encryption
-
-Persistent template payloads use envelope encryption:
+OWNER template storage:
 
 ```text
 biometric template bytes
@@ -178,138 +136,173 @@ random per-profile DEK
         ↓
 user-scoped Windows DPAPI KeyProtector
         ↓
-SQLite profile/template store
+SQLite
 ```
 
-Accepted properties:
+OWNER create/replace/delete is strongly verified. Exact candidate template bytes are SHA-256 committed into the authorization proposal before mutation.
 
-- `cryptography` supplies AES-GCM; JARVIS does not implement custom cryptographic primitives;
-- the per-profile DEK is sealed behind a replaceable `KeyProtector` contract;
-- Windows implementation uses user-scoped DPAPI with purpose-bound entropy;
-- AEAD additional authenticated data binds profile/template/model metadata to ciphertext;
-- create/re-enroll rotates the profile DEK and replaces old active templates;
-- delete removes the live sealed DEK and encrypted template rows;
-- deletion is described as application/logical crypto-erasure only and does not claim guaranteed physical SSD erasure.
+Raw biometric bytes are not exposed to policy/audit.
 
-Real Windows acceptance using synthetic non-biometric bytes proved:
+## Phase 3B.2/3B.3 — Face model integrity/runtime — ACCEPTED
 
-- Hello-gated create/delete;
-- encrypted template round-trip;
-- same-user DPAPI reopen/decrypt;
-- plaintext synthetic template absent from SQLite database and WAL;
-- no live OWNER after deletion.
+Pinned OpenCV Zoo baseline:
 
-No real owner face was enrolled during this acceptance.
+- YuNet `face_detection_yunet_2026may.onnx`;
+- SFace `face_recognition_sface_2021dec.onnx`;
+- exact byte-count/SHA verification;
+- model files stored outside Git;
+- temporary download + integrity verification + atomic promotion;
+- no silent model drift.
 
-## Phase 3B.2/3B.3 — Face asset boundary + non-enrollment runtime — ACCEPTED
+SFace released-weight training-data provenance remains an explicit future commercial-distribution review item.
 
-The model manifest/cache boundary was first automated-validated in 3B.2 and then exercised end-to-end by the human-accepted 3B.3 real-machine smoke. The combined accepted boundary is therefore limited to model integrity, local cache behavior, model construction, and synthetic-input runtime viability.
+## Phase 3B.4 — Pocket-3 live face pipeline — ACCEPTED
 
-### Frozen model baseline
-
-OpenCV Zoo source revision:
-
-`47534e27c9851bb1128ccc0102f1145e27f23f98`
-
-YuNet detector:
-
-- `face_detection_yunet_2026may.onnx`
-- exact SHA-256 `ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0`
-- exact size `229738` bytes
-- MIT directory/model license declaration
-- selected because this dynamic-input re-export is the OpenCV-5-compatible default.
-
-SFace recognizer:
-
-- `face_recognition_sface_2021dec.onnx`
-- exact SHA-256 `0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79`
-- exact size `38696353` bytes
-- OpenCV Zoo directory declaration Apache-2.0
-- exact weight training-dataset provenance remains unresolved for future commercial-distribution review.
-
-The model binary files are not stored in Git.
-
-### Model cache
-
-`ModelAssetCache` stores models outside the repository (`%LOCALAPPDATA%/JARVIS/models` on Windows by default) and requires:
-
-- exact filename/source revision;
-- exact byte count;
-- exact SHA-256;
-- temporary download;
-- integrity verification before atomic promotion;
-- no silent auto-upgrade/model drift;
-- fail closed if the asset is missing or tampered.
-
-Upstream model-match thresholds are reference values only and are not JARVIS trust/authority thresholds.
-
-### Real-machine non-enrollment evidence
-
-Real-machine result on OpenCV `5.0.0`:
-
-- pinned YuNet and SFace checksums verified;
-- YuNet load `47.8 ms`;
-- YuNet synthetic inference median `3.49 ms`, p95 `3.79 ms`;
-- SFace load `92.9 ms`;
-- SFace synthetic feature median `6.92 ms`, p95 `7.56 ms`;
-- SFace feature shape `(1, 128)`;
-- no camera opened;
-- no OWNER profile created;
-- no biometric template persisted;
-- `STEP_3B3_MODEL_SMOKE = PASS`.
-
-OpenCV-5 graph-engine warnings caused by explicit target selection were non-blocking; the accepted diagnostic implementation now uses the default OpenCV-5 backend/target path.
-
-This acceptance proves model integrity/load/runtime viability only. It does **not** accept face recognition accuracy, any match threshold, liveness, OWNER enrollment, T2 trust, or authority use.
-
-## Phase 3B.4 — Selected-track live benchmark — NOT YET HUMAN-ACCEPTED
-
-A read-only diagnostic is implemented and automated-validated but does not become accepted architecture until the real Pocket-3 run passes.
-
-Its intended boundary is:
+Accepted real-machine identity sensor path:
 
 ```text
-existing selected person track
-        ↓
-existing HeadFirstFramingPolicy associated head
-        ↓
-volatile head crop
-        ↓
-YuNet within that crop
-        ↓
-SFace alignment + volatile feature
-        ↓
-transient diagnostic scalar metrics only
+Pocket 3
+    ↓
+RF-DETR + persistent visual track
+    ↓
+selected/head-confirmed track
+    ↓
+BlazeFace head association
+    ↓
+YuNet
+    ↓
+SFace 128-D embedding
 ```
 
-The diagnostic uses a no-op PTZ boundary and never arms/moves the camera. It writes no frame, face crop, feature vector, OWNER profile, or biometric template.
+The live benchmark demonstrated significant same-owner frame variation, so one-frame identity thresholds are not accepted.
 
-Its same-session anchor-cosine value is a diagnostic stability measurement only. It is not a face-match threshold and cannot contribute to trust/authority until later calibration and acceptance.
+## Phase 3B.5A — OWNER positive baseline — ACCEPTED
 
-## Not yet accepted / implemented as authoritative identity
+Positive-only calibration established genuine OWNER behavior on the Pocket 3 but did not define an absolute OWNER-vs-UNKNOWN threshold.
 
-The following remain outside accepted runtime architecture:
+Subject semantics remain:
 
-- real persistent OWNER face enrollment;
-- promoted `FaceIdentityProvider` face-match evidence;
-- production face-match threshold/calibration;
-- randomized active-liveness runtime;
-- face/liveness participation in T2;
-- attention/gaze provider implementation;
-- speaker identity provider implementation;
-- multi-person active-speaker disambiguation;
-- generic capability/tool execution beyond the Step-3 authority foundation.
+- `OWNER` — sufficiently proven enrolled owner;
+- `UNKNOWN` — not sufficiently proven;
+- `AMBIGUOUS` — evidence is insufficient/conflicting.
 
-The future intended T2 structure remains a proposal from the accepted Step-3 architecture until its evidence providers are implemented and human-accepted:
+No persistent non-owner biometric profiles are created.
+
+## Phase 3B.6 — Real OWNER enrollment — ACCEPTED
+
+OWNER face template format:
 
 ```text
-active/unlocked expected Windows session
-+ same stable OWNER track
-+ fresh OWNER face match
-+ fresh randomized liveness
-+ fresh attention/intent evidence
-+ no unresolved association ambiguity
-= T2 CORROBORATED_OWNER
+sface-prototype-set-v1
 ```
 
-No weak signal combination may be promoted into stronger trust merely by adding confidence scores.
+The enrolled payload contains 8 normalized prototypes selected deterministically using centroid + farthest inliers. The serialized payload is committed before Windows Hello, encrypted at rest through the accepted profile store, and decoded strictly.
+
+Enrollment does not grant T2.
+
+## Phase 3B.7A — Active liveness fallback — ACCEPTED
+
+The active fallback uses MediaPipe Face Landmarker primitives and a JARVIS-owned randomized state machine.
+
+Challenge vocabulary:
+
+- blink;
+- open mouth;
+- smile.
+
+Each action requires `neutral → action → neutral`, repeated observations, same Windows session, same visual track, bounded expiry, and fail-closed handling.
+
+A passed challenge creates short-lived typed `FACE_LIVENESS` evidence. It does not independently prove OWNER or grant T2.
+
+This mechanism is a fallback rather than the preferred everyday UX.
+
+## Phase 3B.7B — Passive RGB liveness — ACCEPTED FOR CURRENT POCKET-3 PROTOTYPE
+
+### Selected PAD provider
+
+MiniFASNet V1SE + V2 ensemble is the accepted current RGB PAD candidate.
+
+OpenVINO `anti-spoof-mn3` is rejected for this Pocket-3 integration because genuine-live OWNER remained near-zero even after a bounded reference-style contextual crop retest.
+
+### Why temporal fusion is mandatory
+
+A static phone-photo attack produced an isolated single-frame MiniFAS apparent-real score of `0.8838`. Therefore a single PAD frame is never enough to create accepted liveness evidence.
+
+Real-machine 15-frame temporal evidence showed:
+
+- genuine normal-use live minimum: `0.9855`;
+- phone-photo attack maximum: `0.2229`;
+- prerecorded phone-video attack maximum: `0.0000` at reported precision.
+
+### Accepted temporal liveness contract
+
+`TemporalPassiveLiveness` is JARVIS-owned and bound to exactly one:
+
+- Windows session;
+- visual track;
+- PAD provider.
+
+Cross-session, cross-track, and cross-provider observations are rejected rather than fused.
+
+A gap greater than `0.50 s` clears the observation window.
+
+Decision rule:
+
+```text
+< 15 fresh observations  → INSUFFICIENT
+15-frame median >= 0.95  → LIVE
+15-frame median <= 0.50  → SPOOF
+otherwise                → UNCERTAIN
+```
+
+Behavior:
+
+- `LIVE` → typed short-lived `FACE_LIVENESS` `PASSED` evidence;
+- `SPOOF` → typed `FAILED` evidence and fail closed;
+- `UNCERTAIN` → `INSUFFICIENT` evidence and active challenge may be requested when the trust/risk path requires it;
+- `INSUFFICIENT` → no trust upgrade.
+
+Initial passive evidence TTL is `2.0 s`.
+
+### Privacy and authority boundary
+
+- raw frames/crops/PAD tensors/output vectors are not persisted by this evidence path;
+- passive PAD alone does not prove OWNER;
+- passive PAD alone does not grant T2;
+- passive PAD never authorizes actions;
+- RGB PAD is not treated as equivalent to depth/IR/ToF liveness.
+
+The accepted decision is recorded in `docs/decisions/ADR-008_STEP_3_PASSIVE_RGB_LIVENESS.md`.
+
+## What is intentionally NOT yet accepted
+
+The following are **not** current accepted runtime architecture yet:
+
+- runtime binding of encrypted OWNER SFace matching and passive liveness on the same subject track;
+- automatic T2 derivation from face+liveness;
+- attention implementation/acceptance;
+- speaker identity/corroboration implementation/acceptance;
+- depth/IR/ToF liveness hardware.
+
+These belong to subsequent Phase 3B slices.
+
+## Next architecture slice — 3B.8
+
+3B.8 will integrate OWNER face recognition and passive/active liveness on the same stable visual track while still keeping T2 disabled during acceptance testing.
+
+Target integration:
+
+```text
+expected Windows session
+        +
+stable visual track
+        ↓
+associated face/head
+        ├── SFace → OWNER / UNKNOWN / AMBIGUOUS evidence
+        └── MiniFAS temporal liveness → LIVE / UNCERTAIN / SPOOF
+                                      └── active challenge fallback if needed
+        ↓
+fresh typed evidence bound to same session + same visual track
+```
+
+Only after that integrated evidence path is real-machine accepted should deterministic T2 corroborated-owner composition be enabled.
