@@ -28,6 +28,7 @@ jarvis-face-live-benchmark = "jarvis.identity.live_face_benchmark:main"
 jarvis-face-calibrate = "jarvis.identity.calibration:main"
 jarvis-face-calibrate-owner = "jarvis.identity.owner_calibration:main"
 jarvis-owner-enroll = "jarvis.identity.owner_enrollment:main"
+jarvis-face-liveness = "jarvis.identity.liveness_live:main"
 
 [project.optional-dependencies]
 vision = [
