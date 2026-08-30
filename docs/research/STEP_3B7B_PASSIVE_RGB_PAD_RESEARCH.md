@@ -185,6 +185,32 @@ Interpretation:
 - MiniFAS remains provisionally strong and stable on live OWNER across both independent 300-sample runs, including normal blinking and small natural movement.
 - MiniFAS still must be tested against phone-photo, phone-video, and optionally printed-photo attacks before any threshold, liveness verdict, provider promotion, or T2 contribution can be approved.
 
+## Phone-photo attack — 2026-08-30
+
+Scenario: a clear static photo of the OWNER displayed on another phone, 300 samples, no frame/crop/tensor/output persistence.
+
+Observed `openvino-anti-spoof-mn3-reference-context-v1`:
+
+- real probability: min 0.0004, p05 0.0006, median 0.0013, p95 0.0035, max 0.0081;
+- rolling median 5: median 0.0012, p95 0.0032, max 0.0047;
+- rolling median 15: median 0.0013, p95 0.0024, max 0.0034;
+- latency: median 2.97 ms, p95 3.44 ms.
+
+Observed MiniFASNet V1SE/V2 ensemble:
+
+- real probability: min 0.0000, p05 0.0001, median 0.0152, p95 0.5231, max 0.8838;
+- rolling median 5: median 0.0167, p95 0.2405, max 0.5217;
+- rolling median 15: median 0.0148, p95 0.1100, max 0.2229;
+- latency: median 8.34 ms, p95 30.18 ms.
+
+Interpretation:
+
+- MiniFAS shows very strong separation between genuine live OWNER (`~0.9995` median) and a static phone-photo attack (`0.0152` median).
+- isolated spoof frames can still produce high apparent real scores (`max=0.8838`), so single-frame PAD decisions are explicitly rejected.
+- temporal aggregation materially improves attack robustness; the 15-frame rolling median reduced the phone-photo attack maximum to `0.2229` while live OWNER remained around `0.9996` median.
+- anti-spoof-mn3 remains non-discriminative for the Pocket 3 because both live and phone-photo scenarios remain near zero; its earlier rejection stands.
+- no threshold, liveness verdict, provider promotion, or T2 authority upgrade is approved yet. Phone-video replay remains the next required attack because it is materially harder than a static photo.
+
 ## Decision rule after benchmark
 
 Do not promote a passive provider merely because live scores look high.
