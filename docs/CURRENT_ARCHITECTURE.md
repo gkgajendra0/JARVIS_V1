@@ -16,7 +16,7 @@ JARVIS currently has accepted foundations for:
 - development-only supervised update tooling outside model authority;
 - deterministic Step-3 authority, policy, approval, audit, Windows-session, and strong-verification boundaries;
 - secure single-OWNER profile/template storage foundation;
-- pinned/verified local YuNet/SFace model asset boundary;
+- pinned/verified local YuNet/SFace model asset boundary, exercised by the accepted real-machine 3B.3 smoke;
 - real-machine non-enrollment OpenCV-5 YuNet/SFace runtime viability.
 
 ## Step 3A — Identity/Trust/Authority foundation — ACCEPTED
@@ -201,7 +201,9 @@ Real Windows acceptance using synthetic non-biometric bytes proved:
 
 No real owner face was enrolled during this acceptance.
 
-## Phase 3B.2 — Face model asset boundary — ACCEPTED AS INFRASTRUCTURE
+## Phase 3B.2/3B.3 — Face asset boundary + non-enrollment runtime — ACCEPTED
+
+The model manifest/cache boundary was first automated-validated in 3B.2 and then exercised end-to-end by the human-accepted 3B.3 real-machine smoke. The combined accepted boundary is therefore limited to model integrity, local cache behavior, model construction, and synthetic-input runtime viability.
 
 ### Frozen model baseline
 
@@ -241,9 +243,7 @@ The model binary files are not stored in Git.
 
 Upstream model-match thresholds are reference values only and are not JARVIS trust/authority thresholds.
 
-## Phase 3B.3 — Non-enrollment YuNet/SFace runtime — HUMAN-ACCEPTED
-
-The accepted model-smoke path verifies local runtime viability without touching the camera or persistent identity state.
+### Real-machine non-enrollment evidence
 
 Real-machine result on OpenCV `5.0.0`:
 
