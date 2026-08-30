@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "source_repository": "https://github.com/opencv/opencv_zoo",
+  "source_revision": "47534e27c9851bb1128ccc0102f1145e27f23f98",
+  "assets": [
+    {
+      "asset_id": "opencv-yunet-face-detector-2026may",
+      "role": "face_detector",
+      "filename": "face_detection_yunet_2026may.onnx",
+      "source_path": "models/face_detection_yunet/face_detection_yunet_2026may.onnx",
+      "source_url": "https://github.com/opencv/opencv_zoo/raw/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_detection_yunet/face_detection_yunet_2026may.onnx",
+      "sha256": "ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0",
+      "size_bytes": 229738,
+      "code_license": "MIT",
+      "model_license": "MIT",
+      "provenance_status": "documented_upstream",
+      "training_data_note": "Upstream training project documents YuNet face training on WIDER Face. The 2026may artifact is a dynamic-input re-export of the 2023mar model for OpenCV 5.x ONNX Runtime compatibility.",
+      "commercial_distribution_status": "license_permissive_provenance_documented",
+      "deployment_status": "benchmark_candidate",
+      "minimum_opencv_version": "5.0.0",
+      "backend": "opencv_face_detector_yn",
+      "calibration_status": "not_applicable"
+    },
+    {
+      "asset_id": "opencv-sface-recognizer-2021dec",
+      "role": "face_recognizer",
+      "filename": "face_recognition_sface_2021dec.onnx",
+      "source_path": "models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
+      "source_url": "https://github.com/opencv/opencv_zoo/raw/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
+      "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
+      "size_bytes": 38696353,
+      "code_license": "Apache-2.0",
+      "model_license": "Apache-2.0-directory-declaration",
+      "provenance_status": "exact_training_dataset_unresolved",
+      "training_data_note": "OpenCV Zoo states that this is a MobileFaceNet instance trained with SFace loss, but does not map this exact ONNX weight to a specific training dataset. OpenCV Zoo issue #313 requesting clarification remained open during the 2026-08-30 review.",
+      "commercial_distribution_status": "review_required_before_commercial_distribution",
+      "deployment_status": "personal-development-benchmark-candidate",
+      "minimum_opencv_version": "5.0.0",
+      "backend": "opencv_face_recognizer_sf",
+      "calibration_status": "local_threshold_calibration_required",
+      "reference_thresholds": {
+        "cosine_same_identity_min": 0.363,
+        "norm_l2_same_identity_max": 1.128
+      }
+    }
+  ]
+}
