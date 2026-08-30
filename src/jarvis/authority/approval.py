@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 
 from .proposal import ActionProposal
 from .types import ApprovalMethod, ApprovalRequirement, ApprovalStatus
+from .verifier import StrongVerificationResult
 
 
 class ApprovalError(ValueError):
@@ -39,6 +40,7 @@ class ApprovalService:
     def __init__(self, *, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
         self._records: dict[str, ApprovalRecord] = {}
+        self._used_strong_verification_ids: set[str] = set()
         self._lock = threading.RLock()
 
     def request(
@@ -84,22 +86,46 @@ class ApprovalService:
         session_id: str,
         method: ApprovalMethod,
     ) -> ApprovalRecord:
-        with self._lock:
-            record = self._active_record(approval_id)
-            self._assert_binding(record, proposal=proposal, session_id=session_id)
-            if record.status is not ApprovalStatus.PENDING:
-                raise ApprovalError(f"approval is not pending: {record.status.value}")
-            if _METHOD_LEVEL[method] < record.requirement:
-                raise ApprovalError(
-                    f"{method.value} does not satisfy {record.requirement.name.lower()}"
-                )
-            granted = replace(
-                record,
-                status=ApprovalStatus.GRANTED,
-                method=method,
-                resolved_at_monotonic=self._clock(),
+        if method is ApprovalMethod.STRONG_VERIFIER:
+            raise ApprovalError(
+                "strong verifier approval requires a bound verification result"
             )
-            self._records[approval_id] = granted
+        with self._lock:
+            return self._grant_locked(
+                approval_id,
+                proposal=proposal,
+                session_id=session_id,
+                method=method,
+            )
+
+    def grant_verified_strong(
+        self,
+        approval_id: str,
+        *,
+        proposal: ActionProposal,
+        session_id: str,
+        verification: StrongVerificationResult,
+    ) -> ApprovalRecord:
+        with self._lock:
+            if not verification.verified:
+                raise ApprovalError("strong verification did not verify")
+            if not verification.is_bound_to(
+                proposal=proposal,
+                session_id=session_id,
+            ):
+                raise ApprovalError("strong verification binding mismatch")
+            verification_id = verification.verification_id
+            if not verification_id:
+                raise ApprovalError("strong verification id is missing")
+            if verification_id in self._used_strong_verification_ids:
+                raise ApprovalError("strong verification result was already consumed")
+            granted = self._grant_locked(
+                approval_id,
+                proposal=proposal,
+                session_id=session_id,
+                method=ApprovalMethod.STRONG_VERIFIER,
+            )
+            self._used_strong_verification_ids.add(verification_id)
             return granted
 
     def deny(self, approval_id: str) -> ApprovalRecord:
@@ -174,6 +200,31 @@ class ApprovalService:
                     status=ApprovalStatus.CANCELED,
                     resolved_at_monotonic=now,
                 )
+
+    def _grant_locked(
+        self,
+        approval_id: str,
+        *,
+        proposal: ActionProposal,
+        session_id: str,
+        method: ApprovalMethod,
+    ) -> ApprovalRecord:
+        record = self._active_record(approval_id)
+        self._assert_binding(record, proposal=proposal, session_id=session_id)
+        if record.status is not ApprovalStatus.PENDING:
+            raise ApprovalError(f"approval is not pending: {record.status.value}")
+        if _METHOD_LEVEL[method] < record.requirement:
+            raise ApprovalError(
+                f"{method.value} does not satisfy {record.requirement.name.lower()}"
+            )
+        granted = replace(
+            record,
+            status=ApprovalStatus.GRANTED,
+            method=method,
+            resolved_at_monotonic=self._clock(),
+        )
+        self._records[approval_id] = granted
+        return granted
 
     def _resolve_pending(
         self,
