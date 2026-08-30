@@ -19,6 +19,7 @@ from jarvis.identity.calibration import (
     _DEFAULT_MINIMUM_SAMPLES,
     _DEFAULT_WINDOW_REQUIRED_ACCEPTS,
     _DEFAULT_WINDOW_SIZE,
+    CalibrationDistribution,
     _capture_stage,
     _distribution,
     _format_distribution,
@@ -26,7 +27,6 @@ from jarvis.identity.calibration import (
     _rolling_accept_rate,
     _sample_quality_summary,
     _scores_against,
-    CalibrationDistribution,
 )
 from jarvis.identity.model_assets import (
     ModelAssetCache,
