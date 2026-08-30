@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — 3B.8 RUNTIME OWNER + LIVENESS BINDING HUMAN-ACCEPTED — 3B.9 ATTENTION/INTENT EVIDENCE NEXT**
+**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — 3B.8 RUNTIME OWNER + LIVENESS BINDING HUMAN-ACCEPTED — 3B.9 ATTENTION DEFERRED UNTIL FIXED WEBCAM — SPEAKER IDENTITY / ACTIVE-SPEAKER CORROBORATION NEXT**
 
 Step 0, Step 1, Step 2, Step 2.5, and Step 3A are complete. Phase 3A was real-machine accepted, reconciled, and merged through protected `main`.
 
@@ -105,12 +105,7 @@ Research benchmarked two mature PAD candidates on the real Pocket 3:
 - OpenVINO `anti-spoof-mn3` — **rejected** for this integration because genuine-live OWNER remained near-zero even after a bounded reference-style crop correction;
 - MiniFASNet V1SE + V2 ensemble — **selected** for the current RGB prototype behind JARVIS-owned temporal fusion.
 
-Real MiniFAS evidence included:
-
-- two genuine-live OWNER baselines;
-- static OWNER photo on another phone;
-- prerecorded moving OWNER video replay on another phone;
-- normal-use genuine-live robustness with moderate head turns, near/far movement, blinking, eye movement, and mouth/body movement.
+Real MiniFAS evidence included two genuine-live baselines, a static OWNER photo on another phone, a prerecorded moving OWNER video replay, and normal-use genuine-live robustness.
 
 Critical temporal separation:
 
@@ -172,7 +167,7 @@ Accepted 3B.8 properties:
 - temporal identity uses a provisional evidence-only band: `>=0.65 OWNER_CANDIDATE`, `<=0.35 UNKNOWN`, middle `AMBIGUOUS`, with 15 fresh samples required;
 - the identity threshold is explicitly **not authoritative** because a consenting live non-owner calibration set is still unavailable;
 - identity/liveness observation gaps > `0.50 s` reset temporal state;
-- selected-target loss now immediately discards both identity and liveness windows and stops evidence collection;
+- selected-target loss immediately discards both identity and liveness windows and stops evidence collection;
 - Windows lock/session transition invalidates the evidence session and fails closed;
 - `OWNER_CANDIDATE + LIVE` produces only `LIVE_OWNER_CANDIDATE` evidence;
 - `OWNER_CANDIDATE + UNCERTAIN` is challenge-eligible rather than silently upgraded;
@@ -188,9 +183,32 @@ Real Pocket-3 evidence:
 - `272` observations reached `LIVE_OWNER_CANDIDATE` after temporal warm-up/reset periods;
 - real WTS Windows-lock test produced `SESSION_INVALIDATED_FAIL_CLOSED`.
 
-Phone-photo/video attacks were not redundantly rerun in 3B.8 because the same selected MiniFAS provider and temporal rule were already real-machine attacked and human-accepted in 3B.7B; 3B.8 automated tests cover deterministic `OWNER_CANDIDATE + SPOOF` binding behavior.
-
 Acceptance evidence: `docs/research/STEP_3B8_OWNER_LIVENESS_ACCEPTANCE_RESULTS.md`.
+
+## Deferred Phase 3B.9 — Attention / intent-to-engage evidence
+
+Attention implementation is deliberately deferred until JARVIS has a fixed monitor-mounted webcam or stronger accepted attention/eye sensor.
+
+Reason:
+
+- DJI Pocket 3 is a movable gimbal camera;
+- camera-relative eye/head geometry changes whenever its placement or gimbal orientation changes;
+- repeated camera-to-screen calibration would create unacceptable everyday friction;
+- looking at a monitor is not itself proof that the OWNER is engaging with JARVIS.
+
+ADR-007 remains the architectural boundary, but its implementation is hardware-dependent and non-blocking for unrelated Step-3 work.
+
+Architecture correction:
+
+```text
+T2 CORROBORATED_OWNER
+= corroborated OWNER identity/presence context
+
+OWNER_ATTENTIVE
+= separate interaction predicate layered on T2 when an accepted attention provider exists
+```
+
+Until attention is implemented, JARVIS must not invent `OWNER_ATTENTIVE`. A policy that genuinely requires it must fail closed or escalate to stronger explicit verification.
 
 ## Non-negotiable Step-3 invariants
 
@@ -204,53 +222,56 @@ Acceptance evidence: `docs/research/STEP_3B8_OWNER_LIVENESS_ACCEPTANCE_RESULTS.m
 - `SPOOF` fails closed.
 - `UNCERTAIN` may request stronger evidence but may not silently upgrade trust.
 
-## Phase 3B.9 — NEXT: Attention / intent-to-engage evidence
+## Next bounded slice — Speaker identity / active-speaker corroboration
 
-T2 must **not** be enabled merely because 3B.8 now produces a live OWNER candidate. The accepted Step-3 architecture requires fresh intent/attention evidence before an ambient visual OWNER can become corroborated OWNER context for protected interaction.
+The next independent Step-3 slice is speaker identity and active-speaker ambiguity handling for voice-originated protected interaction.
 
-ADR-007 already defines the architecture. The next bounded implementation slice is therefore:
+Research must be refreshed before implementation and should evaluate current mature local speaker-verification/diarization technology rather than rebuilding embeddings/classifiers from scratch.
+
+Target boundary:
 
 ```text
-same selected OWNER/head track
+JARVIS microphone audio
         ↓
-MediaPipe Face Landmarker
-        ├── eye-open state
-        ├── left/right look blendshapes
-        ├── head pose / facial transform
-        ├── iris/eye geometry
-        └── temporal stability
+voice activity / speech segment
         ↓
-ATTENTIVE / NOT_ATTENTIVE / AMBIGUOUS
+replaceable speaker-evidence provider
         ↓
-short-lived typed ATTENTION evidence
+OWNER_SPEAKER_CANDIDATE / UNKNOWN / AMBIGUOUS
+        +
+active-speaker / actor ambiguity checks
+        ↓
+typed short-lived speaker evidence
 ```
 
-3B.9 requirements:
+Requirements:
 
-1. reuse the already selected/head-associated visual track; do not create a parallel full-frame surveillance pipeline;
-2. reuse the existing MediaPipe Face Landmarker asset/runtime where practical;
-3. benchmark and calibrate on the real Pocket 3 with natural looking/talking behavior;
-4. looking away must remove fresh intent evidence without revoking OWNER identity;
-5. attention remains supporting evidence and never grants permission itself;
-6. do not persist eye crops, iris coordinates, gaze vectors, behavioral gaze history, or emotion/fatigue inference;
-7. false negatives degrade to stronger verification / no protected disclosure, never to weaker thresholds;
-8. keep T2 disabled during 3B.9 implementation and human acceptance.
+1. speaker evidence never creates T2/T3 or action permission by itself;
+2. do not treat wake-word detection as speaker identity;
+3. do not treat transcription/LLM confidence as speaker identity;
+4. TV/speaker playback and JARVIS's own output must not silently become OWNER evidence;
+5. multi-person/ambiguous speech must fail closed for protected voice-originated interaction;
+6. provider/model boundaries must remain replaceable;
+7. raw audio retention is off by default; store only strongly justified encrypted enrollment material/derived templates;
+8. benchmark on the real Windows audio route before promoting any threshold;
+9. keep T2 disabled during research, implementation, and acceptance.
 
-## Work after 3B.9
+## Work after speaker identity
 
-After attention/intent evidence is implemented and human-accepted:
+After speaker identity/corroboration is researched, implemented, and accepted:
 
-- deterministic T2 `CORROBORATED_OWNER` composition using the exact accepted evidence predicates;
-- speaker identity/corroboration and active-speaker ambiguity handling for voice-originated protected interaction;
-- broader negative/attack coverage;
-- future depth/IR provider research and hardware integration without changing the authority contract.
+- resolve the authoritative OWNER-vs-UNKNOWN face threshold when a consenting live non-owner calibration subject is available, or explicitly redesign the T2 predicate so provisional face evidence cannot be mistaken for authoritative identity;
+- implement deterministic T2 `CORROBORATED_OWNER` composition from the final accepted evidence predicate;
+- broader negative/attack coverage and expiry/cross-session/cross-actor testing;
+- final Phase-3 documentation reconciliation and protected-main review/merge;
+- revisit deferred attention later when fixed monitor-mounted hardware is available.
 
 ## Accepted ADRs relevant to Step 3
 
 - `docs/decisions/ADR-006_STEP_3_IDENTITY_TRUST_AUTHORITY_GOVERNANCE.md`
-- `docs/decisions/ADR-007_STEP_3_ATTENTION_INTENT_EVIDENCE.md`
+- `docs/decisions/ADR-007_STEP_3_ATTENTION_INTENT_EVIDENCE.md` — architecture accepted, implementation deferred;
 - `docs/decisions/ADR-008_STEP_3_PASSIVE_RGB_LIVENESS.md`
 
 ## Immediate Next Action
 
-Implement **3B.9 attention / intent-to-engage evidence** on the same accepted OWNER/head track according to ADR-007, keep T2 disabled, run automated validation, then perform real Pocket-3 human acceptance before implementing deterministic T2 composition.
+Refresh **speaker identity / active-speaker corroboration research**, select the best mature current technology, define the bounded architecture, obtain human approval, then implement and real-machine validate it. Attention remains deferred until suitable fixed camera hardware exists.
