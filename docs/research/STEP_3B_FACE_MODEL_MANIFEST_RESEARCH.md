@@ -2,7 +2,7 @@
 
 ## Status
 
-**3B.2 MODEL MANIFEST / ASSET BOUNDARY AUTOMATED-VALIDATED; 3B.3 REAL OWNER-MACHINE MODEL SMOKE ACCEPTED**
+**3B.2 MODEL MANIFEST / ASSET BOUNDARY AUTOMATED-VALIDATED AND EXERCISED BY HUMAN-ACCEPTED 3B.3 REAL OWNER-MACHINE MODEL SMOKE**
 
 This record freezes the exact initial face-detection and face-recognition assets used for the Phase 3B benchmark path. It is intentionally narrower than a general face-recognition technology review; the Step-3 architecture already selected YuNet + SFace as the initial local benchmark pair, subject to real calibration and provenance review.
 
@@ -149,7 +149,7 @@ Privacy/non-enrollment gate:
 - no biometric template persisted;
 - final diagnostic: `STEP_3B3_MODEL_SMOKE = PASS`.
 
-This accepts model integrity/load/runtime viability only. It does not accept owner enrollment, face-match accuracy, liveness, T2 trust, or any authority use.
+This human run also exercised the previously automated-only 3B.2 exact-hash/cache boundary end-to-end on the owner machine. The accepted combined 3B.2/3 boundary remains limited to model integrity/cache behavior and synthetic-input runtime viability. It does not accept face-match accuracy, production thresholds, liveness, OWNER enrollment, T2 trust, or any authority use.
 
 ## Next gate
 
