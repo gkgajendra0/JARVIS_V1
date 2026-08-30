@@ -8,7 +8,7 @@ import numpy as np
 
 from jarvis.authority import WindowsWtsSessionProvider
 from jarvis.identity.calibration import _build_runtime, _draw_clickable_heads
-from jarvis.identity.live_face_benchmark import _SelectionState, _crop_head
+from jarvis.identity.live_face_benchmark import _crop_head, _SelectionState
 from jarvis.identity.liveness import (
     ActiveLivenessChallenge,
     LivenessAction,
