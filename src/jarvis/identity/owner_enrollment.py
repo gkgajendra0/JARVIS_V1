@@ -135,7 +135,7 @@ def run_owner_enrollment(
             )
             return 2
 
-        manifest, recognizer_asset, yunet, sface = _load_face_models()
+        _manifest, recognizer_asset, yunet, sface = _load_face_models()
         print("JARVIS Step 3B.6 real OWNER face enrollment")
         print("-------------------------------------------")
         print("This command WILL persist your encrypted OWNER face template.")
