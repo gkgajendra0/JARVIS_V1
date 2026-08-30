@@ -47,7 +47,9 @@ def default_face_landmarker_path() -> Path:
 def verify_face_landmarker_model(path: str | Path) -> Path:
     candidate = Path(path)
     if not candidate.is_file():
-        raise LivenessModelIntegrityError(f"face landmarker model is missing: {candidate}")
+        raise LivenessModelIntegrityError(
+            f"face landmarker model is missing: {candidate}"
+        )
     digest = hashlib.sha256()
     size = 0
     with candidate.open("rb") as handle:
@@ -126,7 +128,9 @@ def ensure_face_landmarker_model(
         temporary_path = None
         return verify_face_landmarker_model(target)
     except (OSError, urllib.error.URLError) as exc:
-        raise LivenessModelAssetError("failed to download face landmarker model") from exc
+        raise LivenessModelAssetError(
+            "failed to download face landmarker model"
+        ) from exc
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
