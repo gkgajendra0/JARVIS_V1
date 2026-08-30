@@ -78,9 +78,7 @@ class _VoicePrompter:
     @property
     def enabled(self) -> bool:
         return (
-            not self._disabled
-            and self._output is not None
-            and self._speech is not None
+            not self._disabled and self._output is not None and self._speech is not None
         )
 
     async def start(self) -> None:
@@ -228,9 +226,13 @@ async def run_live_liveness() -> int:
     print(f"Windows session: {session.session_id}")
     print(f"Pinned Face Landmarker: {model_path}")
     print("Camera/PTZ is READ-ONLY for this diagnostic; PTZ is never armed or moved.")
-    print("Voice prompts use the configured JARVIS scripted-speech provider and speaker.")
+    print(
+        "Voice prompts use the configured JARVIS scripted-speech provider and speaker."
+    )
     print("Click one GREEN associated head once, then press S when ready.")
-    print("Only the current challenge step is shown; the full sequence stays undisclosed.")
+    print(
+        "Only the current challenge step is shown; the full sequence stays undisclosed."
+    )
     print("No frame, landmark, blendshape vector, or liveness sample is persisted.")
 
     runtime, framing_policy = _build_runtime()
@@ -297,7 +299,9 @@ async def run_live_liveness() -> int:
                         requested_track = selection.clicked_track_id
                         selection.clicked_track_id = None
                         if challenge is not None:
-                            print("Challenge is active; target changes are not allowed.")
+                            print(
+                                "Challenge is active; target changes are not allowed."
+                            )
                         else:
                             try:
                                 runtime.lock(requested_track)
@@ -354,7 +358,8 @@ async def run_live_liveness() -> int:
                             break
                         if (
                             last_visible_target_at is None
-                            or now - last_visible_target_at > _TARGET_LOST_TIMEOUT_SECONDS
+                            or now - last_visible_target_at
+                            > _TARGET_LOST_TIMEOUT_SECONDS
                         ):
                             progress = challenge.fail("target_lost")
                             final_phase = progress.phase
@@ -362,7 +367,8 @@ async def run_live_liveness() -> int:
                             break
                         if (
                             last_associated_head_at is None
-                            or now - last_associated_head_at > _HEAD_LOST_TIMEOUT_SECONDS
+                            or now - last_associated_head_at
+                            > _HEAD_LOST_TIMEOUT_SECONDS
                         ):
                             progress = challenge.fail("associated_head_lost")
                             final_phase = progress.phase
@@ -416,7 +422,9 @@ async def run_live_liveness() -> int:
                         preview,
                         challenge=challenge,
                         stats=stats,
-                        selected_track_id=(target.track_id if target is not None else None),
+                        selected_track_id=(
+                            target.track_id if target is not None else None
+                        ),
                     )
                     cv2.imshow(_WINDOW_NAME, preview)
 
@@ -430,7 +438,9 @@ async def run_live_liveness() -> int:
                     if key in (ord("s"), ord("S")) and challenge is None:
                         target = runtime.target
                         if target is None or not target.visible:
-                            print("Lock one visible GREEN associated head before starting.")
+                            print(
+                                "Lock one visible GREEN associated head before starting."
+                            )
                             continue
                         if framing_policy.associated_head(target, heads) is None:
                             print(
@@ -462,14 +472,14 @@ async def run_live_liveness() -> int:
         if challenge is None or final_phase is None:
             print("STEP_3B7_ACTIVE_LIVENESS = ABORTED")
             return 2
-        elapsed = (
-            0.0 if started_at is None else max(0.0, time.monotonic() - started_at)
-        )
+        elapsed = 0.0 if started_at is None else max(0.0, time.monotonic() - started_at)
         print(f"challenge_id = {challenge.challenge.challenge_id}")
         print(f"visual_track_id = {challenge.challenge.visual_track_id}")
         print(
             "sequence = "
-            + " -> ".join(action.value.upper() for action in challenge.challenge.actions)
+            + " -> ".join(
+                action.value.upper() for action in challenge.challenge.actions
+            )
         )
         print(
             f"completed_actions = "
