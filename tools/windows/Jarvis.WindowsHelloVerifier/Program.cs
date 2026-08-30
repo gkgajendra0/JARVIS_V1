@@ -39,43 +39,75 @@ internal static class Program
             }
 
             Application.SetHighDpiMode(HighDpiMode.SystemAware);
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+
+            VerificationResponse? response = null;
             using var owner = new Form
             {
                 ShowInTaskbar = false,
                 FormBorderStyle = FormBorderStyle.FixedToolWindow,
-                StartPosition = FormStartPosition.Manual,
-                Location = new System.Drawing.Point(-32000, -32000),
+                StartPosition = FormStartPosition.CenterScreen,
                 Size = new System.Drawing.Size(1, 1),
-                Opacity = 0,
+                Opacity = 0.01,
+                TopMost = true,
             };
-            var hwnd = owner.Handle;
-            var result = await UserConsentVerifierInterop.RequestVerificationForWindowAsync(
-                hwnd,
-                request.Message
-            );
-            return result switch
+
+            owner.Shown += async (_, _) =>
             {
-                UserConsentVerificationResult.Verified =>
-                    Write("verified", "verified", 0),
-                UserConsentVerificationResult.Canceled =>
-                    Write("canceled", "user_canceled", 0),
-                UserConsentVerificationResult.RetriesExhausted =>
-                    Write("retries_exhausted", "retries_exhausted", 0),
-                UserConsentVerificationResult.NotConfiguredForUser =>
-                    Write("not_configured", "not_configured_for_user", 0),
-                UserConsentVerificationResult.DeviceBusy =>
-                    Write("unavailable", "device_busy", 0),
-                UserConsentVerificationResult.DeviceNotPresent =>
-                    Write("unavailable", "device_not_present", 0),
-                UserConsentVerificationResult.DisabledByPolicy =>
-                    Write("unavailable", "disabled_by_policy", 0),
-                _ => Write("failed", "verification_failed", 0),
+                try
+                {
+                    owner.Activate();
+                    var result =
+                        await UserConsentVerifierInterop.RequestVerificationForWindowAsync(
+                            owner.Handle,
+                            request.Message
+                        );
+                    response = Map(result);
+                }
+                catch (Exception ex)
+                {
+                    response = new VerificationResponse("error", ex.GetType().Name);
+                }
+                finally
+                {
+                    owner.Close();
+                }
             };
+
+            Application.Run(owner);
+            var finalResponse = response ?? new VerificationResponse(
+                "error",
+                "verification_window_closed_without_result"
+            );
+            return Write(finalResponse.Status, finalResponse.Reason, 0);
         }
         catch (Exception ex)
         {
             return Write("error", ex.GetType().Name, 1);
         }
+    }
+
+    private static VerificationResponse Map(UserConsentVerificationResult result)
+    {
+        return result switch
+        {
+            UserConsentVerificationResult.Verified =>
+                new VerificationResponse("verified", "verified"),
+            UserConsentVerificationResult.Canceled =>
+                new VerificationResponse("canceled", "user_canceled"),
+            UserConsentVerificationResult.RetriesExhausted =>
+                new VerificationResponse("retries_exhausted", "retries_exhausted"),
+            UserConsentVerificationResult.NotConfiguredForUser =>
+                new VerificationResponse("not_configured", "not_configured_for_user"),
+            UserConsentVerificationResult.DeviceBusy =>
+                new VerificationResponse("unavailable", "device_busy"),
+            UserConsentVerificationResult.DeviceNotPresent =>
+                new VerificationResponse("unavailable", "device_not_present"),
+            UserConsentVerificationResult.DisabledByPolicy =>
+                new VerificationResponse("unavailable", "disabled_by_policy"),
+            _ => new VerificationResponse("failed", "verification_failed"),
+        };
     }
 
     private static int Write(string status, string reason, int exitCode)
