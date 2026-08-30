@@ -41,3 +41,49 @@ jobs:
 
       - name: Run unit tests
         run: python -m pytest -q
+
+  windows-hello-helper:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Build Windows Hello helper
+        run: >-
+          dotnet build
+          tools/windows/Jarvis.WindowsHelloVerifier/Jarvis.WindowsHelloVerifier.csproj
+          --configuration Release
+          --nologo
+
+      - name: Probe Windows Hello helper JSON contract
+        shell: pwsh
+        run: |
+          $helper = Resolve-Path ".\tools\windows\Jarvis.WindowsHelloVerifier\bin\Release\net9.0-windows10.0.22000.0\Jarvis.WindowsHelloVerifier.exe"
+          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+          $startInfo.FileName = $helper.Path
+          $startInfo.UseShellExecute = $false
+          $startInfo.RedirectStandardInput = $true
+          $startInfo.RedirectStandardOutput = $true
+          $startInfo.RedirectStandardError = $true
+          $process = [System.Diagnostics.Process]::new()
+          $process.StartInfo = $startInfo
+          if (-not $process.Start()) {
+            throw "Failed to start Windows Hello helper contract probe"
+          }
+          $process.StandardInput.Write('{}')
+          $process.StandardInput.Close()
+          $response = $process.StandardOutput.ReadToEnd()
+          $stderr = $process.StandardError.ReadToEnd()
+          $process.WaitForExit()
+          if ($process.ExitCode -ne 2) {
+            throw "Expected invalid-request exit code 2, got $($process.ExitCode). stderr=$stderr"
+          }
+          $payload = $response | ConvertFrom-Json
+          if ($payload.status -ne 'error' -or $payload.reason -ne 'invalid_request') {
+            throw "Windows Hello helper JSON contract mismatch: $response"
+          }
