@@ -19,13 +19,15 @@ from jarvis.identity.live_face_benchmark import (
     _select_center_face,
     _SelectionState,
 )
-from jarvis.identity.model_assets import ModelAssetCache, load_default_face_model_manifest
+from jarvis.identity.model_assets import (
+    ModelAssetCache,
+    load_default_face_model_manifest,
+)
 from jarvis.identity.owner_enrollment import default_identity_data_dir
 from jarvis.identity.owner_evidence import (
     OwnerIdentityObservation,
     OwnerIdentityState,
     OwnerLivenessBindingAssessment,
-    OwnerLivenessBindingState,
     TemporalOwnerIdentity,
     bind_owner_liveness,
     max_prototype_cosine,
@@ -109,7 +111,9 @@ def _draw_overlay(
     combined: OwnerLivenessBindingAssessment | None,
 ) -> None:
     run_state = "COLLECTING" if collecting else "READY"
-    identity_value = "n/a" if identity_similarity is None else f"{identity_similarity:.3f}"
+    identity_value = (
+        "n/a" if identity_similarity is None else f"{identity_similarity:.3f}"
+    )
     liveness_value = (
         "n/a" if liveness_probability is None else f"{liveness_probability:.3f}"
     )
@@ -146,7 +150,9 @@ def run_owner_evidence_live(scenario: str) -> int:
         print(f"Windows session unavailable: {exc}")
         return 2
     if not initial_session.active_unlocked:
-        print("Windows session is not active/unlocked; refusing to start evidence capture.")
+        print(
+            "Windows session is not active/unlocked; refusing to start evidence capture."
+        )
         return 2
 
     manifest = load_default_face_model_manifest()
@@ -174,13 +180,11 @@ def run_owner_evidence_live(scenario: str) -> int:
     try:
         owner_template = load_compatible_owner_face_template(store, recognizer_asset)
     except (OwnerProfileStoreError, OwnerTemplateCompatibilityError) as exc:
-        store.close()
         print(f"OWNER template unavailable/incompatible: {exc}")
         print("STEP_3B8_OWNER_LIVENESS_EVIDENCE = FAIL_CLOSED")
         return 2
     finally:
-        if "owner_template" in locals():
-            store.close()
+        store.close()
 
     if owner_template.embedding_dimension != 128:
         print(
@@ -245,10 +249,15 @@ def run_owner_evidence_live(scenario: str) -> int:
     print(f"OWNER prototype count = {owner_template.prototype_count}")
     print(f"SFace model = {recognizer_asset.asset_id}")
     print(f"passive PAD provider = {pad_provider.provider_id}")
-    print("Identity threshold is provisional/evidence-only because live non-owner calibration is still missing.")
+    print(
+        "Identity threshold is provisional/evidence-only because live non-owner "
+        "calibration is still missing."
+    )
     print("T2 is disabled. No action authority is exercised by this harness.")
     print("No frame, aligned face, SFace embedding, or PAD tensor/output is saved.")
-    print("Wait for a GREEN associated head, click it once, press S, then behave naturally.")
+    print(
+        "Wait for a GREEN associated head, click it once, press S, then behave naturally."
+    )
 
     cv2.namedWindow(_WINDOW_NAME)
     cv2.setMouseCallback(_WINDOW_NAME, selection.on_mouse)
@@ -307,7 +316,9 @@ def run_owner_evidence_live(scenario: str) -> int:
                 selection.clicked_track_id = None
                 target = runtime.target
                 if target is not None and target.track_id == requested_track:
-                    print(f"Track {requested_track} is already selected; no reset performed.")
+                    print(
+                        f"Track {requested_track} is already selected; no reset performed."
+                    )
                 else:
                     try:
                         runtime.lock(requested_track)
@@ -465,7 +476,11 @@ def run_owner_evidence_live(scenario: str) -> int:
                 last_face_rect = None
                 print("Selected target cleared; temporal evidence windows discarded.")
             if key in (ord("s"), ord("S")):
-                if runtime.target is None or identity_window is None or liveness_window is None:
+                if (
+                    runtime.target is None
+                    or identity_window is None
+                    or liveness_window is None
+                ):
                     print("Select one GREEN associated head before starting.")
                 else:
                     collecting = True
@@ -503,6 +518,9 @@ def run_owner_evidence_live(scenario: str) -> int:
     print("identity_threshold_authoritative = False")
     print("live_non_owner_calibration_available = False")
     print("face_evidence_grants_T2 = False")
+    if session_invalidated:
+        print("STEP_3B8_OWNER_LIVENESS_EVIDENCE = SESSION_INVALIDATED_FAIL_CLOSED")
+        return 0 if scenario == "session-lock" else 3
     print("STEP_3B8_OWNER_LIVENESS_EVIDENCE = COMPLETE")
     return 0
 
