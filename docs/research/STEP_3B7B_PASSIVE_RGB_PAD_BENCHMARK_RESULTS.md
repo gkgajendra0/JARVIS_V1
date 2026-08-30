@@ -4,7 +4,7 @@ Date: 2026-08-30
 
 ## Status
 
-**REAL-MACHINE BENCHMARK EVIDENCE IN PROGRESS — NO PASSIVE PAD AUTHORITY YET**
+**HUMAN-ACCEPTED FOR THE CURRENT POCKET-3 PROTOTYPE — MINIFAS + 15-FRAME TEMPORAL FUSION SELECTED — NO T2 AUTHORITY YET**
 
 This file records empirical DJI Pocket 3 benchmark evidence for the passive RGB presentation-attack-detection candidates researched in `STEP_3B7B_PASSIVE_RGB_PAD_RESEARCH.md`.
 
@@ -20,9 +20,9 @@ Two independent genuine-live OWNER runs remained near zero real probability, inc
 
 ### MiniFASNet V1SE + V2 ensemble
 
-**LEADING PASSIVE RGB PAD CANDIDATE — NOT YET PROMOTED.**
+**SELECTED for the current Pocket-3 passive RGB PAD prototype.**
 
-The candidate has shown strong separation between genuine live OWNER and both static phone-photo and prerecorded phone-video presentation attacks. Promotion still requires a normal-use robustness sweep and explicit human acceptance of the resulting temporal decision rule.
+The candidate showed strong separation between genuine live OWNER, static phone-photo attack, prerecorded phone-video attack, and a normal-use live robustness sweep. It is used only behind JARVIS-owned 15-observation temporal fusion. It remains supporting biometric evidence, not permission and not a strong authenticator.
 
 ## Live OWNER baseline 1
 
@@ -94,25 +94,54 @@ OpenVINO anti-spoof-mn3 reference-context crop:
 
 Interpretation: the MiniFAS ensemble strongly rejected the prerecorded moving-face replay. The 15-frame rolling median remained 0.0000 through the complete reported distribution.
 
-## Empirical separation so far
+## Normal-use live robustness sweep
 
-| Scenario | MiniFAS raw median | MiniFAS 15-frame median | MiniFAS 15-frame max |
+Scenario: genuine live OWNER with moderate left/right head turns, slight up/down movement, near/far leaning, normal blinking/eye movement, mouth movement, and ordinary small body/head movement. The operator reselected once and restarted; the reported final dataset is a fresh complete 300-sample run after that reset.
+
+MiniFASNet ensemble:
+
+- real probability: min 0.9073, p05 0.9878, median 0.9988, p95 0.9999, max 0.9999;
+- rolling median 5: min 0.9383, p05 0.9913, median 0.9988, p95 0.9998, max 0.9999;
+- rolling median 15: min 0.9855, p05 0.9942, median 0.9987, p95 0.9997, max 0.9998;
+- latency: median 14.22 ms, p95 27.74 ms, max 43.63 ms.
+
+OpenVINO anti-spoof-mn3 remained near zero and its rejection is unchanged.
+
+Interpretation: the 15-frame temporal MiniFAS result remained strongly live throughout the normal-use movement sweep. The lowest observed genuine-live 15-frame median was 0.9855, while the strongest tested attack 15-frame value was 0.2229 from the phone-photo scenario.
+
+## Empirical separation
+
+| Scenario | MiniFAS raw median | MiniFAS 15-frame median | MiniFAS 15-frame min/max relevant to decision |
 | --- | ---: | ---: | ---: |
-| Live OWNER run 1 | 0.9994 | 0.9994 | not required for acceptance comparison |
-| Live OWNER run 2 | 0.9995 | 0.9996 | 0.9998 |
-| Phone photo | 0.0152 | 0.0148 | 0.2229 |
-| Phone video | 0.0000 | 0.0000 | 0.0000 |
+| Live OWNER run 1 | 0.9994 | 0.9994 | stable live baseline |
+| Live OWNER run 2 | 0.9995 | 0.9996 | max 0.9998 |
+| Normal-use live robustness | 0.9988 | 0.9987 | **min 0.9855** |
+| Phone photo | 0.0152 | 0.0148 | **max 0.2229** |
+| Phone video | 0.0000 | 0.0000 | max 0.0000 at reported precision |
 
-This is strong empirical separation on the tested Pocket 3 conditions, but it is not yet a production threshold. A normal-use robustness sweep must establish how low genuine-live temporal scores can fall under moderate pose, distance, motion, and lighting variation before selecting LIVE / UNCERTAIN / SPOOF bands.
+## Accepted temporal decision rule
 
-## Next acceptance evidence
+For the current Pocket-3 prototype, JARVIS owns the temporal rule rather than trusting a single model frame:
 
-Perform a genuine-live OWNER robustness sweep with normal non-cooperative behavior rather than an artificial still pose. Include moderate left/right yaw, slight up/down pitch, leaning nearer/farther from the camera, natural blinking/eye movement, and representative room-light variation where practical.
+- window: 15 fresh observations from the same Windows session, same visual track, and selected MiniFAS provider;
+- `LIVE`: 15-observation median real probability >= 0.95;
+- `SPOOF`: 15-observation median real probability <= 0.50;
+- `UNCERTAIN`: between 0.50 and 0.95;
+- `INSUFFICIENT`: fewer than 15 fresh observations;
+- a gap greater than 0.50 seconds clears the temporal window;
+- `UNCERTAIN` is eligible for the already accepted 3B.7A active challenge fallback;
+- `SPOOF` fails closed rather than invoking a challenge automatically;
+- passive evidence TTL is short-lived (2 seconds in the initial wiring).
 
-If genuine-live temporal scores remain clearly separated from the observed attacks, define a conservative three-state temporal rule:
+These deliberately conservative bands leave substantial margin around the observed data instead of fitting thresholds to the benchmark extrema. They are specific to the selected Pocket-3/MiniFAS prototype and must be reevaluated when camera hardware, PAD model, crop behavior, or operating conditions materially change.
 
-- `LIVE`: strong sustained passive evidence;
-- `UNCERTAIN`: insufficient or degraded evidence — invoke the already accepted 3B.7A active challenge when trust/risk requires it;
-- `SPOOF`: strong presentation-attack evidence.
+## Security boundary remains unchanged
 
-Even after passive PAD promotion, passive liveness remains supporting evidence only and must not independently grant T2 or authorize an action.
+Even after this human acceptance:
+
+- passive PAD alone does not prove OWNER identity;
+- passive PAD alone does not grant T2;
+- passive PAD never authorizes an action;
+- runtime trust must bind fresh OWNER face evidence and fresh liveness evidence to the same stable visual track and expected Windows session;
+- critical actions still require T3 through Windows Hello/FIDO2;
+- future depth/IR hardware may replace or strengthen this provider without changing the authority contract.
