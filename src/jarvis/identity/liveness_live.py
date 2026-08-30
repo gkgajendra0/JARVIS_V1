@@ -7,10 +7,7 @@ import cv2
 import numpy as np
 
 from jarvis.authority import WindowsWtsSessionProvider
-from jarvis.identity.calibration import (
-    _build_runtime,
-    _draw_clickable_heads,
-)
+from jarvis.identity.calibration import _build_runtime, _draw_clickable_heads
 from jarvis.identity.live_face_benchmark import _SelectionState, _crop_head
 from jarvis.identity.liveness import (
     ActiveLivenessChallenge,
@@ -20,6 +17,8 @@ from jarvis.identity.liveness import (
 )
 from jarvis.identity.liveness_assets import ensure_face_landmarker_model
 from jarvis.identity.liveness_mediapipe import MediaPipeFaceLandmarker
+from jarvis.vision.models import TargetState
+from jarvis.vision.observer import render_snapshot
 
 _WINDOW_NAME = "JARVIS Active Liveness"
 _ANALYSIS_INTERVAL_SECONDS = 0.08
@@ -37,7 +36,9 @@ class _DiagnosticStats:
 
     def update(self, values: dict[str, float]) -> None:
         canonical = {
-            "".join(character for character in name.lower() if character.isalnum()): score
+            "".join(
+                character for character in name.lower() if character.isalnum()
+            ): score
             for name, score in values.items()
         }
         blink = min(
@@ -91,7 +92,9 @@ def _draw_overlay(
         progress = challenge.progress
         total = len(challenge.challenge.actions)
         current = min(progress.action_index + 1, total)
-        sequence = " -> ".join(action.value.upper() for action in challenge.challenge.actions)
+        sequence = " -> ".join(
+            action.value.upper() for action in challenge.challenge.actions
+        )
         lines = [
             f"TRACK {selected_track_id} | challenge {current}/{total} | {progress.phase.value}",
             _prompt(progress.action, progress.phase),
@@ -168,12 +171,12 @@ def run_live_liveness() -> int:
                 for track in snapshot.tracks:
                     if not runtime.head_lock_eligible(track.track_id):
                         continue
-                    from jarvis.vision.models import TargetState
-
                     candidate = TargetState(track_id=track.track_id, track=track)
                     associated = framing_policy.associated_head(candidate, heads)
                     if associated is not None:
-                        clickable_head_regions.append((track.track_id, associated.bounds))
+                        clickable_head_regions.append(
+                            (track.track_id, associated.bounds)
+                        )
 
                 selection.update(
                     snapshot.tracks,
@@ -189,7 +192,9 @@ def run_live_liveness() -> int:
                     else:
                         try:
                             runtime.lock(requested_track)
-                            print(f"Locked track {requested_track}; press S when ready.")
+                            print(
+                                f"Locked track {requested_track}; press S when ready."
+                            )
                         except ValueError as exc:
                             print(exc)
 
@@ -198,7 +203,11 @@ def run_live_liveness() -> int:
                 if target is not None and target.visible:
                     last_visible_target_at = now
                 associated_head = framing_policy.associated_head(target, heads)
-                if associated_head is not None and target is not None and target.visible:
+                if (
+                    associated_head is not None
+                    and target is not None
+                    and target.visible
+                ):
                     last_associated_head_at = now
 
                 if challenge is not None:
@@ -211,7 +220,10 @@ def run_live_liveness() -> int:
                         final_phase = progress.phase
                         final_reasons = progress.reason_codes
                         break
-                    if target is None or target.track_id != challenge.challenge.visual_track_id:
+                    if (
+                        target is None
+                        or target.track_id != challenge.challenge.visual_track_id
+                    ):
                         progress = challenge.fail("visual_track_changed")
                         final_phase = progress.phase
                         final_reasons = progress.reason_codes
@@ -243,7 +255,11 @@ def run_live_liveness() -> int:
                     )
                     if should_analyze:
                         last_analysis_at = now
-                        crop = _crop_head(frame.image, associated_head.bounds, margin_fraction=0.35)
+                        crop = _crop_head(
+                            frame.image,
+                            associated_head.bounds,
+                            margin_fraction=0.35,
+                        )
                         observed = landmarker.observe(
                             crop.image,
                             observed_at_monotonic=now,
@@ -268,8 +284,6 @@ def run_live_liveness() -> int:
                         final_reasons = progress.reason_codes
                         break
 
-                from jarvis.vision.observer import render_snapshot
-
                 preview = render_snapshot(frame.image, snapshot)
                 _draw_clickable_heads(preview, clickable_head_regions)
                 _draw_overlay(
@@ -293,7 +307,9 @@ def run_live_liveness() -> int:
                         print("Lock one visible GREEN associated head before starting.")
                         continue
                     if framing_policy.associated_head(target, heads) is None:
-                        print("Selected track does not currently have an associated head.")
+                        print(
+                            "Selected track does not currently have an associated head."
+                        )
                         continue
                     challenge = ActiveLivenessChallenge.create(
                         session_id=session.session_id,
@@ -326,7 +342,10 @@ def run_live_liveness() -> int:
         "sequence = "
         + " -> ".join(action.value.upper() for action in challenge.challenge.actions)
     )
-    print(f"completed_actions = {[action.value for action in challenge.progress.completed_actions]}")
+    print(
+        f"completed_actions = "
+        f"{[action.value for action in challenge.progress.completed_actions]}"
+    )
     print(f"valid_landmarker_observations = {stats.valid_observations}")
     print(f"max_blink_pair = {stats.max_blink_pair:.3f}")
     print(f"max_jaw_open = {stats.max_jaw_open:.3f}")
