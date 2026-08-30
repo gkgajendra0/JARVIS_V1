@@ -32,6 +32,7 @@ from .session import (
     WindowsSessionUnavailable,
     WindowsWtsSessionProvider,
 )
+from .strong_approval import StrongApprovalOutcome, StrongApprovalService
 from .types import (
     ActionAttributes,
     ActionOrigin,
@@ -95,6 +96,8 @@ __all__ = [
     "RiskClassifier",
     "SessionSecurityEvent",
     "SqliteAuditEventStore",
+    "StrongApprovalOutcome",
+    "StrongApprovalService",
     "StrongVerificationResult",
     "StrongVerificationStatus",
     "StrongVerifier",
