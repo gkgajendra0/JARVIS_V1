@@ -400,9 +400,7 @@ class SqliteOwnerProfileStore:
             model_sha256=row["model_sha256"],
             embedding_dimension=row["embedding_dimension"],
             calibration_version=row["calibration_version"],
-            enrollment_compatibility_version=row[
-                "enrollment_compatibility_version"
-            ],
+            enrollment_compatibility_version=row["enrollment_compatibility_version"],
             template_format=row["template_format"],
         )
 

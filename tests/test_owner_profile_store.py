@@ -103,7 +103,7 @@ def test_replace_rotates_profile_and_replaces_template(tmp_path) -> None:
     assert second_template.payload == b"face-v2"
 
 
-def test_delete_crypto_shreds_live_profile_state(tmp_path) -> None:
+def test_delete_removes_live_profile_key_and_templates(tmp_path) -> None:
     store = SqliteOwnerProfileStore(
         tmp_path / "identity.db",
         key_protector=TestKeyProtector(),
@@ -150,9 +150,7 @@ def test_metadata_tamper_fails_aead_binding(tmp_path) -> None:
     store.create_owner([face_template()])
 
     connection = sqlite3.connect(db_path)
-    connection.execute(
-        "UPDATE owner_biometric_template SET model_version = 'tampered'"
-    )
+    connection.execute("UPDATE owner_biometric_template SET model_version = 'tampered'")
     connection.commit()
     connection.close()
 

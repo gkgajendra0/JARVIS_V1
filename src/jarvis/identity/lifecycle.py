@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Protocol, TypeVar
@@ -168,6 +169,13 @@ class OwnerProfileLifecycleService:
         templates: tuple[TemplateInput, ...],
     ) -> ActionProposal:
         manifests = [item.metadata.manifest_view() for item in templates]
+        commitments = [
+            {
+                "modality": item.metadata.modality.value,
+                "sha256": hashlib.sha256(item.payload).hexdigest(),
+            }
+            for item in templates
+        ]
         summary = {
             "create_owner": "Enroll this local biometric profile as JARVIS OWNER",
             "replace_owner": "Replace the enrolled JARVIS OWNER biometric profile",
@@ -178,7 +186,10 @@ class OwnerProfileLifecycleService:
             capability="identity_profile",
             operation=operation,
             target={"subject": OWNER_PROFILE_ID},
-            parameters={"template_manifests": manifests},
+            parameters={
+                "template_manifests": manifests,
+                "template_commitments": commitments,
+            },
             material_summary=summary,
             attributes=ActionAttributes(
                 persistent_write=True,

@@ -231,3 +231,21 @@ def test_replace_and_delete_each_require_a_new_strong_flow(tmp_path) -> None:
     assert deleted.profile is None
     assert not store.has_owner()
     store.close()
+
+
+def test_enrollment_proposal_binds_candidate_template_bytes() -> None:
+    first = OwnerProfileLifecycleService._proposal(
+        session_id="wts:7",
+        operation="create_owner",
+        templates=(face_template(b"candidate-a"),),
+    )
+    second = OwnerProfileLifecycleService._proposal(
+        session_id="wts:7",
+        operation="create_owner",
+        templates=(face_template(b"candidate-b"),),
+    )
+
+    assert first.fingerprint != second.fingerprint
+    first_commitment = first.parameters()["template_commitments"][0]
+    second_commitment = second.parameters()["template_commitments"][0]
+    assert first_commitment["sha256"] != second_commitment["sha256"]
