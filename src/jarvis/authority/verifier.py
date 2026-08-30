@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import uuid
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -26,6 +27,7 @@ class StrongVerificationStatus(str, Enum):
 class StrongVerificationResult:
     status: StrongVerificationStatus
     verifier_id: str
+    verification_id: str | None = None
     proposal_fingerprint: str | None = None
     session_id: str | None = None
     reason_codes: tuple[str, ...] = ()
@@ -71,6 +73,8 @@ class WindowsHelloVerifier:
         proposal: ActionProposal,
         session_id: str,
     ) -> StrongVerificationResult:
+        verification_id = str(uuid.uuid4())
+
         def result(
             status: StrongVerificationStatus,
             reason: str,
@@ -78,6 +82,7 @@ class WindowsHelloVerifier:
             return self._result(
                 status,
                 reason,
+                verification_id=verification_id,
                 proposal=proposal,
                 session_id=session_id,
             )
@@ -136,12 +141,14 @@ class WindowsHelloVerifier:
         status: StrongVerificationStatus,
         reason: str,
         *,
+        verification_id: str,
         proposal: ActionProposal,
         session_id: str,
     ) -> StrongVerificationResult:
         return StrongVerificationResult(
             status=status,
             verifier_id=self.verifier_id,
+            verification_id=verification_id,
             proposal_fingerprint=proposal.fingerprint,
             session_id=session_id,
             reason_codes=(reason,),
