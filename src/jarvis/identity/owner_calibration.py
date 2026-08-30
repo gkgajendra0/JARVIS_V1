@@ -179,7 +179,9 @@ def run_owner_calibration(
         "Provisional OWNER positive-distribution floor (held-out p05): "
         f"{result.provisional_positive_floor:.4f}"
     )
-    print(f"OWNER point rate at p05 floor: {result.owner_point_accept_rate * 100.0:.2f}%")
+    print(
+        f"OWNER point rate at p05 floor: {result.owner_point_accept_rate * 100.0:.2f}%"
+    )
     print(
         f"Temporal diagnostic: {result.window_required_accepts}/"
         f"{result.window_size} fresh valid scores >= p05 floor and "
@@ -193,7 +195,9 @@ def run_owner_calibration(
     print("IMPORTANT: no non-owner false-accept rate was measured in this run.")
     print("No absolute OWNER-vs-UNKNOWN threshold is approved by this command.")
     print("Anything not strongly matching OWNER remains UNKNOWN/AMBIGUOUS.")
-    print("This positive baseline is not sufficient by itself to grant T2 or authority.")
+    print(
+        "This positive baseline is not sufficient by itself to grant T2 or authority."
+    )
     print("Human review is required before encrypted OWNER enrollment.")
     print()
     print("NO OWNER PROFILE CREATED")
