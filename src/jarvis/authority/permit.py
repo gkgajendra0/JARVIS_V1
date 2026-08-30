@@ -3,9 +3,9 @@ from __future__ import annotations
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import Enum
-from typing import Callable
 
 from .types import RiskClass
 
