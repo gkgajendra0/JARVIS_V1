@@ -10,7 +10,7 @@ This document describes implemented, validated, and human-accepted architecture 
 - Step 2.5 — Vision Sensor & Active Target Tracking Foundation: accepted on 2026-08-29 and merged to `main`.
 - Development supervisor (`jarvis-dev`) — accepted on 2026-08-30 and merged to protected `main`.
 - Time-aware startup greeting interaction — accepted on 2026-08-30.
-- Step 3A — Deterministic Authority Foundation + Windows strong verification/session invalidation: accepted on 2026-08-30; pending protected-main merge of PR #7.
+- Step 3A — Deterministic Authority Foundation + Windows strong verification/session invalidation: accepted on 2026-08-30 and awaiting the final protected-main merge of PR #7.
 
 Step 3 is not complete. Owner biometric identity, liveness, attention-provider integration, speaker identity, and full T0/T1/T2 trust derivation remain future Step-3 slices.
 
