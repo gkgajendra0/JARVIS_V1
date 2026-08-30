@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import math
 import statistics
-import time
 from dataclasses import dataclass
 from enum import Enum
 
@@ -29,6 +27,7 @@ _DEFAULT_MAXIMUM_SAMPLES = 240
 _DEFAULT_ANALYSIS_INTERVAL_SECONDS = 0.20
 _DEFAULT_WINDOW_SIZE = 5
 _DEFAULT_WINDOW_REQUIRED_ACCEPTS = 4
+_MINIMUM_OWNER_WINDOW_ACCEPT_RATE = 0.90
 
 
 class CalibrationStatus(str, Enum):
@@ -103,7 +102,9 @@ def _prototype(features: list[np.ndarray]) -> np.ndarray:
 
 def _scores_against(prototype: np.ndarray, features: list[np.ndarray]) -> list[float]:
     reference = _normalize_feature(prototype)
-    return [float(np.dot(reference, _normalize_feature(feature))) for feature in features]
+    return [
+        float(np.dot(reference, _normalize_feature(feature))) for feature in features
+    ]
 
 
 def _percentile(values: list[float], percentile: float) -> float:
@@ -171,6 +172,10 @@ def derive_face_calibration(
     prototype. The 5th percentile positive score becomes the candidate ACCEPT floor
     and the 99th percentile negative score becomes the candidate REJECT ceiling.
     Values between those bounds are deliberately AMBIGUOUS.
+
+    A candidate is only considered ready when the percentile bands separate, at
+    least 90% of rolling OWNER windows satisfy the proposed temporal rule, and no
+    rolling non-owner window is observed to satisfy it.
     """
     if minimum_samples < 10:
         raise ValueError("minimum_samples must be at least 10")
@@ -199,11 +204,6 @@ def derive_face_calibration(
     accept_threshold = owner_distribution.p05
     reject_threshold = non_owner_distribution.p99
     ambiguity_width = accept_threshold - reject_threshold
-    status = (
-        CalibrationStatus.CANDIDATE_READY
-        if ambiguity_width > 0
-        else CalibrationStatus.INSUFFICIENT_SEPARATION
-    )
 
     owner_point_accept_rate = sum(
         score >= accept_threshold for score in owner_scores
@@ -223,6 +223,17 @@ def derive_face_calibration(
         accept_threshold=accept_threshold,
         window_size=window_size,
         required_accepts=window_required_accepts,
+    )
+
+    candidate_ready = (
+        ambiguity_width > 0
+        and owner_window_accept_rate >= _MINIMUM_OWNER_WINDOW_ACCEPT_RATE
+        and non_owner_window_false_accept_rate == 0.0
+    )
+    status = (
+        CalibrationStatus.CANDIDATE_READY
+        if candidate_ready
+        else CalibrationStatus.INSUFFICIENT_SEPARATION
     )
 
     return FaceCalibrationResult(
@@ -412,11 +423,15 @@ def _capture_stage(
                 selection.clicked_track_id = None
                 target = runtime.target
                 if target is not None and target.track_id == requested_track:
-                    print(f"Track {requested_track} is already selected; capture continues.")
+                    print(
+                        f"Track {requested_track} is already selected; capture continues."
+                    )
                 else:
                     try:
                         runtime.lock(requested_track)
-                        print(f"Locked track {requested_track}; {stage_name} capture active.")
+                        print(
+                            f"Locked track {requested_track}; {stage_name} capture active."
+                        )
                     except ValueError as exc:
                         print(exc)
 
@@ -461,8 +476,12 @@ def _capture_stage(
                             yunet_confidence=float(face[-1]),
                             brightness=float(np.mean(gray)),
                             sharpness=float(cv2.Laplacian(gray, cv2.CV_64F).var()),
-                            head_width_px=max(1, round(head.bounds.width * frame.width)),
-                            head_height_px=max(1, round(head.bounds.height * frame.height)),
+                            head_width_px=max(
+                                1, round(head.bounds.width * frame.width)
+                            ),
+                            head_height_px=max(
+                                1, round(head.bounds.height * frame.height)
+                            ),
                         )
                         samples.append(sample)
 
@@ -591,8 +610,12 @@ def run_calibration(
     print("-------------------------------------------------")
     print("This command performs two fresh camera/tracker sessions.")
     print("Stage 1 captures OWNER-positive samples in RAM only.")
-    print("Stage 2 captures a consenting adult's non-owner-negative samples in RAM only.")
-    print("NO raw frame, aligned face, 128-D feature, OWNER profile, or template is saved.")
+    print(
+        "Stage 2 captures a consenting adult's non-owner-negative samples in RAM only."
+    )
+    print(
+        "NO raw frame, aligned face, 128-D feature, OWNER profile, or template is saved."
+    )
     print("The final output is numeric candidate calibration statistics only.")
 
     owner_stage = _capture_stage(
@@ -611,9 +634,13 @@ def run_calibration(
     print("OWNER capture is complete and its camera/tracker session is closed.")
     print("Have the OWNER leave the camera view before the next session starts.")
     print("Use a different adult only if they have explicitly agreed to this test.")
-    consent = input("Type CONSENT after the other adult has agreed, or anything else to abort: ")
+    consent = input(
+        "Type CONSENT after the other adult has agreed, or anything else to abort: "
+    )
     if consent.strip().upper() != "CONSENT":
-        print("Consent acknowledgement was not provided; negative capture was not started.")
+        print(
+            "Consent acknowledgement was not provided; negative capture was not started."
+        )
         print("STEP_3B5_CALIBRATION = ABORTED")
         return 2
 
@@ -659,7 +686,8 @@ def run_calibration(
     )
     print(
         f"Candidate temporal rule: {result.window_required_accepts}/"
-        f"{result.window_size} fresh valid scores >= ACCEPT and window median >= ACCEPT"
+        f"{result.window_size} consecutive valid scores >= ACCEPT and "
+        "window median >= ACCEPT"
     )
     print(
         "OWNER rolling-window accept rate: "
@@ -668,6 +696,11 @@ def run_calibration(
     print(
         "NON-OWNER rolling-window false-accept rate: "
         f"{result.non_owner_window_false_accept_rate * 100.0:.4f}%"
+    )
+    print(
+        "Candidate readiness requires separated percentile bands, at least "
+        f"{_MINIMUM_OWNER_WINDOW_ACCEPT_RATE * 100:.0f}% OWNER rolling-window "
+        "acceptance, and zero observed non-owner rolling-window false accepts."
     )
     print()
     print("NO OWNER PROFILE CREATED")
