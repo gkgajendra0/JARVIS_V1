@@ -3,7 +3,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from jarvis.identity.passive_pad import _probabilities, _scaled_face_crop
+from jarvis.identity.passive_pad import (
+    _directional_face_crop,
+    _probabilities,
+    _scaled_face_crop,
+)
 from jarvis.identity.passive_pad_benchmark import (
     _associate_face,
     _FaceBox,
@@ -35,6 +39,37 @@ def test_scaled_face_crop_stays_inside_source_image() -> None:
     )
 
     assert crop.shape == (80, 80, 3)
+
+
+def test_directional_face_crop_stays_inside_source_image() -> None:
+    image = np.zeros((100, 120, 3), dtype=np.uint8)
+
+    crop = _directional_face_crop(
+        image,
+        (5, 5, 35, 45),
+        left_ratio=0.10,
+        top_ratio=0.40,
+        right_ratio=0.10,
+        bottom_ratio=0.0,
+        output_size=(128, 128),
+    )
+
+    assert crop.shape == (128, 128, 3)
+
+
+def test_directional_face_crop_rejects_negative_margin() -> None:
+    image = np.zeros((100, 120, 3), dtype=np.uint8)
+
+    with pytest.raises(ValueError):
+        _directional_face_crop(
+            image,
+            (5, 5, 35, 45),
+            left_ratio=-0.10,
+            top_ratio=0.40,
+            right_ratio=0.10,
+            bottom_ratio=0.0,
+            output_size=(128, 128),
+        )
 
 
 def test_face_association_prefers_overlap() -> None:
