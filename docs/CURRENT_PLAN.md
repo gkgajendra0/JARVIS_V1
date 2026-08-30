@@ -253,7 +253,7 @@ requirements
 -> accepted ADRs                            DONE
 -> Phase 3A authority implementation        DONE
 -> Phase 3A automated validation            DONE
--> Phase 3A real human acceptance            DONE
+-> Phase 3A real human acceptance           DONE
 -> Phase 3A documentation reconciliation   DONE
 -> Phase 3A protected-main merge            DONE
 -> Phase 3B.1 secure OWNER profile          DONE / HUMAN ACCEPTED
