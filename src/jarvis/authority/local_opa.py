@@ -8,6 +8,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Self
 
 
 class LocalOpaError(RuntimeError):
@@ -70,7 +71,7 @@ class ManagedOpaServer:
             raise LocalOpaError("OPA server is not running")
         return f"http://127.0.0.1:{self._port}/v1/data/jarvis/authority/decision"
 
-    def start(self) -> ManagedOpaServer:
+    def start(self) -> Self:
         if self._process is not None:
             raise LocalOpaError("OPA server is already running")
         if not self._policy_path.is_file():
@@ -122,7 +123,7 @@ class ManagedOpaServer:
                 process.kill()
                 process.wait(timeout=2.0)
 
-    def __enter__(self) -> ManagedOpaServer:
+    def __enter__(self) -> Self:
         return self.start()
 
     def __exit__(self, exc_type, exc, tb) -> None:
