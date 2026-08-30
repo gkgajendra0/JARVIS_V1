@@ -82,7 +82,9 @@ class WindowsWtsSessionProvider:
 
     def current_session(self) -> AuthoritySession:
         if sys.platform != "win32":
-            raise WindowsSessionUnavailable("Windows WTS is unavailable on this platform")
+            raise WindowsSessionUnavailable(
+                "Windows WTS is unavailable on this platform"
+            )
         session_id, active_unlocked = self._read_state()
         return AuthoritySession(
             session_id=f"wts:{session_id}",
@@ -100,7 +102,10 @@ class WindowsWtsSessionProvider:
 
         session_id = ctypes.c_ulong()
         process_id = ctypes.c_ulong(os.getpid())
-        kernel32.ProcessIdToSessionId.argtypes = [ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong)]
+        kernel32.ProcessIdToSessionId.argtypes = [
+            ctypes.c_ulong,
+            ctypes.POINTER(ctypes.c_ulong),
+        ]
         kernel32.ProcessIdToSessionId.restype = ctypes.c_int
         if not kernel32.ProcessIdToSessionId(process_id, ctypes.byref(session_id)):
             raise WindowsSessionUnavailable("ProcessIdToSessionId failed")
