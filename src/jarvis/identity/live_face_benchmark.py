@@ -42,11 +42,20 @@ class _SelectionState:
     def __init__(self) -> None:
         self.clicked_track_id: int | None = None
         self.tracks = ()
+        self.head_regions = ()
         self.frame_width = 0
         self.frame_height = 0
 
-    def update(self, tracks, *, width: int, height: int) -> None:
+    def update(
+        self,
+        tracks,
+        *,
+        head_regions=(),
+        width: int,
+        height: int,
+    ) -> None:
         self.tracks = tracks
+        self.head_regions = tuple(head_regions)
         self.frame_width = width
         self.frame_height = height
 
@@ -59,6 +68,20 @@ class _SelectionState:
 
         normalized_x = x / self.frame_width
         normalized_y = y / self.frame_height
+
+        containing_heads = [
+            (track_id, bounds)
+            for track_id, bounds in self.head_regions
+            if bounds.left <= normalized_x <= bounds.right
+            and bounds.top <= normalized_y <= bounds.bottom
+        ]
+        if containing_heads:
+            self.clicked_track_id = min(
+                containing_heads,
+                key=lambda item: item[1].width * item[1].height,
+            )[0]
+            return
+
         containing = [
             track
             for track in self.tracks
@@ -172,7 +195,7 @@ def _summary_line(name: str, values: list[float], *, suffix: str = "") -> str:
 
 def _draw_benchmark_overlay(preview: np.ndarray, sample: LiveFaceSample | None) -> None:
     lines = [
-        "3B.4 NON-PERSISTENT | click a green person to lock | C clear | Q quit",
+        "3B.4 NON-PERSISTENT | click GREEN HEAD to lock | C clear | Q quit",
         "Move naturally: frontal, left/right, near/far, normal room lighting.",
     ]
     if sample is not None:
@@ -206,6 +229,26 @@ def _draw_benchmark_overlay(preview: np.ndarray, sample: LiveFaceSample | None) 
         )
 
 
+def _draw_clickable_heads(preview: np.ndarray, head_regions) -> None:
+    height, width = preview.shape[:2]
+    for track_id, bounds in head_regions:
+        left = round(bounds.left * width)
+        top = round(bounds.top * height)
+        right = round(bounds.right * width)
+        bottom = round(bounds.bottom * height)
+        cv2.rectangle(preview, (left, top), (right, bottom), (0, 255, 0), 3)
+        cv2.putText(
+            preview,
+            f"CLICK -> TRACK {track_id}",
+            (left, min(height - 8, bottom + 22)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (0, 255, 0),
+            2,
+            cv2.LINE_AA,
+        )
+
+
 def run_live_benchmark(*, analysis_interval_seconds: float = 0.12) -> int:
     if analysis_interval_seconds <= 0:
         raise ValueError("analysis_interval_seconds must be positive")
@@ -219,6 +262,7 @@ def run_live_benchmark(*, analysis_interval_seconds: float = 0.12) -> int:
         MediaPipeBlazeFaceDetector,
         default_blazeface_model_path,
     )
+    from jarvis.vision.models import TargetState
     from jarvis.vision.observer import render_snapshot
     from jarvis.vision.runtime import VisionRuntime, VisionRuntimeConfig
     from jarvis.vision.targeting import TargetManager
@@ -280,7 +324,7 @@ def run_live_benchmark(*, analysis_interval_seconds: float = 0.12) -> int:
     print("JARVIS Step 3B.4 selected-track live face benchmark")
     print("----------------------------------------------------")
     print("Camera is READ-ONLY for this diagnostic; PTZ is never armed or moved.")
-    print("Click a green/head-confirmed person to lock the benchmark target.")
+    print("Wait for the associated head box to turn GREEN, then click that head.")
     print("Then move naturally for ~30-60 seconds and press Q to finish.")
     print("No frame, aligned face, feature vector, or OWNER template is saved.")
 
@@ -306,8 +350,19 @@ def run_live_benchmark(*, analysis_interval_seconds: float = 0.12) -> int:
             if frame is None:
                 continue
 
+            heads = list(snapshot.heads)
+            clickable_head_regions = []
+            for track in snapshot.tracks:
+                if not runtime.head_lock_eligible(track.track_id):
+                    continue
+                candidate_target = TargetState(track_id=track.track_id, track=track)
+                associated = framing_policy.associated_head(candidate_target, heads)
+                if associated is not None:
+                    clickable_head_regions.append((track.track_id, associated.bounds))
+
             selection.update(
                 snapshot.tracks,
+                head_regions=clickable_head_regions,
                 width=frame.width,
                 height=frame.height,
             )
@@ -329,7 +384,7 @@ def run_live_benchmark(*, analysis_interval_seconds: float = 0.12) -> int:
                     selection.clicked_track_id = None
 
             target = runtime.target
-            head = framing_policy.associated_head(target, list(snapshot.heads))
+            head = framing_policy.associated_head(target, heads)
             should_analyze = (
                 head is not None
                 and target is not None
@@ -410,6 +465,7 @@ def run_live_benchmark(*, analysis_interval_seconds: float = 0.12) -> int:
                         )
 
             preview = render_snapshot(frame.image, snapshot)
+            _draw_clickable_heads(preview, clickable_head_regions)
             if last_face_rect is not None:
                 left, top, right, bottom = last_face_rect
                 cv2.rectangle(
