@@ -27,7 +27,7 @@ class LivenessPhase(str, Enum):
 @dataclass(frozen=True, slots=True)
 class LivenessThresholds:
     blink_neutral_max: float = 0.30
-    blink_action_min: float = 0.60
+    blink_action_min: float = 0.50
     mouth_neutral_max: float = 0.25
     mouth_action_min: float = 0.55
     smile_neutral_max: float = 0.30
