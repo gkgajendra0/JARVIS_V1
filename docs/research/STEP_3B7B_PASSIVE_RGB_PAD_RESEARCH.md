@@ -4,57 +4,51 @@ Date: 2026-08-30
 
 ## Status
 
-**RESEARCH COMPLETE FOR BENCHMARK IMPLEMENTATION — REAL POCKET-3 BENCHMARK IN PROGRESS — NOT YET AN AUTHORITY PROVIDER**
+**RESEARCH COMPLETE — REAL POCKET-3 BENCHMARK HUMAN-ACCEPTED — MINIFAS + TEMPORAL FUSION SELECTED FOR THE CURRENT RGB PROTOTYPE — NO T2 AUTHORITY YET**
 
-This record follows the accepted 3B.7A randomized active-challenge primitive. The active challenge remains a valid fallback, but it is not the intended normal JARVIS experience. Normal presence verification should be passive whenever the available evidence is strong enough.
+Detailed empirical results are preserved in `STEP_3B7B_PASSIVE_RGB_PAD_BENCHMARK_RESULTS.md`. The architecture decision is recorded in `docs/decisions/ADR-008_STEP_3_PASSIVE_RGB_LIVENESS.md`.
 
 ## Goal
 
-Evaluate mature passive RGB face presentation-attack detection (PAD) technology on the real DJI Pocket 3 before any passive model is allowed to create `FACE_LIVENESS` evidence.
+Replace the normal-use requirement for explicit blink/smile/open-mouth challenges with mature passive RGB presentation-attack detection where evidence is strong enough, while retaining the accepted 3B.7A randomized active challenge as a deterministic fallback.
 
-The benchmark must distinguish score distributions for at least:
-
-- a live face;
-- a face displayed as a static photo on a phone;
-- a prerecorded face video replayed on a phone;
-- a printed face photo when available.
-
-No raw frame, face crop, PAD input tensor, or model output vector is persisted.
+The current sensor is the DJI Pocket 3 RGB camera. Depth/IR remains a future provider upgrade and must not require redesigning JARVIS authority.
 
 ## Security boundary
 
-Passive RGB PAD is supporting biometric evidence, not permission and not a strong authenticator.
+Passive PAD is supporting biometric evidence, not permission and not a strong authenticator.
 
-A model prediction of `real` must never directly grant T2 or authorize an action. The eventual runtime must combine fresh PAD evidence with the same stable OWNER track, fresh OWNER face-match evidence, expected Windows session state, ambiguity checks, and other accepted evidence. Critical actions still require T3 through Windows Hello/FIDO2.
+A model prediction of `real` must never directly grant T2 or authorize an action. Runtime trust must eventually combine fresh PAD with the same stable OWNER visual track, fresh OWNER face-match evidence, expected Windows session state, ambiguity checks, and the other accepted trust requirements. Critical actions still require T3 through Windows Hello/FIDO2.
 
-RGB PAD also remains fundamentally weaker than future depth/IR sensing. The provider boundary must therefore remain replaceable so a later depth/IR camera can contribute stronger evidence without redesigning authority.
+No raw frame, face crop, PAD input tensor, or model output vector is persisted by the benchmark/runtime evidence boundary merely because it is available.
 
-## Candidate A — OpenVINO anti-spoof-mn3
+## Candidate A — OpenVINO `anti-spoof-mn3`
 
 Upstream: OpenVINO Open Model Zoo.
 
 Frozen research revision: `4d4266fbbb7eb5ab80944c2800d7f304868d573d`.
 
-Model source record:
+Model record:
 
 - model: `anti-spoof-mn3.onnx`;
 - size: 12,270,179 bytes;
 - upstream checksum: SHA-384 `6de4534964b723397b3e8c995cadcf43bc007cc2f9930b95ae25f76adccece5d1d4d058d0b15117b9e4a9f758424f92a`;
-- source: OpenVINO model storage path from the frozen Open Model Zoo manifest;
 - architecture: MobileNetV3 binary classifier;
 - training dataset documented by upstream: CelebA-Spoof;
 - input: RGB 128x128, NCHW;
 - mean: `[151.2405, 119.5950, 107.8395]`;
 - per-channel scale: `[63.0105, 56.4570, 55.0035]`;
 - output class 0 = real, class 1 = spoof;
-- reported ACER: 3.81% on the upstream evaluation;
+- reported upstream ACER: 3.81%;
 - model license: MIT according to Open Model Zoo legal information.
 
-OpenVINO 2026.2 still lists this ONNX model as verified, which makes it a useful mature baseline even though Open Model Zoo itself is now in maintenance mode.
+### Pocket-3 disposition
 
-The published ACER is reference data only. It is not JARVIS Pocket-3 accuracy and must not become a JARVIS threshold.
+**REJECTED.**
 
-The first Pocket-3 live run showed that feeding the tight YuNet face rectangle directly produced near-zero real probability for a genuine live OWNER. Upstream documentation confirms class 0 is genuinely the real class, so the result must not be "fixed" by swapping labels. A public anti-spoof-mn3 webcam integration expands the detected face roughly 10% left/right and 40% above the face before inference. JARVIS therefore added a research-matched contextual crop for a bounded retest. If that retest remains poor, this candidate will be rejected for the Pocket 3 rather than threshold-tuned into a pass.
+The initial tight YuNet crop produced near-zero real probability for genuine live OWNER. Upstream class semantics were verified, so JARVIS did not swap labels. A bounded retest using a reference-style contextual crop (approximately 10% left/right and 40% above the face) still left genuine live OWNER near zero.
+
+The model therefore does not discriminate the Pocket-3 live condition in this integration and is rejected rather than threshold-tuned into a pass.
 
 ## Candidate B — MiniFASNet multi-scale family
 
@@ -62,9 +56,7 @@ Primary lineage: MiniVision `Silent-Face-Anti-Spoofing`.
 
 Benchmark packaging source: `yakhyo/face-anti-spoofing`, which provides compact ONNX exports of the MiniVision architecture.
 
-Repository research revision: `aea85c1fa14e4d52a7910af75d59ef51e62a2267`.
-
-GitHub release ID: `271938250` (`weights`).
+Frozen research revision: `aea85c1fa14e4d52a7910af75d59ef51e62a2267`.
 
 Pinned assets:
 
@@ -79,144 +71,86 @@ Pinned assets:
   - SHA-256 `b32929adc2d9c34b9486f8c4c7bc97c1b69bc0ea9befefc380e4faae4e463907`;
   - crop scale 2.7.
 
-The benchmark uses both models and averages their real-class probabilities. Class index 1 is treated as the real class, matching the published ONNX inference implementation.
+The benchmark averages the two models' real-class probabilities. Class index 1 is treated as the real class, matching the published ONNX inference implementation.
 
-MiniVision explicitly warns that RGB silent-liveness robustness depends on camera model and scene. That warning is a reason to benchmark on the Pocket 3, not a reason to copy published thresholds.
+MiniVision explicitly warns that RGB silent-liveness robustness depends on camera model and scene. JARVIS therefore does not copy a published threshold; it benchmarks the exact Pocket-3 path.
 
-The code/model lineage is Apache-2.0, but the exact training-dataset provenance for these released MiniFAS weights is not sufficiently documented for a future commercial-distribution claim. They therefore remain benchmark candidates until that provenance question is explicitly reviewed.
+The code/model lineage is Apache-2.0, but exact training-dataset provenance for the released MiniFAS weights is not sufficiently documented for a future commercial-distribution claim. That issue remains an explicit future review item.
+
+### Pocket-3 disposition
+
+**SELECTED for the current prototype, behind JARVIS-owned temporal fusion.**
+
+The real-machine benchmark demonstrated strong separation across:
+
+- two genuine-live OWNER baselines;
+- a static OWNER photo displayed on a phone;
+- a prerecorded moving OWNER video replayed on a phone;
+- a genuine-live normal-use robustness sweep with head/eye/mouth/body movement and distance variation.
+
+Single-frame decisions are rejected because the phone-photo attack produced an isolated apparent-real score as high as `0.8838`.
+
+The 15-frame temporal results were decisively separated:
+
+- normal-use genuine-live minimum: `0.9855`;
+- phone-photo attack maximum: `0.2229`;
+- phone-video attack maximum: `0.0000` at reported precision.
 
 ## Runtime selection
 
-Use ONNX Runtime `1.29.0` CPU inference for the benchmark.
+Use ONNX Runtime `1.29.0` CPU inference for the current benchmark/runtime adapter.
 
 Reasons:
 
-- current release at research time;
-- CPython 3.11 Windows x64 wheel available;
-- both candidate families are tiny enough that CPU inference is appropriate;
-- avoids introducing a CUDA-specific ONNX Runtime dependency merely for PAD;
-- preserves provider/model replacement behind JARVIS-owned code.
+- current compatible CPython 3.11 Windows x64 runtime at research time;
+- candidate models are small enough for CPU inference;
+- avoids introducing a CUDA-specific ONNX Runtime dependency solely for PAD;
+- keeps model/provider replacement behind JARVIS-owned boundaries.
 
-## Benchmark architecture
+## Accepted temporal architecture
 
 ```text
-Pocket 3 read-only RGB
+Pocket 3 RGB
         ↓
-YuNet full-frame face detection
+selected/stable visual subject
         ↓
-explicitly click one detected face
+MiniFASNet V1SE + V2
         ↓
-short-lived face association in RAM
+15 fresh observations
+same Windows session + same visual track + same provider
         ↓
-┌────────────────────────────┐
-│ anti-spoof-mn3             │
-│ MiniFASNet V1SE + V2       │
-└────────────────────────────┘
+JARVIS temporal median
         ↓
-per-frame real probabilities
-        ↓
-5-frame + 15-frame rolling medians
-        ↓
-distribution summary only
+LIVE / UNCERTAIN / SPOOF
 ```
 
-The benchmark deliberately selects a YuNet face directly rather than requiring a body track. A presentation attack such as a phone photo may have no genuine body behind the displayed face; requiring body association would hide the attack surface we are trying to measure.
+Accepted prototype bands:
 
-The eventual runtime remains stricter: accepted PAD evidence must bind back to the same stable OWNER body/head track before it can contribute to trust.
+- `LIVE`: median >= `0.95`;
+- `SPOOF`: median <= `0.50`;
+- `UNCERTAIN`: between `0.50` and `0.95`;
+- `INSUFFICIENT`: fewer than 15 fresh observations;
+- gap > `0.50 s`: clear the temporal window;
+- passive evidence TTL: initially `2.0 s`;
+- `UNCERTAIN`: may invoke accepted 3B.7A active challenge;
+- `SPOOF`: fail closed.
 
-## Benchmark output
+These thresholds deliberately leave substantial unused margin between observed live and tested attack distributions. They are not universal MiniFAS thresholds and must be re-benchmarked when the camera/model/preprocessing/operating envelope changes materially.
 
-For each candidate, report without inventing an accept threshold:
+## Benchmark architecture and privacy
 
-- valid sample count;
-- real-probability min/p05/median/p95/max;
-- inference latency median/p95;
-- 5-frame rolling-median distribution;
-- 15-frame rolling-median distribution.
+The diagnostic deliberately allowed direct YuNet face selection so photo/video presentation attacks could be measured even without a genuine body behind them. The eventual integrated runtime is stricter: liveness evidence must bind back to the same stable visual subject used by OWNER identity evidence.
 
-Run the benchmark separately for each declared scenario. Human review compares live and attack distributions and decides whether either provider, their fusion, or neither is suitable.
-
-## First real Pocket-3 live baseline — 2026-08-30
-
-Scenario: real live enrolled OWNER, 300 samples, no frame/crop/tensor/output persistence.
-
-Observed tight-crop `anti-spoof-mn3`:
-
-- real probability: min 0.0006, p05 0.0008, median 0.0014, p95 0.0032, max 0.0060;
-- rolling median 5: median 0.0014;
-- rolling median 15: median 0.0013;
-- latency: median 3.00 ms, p95 3.87 ms.
-
-Observed MiniFASNet V1SE/V2 ensemble:
-
-- real probability: min 0.9980, p05 0.9987, median 0.9994, p95 0.9997, max 0.9998;
-- rolling median 5: median 0.9994;
-- rolling median 15: median 0.9994;
-- latency: median 12.37 ms, p95 26.16 ms.
-
-Interpretation:
-
-- MiniFAS is provisionally positive and extremely stable on this live OWNER run, but it is not accepted until phone-photo/video/print attack distributions are measured.
-- tight-crop anti-spoof-mn3 is provisionally unsuitable on Pocket-3 + YuNet integration; contextual-crop retest is required before rejection.
-- no threshold, liveness verdict, provider promotion, or T2 authority upgrade is approved from this run.
-
-## Contextual-crop live retest — 2026-08-30
-
-Scenario: real live enrolled OWNER, 300 samples, natural blinking and ordinary small eye/head movement permitted, no frame/crop/tensor/output persistence.
-
-Observed `openvino-anti-spoof-mn3-reference-context-v1`:
-
-- real probability: min 0.0008, p05 0.0014, median 0.0031, p95 0.0041, max 0.0049;
-- rolling median 5: median 0.0031;
-- rolling median 15: median 0.0031;
-- latency: median 2.96 ms, p95 3.59 ms.
-
-Observed MiniFASNet V1SE/V2 ensemble:
-
-- real probability: min 0.9960, p05 0.9988, median 0.9995, p95 0.9998, max 0.9999;
-- rolling median 5: median 0.9995;
-- rolling median 15: median 0.9996;
-- latency: median 9.12 ms, p95 30.66 ms.
-
-Interpretation:
-
-- contextual cropping does not recover anti-spoof-mn3 on the Pocket 3; genuine live OWNER remains near-zero real probability across the entire distribution.
-- `anti-spoof-mn3` is therefore rejected as a JARVIS Pocket-3 passive PAD candidate rather than threshold-tuned into a pass.
-- MiniFAS remains provisionally strong and stable on live OWNER across both independent 300-sample runs, including normal blinking and small natural movement.
-- MiniFAS still must be tested against phone-photo, phone-video, and optionally printed-photo attacks before any threshold, liveness verdict, provider promotion, or T2 contribution can be approved.
-
-## Phone-photo attack — 2026-08-30
-
-Scenario: a clear static photo of the OWNER displayed on another phone, 300 samples, no frame/crop/tensor/output persistence.
-
-Observed `openvino-anti-spoof-mn3-reference-context-v1`:
-
-- real probability: min 0.0004, p05 0.0006, median 0.0013, p95 0.0035, max 0.0081;
-- rolling median 5: median 0.0012, p95 0.0032, max 0.0047;
-- rolling median 15: median 0.0013, p95 0.0024, max 0.0034;
-- latency: median 2.97 ms, p95 3.44 ms.
-
-Observed MiniFASNet V1SE/V2 ensemble:
-
-- real probability: min 0.0000, p05 0.0001, median 0.0152, p95 0.5231, max 0.8838;
-- rolling median 5: median 0.0167, p95 0.2405, max 0.5217;
-- rolling median 15: median 0.0148, p95 0.1100, max 0.2229;
-- latency: median 8.34 ms, p95 30.18 ms.
-
-Interpretation:
-
-- MiniFAS shows very strong separation between genuine live OWNER (`~0.9995` median) and a static phone-photo attack (`0.0152` median).
-- isolated spoof frames can still produce high apparent real scores (`max=0.8838`), so single-frame PAD decisions are explicitly rejected.
-- temporal aggregation materially improves attack robustness; the 15-frame rolling median reduced the phone-photo attack maximum to `0.2229` while live OWNER remained around `0.9996` median.
-- anti-spoof-mn3 remains non-discriminative for the Pocket 3 because both live and phone-photo scenarios remain near zero; its earlier rejection stands.
-- no threshold, liveness verdict, provider promotion, or T2 authority upgrade is approved yet. Phone-video replay remains the next required attack because it is materially harder than a static photo.
-
-## Decision rule after benchmark
-
-Do not promote a passive provider merely because live scores look high.
-
-Promotion requires demonstrated separation on the real Pocket 3 between live and the tested presentation attacks, reasonable stability across normal pose/distance/lighting, and explicit human acceptance. If separation is weak, passive PAD remains `UNCERTAIN` and 3B.7A active challenge stays the fallback.
+The benchmark reports scalar distributions only. It does not save frames, face crops, PAD tensors, or output vectors.
 
 ## Future depth/IR upgrade
 
-The liveness boundary must remain modality-neutral. When depth/IR hardware is added, JARVIS should be able to add or replace evidence providers for depth geometry, NIR response, structured illumination, or ToF without changing the authority contract.
+The liveness contract remains modality-neutral. Future depth, NIR, structured-light, stereo, or ToF providers may replace or strengthen the RGB provider without changing:
+
+- identity evidence semantics;
+- session/visual-track binding;
+- trust tiers;
+- action authority;
+- Windows Hello/FIDO2 strong verification.
+
+RGB PAD must not be represented as equivalent to depth/IR presentation-attack resistance.
