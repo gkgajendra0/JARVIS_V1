@@ -27,7 +27,10 @@ from .session import (
     AuthoritySession,
     AuthoritySessionManager,
     SessionSecurityEvent,
+    WindowsSessionGuard,
     WindowsSessionProvider,
+    WindowsSessionUnavailable,
+    WindowsWtsSessionProvider,
 )
 from .types import (
     ActionAttributes,
@@ -47,6 +50,7 @@ from .verifier import (
     StrongVerificationResult,
     StrongVerificationStatus,
     StrongVerifier,
+    WindowsHelloVerifier,
 )
 
 __all__ = [
@@ -95,6 +99,10 @@ __all__ = [
     "StrongVerificationStatus",
     "StrongVerifier",
     "TrustTier",
+    "WindowsHelloVerifier",
+    "WindowsSessionGuard",
     "WindowsSessionProvider",
+    "WindowsSessionUnavailable",
+    "WindowsWtsSessionProvider",
     "canonical_json",
 ]
