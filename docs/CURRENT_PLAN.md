@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — 3B.1 HUMAN-ACCEPTED, 3B.2 AUTOMATED-VALIDATED, 3B.3 HUMAN-ACCEPTED, 3B.4 REAL POCKET-3 LIVE BENCHMARK NEXT**
+**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — 3B.1 HUMAN-ACCEPTED, 3B.2/3 HUMAN-ACCEPTED AS MODEL-INTEGRITY/RUNTIME BOUNDARY, 3B.4 REAL POCKET-3 LIVE BENCHMARK NEXT**
 
 Step 0, Step 1, Step 2, Step 2.5, and Step 3A are complete. The development-only `jarvis-dev` supervisor and time-aware startup greetings are also implemented, automated-validated, human-accepted, and merged to protected `main`.
 
@@ -19,8 +19,8 @@ Accepted Phase-3A evidence includes a real Windows lock transition invalidating 
 Phase 3B is proceeding on draft PR #10 in bounded slices. Accepted/validated progress so far:
 
 - **3B.1 secure single-OWNER profile/storage — HUMAN-ACCEPTED** on the real Windows owner account using synthetic non-biometric bytes only. Windows Hello gated create/delete, user-scoped DPAPI survived reopen, plaintext synthetic template bytes were absent from SQLite/WAL, and no live OWNER remained after delete.
-- **3B.2 face model manifest/asset boundary — AUTOMATED-VALIDATED.** YuNet/SFace assets are pinned to an immutable OpenCV Zoo revision, exact filenames/sizes/SHA-256 values, external verified cache, and no automatic model drift. SFace training-data provenance remains explicitly unresolved for future commercial distribution review.
-- **3B.3 non-enrollment model smoke — HUMAN-ACCEPTED** on the real owner machine. OpenCV 5 loaded the pinned models, YuNet and SFace executed successfully on synthetic inputs, SFace emitted a `(1, 128)` feature, and no camera/profile/template was used or persisted.
+- **3B.2 model manifest/asset boundary — AUTOMATED-VALIDATED and subsequently exercised by the 3B.3 human run.** YuNet/SFace assets are pinned to an immutable OpenCV Zoo revision, exact filenames/sizes/SHA-256 values, external verified cache, and no automatic model drift. SFace training-data provenance remains explicitly unresolved for future commercial distribution review.
+- **3B.3 non-enrollment model smoke — HUMAN-ACCEPTED** on the real owner machine. It exercised the 3B.2 manifest/cache boundary end-to-end: exact model integrity verified, OpenCV 5 loaded YuNet/SFace, both executed successfully on synthetic inputs, SFace emitted a `(1, 128)` feature, and no camera/profile/template was used or persisted.
 - **3B.4 selected-track live face benchmark — IMPLEMENTED + AUTOMATED-VALIDATED; REAL POCKET-3 RUN NEXT.** The diagnostic reuses the existing Step-2.5 person-track/head-association path, runs YuNet/SFace only on the selected track's associated head crop, uses read-only camera capture with a no-op PTZ boundary, and persists no frame or feature vector.
 
 Accepted ADRs:
@@ -133,9 +133,11 @@ Implemented/accepted:
 
 No real owner face was enrolled during 3B.1.
 
-### 3B.2 — YuNet/SFace model manifest + asset boundary — AUTOMATED-VALIDATED
+### 3B.2/3 — Model integrity + non-enrollment runtime — HUMAN-ACCEPTED BOUNDARY
 
-Implemented/validated:
+The 3B.2 manifest/cache layer was automated-validated first and then exercised on the real owner machine by 3B.3. The accepted boundary includes only model identity/integrity/cache behavior and synthetic-input runtime viability.
+
+Implemented/accepted:
 
 1. OpenCV Zoo revision and exact model assets pinned;
 2. YuNet 2026 dynamic-input asset selected for OpenCV 5;
@@ -143,9 +145,9 @@ Implemented/validated:
 4. external cache with exact size/SHA-256 verification and atomic download promotion;
 5. no model binaries committed to Git;
 6. no silent provider/model version drift;
-7. upstream SFace thresholds retained as benchmark references only.
-
-### 3B.3 — Non-enrollment model smoke — HUMAN-ACCEPTED
+7. upstream SFace thresholds retained as benchmark references only;
+8. real-machine exact-hash fetch/verification and OpenCV-5 model construction;
+9. synthetic YuNet/SFace inference and finite `(1, 128)` SFace feature.
 
 Real owner-machine evidence on 2026-08-30:
 
@@ -163,6 +165,8 @@ Real owner-machine evidence on 2026-08-30:
 - `STEP_3B3_MODEL_SMOKE = PASS`.
 
 OpenCV-5 graph-engine warnings caused by explicitly requesting `DNN_TARGET_CPU` were non-blocking; the diagnostic has since been corrected to use the default OpenCV-5 backend/target path.
+
+This boundary does **not** accept face-match accuracy or any production match threshold.
 
 ### 3B.4 — Selected-track live face benchmark — REAL MACHINE NEXT
 
@@ -213,8 +217,7 @@ Phase 3B is not complete merely because face recognition works. Persistent owner
 - Phase 3A documentation reconciliation — **DONE**;
 - Phase 3A protected-main merge — **DONE 2026-08-30 (PR #7)**;
 - Phase 3B.1 OWNER storage lifecycle — **HUMAN-ACCEPTED**;
-- Phase 3B.2 model manifest/asset boundary — **AUTOMATED-VALIDATED**;
-- Phase 3B.3 non-enrollment model smoke — **HUMAN-ACCEPTED**;
+- Phase 3B.2/3 model integrity + non-enrollment runtime — **HUMAN-ACCEPTED BOUNDARY**;
 - Phase 3B.4 selected-track Pocket-3 live face benchmark — **IMPLEMENTED + AUTOMATED-VALIDATED; REAL MACHINE NEXT**;
 - remaining Phase 3B owner identity + face/liveness implementation — **PENDING**;
 - remaining Step-3 attention/speaker validation — **PENDING**;
@@ -254,8 +257,7 @@ requirements
 -> Phase 3A documentation reconciliation   DONE
 -> Phase 3A protected-main merge            DONE
 -> Phase 3B.1 secure OWNER profile          DONE / HUMAN ACCEPTED
--> Phase 3B.2 model manifest/assets         DONE / AUTOMATED VALIDATED
--> Phase 3B.3 model smoke                    DONE / HUMAN ACCEPTED
+-> Phase 3B.2/3 model integrity/runtime     DONE / HUMAN ACCEPTED BOUNDARY
 -> Phase 3B.4 live selected-track benchmark NEXT REAL-MACHINE GATE
 -> owner face calibration/enrollment
 -> active liveness
