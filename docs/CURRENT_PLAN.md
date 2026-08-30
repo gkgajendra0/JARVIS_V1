@@ -6,11 +6,26 @@
 
 ## Current Stage
 
-**ACTIVE — RESEARCH / ARCHITECTURE DEFINITION**
+**ARCHITECTURE APPROVED — ADRs ACCEPTED — PHASE 3A AUTHORITY FOUNDATION NEXT**
 
-Step 0, Step 1, Step 2, and Step 2.5 are complete. The development-only `jarvis-dev` supervisor is also implemented, automated-validated, human-accepted, merged to protected `main`, and now watches `origin/main` by default.
+Step 0, Step 1, Step 2, and Step 2.5 are complete. The development-only `jarvis-dev` supervisor and time-aware startup greetings are implemented, automated-validated, human-accepted, and merged to protected `main`.
 
-Step 3 is the next product slice. Earlier working research established the core direction, but no Step-3 implementation or final technology selection is accepted yet. The first Step-3 task is to complete and record current research, threat/risk assumptions, and the minimum architecture required before later capabilities may read, write, communicate, or control consequential resources.
+Step-3 research, security/privacy threat modeling, technology comparisons, canonical governance contracts, trust/risk vocabulary, degraded behavior, validation gates, and the Apple-inspired attention/intent amendment are complete. The combined architecture package received explicit human approval on 2026-08-30.
+
+Accepted ADRs:
+
+- `docs/decisions/ADR-006_STEP_3_IDENTITY_TRUST_AUTHORITY_GOVERNANCE.md`
+- `docs/decisions/ADR-007_STEP_3_ATTENTION_INTENT_EVIDENCE.md`
+
+Research artifacts:
+
+- `docs/research/STEP_3_IDENTITY_TRUST_AUTHORITY_RESEARCH.md`
+- `docs/research/STEP_3_THREAT_PRIVACY_MODEL.md`
+- `docs/research/STEP_3_INDIA_PRIVACY_CONTEXT.md`
+- `docs/research/STEP_3_ARCHITECTURE_PROPOSAL.md`
+- `docs/research/STEP_3_ATTENTION_INTENT_AMENDMENT.md`
+
+Implementation has not yet been human-accepted. Phase 3A must build the deterministic authority foundation before any biometric provider is allowed to influence protected authority.
 
 ## Step-3 Objective
 
@@ -35,46 +50,105 @@ The following are already accepted and must be treated as inputs, not redesigned
 - `jarvis-dev` as development tooling outside model authority;
 - protected `main` requiring PR flow plus `ruff` and `pytest` checks;
 - explicit spoken software-update approval parsed deterministically outside the realtime model;
-- last-known-good rollback for failed development updates.
+- last-known-good rollback for failed development updates;
+- deterministic JARVIS-owned scripted speech for startup/system prompts.
 
-## Step-3 Non-Negotiable Invariants
+## Accepted Step-3 Non-Negotiable Invariants
 
 - Identity evidence is not execution permission.
-- Face recognition, voice recognition, presence, Windows/session context, wake word, or model confidence must never directly grant consequential authority.
+- Attention/gaze evidence is intent-to-engage evidence only; it is not identity, authentication, or execution permission.
+- Face recognition, voice recognition, attention, presence, Windows/session context, wake word, or model confidence must never directly grant consequential authority.
 - The model may recommend or explain; deterministic JARVIS-owned policy decides whether an action may proceed.
 - Capabilities cannot self-authorize or broaden their own permission.
 - Approval must bind to the materially relevant action, target, and parameters.
 - Ambiguous or missing approval must fail safely for consequential actions.
 - Trust friction should increase with consequence rather than making ordinary conversation annoying.
 - Observability must capture enough evidence to explain decisions without becoming hidden surveillance.
-- Raw audio/video, full transcripts, biometric material, secrets, and sensitive payloads are not retained merely because they are available.
+- Raw audio/video, eye crops, gaze vectors, full transcripts, biometric material, secrets, and sensitive payloads are not retained merely because they are available.
 - Provider/device/model implementations remain replaceable behind JARVIS-owned contracts.
+- Pocket-3 RGB attention/liveness must never be represented as Face-ID-equivalent security or as iris authentication; Windows Hello/FIDO2 remains the strong-verification path.
 
-## Step-3 Research Questions
+## Accepted Step-3 Architecture
 
-Before architecture is frozen, research must cover at least:
+The approved architecture includes:
 
-- owner identity and presence evidence sources suitable for the current Windows + Pocket 3 environment;
-- current face-recognition/embedding options, local inference performance, licensing, and spoof/liveness limitations;
-- voice identity/speaker-verification options and their limitations in TV/background/multi-speaker conditions;
-- session continuity and identity-evidence fusion rather than single-sensor authentication;
-- graduated-trust models appropriate for read, reversible, persistent, external, destructive, security-sensitive, and self-modifying actions;
-- approval/consent state machines and exact-action binding;
-- local policy/authority engine design that remains outside LLM authority;
-- audit/observability event design, retention, redaction, and privacy boundaries;
-- threat cases: replay, spoofed face/voice, nearby person saying “yes”, stale identity evidence, device/session changes, provider hallucination, compromised capability, and confused-deputy behavior;
-- failure/degraded behavior when sensors, providers, or identity signals are unavailable.
+- one persistent `OWNER` identity plus ephemeral `UNKNOWN` subjects for v1;
+- typed local identity evidence rather than a universal confidence score;
+- OpenCV YuNet + SFace as the initial face deployment candidate, benchmarked against InsightFace `buffalo_l` as an accuracy reference;
+- randomized active face liveness through MediaPipe Face Landmarker instead of relying on uncertain passive-PAD weights;
+- Apple-inspired attention/intent evidence as a separate short-lived `ATTENTION` modality, using the existing MediaPipe Face Landmarker path first and benchmarking OpenVINO gaze estimation only if needed;
+- deterministic `OWNER_ATTENTIVE = T2 + fresh same-track attention + no relevant ambiguity`, used as an interaction predicate rather than a new trust tier;
+- private ambient disclosure and R3 spoken consequential approval gated by fresh owner attention where policy requires it;
+- explicit ambient biometric-attempt throttling with escalation to Windows Hello rather than weakening requirements after repeated failed explicit elevation attempts;
+- sherpa-onnx speaker embedding candidate benchmarked against SpeechBrain ECAPA, with voice remaining corroborating evidence only;
+- Windows session/lock state as contextual evidence only;
+- Windows Hello `UserConsentVerifier` as the initial strong verifier, with WebAuthn/FIDO2 behind the same future-facing interface;
+- four deterministic trust tiers: T0 `UNVERIFIED`, T1 `PRESENT_CONTEXT`, T2 `CORROBORATED_OWNER`, T3 `VERIFIED_OWNER`;
+- deterministic risk classes R0 `ROUTINE`, R1 `PRIVATE_READ`, R2 `REVERSIBLE_LOCAL_CHANGE`, R3 `PERSISTENT_OR_EXTERNAL`, R4 `CRITICAL`, R5 `RESTRICTED_DEV_ONLY`;
+- Open Policy Agent behind a fail-closed JARVIS `PolicyEngine` adapter;
+- immutable exact-action proposals, one-time approval receipts, and final pre-execution revalidation;
+- SQLite local state/audit with envelope-encrypted biometric templates and user-scoped DPAPI key sealing;
+- privacy-aware structured audit plus optional tamper-evident chaining, with OpenTelemetry restricted to operational telemetry;
+- STRIDE + LINDDUN PRO as the security/privacy threat-model baseline, extended by attention-specific spoofing/privacy cases.
 
-## Expected Step-3 Deliverables
+## Phase 3A — Authority Skeleton First
 
-Before implementation begins, produce:
+Phase 3A must be implemented before face/voice/attention evidence can participate in protected decisions.
 
-- a Step-3 research record with current evidence and realistic alternatives;
-- one or more ADRs for major accepted identity/trust/authority/observability decisions;
-- a concrete threat model and trust-level vocabulary;
-- canonical JARVIS-owned contracts for identity evidence, trust/session state, authority decisions, approvals, and audit events;
-- explicit scope/non-scope and human acceptance scenarios;
-- measurable validation criteria for security, privacy, latency, and false-accept/false-reject behavior where applicable.
+Required work:
+
+- canonical Step-3 types/contracts;
+- immutable `ActionProposal` canonicalization and fingerprinting;
+- deterministic `RiskClassifier` with hard security floors;
+- fail-closed `PolicyEngine` boundary and initial OPA adapter/policies;
+- `ApprovalService` proposal-bound state machine with expiry, denial, cancellation, one-time consumption, and material-mutation invalidation;
+- `AuthorityService` final decision and pre-execution revalidation contract;
+- structured `AuditEvent` schema and local audit-store boundary;
+- Windows session invalidation boundary;
+- attention-related authority predicates/contracts established before model integration;
+- exhaustive unit/failure-path tests for unauthorized execution, policy failure, approval replay, proposal mutation, expiry, session invalidation, risk-floor downgrade attempts, and TOCTOU revalidation.
+
+**Phase 3A rule:** no face, speaker, liveness, gaze, or LLM output may directly authorize an action. Initial tests should use deterministic synthetic evidence/state only.
+
+## Research Completion Coverage
+
+The accepted research package covers:
+
+- owner identity/presence evidence for Windows + Pocket 3;
+- current face-recognition/embedding candidates, local deployment shape, licensing/provenance, and thresholds;
+- face liveness/PAD limitations and randomized active challenge-response;
+- Apple Face ID/Optic ID security lessons relevant to JARVIS, including the distinction between face identity, attention/intent, depth/IR anti-spoofing, iris authentication, and platform strong verification;
+- local attention/eye-open/look-direction evidence, MediaPipe limitations, OpenVINO fallback, privacy boundaries, and real Pocket-3 acceptance gates;
+- speaker-verification candidates plus replay/deepfake limitations;
+- multi-person ambiguity, active-speaker options, attention-bound spoken approval, and safe escalation behavior;
+- Windows Hello/WebAuthn strong-verification options;
+- session continuity and typed evidence fusion;
+- graduated-trust semantics and freshness/invalidation;
+- action-risk classification and approval/consent state machines;
+- exact-action binding, one-time receipts, expiry, mutation invalidation, and TOCTOU revalidation;
+- policy-engine comparison (OPA/Cedar/Casbin) and fail-closed behavior;
+- enrollment/re-enrollment/deletion and model-version lifecycle;
+- encrypted biometric storage, DPAPI/TPM options, audit retention/redaction/integrity;
+- STRIDE security threats and LINDDUN privacy threats, including attention/gaze surveillance and spoofing cases;
+- degraded behavior for camera/mic/model/policy/Hello/audit failures;
+- measurable face/liveness/attention/voice/Hello/policy/audit/resource benchmarks;
+- explicit human acceptance scenarios;
+- implementation sequencing that builds authority before biometrics or attention can influence it.
+
+## Step-3 Deliverable Status
+
+- current research record — **DONE**;
+- concrete STRIDE + LINDDUN threat/privacy model — **DONE**;
+- India privacy-context record — **DONE**;
+- trust/risk vocabulary and canonical contracts — **APPROVED**;
+- Apple-inspired attention/intent security amendment — **APPROVED**;
+- scope/non-scope and human acceptance scenarios — **APPROVED**;
+- measurable security/privacy/latency/false-accept/false-reject/attention validation gates — **APPROVED**;
+- explicit human architecture approval — **DONE 2026-08-30**;
+- accepted ADRs for major decisions — **DONE**;
+- Phase 3A implementation — **NEXT**;
+- automated validation — **PENDING IMPLEMENTATION**;
+- real human acceptance — **PENDING IMPLEMENTATION**.
 
 ## Explicitly Out of Scope for Step 3
 
@@ -84,9 +158,13 @@ Before implementation begins, produce:
 - general scene understanding / VLM reasoning;
 - OCR, gestures, or visual memory;
 - proactive surveillance or continuous recording;
+- persistent gaze history, emotion/fatigue/interest inference, or behavioral eye tracking;
 - smart-glasses/HUD work;
 - unrestricted shell authority;
-- autonomous self-modification.
+- autonomous self-modification;
+- persistent guest/family identity roles;
+- cloud biometric recognition;
+- claims of Face-ID-equivalent or iris-authentication security from the Pocket 3 RGB camera.
 
 ## Completion Gate
 
@@ -94,10 +172,14 @@ Step 3 is complete only after:
 
 ```text
 requirements
--> current research
--> technology/architecture decisions
--> human approval
--> implementation
+-> current research                         DONE
+-> threat/privacy model                     DONE
+-> technology/architecture proposal         DONE
+-> attention/intent amendment               DONE
+-> human approval                           DONE
+-> accepted ADRs                            DONE
+-> Phase 3A authority implementation        NEXT
+-> biometric/identity implementation
 -> automated validation
 -> real human acceptance
 -> documentation reconciliation
@@ -108,7 +190,7 @@ No Step-3 component becomes authoritative merely because a model/provider API wo
 
 ## Immediate Next Actions
 
-1. Complete current Step-3 research, including face/voice identity evidence, liveness limits, trust models, authority policy, approvals, observability, privacy, and threat cases.
-2. Compare mature 2026 technologies before choosing any implementation.
-3. Propose the minimum Step-3 architecture and trust-level model.
-4. Obtain explicit human approval before implementation.
+1. Merge the approved Step-3 research/ADR package through protected-main PR flow after required checks pass.
+2. Start Phase 3A on a dedicated implementation branch from the approved architecture baseline.
+3. Build authority contracts, proposal/risk/policy/approval/audit/session foundations and prove fail-closed behavior before biometric integration.
+4. Only then proceed to owner profile/face/liveness/attention/speaker provider implementation and real-hardware calibration.
