@@ -7,7 +7,9 @@ import pytest
 from jarvis.identity import liveness_assets
 
 
-def test_verify_face_landmarker_model_accepts_exact_asset(tmp_path, monkeypatch) -> None:
+def test_verify_face_landmarker_model_accepts_exact_asset(
+    tmp_path, monkeypatch
+) -> None:
     payload = b"pinned-face-landmarker-test-bytes"
     monkeypatch.setattr(liveness_assets, "FACE_LANDMARKER_SIZE_BYTES", len(payload))
     monkeypatch.setattr(
