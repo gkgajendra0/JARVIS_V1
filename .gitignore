@@ -8,3 +8,6 @@ build/
 dist/
 .env
 
+# .NET build outputs
+**/bin/
+**/obj/
