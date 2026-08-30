@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import cv2
 import numpy as np
 import pytest
 
 from jarvis.identity.live_face_benchmark import (
+    _SelectionState,
     _cosine_similarity,
     _crop_head,
     _face_rows,
@@ -58,6 +60,29 @@ def test_cosine_similarity_requires_matching_nonzero_features() -> None:
         _cosine_similarity(first, np.ones((1, 2), dtype=np.float32))
     with pytest.raises(ValueError, match="norm"):
         _cosine_similarity(first, np.zeros_like(first))
+
+
+def test_selection_state_allows_clicking_associated_head_region() -> None:
+    track = Track(
+        track_id=7,
+        category="person",
+        confidence=0.9,
+        bounds=BoundingBox(0.10, 0.10, 0.90, 0.95),
+        first_seen_at=1.0,
+        last_seen_at=1.0,
+    )
+    head_bounds = BoundingBox(0.40, 0.15, 0.60, 0.40)
+    state = _SelectionState()
+    state.update(
+        (track,),
+        head_regions=((7, head_bounds),),
+        width=100,
+        height=100,
+    )
+
+    state.on_mouse(cv2.EVENT_LBUTTONDOWN, 50, 25, 0, None)
+
+    assert state.clicked_track_id == 7
 
 
 def test_canonical_framing_policy_exposes_same_associated_head() -> None:
