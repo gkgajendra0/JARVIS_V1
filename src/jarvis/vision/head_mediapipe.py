@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +16,20 @@ from jarvis.vision.models import BoundingBox
 
 DetectorFactory = Callable[["MediaPipeBlazeFaceConfig"], Any]
 ImageFactory = Callable[[np.ndarray], Any]
+
+BLAZEFACE_MODEL_NAME = "blaze_face_full_range.tflite"
+
+
+def default_blazeface_model_path() -> Path:
+    """Resolve the single local BlazeFace asset path used by JARVIS diagnostics."""
+    configured = os.environ.get("JARVIS_BLAZEFACE_MODEL_PATH")
+    if configured:
+        return Path(configured).expanduser()
+
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / "JARVIS" / "models" / BLAZEFACE_MODEL_NAME
+    return Path.home() / ".jarvis" / "models" / BLAZEFACE_MODEL_NAME
 
 
 @dataclass(frozen=True, slots=True)
