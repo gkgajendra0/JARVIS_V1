@@ -94,7 +94,10 @@ def test_unknown_and_ambiguous_bands_fail_safe() -> None:
 
     assert unknown_assessment.state is OwnerIdentityState.UNKNOWN
     assert ambiguous_assessment.state is OwnerIdentityState.AMBIGUOUS
-    assert unknown.to_identity_evidence(unknown_assessment).verdict is EvidenceVerdict.NO_MATCH
+    assert (
+        unknown.to_identity_evidence(unknown_assessment).verdict
+        is EvidenceVerdict.NO_MATCH
+    )
     assert (
         ambiguous.to_identity_evidence(ambiguous_assessment).verdict
         is EvidenceVerdict.INSUFFICIENT
