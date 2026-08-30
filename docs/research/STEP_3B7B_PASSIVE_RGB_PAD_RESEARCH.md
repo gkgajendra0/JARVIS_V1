@@ -160,6 +160,31 @@ Interpretation:
 - tight-crop anti-spoof-mn3 is provisionally unsuitable on Pocket-3 + YuNet integration; contextual-crop retest is required before rejection.
 - no threshold, liveness verdict, provider promotion, or T2 authority upgrade is approved from this run.
 
+## Contextual-crop live retest — 2026-08-30
+
+Scenario: real live enrolled OWNER, 300 samples, natural blinking and ordinary small eye/head movement permitted, no frame/crop/tensor/output persistence.
+
+Observed `openvino-anti-spoof-mn3-reference-context-v1`:
+
+- real probability: min 0.0008, p05 0.0014, median 0.0031, p95 0.0041, max 0.0049;
+- rolling median 5: median 0.0031;
+- rolling median 15: median 0.0031;
+- latency: median 2.96 ms, p95 3.59 ms.
+
+Observed MiniFASNet V1SE/V2 ensemble:
+
+- real probability: min 0.9960, p05 0.9988, median 0.9995, p95 0.9998, max 0.9999;
+- rolling median 5: median 0.9995;
+- rolling median 15: median 0.9996;
+- latency: median 9.12 ms, p95 30.66 ms.
+
+Interpretation:
+
+- contextual cropping does not recover anti-spoof-mn3 on the Pocket 3; genuine live OWNER remains near-zero real probability across the entire distribution.
+- `anti-spoof-mn3` is therefore rejected as a JARVIS Pocket-3 passive PAD candidate rather than threshold-tuned into a pass.
+- MiniFAS remains provisionally strong and stable on live OWNER across both independent 300-sample runs, including normal blinking and small natural movement.
+- MiniFAS still must be tested against phone-photo, phone-video, and optionally printed-photo attacks before any threshold, liveness verdict, provider promotion, or T2 contribution can be approved.
+
 ## Decision rule after benchmark
 
 Do not promote a passive provider merely because live scores look high.
