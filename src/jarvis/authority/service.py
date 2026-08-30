@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from .approval import ApprovalError, ApprovalRecord, ApprovalService
 from .audit import AuditError, AuditEvent, AuditEventStore
@@ -21,8 +21,8 @@ from .risk import RiskAssessment, RiskClassifier
 from .types import (
     ActionOrigin,
     ApprovalMethod,
-    AttentionState,
     ApprovalRequirement,
+    AttentionState,
     AuthorityEffect,
     InteractionContext,
     RiskClass,
@@ -317,9 +317,11 @@ class AuthorityService:
         context: InteractionContext,
         approval: ApprovalRecord,
     ) -> None:
-        if approval.method is ApprovalMethod.DIRECT_INTENT:
-            if proposal.origin is not ActionOrigin.DIRECT_USER:
-                raise AuthorityError("direct_intent_origin_mismatch")
+        if (
+            approval.method is ApprovalMethod.DIRECT_INTENT
+            and proposal.origin is not ActionOrigin.DIRECT_USER
+        ):
+            raise AuthorityError("direct_intent_origin_mismatch")
         if approval.method is ApprovalMethod.SPOKEN:
             if context.attention_state is not AttentionState.ATTENTIVE:
                 raise AuthorityError("spoken_approval_requires_attention")
