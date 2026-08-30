@@ -107,27 +107,87 @@ def _scaled_face_crop(
     return cv2.resize(crop, output_size, interpolation=cv2.INTER_LINEAR)
 
 
+def _directional_face_crop(
+    image: np.ndarray,
+    face_xyxy: tuple[int, int, int, int],
+    *,
+    left_ratio: float,
+    top_ratio: float,
+    right_ratio: float,
+    bottom_ratio: float,
+    output_size: tuple[int, int],
+) -> np.ndarray:
+    ratios = (left_ratio, top_ratio, right_ratio, bottom_ratio)
+    if any(value < 0 for value in ratios):
+        raise ValueError("directional crop ratios must be non-negative")
+    left, top, right, bottom = _bounded_xyxy(image, face_xyxy)
+    height, width = image.shape[:2]
+    box_width = right - left
+    box_height = bottom - top
+    crop_left = max(0, int(left - box_width * left_ratio))
+    crop_top = max(0, int(top - box_height * top_ratio))
+    crop_right = min(width, int(right + box_width * right_ratio))
+    crop_bottom = min(height, int(bottom + box_height * bottom_ratio))
+    if crop_left >= crop_right or crop_top >= crop_bottom:
+        raise ValueError("directional PAD face crop is empty")
+    crop = image[crop_top:crop_bottom, crop_left:crop_right]
+    return cv2.resize(crop, output_size, interpolation=cv2.INTER_LINEAR)
+
+
 class AntiSpoofMn3Provider:
-    provider_id = "openvino-anti-spoof-mn3-v1"
     _MEAN = np.asarray([151.2405, 119.5950, 107.8395], dtype=np.float32)
     _SCALE = np.asarray([63.0105, 56.4570, 55.0035], dtype=np.float32)
+    _TIGHT = "tight"
+    _REFERENCE_CONTEXT = "reference-context"
 
-    def __init__(self, model_path: str | Path) -> None:
+    def __init__(
+        self,
+        model_path: str | Path,
+        *,
+        crop_mode: str = _TIGHT,
+    ) -> None:
+        if crop_mode not in {self._TIGHT, self._REFERENCE_CONTEXT}:
+            raise ValueError(f"unsupported anti-spoof-mn3 crop mode: {crop_mode}")
         self._session = _load_ort_session(model_path)
         self._input_name = self._session.get_inputs()[0].name
         self._output_name = self._session.get_outputs()[0].name
+        self._crop_mode = crop_mode
+        self.provider_id = (
+            "openvino-anti-spoof-mn3-v1"
+            if crop_mode == self._TIGHT
+            else "openvino-anti-spoof-mn3-reference-context-v1"
+        )
+
+    def _crop(
+        self,
+        frame_bgr: np.ndarray,
+        face_xyxy: tuple[int, int, int, int],
+    ) -> np.ndarray:
+        if self._crop_mode == self._TIGHT:
+            return _scaled_face_crop(
+                frame_bgr,
+                face_xyxy,
+                scale=1.0,
+                output_size=(128, 128),
+            )
+        # Match the public webcam integration referenced during 3B.7B investigation:
+        # expand 10% left/right, 40% upward, and keep the lower edge unchanged.
+        return _directional_face_crop(
+            frame_bgr,
+            face_xyxy,
+            left_ratio=0.10,
+            top_ratio=0.40,
+            right_ratio=0.10,
+            bottom_ratio=0.0,
+            output_size=(128, 128),
+        )
 
     def score(
         self,
         frame_bgr: np.ndarray,
         face_xyxy: tuple[int, int, int, int],
     ) -> PassivePadScore:
-        face = _scaled_face_crop(
-            frame_bgr,
-            face_xyxy,
-            scale=1.0,
-            output_size=(128, 128),
-        )
+        face = self._crop(frame_bgr, face_xyxy)
         rgb = cv2.cvtColor(face, cv2.COLOR_BGR2RGB).astype(np.float32)
         normalized = (rgb - self._MEAN) / self._SCALE
         tensor = np.ascontiguousarray(normalized.transpose(2, 0, 1)[None, ...])
