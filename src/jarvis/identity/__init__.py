@@ -15,6 +15,16 @@ from .lifecycle import (
     OwnerProfileLifecycleService,
     OwnerProfileMutationResult,
 )
+from .model_assets import (
+    FaceModelManifestSet,
+    ModelAssetCache,
+    ModelAssetError,
+    ModelAssetIntegrityError,
+    ModelAssetManifest,
+    ModelManifestError,
+    default_model_cache_dir,
+    load_default_face_model_manifest,
+)
 from .store import (
     KeyProtectorMismatch,
     OwnerProfileAlreadyExists,
@@ -40,11 +50,17 @@ __all__ = [
     "DecryptedTemplate",
     "EncryptedPayload",
     "EnvelopeCipher",
+    "FaceModelManifestSet",
     "IdentityCryptoError",
     "IdentityValidationError",
     "KeyProtectionError",
     "KeyProtector",
     "KeyProtectorMismatch",
+    "ModelAssetCache",
+    "ModelAssetError",
+    "ModelAssetIntegrityError",
+    "ModelAssetManifest",
+    "ModelManifestError",
     "OwnerProfile",
     "OwnerProfileAlreadyExists",
     "OwnerProfileAuthorizationDenied",
@@ -60,4 +76,6 @@ __all__ = [
     "TemplateNotFound",
     "WindowsDpapiKeyProtector",
     "canonical_aad",
+    "default_model_cache_dir",
+    "load_default_face_model_manifest",
 ]
