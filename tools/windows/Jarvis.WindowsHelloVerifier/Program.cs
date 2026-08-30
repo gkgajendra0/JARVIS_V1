@@ -1,9 +1,15 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Windows.Forms;
 using Windows.Security.Credentials.UI;
 
-internal sealed record VerificationRequest(string Message);
-internal sealed record VerificationResponse(string Status, string Reason);
+internal sealed record VerificationRequest(
+    [property: JsonPropertyName("message")] string Message
+);
+internal sealed record VerificationResponse(
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("reason")] string Reason
+);
 
 internal static class Program
 {
