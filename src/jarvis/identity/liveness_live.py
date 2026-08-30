@@ -75,6 +75,14 @@ class _VoicePrompter:
         self._speech: ScriptedSpeech | None = None
         self._disabled = False
 
+    @property
+    def enabled(self) -> bool:
+        return (
+            not self._disabled
+            and self._output is not None
+            and self._speech is not None
+        )
+
     async def start(self) -> None:
         media_devices = rtc.MediaDevices(
             input_sample_rate=DEVICE_SAMPLE_RATE,
@@ -95,7 +103,8 @@ class _VoicePrompter:
         if self._disabled:
             return
         if self._output is None or self._speech is None:
-            raise RuntimeError("liveness voice prompter has not been started")
+            self._disabled = True
+            return
         try:
             await self._speech.speak(self._output, text)
         except asyncio.CancelledError:
@@ -238,251 +247,262 @@ async def run_live_liveness() -> int:
     announced_state: _PromptState | None = None
 
     try:
-        await voice.start()
-    except Exception as exc:
-        print(
-            "Voice prompt setup failed; continuing with compact on-screen prompts only: "
-            f"{type(exc).__name__}: {exc}"
-        )
+        try:
+            await voice.start()
+        except Exception as exc:
+            print(
+                "Voice prompt setup failed; continuing with compact on-screen prompts only: "
+                f"{type(exc).__name__}: {exc}"
+            )
 
-    cv2.namedWindow(_WINDOW_NAME)
-    cv2.setMouseCallback(_WINDOW_NAME, selection.on_mouse)
+        cv2.namedWindow(_WINDOW_NAME)
+        cv2.setMouseCallback(_WINDOW_NAME, selection.on_mouse)
 
-    try:
-        with MediaPipeFaceLandmarker(model_path) as landmarker:
-            runtime.start()
-            while True:
-                snapshot = runtime.process_once(timeout_seconds=1.0)
-                if snapshot is None:
-                    if challenge is not None:
-                        progress = challenge.check_timeout(time.monotonic())
-                        if progress.terminal:
-                            final_phase = progress.phase
-                            final_reasons = progress.reason_codes
-                            break
-                    continue
-                frame = runtime.latest_frame
-                if frame is None:
-                    continue
-
-                clickable_head_regions = []
-                heads = list(snapshot.heads)
-                for track in snapshot.tracks:
-                    if not runtime.head_lock_eligible(track.track_id):
-                        continue
-                    candidate = TargetState(track_id=track.track_id, track=track)
-                    associated = framing_policy.associated_head(candidate, heads)
-                    if associated is not None:
-                        clickable_head_regions.append(
-                            (track.track_id, associated.bounds)
-                        )
-
-                selection.update(
-                    snapshot.tracks,
-                    head_regions=clickable_head_regions,
-                    width=frame.width,
-                    height=frame.height,
-                )
-                if selection.clicked_track_id is not None:
-                    requested_track = selection.clicked_track_id
-                    selection.clicked_track_id = None
-                    if challenge is not None:
-                        print("Challenge is active; target changes are not allowed.")
-                    else:
-                        try:
-                            runtime.lock(requested_track)
-                            print(
-                                f"Locked track {requested_track}; press S when ready."
-                            )
-                        except ValueError as exc:
-                            print(exc)
-
-                target = runtime.target
-                now = frame.captured_at
-                if target is not None and target.visible:
-                    last_visible_target_at = now
-                associated_head = framing_policy.associated_head(target, heads)
-                if (
-                    associated_head is not None
-                    and target is not None
-                    and target.visible
-                ):
-                    last_associated_head_at = now
-
-                if challenge is not None:
-                    progress = challenge.progress
-                    prompt_state = _PromptState(
-                        action_index=progress.action_index,
-                        action=progress.action,
-                        phase=progress.phase,
-                    )
-                    if prompt_state != announced_state and not progress.terminal:
-                        announced_state = prompt_state
-                        await voice.speak(_spoken_prompt(progress.action, progress.phase))
-
-                    current_session = session_provider.current_session()
-                    if (
-                        current_session.session_id != session.session_id
-                        or not current_session.active_unlocked
-                    ):
-                        progress = challenge.fail("windows_session_changed")
-                        final_phase = progress.phase
-                        final_reasons = progress.reason_codes
-                        break
-                    if (
-                        target is None
-                        or target.track_id != challenge.challenge.visual_track_id
-                    ):
-                        progress = challenge.fail("visual_track_changed")
-                        final_phase = progress.phase
-                        final_reasons = progress.reason_codes
-                        break
-                    if (
-                        last_visible_target_at is None
-                        or now - last_visible_target_at > _TARGET_LOST_TIMEOUT_SECONDS
-                    ):
-                        progress = challenge.fail("target_lost")
-                        final_phase = progress.phase
-                        final_reasons = progress.reason_codes
-                        break
-                    if (
-                        last_associated_head_at is None
-                        or now - last_associated_head_at > _HEAD_LOST_TIMEOUT_SECONDS
-                    ):
-                        progress = challenge.fail("associated_head_lost")
-                        final_phase = progress.phase
-                        final_reasons = progress.reason_codes
-                        break
-
-                    should_analyze = (
-                        associated_head is not None
-                        and target.visible
-                        and (
-                            last_analysis_at is None
-                            or now - last_analysis_at >= _ANALYSIS_INTERVAL_SECONDS
-                        )
-                    )
-                    if should_analyze:
-                        last_analysis_at = now
-                        crop = _crop_head(
-                            frame.image,
-                            associated_head.bounds,
-                            margin_fraction=0.35,
-                        )
-                        observed = landmarker.observe(
-                            crop.image,
-                            observed_at_monotonic=now,
-                        )
-                        if observed is not None:
-                            stats.update(observed.blendshapes)
-                            progress = challenge.observe(
-                                LivenessObservation(
-                                    session_id=session.session_id,
-                                    visual_track_id=target.track_id,
-                                    observed_at_monotonic=observed.observed_at_monotonic,
-                                    blendshapes=observed.blendshapes,
-                                )
-                            )
+        try:
+            with MediaPipeFaceLandmarker(model_path) as landmarker:
+                runtime.start()
+                while True:
+                    snapshot = runtime.process_once(timeout_seconds=1.0)
+                    if snapshot is None:
+                        if challenge is not None:
+                            progress = challenge.check_timeout(time.monotonic())
                             if progress.terminal:
                                 final_phase = progress.phase
                                 final_reasons = progress.reason_codes
                                 break
-                    progress = challenge.check_timeout(now)
-                    if progress.terminal:
-                        final_phase = progress.phase
-                        final_reasons = progress.reason_codes
-                        break
+                        continue
+                    frame = runtime.latest_frame
+                    if frame is None:
+                        continue
 
-                preview = render_snapshot(frame.image, snapshot)
-                _draw_clickable_heads(preview, clickable_head_regions)
-                _draw_overlay(
-                    preview,
-                    challenge=challenge,
-                    stats=stats,
-                    selected_track_id=(target.track_id if target is not None else None),
-                )
-                cv2.imshow(_WINDOW_NAME, preview)
+                    clickable_head_regions = []
+                    heads = list(snapshot.heads)
+                    for track in snapshot.tracks:
+                        if not runtime.head_lock_eligible(track.track_id):
+                            continue
+                        candidate = TargetState(track_id=track.track_id, track=track)
+                        associated = framing_policy.associated_head(candidate, heads)
+                        if associated is not None:
+                            clickable_head_regions.append(
+                                (track.track_id, associated.bounds)
+                            )
 
-                key = cv2.waitKey(1) & 0xFF
-                if key in (ord("q"), ord("Q"), 27):
-                    print("STEP_3B7_ACTIVE_LIVENESS = ABORTED")
-                    return 2
-                if key in (ord("c"), ord("C")) and challenge is None:
-                    runtime.clear_target()
-                    print("Selected target cleared.")
-                if key in (ord("s"), ord("S")) and challenge is None:
+                    selection.update(
+                        snapshot.tracks,
+                        head_regions=clickable_head_regions,
+                        width=frame.width,
+                        height=frame.height,
+                    )
+                    if selection.clicked_track_id is not None:
+                        requested_track = selection.clicked_track_id
+                        selection.clicked_track_id = None
+                        if challenge is not None:
+                            print("Challenge is active; target changes are not allowed.")
+                        else:
+                            try:
+                                runtime.lock(requested_track)
+                                print(
+                                    f"Locked track {requested_track}; press S when ready."
+                                )
+                                await voice.speak(
+                                    "Target locked. Press S when you are ready, sir."
+                                )
+                            except ValueError as exc:
+                                print(exc)
+
                     target = runtime.target
-                    if target is None or not target.visible:
-                        print("Lock one visible GREEN associated head before starting.")
-                        continue
-                    if framing_policy.associated_head(target, heads) is None:
-                        print(
-                            "Selected track does not currently have an associated head."
+                    now = frame.captured_at
+                    if target is not None and target.visible:
+                        last_visible_target_at = now
+                    associated_head = framing_policy.associated_head(target, heads)
+                    if (
+                        associated_head is not None
+                        and target is not None
+                        and target.visible
+                    ):
+                        last_associated_head_at = now
+
+                    if challenge is not None:
+                        progress = challenge.progress
+                        prompt_state = _PromptState(
+                            action_index=progress.action_index,
+                            action=progress.action,
+                            phase=progress.phase,
                         )
-                        continue
-                    challenge = ActiveLivenessChallenge.create(
-                        session_id=session.session_id,
-                        visual_track_id=target.track_id,
-                        now_monotonic=now,
-                        ttl_seconds=_CHALLENGE_TTL_SECONDS,
-                    )
-                    stats = _DiagnosticStats()
-                    started_at = now
-                    last_analysis_at = None
-                    last_visible_target_at = now
-                    last_associated_head_at = now
-                    announced_state = None
-                    print(
-                        f"Challenge started on track {target.track_id}; "
-                        "follow JARVIS voice prompts."
-                    )
-    finally:
-        runtime.close()
-        cv2.destroyAllWindows()
-        await voice.aclose()
+                        if prompt_state != announced_state and not progress.terminal:
+                            announced_state = prompt_state
+                            await voice.speak(
+                                _spoken_prompt(progress.action, progress.phase)
+                            )
 
-    print()
-    print("ACTIVE LIVENESS SUMMARY")
-    if challenge is None or final_phase is None:
-        print("STEP_3B7_ACTIVE_LIVENESS = ABORTED")
-        return 2
-    elapsed = 0.0 if started_at is None else max(0.0, time.monotonic() - started_at)
-    print(f"challenge_id = {challenge.challenge.challenge_id}")
-    print(f"visual_track_id = {challenge.challenge.visual_track_id}")
-    print(
-        "sequence = "
-        + " -> ".join(action.value.upper() for action in challenge.challenge.actions)
-    )
-    print(
-        f"completed_actions = "
-        f"{[action.value for action in challenge.progress.completed_actions]}"
-    )
-    print(f"valid_landmarker_observations = {stats.valid_observations}")
-    print(f"max_blink_pair = {stats.max_blink_pair:.3f}")
-    print(f"max_jaw_open = {stats.max_jaw_open:.3f}")
-    print(f"max_smile_pair = {stats.max_smile_pair:.3f}")
-    print(f"elapsed_seconds = {elapsed:.2f}")
-    print(f"reason_codes = {final_reasons}")
-    print("voice_guidance_enabled = True")
-    print("frames_saved = False")
-    print("landmarks_saved = False")
-    print("blendshape_vectors_saved = False")
-    print("face_evidence_grants_T2 = False")
+                        current_session = session_provider.current_session()
+                        if (
+                            current_session.session_id != session.session_id
+                            or not current_session.active_unlocked
+                        ):
+                            progress = challenge.fail("windows_session_changed")
+                            final_phase = progress.phase
+                            final_reasons = progress.reason_codes
+                            break
+                        if (
+                            target is None
+                            or target.track_id != challenge.challenge.visual_track_id
+                        ):
+                            progress = challenge.fail("visual_track_changed")
+                            final_phase = progress.phase
+                            final_reasons = progress.reason_codes
+                            break
+                        if (
+                            last_visible_target_at is None
+                            or now - last_visible_target_at > _TARGET_LOST_TIMEOUT_SECONDS
+                        ):
+                            progress = challenge.fail("target_lost")
+                            final_phase = progress.phase
+                            final_reasons = progress.reason_codes
+                            break
+                        if (
+                            last_associated_head_at is None
+                            or now - last_associated_head_at > _HEAD_LOST_TIMEOUT_SECONDS
+                        ):
+                            progress = challenge.fail("associated_head_lost")
+                            final_phase = progress.phase
+                            final_reasons = progress.reason_codes
+                            break
 
-    if final_phase is LivenessPhase.PASSED:
-        evidence = challenge.to_identity_evidence()
-        print(f"liveness_evidence_verdict = {evidence.verdict.value}")
-        print(
-            "liveness_evidence_ttl_seconds = "
-            f"{evidence.expires_at_monotonic - evidence.observed_at_monotonic:.1f}"
+                        should_analyze = (
+                            associated_head is not None
+                            and target.visible
+                            and (
+                                last_analysis_at is None
+                                or now - last_analysis_at >= _ANALYSIS_INTERVAL_SECONDS
+                            )
+                        )
+                        if should_analyze:
+                            last_analysis_at = now
+                            crop = _crop_head(
+                                frame.image,
+                                associated_head.bounds,
+                                margin_fraction=0.35,
+                            )
+                            observed = landmarker.observe(
+                                crop.image,
+                                observed_at_monotonic=now,
+                            )
+                            if observed is not None:
+                                stats.update(observed.blendshapes)
+                                progress = challenge.observe(
+                                    LivenessObservation(
+                                        session_id=session.session_id,
+                                        visual_track_id=target.track_id,
+                                        observed_at_monotonic=(
+                                            observed.observed_at_monotonic
+                                        ),
+                                        blendshapes=observed.blendshapes,
+                                    )
+                                )
+                                if progress.terminal:
+                                    final_phase = progress.phase
+                                    final_reasons = progress.reason_codes
+                                    break
+                        progress = challenge.check_timeout(now)
+                        if progress.terminal:
+                            final_phase = progress.phase
+                            final_reasons = progress.reason_codes
+                            break
+
+                    preview = render_snapshot(frame.image, snapshot)
+                    _draw_clickable_heads(preview, clickable_head_regions)
+                    _draw_overlay(
+                        preview,
+                        challenge=challenge,
+                        stats=stats,
+                        selected_track_id=(target.track_id if target is not None else None),
+                    )
+                    cv2.imshow(_WINDOW_NAME, preview)
+
+                    key = cv2.waitKey(1) & 0xFF
+                    if key in (ord("q"), ord("Q"), 27):
+                        print("STEP_3B7_ACTIVE_LIVENESS = ABORTED")
+                        return 2
+                    if key in (ord("c"), ord("C")) and challenge is None:
+                        runtime.clear_target()
+                        print("Selected target cleared.")
+                    if key in (ord("s"), ord("S")) and challenge is None:
+                        target = runtime.target
+                        if target is None or not target.visible:
+                            print("Lock one visible GREEN associated head before starting.")
+                            continue
+                        if framing_policy.associated_head(target, heads) is None:
+                            print(
+                                "Selected track does not currently have an associated head."
+                            )
+                            continue
+                        challenge = ActiveLivenessChallenge.create(
+                            session_id=session.session_id,
+                            visual_track_id=target.track_id,
+                            now_monotonic=now,
+                            ttl_seconds=_CHALLENGE_TTL_SECONDS,
+                        )
+                        stats = _DiagnosticStats()
+                        started_at = now
+                        last_analysis_at = None
+                        last_visible_target_at = now
+                        last_associated_head_at = now
+                        announced_state = None
+                        print(
+                            f"Challenge started on track {target.track_id}; "
+                            "follow JARVIS voice prompts."
+                        )
+        finally:
+            runtime.close()
+            cv2.destroyAllWindows()
+
+        print()
+        print("ACTIVE LIVENESS SUMMARY")
+        if challenge is None or final_phase is None:
+            print("STEP_3B7_ACTIVE_LIVENESS = ABORTED")
+            return 2
+        elapsed = (
+            0.0 if started_at is None else max(0.0, time.monotonic() - started_at)
         )
-        await voice.speak("Liveness confirmed, sir.")
-        print("STEP_3B7_ACTIVE_LIVENESS = PASS")
-        return 0
+        print(f"challenge_id = {challenge.challenge.challenge_id}")
+        print(f"visual_track_id = {challenge.challenge.visual_track_id}")
+        print(
+            "sequence = "
+            + " -> ".join(action.value.upper() for action in challenge.challenge.actions)
+        )
+        print(
+            f"completed_actions = "
+            f"{[action.value for action in challenge.progress.completed_actions]}"
+        )
+        print(f"valid_landmarker_observations = {stats.valid_observations}")
+        print(f"max_blink_pair = {stats.max_blink_pair:.3f}")
+        print(f"max_jaw_open = {stats.max_jaw_open:.3f}")
+        print(f"max_smile_pair = {stats.max_smile_pair:.3f}")
+        print(f"elapsed_seconds = {elapsed:.2f}")
+        print(f"reason_codes = {final_reasons}")
+        print(f"voice_guidance_enabled = {voice.enabled}")
+        print("frames_saved = False")
+        print("landmarks_saved = False")
+        print("blendshape_vectors_saved = False")
+        print("face_evidence_grants_T2 = False")
 
-    await voice.speak("Liveness check failed, sir.")
-    print("STEP_3B7_ACTIVE_LIVENESS = FAIL")
-    return 3
+        if final_phase is LivenessPhase.PASSED:
+            evidence = challenge.to_identity_evidence()
+            print(f"liveness_evidence_verdict = {evidence.verdict.value}")
+            print(
+                "liveness_evidence_ttl_seconds = "
+                f"{evidence.expires_at_monotonic - evidence.observed_at_monotonic:.1f}"
+            )
+            await voice.speak("Liveness confirmed, sir.")
+            print("STEP_3B7_ACTIVE_LIVENESS = PASS")
+            return 0
+
+        await voice.speak("Liveness check failed, sir.")
+        print("STEP_3B7_ACTIVE_LIVENESS = FAIL")
+        return 3
+    finally:
+        await voice.aclose()
 
 
 def main() -> None:
