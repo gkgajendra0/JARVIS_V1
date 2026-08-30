@@ -21,8 +21,8 @@ from .risk import RiskAssessment, RiskClassifier
 from .types import (
     ActionOrigin,
     ApprovalMethod,
-    ApprovalRequirement,
     AttentionState,
+    ApprovalRequirement,
     AuthorityEffect,
     InteractionContext,
     RiskClass,
@@ -82,9 +82,7 @@ class AuthorityService:
         approval_id: str | None = None,
     ) -> AuthorityDecision:
         decision_id = str(uuid.uuid4())
-        initial_risk = self._risk_classifier.classify(
-            proposal.attributes
-        ).risk_class
+        initial_risk = self._risk_classifier.classify(proposal.attributes).risk_class
         try:
             assessment = self._assess(
                 proposal=proposal,
@@ -175,9 +173,7 @@ class AuthorityService:
         with self._permits.lock:
             permit = self._permits.get_locked(permit_id)
             if permit.status is not PermitStatus.PENDING:
-                raise AuthorityError(
-                    f"execution permit is {permit.status.value}"
-                )
+                raise AuthorityError(f"execution permit is {permit.status.value}")
             try:
                 self._assert_permit_binding(
                     permit=permit,
@@ -276,11 +272,7 @@ class AuthorityService:
         except Exception as exc:
             raise AuthorityError("policy_engine_exception") from exc
         if policy.effect is AuthorityEffect.DENY:
-            reason = (
-                policy.reason_codes[0]
-                if policy.reason_codes
-                else "policy_denied"
-            )
+            reason = policy.reason_codes[0] if policy.reason_codes else "policy_denied"
             raise AuthorityError(reason)
 
         requirements = combine_requirements(
@@ -289,15 +281,9 @@ class AuthorityService:
         )
         if context.trust_tier < requirements.required_trust:
             raise AuthorityError("insufficient_trust")
-        if (
-            requirements.require_owner_attentive
-            and not context.owner_attentive
-        ):
+        if requirements.require_owner_attentive and not context.owner_attentive:
             raise AuthorityError("owner_attention_required")
-        if (
-            requirements.require_actor_unambiguous
-            and not context.actor_unambiguous
-        ):
+        if requirements.require_actor_unambiguous and not context.actor_unambiguous:
             raise AuthorityError("actor_ambiguous")
 
         if requirements.approval_requirement is not ApprovalRequirement.NONE:
@@ -338,9 +324,7 @@ class AuthorityService:
             if context.attention_state is not AttentionState.ATTENTIVE:
                 raise AuthorityError("spoken_approval_requires_attention")
             if not context.actor_unambiguous:
-                raise AuthorityError(
-                    "spoken_approval_requires_actor_binding"
-                )
+                raise AuthorityError("spoken_approval_requires_actor_binding")
 
     def _assert_permit_binding(
         self,

@@ -141,12 +141,10 @@ def combine_requirements(
             policy.approval_requirement,
         ),
         require_owner_attentive=(
-            floor.require_owner_attentive
-            or policy.require_owner_attentive
+            floor.require_owner_attentive or policy.require_owner_attentive
         ),
         require_actor_unambiguous=(
-            floor.require_actor_unambiguous
-            or policy.require_actor_unambiguous
+            floor.require_actor_unambiguous or policy.require_actor_unambiguous
         ),
         audit_required=floor.audit_required or policy.audit_required,
     )
@@ -158,9 +156,7 @@ class OpaPolicyEngine:
     def __init__(
         self,
         *,
-        endpoint: str = (
-            "http://127.0.0.1:8181/v1/data/jarvis/authority/decision"
-        ),
+        endpoint: str = ("http://127.0.0.1:8181/v1/data/jarvis/authority/decision"),
         timeout_seconds: float = 0.5,
         expected_policy_version: str = "step3-v1",
     ) -> None:
@@ -258,15 +254,9 @@ class OpaPolicyEngine:
             isinstance(reason, str) for reason in raw_reasons
         ):
             raise TypeError("OPA reason_codes must be a string list")
-        policy_version = str(
-            result.get("policy_version", "opa:unknown")
-        )
+        policy_version = str(result.get("policy_version", "opa:unknown"))
         return PolicyDecision(
-            effect=(
-                AuthorityEffect.ALLOW
-                if allow
-                else AuthorityEffect.DENY
-            ),
+            effect=(AuthorityEffect.ALLOW if allow else AuthorityEffect.DENY),
             requirements=PolicyRequirements(
                 required_trust=required_trust,
                 approval_requirement=approval_requirement,

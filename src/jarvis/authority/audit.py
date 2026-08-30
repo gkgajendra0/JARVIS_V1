@@ -40,9 +40,7 @@ def _validated_metadata(
         if any(part in lowered for part in _FORBIDDEN_KEY_PARTS):
             raise AuditError(f"forbidden audit metadata key: {key}")
         if not isinstance(value, _ALLOWED_VALUE_TYPES):
-            raise AuditError(
-                f"unsupported audit metadata value for {key}"
-            )
+            raise AuditError(f"unsupported audit metadata value for {key}")
         safe[key] = value
     return safe
 
@@ -80,9 +78,7 @@ class AuditEvent:
         return cls(
             event_id=str(uuid.uuid4()),
             event_type=event_type,
-            occurred_at_epoch=(
-                time.time() if now_epoch is None else now_epoch
-            ),
+            occurred_at_epoch=(time.time() if now_epoch is None else now_epoch),
             session_id=session_id,
             proposal_id=proposal_id,
             proposal_fingerprint=proposal_fingerprint,
@@ -167,9 +163,7 @@ class SqliteAuditEventStore:
                 )
                 self._connection.commit()
             except sqlite3.Error as exc:
-                raise AuditError(
-                    "failed to persist audit event"
-                ) from exc
+                raise AuditError("failed to persist audit event") from exc
 
     def close(self) -> None:
         with self._lock:

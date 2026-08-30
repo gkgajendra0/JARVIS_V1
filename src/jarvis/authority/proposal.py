@@ -29,9 +29,7 @@ def _normalize_json(value: Any) -> Any:
         normalized: dict[str, Any] = {}
         for key, item in value.items():
             if not isinstance(key, str):
-                raise ProposalValidationError(
-                    "proposal mapping keys must be strings"
-                )
+                raise ProposalValidationError("proposal mapping keys must be strings")
             normalized_key = unicodedata.normalize("NFC", key)
             if normalized_key in normalized:
                 raise ProposalValidationError(
@@ -39,9 +37,7 @@ def _normalize_json(value: Any) -> Any:
                 )
             normalized[normalized_key] = _normalize_json(item)
         return normalized
-    if isinstance(value, Sequence) and not isinstance(
-        value, bytes | bytearray | str
-    ):
+    if isinstance(value, Sequence) and not isinstance(value, bytes | bytearray | str):
         return [_normalize_json(item) for item in value]
     raise ProposalValidationError(
         f"unsupported proposal value type: {type(value).__name__}"
@@ -161,9 +157,7 @@ class ActionProposal:
             "attributes": self.attributes.as_policy_dict(),
             "origin": self.origin.value,
         }
-        return hashlib.sha256(
-            canonical_json(material).encode("utf-8")
-        ).hexdigest()
+        return hashlib.sha256(canonical_json(material).encode("utf-8")).hexdigest()
 
     def has_valid_fingerprint(self) -> bool:
         try:

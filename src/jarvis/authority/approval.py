@@ -88,13 +88,10 @@ class ApprovalService:
             record = self._active_record(approval_id)
             self._assert_binding(record, proposal=proposal, session_id=session_id)
             if record.status is not ApprovalStatus.PENDING:
-                raise ApprovalError(
-                    f"approval is not pending: {record.status.value}"
-                )
+                raise ApprovalError(f"approval is not pending: {record.status.value}")
             if _METHOD_LEVEL[method] < record.requirement:
                 raise ApprovalError(
-                    f"{method.value} does not satisfy "
-                    f"{record.requirement.name.lower()}"
+                    f"{method.value} does not satisfy {record.requirement.name.lower()}"
                 )
             granted = replace(
                 record,
@@ -129,9 +126,7 @@ class ApprovalService:
             record = self._active_record(approval_id)
             self._assert_binding(record, proposal=proposal, session_id=session_id)
             if record.status is not ApprovalStatus.GRANTED:
-                raise ApprovalError(
-                    f"approval is not granted: {record.status.value}"
-                )
+                raise ApprovalError(f"approval is not granted: {record.status.value}")
             if record.requirement < minimum_requirement:
                 raise ApprovalError("approval requirement is too weak")
             if record.method is None:
@@ -187,9 +182,7 @@ class ApprovalService:
     ) -> ApprovalRecord:
         record = self._active_record(approval_id)
         if record.status is not ApprovalStatus.PENDING:
-            raise ApprovalError(
-                f"approval is not pending: {record.status.value}"
-            )
+            raise ApprovalError(f"approval is not pending: {record.status.value}")
         resolved = replace(
             record,
             status=status,

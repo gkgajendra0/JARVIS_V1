@@ -226,8 +226,8 @@ def test_unicode_normalized_key_collision_rejected() -> None:
         proposal(
             clock,
             parameters={
-                "\u00e9": 1,
-                "e\u0301": 2,
+                "é": 1,
+                "é": 2,
             },
         )
 
@@ -279,10 +279,7 @@ def test_lower_risk_flags_cannot_downgrade_critical() -> None:
         persistent_write=True,
         financial_or_legal=True,
     )
-    assert (
-        RiskClassifier().classify(attributes).risk_class
-        is RiskClass.CRITICAL
-    )
+    assert RiskClassifier().classify(attributes).risk_class is RiskClass.CRITICAL
 
 
 def test_direct_intent_requires_direct_user_origin() -> None:
@@ -370,9 +367,7 @@ def test_spoken_r3_requires_fresh_attention() -> None:
         approval_id=approval_id,
     )
     assert decision.effect is AuthorityEffect.DENY
-    assert decision.reason_codes == (
-        "spoken_approval_requires_attention",
-    )
+    assert decision.reason_codes == ("spoken_approval_requires_attention",)
 
 
 def test_spoken_r3_requires_unambiguous_actor() -> None:
@@ -394,9 +389,7 @@ def test_spoken_r3_requires_unambiguous_actor() -> None:
         approval_id=approval_id,
     )
     assert decision.effect is AuthorityEffect.DENY
-    assert decision.reason_codes == (
-        "spoken_approval_requires_actor_binding",
-    )
+    assert decision.reason_codes == ("spoken_approval_requires_actor_binding",)
 
 
 def test_r3_spoken_approval_allows_when_attention_bound() -> None:

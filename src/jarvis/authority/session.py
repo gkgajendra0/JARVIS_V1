@@ -59,9 +59,7 @@ class AuthoritySessionManager:
                 active_unlocked=True,
                 generation=self._generation,
                 created_at_monotonic=(
-                    time.monotonic()
-                    if now_monotonic is None
-                    else now_monotonic
+                    time.monotonic() if now_monotonic is None else now_monotonic
                 ),
             )
             return self._current
@@ -81,9 +79,7 @@ class AuthoritySessionManager:
                 self._current,
                 active_unlocked=False,
                 invalidated_at_monotonic=(
-                    time.monotonic()
-                    if now_monotonic is None
-                    else now_monotonic
+                    time.monotonic() if now_monotonic is None else now_monotonic
                 ),
                 invalidation_reason=reason,
             )
