@@ -5,9 +5,10 @@ import sqlite3
 import threading
 import time
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Protocol
+from typing import Protocol
 
 
 class AuditError(RuntimeError):
