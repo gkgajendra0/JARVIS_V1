@@ -68,9 +68,7 @@ class ManagedOpaServer:
     def endpoint(self) -> str:
         if self._port is None:
             raise LocalOpaError("OPA server is not running")
-        return (
-            f"http://127.0.0.1:{self._port}/v1/data/jarvis/authority/decision"
-        )
+        return f"http://127.0.0.1:{self._port}/v1/data/jarvis/authority/decision"
 
     def start(self) -> ManagedOpaServer:
         if self._process is not None:
