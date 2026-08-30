@@ -9,6 +9,7 @@ from .verifier import (
     StrongVerificationResult,
     StrongVerificationStatus,
     StrongVerifier,
+    StrongVerifierError,
 )
 
 
@@ -52,13 +53,13 @@ class StrongApprovalService:
                 proposal=proposal,
                 session_id=session_id,
             )
-        except Exception:
+        except StrongVerifierError:
             verification = StrongVerificationResult(
                 status=StrongVerificationStatus.ERROR,
-                verifier_id="strong-verifier-exception",
+                verifier_id="strong-verifier-error",
                 proposal_fingerprint=proposal.fingerprint,
                 session_id=session_id,
-                reason_codes=("verifier_exception",),
+                reason_codes=("verifier_error",),
             )
 
         if verification.verified:
