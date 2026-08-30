@@ -29,7 +29,9 @@ class PassiveLivenessThresholds:
         if self.window_size < 3:
             raise ValueError("passive liveness window_size must be at least 3")
         if not 0.0 <= self.spoof_max < self.live_min <= 1.0:
-            raise ValueError("passive liveness thresholds must satisfy 0 <= spoof < live <= 1")
+            raise ValueError(
+                "passive liveness thresholds must satisfy 0 <= spoof < live <= 1"
+            )
         if self.max_inter_observation_gap_seconds <= 0:
             raise ValueError("passive liveness max observation gap must be positive")
 
@@ -180,7 +182,9 @@ class TemporalPassiveLiveness:
             raise ValueError("evidence_ttl_seconds must be positive")
         current = assessment or self.assessment
         if current.session_id != self.session_id:
-            raise ValueError("assessment session does not match passive liveness binding")
+            raise ValueError(
+                "assessment session does not match passive liveness binding"
+            )
         if current.visual_track_id != self.visual_track_id:
             raise ValueError("assessment track does not match passive liveness binding")
 
@@ -195,8 +199,7 @@ class TemporalPassiveLiveness:
             session_id=self.session_id,
             modality=EvidenceModality.FACE_LIVENESS,
             observed_at_monotonic=current.observed_at_monotonic,
-            expires_at_monotonic=current.observed_at_monotonic
-            + evidence_ttl_seconds,
+            expires_at_monotonic=current.observed_at_monotonic + evidence_ttl_seconds,
             source_id=f"passive-pad-track:{self.visual_track_id}",
             provider_id=self.provider_id,
             verdict=verdict,
