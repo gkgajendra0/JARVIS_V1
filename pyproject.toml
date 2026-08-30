@@ -15,6 +15,7 @@ dependencies = [
     "numpy>=2,<3",
     "opencv-python==5.0.0.93",
     "opencv-contrib-python==5.0.0.93",
+    "cryptography==50.0.1",
 ]
 
 [project.scripts]
