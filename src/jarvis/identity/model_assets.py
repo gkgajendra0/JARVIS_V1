@@ -5,10 +5,11 @@ import json
 import os
 import tempfile
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
-from typing import BinaryIO, Callable
+from typing import BinaryIO
 from urllib.parse import urlparse
 
 
@@ -258,28 +259,30 @@ class ModelAssetCache:
         )
         temporary_path: Path | None = None
         try:
-            with opener(request, timeout=timeout_seconds) as response:
-                with tempfile.NamedTemporaryFile(
+            with (
+                opener(request, timeout=timeout_seconds) as response,
+                tempfile.NamedTemporaryFile(
                     mode="wb",
                     prefix=f".{asset.filename}.",
                     suffix=".tmp",
                     dir=target.parent,
                     delete=False,
-                ) as temporary:
-                    temporary_path = Path(temporary.name)
-                    digest = hashlib.sha256()
-                    total = 0
-                    while True:
-                        chunk = response.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        total += len(chunk)
-                        if total > asset.size_bytes:
-                            raise ModelAssetIntegrityError(
-                                f"download exceeded expected size for {asset.asset_id}"
-                            )
-                        digest.update(chunk)
-                        temporary.write(chunk)
+                ) as temporary,
+            ):
+                temporary_path = Path(temporary.name)
+                digest = hashlib.sha256()
+                total = 0
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > asset.size_bytes:
+                        raise ModelAssetIntegrityError(
+                            f"download exceeded expected size for {asset.asset_id}"
+                        )
+                    digest.update(chunk)
+                    temporary.write(chunk)
             if total != asset.size_bytes:
                 raise ModelAssetIntegrityError(
                     f"download size mismatch for {asset.asset_id}: {total}"
