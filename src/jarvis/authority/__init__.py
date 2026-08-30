@@ -51,6 +51,7 @@ from .verifier import (
     StrongVerificationResult,
     StrongVerificationStatus,
     StrongVerifier,
+    StrongVerifierError,
     WindowsHelloVerifier,
 )
 
@@ -101,6 +102,7 @@ __all__ = [
     "StrongVerificationResult",
     "StrongVerificationStatus",
     "StrongVerifier",
+    "StrongVerifierError",
     "TrustTier",
     "WindowsHelloVerifier",
     "WindowsSessionGuard",
