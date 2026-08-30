@@ -6,11 +6,13 @@
 
 ## Current Stage
 
-**ARCHITECTURE APPROVED — ADRs ACCEPTED — PHASE 3A AUTHORITY FOUNDATION NEXT**
+**PHASE 3A AUTHORITY FOUNDATION HUMAN-ACCEPTED — PHASE 3B OWNER IDENTITY + FACE/LIVENESS NEXT**
 
 Step 0, Step 1, Step 2, and Step 2.5 are complete. The development-only `jarvis-dev` supervisor and time-aware startup greetings are implemented, automated-validated, human-accepted, and merged to protected `main`.
 
 Step-3 research, security/privacy threat modeling, technology comparisons, canonical governance contracts, trust/risk vocabulary, degraded behavior, validation gates, and the Apple-inspired attention/intent amendment are complete. The combined architecture package received explicit human approval on 2026-08-30.
+
+Phase 3A is now implemented, automated-validated, and human-accepted on real Windows hardware. The accepted evidence includes a real Windows lock transition invalidating authority state, a real Windows Hello/PIN strong-verification success, proposal/session-bound STRONG approval, R4 authority allow, one-time execution-permit consumption, and a canceled Hello verification that produced DENY with no permit and no weak fallback.
 
 Accepted ADRs:
 
@@ -24,8 +26,6 @@ Research artifacts:
 - `docs/research/STEP_3_INDIA_PRIVACY_CONTEXT.md`
 - `docs/research/STEP_3_ARCHITECTURE_PROPOSAL.md`
 - `docs/research/STEP_3_ATTENTION_INTENT_AMENDMENT.md`
-
-Implementation has not yet been human-accepted. Phase 3A must build the deterministic authority foundation before any biometric provider is allowed to influence protected authority.
 
 ## Step-3 Objective
 
@@ -51,7 +51,8 @@ The following are already accepted and must be treated as inputs, not redesigned
 - protected `main` requiring PR flow plus `ruff` and `pytest` checks;
 - explicit spoken software-update approval parsed deterministically outside the realtime model;
 - last-known-good rollback for failed development updates;
-- deterministic JARVIS-owned scripted speech for startup/system prompts.
+- deterministic JARVIS-owned scripted speech for startup/system prompts;
+- Phase 3A deterministic authority contracts and Windows strong-verification/session boundaries.
 
 ## Accepted Step-3 Non-Negotiable Invariants
 
@@ -67,6 +68,7 @@ The following are already accepted and must be treated as inputs, not redesigned
 - Raw audio/video, eye crops, gaze vectors, full transcripts, biometric material, secrets, and sensitive payloads are not retained merely because they are available.
 - Provider/device/model implementations remain replaceable behind JARVIS-owned contracts.
 - Pocket-3 RGB attention/liveness must never be represented as Face-ID-equivalent security or as iris authentication; Windows Hello/FIDO2 remains the strong-verification path.
+- A generic approval path may not claim `STRONG_VERIFIER`; a verified strong proof must be bound to the exact proposal/session and consumed only once.
 
 ## Accepted Step-3 Architecture
 
@@ -91,24 +93,60 @@ The approved architecture includes:
 - privacy-aware structured audit plus optional tamper-evident chaining, with OpenTelemetry restricted to operational telemetry;
 - STRIDE + LINDDUN PRO as the security/privacy threat-model baseline, extended by attention-specific spoofing/privacy cases.
 
-## Phase 3A — Authority Skeleton First
+## Phase 3A — Authority Foundation — ACCEPTED
 
-Phase 3A must be implemented before face/voice/attention evidence can participate in protected decisions.
+Phase 3A is implemented and human-accepted. It establishes the authority boundary before biometric evidence can participate in protected decisions.
 
-Required work:
+Accepted implementation includes:
 
-- canonical Step-3 types/contracts;
-- immutable `ActionProposal` canonicalization and fingerprinting;
-- deterministic `RiskClassifier` with hard security floors;
-- fail-closed `PolicyEngine` boundary and initial OPA adapter/policies;
-- `ApprovalService` proposal-bound state machine with expiry, denial, cancellation, one-time consumption, and material-mutation invalidation;
-- `AuthorityService` final decision and pre-execution revalidation contract;
-- structured `AuditEvent` schema and local audit-store boundary;
-- Windows session invalidation boundary;
-- attention-related authority predicates/contracts established before model integration;
-- exhaustive unit/failure-path tests for unauthorized execution, policy failure, approval replay, proposal mutation, expiry, session invalidation, risk-floor downgrade attempts, and TOCTOU revalidation.
+- canonical Step-3 trust/risk/approval/attention/evidence contracts;
+- immutable, expiring, session-bound `ActionProposal` canonicalization and SHA-256 material fingerprinting;
+- Unicode-normalized-key collision rejection and fingerprint re-computation at authority boundaries;
+- deterministic `RiskClassifier` with hard security floors that policy/model output cannot lower;
+- fail-closed `PolicyEngine` boundary and loopback-only OPA adapter with strict response/policy-version validation;
+- proposal-bound `ApprovalService` with expiry, cancellation, denial, one-time consumption, session invalidation, and strength ordering;
+- proposal/session-bound `StrongVerificationResult` carrying a unique one-time verification ID;
+- `StrongApprovalService` as the only path that can convert a verified strong proof into a STRONG approval;
+- prohibition on generic approval APIs pretending `STRONG_VERIFIER` happened;
+- `AuthorityService` decision, audit-before-protected-execution, short-lived execution permits, and final pre-execution revalidation/consumption;
+- structured privacy-aware audit boundary plus SQLite audit store and forbidden sensitive metadata keys;
+- Windows WTS session adapter using explicit lock state and authority invalidation on lock/session transition;
+- desktop Windows Hello adapter plus .NET 9 interop helper and lowercase JSON wire contract;
+- attention-evidence contract established without yet integrating an attention model;
+- failure-path tests for unauthorized execution, policy failure, approval/proof replay, proposal mutation, expiry, session invalidation, risk-floor downgrade, audit failure, and TOCTOU revalidation.
 
-**Phase 3A rule:** no face, speaker, liveness, gaze, or LLM output may directly authorize an action. Initial tests should use deterministic synthetic evidence/state only.
+Automated validation on the accepted PR head covers Ruff, the complete pytest suite, Windows .NET helper compilation, and execution of the helper JSON contract probe.
+
+Real-machine human acceptance on 2026-08-30 established:
+
+- current WTS session reports unlocked during normal use;
+- `Win+L` produces authority invalidation for the active session;
+- Windows Hello/PIN can produce `VERIFIED`;
+- verified proof is bound to the exact proposal fingerprint and session;
+- the resulting STRONG approval allows an R4 diagnostic proposal;
+- the resulting execution permit and approval are consumed exactly once;
+- canceling Windows Hello produces a canceled approval, authority `DENY`, and no execution permit.
+
+**Phase 3A rule remains permanent:** no face, speaker, liveness, gaze, wake-word, or LLM output may directly authorize an action.
+
+## Phase 3B — Owner Identity + Face/Liveness — NEXT
+
+Phase 3B adds local OWNER enrollment and typed face/liveness evidence behind the already accepted authority contracts. It must not weaken or bypass Phase 3A.
+
+Planned work:
+
+1. implement the single-OWNER profile/enrollment lifecycle with explicit create/replace/delete semantics;
+2. implement DPAPI-backed key protection and envelope-encrypted biometric-template storage before persisting any owner biometric material;
+3. add model/version/checksum/license manifests for YuNet/SFace and MediaPipe assets;
+4. implement `FaceIdentityProvider` using YuNet + SFace on the selected/head crop rather than creating a second full-frame perception pipeline;
+5. benchmark/calibrate face matching on the real Pocket 3 across lighting, pose, glasses, distance, and ordinary appearance variation;
+6. implement randomized MediaPipe Face Landmarker active-liveness challenges on the same stable OWNER track;
+7. emit typed `FACE_MATCH` and `FACE_LIVENESS` evidence with quality, freshness, source/model IDs, verdicts, and reason codes;
+8. implement the first deterministic T0/T1/T2 trust derivation from Windows session + stable OWNER track + fresh face + fresh liveness, with no generic weighted confidence sum;
+9. test print/photo/phone-screen/video replay and track-association failure cases on the real Pocket 3;
+10. keep attention and speaker identity as subsequent evidence-provider slices unless needed to complete the approved T2 acceptance matrix.
+
+Phase 3B is not complete merely because face recognition works. Persistent owner storage, deletion/re-enrollment, spoof testing, freshness/invalidation, and trust derivation must all pass before face evidence can become accepted architecture.
 
 ## Research Completion Coverage
 
@@ -140,15 +178,18 @@ The accepted research package covers:
 - current research record — **DONE**;
 - concrete STRIDE + LINDDUN threat/privacy model — **DONE**;
 - India privacy-context record — **DONE**;
-- trust/risk vocabulary and canonical contracts — **APPROVED**;
-- Apple-inspired attention/intent security amendment — **APPROVED**;
+- trust/risk vocabulary and canonical contracts — **APPROVED + IMPLEMENTED IN 3A**;
+- Apple-inspired attention/intent security amendment — **APPROVED; PROVIDER IMPLEMENTATION PENDING**;
 - scope/non-scope and human acceptance scenarios — **APPROVED**;
 - measurable security/privacy/latency/false-accept/false-reject/attention validation gates — **APPROVED**;
 - explicit human architecture approval — **DONE 2026-08-30**;
 - accepted ADRs for major decisions — **DONE**;
-- Phase 3A implementation — **NEXT**;
-- automated validation — **PENDING IMPLEMENTATION**;
-- real human acceptance — **PENDING IMPLEMENTATION**.
+- Phase 3A implementation — **DONE**;
+- Phase 3A automated validation — **DONE**;
+- Phase 3A real human acceptance — **DONE 2026-08-30**;
+- Phase 3B owner identity + face/liveness implementation — **NEXT**;
+- remaining Step-3 identity/attention/speaker validation — **PENDING**;
+- complete Step-3 human acceptance — **PENDING**.
 
 ## Explicitly Out of Scope for Step 3
 
@@ -176,21 +217,26 @@ requirements
 -> threat/privacy model                     DONE
 -> technology/architecture proposal         DONE
 -> attention/intent amendment               DONE
--> human approval                           DONE
+-> human architecture approval              DONE
 -> accepted ADRs                            DONE
--> Phase 3A authority implementation        NEXT
--> biometric/identity implementation
--> automated validation
--> real human acceptance
+-> Phase 3A authority implementation        DONE
+-> Phase 3A automated validation            DONE
+-> Phase 3A real human acceptance           DONE
+-> Phase 3B owner identity + face/liveness  NEXT
+-> attention/speaker evidence implementation
+-> full Step-3 automated validation
+-> full real-human security/privacy acceptance
 -> documentation reconciliation
--> protected-main merge
+-> protected-main merge(s)
 ```
 
 No Step-3 component becomes authoritative merely because a model/provider API works in isolation.
 
 ## Immediate Next Actions
 
-1. Merge the approved Step-3 research/ADR package through protected-main PR flow after required checks pass.
-2. Start Phase 3A on a dedicated implementation branch from the approved architecture baseline.
-3. Build authority contracts, proposal/risk/policy/approval/audit/session foundations and prove fail-closed behavior before biometric integration.
-4. Only then proceed to owner profile/face/liveness/attention/speaker provider implementation and real-hardware calibration.
+1. Reconcile Phase 3A accepted implementation into `CURRENT_ARCHITECTURE.md`.
+2. Merge PR #7 through protected `main` after the final documentation head passes required checks.
+3. Create a dedicated Phase 3B implementation branch from the new `main` baseline.
+4. Build OWNER lifecycle + encrypted biometric storage before persisting face templates.
+5. Integrate and benchmark YuNet/SFace + randomized MediaPipe liveness on the existing Pocket 3 selected-track crop.
+6. Only after real spoof/lighting/pose acceptance, allow typed face/liveness evidence to participate in deterministic T0/T1/T2 trust derivation.
