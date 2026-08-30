@@ -6,11 +6,11 @@
 
 ## Current Stage
 
-**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — 3B.7B PASSIVE RGB LIVENESS HUMAN-ACCEPTED — 3B.8 RUNTIME OWNER FACE + LIVENESS BINDING NEXT**
+**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — 3B.8 RUNTIME OWNER + LIVENESS BINDING HUMAN-ACCEPTED — 3B.9 ATTENTION/INTENT EVIDENCE NEXT**
 
 Step 0, Step 1, Step 2, Step 2.5, and Step 3A are complete. Phase 3A was real-machine accepted, reconciled, and merged through protected `main`.
 
-Phase 3B continues on draft PR #10 and remains deliberately unmerged until the identity/liveness slices are integrated, real-machine accepted, reconciled, and ready for protected-main review.
+Phase 3B continues on draft PR #10 and remains deliberately unmerged until the remaining identity/trust slices are integrated, real-machine accepted, reconciled, and ready for protected-main review.
 
 ## Accepted Phase 3B slices
 
@@ -138,6 +138,60 @@ A gap > `0.50 s` resets the window. Passive evidence TTL is initially `2.0 s`. `
 
 This selection is recorded in `docs/decisions/ADR-008_STEP_3_PASSIVE_RGB_LIVENESS.md`.
 
+### 3B.8 — Runtime OWNER identity + liveness binding — HUMAN-ACCEPTED
+
+Accepted integrated evidence path:
+
+```text
+active/unlocked Windows session
+        +
+selected stable person track
+        ↓
+associated head/face
+        ├── YuNet + SFace
+        │       ↓
+        │ encrypted OWNER 8-prototype set
+        │       ↓
+        │ 15-frame temporal OWNER identity
+        │
+        └── MiniFAS V1SE + V2
+                ↓
+           15-frame passive liveness
+                ↓
+        same session + same track
+                ↓
+LIVE_OWNER_CANDIDATE / ACTIVE_CHALLENGE_ELIGIBLE /
+SPOOFED_OWNER_PRESENTATION / UNKNOWN / AMBIGUOUS / INSUFFICIENT
+```
+
+Accepted 3B.8 properties:
+
+- encrypted OWNER template is loaded through the accepted DPAPI/AES-GCM identity-store boundary;
+- exact template/model compatibility is required and mismatches fail closed;
+- SFace identity and MiniFAS liveness are fused only when bound to the same Windows session and visual track;
+- temporal identity uses a provisional evidence-only band: `>=0.65 OWNER_CANDIDATE`, `<=0.35 UNKNOWN`, middle `AMBIGUOUS`, with 15 fresh samples required;
+- the identity threshold is explicitly **not authoritative** because a consenting live non-owner calibration set is still unavailable;
+- identity/liveness observation gaps > `0.50 s` reset temporal state;
+- selected-target loss now immediately discards both identity and liveness windows and stops evidence collection;
+- Windows lock/session transition invalidates the evidence session and fails closed;
+- `OWNER_CANDIDATE + LIVE` produces only `LIVE_OWNER_CANDIDATE` evidence;
+- `OWNER_CANDIDATE + UNCERTAIN` is challenge-eligible rather than silently upgraded;
+- `OWNER_CANDIDATE + SPOOF` fails closed as `SPOOFED_OWNER_PRESENTATION`;
+- no raw frames, aligned faces, embeddings, PAD tensors, or PAD outputs are persisted;
+- `face_evidence_grants_T2 = False` remains enforced.
+
+Real Pocket-3 evidence:
+
+- 300 integrated live OWNER observations;
+- temporal OWNER similarity median `0.7982`;
+- MiniFAS live median `0.9998`;
+- `272` observations reached `LIVE_OWNER_CANDIDATE` after temporal warm-up/reset periods;
+- real WTS Windows-lock test produced `SESSION_INVALIDATED_FAIL_CLOSED`.
+
+Phone-photo/video attacks were not redundantly rerun in 3B.8 because the same selected MiniFAS provider and temporal rule were already real-machine attacked and human-accepted in 3B.7B; 3B.8 automated tests cover deterministic `OWNER_CANDIDATE + SPOOF` binding behavior.
+
+Acceptance evidence: `docs/research/STEP_3B8_OWNER_LIVENESS_ACCEPTANCE_RESULTS.md`.
+
 ## Non-negotiable Step-3 invariants
 
 - Identity evidence is not execution permission.
@@ -150,50 +204,44 @@ This selection is recorded in `docs/decisions/ADR-008_STEP_3_PASSIVE_RGB_LIVENES
 - `SPOOF` fails closed.
 - `UNCERTAIN` may request stronger evidence but may not silently upgrade trust.
 
-## Phase 3B.8 — NEXT: Runtime OWNER identity + liveness binding
+## Phase 3B.9 — NEXT: Attention / intent-to-engage evidence
 
-The next bounded slice is to produce runtime identity/liveness evidence for the **same stable subject** rather than leaving face recognition and liveness as separate diagnostics.
+T2 must **not** be enabled merely because 3B.8 now produces a live OWNER candidate. The accepted Step-3 architecture requires fresh intent/attention evidence before an ambient visual OWNER can become corroborated OWNER context for protected interaction.
 
-Target architecture:
+ADR-007 already defines the architecture. The next bounded implementation slice is therefore:
 
 ```text
-expected active Windows session
-        +
-stable selected/eligible visual track
+same selected OWNER/head track
         ↓
-associated head/face
-        ├── SFace → encrypted OWNER prototype match
-        └── MiniFAS → 15-frame passive liveness
-                         ↓
-                  LIVE / UNCERTAIN / SPOOF
-                         │
-             UNCERTAIN ─┴─→ active challenge when required
+MediaPipe Face Landmarker
+        ├── eye-open state
+        ├── left/right look blendshapes
+        ├── head pose / facial transform
+        ├── iris/eye geometry
+        └── temporal stability
         ↓
-typed fresh evidence bound to same session + same track
+ATTENTIVE / NOT_ATTENTIVE / AMBIGUOUS
+        ↓
+short-lived typed ATTENTION evidence
 ```
 
-3B.8 must initially remain **evidence-only**. It must not automatically grant T2 while the integrated identity/liveness behavior is still being validated.
+3B.9 requirements:
 
-Required 3B.8 acceptance work:
+1. reuse the already selected/head-associated visual track; do not create a parallel full-frame surveillance pipeline;
+2. reuse the existing MediaPipe Face Landmarker asset/runtime where practical;
+3. benchmark and calibrate on the real Pocket 3 with natural looking/talking behavior;
+4. looking away must remove fresh intent evidence without revoking OWNER identity;
+5. attention remains supporting evidence and never grants permission itself;
+6. do not persist eye crops, iris coordinates, gaze vectors, behavioral gaze history, or emotion/fatigue inference;
+7. false negatives degrade to stronger verification / no protected disclosure, never to weaker thresholds;
+8. keep T2 disabled during 3B.9 implementation and human acceptance.
 
-1. load/decrypt the enrolled OWNER face prototype set through the accepted identity store boundary;
-2. run SFace on the associated face/head of one stable visual track;
-3. aggregate OWNER match evidence temporally rather than trusting one frame;
-4. run MiniFAS passive liveness on that same track;
-5. preserve explicit `OWNER / UNKNOWN / AMBIGUOUS` semantics;
-6. bind all evidence to the exact active Windows session and visual track;
-7. invalidate evidence on track loss, session change/lock, expiry, provider/model mismatch, or material observation gaps;
-8. invoke active liveness only for `UNCERTAIN` when the trust/risk path actually requires liveness;
-9. keep `face_evidence_grants_T2 = False` during integration testing;
-10. perform real OWNER, phone-photo, phone-video, track-loss, and session-lock acceptance tests on the integrated path.
+## Work after 3B.9
 
-## Work after 3B.8
+After attention/intent evidence is implemented and human-accepted:
 
-After integrated runtime OWNER+liveness evidence is accepted:
-
-- deterministic T2 corroborated-owner composition;
-- attention/intent evidence implementation and acceptance;
-- speaker identity/corroboration implementation and acceptance;
+- deterministic T2 `CORROBORATED_OWNER` composition using the exact accepted evidence predicates;
+- speaker identity/corroboration and active-speaker ambiguity handling for voice-originated protected interaction;
 - broader negative/attack coverage;
 - future depth/IR provider research and hardware integration without changing the authority contract.
 
@@ -205,4 +253,4 @@ After integrated runtime OWNER+liveness evidence is accepted:
 
 ## Immediate Next Action
 
-Implement **3B.8 runtime OWNER face + passive/active liveness binding** on the same stable visual track, keep T2 disabled, then run automated validation followed by real Pocket-3 human acceptance before any trust-composition change.
+Implement **3B.9 attention / intent-to-engage evidence** on the same accepted OWNER/head track according to ADR-007, keep T2 disabled, run automated validation, then perform real Pocket-3 human acceptance before implementing deterministic T2 composition.
