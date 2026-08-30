@@ -172,7 +172,7 @@ class WindowsDpapiKeyProtector:
         normalized = purpose.strip()
         if not normalized:
             raise KeyProtectionError("DPAPI purpose must not be empty")
-        return hashlib.sha256(f"jarvis:{normalized}".encode("utf-8")).digest()
+        return hashlib.sha256(f"jarvis:{normalized}".encode()).digest()
 
     @staticmethod
     def _blob(data: bytes) -> tuple[_DataBlob, ctypes.Array[ctypes.c_char]]:
