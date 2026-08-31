@@ -12,7 +12,6 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from jarvis.identity.lr_asd_model import LrAsdInferenceModel
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
 from jarvis.vision.camera import CapturedFrame
 from jarvis.vision.framing import HeadFirstFramingPolicy
@@ -75,7 +74,9 @@ class ActiveSpeakerVisualWindow:
             LR_ASD_VISUAL_SIZE,
             LR_ASD_VISUAL_SIZE,
         ):
-            raise ValueError("active-speaker window must contain 112x112 grayscale frames")
+            raise ValueError(
+                "active-speaker window must contain 112x112 grayscale frames"
+            )
         if self.frames.dtype != np.uint8:
             raise ValueError("active-speaker visual window must use uint8 frames")
 
@@ -198,8 +199,12 @@ class ActiveSpeakerVisualBuffer:
         if maximum_gap > maximum_source_gap_seconds:
             return None
 
-        grid_count = max(1, math.floor((end_monotonic - window_start) * LR_ASD_VISUAL_FPS))
-        grid = window_start + np.arange(grid_count, dtype=np.float64) / LR_ASD_VISUAL_FPS
+        grid_count = max(
+            1, math.floor((end_monotonic - window_start) * LR_ASD_VISUAL_FPS)
+        )
+        grid = (
+            window_start + np.arange(grid_count, dtype=np.float64) / LR_ASD_VISUAL_FPS
+        )
         chosen: list[ActiveSpeakerVisualSample] = []
         source_indices: list[int] = []
         for timestamp in grid:
@@ -218,7 +223,9 @@ class ActiveSpeakerVisualBuffer:
             maximum_source_gap_seconds=maximum_gap,
         )
 
-    def _select_target(self, snapshot: VisionSnapshot) -> tuple[TargetState, object] | None:
+    def _select_target(
+        self, snapshot: VisionSnapshot
+    ) -> tuple[TargetState, object] | None:
         heads = list(snapshot.heads)
         target = snapshot.target
         if target is not None and target.visible:
@@ -245,6 +252,8 @@ class LrAsdActiveSpeakerProvider:
 
         import torch
 
+        from jarvis.identity.lr_asd_model import LrAsdInferenceModel
+
         selected_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.device = torch.device(selected_device)
         model = LrAsdInferenceModel()
@@ -257,6 +266,7 @@ class LrAsdActiveSpeakerProvider:
         model.load_state_dict(normalized, strict=True)
         model.eval()
         self.model = model.to(self.device)
+        self._inference_lock = threading.Lock()
         LOGGER.info("LR-ASD active-speaker provider loaded on %s", self.device)
 
     def assess(
@@ -268,7 +278,9 @@ class LrAsdActiveSpeakerProvider:
         windows_session_id: str,
     ) -> ActiveSpeakerAssessment:
         if not audio_turn_id.strip() or not windows_session_id.strip():
-            raise ValueError("active-speaker turn/session identifiers must not be empty")
+            raise ValueError(
+                "active-speaker turn/session identifiers must not be empty"
+            )
         if turn.start_monotonic is None or turn.end_monotonic is None:
             return _insufficient_assessment(
                 self.provider_id,
@@ -317,13 +329,15 @@ class LrAsdActiveSpeakerProvider:
 
         import torch
 
-        audio_tensor = torch.from_numpy(features.astype(np.float32, copy=False)).unsqueeze(0)
+        audio_tensor = torch.from_numpy(
+            features.astype(np.float32, copy=False)
+        ).unsqueeze(0)
         visual_tensor = torch.from_numpy(
             visual_frames.astype(np.float32, copy=False)
         ).unsqueeze(0)
         audio_tensor = audio_tensor.to(self.device)
         visual_tensor = visual_tensor.to(self.device)
-        with torch.inference_mode():
+        with self._inference_lock, torch.inference_mode():
             scores = self.model.active_speaker_probabilities(
                 audio_tensor,
                 visual_tensor,
@@ -391,14 +405,18 @@ def _slice_turn_audio(
     return turn.samples[start:end]
 
 
-def _resample_audio(samples: np.ndarray, source_rate: int, target_rate: int) -> np.ndarray:
+def _resample_audio(
+    samples: np.ndarray, source_rate: int, target_rate: int
+) -> np.ndarray:
     if source_rate == target_rate:
         return samples.astype(np.float32, copy=False)
     from scipy.signal import resample_poly
 
     divisor = math.gcd(source_rate, target_rate)
     return np.asarray(
-        resample_poly(samples.astype(np.float32), target_rate // divisor, source_rate // divisor),
+        resample_poly(
+            samples.astype(np.float32), target_rate // divisor, source_rate // divisor
+        ),
         dtype=np.float32,
     )
 
@@ -424,7 +442,8 @@ def _verify_lr_asd_asset(path: Path) -> None:
     payload = path.read_bytes()
     if len(payload) != LR_ASD_AVA_SIZE_BYTES:
         raise RuntimeError(
-            f"LR-ASD asset size mismatch: expected {LR_ASD_AVA_SIZE_BYTES}, got {len(payload)}"
+            f"LR-ASD asset size mismatch: expected {LR_ASD_AVA_SIZE_BYTES}, "
+            f"got {len(payload)}"
         )
     header = f"blob {len(payload)}\0".encode()
     git_blob_sha1 = hashlib.sha1(header + payload, usedforsecurity=False).hexdigest()
