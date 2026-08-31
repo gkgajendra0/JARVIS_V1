@@ -113,7 +113,7 @@ class ActiveSpeakerAssessment:
 
 
 class ActiveSpeakerVisualBuffer:
-    """Cheap memory-only LR-ASD visual ring fed by exact canonical frame/snapshot pairs."""
+    """Memory-only LR-ASD visual ring bound to fresh perception context."""
 
     def __init__(
         self,
@@ -121,19 +121,24 @@ class ActiveSpeakerVisualBuffer:
         max_seconds: float = 16.0,
         framing_policy: HeadFirstFramingPolicy | None = None,
         crop_scale: float = 1.35,
+        max_snapshot_age_seconds: float = 0.15,
     ) -> None:
         if max_seconds <= 0:
             raise ValueError("active-speaker visual buffer duration must be positive")
         if not 1.0 <= crop_scale <= 2.0:
             raise ValueError("active-speaker crop scale must be in [1, 2]")
+        if max_snapshot_age_seconds <= 0:
+            raise ValueError("active-speaker snapshot age must be positive")
         self.max_seconds = max_seconds
         self.framing_policy = framing_policy or HeadFirstFramingPolicy()
         self.crop_scale = crop_scale
+        self.max_snapshot_age_seconds = max_snapshot_age_seconds
         self._lock = threading.RLock()
         self._samples: deque[ActiveSpeakerVisualSample] = deque()
 
     def observe(self, frame: CapturedFrame, snapshot: VisionSnapshot) -> None:
-        if frame.frame_id != snapshot.frame_id:
+        snapshot_age = frame.captured_at - snapshot.captured_at
+        if snapshot_age < 0 or snapshot_age > self.max_snapshot_age_seconds:
             return
         selected = self._select_target(snapshot)
         if selected is None:
