@@ -283,7 +283,9 @@ def _consolidate_candidates(
             or candidate.start_monotonic is None
             or candidate.end_monotonic is None
         ):
-            raise ValueError("speech-region consolidation requires candidate timestamps")
+            raise ValueError(
+                "speech-region consolidation requires candidate timestamps"
+            )
         gap = candidate.start_monotonic - previous.end_monotonic
         if gap <= max_gap_seconds:
             groups[-1].append(candidate)
@@ -295,7 +297,9 @@ def _consolidate_candidates(
         start_monotonic = group[0].start_monotonic
         end_monotonic = group[-1].end_monotonic
         if start_monotonic is None or end_monotonic is None:
-            raise ValueError("speech-region consolidation requires candidate timestamps")
+            raise ValueError(
+                "speech-region consolidation requires candidate timestamps"
+            )
         candidate = _candidate_from_offsets(
             turn,
             max(0.0, start_monotonic - turn.start_monotonic),
