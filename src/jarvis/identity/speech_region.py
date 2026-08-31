@@ -74,40 +74,9 @@ class LiveKitSileroSpeechRegionDetector:
             async for event in stream:
                 if event.type is not vad.VADEventType.END_OF_SPEECH:
                     continue
-                frame_samples = sum(
-                    frame.samples_per_channel for frame in event.frames
-                )
-                if frame_samples <= 0:
-                    continue
-                event_end_offset = max(0.0, float(event.timestamp))
-                event_start_offset = max(
-                    0.0,
-                    event_end_offset - frame_samples / turn.sample_rate,
-                )
-                original_end_offset = min(turn.duration_seconds, event_end_offset)
-                start_sample = min(
-                    turn.samples.size,
-                    max(0, round(event_start_offset * turn.sample_rate)),
-                )
-                end_sample = min(
-                    turn.samples.size,
-                    max(start_sample, round(original_end_offset * turn.sample_rate)),
-                )
-                if end_sample <= start_sample:
-                    continue
-                samples = turn.samples[start_sample:end_sample].copy()
-                candidates.append(
-                    SpeakerTurnAudio(
-                        samples=samples,
-                        sample_rate=turn.sample_rate,
-                        start_monotonic=(
-                            turn.start_monotonic + start_sample / turn.sample_rate
-                        ),
-                        end_monotonic=(
-                            turn.start_monotonic + end_sample / turn.sample_rate
-                        ),
-                    )
-                )
+                candidate = _candidate_from_end_event(turn, event)
+                if candidate is not None:
+                    candidates.append(candidate)
         finally:
             await stream.aclose()
 
@@ -115,6 +84,44 @@ class LiveKitSileroSpeechRegionDetector:
             return SpeechRegionResult(None, 0, "speech_region_not_detected")
         selected = max(candidates, key=lambda candidate: candidate.duration_seconds)
         return SpeechRegionResult(selected, len(candidates), "speech_region_selected")
+
+
+def _candidate_from_end_event(
+    turn: SpeakerTurnAudio,
+    event: vad.VADEvent,
+) -> SpeakerTurnAudio | None:
+    if turn.start_monotonic is None:
+        return None
+    frame_samples = sum(frame.samples_per_channel for frame in event.frames)
+    if frame_samples <= 0:
+        return None
+
+    event_timestamp = max(0.0, float(event.timestamp))
+    buffered_start_offset = max(
+        0.0,
+        event_timestamp - frame_samples / turn.sample_rate,
+    )
+    speech_end_offset = max(
+        buffered_start_offset,
+        event_timestamp - max(0.0, float(event.silence_duration)),
+    )
+    start_sample = min(
+        turn.samples.size,
+        max(0, round(buffered_start_offset * turn.sample_rate)),
+    )
+    end_sample = min(
+        turn.samples.size,
+        max(start_sample, round(speech_end_offset * turn.sample_rate)),
+    )
+    if end_sample <= start_sample:
+        return None
+
+    return SpeakerTurnAudio(
+        samples=turn.samples[start_sample:end_sample].copy(),
+        sample_rate=turn.sample_rate,
+        start_monotonic=turn.start_monotonic + start_sample / turn.sample_rate,
+        end_monotonic=turn.start_monotonic + end_sample / turn.sample_rate,
+    )
 
 
 def _push_pcm(stream: vad.VADStream, samples: np.ndarray, sample_rate: int) -> None:
