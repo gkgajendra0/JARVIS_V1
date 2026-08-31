@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from jarvis.vision.models import BoundingBox, TargetState, Track
+import numpy as np
+
+from jarvis.vision.camera import CapturedFrame
+from jarvis.vision.models import BoundingBox, FollowCommand, TargetState, Track
+from jarvis.vision.runtime import VisionSnapshot
 from jarvis.vision.service import VisionService
 
 
@@ -12,6 +16,19 @@ def _track(track_id: int) -> Track:
         bounds=BoundingBox(0.2, 0.1, 0.8, 0.95),
         first_seen_at=1.0,
         last_seen_at=1.0,
+    )
+
+
+def _snapshot(frame_id: int, observed_at: float) -> VisionSnapshot:
+    track = _track(7)
+    return VisionSnapshot(
+        frame_id=frame_id,
+        captured_at=observed_at,
+        tracks=(track,),
+        target=TargetState(track_id=7, track=track),
+        command=FollowCommand(),
+        armed=False,
+        detector_persons=1,
     )
 
 
@@ -78,3 +95,32 @@ def test_service_requires_lock_before_arming() -> None:
         assert "visible locked target" in str(exc)
     else:
         raise AssertionError("arming without a target must fail")
+
+
+def test_frame_pair_tap_accepts_only_fresh_perception_context() -> None:
+    runtime = _FakeRuntime([_track(7)], {7})
+    service = VisionService(
+        runtime,  # type: ignore[arg-type]
+        frame_pair_tap=lambda frame, snapshot: None,
+        frame_pair_tap_max_snapshot_age_seconds=0.15,
+    )
+    service._latest_snapshot = _snapshot(10, 100.0)
+    fresh_frame = CapturedFrame(
+        frame_id=11,
+        captured_at=100.10,
+        image=np.zeros((10, 10, 3), dtype=np.uint8),
+    )
+    stale_frame = CapturedFrame(
+        frame_id=12,
+        captured_at=100.151,
+        image=np.zeros((10, 10, 3), dtype=np.uint8),
+    )
+    earlier_frame = CapturedFrame(
+        frame_id=9,
+        captured_at=99.99,
+        image=np.zeros((10, 10, 3), dtype=np.uint8),
+    )
+
+    assert service._fresh_snapshot_for_frame(fresh_frame) is service._latest_snapshot
+    assert service._fresh_snapshot_for_frame(stale_frame) is None
+    assert service._fresh_snapshot_for_frame(earlier_frame) is None
