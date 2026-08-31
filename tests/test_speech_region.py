@@ -188,8 +188,13 @@ def test_consolidation_does_not_bind_old_unrelated_speech_to_current_utterance()
         max_gap_seconds=0.8,
     )
 
-    assert consolidated == [old, current]
-    assert _select_latest_candidate(consolidated) is current
+    assert len(consolidated) == 2
+    first, second = consolidated
+    assert first.start_monotonic == pytest.approx(20.5)
+    assert first.end_monotonic == pytest.approx(22.5)
+    assert second.start_monotonic == pytest.approx(24.0)
+    assert second.end_monotonic == pytest.approx(26.0)
+    assert _select_latest_candidate(consolidated) is second
 
 
 def test_latest_candidate_wins_over_older_longer_region() -> None:
