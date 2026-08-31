@@ -10,6 +10,7 @@ from jarvis.identity.speech_region import (
     _candidate_from_end_event,
     _candidates_from_probability_observations,
     _ProbabilityObservation,
+    _select_latest_candidate,
 )
 
 
@@ -114,3 +115,22 @@ def test_probability_fallback_rejects_subthreshold_observations() -> None:
     )
 
     assert candidates == []
+
+
+def test_latest_candidate_wins_over_older_longer_region() -> None:
+    older = SpeakerTurnAudio(
+        samples=np.ones(2_000, dtype=np.int16),
+        sample_rate=1_000,
+        start_monotonic=10.0,
+        end_monotonic=12.0,
+    )
+    latest = SpeakerTurnAudio(
+        samples=np.ones(500, dtype=np.int16),
+        sample_rate=1_000,
+        start_monotonic=13.0,
+        end_monotonic=13.5,
+    )
+
+    selected = _select_latest_candidate([older, latest])
+
+    assert selected is latest
