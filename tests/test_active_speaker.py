@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from itertools import pairwise
+
 import numpy as np
 import pytest
 
@@ -115,7 +117,7 @@ def test_lr_asd_context_ranges_cover_every_frame_for_each_duration() -> None:
         assert sum(end - start for start, end in ranges) == 115
         assert all(
             left_end == right_start
-            for (_, left_end), (right_start, _) in zip(ranges, ranges[1:])
+            for (_, left_end), (right_start, _) in pairwise(ranges)
         )
 
 
