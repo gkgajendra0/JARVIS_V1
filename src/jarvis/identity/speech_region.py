@@ -229,7 +229,9 @@ def _candidates_from_probability_observations(
 
 def _select_latest_candidate(candidates: list[SpeakerTurnAudio]) -> SpeakerTurnAudio:
     if not candidates:
-        raise ValueError("speech-region candidate selection requires at least one region")
+        raise ValueError(
+            "speech-region candidate selection requires at least one region"
+        )
     return max(
         candidates,
         key=lambda candidate: (
