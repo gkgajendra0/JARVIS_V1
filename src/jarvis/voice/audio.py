@@ -72,7 +72,14 @@ class _OutputSegment:
 
 
 class LocalAudioOutput(io.AudioOutput):
-    """LiveKit output sink with physical-playout and interruption accounting."""
+    """LiveKit output sink with physical-playout and interruption accounting.
+
+    The LiveKit/JARVIS side remains at the canonical 48 kHz rate. Physical
+    speakers may expose a different native rate (notably 44.1 kHz Bluetooth
+    A2DP endpoints), so playback is resampled only at this boundary. The actual
+    physical signal is resampled back to the canonical rate before it is fed to
+    WebRTC APM as the reverse-stream echo reference.
+    """
 
     def __init__(
         self,
@@ -81,7 +88,13 @@ class LocalAudioOutput(io.AudioOutput):
         apm: Any = None,
         delay_estimator: Any = None,
         sample_rate: int = DEVICE_SAMPLE_RATE,
+        output_sample_rate: int | None = None,
     ) -> None:
+        if sample_rate <= 0:
+            raise ValueError("canonical output sample rate must be positive")
+        physical_rate = sample_rate if output_sample_rate is None else output_sample_rate
+        if physical_rate <= 0:
+            raise ValueError("physical output sample rate must be positive")
         super().__init__(
             label="JARVIS local speaker",
             capabilities=io.AudioOutputCapabilities(pause=True),
@@ -90,7 +103,15 @@ class LocalAudioOutput(io.AudioOutput):
         self._output_device = output_device
         self._apm = apm
         self._delay_estimator = delay_estimator
-        self._target_rate = sample_rate
+        self._canonical_rate = int(sample_rate)
+        self._canonical_frame_samples = (
+            self._canonical_rate * FRAME_SIZE_MS // 1000
+        )
+        self._target_rate = int(physical_rate)
+        self._physical_frame_samples = max(
+            1,
+            int(round(self._target_rate * FRAME_SIZE_MS / 1000)),
+        )
         self._buffer = bytearray()
         self._lock = threading.Lock()
         self._segments: deque[_OutputSegment] = deque()
@@ -104,8 +125,14 @@ class LocalAudioOutput(io.AudioOutput):
         self._loop: asyncio.AbstractEventLoop | None = None
         self._resampler: rtc.AudioResampler | None = None
         self._resampler_input_rate: int | None = None
+        self._reverse_resampler: rtc.AudioResampler | None = None
+        self._reverse_buffer = bytearray()
         self._timing_error_count = 0
         self._apm_error_count = 0
+
+    @property
+    def physical_sample_rate(self) -> int:
+        return self._target_rate
 
     def start(self) -> None:
         if self._stream is not None:
@@ -119,7 +146,7 @@ class LocalAudioOutput(io.AudioOutput):
             channels=DEVICE_CHANNELS,
             device=self._output_device,
             samplerate=self._target_rate,
-            blocksize=FRAME_SAMPLES,
+            blocksize=self._physical_frame_samples,
         )
         self._stream.start()
 
@@ -153,25 +180,53 @@ class LocalAudioOutput(io.AudioOutput):
         except (AttributeError, RuntimeError, TypeError, ValueError):
             self._timing_error_count += 1
 
-        if self._apm is not None:
-            for start in range(0, frame_count, FRAME_SAMPLES):
-                chunk = outdata[start : start + FRAME_SAMPLES, 0]
-                if len(chunk) != FRAME_SAMPLES:
-                    break
-                try:
-                    self._apm.process_reverse_stream(
-                        rtc.AudioFrame(
-                            data=chunk.tobytes(),
-                            sample_rate=self._target_rate,
-                            num_channels=1,
-                            samples_per_channel=FRAME_SAMPLES,
-                        )
-                    )
-                except (AttributeError, RuntimeError, TypeError, ValueError):
-                    self._apm_error_count += 1
+        self._feed_reverse_apm(outdata[:, 0])
 
         if actual_samples and self._loop is not None:
             self._loop.call_soon_threadsafe(self._finish_played_segments)
+
+    def _feed_reverse_apm(self, physical_samples: np.ndarray) -> None:
+        if self._apm is None:
+            return
+        physical_frame = rtc.AudioFrame(
+            data=np.asarray(physical_samples, dtype=np.int16).tobytes(),
+            sample_rate=self._target_rate,
+            num_channels=1,
+            samples_per_channel=len(physical_samples),
+        )
+        try:
+            if self._target_rate == self._canonical_rate:
+                canonical_frames = [physical_frame]
+            else:
+                if self._reverse_resampler is None:
+                    self._reverse_resampler = rtc.AudioResampler(
+                        input_rate=self._target_rate,
+                        output_rate=self._canonical_rate,
+                        num_channels=1,
+                    )
+                canonical_frames = self._reverse_resampler.push(physical_frame)
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            self._apm_error_count += 1
+            return
+
+        for canonical in canonical_frames:
+            self._reverse_buffer.extend(bytes(canonical.data))
+
+        frame_bytes = self._canonical_frame_samples * 2
+        while len(self._reverse_buffer) >= frame_bytes:
+            chunk = bytes(self._reverse_buffer[:frame_bytes])
+            del self._reverse_buffer[:frame_bytes]
+            try:
+                self._apm.process_reverse_stream(
+                    rtc.AudioFrame(
+                        data=chunk,
+                        sample_rate=self._canonical_rate,
+                        num_channels=1,
+                        samples_per_channel=self._canonical_frame_samples,
+                    )
+                )
+            except (AttributeError, RuntimeError, TypeError, ValueError):
+                self._apm_error_count += 1
 
     def _frames_at_target_rate(self, frame: rtc.AudioFrame) -> list[rtc.AudioFrame]:
         if frame.sample_rate == self._target_rate:
@@ -503,6 +558,67 @@ class LocalAudioRuntime:
             resolved_index,
         )
 
+    @staticmethod
+    def _select_output_sample_rate(output_device: int | None) -> int:
+        """Prefer canonical 48 kHz, then fall back to the endpoint native rate."""
+        import sounddevice as sd
+
+        probe_device = output_device
+        if probe_device is None:
+            try:
+                default_output = int(sd.default.device[1])
+            except (IndexError, TypeError, ValueError):
+                default_output = -1
+            if default_output >= 0:
+                probe_device = default_output
+
+        try:
+            sd.check_output_settings(
+                device=probe_device,
+                channels=DEVICE_CHANNELS,
+                dtype="int16",
+                samplerate=DEVICE_SAMPLE_RATE,
+            )
+            LOGGER.info(
+                "JARVIS audio output sample rate: canonical=%s Hz | physical=%s Hz",
+                DEVICE_SAMPLE_RATE,
+                DEVICE_SAMPLE_RATE,
+            )
+            return DEVICE_SAMPLE_RATE
+        except (sd.PortAudioError, TypeError, ValueError):
+            pass
+
+        try:
+            info = sd.query_devices(probe_device)
+            native_rate = int(round(float(info["default_samplerate"])))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError(
+                "Unable to determine the selected audio output device sample rate"
+            ) from exc
+        if native_rate <= 0:
+            raise RuntimeError(
+                f"Selected audio output device reported invalid sample rate: {native_rate}"
+            )
+        try:
+            sd.check_output_settings(
+                device=probe_device,
+                channels=DEVICE_CHANNELS,
+                dtype="int16",
+                samplerate=native_rate,
+            )
+        except (sd.PortAudioError, TypeError, ValueError) as exc:
+            raise RuntimeError(
+                "Selected audio output device supports neither canonical 48 kHz "
+                f"nor its reported native rate {native_rate} Hz"
+            ) from exc
+
+        LOGGER.info(
+            "JARVIS audio output sample rate negotiated: canonical=%s Hz | physical=%s Hz",
+            DEVICE_SAMPLE_RATE,
+            native_rate,
+        )
+        return native_rate
+
     def set_overflow_handler(self, callback: Callable[[], None]) -> None:
         self._overflow_handler = callback
 
@@ -544,6 +660,7 @@ class LocalAudioRuntime:
         )
         self._log_resolved_device(input_devices, input_device, kind="input")
         self._log_resolved_device(output_devices, output_device, kind="output")
+        output_sample_rate = self._select_output_sample_rate(output_device)
         self._input_capture = self._open_input_capture(input_device)
         self._input_track = rtc.LocalAudioTrack.create_audio_track(
             "jarvis-local-microphone",
@@ -559,6 +676,7 @@ class LocalAudioRuntime:
             output_device=output_device,
             apm=self._input_capture.apm,
             delay_estimator=self._input_capture.delay_estimator,
+            output_sample_rate=output_sample_rate,
         )
         self.output.start()
         self.detector.enable()
