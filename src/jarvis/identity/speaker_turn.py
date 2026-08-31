@@ -98,9 +98,7 @@ class InMemorySpeakerTurnCapture:
         if samples_per_channel <= 0:
             raise ValueError("speaker frame samples_per_channel must be positive")
         observed_at = (
-            time.monotonic()
-            if observed_at_monotonic is None
-            else observed_at_monotonic
+            time.monotonic() if observed_at_monotonic is None else observed_at_monotonic
         )
         if observed_at < 0:
             raise ValueError("speaker frame timestamp must be non-negative")
