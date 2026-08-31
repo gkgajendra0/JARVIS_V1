@@ -53,7 +53,7 @@ class LiveKitSileroSpeechRegionDetector:
         min_speech_duration: float = 0.08,
         min_silence_duration: float = 0.18,
         prefix_padding_duration: float = 0.12,
-        activation_threshold: float = 0.35,
+        activation_threshold: float = 0.30,
         utterance_merge_gap_seconds: float = _DEFAULT_UTTERANCE_MERGE_GAP_SECONDS,
     ) -> None:
         if min_speech_duration <= 0:
