@@ -9,6 +9,7 @@ from jarvis.identity.speaker_turn import SpeakerTurnAudio
 from jarvis.identity.speech_region import (
     _candidate_from_end_event,
     _candidates_from_probability_observations,
+    _consolidate_candidates,
     _ProbabilityObservation,
     _select_latest_candidate,
 )
@@ -115,6 +116,78 @@ def test_probability_fallback_rejects_subthreshold_observations() -> None:
     )
 
     assert candidates == []
+
+
+def test_consolidation_merges_fragmented_natural_utterance_with_real_gaps() -> None:
+    turn = SpeakerTurnAudio(
+        samples=np.arange(6_000, dtype=np.int16),
+        sample_rate=1_000,
+        start_monotonic=100.0,
+        end_monotonic=106.0,
+    )
+    candidates = [
+        SpeakerTurnAudio(
+            samples=np.ones(500, dtype=np.int16),
+            sample_rate=1_000,
+            start_monotonic=101.0,
+            end_monotonic=101.5,
+        ),
+        SpeakerTurnAudio(
+            samples=np.ones(650, dtype=np.int16),
+            sample_rate=1_000,
+            start_monotonic=101.9,
+            end_monotonic=102.55,
+        ),
+        SpeakerTurnAudio(
+            samples=np.ones(900, dtype=np.int16),
+            sample_rate=1_000,
+            start_monotonic=103.1,
+            end_monotonic=104.0,
+        ),
+    ]
+
+    consolidated = _consolidate_candidates(
+        turn,
+        candidates,
+        max_gap_seconds=0.8,
+    )
+
+    assert len(consolidated) == 1
+    merged = consolidated[0]
+    assert merged.start_monotonic == pytest.approx(101.0)
+    assert merged.end_monotonic == pytest.approx(104.0)
+    assert merged.duration_seconds == pytest.approx(3.0)
+    np.testing.assert_array_equal(merged.samples, turn.samples[1_000:4_000])
+
+
+def test_consolidation_does_not_bind_old_unrelated_speech_to_current_utterance() -> None:
+    turn = SpeakerTurnAudio(
+        samples=np.ones(8_000, dtype=np.int16),
+        sample_rate=1_000,
+        start_monotonic=20.0,
+        end_monotonic=28.0,
+    )
+    old = SpeakerTurnAudio(
+        samples=np.ones(2_000, dtype=np.int16),
+        sample_rate=1_000,
+        start_monotonic=20.5,
+        end_monotonic=22.5,
+    )
+    current = SpeakerTurnAudio(
+        samples=np.ones(2_000, dtype=np.int16),
+        sample_rate=1_000,
+        start_monotonic=24.0,
+        end_monotonic=26.0,
+    )
+
+    consolidated = _consolidate_candidates(
+        turn,
+        [old, current],
+        max_gap_seconds=0.8,
+    )
+
+    assert consolidated == [old, current]
+    assert _select_latest_candidate(consolidated) is current
 
 
 def test_latest_candidate_wins_over_older_longer_region() -> None:
