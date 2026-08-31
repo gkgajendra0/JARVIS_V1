@@ -147,10 +147,13 @@ class LiveKitSileroSpeechRegionDetector:
                 max_probability,
             )
 
+        probability_reason = (
+            "n/a" if max_probability is None else f"{max_probability:.4f}"
+        )
         return SpeechRegionResult(
             None,
             0,
-            "speech_region_not_detected",
+            f"speech_region_not_detected:max_vad_probability={probability_reason}",
             max_probability,
         )
 
