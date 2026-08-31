@@ -245,9 +245,7 @@ class SpeakerShadowSession:
         if not audio_turn_id.strip():
             raise ValueError("audio_turn_id must not be empty")
         observed_at = (
-            time.monotonic()
-            if observed_at_monotonic is None
-            else observed_at_monotonic
+            time.monotonic() if observed_at_monotonic is None else observed_at_monotonic
         )
         if observed_at < 0:
             raise ValueError("speaker observation time must be non-negative")
