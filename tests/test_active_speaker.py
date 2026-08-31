@@ -113,7 +113,10 @@ def test_lr_asd_context_ranges_cover_every_frame_for_each_duration() -> None:
         assert ranges[0][0] == 0
         assert ranges[-1][1] == 115
         assert sum(end - start for start, end in ranges) == 115
-        assert all(left_end == right_start for (_, left_end), (right_start, _) in zip(ranges, ranges[1:]))
+        assert all(
+            left_end == right_start
+            for (_, left_end), (right_start, _) in zip(ranges, ranges[1:])
+        )
 
 
 def test_visual_buffer_preserves_lower_real_cadence_without_duplication() -> None:
