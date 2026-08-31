@@ -31,6 +31,7 @@ jarvis-owner-enroll = "jarvis.identity.owner_enrollment:main"
 jarvis-face-liveness = "jarvis.identity.liveness_live:main"
 jarvis-passive-pad-benchmark = "jarvis.identity.passive_pad_benchmark:main"
 jarvis-owner-evidence-live = "jarvis.identity.owner_evidence_live:main"
+jarvis-speaker-benchmark = "jarvis.identity.speaker_benchmark:main"
 
 [project.optional-dependencies]
 vision = [
@@ -42,6 +43,7 @@ vision = [
     "onnxruntime==1.29.0",
     "duvc-ctl==2.1.0; platform_system == 'Windows'",
 ]
+speaker = ["sherpa-onnx==1.13.6"]
 dev = ["pytest>=8,<10", "pytest-asyncio>=0.23,<2", "ruff==0.16.5"]
 
 [tool.setuptools]
