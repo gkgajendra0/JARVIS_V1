@@ -6,7 +6,11 @@ import numpy as np
 import pytest
 
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
-from jarvis.identity.speech_region import _candidate_from_end_event
+from jarvis.identity.speech_region import (
+    _ProbabilityObservation,
+    _candidate_from_end_event,
+    _candidates_from_probability_observations,
+)
 
 
 def test_end_event_trims_endpointing_silence_and_preserves_monotonic_time() -> None:
@@ -51,3 +55,62 @@ def test_end_event_never_extends_speech_past_captured_turn() -> None:
     assert candidate is not None
     assert candidate.end_monotonic == pytest.approx(11.5)
     assert candidate.samples.size == 700
+
+
+def test_probability_fallback_builds_one_bounded_speech_region() -> None:
+    sample_rate = 1_000
+    turn = SpeakerTurnAudio(
+        samples=np.arange(3_000, dtype=np.int16),
+        sample_rate=sample_rate,
+        start_monotonic=50.0,
+        end_monotonic=53.0,
+    )
+    observations = [
+        _ProbabilityObservation(timestamp=0.32, probability=0.04),
+        _ProbabilityObservation(timestamp=0.64, probability=0.81),
+        _ProbabilityObservation(timestamp=0.672, probability=0.87),
+        _ProbabilityObservation(timestamp=0.704, probability=0.12),
+        _ProbabilityObservation(timestamp=0.736, probability=0.76),
+        _ProbabilityObservation(timestamp=0.768, probability=0.79),
+        _ProbabilityObservation(timestamp=1.20, probability=0.03),
+    ]
+
+    candidates = _candidates_from_probability_observations(
+        turn,
+        observations,
+        activation_threshold=0.5,
+        min_speech_duration=0.08,
+        min_silence_duration=0.18,
+        prefix_padding_duration=0.12,
+    )
+
+    assert len(candidates) == 1
+    candidate = candidates[0]
+    assert candidate.start_monotonic == pytest.approx(50.488)
+    assert candidate.end_monotonic == pytest.approx(50.768)
+    assert candidate.duration_seconds == pytest.approx(0.28)
+
+
+def test_probability_fallback_rejects_subthreshold_observations() -> None:
+    turn = SpeakerTurnAudio(
+        samples=np.ones(2_000, dtype=np.int16),
+        sample_rate=1_000,
+        start_monotonic=10.0,
+        end_monotonic=12.0,
+    )
+    observations = [
+        _ProbabilityObservation(timestamp=0.32, probability=0.20),
+        _ProbabilityObservation(timestamp=0.64, probability=0.49),
+        _ProbabilityObservation(timestamp=0.96, probability=0.30),
+    ]
+
+    candidates = _candidates_from_probability_observations(
+        turn,
+        observations,
+        activation_threshold=0.5,
+        min_speech_duration=0.08,
+        min_silence_duration=0.18,
+        prefix_padding_duration=0.12,
+    )
+
+    assert candidates == []
