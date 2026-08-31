@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 import unicodedata
 import uuid
 from collections.abc import Callable
@@ -24,6 +25,10 @@ from livekit.agents.voice.io import PlaybackFinishedEvent
 
 from jarvis.config import JarvisConfig
 from jarvis.dev_control import DevControlClient, parse_explicit_update_decision
+from jarvis.identity.active_speaker import (
+    ActiveSpeakerVisualBuffer,
+    LrAsdActiveSpeakerProvider,
+)
 from jarvis.identity.owner_context import (
     OwnerContextState,
     build_default_owner_context_observer,
@@ -157,6 +162,8 @@ class VoiceRuntimeController:
         session_factory: SessionFactory = create_voice_session,
         vision_service: VisionService | None = None,
         owner_context_state: OwnerContextState | None = None,
+        active_speaker_visual_buffer: ActiveSpeakerVisualBuffer | None = None,
+        active_speaker_provider: LrAsdActiveSpeakerProvider | None = None,
         scripted_speech: ScriptedSpeech | None = None,
         startup_greeting_factory: StartupGreetingFactory = select_startup_greeting,
     ) -> None:
@@ -165,6 +172,8 @@ class VoiceRuntimeController:
         self._session_factory = session_factory
         self._vision_service = vision_service
         self._owner_context_state = owner_context_state
+        self._active_speaker_visual_buffer = active_speaker_visual_buffer
+        self._active_speaker_provider = active_speaker_provider
         self._vision_tools = (
             VisionAgentTools(vision_service) if vision_service is not None else None
         )
@@ -253,6 +262,93 @@ class VoiceRuntimeController:
             active_end.set,
         )
 
+    async def _inspect_active_speaker_turn(
+        self,
+        turn: SpeakerTurnAudio,
+        *,
+        audio_turn_id: str,
+        quality_accepted: bool,
+    ) -> None:
+        provider = self._active_speaker_provider
+        visual_buffer = self._active_speaker_visual_buffer
+        if provider is None or visual_buffer is None:
+            return
+        if not quality_accepted:
+            LOGGER.info(
+                "Active speaker shadow turn %s | state=insufficient | "
+                "active_speaker_confirmed=False | prototype_admission=False | "
+                "reasons=speaker_quality_rejected",
+                audio_turn_id,
+            )
+            return
+        if turn.start_monotonic is None or turn.end_monotonic is None:
+            LOGGER.info(
+                "Active speaker shadow turn %s | state=insufficient | "
+                "active_speaker_confirmed=False | prototype_admission=False | "
+                "reasons=audio_timestamps_missing",
+                audio_turn_id,
+            )
+            return
+
+        context = self._owner_context_state
+        snapshot = context.snapshot() if context is not None else None
+        assessment = snapshot.assessment if snapshot is not None else None
+        owner_context_live = bool(
+            context is not None
+            and assessment is not None
+            and context.has_fresh_live_owner_candidate()
+        )
+        if not owner_context_live or assessment is None:
+            LOGGER.info(
+                "Active speaker shadow turn %s | state=insufficient | "
+                "active_speaker_confirmed=False | prototype_admission=False | "
+                "reasons=no_fresh_live_owner_context",
+                audio_turn_id,
+            )
+            return
+
+        visual = visual_buffer.build_window(
+            visual_track_id=assessment.visual_track_id,
+            start_monotonic=turn.start_monotonic,
+            end_monotonic=turn.end_monotonic,
+        )
+        if visual is None:
+            LOGGER.info(
+                "Active speaker shadow turn %s | state=insufficient | track=%s | "
+                "active_speaker_confirmed=False | prototype_admission=False | "
+                "reasons=visual_window_insufficient",
+                audio_turn_id,
+                assessment.visual_track_id,
+            )
+            return
+
+        result = await asyncio.to_thread(
+            provider.assess,
+            turn,
+            visual,
+            audio_turn_id=audio_turn_id,
+            windows_session_id=assessment.session_id,
+        )
+        LOGGER.info(
+            "Active speaker shadow turn %s | state=%s | session=%s | track=%s | "
+            "window=%.2fs | visual=%s/%s | audio_features=%s | "
+            "score mean=%s median=%s min=%s max=%s | "
+            "active_speaker_confirmed=False | prototype_admission=False | reasons=%s",
+            audio_turn_id,
+            result.state.value,
+            result.windows_session_id,
+            result.visual_track_id,
+            result.end_monotonic - result.start_monotonic,
+            result.unique_visual_frames,
+            result.visual_frames,
+            result.audio_feature_frames,
+            f"{result.mean_score:.4f}" if result.mean_score is not None else "n/a",
+            f"{result.median_score:.4f}" if result.median_score is not None else "n/a",
+            f"{result.minimum_score:.4f}" if result.minimum_score is not None else "n/a",
+            f"{result.maximum_score:.4f}" if result.maximum_score is not None else "n/a",
+            ",".join(result.reason_codes) if result.reason_codes else "none",
+        )
+
     async def _inspect_shadow_turn(
         self,
         turn: SpeakerTurnAudio,
@@ -278,6 +374,11 @@ class VoiceRuntimeController:
             quality.accepted,
             owner_context_live,
             ",".join(quality.reason_codes) if quality.reason_codes else "none",
+        )
+        await self._inspect_active_speaker_turn(
+            turn,
+            audio_turn_id=audio_turn_id,
+            quality_accepted=quality.accepted,
         )
 
     async def run(self) -> None:
@@ -399,6 +500,8 @@ class VoiceRuntimeController:
                     LOGGER.exception(
                         "JARVIS integrated vision did not shut down cleanly"
                     )
+            if self._active_speaker_visual_buffer is not None:
+                self._active_speaker_visual_buffer.clear()
 
     async def _run_update_approval_session(
         self,
@@ -491,6 +594,7 @@ class VoiceRuntimeController:
                 sample_rate=frame.sample_rate,
                 num_channels=frame.num_channels,
                 samples_per_channel=frame.samples_per_channel,
+                observed_at_monotonic=time.monotonic(),
             )
 
         session_input = (
@@ -581,6 +685,11 @@ class VoiceRuntimeController:
                     "context; prototype admission remains disabled until active-speaker "
                     "corroboration is accepted"
                 )
+            if self._active_speaker_provider is not None:
+                LOGGER.info(
+                    "LR-ASD active-speaker shadow is active: scores are diagnostic only; "
+                    "active-speaker confirmation and prototype admission remain disabled"
+                )
             await active_end.wait()
         finally:
             self._cancel_timeout()
@@ -601,6 +710,15 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         raise RuntimeError(
             "JARVIS_SPEAKER_SHADOW_ENABLED requires JARVIS_VISION_ENABLED because "
             "speaker prototype admission must be bound to independent live-owner context"
+        )
+    if config.active_speaker_shadow_enabled and not config.speaker_shadow_enabled:
+        raise RuntimeError(
+            "JARVIS_ACTIVE_SPEAKER_SHADOW_ENABLED requires "
+            "JARVIS_SPEAKER_SHADOW_ENABLED"
+        )
+    if config.active_speaker_shadow_enabled and config.active_speaker_model_path is None:
+        raise RuntimeError(
+            "JARVIS_LR_ASD_MODEL_PATH is required when active-speaker shadow is enabled"
         )
 
     predictor = load_livekit_predictor(Path(config.wake_model_path))
@@ -623,10 +741,26 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         evidence_observer = build_default_owner_context_observer()
         owner_context_state = evidence_observer.state
 
+    active_speaker_visual_buffer: ActiveSpeakerVisualBuffer | None = None
+    active_speaker_provider: LrAsdActiveSpeakerProvider | None = None
+    if config.active_speaker_shadow_enabled:
+        assert config.active_speaker_model_path is not None
+        active_speaker_visual_buffer = ActiveSpeakerVisualBuffer(
+            max_seconds=config.max_utterance_seconds + 1.0
+        )
+        active_speaker_provider = LrAsdActiveSpeakerProvider(
+            config.active_speaker_model_path
+        )
+
     vision_service = (
         build_default_vision_service(
             head_model_path=config.vision_head_model_path,
             evidence_observer=evidence_observer,
+            frame_pair_tap=(
+                active_speaker_visual_buffer.observe
+                if active_speaker_visual_buffer is not None
+                else None
+            ),
         )
         if config.vision_enabled
         else None
@@ -636,6 +770,8 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         audio,
         vision_service=vision_service,
         owner_context_state=owner_context_state,
+        active_speaker_visual_buffer=active_speaker_visual_buffer,
+        active_speaker_provider=active_speaker_provider,
     )
 
 
