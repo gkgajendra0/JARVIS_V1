@@ -84,9 +84,7 @@ def test_prototype_bank_is_bounded_and_scores_max_cosine() -> None:
 
 
 def test_shadow_session_never_bootstraps_from_untrusted_audio() -> None:
-    provider = _FakeEmbeddingProvider(
-        [np.array([1.0, 0.0, 0.0], dtype=np.float32)]
-    )
+    provider = _FakeEmbeddingProvider([np.array([1.0, 0.0, 0.0], dtype=np.float32)])
     session = SpeakerShadowSession(
         session_id="session-1",
         embedding_provider=provider,
@@ -164,9 +162,7 @@ def test_bad_quality_never_calls_embedding_provider() -> None:
 
 
 def test_shadow_identity_evidence_is_always_insufficient() -> None:
-    provider = _FakeEmbeddingProvider(
-        [np.array([1.0, 0.0, 0.0], dtype=np.float32)]
-    )
+    provider = _FakeEmbeddingProvider([np.array([1.0, 0.0, 0.0], dtype=np.float32)])
     session = SpeakerShadowSession(
         session_id="session-1",
         embedding_provider=provider,
