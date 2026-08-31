@@ -10,6 +10,7 @@ from livekit.agents import inference, vad
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
 
 _SILERO_INFERENCE_WINDOW_SECONDS = 0.032
+_DEFAULT_UTTERANCE_MERGE_GAP_SECONDS = 0.8
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,8 +36,10 @@ class LiveKitSileroSpeechRegionDetector:
 
     The detector reuses LiveKit's bundled local Silero VAD. Raw audio remains
     memory-only. A committed user message may arrive after a bounded recent-audio
-    window that still contains older speech leakage, so the most recent continuous
-    speech region is selected rather than the longest one.
+    window that still contains older speech leakage. Nearby Silero speech islands
+    are therefore consolidated across bounded conversational pauses while keeping
+    their real silence and timestamps intact, then the most recent consolidated
+    utterance is selected.
 
     LiveKit's normal END_OF_SPEECH event is authoritative when available. For
     bounded offline turns, end_input() also establishes a hard reset boundary, so
@@ -51,6 +54,7 @@ class LiveKitSileroSpeechRegionDetector:
         min_silence_duration: float = 0.18,
         prefix_padding_duration: float = 0.12,
         activation_threshold: float = 0.35,
+        utterance_merge_gap_seconds: float = _DEFAULT_UTTERANCE_MERGE_GAP_SECONDS,
     ) -> None:
         if min_speech_duration <= 0:
             raise ValueError("speech-region minimum speech duration must be positive")
@@ -60,10 +64,13 @@ class LiveKitSileroSpeechRegionDetector:
             raise ValueError("speech-region prefix padding must be non-negative")
         if not 0 < activation_threshold < 1:
             raise ValueError("speech-region activation threshold must be in (0, 1)")
+        if utterance_merge_gap_seconds <= 0:
+            raise ValueError("speech-region utterance merge gap must be positive")
         self._min_speech_duration = min_speech_duration
         self._min_silence_duration = min_silence_duration
         self._prefix_padding_duration = prefix_padding_duration
         self._activation_threshold = activation_threshold
+        self._utterance_merge_gap_seconds = utterance_merge_gap_seconds
         self._vad = inference.VAD(
             model="silero",
             min_speech_duration=min_speech_duration,
@@ -119,11 +126,21 @@ class LiveKitSileroSpeechRegionDetector:
             await stream.aclose()
 
         if candidates:
-            selected = _select_latest_candidate(candidates)
+            consolidated = _consolidate_candidates(
+                turn,
+                candidates,
+                max_gap_seconds=self._utterance_merge_gap_seconds,
+            )
+            selected = _select_latest_candidate(consolidated)
+            reason = (
+                "speech_region_selected_consolidated"
+                if len(consolidated) < len(candidates)
+                else "speech_region_selected"
+            )
             return SpeechRegionResult(
                 selected,
                 len(candidates),
-                "speech_region_selected",
+                reason,
                 max_probability,
             )
 
@@ -136,11 +153,21 @@ class LiveKitSileroSpeechRegionDetector:
             prefix_padding_duration=self._prefix_padding_duration,
         )
         if fallback_candidates:
-            selected = _select_latest_candidate(fallback_candidates)
+            consolidated = _consolidate_candidates(
+                turn,
+                fallback_candidates,
+                max_gap_seconds=self._utterance_merge_gap_seconds,
+            )
+            selected = _select_latest_candidate(consolidated)
+            reason = (
+                "speech_region_selected_probability_fallback_consolidated"
+                if len(consolidated) < len(fallback_candidates)
+                else "speech_region_selected_probability_fallback"
+            )
             return SpeechRegionResult(
                 selected,
                 len(fallback_candidates),
-                "speech_region_selected_probability_fallback",
+                reason,
                 max_probability,
             )
 
@@ -225,6 +252,58 @@ def _candidates_from_probability_observations(
         if candidate is not None:
             candidates.append(candidate)
     return candidates
+
+
+def _consolidate_candidates(
+    turn: SpeakerTurnAudio,
+    candidates: list[SpeakerTurnAudio],
+    *,
+    max_gap_seconds: float,
+) -> list[SpeakerTurnAudio]:
+    if max_gap_seconds <= 0:
+        raise ValueError("speech-region consolidation gap must be positive")
+    if not candidates:
+        return []
+    if turn.start_monotonic is None:
+        raise ValueError("speech-region consolidation requires turn timestamps")
+
+    ordered = sorted(
+        candidates,
+        key=lambda candidate: (
+            candidate.start_monotonic
+            if candidate.start_monotonic is not None
+            else float("inf")
+        ),
+    )
+    groups: list[list[SpeakerTurnAudio]] = [[ordered[0]]]
+    for candidate in ordered[1:]:
+        previous = groups[-1][-1]
+        if (
+            previous.end_monotonic is None
+            or candidate.start_monotonic is None
+            or candidate.end_monotonic is None
+        ):
+            raise ValueError("speech-region consolidation requires candidate timestamps")
+        gap = candidate.start_monotonic - previous.end_monotonic
+        if gap <= max_gap_seconds:
+            groups[-1].append(candidate)
+        else:
+            groups.append([candidate])
+
+    consolidated: list[SpeakerTurnAudio] = []
+    for group in groups:
+        start_monotonic = group[0].start_monotonic
+        end_monotonic = group[-1].end_monotonic
+        if start_monotonic is None or end_monotonic is None:
+            raise ValueError("speech-region consolidation requires candidate timestamps")
+        candidate = _candidate_from_offsets(
+            turn,
+            max(0.0, start_monotonic - turn.start_monotonic),
+            max(0.0, end_monotonic - turn.start_monotonic),
+        )
+        if candidate is not None:
+            consolidated.append(candidate)
+    return consolidated
 
 
 def _select_latest_candidate(candidates: list[SpeakerTurnAudio]) -> SpeakerTurnAudio:
