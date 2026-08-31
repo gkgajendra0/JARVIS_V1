@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from jarvis.identity.active_speaker import (
     LR_ASD_PROVIDER_ID,
@@ -63,7 +64,7 @@ def _pair(
     return frame, snapshot
 
 
-def test_visual_buffer_builds_timestamped_same_track_lr_asd_window() -> None:
+def test_visual_buffer_preserves_25fps_source_frames() -> None:
     buffer = ActiveSpeakerVisualBuffer()
     for index in range(31):
         frame, snapshot = _pair(index, 10.0 + index * 0.04)
@@ -77,11 +78,31 @@ def test_visual_buffer_builds_timestamped_same_track_lr_asd_window() -> None:
 
     assert window is not None
     assert window.visual_track_id == 7
-    assert window.frames.shape == (30, 112, 112)
+    assert window.frames.shape == (31, 112, 112)
     assert window.frames.dtype == np.uint8
     assert window.source_sample_count == 31
-    assert window.unique_source_frames >= 29
+    assert window.unique_source_frames == 31
+    assert window.source_fps == pytest.approx(25.0)
     assert window.maximum_source_gap_seconds < 0.05
+
+
+def test_visual_buffer_preserves_lower_real_cadence_without_duplication() -> None:
+    buffer = ActiveSpeakerVisualBuffer()
+    for index in range(16):
+        frame, snapshot = _pair(index, 40.0 + index * 0.08)
+        buffer.observe(frame, snapshot)
+
+    window = buffer.build_window(
+        visual_track_id=7,
+        start_monotonic=40.0,
+        end_monotonic=41.2,
+    )
+
+    assert window is not None
+    assert window.frames.shape == (16, 112, 112)
+    assert window.source_sample_count == 16
+    assert window.unique_source_frames == 16
+    assert window.source_fps == pytest.approx(12.5)
 
 
 def test_visual_buffer_never_stitches_different_tracks() -> None:
