@@ -110,7 +110,7 @@ class LocalAudioOutput(io.AudioOutput):
         self._target_rate = int(physical_rate)
         self._physical_frame_samples = max(
             1,
-            int(round(self._target_rate * FRAME_SIZE_MS / 1000)),
+            round(self._target_rate * FRAME_SIZE_MS / 1000),
         )
         self._buffer = bytearray()
         self._lock = threading.Lock()
@@ -590,7 +590,7 @@ class LocalAudioRuntime:
 
         try:
             info = sd.query_devices(probe_device)
-            native_rate = int(round(float(info["default_samplerate"])))
+            native_rate = round(float(info["default_samplerate"]))
         except (KeyError, TypeError, ValueError) as exc:
             raise RuntimeError(
                 "Unable to determine the selected audio output device sample rate"
