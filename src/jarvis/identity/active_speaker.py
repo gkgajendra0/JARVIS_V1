@@ -263,7 +263,7 @@ class LrAsdActiveSpeakerProvider:
         model = LrAsdInferenceModel()
         loaded = torch.load(self.model_path, map_location="cpu", weights_only=True)
         if not isinstance(loaded, dict):
-            raise RuntimeError("LR-ASD checkpoint did not contain a state dictionary")
+            raise TypeError("LR-ASD checkpoint did not contain a state dictionary")
         normalized = {
             str(name).removeprefix("module."): value for name, value in loaded.items()
         }
