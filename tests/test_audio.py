@@ -289,7 +289,9 @@ async def test_local_output_reports_physical_completion_and_interruption() -> No
 
 
 @pytest.mark.asyncio
-async def test_local_output_resamples_physical_playback_but_keeps_aec_canonical() -> None:
+async def test_local_output_resamples_physical_playback_but_keeps_aec_canonical() -> (
+    None
+):
     apm = FakeApm()
     output = LocalAudioOutput(
         output_device=None,
@@ -312,5 +314,7 @@ async def test_local_output_resamples_physical_playback_but_keeps_aec_canonical(
     assert finished[0].playback_position == pytest.approx(0.01, abs=0.002)
     assert apm.reverse_frames
     assert all(audio_frame.sample_rate == 48_000 for audio_frame in apm.reverse_frames)
-    assert all(audio_frame.samples_per_channel == 480 for audio_frame in apm.reverse_frames)
+    assert all(
+        audio_frame.samples_per_channel == 480 for audio_frame in apm.reverse_frames
+    )
     await output.aclose()
