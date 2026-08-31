@@ -10,7 +10,6 @@ import typing
 import uuid
 
 import numpy as np
-
 from jarvis.authority import EvidenceModality, EvidenceVerdict, IdentityEvidence
 
 
