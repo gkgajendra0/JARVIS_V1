@@ -31,12 +31,12 @@ class SpeechRegionDetector(Protocol):
 
 
 class LiveKitSileroSpeechRegionDetector:
-    """Trim provider-sized turns to one local speech-active region.
+    """Trim a committed recent-audio window to one local speech-active region.
 
     The detector reuses LiveKit's bundled local Silero VAD. Raw audio remains
-    memory-only. The longest continuous speech region is selected because active
-    speaker scoring requires one temporally coherent audio/visual segment rather
-    than a stitched set of disjoint speech islands.
+    memory-only. A committed user message may arrive after a bounded recent-audio
+    window that still contains older speech leakage, so the most recent continuous
+    speech region is selected rather than the longest one.
 
     LiveKit's normal END_OF_SPEECH event is authoritative when available. For
     bounded offline turns, end_input() also establishes a hard reset boundary, so
@@ -50,7 +50,7 @@ class LiveKitSileroSpeechRegionDetector:
         min_speech_duration: float = 0.08,
         min_silence_duration: float = 0.18,
         prefix_padding_duration: float = 0.12,
-        activation_threshold: float = 0.5,
+        activation_threshold: float = 0.35,
     ) -> None:
         if min_speech_duration <= 0:
             raise ValueError("speech-region minimum speech duration must be positive")
@@ -119,7 +119,7 @@ class LiveKitSileroSpeechRegionDetector:
             await stream.aclose()
 
         if candidates:
-            selected = max(candidates, key=lambda candidate: candidate.duration_seconds)
+            selected = _select_latest_candidate(candidates)
             return SpeechRegionResult(
                 selected,
                 len(candidates),
@@ -136,10 +136,7 @@ class LiveKitSileroSpeechRegionDetector:
             prefix_padding_duration=self._prefix_padding_duration,
         )
         if fallback_candidates:
-            selected = max(
-                fallback_candidates,
-                key=lambda candidate: candidate.duration_seconds,
-            )
+            selected = _select_latest_candidate(fallback_candidates)
             return SpeechRegionResult(
                 selected,
                 len(fallback_candidates),
@@ -228,6 +225,17 @@ def _candidates_from_probability_observations(
         if candidate is not None:
             candidates.append(candidate)
     return candidates
+
+
+def _select_latest_candidate(candidates: list[SpeakerTurnAudio]) -> SpeakerTurnAudio:
+    if not candidates:
+        raise ValueError("speech-region candidate selection requires at least one region")
+    return max(
+        candidates,
+        key=lambda candidate: (
+            candidate.end_monotonic if candidate.end_monotonic is not None else -1.0
+        ),
+    )
 
 
 def _candidate_from_offsets(
