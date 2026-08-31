@@ -28,6 +28,7 @@ LR_ASD_PROVIDER_ID = "jarvis-lr-asd-ava-shadow-v1"
 LR_ASD_AUDIO_RATE = 16_000
 LR_ASD_VISUAL_FPS = 25
 LR_ASD_VISUAL_SIZE = 112
+LR_ASD_CONTEXT_DURATIONS_SECONDS = (1, 2, 3, 4, 5, 6)
 
 
 class ActiveSpeakerState(str, Enum):
@@ -346,22 +347,11 @@ class LrAsdActiveSpeakerProvider:
         else:
             features = features[:target_audio_frames]
 
-        import torch
-
-        audio_tensor = torch.from_numpy(
-            features.astype(np.float32, copy=False)
-        ).unsqueeze(0)
-        visual_tensor = torch.from_numpy(
-            visual_frames.astype(np.float32, copy=False)
-        ).unsqueeze(0)
-        audio_tensor = audio_tensor.to(self.device)
-        visual_tensor = visual_tensor.to(self.device)
-        with self._inference_lock, torch.inference_mode():
-            scores = self.model.active_speaker_probabilities(
-                audio_tensor,
-                visual_tensor,
-            )
-        values = scores.detach().float().cpu().numpy().reshape(-1)
+        values = self._multicontext_probabilities(
+            features,
+            visual_frames,
+            source_fps=visual.source_fps,
+        )
         if values.size == 0 or not np.isfinite(values).all():
             return _insufficient_assessment(
                 self.provider_id,
@@ -386,8 +376,71 @@ class LrAsdActiveSpeakerProvider:
             median_score=float(np.median(values)),
             minimum_score=float(np.min(values)),
             maximum_score=float(np.max(values)),
-            reason_codes=("active_speaker_shadow_score_no_threshold",),
+            reason_codes=("active_speaker_shadow_multicontext_score_no_threshold",),
         )
+
+    def _multicontext_probabilities(
+        self,
+        features: np.ndarray,
+        visual_frames: np.ndarray,
+        *,
+        source_fps: float,
+    ) -> np.ndarray:
+        import torch
+
+        frame_count = len(visual_frames)
+        context_scores: list[np.ndarray] = []
+        with self._inference_lock, torch.inference_mode():
+            for duration_seconds in LR_ASD_CONTEXT_DURATIONS_SECONDS:
+                chunk_scores: list[np.ndarray] = []
+                for start, end in _context_frame_ranges(
+                    frame_count,
+                    source_fps,
+                    duration_seconds,
+                ):
+                    audio_chunk = features[start * 4 : end * 4]
+                    visual_chunk = visual_frames[start:end]
+                    audio_tensor = torch.from_numpy(
+                        audio_chunk.astype(np.float32, copy=False)
+                    ).unsqueeze(0)
+                    visual_tensor = torch.from_numpy(
+                        visual_chunk.astype(np.float32, copy=False)
+                    ).unsqueeze(0)
+                    scores = self.model.active_speaker_probabilities(
+                        audio_tensor.to(self.device),
+                        visual_tensor.to(self.device),
+                    )
+                    values = scores.detach().float().cpu().numpy().reshape(-1)
+                    if values.size != end - start:
+                        return np.empty(0, dtype=np.float32)
+                    chunk_scores.append(values)
+                if not chunk_scores:
+                    return np.empty(0, dtype=np.float32)
+                context = np.concatenate(chunk_scores)
+                if context.size != frame_count:
+                    return np.empty(0, dtype=np.float32)
+                context_scores.append(context)
+        if not context_scores:
+            return np.empty(0, dtype=np.float32)
+        return np.mean(np.stack(context_scores, axis=0), axis=0)
+
+
+def _context_frame_ranges(
+    frame_count: int,
+    source_fps: float,
+    duration_seconds: int,
+) -> tuple[tuple[int, int], ...]:
+    if frame_count <= 0:
+        return ()
+    if not math.isfinite(source_fps) or source_fps <= 0:
+        raise ValueError("LR-ASD context source fps must be positive and finite")
+    if duration_seconds <= 0:
+        raise ValueError("LR-ASD context duration must be positive")
+    chunk_frames = max(1, round(duration_seconds * source_fps))
+    return tuple(
+        (start, min(start + chunk_frames, frame_count))
+        for start in range(0, frame_count, chunk_frames)
+    )
 
 
 def _normalized_head_crop(
