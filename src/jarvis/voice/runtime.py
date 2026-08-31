@@ -652,7 +652,7 @@ class VoiceRuntimeController:
         def submit_shadow_turn() -> None:
             if turn_capture is None:
                 return
-            turn = turn_capture.finish_turn()
+            turn = turn_capture.snapshot_recent_audio()
             if turn is None:
                 return
             audio_turn_id = str(uuid.uuid4())
@@ -665,11 +665,8 @@ class VoiceRuntimeController:
 
         def on_user_state(event: UserStateChangedEvent) -> None:
             if event.new_state == "speaking":
-                if turn_capture is not None:
-                    turn_capture.start_turn()
                 self._arm_timeout(self.config.max_utterance_seconds)
             elif event.new_state == "listening":
-                submit_shadow_turn()
                 timeout = (
                     self.config.follow_up_timeout_seconds
                     if has_user_turn
@@ -691,6 +688,7 @@ class VoiceRuntimeController:
                 return
             has_user_turn = True
             self._cancel_timeout()
+            submit_shadow_turn()
             if _is_exit_intent(text):
                 LOGGER.info("Explicit voice-session exit accepted")
                 active_end.set()
@@ -724,20 +722,20 @@ class VoiceRuntimeController:
             LOGGER.info("JARVIS realtime conversation is active")
             if turn_capture is not None:
                 LOGGER.info(
-                    "Speaker shadow bridge active: memory-only turn quality + live-owner "
-                    "context; prototype admission remains disabled until active-speaker "
-                    "corroboration is accepted"
+                    "Speaker shadow bridge active: committed user turns snapshot a bounded "
+                    "memory-only canonical-audio window + live-owner context; prototype "
+                    "admission remains disabled until active-speaker corroboration is accepted"
                 )
             if self._active_speaker_provider is not None:
                 LOGGER.info(
-                    "LR-ASD active-speaker shadow is active: local Silero trims provider "
-                    "turns, real visual cadence is preserved, scores remain diagnostic only; "
-                    "active-speaker confirmation and prototype admission remain disabled"
+                    "LR-ASD active-speaker shadow is active: local Silero trims committed "
+                    "canonical-audio windows, real visual cadence is preserved, scores remain "
+                    "diagnostic only; active-speaker confirmation and prototype admission "
+                    "remain disabled"
                 )
             await active_end.wait()
         finally:
             self._cancel_timeout()
-            submit_shadow_turn()
             output.off("playback_finished", on_playback_finished)
             self.audio.deactivate_session()
             await session.aclose()
