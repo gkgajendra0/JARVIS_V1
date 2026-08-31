@@ -760,7 +760,10 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
             "JARVIS_ACTIVE_SPEAKER_SHADOW_ENABLED requires "
             "JARVIS_SPEAKER_SHADOW_ENABLED"
         )
-    if config.active_speaker_shadow_enabled and config.active_speaker_model_path is None:
+    if (
+        config.active_speaker_shadow_enabled
+        and config.active_speaker_model_path is None
+    ):
         raise RuntimeError(
             "JARVIS_LR_ASD_MODEL_PATH is required when active-speaker shadow is enabled"
         )
