@@ -181,7 +181,7 @@ class ActiveSpeakerVisualBuffer:
         visual_track_id: int,
         start_monotonic: float,
         end_monotonic: float,
-        max_duration_seconds: float = 2.0,
+        max_duration_seconds: float = 6.0,
         minimum_source_frames: int = 5,
         maximum_source_gap_seconds: float = 0.35,
         maximum_edge_gap_seconds: float = 0.15,
