@@ -35,9 +35,7 @@ def test_parse_model_spec_uses_explicit_name_path_contract() -> None:
 
 
 def test_int16_pcm_conversion_is_normalized_float32() -> None:
-    converted = int16_to_float32(
-        np.asarray([-32768, 0, 16384, 32767], dtype=np.int16)
-    )
+    converted = int16_to_float32(np.asarray([-32768, 0, 16384, 32767], dtype=np.int16))
 
     assert converted.dtype == np.float32
     assert converted[0] == pytest.approx(-1.0)

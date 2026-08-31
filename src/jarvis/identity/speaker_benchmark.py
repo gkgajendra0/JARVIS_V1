@@ -378,11 +378,7 @@ def _print_final_summary(observations: list[ModelObservation]) -> None:
         latencies = [item.embedding_ms for item in model_items if item.status == "ok"]
         print(f"  embedding latency ms: {_summary(latencies)}")
         scenarios = sorted(
-            {
-                item.scenario
-                for item in model_items
-                if item.scenario != "reference"
-            }
+            {item.scenario for item in model_items if item.scenario != "reference"}
         )
         for scenario in scenarios:
             items = [item for item in model_items if item.scenario == scenario]
