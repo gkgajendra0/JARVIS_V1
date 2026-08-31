@@ -68,6 +68,7 @@ class JarvisConfig:
     max_utterance_seconds: float = 15.0
     vision_enabled: bool = False
     vision_head_model_path: str | None = None
+    speaker_shadow_enabled: bool = False
 
     def __post_init__(self) -> None:
         normalized = str(self.log_level).strip().upper()
@@ -167,5 +168,8 @@ class JarvisConfig:
             vision_enabled=_environment_bool("JARVIS_VISION_ENABLED", False),
             vision_head_model_path=_optional_environment_text(
                 "JARVIS_BLAZEFACE_MODEL_PATH"
+            ),
+            speaker_shadow_enabled=_environment_bool(
+                "JARVIS_SPEAKER_SHADOW_ENABLED", False
             ),
         )
