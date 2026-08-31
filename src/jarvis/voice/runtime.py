@@ -475,7 +475,9 @@ class VoiceRuntimeController:
         self._active_end = active_end
         session, bridge = self._session_factory(self.config)
         turn_capture = (
-            InMemorySpeakerTurnCapture(max_turn_seconds=self.config.max_utterance_seconds)
+            InMemorySpeakerTurnCapture(
+                max_turn_seconds=self.config.max_utterance_seconds
+            )
             if self.config.speaker_shadow_enabled
             else None
         )
