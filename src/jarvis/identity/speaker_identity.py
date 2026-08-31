@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import dataclasses
+import enum
 import hashlib
 import math
+import pathlib
 import time
 import typing
 import uuid
-from dataclasses import dataclass
-from enum import Enum
-from pathlib import Path
 
 import numpy as np
 
@@ -20,13 +20,13 @@ CAMPP_MODEL_SIZE_BYTES = 28_281_164
 CAMPP_PROVIDER_ID = "jarvis-sherpa-campp-shadow-v1"
 
 
-class SpeakerShadowState(str, Enum):
+class SpeakerShadowState(str, enum.Enum):
     INSUFFICIENT = "insufficient"
     PROFILE_BUILDING = "profile_building"
     SCORED = "scored"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class SpeakerQualityPolicy:
     """Conservative quality gate derived from the first real JARVIS bake-off."""
 
@@ -43,7 +43,7 @@ class SpeakerQualityPolicy:
             raise ValueError("speaker clipping ratio must be in [0, 1]")
 
 
-@dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class SpeakerSegmentQuality:
     duration_seconds: float
     rms_dbfs: float
@@ -53,7 +53,7 @@ class SpeakerSegmentQuality:
     reason_codes: tuple[str, ...]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class SpeakerShadowAssessment:
     session_id: str
     audio_turn_id: str
@@ -109,7 +109,7 @@ class SherpaCamPlusEmbeddingProvider:
 
     def __init__(
         self,
-        model_path: str | Path,
+        model_path: str | pathlib.Path,
         *,
         num_threads: int = 1,
         provider: str = "cpu",
@@ -118,7 +118,7 @@ class SherpaCamPlusEmbeddingProvider:
     ) -> None:
         if num_threads <= 0:
             raise ValueError("speaker model num_threads must be positive")
-        path = Path(model_path).expanduser()
+        path = pathlib.Path(model_path).expanduser()
         if not path.is_file():
             raise FileNotFoundError(path)
         if verify_asset:
@@ -377,7 +377,7 @@ def _amplitude_dbfs(amplitude: float) -> float:
     return max(-120.0, 20.0 * math.log10(amplitude))
 
 
-def _verify_campp_asset(path: Path) -> None:
+def _verify_campp_asset(path: pathlib.Path) -> None:
     size = path.stat().st_size
     if size != CAMPP_MODEL_SIZE_BYTES:
         raise RuntimeError(
