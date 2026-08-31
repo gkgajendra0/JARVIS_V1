@@ -35,6 +35,10 @@ from jarvis.identity.owner_context import (
 )
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_turn import InMemorySpeakerTurnCapture, SpeakerTurnAudio
+from jarvis.identity.speech_region import (
+    LiveKitSileroSpeechRegionDetector,
+    SpeechRegionDetector,
+)
 from jarvis.logging_config import configure_logging
 from jarvis.vision.service import VisionService, build_default_vision_service
 from jarvis.voice.agent import JarvisVoiceAgent
@@ -164,6 +168,7 @@ class VoiceRuntimeController:
         owner_context_state: OwnerContextState | None = None,
         active_speaker_visual_buffer: ActiveSpeakerVisualBuffer | None = None,
         active_speaker_provider: LrAsdActiveSpeakerProvider | None = None,
+        speech_region_detector: SpeechRegionDetector | None = None,
         scripted_speech: ScriptedSpeech | None = None,
         startup_greeting_factory: StartupGreetingFactory = select_startup_greeting,
     ) -> None:
@@ -174,6 +179,7 @@ class VoiceRuntimeController:
         self._owner_context_state = owner_context_state
         self._active_speaker_visual_buffer = active_speaker_visual_buffer
         self._active_speaker_provider = active_speaker_provider
+        self._speech_region_detector = speech_region_detector
         self._vision_tools = (
             VisionAgentTools(vision_service) if vision_service is not None else None
         )
@@ -331,7 +337,7 @@ class VoiceRuntimeController:
         )
         LOGGER.info(
             "Active speaker shadow turn %s | state=%s | session=%s | track=%s | "
-            "window=%.2fs | visual=%s/%s | audio_features=%s | "
+            "window=%.2fs | visual=%s/%s@%.2ffps | audio_features=%s | "
             "score mean=%s median=%s min=%s max=%s | "
             "active_speaker_confirmed=False | prototype_admission=False | reasons=%s",
             audio_turn_id,
@@ -341,11 +347,16 @@ class VoiceRuntimeController:
             result.end_monotonic - result.start_monotonic,
             result.unique_visual_frames,
             result.visual_frames,
+            visual.source_fps,
             result.audio_feature_frames,
             f"{result.mean_score:.4f}" if result.mean_score is not None else "n/a",
             f"{result.median_score:.4f}" if result.median_score is not None else "n/a",
-            f"{result.minimum_score:.4f}" if result.minimum_score is not None else "n/a",
-            f"{result.maximum_score:.4f}" if result.maximum_score is not None else "n/a",
+            f"{result.minimum_score:.4f}"
+            if result.minimum_score is not None
+            else "n/a",
+            f"{result.maximum_score:.4f}"
+            if result.maximum_score is not None
+            else "n/a",
             ",".join(result.reason_codes) if result.reason_codes else "none",
         )
 
@@ -355,28 +366,60 @@ class VoiceRuntimeController:
         *,
         audio_turn_id: str,
     ) -> None:
+        analysis_turn = turn
+        speech_segments = 0
+        if self._speech_region_detector is not None:
+            region = await self._speech_region_detector.extract(turn)
+            speech_segments = region.segment_count
+            if region.turn is None:
+                owner_context_live = bool(
+                    self._owner_context_state is not None
+                    and self._owner_context_state.has_fresh_live_owner_candidate()
+                )
+                LOGGER.info(
+                    "Speaker shadow turn %s | captured=%.2fs | speech=none | "
+                    "accepted=False | live_owner_context=%s | "
+                    "active_speaker_confirmed=False | prototype_admission=False | "
+                    "reasons=%s",
+                    audio_turn_id,
+                    turn.duration_seconds,
+                    owner_context_live,
+                    region.reason,
+                )
+                LOGGER.info(
+                    "Active speaker shadow turn %s | state=insufficient | "
+                    "active_speaker_confirmed=False | prototype_admission=False | "
+                    "reasons=%s",
+                    audio_turn_id,
+                    region.reason,
+                )
+                return
+            analysis_turn = region.turn
+
         quality = await asyncio.to_thread(
             assess_speaker_segment,
-            turn.samples,
-            sample_rate=turn.sample_rate,
+            analysis_turn.samples,
+            sample_rate=analysis_turn.sample_rate,
         )
         owner_context_live = bool(
             self._owner_context_state is not None
             and self._owner_context_state.has_fresh_live_owner_candidate()
         )
         LOGGER.info(
-            "Speaker shadow turn %s | %.2fs | rms %.1f dBFS | accepted=%s | "
-            "live_owner_context=%s | active_speaker_confirmed=False | "
-            "prototype_admission=False | reasons=%s",
+            "Speaker shadow turn %s | captured=%.2fs | speech=%.2fs | segments=%s | "
+            "rms %.1f dBFS | accepted=%s | live_owner_context=%s | "
+            "active_speaker_confirmed=False | prototype_admission=False | reasons=%s",
             audio_turn_id,
-            quality.duration_seconds,
+            turn.duration_seconds,
+            analysis_turn.duration_seconds,
+            speech_segments,
             quality.rms_dbfs,
             quality.accepted,
             owner_context_live,
             ",".join(quality.reason_codes) if quality.reason_codes else "none",
         )
         await self._inspect_active_speaker_turn(
-            turn,
+            analysis_turn,
             audio_turn_id=audio_turn_id,
             quality_accepted=quality.accepted,
         )
@@ -687,7 +730,8 @@ class VoiceRuntimeController:
                 )
             if self._active_speaker_provider is not None:
                 LOGGER.info(
-                    "LR-ASD active-speaker shadow is active: scores are diagnostic only; "
+                    "LR-ASD active-speaker shadow is active: local Silero trims provider "
+                    "turns, real visual cadence is preserved, scores remain diagnostic only; "
                     "active-speaker confirmation and prototype admission remain disabled"
                 )
             await active_end.wait()
@@ -743,6 +787,7 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
 
     active_speaker_visual_buffer: ActiveSpeakerVisualBuffer | None = None
     active_speaker_provider: LrAsdActiveSpeakerProvider | None = None
+    speech_region_detector: SpeechRegionDetector | None = None
     if config.active_speaker_shadow_enabled:
         assert config.active_speaker_model_path is not None
         active_speaker_visual_buffer = ActiveSpeakerVisualBuffer(
@@ -751,6 +796,7 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         active_speaker_provider = LrAsdActiveSpeakerProvider(
             config.active_speaker_model_path
         )
+        speech_region_detector = LiveKitSileroSpeechRegionDetector()
 
     vision_service = (
         build_default_vision_service(
@@ -772,6 +818,7 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         owner_context_state=owner_context_state,
         active_speaker_visual_buffer=active_speaker_visual_buffer,
         active_speaker_provider=active_speaker_provider,
+        speech_region_detector=speech_region_detector,
     )
 
 
