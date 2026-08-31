@@ -105,6 +105,56 @@ def test_visual_buffer_preserves_lower_real_cadence_without_duplication() -> Non
     assert window.source_fps == pytest.approx(12.5)
 
 
+def test_visual_buffer_accepts_camera_frames_with_fresh_perception_context() -> None:
+    buffer = ActiveSpeakerVisualBuffer(max_snapshot_age_seconds=0.15)
+    _, snapshot = _pair(100, 50.0)
+    timestamps = [50.02, 50.05, 50.08, 50.11, 50.14]
+    for index, observed_at in enumerate(timestamps, start=101):
+        frame = CapturedFrame(
+            frame_id=index,
+            captured_at=observed_at,
+            image=np.full((240, 320, 3), 125, dtype=np.uint8),
+        )
+        buffer.observe(frame, snapshot)
+
+    window = buffer.build_window(
+        visual_track_id=7,
+        start_monotonic=50.02,
+        end_monotonic=50.14,
+    )
+
+    assert window is not None
+    assert window.unique_source_frames == 5
+    assert window.source_fps == pytest.approx(33.333333, rel=1e-5)
+
+
+def test_visual_buffer_rejects_stale_or_future_perception_context() -> None:
+    buffer = ActiveSpeakerVisualBuffer(max_snapshot_age_seconds=0.15)
+    _, snapshot = _pair(200, 60.0)
+    stale_frame = CapturedFrame(
+        frame_id=201,
+        captured_at=60.151,
+        image=np.full((240, 320, 3), 125, dtype=np.uint8),
+    )
+    earlier_frame = CapturedFrame(
+        frame_id=199,
+        captured_at=59.99,
+        image=np.full((240, 320, 3), 125, dtype=np.uint8),
+    )
+
+    buffer.observe(stale_frame, snapshot)
+    buffer.observe(earlier_frame, snapshot)
+
+    assert (
+        buffer.build_window(
+            visual_track_id=7,
+            start_monotonic=59.9,
+            end_monotonic=60.2,
+        )
+        is None
+    )
+
+
 def test_visual_buffer_never_stitches_different_tracks() -> None:
     buffer = ActiveSpeakerVisualBuffer()
     for index in range(15):
