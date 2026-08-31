@@ -220,9 +220,7 @@ def _candidates_from_probability_observations(
         )
         speech_end = min(turn.duration_seconds, group[-1].timestamp)
         active_duration = (
-            group[-1].timestamp
-            - group[0].timestamp
-            + _SILERO_INFERENCE_WINDOW_SECONDS
+            group[-1].timestamp - group[0].timestamp + _SILERO_INFERENCE_WINDOW_SECONDS
         )
         if active_duration < min_speech_duration:
             continue
