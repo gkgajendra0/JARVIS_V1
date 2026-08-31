@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — 3B.8 RUNTIME OWNER + LIVENESS BINDING HUMAN-ACCEPTED — 3B.9 ATTENTION DEFERRED UNTIL FIXED WEBCAM — 3B.10 SPEAKER RESEARCH + REAL-MACHINE BAKE-OFF COMPLETE — 3B.10A PASSIVE TURN/OWNER-CONTEXT BRIDGE IMPLEMENTED, REAL-MACHINE ACCEPTANCE PENDING — 3B.11 ACTIVE-SPEAKER CORROBORATION NEXT**
+**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — 3B.8 RUNTIME OWNER + LIVENESS BINDING HUMAN-ACCEPTED — 3B.9 ATTENTION DEFERRED UNTIL FIXED WEBCAM — 3B.10 SPEAKER RESEARCH + REAL-MACHINE BAKE-OFF COMPLETE — 3B.10A PASSIVE TURN/OWNER-CONTEXT BRIDGE HUMAN-ACCEPTED — 3B.11 ACTIVE-SPEAKER CORROBORATION NEXT**
 
 Step 0, Step 1, Step 2, Step 2.5, and Step 3A are complete. Phase 3A was real-machine accepted, reconciled, and merged through protected `main`.
 
@@ -255,9 +255,9 @@ Speaker-model core now exists behind a JARVIS-owned boundary with:
 Acceptance evidence and model decision:
 `docs/research/STEP_3B10_SPEAKER_BAKEOFF_RESULTS.md`.
 
-## 3B.10A — Passive normal-turn + OWNER-context bridge — IMPLEMENTED, REAL-MACHINE ACCEPTANCE PENDING
+## 3B.10A — Passive normal-turn + OWNER-context bridge — HUMAN-ACCEPTED
 
-The normal voice runtime now contains the safe plumbing needed for passive speaker work without a second microphone or camera.
+The normal voice runtime contains the accepted safe plumbing needed for passive speaker work without a second microphone or camera.
 
 Implemented boundary:
 
@@ -293,6 +293,19 @@ shadow diagnostic log
 - normal-turn diagnostics report quality and whether a fresh `LIVE_OWNER_CANDIDATE` context existed;
 - `active_speaker_confirmed=False` and `prototype_admission=False` are deliberately enforced in this slice;
 - no new speaker profile, voiceprint, threshold, or authority evidence is promoted by 3B.10A.
+
+Real-machine acceptance evidence on the integrated Pocket-3 + canonical voice runtime:
+
+- integrated vision started and maintained a live person/head track during normal realtime conversation;
+- stable audio selectors resolved the current Windows WASAPI endpoints dynamically (`Voicemeeter Out B1` input and `Tribit XSound Plus 2` output) without relying on stored numeric indices;
+- physical output opened successfully and startup greeting/conversation playback completed;
+- normal realtime conversation ran with the speaker-shadow bridge active;
+- healthy turns were accepted at `14.29 s / -36.5 dBFS` and `12.18 s / -30.8 dBFS` with `live_owner_context=True`;
+- another healthy `9.42 s / -42.7 dBFS` turn remained quality-accepted while `live_owner_context=False`, demonstrating that temporary OWNER-context loss does not fabricate corroboration;
+- a `0.20 s` fragment was correctly rejected as `speaker_segment_too_short`;
+- a `15.00 s / -48.1 dBFS` segment was correctly rejected as `speaker_segment_below_rms_floor`;
+- every observed turn remained `active_speaker_confirmed=False` and `prototype_admission=False`, as required before 3B.11;
+- no speaker threshold, persistent voiceprint, T2 upgrade, or action authority was introduced by the acceptance run.
 
 ### Safety correction discovered during integration
 
@@ -375,4 +388,4 @@ After active-speaker corroboration is real-machine accepted:
 
 ## Immediate Next Action
 
-Real-machine accept **3B.10A** as a passive bridge only, then benchmark **LR-ASD active-speaker corroboration** on the exact Pocket-3 + canonical JARVIS audio path. Do not enable speaker prototype admission until active-speaker attribution is accepted. Attention remains deferred until suitable fixed camera hardware exists.
+Implement and benchmark **3B.11 active-speaker corroboration**, starting with **LR-ASD** on the exact Pocket-3 + canonical JARVIS audio path and retaining **C3ASD** as the first robustness challenger. Do not enable speaker prototype admission until active-speaker attribution is accepted. Attention remains deferred until suitable fixed camera hardware exists.
