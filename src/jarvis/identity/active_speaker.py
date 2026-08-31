@@ -175,11 +175,14 @@ class ActiveSpeakerVisualBuffer:
         max_duration_seconds: float = 2.0,
         minimum_source_frames: int = 5,
         maximum_source_gap_seconds: float = 0.35,
+        maximum_edge_gap_seconds: float = 0.15,
     ) -> ActiveSpeakerVisualWindow | None:
         if end_monotonic <= start_monotonic:
             return None
         if max_duration_seconds <= 0:
             raise ValueError("active-speaker max window duration must be positive")
+        if maximum_edge_gap_seconds <= 0:
+            raise ValueError("active-speaker edge gap must be positive")
         window_start = max(start_monotonic, end_monotonic - max_duration_seconds)
         with self._lock:
             candidates = tuple(
@@ -194,13 +197,17 @@ class ActiveSpeakerVisualBuffer:
         times = np.asarray(
             [sample.observed_at_monotonic for sample in candidates], dtype=np.float64
         )
+        start_gap = float(times[0] - window_start)
+        end_gap = float(end_monotonic - times[-1])
+        if start_gap > maximum_edge_gap_seconds or end_gap > maximum_edge_gap_seconds:
+            return None
         gaps = np.diff(times)
         maximum_gap = float(np.max(gaps)) if gaps.size else 0.0
         if maximum_gap > maximum_source_gap_seconds:
             return None
 
         grid_count = max(
-            1, math.floor((end_monotonic - window_start) * LR_ASD_VISUAL_FPS)
+            1, round((end_monotonic - window_start) * LR_ASD_VISUAL_FPS)
         )
         grid = (
             window_start + np.arange(grid_count, dtype=np.float64) / LR_ASD_VISUAL_FPS
