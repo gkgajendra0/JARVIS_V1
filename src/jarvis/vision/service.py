@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 import os
+import queue
 from pathlib import Path
 from threading import Event, RLock, Thread
 
+from jarvis.vision.camera import CapturedFrame
 from jarvis.vision.diagnostics import VisionDiagnostics
 from jarvis.vision.observer import VisionObserver
 from jarvis.vision.runtime import VisionRuntime, VisionSnapshot
@@ -25,6 +27,7 @@ class VisionService:
         *,
         diagnostics: VisionDiagnostics | None = None,
         observer: VisionObserver | None = None,
+        evidence_observer: VisionObserver | None = None,
         process_timeout_seconds: float = 0.20,
     ) -> None:
         if process_timeout_seconds <= 0:
@@ -32,6 +35,7 @@ class VisionService:
         self.runtime = runtime
         self.diagnostics = diagnostics or VisionDiagnostics()
         self._observer = observer
+        self._evidence_observer = evidence_observer
         self._process_timeout_seconds = process_timeout_seconds
         self._runtime_lock = RLock()
         self._snapshot_lock = RLock()
@@ -39,7 +43,11 @@ class VisionService:
         self._stop_requested = Event()
         self._thread: Thread | None = None
         self._observer_thread: Thread | None = None
+        self._evidence_thread: Thread | None = None
         self._latest_snapshot: VisionSnapshot | None = None
+        self._evidence_queue: queue.Queue[tuple[CapturedFrame, VisionSnapshot]] = (
+            queue.Queue(maxsize=1)
+        )
 
     @property
     def running(self) -> bool:
@@ -51,6 +59,7 @@ class VisionService:
             if self.running:
                 return
             self._stop_requested.clear()
+            self._clear_evidence_queue()
             with self._snapshot_lock:
                 self._latest_snapshot = None
             with self._runtime_lock:
@@ -69,6 +78,13 @@ class VisionService:
                     daemon=True,
                 )
                 self._observer_thread.start()
+            if self._evidence_observer is not None:
+                self._evidence_thread = Thread(
+                    target=self._evidence_observer_loop,
+                    name="jarvis-vision-evidence",
+                    daemon=True,
+                )
+                self._evidence_thread.start()
 
     def stop(self, *, join_timeout_seconds: float = 3.0) -> None:
         if join_timeout_seconds <= 0:
@@ -76,6 +92,7 @@ class VisionService:
         with self._lifecycle_lock:
             thread = self._thread
             observer_thread = self._observer_thread
+            evidence_thread = self._evidence_thread
             if thread is None:
                 return
             self._stop_requested.set()
@@ -90,9 +107,17 @@ class VisionService:
                 raise RuntimeError(
                     "vision observer did not stop within the shutdown timeout"
                 )
+        if evidence_thread is not None:
+            evidence_thread.join(timeout=join_timeout_seconds)
+            if evidence_thread.is_alive():
+                raise RuntimeError(
+                    "vision evidence observer did not stop within the shutdown timeout"
+                )
         with self._lifecycle_lock:
             self._thread = None
             self._observer_thread = None
+            self._evidence_thread = None
+            self._clear_evidence_queue()
 
     def report(self, *, event_limit: int = 12) -> dict[str, object]:
         return self.diagnostics.report(event_limit=event_limit)
@@ -161,10 +186,17 @@ class VisionService:
                     snapshot = self.runtime.process_once(
                         timeout_seconds=self._process_timeout_seconds
                     )
+                    frame = self.runtime.latest_frame if snapshot is not None else None
                 if snapshot is not None:
                     with self._snapshot_lock:
                         self._latest_snapshot = snapshot
                     self.diagnostics.observe(snapshot)
+                    if (
+                        self._evidence_observer is not None
+                        and frame is not None
+                        and frame.frame_id == snapshot.frame_id
+                    ):
+                        self._publish_evidence_pair(frame, snapshot)
         except Exception as exc:
             self.diagnostics.record_error(exc)
             LOGGER.exception("Integrated vision service failed")
@@ -178,6 +210,28 @@ class VisionService:
             finally:
                 self.diagnostics.set_running(False)
                 self._stop_requested.set()
+
+    def _publish_evidence_pair(
+        self,
+        frame: CapturedFrame,
+        snapshot: VisionSnapshot,
+    ) -> None:
+        if self._evidence_queue.full():
+            try:
+                self._evidence_queue.get_nowait()
+            except queue.Empty:
+                pass
+        try:
+            self._evidence_queue.put_nowait((frame, snapshot))
+        except queue.Full:
+            pass
+
+    def _clear_evidence_queue(self) -> None:
+        while True:
+            try:
+                self._evidence_queue.get_nowait()
+            except queue.Empty:
+                return
 
     def _observer_loop(self) -> None:
         assert self._observer is not None
@@ -206,6 +260,26 @@ class VisionService:
                 self.diagnostics.record_error(exc)
                 LOGGER.exception("Integrated vision observer shutdown failed")
 
+    def _evidence_observer_loop(self) -> None:
+        assert self._evidence_observer is not None
+        try:
+            while not self._stop_requested.is_set():
+                try:
+                    frame, snapshot = self._evidence_queue.get(timeout=0.05)
+                except queue.Empty:
+                    continue
+                self._evidence_observer.observe(frame, snapshot)
+        except Exception as exc:
+            if not self._stop_requested.is_set():
+                self.diagnostics.record_error(exc)
+                LOGGER.exception("Integrated vision evidence observer failed closed")
+        finally:
+            try:
+                self._evidence_observer.close()
+            except Exception as exc:
+                self.diagnostics.record_error(exc)
+                LOGGER.exception("Integrated vision evidence observer shutdown failed")
+
 
 def resolve_blazeface_model_path(configured: str | Path | None = None) -> Path:
     if configured is not None:
@@ -225,6 +299,7 @@ def resolve_blazeface_model_path(configured: str | Path | None = None) -> Path:
 def build_default_vision_service(
     *,
     head_model_path: str | Path | None = None,
+    evidence_observer: VisionObserver | None = None,
 ) -> VisionService:
     """Compose the benchmark-selected Step 2.5 hardware/runtime stack lazily."""
     from jarvis.vision.camera import OpenCVCameraSource
@@ -307,4 +382,8 @@ def build_default_vision_service(
         in {"1", "true", "yes", "on"}
         else None
     )
-    return VisionService(runtime, observer=observer)
+    return VisionService(
+        runtime,
+        observer=observer,
+        evidence_observer=evidence_observer,
+    )
