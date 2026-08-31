@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import unicodedata
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
@@ -23,6 +24,12 @@ from livekit.agents.voice.io import PlaybackFinishedEvent
 
 from jarvis.config import JarvisConfig
 from jarvis.dev_control import DevControlClient, parse_explicit_update_decision
+from jarvis.identity.owner_context import (
+    OwnerContextState,
+    build_default_owner_context_observer,
+)
+from jarvis.identity.speaker_identity import assess_speaker_segment
+from jarvis.identity.speaker_turn import InMemorySpeakerTurnCapture, SpeakerTurnAudio
 from jarvis.logging_config import configure_logging
 from jarvis.vision.service import VisionService, build_default_vision_service
 from jarvis.voice.agent import JarvisVoiceAgent
@@ -31,6 +38,7 @@ from jarvis.voice.livekit_session import (
     LiveKitConversationBridge,
     create_voice_session,
 )
+from jarvis.voice.observed_audio import ObservedSessionAudioInput
 from jarvis.voice.scripted_speech import ScriptedSpeech, build_scripted_speech
 from jarvis.voice.startup_greeting import select_startup_greeting
 from jarvis.voice.vision_tools import VisionAgentTools
@@ -148,6 +156,7 @@ class VoiceRuntimeController:
         *,
         session_factory: SessionFactory = create_voice_session,
         vision_service: VisionService | None = None,
+        owner_context_state: OwnerContextState | None = None,
         scripted_speech: ScriptedSpeech | None = None,
         startup_greeting_factory: StartupGreetingFactory = select_startup_greeting,
     ) -> None:
@@ -155,6 +164,7 @@ class VoiceRuntimeController:
         self.audio = audio
         self._session_factory = session_factory
         self._vision_service = vision_service
+        self._owner_context_state = owner_context_state
         self._vision_tools = (
             VisionAgentTools(vision_service) if vision_service is not None else None
         )
@@ -241,6 +251,33 @@ class VoiceRuntimeController:
         self._timeout_handle = asyncio.get_running_loop().call_later(
             seconds,
             active_end.set,
+        )
+
+    async def _inspect_shadow_turn(
+        self,
+        turn: SpeakerTurnAudio,
+        *,
+        audio_turn_id: str,
+    ) -> None:
+        quality = await asyncio.to_thread(
+            assess_speaker_segment,
+            turn.samples,
+            sample_rate=turn.sample_rate,
+        )
+        owner_context_live = bool(
+            self._owner_context_state is not None
+            and self._owner_context_state.has_fresh_live_owner_candidate()
+        )
+        LOGGER.info(
+            "Speaker shadow turn %s | %.2fs | rms %.1f dBFS | accepted=%s | "
+            "live_owner_context=%s | active_speaker_confirmed=False | "
+            "prototype_admission=False | reasons=%s",
+            audio_turn_id,
+            quality.duration_seconds,
+            quality.rms_dbfs,
+            quality.accepted,
+            owner_context_live,
+            ",".join(quality.reason_codes) if quality.reason_codes else "none",
         )
 
     async def run(self) -> None:
@@ -437,15 +474,53 @@ class VoiceRuntimeController:
         active_end = asyncio.Event()
         self._active_end = active_end
         session, bridge = self._session_factory(self.config)
-        session_input = SessionAudioInput()
+        turn_capture = (
+            InMemorySpeakerTurnCapture(max_turn_seconds=self.config.max_utterance_seconds)
+            if self.config.speaker_shadow_enabled
+            else None
+        )
+        shadow_tasks: set[asyncio.Task[None]] = set()
+
+        def on_audio_frame(frame) -> None:
+            if turn_capture is None:
+                return
+            turn_capture.push_frame(
+                frame.data,
+                sample_rate=frame.sample_rate,
+                num_channels=frame.num_channels,
+                samples_per_channel=frame.samples_per_channel,
+            )
+
+        session_input = (
+            ObservedSessionAudioInput(on_audio_frame)
+            if turn_capture is not None
+            else SessionAudioInput()
+        )
         session.input.audio = session_input
         session.output.audio = output
         has_user_turn = False
 
+        def submit_shadow_turn() -> None:
+            if turn_capture is None:
+                return
+            turn = turn_capture.finish_turn()
+            if turn is None:
+                return
+            audio_turn_id = str(uuid.uuid4())
+            task = asyncio.create_task(
+                self._inspect_shadow_turn(turn, audio_turn_id=audio_turn_id),
+                name=f"jarvis-speaker-shadow-{audio_turn_id[:8]}",
+            )
+            shadow_tasks.add(task)
+            task.add_done_callback(shadow_tasks.discard)
+
         def on_user_state(event: UserStateChangedEvent) -> None:
             if event.new_state == "speaking":
+                if turn_capture is not None:
+                    turn_capture.start_turn()
                 self._arm_timeout(self.config.max_utterance_seconds)
             elif event.new_state == "listening":
+                submit_shadow_turn()
                 timeout = (
                     self.config.follow_up_timeout_seconds
                     if has_user_turn
@@ -498,17 +573,34 @@ class VoiceRuntimeController:
                 raise
             self._state = VoiceRuntimeState.ACTIVE
             LOGGER.info("JARVIS realtime conversation is active")
+            if turn_capture is not None:
+                LOGGER.info(
+                    "Speaker shadow bridge active: memory-only turn quality + live-owner "
+                    "context; prototype admission remains disabled until active-speaker "
+                    "corroboration is accepted"
+                )
             await active_end.wait()
         finally:
             self._cancel_timeout()
+            submit_shadow_turn()
             output.off("playback_finished", on_playback_finished)
             self.audio.deactivate_session()
             await session.aclose()
+            if shadow_tasks:
+                await asyncio.gather(*tuple(shadow_tasks), return_exceptions=True)
+            if turn_capture is not None:
+                turn_capture.clear()
 
 
 def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
     if config.wake_model_path is None:
         raise RuntimeError("JARVIS_WAKE_MODEL_PATH is required for Step-2 wake mode")
+    if config.speaker_shadow_enabled and not config.vision_enabled:
+        raise RuntimeError(
+            "JARVIS_SPEAKER_SHADOW_ENABLED requires JARVIS_VISION_ENABLED because "
+            "speaker prototype admission must be bound to independent live-owner context"
+        )
+
     predictor = load_livekit_predictor(Path(config.wake_model_path))
     detector = LiveKitWakeDetector(
         predictor,
@@ -522,8 +614,18 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         pre_roll_seconds=config.audio_pre_roll_seconds,
         ring_buffer_seconds=config.audio_ring_buffer_seconds,
     )
+
+    owner_context_state: OwnerContextState | None = None
+    evidence_observer = None
+    if config.speaker_shadow_enabled:
+        evidence_observer = build_default_owner_context_observer()
+        owner_context_state = evidence_observer.state
+
     vision_service = (
-        build_default_vision_service(head_model_path=config.vision_head_model_path)
+        build_default_vision_service(
+            head_model_path=config.vision_head_model_path,
+            evidence_observer=evidence_observer,
+        )
         if config.vision_enabled
         else None
     )
@@ -531,6 +633,7 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         config,
         audio,
         vision_service=vision_service,
+        owner_context_state=owner_context_state,
     )
 
 
