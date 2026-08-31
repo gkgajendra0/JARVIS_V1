@@ -65,6 +65,7 @@ class ActiveSpeakerVisualWindow:
     frames: np.ndarray
     source_sample_count: int
     unique_source_frames: int
+    source_fps: float
     maximum_source_gap_seconds: float
 
     def __post_init__(self) -> None:
@@ -79,6 +80,8 @@ class ActiveSpeakerVisualWindow:
             )
         if self.frames.dtype != np.uint8:
             raise ValueError("active-speaker visual window must use uint8 frames")
+        if not math.isfinite(self.source_fps) or self.source_fps <= 0:
+            raise ValueError("active-speaker source fps must be positive and finite")
 
     @property
     def duration_seconds(self) -> float:
@@ -205,28 +208,22 @@ class ActiveSpeakerVisualBuffer:
         maximum_gap = float(np.max(gaps)) if gaps.size else 0.0
         if maximum_gap > maximum_source_gap_seconds:
             return None
-
-        grid_count = max(
-            1, round((end_monotonic - window_start) * LR_ASD_VISUAL_FPS)
-        )
-        grid = (
-            window_start + np.arange(grid_count, dtype=np.float64) / LR_ASD_VISUAL_FPS
-        )
-        chosen: list[ActiveSpeakerVisualSample] = []
-        source_indices: list[int] = []
-        for timestamp in grid:
-            index = int(np.argmin(np.abs(times - timestamp)))
-            chosen.append(candidates[index])
-            source_indices.append(index)
-        if not chosen:
+        span = float(times[-1] - times[0])
+        if span <= 0:
             return None
+        source_fps = (len(candidates) - 1) / span
+        if not 5.0 <= source_fps <= 60.0:
+            return None
+
+        frame_ids = {sample.frame_id for sample in candidates}
         return ActiveSpeakerVisualWindow(
             visual_track_id=visual_track_id,
             start_monotonic=window_start,
             end_monotonic=end_monotonic,
-            frames=np.stack([sample.image for sample in chosen]),
+            frames=np.stack([sample.image for sample in candidates]),
             source_sample_count=len(candidates),
-            unique_source_frames=len(set(source_indices)),
+            unique_source_frames=len(frame_ids),
+            source_fps=source_fps,
             maximum_source_gap_seconds=maximum_gap,
         )
 
@@ -317,22 +314,32 @@ class LrAsdActiveSpeakerProvider:
                 visual,
                 "active_speaker_audio_overlap_empty",
             )
-
-        audio_16k = _resample_audio(audio, turn.sample_rate, LR_ASD_AUDIO_RATE)
-        features = _mfcc_features(audio_16k)
-        visual_frames = visual.frames
-        aligned_visual = min(len(visual_frames), len(features) // 4)
-        if aligned_visual < LR_ASD_VISUAL_FPS:
+        if visual.duration_seconds < 1.0 or len(visual.frames) < 5:
             return _insufficient_assessment(
                 self.provider_id,
                 audio_turn_id,
                 windows_session_id,
                 visual,
                 "active_speaker_window_below_one_second",
-                audio_feature_frames=len(features),
             )
-        features = features[: aligned_visual * 4]
-        visual_frames = visual_frames[:aligned_visual]
+
+        audio_16k = _resample_audio(audio, turn.sample_rate, LR_ASD_AUDIO_RATE)
+        features = _mfcc_features(audio_16k, visual.source_fps)
+        if features.size == 0:
+            return _insufficient_assessment(
+                self.provider_id,
+                audio_turn_id,
+                windows_session_id,
+                visual,
+                "active_speaker_audio_features_empty",
+            )
+        visual_frames = visual.frames
+        target_audio_frames = len(visual_frames) * 4
+        if len(features) < target_audio_frames:
+            shortage = target_audio_frames - len(features)
+            features = np.pad(features, ((0, shortage), (0, 0)), mode="wrap")
+        else:
+            features = features[:target_audio_frames]
 
         import torch
 
@@ -367,7 +374,7 @@ class LrAsdActiveSpeakerProvider:
             visual_track_id=visual.visual_track_id,
             start_monotonic=overlap_start,
             end_monotonic=overlap_end,
-            visual_frames=aligned_visual,
+            visual_frames=len(visual_frames),
             unique_visual_frames=visual.unique_source_frames,
             audio_feature_frames=len(features),
             mean_score=float(np.mean(values)),
@@ -428,16 +435,17 @@ def _resample_audio(
     )
 
 
-def _mfcc_features(samples: np.ndarray) -> np.ndarray:
+def _mfcc_features(samples: np.ndarray, source_fps: float) -> np.ndarray:
     from python_speech_features import mfcc
 
+    cadence_scale = LR_ASD_VISUAL_FPS / source_fps
     return np.asarray(
         mfcc(
             samples,
             samplerate=LR_ASD_AUDIO_RATE,
             numcep=13,
-            winlen=0.025,
-            winstep=0.010,
+            winlen=0.025 * cadence_scale,
+            winstep=0.010 * cadence_scale,
         ),
         dtype=np.float32,
     )
