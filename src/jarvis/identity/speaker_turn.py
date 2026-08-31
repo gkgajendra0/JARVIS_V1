@@ -37,50 +37,27 @@ class SpeakerTurnAudio:
 
 
 class InMemorySpeakerTurnCapture:
-    """Bounded turn capture driven by LiveKit user speaking/listening transitions.
+    """Bounded rolling canonical-audio buffer for committed user turns.
 
-    No raw audio is written to disk. A small rolling pre-roll protects the first
-    phoneme when LiveKit's user-state event arrives just after speech begins.
-    Canonical-frame arrival timestamps are retained only in memory so downstream
-    audio-visual evidence can bind to the same monotonic clock as camera frames.
+    Provider user-state transitions are intentionally not used as biometric audio
+    boundaries. The runtime continuously feeds canonical mono PCM here and takes a
+    bounded snapshot only when the conversation layer commits a user message. Raw
+    audio remains memory-only and is discarded from the rolling buffer after the
+    snapshot is taken.
     """
 
-    def __init__(
-        self,
-        *,
-        pre_roll_seconds: float = 0.20,
-        max_turn_seconds: float = 15.0,
-    ) -> None:
-        if pre_roll_seconds < 0:
-            raise ValueError("speaker turn pre-roll must be non-negative")
+    def __init__(self, *, max_turn_seconds: float = 15.0) -> None:
         if max_turn_seconds <= 0:
             raise ValueError("speaker turn maximum duration must be positive")
-        if pre_roll_seconds > max_turn_seconds:
-            raise ValueError("speaker turn pre-roll must fit inside maximum duration")
-        self.pre_roll_seconds = pre_roll_seconds
         self.max_turn_seconds = max_turn_seconds
         self._sample_rate: int | None = None
-        self._pre_roll: deque[tuple[bytes, int, float]] = deque()
-        self._pre_roll_samples = 0
-        self._turn_chunks: list[bytes] = []
-        self._turn_samples = 0
-        self._turn_start_monotonic: float | None = None
-        self._turn_end_monotonic: float | None = None
-        self._recording = False
-
-    @property
-    def recording(self) -> bool:
-        return self._recording
+        self._chunks: deque[tuple[bytes, int, float]] = deque()
+        self._buffered_samples = 0
 
     def clear(self) -> None:
         self._sample_rate = None
-        self._pre_roll.clear()
-        self._pre_roll_samples = 0
-        self._turn_chunks.clear()
-        self._turn_samples = 0
-        self._turn_start_monotonic = None
-        self._turn_end_monotonic = None
-        self._recording = False
+        self._chunks.clear()
+        self._buffered_samples = 0
 
     def push_frame(
         self,
@@ -113,64 +90,27 @@ class InMemorySpeakerTurnCapture:
             self.clear()
             self._sample_rate = sample_rate
 
-        frame_end = observed_at + samples_per_channel / sample_rate
-        if self._recording:
-            remaining = self._max_turn_samples() - self._turn_samples
-            if remaining <= 0:
-                return
-            accepted_samples = min(samples_per_channel, remaining)
-            accepted_bytes = accepted_samples * 2
-            if self._turn_start_monotonic is None:
-                self._turn_start_monotonic = observed_at
-            self._turn_chunks.append(payload[:accepted_bytes])
-            self._turn_samples += accepted_samples
-            self._turn_end_monotonic = observed_at + accepted_samples / sample_rate
-            return
+        self._chunks.append((payload, samples_per_channel, observed_at))
+        self._buffered_samples += samples_per_channel
+        self._trim_to_limit()
 
-        self._pre_roll.append((payload, samples_per_channel, observed_at))
-        self._pre_roll_samples += samples_per_channel
-        limit = self._pre_roll_limit_samples()
-        while self._pre_roll and self._pre_roll_samples > limit:
-            _, removed_samples, _ = self._pre_roll.popleft()
-            self._pre_roll_samples -= removed_samples
-        if self._pre_roll:
-            self._turn_end_monotonic = frame_end
-
-    def start_turn(self) -> None:
-        if self._recording:
-            return
-        self._recording = True
-        self._turn_chunks = [payload for payload, _, _ in self._pre_roll]
-        self._turn_samples = self._pre_roll_samples
-        self._turn_start_monotonic = self._pre_roll[0][2] if self._pre_roll else None
-        if self._pre_roll and self._sample_rate is not None:
-            payload, samples, observed_at = self._pre_roll[-1]
-            del payload
-            self._turn_end_monotonic = observed_at + samples / self._sample_rate
-        else:
-            self._turn_end_monotonic = None
-        self._pre_roll.clear()
-        self._pre_roll_samples = 0
-
-    def finish_turn(self) -> SpeakerTurnAudio | None:
-        if not self._recording:
-            return None
-        self._recording = False
-        chunks = self._turn_chunks
-        sample_count = self._turn_samples
-        start_monotonic = self._turn_start_monotonic
-        end_monotonic = self._turn_end_monotonic
-        self._turn_chunks = []
-        self._turn_samples = 0
-        self._turn_start_monotonic = None
-        self._turn_end_monotonic = None
-        self._pre_roll.clear()
-        self._pre_roll_samples = 0
+    def snapshot_recent_audio(self, *, clear: bool = True) -> SpeakerTurnAudio | None:
         sample_rate = self._sample_rate
-        if not chunks or sample_count <= 0 or sample_rate is None:
+        if sample_rate is None or not self._chunks or self._buffered_samples <= 0:
             return None
-        payload = b"".join(chunks)
+
+        chunks = tuple(self._chunks)
+        sample_count = self._buffered_samples
+        start_monotonic = chunks[0][2]
+        _, final_samples, final_observed_at = chunks[-1]
+        end_monotonic = final_observed_at + final_samples / sample_rate
+        payload = b"".join(chunk for chunk, _, _ in chunks)
         samples = np.frombuffer(payload, dtype=np.int16, count=sample_count).copy()
+
+        if clear:
+            self._chunks.clear()
+            self._buffered_samples = 0
+
         if samples.size == 0:
             return None
         return SpeakerTurnAudio(
@@ -180,11 +120,23 @@ class InMemorySpeakerTurnCapture:
             end_monotonic=end_monotonic,
         )
 
-    def _pre_roll_limit_samples(self) -> int:
-        if self._sample_rate is None:
-            return 0
-        return round(self.pre_roll_seconds * self._sample_rate)
+    def _trim_to_limit(self) -> None:
+        sample_rate = self._sample_rate
+        if sample_rate is None:
+            return
+        limit = max(1, round(self.max_turn_seconds * sample_rate))
+        while self._chunks and self._buffered_samples > limit:
+            payload, samples, observed_at = self._chunks.popleft()
+            overflow = self._buffered_samples - limit
+            if samples <= overflow:
+                self._buffered_samples -= samples
+                continue
 
-    def _max_turn_samples(self) -> int:
-        assert self._sample_rate is not None
-        return round(self.max_turn_seconds * self._sample_rate)
+            trim_samples = overflow
+            remaining_samples = samples - trim_samples
+            trimmed_payload = payload[trim_samples * 2 :]
+            trimmed_observed_at = observed_at + trim_samples / sample_rate
+            self._chunks.appendleft(
+                (trimmed_payload, remaining_samples, trimmed_observed_at)
+            )
+            self._buffered_samples -= trim_samples
