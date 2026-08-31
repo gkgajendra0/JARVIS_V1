@@ -8,6 +8,7 @@ from jarvis.identity.active_speaker import (
     ActiveSpeakerAssessment,
     ActiveSpeakerState,
     ActiveSpeakerVisualBuffer,
+    _context_frame_ranges,
 )
 from jarvis.vision.camera import CapturedFrame
 from jarvis.vision.head import HeadObservation
@@ -84,6 +85,35 @@ def test_visual_buffer_preserves_25fps_source_frames() -> None:
     assert window.unique_source_frames == 31
     assert window.source_fps == pytest.approx(25.0)
     assert window.maximum_source_gap_seconds < 0.05
+
+
+def test_visual_buffer_preserves_full_multicontext_window_up_to_six_seconds() -> None:
+    buffer = ActiveSpeakerVisualBuffer()
+    for index in range(126):
+        frame, snapshot = _pair(index, 70.0 + index * 0.04)
+        buffer.observe(frame, snapshot)
+
+    window = buffer.build_window(
+        visual_track_id=7,
+        start_monotonic=70.0,
+        end_monotonic=75.0,
+    )
+
+    assert window is not None
+    assert window.duration_seconds == pytest.approx(5.0)
+    assert window.unique_source_frames == 126
+    assert window.source_fps == pytest.approx(25.0)
+
+
+def test_lr_asd_context_ranges_cover_every_frame_for_each_duration() -> None:
+    for duration_seconds in range(1, 7):
+        ranges = _context_frame_ranges(115, 22.85, duration_seconds)
+
+        assert ranges
+        assert ranges[0][0] == 0
+        assert ranges[-1][1] == 115
+        assert sum(end - start for start, end in ranges) == 115
+        assert all(left_end == right_start for (_, left_end), (right_start, _) in zip(ranges, ranges[1:]))
 
 
 def test_visual_buffer_preserves_lower_real_cadence_without_duplication() -> None:
