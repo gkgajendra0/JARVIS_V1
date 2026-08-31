@@ -139,8 +139,8 @@ class InMemorySpeakerTurnCapture:
     def _pre_roll_limit_samples(self) -> int:
         if self._sample_rate is None:
             return 0
-        return int(round(self.pre_roll_seconds * self._sample_rate))
+        return round(self.pre_roll_seconds * self._sample_rate)
 
     def _max_turn_samples(self) -> int:
         assert self._sample_rate is not None
-        return int(round(self.max_turn_seconds * self._sample_rate))
+        return round(self.max_turn_seconds * self._sample_rate)
