@@ -103,9 +103,24 @@ def test_input_capture_has_bounded_provider_startup_cushion() -> None:
 
 def test_device_name_resolution_rejects_missing_and_ambiguous_devices() -> None:
     devices = [
-        {"index": 6, "name": "Voicemeeter Out B1", "hostapi": 0},
-        {"index": 57, "name": "Voicemeeter Out B1", "hostapi": 2},
-        {"index": 58, "name": "Voicemeeter Out A5", "hostapi": 2},
+        {
+            "index": 6,
+            "name": "Voicemeeter Out B1",
+            "hostapi": 0,
+            "hostapi_name": "MME",
+        },
+        {
+            "index": 57,
+            "name": "Voicemeeter Out B1",
+            "hostapi": 2,
+            "hostapi_name": "Windows WASAPI",
+        },
+        {
+            "index": 58,
+            "name": "Voicemeeter Out A5",
+            "hostapi": 2,
+            "hostapi_name": "Windows WASAPI",
+        },
     ]
 
     assert LocalAudioRuntime._resolve_device(devices, "index:57", kind="input") == 57
@@ -118,6 +133,84 @@ def test_device_name_resolution_rejects_missing_and_ambiguous_devices() -> None:
         LocalAudioRuntime._resolve_device(devices, "index:B1", kind="input")
     with pytest.raises(RuntimeError, match=r"index:6.*index:57"):
         LocalAudioRuntime._resolve_device(devices, "Voicemeeter Out B1", kind="input")
+
+
+def test_stable_device_selector_disambiguates_host_api() -> None:
+    devices = [
+        {
+            "index": 6,
+            "name": "Voicemeeter Out B1 (VB-Audio Voicemeeter VAIO)",
+            "hostapi": 0,
+            "hostapi_name": "MME",
+        },
+        {
+            "index": 57,
+            "name": "Voicemeeter Out B1 (VB-Audio Voicemeeter VAIO)",
+            "hostapi": 2,
+            "hostapi_name": "Windows WASAPI",
+        },
+    ]
+
+    selector = "name:Voicemeeter Out B1|hostapi:Windows WASAPI"
+
+    assert LocalAudioRuntime._resolve_device(devices, selector, kind="input") == 57
+
+
+def test_stable_device_selector_survives_portaudio_index_drift() -> None:
+    selector = "name:Speakers (Tribit XSound Plus 2)|hostapi:Windows WASAPI"
+    before = [
+        {
+            "index": 54,
+            "name": "Speakers (Tribit XSound Plus 2)",
+            "hostapi": 2,
+            "hostapi_name": "Windows WASAPI",
+        }
+    ]
+    after = [
+        {
+            "index": 73,
+            "name": "Speakers (Tribit XSound Plus 2)",
+            "hostapi": 2,
+            "hostapi_name": "Windows WASAPI",
+        }
+    ]
+
+    assert LocalAudioRuntime._resolve_device(before, selector, kind="output") == 54
+    assert LocalAudioRuntime._resolve_device(after, selector, kind="output") == 73
+
+
+def test_stable_device_selector_fails_closed_on_missing_host_api() -> None:
+    devices = [
+        {
+            "index": 20,
+            "name": "Speakers (Tribit XSound Plus 2)",
+            "hostapi": 0,
+            "hostapi_name": "MME",
+        }
+    ]
+
+    selector = "name:Speakers (Tribit XSound Plus 2)|hostapi:Windows WASAPI"
+
+    with pytest.raises(RuntimeError, match="not found for stable selector"):
+        LocalAudioRuntime._resolve_device(devices, selector, kind="output")
+
+
+def test_stable_device_selector_requires_name_and_host_api() -> None:
+    devices = [
+        {
+            "index": 54,
+            "name": "Speakers (Tribit XSound Plus 2)",
+            "hostapi": 2,
+            "hostapi_name": "Windows WASAPI",
+        }
+    ]
+
+    with pytest.raises(RuntimeError, match="require both"):
+        LocalAudioRuntime._resolve_device(
+            devices,
+            "name:Speakers (Tribit XSound Plus 2)",
+            kind="output",
+        )
 
 
 @dataclass
