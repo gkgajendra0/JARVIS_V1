@@ -48,6 +48,22 @@ from .passive_liveness import (
     PassiveLivenessThresholds,
     TemporalPassiveLiveness,
 )
+from .speaker_identity import (
+    CAMPP_MODEL_FILENAME,
+    CAMPP_MODEL_SHA256,
+    CAMPP_MODEL_SIZE_BYTES,
+    CAMPP_PROVIDER_ID,
+    SessionSpeakerPrototypeBank,
+    SherpaCamPlusEmbeddingProvider,
+    SpeakerEmbeddingProvider,
+    SpeakerQualityPolicy,
+    SpeakerSegmentQuality,
+    SpeakerShadowAssessment,
+    SpeakerShadowSession,
+    SpeakerShadowState,
+    assess_speaker_segment,
+    normalize_embedding,
+)
 from .store import (
     KeyProtectorMismatch,
     OwnerProfileAlreadyExists,
@@ -67,6 +83,10 @@ from .types import (
 )
 
 __all__ = [
+    "CAMPP_MODEL_FILENAME",
+    "CAMPP_MODEL_SHA256",
+    "CAMPP_MODEL_SIZE_BYTES",
+    "CAMPP_PROVIDER_ID",
     "OWNER_PROFILE_ID",
     "AuthoritySessionProvider",
     "BiometricModality",
@@ -104,6 +124,14 @@ __all__ = [
     "PassiveLivenessState",
     "PassiveLivenessThresholds",
     "RuntimeOwnerFaceTemplate",
+    "SessionSpeakerPrototypeBank",
+    "SherpaCamPlusEmbeddingProvider",
+    "SpeakerEmbeddingProvider",
+    "SpeakerQualityPolicy",
+    "SpeakerSegmentQuality",
+    "SpeakerShadowAssessment",
+    "SpeakerShadowSession",
+    "SpeakerShadowState",
     "SqliteOwnerProfileStore",
     "TemplateInput",
     "TemplateIntegrityError",
@@ -112,10 +140,12 @@ __all__ = [
     "TemporalOwnerIdentity",
     "TemporalPassiveLiveness",
     "WindowsDpapiKeyProtector",
+    "assess_speaker_segment",
     "bind_owner_liveness",
     "canonical_aad",
     "default_model_cache_dir",
     "load_compatible_owner_face_template",
     "load_default_face_model_manifest",
     "max_prototype_cosine",
+    "normalize_embedding",
 ]
