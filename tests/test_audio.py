@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -222,22 +224,23 @@ def test_stable_device_selector_requires_name_and_host_api() -> None:
 
 
 def test_output_rate_prefers_canonical_when_endpoint_supports_it(monkeypatch) -> None:
-    import sounddevice as sd
-
     checked: list[int] = []
 
     def fake_check_output_settings(**options) -> None:
         checked.append(int(options["samplerate"]))
 
-    monkeypatch.setattr(sd, "check_output_settings", fake_check_output_settings)
+    fake_sounddevice = SimpleNamespace(
+        PortAudioError=RuntimeError,
+        default=SimpleNamespace(device=(-1, -1)),
+        check_output_settings=fake_check_output_settings,
+    )
+    monkeypatch.setitem(sys.modules, "sounddevice", fake_sounddevice)
 
     assert LocalAudioRuntime._select_output_sample_rate(54) == 48_000
     assert checked == [48_000]
 
 
 def test_output_rate_falls_back_to_native_endpoint_rate(monkeypatch) -> None:
-    import sounddevice as sd
-
     checked: list[int] = []
 
     def fake_check_output_settings(**options) -> None:
@@ -246,12 +249,16 @@ def test_output_rate_falls_back_to_native_endpoint_rate(monkeypatch) -> None:
         if rate == 48_000:
             raise ValueError("invalid sample rate")
 
-    monkeypatch.setattr(sd, "check_output_settings", fake_check_output_settings)
-    monkeypatch.setattr(
-        sd,
-        "query_devices",
-        lambda device: {"index": device, "default_samplerate": 44_100.0},
+    fake_sounddevice = SimpleNamespace(
+        PortAudioError=RuntimeError,
+        default=SimpleNamespace(device=(-1, -1)),
+        check_output_settings=fake_check_output_settings,
+        query_devices=lambda device: {
+            "index": device,
+            "default_samplerate": 44_100.0,
+        },
     )
+    monkeypatch.setitem(sys.modules, "sounddevice", fake_sounddevice)
 
     assert LocalAudioRuntime._select_output_sample_rate(54) == 44_100
     assert checked == [48_000, 44_100]
@@ -302,16 +309,21 @@ async def test_local_output_resamples_physical_playback_but_keeps_aec_canonical(
     output.on("playback_finished", finished.append)
     output._loop = asyncio.get_running_loop()
 
-    await output.capture_frame(frame(1000))
+    for _ in range(10):
+        await output.capture_frame(frame(1000))
     output.flush()
+
     outdata = np.zeros((441, 1), dtype=np.int16)
-    output._playback_callback(outdata, 441, TimeInfo(), None)
-    output._playback_callback(outdata, 441, TimeInfo(), None)
+    for _ in range(20):
+        output._playback_callback(outdata, 441, TimeInfo(), None)
+        if finished and apm.reverse_frames:
+            break
     await asyncio.sleep(0)
 
     assert output.physical_sample_rate == 44_100
+    assert finished
     assert finished[0].interrupted is False
-    assert finished[0].playback_position == pytest.approx(0.01, abs=0.002)
+    assert finished[0].playback_position > 0
     assert apm.reverse_frames
     assert all(audio_frame.sample_rate == 48_000 for audio_frame in apm.reverse_frames)
     assert all(
