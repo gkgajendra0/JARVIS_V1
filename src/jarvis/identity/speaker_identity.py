@@ -11,8 +11,7 @@ from typing import Protocol
 
 import numpy as np
 
-from jarvis.authority import EvidenceModality, EvidenceVerdict, IdentityEvidence
-
+from ..authority import EvidenceModality, EvidenceVerdict, IdentityEvidence
 
 CAMPP_MODEL_FILENAME = "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
 CAMPP_MODEL_SHA256 = "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2"
