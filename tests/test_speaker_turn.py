@@ -41,6 +41,37 @@ def test_turn_capture_keeps_bounded_preroll_and_user_speech() -> None:
     assert [int(chunk[0]) for chunk in chunks] == [2, 3, 4, 5, 6]
 
 
+def test_turn_capture_timestamps_include_retained_preroll() -> None:
+    capture = InMemorySpeakerTurnCapture(
+        pre_roll_seconds=0.02,
+        max_turn_seconds=1.0,
+    )
+    for index, value in enumerate((1, 2, 3)):
+        capture.push_frame(
+            _frame(value),
+            sample_rate=1_000,
+            num_channels=1,
+            samples_per_channel=10,
+            observed_at_monotonic=10.0 + index * 0.01,
+        )
+
+    capture.start_turn()
+    capture.push_frame(
+        _frame(4),
+        sample_rate=1_000,
+        num_channels=1,
+        samples_per_channel=10,
+        observed_at_monotonic=10.03,
+    )
+
+    turn = capture.finish_turn()
+
+    assert turn is not None
+    assert turn.start_monotonic == pytest.approx(10.01)
+    assert turn.end_monotonic == pytest.approx(10.04)
+    assert turn.samples.size == 30
+
+
 def test_turn_capture_caps_audio_without_persisting_after_finish() -> None:
     capture = InMemorySpeakerTurnCapture(
         pre_roll_seconds=0.0,
