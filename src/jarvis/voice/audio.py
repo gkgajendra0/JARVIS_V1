@@ -92,7 +92,9 @@ class LocalAudioOutput(io.AudioOutput):
     ) -> None:
         if sample_rate <= 0:
             raise ValueError("canonical output sample rate must be positive")
-        physical_rate = sample_rate if output_sample_rate is None else output_sample_rate
+        physical_rate = (
+            sample_rate if output_sample_rate is None else output_sample_rate
+        )
         if physical_rate <= 0:
             raise ValueError("physical output sample rate must be positive")
         super().__init__(
@@ -104,9 +106,7 @@ class LocalAudioOutput(io.AudioOutput):
         self._apm = apm
         self._delay_estimator = delay_estimator
         self._canonical_rate = int(sample_rate)
-        self._canonical_frame_samples = (
-            self._canonical_rate * FRAME_SIZE_MS // 1000
-        )
+        self._canonical_frame_samples = self._canonical_rate * FRAME_SIZE_MS // 1000
         self._target_rate = int(physical_rate)
         self._physical_frame_samples = max(
             1,
