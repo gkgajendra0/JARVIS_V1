@@ -34,13 +34,17 @@ def _pair(
 ) -> tuple[CapturedFrame, VisionSnapshot]:
     track = _track(track_id, observed_at)
     head = (
-        HeadObservation(
-            confidence=0.99,
-            bounds=BoundingBox(0.35, 0.15, 0.65, 0.45),
-            frame_id=frame_id,
-            observed_at=observed_at,
-        ),
-    ) if include_head else ()
+        (
+            HeadObservation(
+                confidence=0.99,
+                bounds=BoundingBox(0.35, 0.15, 0.65, 0.45),
+                frame_id=frame_id,
+                observed_at=observed_at,
+            ),
+        )
+        if include_head
+        else ()
+    )
     frame = CapturedFrame(
         frame_id=frame_id,
         captured_at=observed_at,
@@ -89,11 +93,14 @@ def test_visual_buffer_never_stitches_different_tracks() -> None:
         frame, snapshot = _pair(index, 20.0 + index * 0.04, track_id=8)
         buffer.observe(frame, snapshot)
 
-    assert buffer.build_window(
-        visual_track_id=7,
-        start_monotonic=20.0,
-        end_monotonic=21.16,
-    ) is None
+    assert (
+        buffer.build_window(
+            visual_track_id=7,
+            start_monotonic=20.0,
+            end_monotonic=21.16,
+        )
+        is None
+    )
 
 
 def test_visual_buffer_rejects_large_temporal_gap_and_missing_head() -> None:
@@ -106,11 +113,14 @@ def test_visual_buffer_rejects_large_temporal_gap_and_missing_head() -> None:
     frame, snapshot = _pair(50, 30.92, include_head=False)
     buffer.observe(frame, snapshot)
 
-    assert buffer.build_window(
-        visual_track_id=7,
-        start_monotonic=30.0,
-        end_monotonic=30.92,
-    ) is None
+    assert (
+        buffer.build_window(
+            visual_track_id=7,
+            start_monotonic=30.0,
+            end_monotonic=30.92,
+        )
+        is None
+    )
 
 
 def test_active_speaker_score_cannot_confirm_actor_before_calibration() -> None:
