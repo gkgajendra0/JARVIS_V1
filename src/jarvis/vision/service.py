@@ -31,15 +31,21 @@ class VisionService:
         observer: VisionObserver | None = None,
         evidence_observer: VisionObserver | None = None,
         frame_pair_tap: FramePairTap | None = None,
+        frame_pair_tap_max_snapshot_age_seconds: float = 0.15,
         process_timeout_seconds: float = 0.20,
     ) -> None:
         if process_timeout_seconds <= 0:
             raise ValueError("process_timeout_seconds must be positive")
+        if frame_pair_tap_max_snapshot_age_seconds <= 0:
+            raise ValueError("frame-pair tap snapshot age must be positive")
         self.runtime = runtime
         self.diagnostics = diagnostics or VisionDiagnostics()
         self._observer = observer
         self._evidence_observer = evidence_observer
         self._frame_pair_tap = frame_pair_tap
+        self._frame_pair_tap_max_snapshot_age_seconds = (
+            frame_pair_tap_max_snapshot_age_seconds
+        )
         self._process_timeout_seconds = process_timeout_seconds
         self._runtime_lock = RLock()
         self._snapshot_lock = RLock()
@@ -48,6 +54,7 @@ class VisionService:
         self._thread: Thread | None = None
         self._observer_thread: Thread | None = None
         self._evidence_thread: Thread | None = None
+        self._frame_pair_thread: Thread | None = None
         self._latest_snapshot: VisionSnapshot | None = None
         self._evidence_queue: queue.Queue[tuple[CapturedFrame, VisionSnapshot]] = (
             queue.Queue(maxsize=1)
@@ -75,6 +82,13 @@ class VisionService:
                 daemon=True,
             )
             self._thread.start()
+            if self._frame_pair_tap is not None:
+                self._frame_pair_thread = Thread(
+                    target=self._frame_pair_loop,
+                    name="jarvis-vision-frame-tap",
+                    daemon=True,
+                )
+                self._frame_pair_thread.start()
             if self._observer is not None:
                 self._observer_thread = Thread(
                     target=self._observer_loop,
@@ -95,6 +109,7 @@ class VisionService:
             raise ValueError("join_timeout_seconds must be positive")
         with self._lifecycle_lock:
             thread = self._thread
+            frame_pair_thread = self._frame_pair_thread
             observer_thread = self._observer_thread
             evidence_thread = self._evidence_thread
             if thread is None:
@@ -105,6 +120,12 @@ class VisionService:
             raise RuntimeError(
                 "vision service did not stop within the shutdown timeout"
             )
+        if frame_pair_thread is not None:
+            frame_pair_thread.join(timeout=join_timeout_seconds)
+            if frame_pair_thread.is_alive():
+                raise RuntimeError(
+                    "vision frame-pair tap did not stop within the shutdown timeout"
+                )
         if observer_thread is not None:
             observer_thread.join(timeout=join_timeout_seconds)
             if observer_thread.is_alive():
@@ -119,6 +140,7 @@ class VisionService:
                 )
         with self._lifecycle_lock:
             self._thread = None
+            self._frame_pair_thread = None
             self._observer_thread = None
             self._evidence_thread = None
             self._clear_evidence_queue()
@@ -198,13 +220,6 @@ class VisionService:
                     exact_pair = (
                         frame is not None and frame.frame_id == snapshot.frame_id
                     )
-                    if exact_pair and self._frame_pair_tap is not None:
-                        try:
-                            self._frame_pair_tap(frame, snapshot)
-                        except Exception:
-                            LOGGER.exception(
-                                "Integrated vision frame-pair tap failed; evidence dropped"
-                            )
                     if exact_pair and self._evidence_observer is not None:
                         self._publish_evidence_pair(frame, snapshot)
         except Exception as exc:
@@ -242,6 +257,45 @@ class VisionService:
                 self._evidence_queue.get_nowait()
             except queue.Empty:
                 return
+
+    def _frame_pair_loop(self) -> None:
+        assert self._frame_pair_tap is not None
+        last_frame_id: int | None = None
+        try:
+            while not self._stop_requested.is_set():
+                frame = self.runtime.latest_camera_frame(
+                    after_frame_id=last_frame_id,
+                    timeout_seconds=0.05,
+                )
+                if frame is None:
+                    continue
+                last_frame_id = frame.frame_id
+                snapshot = self._fresh_snapshot_for_frame(frame)
+                if snapshot is None:
+                    continue
+                try:
+                    self._frame_pair_tap(frame, snapshot)
+                except Exception:
+                    LOGGER.exception(
+                        "Integrated vision frame-pair tap failed; evidence dropped"
+                    )
+        except Exception as exc:
+            if not self._stop_requested.is_set():
+                self.diagnostics.record_error(exc)
+                LOGGER.exception("Integrated vision frame-pair tap failed closed")
+
+    def _fresh_snapshot_for_frame(
+        self,
+        frame: CapturedFrame,
+    ) -> VisionSnapshot | None:
+        with self._snapshot_lock:
+            snapshot = self._latest_snapshot
+        if snapshot is None:
+            return None
+        age = frame.captured_at - snapshot.captured_at
+        if age < 0 or age > self._frame_pair_tap_max_snapshot_age_seconds:
+            return None
+        return snapshot
 
     def _observer_loop(self) -> None:
         assert self._observer is not None
