@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — 3B.8 RUNTIME OWNER + LIVENESS BINDING HUMAN-ACCEPTED — 3B.9 ATTENTION DEFERRED UNTIL FIXED WEBCAM — 3B.10 SPEAKER RESEARCH + REAL-MACHINE BAKE-OFF COMPLETE — CAM++ PASSIVE SHADOW IMPLEMENTATION ACTIVE**
+**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — 3B.8 RUNTIME OWNER + LIVENESS BINDING HUMAN-ACCEPTED — 3B.9 ATTENTION DEFERRED UNTIL FIXED WEBCAM — 3B.10 SPEAKER RESEARCH + REAL-MACHINE BAKE-OFF COMPLETE — 3B.10A PASSIVE TURN/OWNER-CONTEXT BRIDGE IMPLEMENTED, REAL-MACHINE ACCEPTANCE PENDING — 3B.11 ACTIVE-SPEAKER CORROBORATION NEXT**
 
 Step 0, Step 1, Step 2, Step 2.5, and Step 3A are complete. Phase 3A was real-machine accepted, reconciled, and merged through protected `main`.
 
@@ -210,11 +210,9 @@ OWNER_ATTENTIVE
 
 Until attention is implemented, JARVIS must not invent `OWNER_ATTENTIVE`. A policy that genuinely requires it must fail closed or escalate to stronger explicit verification.
 
-## 3B.10 — Speaker identity / active-speaker corroboration — ACTIVE
+## 3B.10 — Speaker identity model selection — RESEARCH + BAKE-OFF COMPLETE
 
-Research is complete and the first real-machine speaker-model bake-off is complete.
-
-Mature runtime/model candidates were evaluated rather than rebuilding a speaker frontend from scratch. The accepted deployment framework for the current shadow slice is `sherpa-onnx==1.13.6`.
+Mature speaker technology was evaluated rather than rebuilding a speaker frontend from scratch. The current deployment runtime is `sherpa-onnx==1.13.6`.
 
 Real JARVIS bake-off candidates:
 
@@ -224,7 +222,7 @@ Real JARVIS bake-off candidates:
 
 Current disposition:
 
-- **CAM++ — provisional shadow provider**;
+- **CAM++ — provisional shadow speaker-embedding provider**;
 - **ERes2NetV2 — retained fallback challenger**;
 - **TitaNet-Large — removed from the first deployment path**.
 
@@ -243,45 +241,109 @@ Observed CAM++ healthy OWNER behavior:
 
 The bake-off also proved that near-silent/too-short audio can still produce embeddings. Therefore bad quality must become `INSUFFICIENT`, never `UNKNOWN_SPEAKER`.
 
-The implementation now contains a bounded passive shadow core:
+Speaker-model core now exists behind a JARVIS-owned boundary with:
 
-```text
-normal JARVIS speech region
-        ↓
-quality gate
-        ↓
-CAM++ via sherpa-onnx exact frontend
-        ↓
-session-bound trusted OWNER prototype bank
-        ↓
-max-prototype score observation
-        ↓
-typed SPEAKER_MATCH evidence
-        ↓
-INSUFFICIENT while shadow calibration is active
-```
-
-Current shadow invariants:
-
-- no deployment speaker similarity threshold exists yet;
-- speaker evidence cannot emit authority-bearing `MATCH` or `NO_MATCH`;
-- speaker evidence never creates T2/T3 or action permission by itself;
-- the speaker model may never self-enroll from its own similarity score;
-- session shadow prototypes may only be admitted from a separately trusted OWNER context;
-- current shadow prototypes are memory-only and cleared with the session;
-- persistent voice-template enrollment/adaptation remains gated on a strongly verified OWNER context and explicit profile versioning;
-- raw audio retention remains off;
-- provider/model boundaries remain replaceable;
-- 1-second and sub-second turns are not standalone speaker identity evidence by default;
-- the current quality gate rejects too-short, near-silent, or heavily clipped segments before embedding/scoring.
+- exact CAM++ model size/SHA verification;
+- exact sherpa frontend instead of hand-written MFCC/fbank code;
+- conservative duration/RMS/clipping quality gate;
+- bounded multi-prototype matching rather than one averaged centroid;
+- memory-only shadow prototype storage;
+- all speaker evidence forced to `INSUFFICIENT` while calibration is incomplete;
+- no deployment similarity threshold;
+- no T2/T3 or action authority effect.
 
 Acceptance evidence and model decision:
 `docs/research/STEP_3B10_SPEAKER_BAKEOFF_RESULTS.md`.
 
+## 3B.10A — Passive normal-turn + OWNER-context bridge — IMPLEMENTED, REAL-MACHINE ACCEPTANCE PENDING
+
+The normal voice runtime now contains the safe plumbing needed for passive speaker work without a second microphone or camera.
+
+Implemented boundary:
+
+```text
+Pocket-3 canonical frame + VisionSnapshot pair
+        ↓
+accepted Step-3B.8 SFace + MiniFAS temporal logic
+        ↓
+thread-safe short-lived OWNER context
+
+canonical LiveKit session PCM
+        +
+LiveKit user speaking/listening lifecycle
+        ↓
+bounded memory-only user-turn capture
+        ↓
+speaker quality gate
+        ↓
+shadow diagnostic log
+```
+
+3B.10A properties:
+
+- vision identity evaluates an exact camera frame paired with the exact `VisionSnapshot`; stale snapshot/frame coordinate mixing is not allowed;
+- the existing VisionService owns the camera and publishes exact-frame pairs to a bounded evidence worker; no second camera is opened;
+- the existing `LocalAudioRuntime` remains the only physical microphone owner;
+- only audio frames successfully accepted by the LiveKit session queue are observed by shadow capture;
+- a bounded `0.20 s` rolling pre-roll protects the beginning of a user turn;
+- turn audio remains memory-only and is cleared after inspection/session end;
+- embedding work is not performed in the realtime audio callback;
+- the feature is opt-in through `JARVIS_SPEAKER_SHADOW_ENABLED` and requires integrated vision;
+- update-approval Yes/No sessions are intentionally excluded from passive voice learning;
+- normal-turn diagnostics report quality and whether a fresh `LIVE_OWNER_CANDIDATE` context existed;
+- `active_speaker_confirmed=False` and `prototype_admission=False` are deliberately enforced in this slice;
+- no new speaker profile, voiceprint, threshold, or authority evidence is promoted by 3B.10A.
+
+### Safety correction discovered during integration
+
+A live OWNER face being present does **not** prove that the current room speech came from that face.
+
+Unsafe rule rejected:
+
+```text
+LIVE_OWNER_CANDIDATE visible
+        +
+any microphone speech
+        ↓
+OWNER voice prototype
+```
+
+That rule could poison the OWNER voice bank with TV, phone playback, a nearby/off-camera person, or overlapping speech while the OWNER is visible.
+
+Therefore fresh face+liveness context is **necessary but not sufficient** for passive speaker prototype admission.
+
+## 3B.11 — Active-speaker / actor corroboration — NEXT
+
+Research has been refreshed before implementation. The current primary first benchmark candidate is **LR-ASD (IJCV 2025)** because it provides a lightweight audio-visual active-speaker model suitable for continuous local use. **C3ASD (ECCV 2026)** is the first robustness challenger. LASER and TalkNet remain second-wave/reference options.
+
+Research record:
+`docs/research/STEP_3B11_ACTIVE_SPEAKER_CORROBORATION_RESEARCH.md`.
+
+Required target boundary:
+
+```text
+fresh LIVE_OWNER_CANDIDATE
+        +
+exact visual track/head sequence
+        +
+canonical user-turn PCM
+        ↓
+active-speaker provider
+        ↓
+ACTIVE_OWNER_SPEAKER / OTHER_OR_OFFCAMERA /
+AMBIGUOUS / INSUFFICIENT
+        ↓
+ACTIVE_OWNER_SPEAKER only
+        ↓
+CAM++ session-shadow prototype admission
+```
+
+No upstream active-speaker threshold is accepted from leaderboard results. The provider must first pass the real Pocket-3 + canonical JARVIS audio route with owner speech, off-camera/TV speech, playback, multiple visible people, overlap, and temporary head/face loss.
+
 ## Non-negotiable Step-3 invariants
 
 - Identity evidence is not execution permission.
-- Face recognition, speaker recognition, liveness, attention, presence, Windows session state, wake word, or model confidence never directly authorize a consequential action.
+- Face recognition, speaker recognition, liveness, active-speaker detection, attention, presence, Windows session state, wake word, or model confidence never directly authorize a consequential action.
 - Weak signals never become strong trust by adding generic confidence scores.
 - Windows Hello/FIDO2 remains the strong-verification path for consequential authority.
 - Raw audio/video, face crops, embeddings, secrets, or sensitive payloads are not retained merely because they are available.
@@ -290,49 +352,13 @@ Acceptance evidence and model decision:
 - `SPOOF` fails closed.
 - `UNCERTAIN` may request stronger evidence but may not silently upgrade trust.
 
-## Next bounded slice — Automatic speaker shadow wiring
+## Work after active-speaker acceptance
 
-Wire the accepted speaker-shadow core into **normal JARVIS conversation turns** without opening a second microphone stream.
+After active-speaker corroboration is real-machine accepted:
 
-Target boundary:
-
-```text
-existing canonical processed PCM
-        +
-LiveKit user speaking/listening turn lifecycle
-        ↓
-bounded in-memory speech-region capture
-        ↓
-speaker quality gate
-        ↓
-CAM++ shadow provider
-        +
-fresh separately-derived OWNER + liveness context
-        ↓
-session-only prototype admission / score observation
-        ↓
-short-lived SPEAKER_MATCH evidence
-        ↓
-authority verdict remains INSUFFICIENT
-```
-
-Requirements:
-
-1. tap the existing `LocalAudioRuntime`; never open a second microphone device;
-2. segment using the already available conversation/user-state lifecycle rather than creating an unrelated VAD pipeline unless required;
-3. never admit a prototype merely because speaker similarity is high;
-4. bind prototype admission to fresh owner/liveness context from the accepted Step 3B.8 path;
-5. discard session prototypes on session end, Windows-session invalidation, audio discontinuity, or trusted-owner-context loss as appropriate;
-6. mark JARVIS playback/overlap ambiguity as insufficient rather than clean OWNER evidence;
-7. keep embedding work off the realtime audio callback path;
-8. collect score distributions passively during ordinary use instead of requiring repeated scripted benchmark ceremonies;
-9. keep T2 disabled throughout shadow integration and acceptance.
-
-## Work after speaker shadow integration
-
-After passive speaker shadow is wired and real-use observations are available:
-
-- decide whether CAM++ separation is sufficient or ERes2NetV2 materially resolves real ambiguity;
+- permit **session-only** CAM++ prototype admission only when fresh OWNER+liveness and active-speaker evidence agree on the same actor/turn;
+- collect speaker similarity distributions passively during ordinary use instead of repeated scripted recording ceremonies;
+- decide whether CAM++ separation is sufficient or ERes2NetV2 materially resolves remaining real ambiguity;
 - perform only the minimum targeted direct-non-owner / OWNER-replay / overlap acceptance checks still required before threshold promotion;
 - define a persistent encrypted voice-template format only behind strongly verified OWNER enrollment/update semantics;
 - resolve the authoritative OWNER-vs-UNKNOWN face threshold when a consenting live non-owner calibration subject is available, or explicitly redesign the T2 predicate so provisional face evidence cannot be mistaken for authoritative identity;
@@ -349,4 +375,4 @@ After passive speaker shadow is wired and real-use observations are available:
 
 ## Immediate Next Action
 
-Integrate the new **CAM++ passive speaker shadow** with normal LiveKit user-turn audio on the canonical processed PCM route, gated by fresh separate OWNER+liveness context, while keeping all speaker evidence non-authoritative. Attention remains deferred until suitable fixed camera hardware exists.
+Real-machine accept **3B.10A** as a passive bridge only, then benchmark **LR-ASD active-speaker corroboration** on the exact Pocket-3 + canonical JARVIS audio path. Do not enable speaker prototype admission until active-speaker attribution is accepted. Attention remains deferred until suitable fixed camera hardware exists.
