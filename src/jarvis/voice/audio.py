@@ -43,7 +43,13 @@ class SessionAudioInput(io.AudioInput):
         )
         self._closed = False
 
-    def push_frame(self, frame: rtc.AudioFrame) -> bool:
+    def push_frame(
+        self,
+        frame: rtc.AudioFrame,
+        *,
+        observed_at_monotonic: float | None = None,
+    ) -> bool:
+        del observed_at_monotonic
         if self._closed or self._queue.full():
             return False
         self._queue.put_nowait(frame)
@@ -62,6 +68,12 @@ class SessionAudioInput(io.AudioInput):
         if self._queue.full():
             self._queue.get_nowait()
         self._queue.put_nowait(_INPUT_CLOSED)
+
+
+@dataclass(frozen=True, slots=True)
+class _TimedAudioFrame:
+    frame: rtc.AudioFrame
+    observed_at_monotonic: float
 
 
 @dataclass(slots=True)
@@ -362,7 +374,7 @@ class LocalAudioRuntime:
         self._output_device_name = output_device_name
         self._pre_roll_seconds = pre_roll_seconds
         self._ring_buffer_seconds = ring_buffer_seconds
-        self._ring: deque[rtc.AudioFrame] = deque()
+        self._ring: deque[_TimedAudioFrame] = deque()
         self._ring_samples = 0
         self._active_input: SessionAudioInput | None = None
         self._overflow_handler: Callable[[], None] | None = None
@@ -688,31 +700,66 @@ class LocalAudioRuntime:
         assert self._input_stream is not None
         async for event in self._input_stream:
             frame = event.frame
+            observed_at_monotonic = time.monotonic()
             copied = rtc.AudioFrame(
                 data=bytes(frame.data),
                 sample_rate=frame.sample_rate,
                 num_channels=frame.num_channels,
                 samples_per_channel=frame.samples_per_channel,
             )
-            self._append_ring(copied)
+            self._append_ring(
+                copied,
+                observed_at_monotonic=observed_at_monotonic,
+            )
             if self._active_input is not None:
                 if (
-                    not self._active_input.push_frame(copied)
+                    not self._active_input.push_frame(
+                        copied,
+                        observed_at_monotonic=observed_at_monotonic,
+                    )
                     and self._overflow_handler is not None
                 ):
                     self._overflow_handler()
             else:
                 self.detector.feed(copied)
 
-    def _append_ring(self, frame: rtc.AudioFrame) -> None:
-        self._ring.append(frame)
+    def _append_ring(
+        self,
+        frame: rtc.AudioFrame,
+        *,
+        observed_at_monotonic: float | None = None,
+    ) -> None:
+        observed_at = (
+            time.monotonic()
+            if observed_at_monotonic is None
+            else observed_at_monotonic
+        )
+        if observed_at < 0:
+            raise ValueError(
+                "audio observation timestamp must be non-negative"
+            )
+
+        self._ring.append(
+            _TimedAudioFrame(
+                frame=frame,
+                observed_at_monotonic=observed_at,
+            )
+        )
+
         self._ring_samples += frame.samples_per_channel
-        limit = int(self._ring_buffer_seconds * DEVICE_SAMPLE_RATE)
+        limit = int(
+            self._ring_buffer_seconds * DEVICE_SAMPLE_RATE
+        )
+
         while (
             self._ring
-            and self._ring_samples - self._ring[0].samples_per_channel >= limit
+            and self._ring_samples
+            - self._ring[0].frame.samples_per_channel
+            >= limit
         ):
-            self._ring_samples -= self._ring.popleft().samples_per_channel
+            self._ring_samples -= (
+                self._ring.popleft().frame.samples_per_channel
+            )
 
     def activate_session(self, session_input: SessionAudioInput) -> None:
         if self._active_input is not None:
@@ -720,15 +767,24 @@ class LocalAudioRuntime:
         self.detector.disable(clear_buffer=False)
         self._active_input = session_input
         pre_roll_samples = int(self._pre_roll_seconds * DEVICE_SAMPLE_RATE)
-        selected: deque[rtc.AudioFrame] = deque()
+        selected: deque[_TimedAudioFrame] = deque()
         selected_samples = 0
-        for frame in reversed(self._ring):
-            selected.appendleft(frame)
-            selected_samples += frame.samples_per_channel
+
+        for timed_frame in reversed(self._ring):
+            selected.appendleft(timed_frame)
+            selected_samples += (
+                timed_frame.frame.samples_per_channel
+            )
             if selected_samples >= pre_roll_samples:
                 break
-        for frame in selected:
-            if not session_input.push_frame(frame):
+
+        for timed_frame in selected:
+            if not session_input.push_frame(
+                timed_frame.frame,
+                observed_at_monotonic=(
+                    timed_frame.observed_at_monotonic
+                ),
+            ):
                 self._active_input = None
                 raise RuntimeError(
                     "session audio queue overflowed while adding pre-roll"

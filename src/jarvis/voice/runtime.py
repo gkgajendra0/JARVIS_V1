@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 import unicodedata
 import uuid
 from collections.abc import Callable
@@ -629,15 +628,19 @@ class VoiceRuntimeController:
         )
         shadow_tasks: set[asyncio.Task[None]] = set()
 
-        def on_audio_frame(frame) -> None:
+        def on_audio_frame(
+            frame,
+            observed_at_monotonic: float,
+        ) -> None:
             if turn_capture is None:
                 return
+
             turn_capture.push_frame(
                 frame.data,
                 sample_rate=frame.sample_rate,
                 num_channels=frame.num_channels,
                 samples_per_channel=frame.samples_per_channel,
-                observed_at_monotonic=time.monotonic(),
+                observed_at_monotonic=observed_at_monotonic,
             )
 
         session_input = (

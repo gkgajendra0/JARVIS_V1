@@ -14,6 +14,7 @@ from jarvis.voice.audio import (
     LocalAudioRuntime,
     SessionAudioInput,
 )
+from jarvis.voice.observed_audio import ObservedSessionAudioInput
 
 
 def frame(value: int, samples: int = 480) -> rtc.AudioFrame:
@@ -86,6 +87,54 @@ async def test_activation_sends_pre_roll_in_order_without_reopening_device() -> 
     assert np.frombuffer(first.data, dtype=np.int16)[0] == 2
     assert np.frombuffer(second.data, dtype=np.int16)[0] == 3
     assert runtime.detector.enabled is False
+
+
+def test_activation_preserves_pre_roll_observation_timestamps() -> None:
+    runtime = LocalAudioRuntime(
+        FakeDetector(),  # type: ignore[arg-type]
+        input_device_name=None,
+        output_device_name=None,
+        pre_roll_seconds=0.02,
+        ring_buffer_seconds=0.05,
+    )
+
+    runtime._append_ring(
+        frame(1),
+        observed_at_monotonic=10.01,
+    )
+    runtime._append_ring(
+        frame(2),
+        observed_at_monotonic=10.02,
+    )
+    runtime._append_ring(
+        frame(3),
+        observed_at_monotonic=10.03,
+    )
+
+    observed: list[float] = []
+
+    session_input = ObservedSessionAudioInput(
+        lambda _frame, observed_at: observed.append(observed_at)
+    )
+
+    runtime.activate_session(session_input)
+
+    assert observed == [10.02, 10.03]
+
+
+def test_observed_session_audio_input_forwards_existing_timestamp() -> None:
+    observed: list[float] = []
+
+    session_input = ObservedSessionAudioInput(
+        lambda _frame, observed_at: observed.append(observed_at)
+    )
+
+    assert session_input.push_frame(
+        frame(1),
+        observed_at_monotonic=42.5,
+    )
+
+    assert observed == [42.5]
 
 
 def test_input_capture_has_bounded_provider_startup_cushion() -> None:
