@@ -431,9 +431,7 @@ class LocalAudioRuntime:
             host_api_matches = [
                 device
                 for device in devices
-                if str(
-                    device.get("hostapi_name", device.get("hostapi", ""))
-                ).casefold()
+                if str(device.get("hostapi_name", device.get("hostapi", ""))).casefold()
                 == requested_host_api
             ]
             exact_name_matches = [
