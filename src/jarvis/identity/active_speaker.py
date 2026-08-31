@@ -79,7 +79,7 @@ class ActiveSpeakerVisualWindow:
                 "active-speaker window must contain 112x112 grayscale frames"
             )
         if self.frames.dtype != np.uint8:
-            raise ValueError("active-speaker visual window must use uint8 frames")
+            raise ValueError("LR-ASD visual window must use uint8 frames")
         if not math.isfinite(self.source_fps) or self.source_fps <= 0:
             raise ValueError("active-speaker source fps must be positive and finite")
 
