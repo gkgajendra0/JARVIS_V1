@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — 3B.8 RUNTIME OWNER + LIVENESS BINDING HUMAN-ACCEPTED — 3B.9 ATTENTION DEFERRED UNTIL FIXED WEBCAM — SPEAKER IDENTITY / ACTIVE-SPEAKER CORROBORATION NEXT**
+**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — 3B.8 RUNTIME OWNER + LIVENESS BINDING HUMAN-ACCEPTED — 3B.9 ATTENTION DEFERRED UNTIL FIXED WEBCAM — 3B.10 SPEAKER RESEARCH + REAL-MACHINE BAKE-OFF COMPLETE — CAM++ PASSIVE SHADOW IMPLEMENTATION ACTIVE**
 
 Step 0, Step 1, Step 2, Step 2.5, and Step 3A are complete. Phase 3A was real-machine accepted, reconciled, and merged through protected `main`.
 
@@ -210,6 +210,74 @@ OWNER_ATTENTIVE
 
 Until attention is implemented, JARVIS must not invent `OWNER_ATTENTIVE`. A policy that genuinely requires it must fail closed or escalate to stronger explicit verification.
 
+## 3B.10 — Speaker identity / active-speaker corroboration — ACTIVE
+
+Research is complete and the first real-machine speaker-model bake-off is complete.
+
+Mature runtime/model candidates were evaluated rather than rebuilding a speaker frontend from scratch. The accepted deployment framework for the current shadow slice is `sherpa-onnx==1.13.6`.
+
+Real JARVIS bake-off candidates:
+
+- 3D-Speaker CAM++ zh/en advanced;
+- 3D-Speaker ERes2NetV2;
+- NVIDIA TitaNet-Large.
+
+Current disposition:
+
+- **CAM++ — provisional shadow provider**;
+- **ERes2NetV2 — retained fallback challenger**;
+- **TitaNet-Large — removed from the first deployment path**.
+
+Real ~3-second embedding latency on the canonical JARVIS PCM route:
+
+- CAM++: ~`54 ms` median;
+- ERes2NetV2: ~`319 ms` median;
+- TitaNet-Large: ~`143 ms` median.
+
+Observed CAM++ healthy OWNER behavior:
+
+- Hinglish 3 s: `0.7354–0.7579`;
+- far-field 3 s: `0.6287–0.6435`;
+- 2 s speech: `0.7087–0.7611`;
+- TV speech 3 s: `0.1847–0.3943`.
+
+The bake-off also proved that near-silent/too-short audio can still produce embeddings. Therefore bad quality must become `INSUFFICIENT`, never `UNKNOWN_SPEAKER`.
+
+The implementation now contains a bounded passive shadow core:
+
+```text
+normal JARVIS speech region
+        ↓
+quality gate
+        ↓
+CAM++ via sherpa-onnx exact frontend
+        ↓
+session-bound trusted OWNER prototype bank
+        ↓
+max-prototype score observation
+        ↓
+typed SPEAKER_MATCH evidence
+        ↓
+INSUFFICIENT while shadow calibration is active
+```
+
+Current shadow invariants:
+
+- no deployment speaker similarity threshold exists yet;
+- speaker evidence cannot emit authority-bearing `MATCH` or `NO_MATCH`;
+- speaker evidence never creates T2/T3 or action permission by itself;
+- the speaker model may never self-enroll from its own similarity score;
+- session shadow prototypes may only be admitted from a separately trusted OWNER context;
+- current shadow prototypes are memory-only and cleared with the session;
+- persistent voice-template enrollment/adaptation remains gated on a strongly verified OWNER context and explicit profile versioning;
+- raw audio retention remains off;
+- provider/model boundaries remain replaceable;
+- 1-second and sub-second turns are not standalone speaker identity evidence by default;
+- the current quality gate rejects too-short, near-silent, or heavily clipped segments before embedding/scoring.
+
+Acceptance evidence and model decision:
+`docs/research/STEP_3B10_SPEAKER_BAKEOFF_RESULTS.md`.
+
 ## Non-negotiable Step-3 invariants
 
 - Identity evidence is not execution permission.
@@ -222,44 +290,51 @@ Until attention is implemented, JARVIS must not invent `OWNER_ATTENTIVE`. A poli
 - `SPOOF` fails closed.
 - `UNCERTAIN` may request stronger evidence but may not silently upgrade trust.
 
-## Next bounded slice — Speaker identity / active-speaker corroboration
+## Next bounded slice — Automatic speaker shadow wiring
 
-The next independent Step-3 slice is speaker identity and active-speaker ambiguity handling for voice-originated protected interaction.
-
-Research must be refreshed before implementation and should evaluate current mature local speaker-verification/diarization technology rather than rebuilding embeddings/classifiers from scratch.
+Wire the accepted speaker-shadow core into **normal JARVIS conversation turns** without opening a second microphone stream.
 
 Target boundary:
 
 ```text
-JARVIS microphone audio
-        ↓
-voice activity / speech segment
-        ↓
-replaceable speaker-evidence provider
-        ↓
-OWNER_SPEAKER_CANDIDATE / UNKNOWN / AMBIGUOUS
+existing canonical processed PCM
         +
-active-speaker / actor ambiguity checks
+LiveKit user speaking/listening turn lifecycle
         ↓
-typed short-lived speaker evidence
+bounded in-memory speech-region capture
+        ↓
+speaker quality gate
+        ↓
+CAM++ shadow provider
+        +
+fresh separately-derived OWNER + liveness context
+        ↓
+session-only prototype admission / score observation
+        ↓
+short-lived SPEAKER_MATCH evidence
+        ↓
+authority verdict remains INSUFFICIENT
 ```
 
 Requirements:
 
-1. speaker evidence never creates T2/T3 or action permission by itself;
-2. do not treat wake-word detection as speaker identity;
-3. do not treat transcription/LLM confidence as speaker identity;
-4. TV/speaker playback and JARVIS's own output must not silently become OWNER evidence;
-5. multi-person/ambiguous speech must fail closed for protected voice-originated interaction;
-6. provider/model boundaries must remain replaceable;
-7. raw audio retention is off by default; store only strongly justified encrypted enrollment material/derived templates;
-8. benchmark on the real Windows audio route before promoting any threshold;
-9. keep T2 disabled during research, implementation, and acceptance.
+1. tap the existing `LocalAudioRuntime`; never open a second microphone device;
+2. segment using the already available conversation/user-state lifecycle rather than creating an unrelated VAD pipeline unless required;
+3. never admit a prototype merely because speaker similarity is high;
+4. bind prototype admission to fresh owner/liveness context from the accepted Step 3B.8 path;
+5. discard session prototypes on session end, Windows-session invalidation, audio discontinuity, or trusted-owner-context loss as appropriate;
+6. mark JARVIS playback/overlap ambiguity as insufficient rather than clean OWNER evidence;
+7. keep embedding work off the realtime audio callback path;
+8. collect score distributions passively during ordinary use instead of requiring repeated scripted benchmark ceremonies;
+9. keep T2 disabled throughout shadow integration and acceptance.
 
-## Work after speaker identity
+## Work after speaker shadow integration
 
-After speaker identity/corroboration is researched, implemented, and accepted:
+After passive speaker shadow is wired and real-use observations are available:
 
+- decide whether CAM++ separation is sufficient or ERes2NetV2 materially resolves real ambiguity;
+- perform only the minimum targeted direct-non-owner / OWNER-replay / overlap acceptance checks still required before threshold promotion;
+- define a persistent encrypted voice-template format only behind strongly verified OWNER enrollment/update semantics;
 - resolve the authoritative OWNER-vs-UNKNOWN face threshold when a consenting live non-owner calibration subject is available, or explicitly redesign the T2 predicate so provisional face evidence cannot be mistaken for authoritative identity;
 - implement deterministic T2 `CORROBORATED_OWNER` composition from the final accepted evidence predicate;
 - broader negative/attack coverage and expiry/cross-session/cross-actor testing;
@@ -274,4 +349,4 @@ After speaker identity/corroboration is researched, implemented, and accepted:
 
 ## Immediate Next Action
 
-Refresh **speaker identity / active-speaker corroboration research**, select the best mature current technology, define the bounded architecture, obtain human approval, then implement and real-machine validate it. Attention remains deferred until suitable fixed camera hardware exists.
+Integrate the new **CAM++ passive speaker shadow** with normal LiveKit user-turn audio on the canonical processed PCM route, gated by fresh separate OWNER+liveness context, while keeping all speaker evidence non-authoritative. Attention remains deferred until suitable fixed camera hardware exists.
