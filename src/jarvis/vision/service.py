@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import queue
+from collections.abc import Callable
 from pathlib import Path
 from threading import Event, RLock, Thread
 
@@ -16,6 +17,7 @@ from jarvis.vision.runtime import VisionRuntime, VisionSnapshot
 LOGGER = logging.getLogger(__name__)
 
 _HEAD_MODEL_NAME = "blaze_face_full_range.tflite"
+FramePairTap = Callable[[CapturedFrame, VisionSnapshot], None]
 
 
 class VisionService:
@@ -28,6 +30,7 @@ class VisionService:
         diagnostics: VisionDiagnostics | None = None,
         observer: VisionObserver | None = None,
         evidence_observer: VisionObserver | None = None,
+        frame_pair_tap: FramePairTap | None = None,
         process_timeout_seconds: float = 0.20,
     ) -> None:
         if process_timeout_seconds <= 0:
@@ -36,6 +39,7 @@ class VisionService:
         self.diagnostics = diagnostics or VisionDiagnostics()
         self._observer = observer
         self._evidence_observer = evidence_observer
+        self._frame_pair_tap = frame_pair_tap
         self._process_timeout_seconds = process_timeout_seconds
         self._runtime_lock = RLock()
         self._snapshot_lock = RLock()
@@ -191,11 +195,17 @@ class VisionService:
                     with self._snapshot_lock:
                         self._latest_snapshot = snapshot
                     self.diagnostics.observe(snapshot)
-                    if (
-                        self._evidence_observer is not None
-                        and frame is not None
-                        and frame.frame_id == snapshot.frame_id
-                    ):
+                    exact_pair = (
+                        frame is not None and frame.frame_id == snapshot.frame_id
+                    )
+                    if exact_pair and self._frame_pair_tap is not None:
+                        try:
+                            self._frame_pair_tap(frame, snapshot)
+                        except Exception:
+                            LOGGER.exception(
+                                "Integrated vision frame-pair tap failed; evidence dropped"
+                            )
+                    if exact_pair and self._evidence_observer is not None:
                         self._publish_evidence_pair(frame, snapshot)
         except Exception as exc:
             self.diagnostics.record_error(exc)
@@ -300,6 +310,7 @@ def build_default_vision_service(
     *,
     head_model_path: str | Path | None = None,
     evidence_observer: VisionObserver | None = None,
+    frame_pair_tap: FramePairTap | None = None,
 ) -> VisionService:
     """Compose the benchmark-selected Step 2.5 hardware/runtime stack lazily."""
     from jarvis.vision.camera import OpenCVCameraSource
@@ -386,4 +397,5 @@ def build_default_vision_service(
         runtime,
         observer=observer,
         evidence_observer=evidence_observer,
+        frame_pair_tap=frame_pair_tap,
     )
