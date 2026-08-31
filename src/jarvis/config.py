@@ -69,6 +69,8 @@ class JarvisConfig:
     vision_enabled: bool = False
     vision_head_model_path: str | None = None
     speaker_shadow_enabled: bool = False
+    active_speaker_shadow_enabled: bool = False
+    active_speaker_model_path: str | None = None
 
     def __post_init__(self) -> None:
         normalized = str(self.log_level).strip().upper()
@@ -94,7 +96,11 @@ class JarvisConfig:
                 raise ValueError(f"{name} must not be empty")
             object.__setattr__(self, name, value)
 
-        for name in ("wake_model_path", "vision_head_model_path"):
+        for name in (
+            "wake_model_path",
+            "vision_head_model_path",
+            "active_speaker_model_path",
+        ):
             value = getattr(self, name)
             if value is not None:
                 normalized_value = str(value).strip()
@@ -171,5 +177,11 @@ class JarvisConfig:
             ),
             speaker_shadow_enabled=_environment_bool(
                 "JARVIS_SPEAKER_SHADOW_ENABLED", False
+            ),
+            active_speaker_shadow_enabled=_environment_bool(
+                "JARVIS_ACTIVE_SPEAKER_SHADOW_ENABLED", False
+            ),
+            active_speaker_model_path=_optional_environment_text(
+                "JARVIS_LR_ASD_MODEL_PATH"
             ),
         )
