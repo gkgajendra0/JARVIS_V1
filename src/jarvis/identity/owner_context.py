@@ -13,14 +13,16 @@ from jarvis.authority import (
     WindowsSessionUnavailable,
     WindowsWtsSessionProvider,
 )
-from jarvis.identity.calibration import _build_runtime
 from jarvis.identity.crypto import WindowsDpapiKeyProtector
 from jarvis.identity.live_face_benchmark import (
     _crop_head,
     _face_rows,
     _select_center_face,
 )
-from jarvis.identity.model_assets import ModelAssetCache, load_default_face_model_manifest
+from jarvis.identity.model_assets import (
+    ModelAssetCache,
+    load_default_face_model_manifest,
+)
 from jarvis.identity.owner_enrollment import default_identity_data_dir
 from jarvis.identity.owner_evidence import (
     OwnerIdentityObservation,
