@@ -14,7 +14,9 @@ from torch import nn
 
 
 class _AudioBlock(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, kernel_1: int, kernel_2: int):
+    def __init__(
+        self, in_channels: int, out_channels: int, kernel_1: int, kernel_2: int
+    ):
         super().__init__()
         p1 = (kernel_1 - 1) // 2
         p2 = (kernel_2 - 1) // 2
