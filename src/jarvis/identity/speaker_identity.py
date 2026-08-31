@@ -3,11 +3,11 @@ from __future__ import annotations
 import hashlib
 import math
 import time
+import typing
 import uuid
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Protocol
 
 import numpy as np
 
@@ -90,7 +90,7 @@ class SpeakerShadowAssessment:
         )
 
 
-class SpeakerEmbeddingProvider(Protocol):
+class SpeakerEmbeddingProvider(typing.Protocol):
     provider_id: str
     dimension: int
 
