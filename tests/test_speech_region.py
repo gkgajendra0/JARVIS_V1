@@ -7,9 +7,9 @@ import pytest
 
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
 from jarvis.identity.speech_region import (
-    _ProbabilityObservation,
     _candidate_from_end_event,
     _candidates_from_probability_observations,
+    _ProbabilityObservation,
 )
 
 
