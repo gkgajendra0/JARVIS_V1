@@ -160,7 +160,9 @@ def test_consolidation_merges_fragmented_natural_utterance_with_real_gaps() -> N
     np.testing.assert_array_equal(merged.samples, turn.samples[1_000:4_000])
 
 
-def test_consolidation_does_not_bind_old_unrelated_speech_to_current_utterance() -> None:
+def test_consolidation_does_not_bind_old_unrelated_speech_to_current_utterance() -> (
+    None
+):
     turn = SpeakerTurnAudio(
         samples=np.ones(8_000, dtype=np.int16),
         sample_rate=1_000,
