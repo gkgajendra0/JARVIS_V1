@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 import time
 from collections import deque
@@ -15,6 +16,8 @@ from livekit import rtc
 from livekit.agents.voice import io
 
 from jarvis.voice.wakeword import LiveKitWakeDetector
+
+LOGGER = logging.getLogger(__name__)
 
 DEVICE_SAMPLE_RATE = 48_000
 DEVICE_CHANNELS = 1
@@ -316,6 +319,83 @@ class LocalAudioRuntime:
         self.output: LocalAudioOutput | None = None
 
     @staticmethod
+    def _attach_host_api_names(
+        devices: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Add stable human-readable PortAudio host API names to device metadata."""
+        import sounddevice as sd
+
+        host_apis = list(sd.query_hostapis())
+        enriched: list[dict[str, Any]] = []
+        for device in devices:
+            item = dict(device)
+            host_api_name = "unknown"
+            try:
+                host_api_index = int(item.get("hostapi", -1))
+                if 0 <= host_api_index < len(host_apis):
+                    host_api_name = str(host_apis[host_api_index]["name"])
+            except (KeyError, TypeError, ValueError):
+                pass
+            item["hostapi_name"] = host_api_name
+            enriched.append(item)
+        return enriched
+
+    @staticmethod
+    def _parse_stable_device_selector(requested: str) -> dict[str, str] | None:
+        """Parse `name:<device>|hostapi:<api>` selectors.
+
+        Plain legacy names and `index:N` remain supported separately. Structured
+        selectors deliberately require both fields so an endpoint cannot silently
+        drift onto another PortAudio backend with the same friendly name.
+        """
+        if "|" not in requested and not requested.strip().casefold().startswith(
+            "name:"
+        ):
+            return None
+
+        fields: dict[str, str] = {}
+        for raw_part in requested.split("|"):
+            part = raw_part.strip()
+            if ":" not in part:
+                raise RuntimeError(
+                    "Configured audio device selector is invalid; expected "
+                    "name:<device>|hostapi:<host API>"
+                )
+            key, value = part.split(":", 1)
+            normalized_key = key.strip().casefold()
+            normalized_value = value.strip()
+            if normalized_key not in {"name", "hostapi"}:
+                raise RuntimeError(
+                    f"Configured audio device selector field is unsupported: {key.strip()}"
+                )
+            if normalized_key in fields:
+                raise RuntimeError(
+                    f"Configured audio device selector repeats field: {key.strip()}"
+                )
+            if not normalized_value:
+                raise RuntimeError(
+                    f"Configured audio device selector field is empty: {key.strip()}"
+                )
+            fields[normalized_key] = normalized_value
+
+        if set(fields) != {"name", "hostapi"}:
+            raise RuntimeError(
+                "Stable audio device selectors require both name:<device> and "
+                "hostapi:<host API>"
+            )
+        return fields
+
+    @staticmethod
+    def _device_choices(devices: list[dict[str, Any]]) -> str:
+        if not devices:
+            return "none"
+        return ", ".join(
+            f"index:{device['index']} {device['name']} "
+            f"(hostapi {device.get('hostapi_name', device.get('hostapi', 'unknown'))})"
+            for device in devices
+        )
+
+    @staticmethod
     def _resolve_device(
         devices: list[dict[str, Any]],
         requested: str | None,
@@ -324,7 +404,9 @@ class LocalAudioRuntime:
     ) -> int | None:
         if requested is None:
             return None
-        needle = requested.strip().casefold()
+
+        stripped = requested.strip()
+        needle = stripped.casefold()
         if needle.startswith("index:"):
             index_text = needle.removeprefix("index:").strip()
             try:
@@ -342,6 +424,42 @@ class LocalAudioRuntime:
                 )
             return requested_index
 
+        stable_selector = LocalAudioRuntime._parse_stable_device_selector(stripped)
+        if stable_selector is not None:
+            requested_name = stable_selector["name"].casefold()
+            requested_host_api = stable_selector["hostapi"].casefold()
+            host_api_matches = [
+                device
+                for device in devices
+                if str(
+                    device.get("hostapi_name", device.get("hostapi", ""))
+                ).casefold()
+                == requested_host_api
+            ]
+            exact_name_matches = [
+                device
+                for device in host_api_matches
+                if str(device["name"]).casefold() == requested_name
+            ]
+            matches = exact_name_matches or [
+                device
+                for device in host_api_matches
+                if requested_name in str(device["name"]).casefold()
+            ]
+            if not matches:
+                available = LocalAudioRuntime._device_choices(devices)
+                raise RuntimeError(
+                    f"Configured {kind} device not found for stable selector "
+                    f"{requested!r}. Available {kind} devices: {available}"
+                )
+            if len(matches) > 1:
+                choices = LocalAudioRuntime._device_choices(matches)
+                raise RuntimeError(
+                    f"Configured {kind} device selector is still ambiguous: "
+                    f"{requested!r}. Matches: {choices}"
+                )
+            return int(matches[0]["index"])
+
         exact = [
             device for device in devices if str(device["name"]).casefold() == needle
         ]
@@ -351,16 +469,41 @@ class LocalAudioRuntime:
         if not matches:
             raise RuntimeError(f"Configured {kind} device not found: {requested}")
         if len(matches) > 1:
-            choices = ", ".join(
-                f"index:{device['index']} {device['name']} "
-                f"(hostapi {device.get('hostapi', 'unknown')})"
-                for device in matches
-            )
+            choices = LocalAudioRuntime._device_choices(matches)
             raise RuntimeError(
-                f"Configured {kind} device is ambiguous; select an explicit "
-                f"index:<number>: {choices}"
+                f"Configured {kind} device is ambiguous; use a stable "
+                f"name:<device>|hostapi:<host API> selector: {choices}"
             )
         return int(matches[0]["index"])
+
+    @staticmethod
+    def _log_resolved_device(
+        devices: list[dict[str, Any]],
+        resolved_index: int | None,
+        *,
+        kind: str,
+    ) -> None:
+        if resolved_index is None:
+            LOGGER.info("JARVIS audio %s uses the system default device", kind)
+            return
+        device = next(
+            (
+                candidate
+                for candidate in devices
+                if int(candidate["index"]) == resolved_index
+            ),
+            None,
+        )
+        if device is None:
+            LOGGER.info("JARVIS audio %s resolved to index:%s", kind, resolved_index)
+            return
+        LOGGER.info(
+            "JARVIS audio %s resolved: %s | hostapi=%s | current_index=%s",
+            kind,
+            device["name"],
+            device.get("hostapi_name", device.get("hostapi", "unknown")),
+            resolved_index,
+        )
 
     def set_overflow_handler(self, callback: Callable[[], None]) -> None:
         self._overflow_handler = callback
@@ -385,16 +528,24 @@ class LocalAudioRuntime:
             num_channels=DEVICE_CHANNELS,
             blocksize=FRAME_SAMPLES,
         )
+        input_devices = self._attach_host_api_names(
+            self._media_devices.list_input_devices()
+        )
+        output_devices = self._attach_host_api_names(
+            self._media_devices.list_output_devices()
+        )
         input_device = self._resolve_device(
-            self._media_devices.list_input_devices(),
+            input_devices,
             self._input_device_name,
             kind="input",
         )
         output_device = self._resolve_device(
-            self._media_devices.list_output_devices(),
+            output_devices,
             self._output_device_name,
             kind="output",
         )
+        self._log_resolved_device(input_devices, input_device, kind="input")
+        self._log_resolved_device(output_devices, output_device, kind="output")
         self._input_capture = self._open_input_capture(input_device)
         self._input_track = rtc.LocalAudioTrack.create_audio_track(
             "jarvis-local-microphone",
