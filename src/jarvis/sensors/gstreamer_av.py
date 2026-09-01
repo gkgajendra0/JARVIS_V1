@@ -98,6 +98,33 @@ def build_pipeline_description(
         )
         parts.extend(
             [
+                # Keep the render/probe branch live even while JARVIS is idle. An
+                # empty live appsrc does not produce buffers until application audio
+                # arrives, which can leave downstream sinks waiting during startup.
+                # The zero-valued carrier gives the mixer/probe/sink a continuous
+                # clocked stream without changing the audible JARVIS signal.
+                "audiotestsrc",
+                "name=playback_silence",
+                "is-live=true",
+                "wave=silence",
+                "!",
+                "audio/x-raw,format=S16LE,layout=interleaved,rate=48000,channels=1",
+                "!",
+                "queue",
+                "!",
+                "audiomixer",
+                "name=playback_mix",
+                "!",
+                "webrtcechoprobe",
+                "name=echo_probe",
+                "!",
+                "audioconvert",
+                "!",
+                "audioresample",
+                "!",
+                "wasapi2sink",
+                f"device={playback_device}",
+                "low-latency=true",
                 "appsrc",
                 "name=playback_src",
                 "is-live=true",
@@ -112,16 +139,7 @@ def build_pipeline_description(
                 "max-size-bytes=0",
                 "max-size-buffers=0",
                 "!",
-                "webrtcechoprobe",
-                "name=echo_probe",
-                "!",
-                "audioconvert",
-                "!",
-                "audioresample",
-                "!",
-                "wasapi2sink",
-                f"device={playback_device}",
-                "low-latency=true",
+                "playback_mix.",
             ]
         )
 
