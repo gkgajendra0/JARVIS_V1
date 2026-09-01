@@ -2,29 +2,35 @@
 
 ## Status
 
-**IMPLEMENTED + HUMAN-ACCEPTED ARCHITECTURE THROUGH PHASE 3B.8. ATTENTION / INTENT-TO-ENGAGE IMPLEMENTATION IS DEFERRED UNTIL FIXED MONITOR-MOUNTED CAMERA HARDWARE. SPEAKER IDENTITY / ACTIVE-SPEAKER CORROBORATION IS NEXT. T2 REMAINS DISABLED.**
+**IMPLEMENTED/HUMAN-ACCEPTED THROUGH PHASE 3B.10A, WITH THE 48-kHz LIVEKIT MEDIADEVICES CONVERSATION-AUDIO REPLACEMENT IMPLEMENTED AFTER REAL-MACHINE ACCEPTANCE. INTEGRATED MEDIADEVICES + RAW GSTREAMER SENSOR COEXISTENCE IS THE NEXT ACCEPTANCE GATE. 3B.11 ACTIVE-SPEAKER CORROBORATION FOLLOWS. ATTENTION REMAINS DEFERRED. T2 REMAINS DISABLED.**
 
-This document records only implemented and human-accepted architecture. Proposed, deferred, or still-integration-stage behavior belongs in research/plan/decision documents until accepted.
+This document records accepted production architecture and the exact replacement boundaries currently being integrated. Detailed benchmark evidence belongs in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; significant choices are recorded in ADRs.
+
+---
 
 ## Accepted platform foundation
 
-JARVIS currently has accepted foundations for:
+JARVIS has accepted foundations for:
 
-- natural realtime conversation with JARVIS-owned canonical conversation state;
-- local wake detection and JARVIS-owned audio lifecycle;
-- Pocket 3 visual capture, person detection, persistent person tracking, head evidence, explicit target selection, and safe PTZ follow;
-- development-only supervised update tooling outside model authority;
-- deterministic Step-3 authority, policy, approval, audit, Windows-session, and strong-verification boundaries;
+- natural realtime conversation with JARVIS-owned conversation state;
+- local wake detection and JARVIS-owned voice lifecycle;
+- Pocket3 visual capture, person detection, persistent tracking, head evidence, explicit target selection and safe PTZ follow;
+- deterministic Step-3 authority, policy, approval, audit, Windows-session and strong-verification boundaries;
 - one persistent encrypted OWNER profile;
-- pinned and integrity-verified YuNet/SFace face runtime;
+- pinned/integrity-verified YuNet + SFace face runtime;
 - real OWNER multi-prototype SFace enrollment;
-- randomized active facial liveness fallback;
-- passive RGB presentation-attack detection using MiniFAS + JARVIS-owned temporal fusion for the current Pocket-3 prototype;
-- runtime temporal OWNER identity + liveness binding on the same Windows session and visual track, with T2 explicitly disabled.
+- passive MiniFAS temporal RGB liveness plus randomized active challenge fallback;
+- runtime OWNER identity + liveness binding on the same Windows session and visual track;
+- CAM++ speaker-embedding foundation and passive turn-capture/OWNER-context bridge;
+- LiveKit `rtc.MediaDevices` full-duplex conversation audio at 48 kHz using WebRTC AEC/NS/HPF/AGC and the accepted NVIDIA HDMI/TV render path.
+
+T2 `CORROBORATED_OWNER` is still intentionally disabled until the final multimodal predicate is accepted.
+
+---
 
 ## Step 3A — Authority foundation — ACCEPTED + MERGED
 
-Identity/context evidence, graduated trust, and action authority are separate layers:
+Identity/context evidence, graduated trust and action authority are separate layers:
 
 ```text
 IDENTITY / CONTEXT EVIDENCE
@@ -47,7 +53,7 @@ There is no ambient T4/admin-superuser state.
 
 ### Strong verification
 
-Windows Hello is wrapped behind JARVIS's `StrongVerifier` boundary using the desktop .NET helper and Microsoft user-consent verification.
+Windows Hello is wrapped behind JARVIS's `StrongVerifier` boundary.
 
 ```text
 exact ActionProposal
@@ -62,7 +68,7 @@ StrongApprovalService
 one proposal-bound STRONG approval
 ```
 
-Cancellation/unavailability never falls back to face, voice, wake word, spoken confirmation, Windows-unlocked state, or LLM confidence.
+Cancellation/unavailability never falls back to face, voice, wake word, spoken confirmation, Windows-unlocked state or LLM confidence.
 
 ### Action authority
 
@@ -80,7 +86,7 @@ Accepted protections include:
 
 ### Windows session boundary
 
-`WindowsWtsSessionProvider` tracks the current Windows session and explicit lock/unlock state. Session lock/switch invalidates authority state.
+`WindowsWtsSessionProvider` tracks the active Windows session and lock/unlock state. Session lock/switch invalidates authority and biometric evidence contexts.
 
 Windows unlocked is context only; it does not prove the person on camera or microphone is OWNER.
 
@@ -90,31 +96,38 @@ Windows unlocked is context only; it does not prove the person on camera or micr
 face match       ≠ permission
 speaker match    ≠ permission
 liveness         ≠ permission
+active speaker   ≠ permission
 attention        ≠ permission
 wake word        ≠ owner
 Windows unlocked ≠ owner speaking
 LLM confidence   ≠ permission
 ```
 
-T3 also is not permission by itself; exact proposal, deterministic risk/policy, and bound approval are still required.
+Even T3 is not permission by itself; exact proposal, risk, policy and bound approval remain required.
+
+Decision: `docs/decisions/ADR-006_STEP_3_IDENTITY_TRUST_AUTHORITY_GOVERNANCE.md`.
+
+---
 
 ## Step 2.5 visual association reused by identity — ACCEPTED
 
 ```text
-Pocket 3 capture
+Pocket3 capture
         ↓
 RF-DETR person detection
         ↓
 persistent person track
         ↓
-TargetManager explicit selected/locked track
+TargetManager selected/locked track
         ↓
 MediaPipe BlazeFace head observations
         ↓
-HeadFirstFramingPolicy body↔head association
+body↔head association
 ```
 
-The persistent visual track is the stable subject handle. Head/face observations are supporting evidence associated with that track; they are not standalone authority identities.
+The persistent visual track is the stable subject handle. Head/face observations support that track; they are not standalone authority identities.
+
+---
 
 ## Phase 3B.1 — Secure single-OWNER storage — ACCEPTED
 
@@ -126,7 +139,7 @@ OWNER
 
 Unknown people remain ephemeral/session-scoped.
 
-OWNER template storage:
+OWNER storage:
 
 ```text
 biometric template bytes
@@ -140,29 +153,27 @@ user-scoped Windows DPAPI KeyProtector
 SQLite
 ```
 
-OWNER create/replace/delete is strongly verified. Exact candidate template bytes are SHA-256 committed into the authorization proposal before mutation.
+OWNER create/replace/delete is strongly verified. Candidate template bytes are committed before mutation. Raw biometric payloads are not exposed to policy/audit.
 
-Raw biometric bytes are not exposed to policy/audit.
+---
 
-## Phase 3B.2/3B.3 — Face model integrity/runtime — ACCEPTED
+## Phase 3B.2/3 — Face model integrity/runtime — ACCEPTED
 
 Pinned OpenCV Zoo baseline:
 
 - YuNet `face_detection_yunet_2026may.onnx`;
 - SFace `face_recognition_sface_2021dec.onnx`;
 - exact byte-count/SHA verification;
-- model files stored outside Git;
-- temporary download + integrity verification + atomic promotion;
+- model files outside Git;
+- integrity-verified atomic promotion;
 - no silent model drift.
 
-SFace released-weight training-data provenance remains an explicit future commercial-distribution review item.
+---
 
-## Phase 3B.4 — Pocket-3 live face pipeline — ACCEPTED
-
-Accepted real-machine identity sensor path:
+## Phase 3B.4 — Pocket3 live face pipeline — ACCEPTED
 
 ```text
-Pocket 3
+Pocket3
     ↓
 RF-DETR + persistent visual track
     ↓
@@ -175,135 +186,85 @@ YuNet
 SFace 128-D embedding
 ```
 
-The live benchmark demonstrated significant same-owner frame variation, so one-frame identity thresholds are not accepted.
+Real-machine evidence showed meaningful same-owner frame variation; one-frame identity thresholds are not accepted.
 
-## Phase 3B.5A — OWNER positive baseline — ACCEPTED
+---
 
-Positive-only calibration established genuine OWNER behavior on the Pocket 3 but did not define an absolute OWNER-vs-UNKNOWN threshold.
+## Phase 3B.5A / 3B.6 — OWNER calibration + enrollment — ACCEPTED BASELINE
 
-Subject semantics remain:
+Positive OWNER calibration established real-device same-owner behavior but not an authoritative OWNER-vs-UNKNOWN threshold.
 
-- `OWNER` — sufficiently proven enrolled owner;
-- `UNKNOWN` — not sufficiently proven;
-- `AMBIGUOUS` — evidence is insufficient/conflicting.
-
-No persistent non-owner biometric profiles are created.
-
-## Phase 3B.6 — Real OWNER enrollment — ACCEPTED
-
-OWNER face template format:
+OWNER template format:
 
 ```text
 sface-prototype-set-v1
 ```
 
-The enrolled payload contains 8 normalized prototypes selected deterministically using centroid + farthest inliers. The serialized payload is committed before Windows Hello, encrypted at rest through the accepted profile store, and decoded strictly.
+The encrypted enrolled payload contains 8 normalized prototypes selected deterministically using centroid + farthest inliers.
 
 Enrollment does not grant T2.
 
+---
+
 ## Phase 3B.7A — Active liveness fallback — ACCEPTED
 
-The active fallback uses MediaPipe Face Landmarker primitives and a JARVIS-owned randomized state machine.
-
-Challenge vocabulary:
+MediaPipe Face Landmarker drives a JARVIS-owned randomized challenge state machine:
 
 - blink;
 - open mouth;
-- smile.
-
-Each action requires `neutral → action → neutral`, repeated observations, same Windows session, same visual track, bounded expiry, and fail-closed handling.
+- smile;
+- neutral → action → neutral;
+- same Windows session;
+- same visual track;
+- bounded expiry/fail-closed behavior.
 
 A passed challenge creates short-lived typed `FACE_LIVENESS` evidence. It does not independently prove OWNER or grant T2.
 
-This mechanism is a fallback rather than the preferred everyday UX.
+---
 
-## Phase 3B.7B — Passive RGB liveness — ACCEPTED FOR CURRENT POCKET-3 PROTOTYPE
+## Phase 3B.7B — Passive RGB liveness — ACCEPTED FOR CURRENT POCKET3 PROTOTYPE
 
-### Selected PAD provider
+Selected provider: **MiniFASNet V1SE + V2 ensemble**.
 
-MiniFASNet V1SE + V2 ensemble is the accepted current RGB PAD candidate.
-
-OpenVINO `anti-spoof-mn3` is rejected for this Pocket-3 integration because genuine-live OWNER remained near-zero even after a bounded reference-style contextual crop retest.
-
-### Why temporal fusion is mandatory
-
-A static phone-photo attack produced an isolated single-frame MiniFAS apparent-real score of `0.8838`. Therefore a single PAD frame is never enough to create accepted liveness evidence.
-
-Real-machine 15-frame temporal evidence showed:
-
-- genuine normal-use live minimum: `0.9855`;
-- phone-photo attack maximum: `0.2229`;
-- prerecorded phone-video attack maximum: `0.0000` at reported precision.
-
-### Accepted temporal liveness contract
-
-`TemporalPassiveLiveness` is JARVIS-owned and bound to exactly one:
-
-- Windows session;
-- visual track;
-- PAD provider.
-
-Cross-session, cross-track, and cross-provider observations are rejected rather than fused.
-
-A gap greater than `0.50 s` clears the observation window.
+`TemporalPassiveLiveness` is JARVIS-owned and bound to one Windows session, visual track and PAD provider.
 
 Decision rule:
 
 ```text
-< 15 fresh observations  → INSUFFICIENT
-15-frame median >= 0.95  → LIVE
-15-frame median <= 0.50  → SPOOF
-otherwise                → UNCERTAIN
+<15 fresh observations       → INSUFFICIENT
+15-frame median >= 0.95      → LIVE
+15-frame median <= 0.50      → SPOOF
+otherwise                    → UNCERTAIN
 ```
 
-Behavior:
+Gap > `0.50 s` resets the window. Initial evidence TTL: `2.0 s`.
 
-- `LIVE` → typed short-lived `FACE_LIVENESS` `PASSED` evidence;
-- `SPOOF` → typed `FAILED` evidence and fail closed;
-- `UNCERTAIN` → `INSUFFICIENT` evidence and active challenge may be requested when the trust/risk path requires it;
-- `INSUFFICIENT` → no trust upgrade.
-
-Initial passive evidence TTL is `2.0 s`.
-
-### Privacy and authority boundary
-
-- raw frames/crops/PAD tensors/output vectors are not persisted by this evidence path;
-- passive PAD alone does not prove OWNER;
-- passive PAD alone does not grant T2;
-- passive PAD never authorizes actions;
+- `LIVE` creates short-lived passed liveness evidence;
+- `SPOOF` fails closed;
+- `UNCERTAIN` may request active challenge;
+- liveness alone never proves OWNER or grants authority;
 - RGB PAD is not treated as equivalent to depth/IR/ToF liveness.
 
-The accepted decision is recorded in `docs/decisions/ADR-008_STEP_3_PASSIVE_RGB_LIVENESS.md`.
+Decision: `docs/decisions/ADR-008_STEP_3_PASSIVE_RGB_LIVENESS.md`.
+
+---
 
 ## Phase 3B.8 — Runtime OWNER identity + liveness binding — ACCEPTED
 
-### Runtime identity contract
+Temporal OWNER identity is bound to exactly one Windows session, visual track and face provider.
 
-The accepted 3B.8 path decrypts the enrolled OWNER face template through the accepted profile-store boundary and requires exact compatibility with the pinned SFace runtime before comparing embeddings.
-
-Compatibility includes:
-
-- face modality;
-- `sface-prototype-set-v1` template format;
-- JARVIS SFace provider id;
-- current model id/revision/SHA-256;
-- embedding dimension;
-- enrollment compatibility version.
-
-Mismatch fails closed.
-
-Temporal identity is bound to exactly one Windows session, visual track, and face provider. A 15-observation median uses the current provisional evidence-only band:
+Current provisional evidence-only band:
 
 ```text
 <15 fresh observations        → INSUFFICIENT
-median max-prototype >= 0.65 → OWNER_CANDIDATE
-median max-prototype <= 0.35 → UNKNOWN
-otherwise                    → AMBIGUOUS
+median max-prototype >= 0.65  → OWNER_CANDIDATE
+median max-prototype <= 0.35  → UNKNOWN
+otherwise                     → AMBIGUOUS
 ```
 
-This threshold is **not authoritative OWNER-vs-UNKNOWN authentication** because a consenting live non-owner calibration dataset is still unavailable.
+This is **not authoritative OWNER-vs-UNKNOWN authentication** because a consenting live non-owner calibration set is not yet available.
 
-### Same-track OWNER + liveness binding
+Same-track fusion:
 
 ```text
 active/unlocked Windows session
@@ -319,104 +280,249 @@ same session + same track + co-fresh observations
 combined evidence state
 ```
 
-Accepted combined states:
+Combined states:
 
 ```text
-OWNER_CANDIDATE + LIVE      → LIVE_OWNER_CANDIDATE
-OWNER_CANDIDATE + UNCERTAIN → ACTIVE_CHALLENGE_ELIGIBLE
-OWNER_CANDIDATE + SPOOF     → SPOOFED_OWNER_PRESENTATION
-UNKNOWN + any liveness      → UNKNOWN_SUBJECT
-AMBIGUOUS + any liveness    → AMBIGUOUS_SUBJECT
-anything insufficient       → INSUFFICIENT
+OWNER_CANDIDATE + LIVE       → LIVE_OWNER_CANDIDATE
+OWNER_CANDIDATE + UNCERTAIN  → ACTIVE_CHALLENGE_ELIGIBLE
+OWNER_CANDIDATE + SPOOF      → SPOOFED_OWNER_PRESENTATION
+UNKNOWN + any liveness       → UNKNOWN_SUBJECT
+AMBIGUOUS + any liveness     → AMBIGUOUS_SUBJECT
+anything insufficient        → INSUFFICIENT
 ```
 
-`LIVE_OWNER_CANDIDATE` is deliberately **not** T2.
+`LIVE_OWNER_CANDIDATE` is deliberately **not T2**.
 
-### Invalidation behavior
+Target loss, track change, stale gaps or Windows session transitions invalidate the evidence fail-closed.
 
-- identity/liveness gaps > `0.50 s` clear their temporal windows;
-- cross-session, cross-track, and cross-provider observations are rejected;
-- selected-target loss immediately discards both temporal windows, clears the combined result, stops collection, and requires fresh selection/evidence;
-- target-id change resets both windows;
-- Windows lock/session transition clears evidence and terminates the evidence context fail-closed;
-- stale identity/liveness observations cannot be combined beyond the co-freshness bound.
+Evidence: `docs/research/STEP_3B8_OWNER_LIVENESS_ACCEPTANCE_RESULTS.md`.
 
-### Real-machine acceptance
+---
 
-Real Pocket-3 live OWNER integration:
+## Deferred 3B.9 — Attention / intent-to-engage
 
-- 300 valid integrated observations;
-- OWNER max-prototype cosine median `0.7982`;
-- MiniFAS real probability median `0.9998`;
-- 272 post-warm-up/reset observations reached `LIVE_OWNER_CANDIDATE`;
-- no raw biometric persistence;
-- T2 remained disabled.
+Attention implementation is deferred until fixed monitor-mounted camera hardware or a stronger accepted attention/eye sensor is available.
 
-Real Windows WTS lock acceptance produced:
-
-```text
-session_invalidated = True
-STEP_3B8_OWNER_LIVENESS_EVIDENCE = SESSION_INVALIDATED_FAIL_CLOSED
-```
-
-The already accepted real Pocket-3 3B.7B phone-photo/video attack evidence is reused rather than redundantly recollected. Automated 3B.8 tests verify deterministic spoof binding and cross-track/co-freshness behavior.
-
-### Authority boundary
-
-- `FACE_MATCH` evidence is typed but provisional;
-- liveness does not repair ambiguous identity;
-- attention is not inferred from face visibility;
-- `face_evidence_grants_T2 = False` remains invariant;
-- no 3B.8 result directly authorizes any action.
-
-Acceptance evidence is recorded in `docs/research/STEP_3B8_OWNER_LIVENESS_ACCEPTANCE_RESULTS.md`.
-
-## Deferred attention / intent-to-engage provider
-
-ADR-007 remains accepted as an architectural boundary, but implementation is deliberately deferred until JARVIS has a fixed monitor-mounted webcam or stronger accepted attention/eye sensor.
-
-The movable Pocket 3 must not be used to infer stable monitor-relative gaze through repeated calibration. JARVIS therefore currently emits no accepted `OWNER_ATTENTIVE` predicate.
-
-The layering is:
+The movable Pocket3 must not be used to infer stable monitor-relative gaze through repeated calibration.
 
 ```text
 T2 CORROBORATED_OWNER
         +
-accepted fresh attention evidence (only when available and required)
+accepted fresh attention evidence (when available/required)
         ↓
 OWNER_ATTENTIVE interaction predicate
 ```
 
-Attention is not itself a trust tier and is not a prerequisite for defining T2. Until an attention provider is accepted, policy paths that genuinely require `OWNER_ATTENTIVE` must fail closed or escalate to explicit strong verification rather than infer attention from visibility, face match, liveness, wake word, or conversation state.
+Attention is not a trust tier and does not block completion of the rest of Step 3.
+
+Decision: `docs/decisions/ADR-007_STEP_3_ATTENTION_INTENT_EVIDENCE.md`.
+
+---
+
+## Phase 3B.10 — Speaker identity foundation — ACCEPTED SHADOW PROVIDER
+
+Current disposition:
+
+- CAM++ = provisional shadow speaker-embedding provider;
+- ERes2NetV2 = retained challenger;
+- TitaNet-Large = removed from first deployment path.
+
+Speaker evidence is protected by:
+
+- exact model integrity checks;
+- sherpa-onnx frontend;
+- duration/RMS/clipping quality gate;
+- bounded multi-prototype matching;
+- memory-only shadow prototype state during calibration;
+- no deployment threshold while calibration remains incomplete.
+
+Bad/insufficient audio becomes `INSUFFICIENT`, not `UNKNOWN_SPEAKER`.
+
+Speaker identity does not independently create T2/T3 or authorize actions.
+
+Evidence: `docs/research/STEP_3B10_SPEAKER_BAKEOFF_RESULTS.md`.
+
+---
+
+## Phase 3B.10A — Passive normal-turn + OWNER-context bridge — ACCEPTED
+
+```text
+exact Pocket3 frame + VisionSnapshot
+        ↓
+3B.8 SFace + MiniFAS temporal logic
+        ↓
+thread-safe short-lived OWNER context
+
+canonical accepted user PCM
+        +
+LiveKit user lifecycle
+        ↓
+bounded memory-only turn capture
+        ↓
+speaker quality gate
+        ↓
+shadow diagnostics
+```
+
+A visible live OWNER does **not** prove that current room speech came from that person.
+
+Unsafe prototype-learning rule rejected:
+
+```text
+LIVE_OWNER_CANDIDATE visible
+        +
+any microphone speech
+        ↓
+OWNER voice prototype   ← forbidden
+```
+
+This prevents TV, phone playback, off-camera people and overlapping speech from poisoning the OWNER voice bank.
+
+Prototype admission remains disabled until 3B.11 active-speaker actor corroboration is accepted.
+
+---
+
+## Production conversation audio — ACCEPTED REPLACEMENT ARCHITECTURE
+
+### Superseded path
+
+ADR-010's GStreamer full-duplex conversation path with Tribit Bluetooth is **superseded for conversation audio**.
+
+Although isolated WebRTC DSP tests showed strong suppression, real Gemini Live conversation still generated false user turns containing JARVIS's own spoken fragments. A custom Silero barge-in gate also falsely admitted residual assistant speech.
+
+Those layers are not part of the production conversation architecture.
+
+### Accepted LiveKit MediaDevices path
+
+```text
+Pocket3 microphone @ 48 kHz mono
+        ↓
+rtc.MediaDevices.open_input()
+WebRTC AEC + NS + HPF + AGC
+        ↓
+JARVIS wake / AgentSession / Gemini Live
+        ↓
+rtc.MediaDevices.open_output()
+(shared MediaDevices/APM reverse render reference)
+        ↓
+48 kHz physical output
+        ↓
+NVIDIA HDMI → 24'TV speakers
+```
+
+Key requirements:
+
+- capture and render use the **same** `rtc.MediaDevices` instance;
+- conversation input is 48 kHz mono;
+- physical conversation output must accept 48 kHz;
+- the current accepted render endpoint is NVIDIA HDMI `24'TV`;
+- a 44.1-kHz-only Bluetooth A2DP endpoint fails closed;
+- `JARVIS_AUDIO_OUTPUT_DEVICE` selects the canonical conversation render endpoint;
+- `JARVIS_AUDIO_OUTPUT_WASAPI_DEVICE` is not used for production conversation playback.
+
+Real acceptance proved both required behaviors:
+
+```text
+JARVIS speaking + user silent
+→ JARVIS completes without self-trigger
+
+JARVIS speaking + real user interruption
+→ real barge-in interrupts correctly
+```
+
+Implementation boundary:
+
+- `src/jarvis/voice/media_devices_audio.py`
+- `src/jarvis/voice/production_runtime.py`
+- `jarvis-voice = jarvis.voice.production_runtime:main`
+- `tests/test_media_devices_audio.py`
+
+Decision: `docs/decisions/ADR-011_LIVEKIT_MEDIADEVICES_48K_FULL_DUPLEX.md`.
+
+---
+
+## Independent synchronized sensor evidence path — CURRENT REPLACEMENT BOUNDARY
+
+Conversation audio and Step-3 synchronized sensor evidence are now separate responsibilities:
+
+```text
+                         POCKET3
+                            │
+             ┌──────────────┴──────────────┐
+             │                             │
+      Conversation path              Evidence path
+             │                             │
+ LiveKit MediaDevices              GStreamer paired raw A/V
+ AEC + NS + HPF + AGC             synchronized sensor capture
+             │                             │
+ Gemini Live / wake                  ├── video → Vision
+             │                        └── raw audio → LR-ASD
+ NVIDIA 48 kHz → TV
+```
+
+The GStreamer graph no longer owns production conversation playback or conversation AEC in the production builder.
+
+### Integration gate still pending
+
+Before deleting historical paired-conversation code, the real machine must prove that LiveKit MediaDevices and GStreamer raw sensor capture can coexist on the Pocket3 endpoint without device contention or timing regression.
+
+Until that acceptance passes, this separation is the **implemented replacement boundary with one remaining integration gate**.
+
+---
+
+## Next major architecture slice — 3B.11 active-speaker / actor corroboration
+
+Primary benchmark provider: **LR-ASD**. First robustness challenger: **C3ASD**.
+
+Target:
+
+```text
+fresh LIVE_OWNER_CANDIDATE
+        +
+exact visual track/head sequence
+        +
+synchronized current speech evidence
+        ↓
+ActiveSpeakerProvider
+        ↓
+ACTIVE_OWNER_SPEAKER
+OTHER_OR_OFFCAMERA
+AMBIGUOUS
+INSUFFICIENT
+```
+
+`ACTIVE_OWNER_SPEAKER` is actor-corroboration evidence, not execution authority.
+
+Only after real-machine acceptance may it unlock **session-only CAM++ prototype admission** for the same actor/turn.
+
+Required acceptance conditions include owner speech, owner-visible-but-silent with TV/other speech, off-camera speech, replay/playback, overlap, temporary visual loss and insufficient windows.
+
+Research: `docs/research/STEP_3B11_ACTIVE_SPEAKER_CORROBORATION_RESEARCH.md`.
+
+---
 
 ## What is intentionally NOT yet accepted
 
-The following are **not** current accepted runtime architecture yet:
+The following are not accepted production trust semantics yet:
 
-- automatic T2 derivation from current provisional face/liveness evidence;
+- automatic T2 derivation from current face/liveness evidence;
 - authoritative OWNER-vs-UNKNOWN face threshold based on live non-owner separation;
-- speaker identity/corroboration and active-speaker ambiguity handling;
-- attention/intent-to-engage implementation (deferred until fixed camera hardware);
+- speaker threshold promotion;
+- persistent OWNER voice template;
+- active-speaker evidence as authoritative until 3B.11 real-machine acceptance;
+- attention/intent-to-engage implementation;
 - depth/IR/ToF liveness hardware.
 
-## Next architecture slice — Speaker identity / active-speaker corroboration
+---
 
-The next independent slice will research and define replaceable local speaker evidence for voice-originated protected interaction.
+## Documentation as architecture control
 
-Target boundary:
+Whenever an accepted runtime boundary changes:
 
-```text
-microphone speech segment
-        ↓
-replaceable speaker-evidence provider
-        ↓
-OWNER_SPEAKER_CANDIDATE / UNKNOWN / AMBIGUOUS
-        +
-active-speaker / playback / actor ambiguity checks
-        ↓
-typed short-lived speaker evidence
-```
+1. `CURRENT_ARCHITECTURE.md` is updated in the same development slice;
+2. `CURRENT_PLAN.md` is updated with the resulting state and next action;
+3. significant choices are captured in an ADR;
+4. real-machine evidence is recorded under `docs/research/`;
+5. superseded production paths are marked explicitly and removed after replacement acceptance.
 
-Speaker evidence may corroborate an interaction but may not independently create T2/T3, authorize an action, or turn a wake-word match into OWNER identity.
-
-Research must be refreshed against current mature technology before implementation. T2 remains disabled during this slice.
+Documentation is part of the acceptance gate, not a later cleanup activity.
