@@ -1,31 +1,29 @@
 """Canonical JARVIS audio runtime backed by paired GStreamer PCM.
 
-The paired sensor source owns the physical microphone once. This runtime accepts
-that PCM from GStreamer's callback, applies WebRTC APM, and routes the processed
-frames to local wake detection or the active realtime conversation. No PortAudio
-input device is opened here; the only PortAudio device owned by this runtime is
-the configured output speaker.
+The paired sensor source owns the physical Pocket 3 microphone and Tribit playback
+inside one GStreamer clock domain. GStreamer's WebRTC AEC produces the canonical
+conversation PCM; raw paired PCM remains separate for synchronized active-speaker
+analysis. No PortAudio device and no Python-side reverse-stream delay estimator are
+used by this runtime.
 """
 
 from __future__ import annotations
 
 import asyncio
-import math
 import threading
 import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
 
 from livekit import rtc
+from livekit.agents.voice import io
 
+from jarvis.sensors.gstreamer_av import GStreamerPairedAVSource
 from jarvis.voice.audio import (
     DEVICE_CHANNELS,
     DEVICE_SAMPLE_RATE,
     FRAME_SAMPLES,
-    LocalAudioOutput,
-    LocalAudioRuntime,
     SessionAudioInput,
 )
 from jarvis.voice.wakeword import LiveKitWakeDetector
@@ -33,6 +31,7 @@ from jarvis.voice.wakeword import LiveKitWakeDetector
 _NATIVE_QUEUE_CAPACITY = 500
 _FRAME_SECONDS = FRAME_SAMPLES / DEVICE_SAMPLE_RATE
 _FRAME_BYTES = FRAME_SAMPLES * 2
+_PLAYBACK_SETTLE_SECONDS = 0.12
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,58 +40,193 @@ class _TimedAudioFrame:
     observed_at_monotonic: float
 
 
-class _ExternalAecDelayEstimator:
-    """Combine physical render delay with capture-to-APM processing delay."""
+@dataclass(slots=True)
+class _PlaybackSegment:
+    samples: int
+    started_at_wall: float
+    started_at_monotonic: float
+    generation: int
+    completed: bool = False
 
-    def __init__(self, *, clock: Callable[[], float] = time.monotonic) -> None:
-        self._clock = clock
-        self._lock = threading.Lock()
-        self._output_delay_seconds = 0.0
 
-    def set_output_delay(self, seconds: float) -> None:
-        if not math.isfinite(seconds):
+class GStreamerPairedAudioOutput(io.AudioOutput):
+    """LiveKit output sink backed by the paired GStreamer playback/AEC branch."""
+
+    def __init__(self, source: GStreamerPairedAVSource) -> None:
+        super().__init__(
+            label="JARVIS GStreamer speaker",
+            capabilities=io.AudioOutputCapabilities(pause=True),
+            sample_rate=DEVICE_SAMPLE_RATE,
+        )
+        self._source = source
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._closed = False
+        self._paused = False
+        self._resampler: rtc.AudioResampler | None = None
+        self._resampler_input_rate: int | None = None
+        self._current_samples = 0
+        self._current_started_at_wall = 0.0
+        self._current_started_at_monotonic = 0.0
+        self._generation = 0
+        self._segments: list[_PlaybackSegment] = []
+
+    def start(self) -> None:
+        if self._loop is not None:
+            raise RuntimeError("paired GStreamer audio output is already started")
+        if not self._source.running or not self._source.playback_enabled:
+            raise RuntimeError("paired GStreamer playback/AEC branch is not running")
+        self._loop = asyncio.get_running_loop()
+
+    def _frames_at_canonical_rate(self, frame: rtc.AudioFrame) -> list[rtc.AudioFrame]:
+        if frame.num_channels != DEVICE_CHANNELS:
+            raise ValueError("paired GStreamer output requires mono audio")
+        if frame.sample_rate == DEVICE_SAMPLE_RATE:
+            return [frame]
+        if self._resampler_input_rate != frame.sample_rate:
+            self._resampler = rtc.AudioResampler(
+                input_rate=frame.sample_rate,
+                output_rate=DEVICE_SAMPLE_RATE,
+                num_channels=DEVICE_CHANNELS,
+            )
+            self._resampler_input_rate = frame.sample_rate
+        assert self._resampler is not None
+        return self._resampler.push(frame)
+
+    async def capture_frame(self, frame: rtc.AudioFrame) -> None:
+        if self._closed:
             return
-        with self._lock:
-            self._output_delay_seconds = max(0.0, seconds)
+        while self._paused and not self._closed:
+            await asyncio.sleep(0.01)
+        if self._closed:
+            return
 
-    def stream_delay_ms(self, observed_at_monotonic: float) -> int:
-        with self._lock:
-            output_delay = self._output_delay_seconds
-        capture_to_process = max(0.0, self._clock() - observed_at_monotonic)
-        total_seconds = min(1.0, output_delay + capture_to_process)
-        return max(0, round(total_seconds * 1000))
+        await super().capture_frame(frame)
+        for canonical in self._frames_at_canonical_rate(frame):
+            playback_started_at: float | None = None
+            if self._current_samples == 0:
+                self._current_started_at_wall = time.time()
+                self._current_started_at_monotonic = time.monotonic()
+                playback_started_at = self._current_started_at_wall
+
+            await asyncio.to_thread(
+                self._source.push_playback_pcm,
+                bytes(canonical.data),
+                sample_rate=DEVICE_SAMPLE_RATE,
+                num_channels=DEVICE_CHANNELS,
+                samples_per_channel=canonical.samples_per_channel,
+            )
+            self._current_samples += canonical.samples_per_channel
+            if playback_started_at is not None:
+                self.on_playback_started(created_at=playback_started_at)
+
+    def flush(self) -> None:
+        super().flush()
+        if self._current_samples <= 0:
+            return
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            return
+
+        segment = _PlaybackSegment(
+            samples=self._current_samples,
+            started_at_wall=self._current_started_at_wall,
+            started_at_monotonic=self._current_started_at_monotonic,
+            generation=self._generation,
+        )
+        self._segments.append(segment)
+        self._current_samples = 0
+        self._current_started_at_wall = 0.0
+        self._current_started_at_monotonic = 0.0
+
+        duration = segment.samples / DEVICE_SAMPLE_RATE
+        elapsed = max(0.0, time.monotonic() - segment.started_at_monotonic)
+        remaining = max(0.01, duration - elapsed + _PLAYBACK_SETTLE_SECONDS)
+        loop.call_later(remaining, self._finish_segment, segment)
+
+    def _finish_segment(self, segment: _PlaybackSegment) -> None:
+        if (
+            segment.completed
+            or segment.generation != self._generation
+            or self._closed
+        ):
+            return
+        segment.completed = True
+        if segment in self._segments:
+            self._segments.remove(segment)
+        self.on_playback_finished(
+            playback_position=segment.samples / DEVICE_SAMPLE_RATE,
+            interrupted=False,
+        )
+
+    def clear_buffer(self) -> None:
+        had_current = self._current_samples > 0
+        current_position = 0.0
+        if had_current:
+            duration = self._current_samples / DEVICE_SAMPLE_RATE
+            elapsed = max(0.0, time.monotonic() - self._current_started_at_monotonic)
+            current_position = min(duration, elapsed)
+
+        pending = [segment for segment in self._segments if not segment.completed]
+        self._generation += 1
+        self._segments.clear()
+        self._current_samples = 0
+        self._current_started_at_wall = 0.0
+        self._current_started_at_monotonic = 0.0
+        self._source.flush_playback()
+
+        if had_current:
+            super().flush()
+            self.on_playback_finished(
+                playback_position=current_position,
+                interrupted=True,
+            )
+        for segment in pending:
+            segment.completed = True
+            duration = segment.samples / DEVICE_SAMPLE_RATE
+            elapsed = max(0.0, time.monotonic() - segment.started_at_monotonic)
+            self.on_playback_finished(
+                playback_position=min(duration, elapsed),
+                interrupted=True,
+            )
+
+    def pause(self) -> None:
+        self._paused = True
+
+    def resume(self) -> None:
+        self._paused = False
+
+    async def aclose(self) -> None:
+        if self._closed:
+            return
+        self.clear_buffer()
+        self._closed = True
+        self._loop = None
 
 
 class PairedAudioRuntime:
-    """Route one GStreamer-owned DJI microphone to wake and conversation."""
+    """Route GStreamer AEC-cleaned DJI PCM to wake and conversation."""
 
     def __init__(
         self,
         detector: LiveKitWakeDetector,
         *,
-        output_device_name: str | None,
+        av_source: GStreamerPairedAVSource,
         pre_roll_seconds: float,
         ring_buffer_seconds: float,
-        clock: Callable[[], float] = time.monotonic,
-        apm_factory: Callable[..., Any] = rtc.AudioProcessingModule,
     ) -> None:
         if not 0 <= pre_roll_seconds <= ring_buffer_seconds:
             raise ValueError("pre-roll must fit inside the audio ring buffer")
         self.detector = detector
-        self._output_device_name = output_device_name
+        self._av_source = av_source
         self._pre_roll_seconds = pre_roll_seconds
         self._ring_buffer_seconds = ring_buffer_seconds
-        self._clock = clock
-        self._apm_factory = apm_factory
 
         self._ring: deque[_TimedAudioFrame] = deque()
         self._ring_samples = 0
         self._active_input: SessionAudioInput | None = None
         self._overflow_handler: Callable[[], None] | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._apm: Any = None
-        self._delay_estimator = _ExternalAecDelayEstimator(clock=clock)
-        self.output: LocalAudioOutput | None = None
+        self.output: GStreamerPairedAudioOutput | None = None
         self._started = False
 
         self._native_lock = threading.Lock()
@@ -101,15 +235,10 @@ class PairedAudioRuntime:
         self._native_drop_count = 0
         self._pending_pcm = bytearray()
         self._pending_start_monotonic: float | None = None
-        self._apm_error_count = 0
 
     @property
     def native_drop_count(self) -> int:
         return self._native_drop_count
-
-    @property
-    def apm_error_count(self) -> int:
-        return self._apm_error_count
 
     def set_overflow_handler(self, callback: Callable[[], None]) -> None:
         self._overflow_handler = callback
@@ -117,46 +246,18 @@ class PairedAudioRuntime:
     async def start(self) -> None:
         if self._started:
             raise RuntimeError("paired audio runtime is already started")
+        if not self._av_source.running:
+            raise RuntimeError("paired AV source must be running before paired audio")
+        if not self._av_source.playback_enabled:
+            raise RuntimeError("paired AV source has no full-duplex playback/AEC branch")
+
         self._loop = asyncio.get_running_loop()
-
-        media_devices = rtc.MediaDevices(
-            input_sample_rate=DEVICE_SAMPLE_RATE,
-            output_sample_rate=DEVICE_SAMPLE_RATE,
-            num_channels=DEVICE_CHANNELS,
-            blocksize=FRAME_SAMPLES,
-        )
-        output_devices = LocalAudioRuntime._attach_host_api_names(
-            media_devices.list_output_devices()
-        )
-        output_device = LocalAudioRuntime._resolve_device(
-            output_devices,
-            self._output_device_name,
-            kind="output",
-        )
-        LocalAudioRuntime._log_resolved_device(
-            output_devices,
-            output_device,
-            kind="output",
-        )
-        output_sample_rate = LocalAudioRuntime._select_output_sample_rate(output_device)
-
-        self._apm = self._apm_factory(
-            echo_cancellation=True,
-            noise_suppression=True,
-            high_pass_filter=True,
-            auto_gain_control=True,
-        )
-        self.output = LocalAudioOutput(
-            output_device=output_device,
-            apm=self._apm,
-            delay_estimator=self._delay_estimator,
-            output_sample_rate=output_sample_rate,
-        )
+        self.output = GStreamerPairedAudioOutput(self._av_source)
         self.output.start()
         self.detector.enable()
         self._started = True
 
-    def feed_external_pcm(
+    def feed_clean_pcm(
         self,
         data: bytes | bytearray | memoryview,
         *,
@@ -165,7 +266,7 @@ class PairedAudioRuntime:
         samples_per_channel: int,
         observed_at_monotonic: float,
     ) -> None:
-        """Accept paired PCM from GStreamer's native callback thread."""
+        """Accept WebRTC-AEC-cleaned PCM from GStreamer's native callback thread."""
         if sample_rate != DEVICE_SAMPLE_RATE:
             raise ValueError(
                 f"paired canonical audio must be {DEVICE_SAMPLE_RATE} Hz, got {sample_rate}"
@@ -232,25 +333,13 @@ class PairedAudioRuntime:
                 num_channels=DEVICE_CHANNELS,
                 samples_per_channel=FRAME_SAMPLES,
             )
-            self._process_and_route(frame, frame_start)
+            self._route(frame, frame_start)
 
-    def _process_and_route(
+    def _route(
         self,
         frame: rtc.AudioFrame,
         observed_at_monotonic: float,
     ) -> None:
-        apm = self._apm
-        if apm is None:
-            return
-        try:
-            apm.set_stream_delay_ms(
-                self._delay_estimator.stream_delay_ms(observed_at_monotonic)
-            )
-            apm.process_stream(frame)
-        except (AttributeError, RuntimeError, TypeError, ValueError):
-            self._apm_error_count += 1
-            return
-
         self._append_ring(frame, observed_at_monotonic=observed_at_monotonic)
         active_input = self._active_input
         if active_input is not None:
@@ -337,5 +426,4 @@ class PairedAudioRuntime:
         if self.output is not None:
             await self.output.aclose()
             self.output = None
-        self._apm = None
         await self.detector.aclose()
