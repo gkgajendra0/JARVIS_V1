@@ -52,6 +52,7 @@ from jarvis.voice.livekit_session import (
     create_voice_session,
 )
 from jarvis.voice.observed_audio import ObservedSessionAudioInput
+from jarvis.voice.paired_wake import PairedWakeDetectorBridge
 from jarvis.voice.scripted_speech import ScriptedSpeech, build_scripted_speech
 from jarvis.voice.startup_greeting import select_startup_greeting
 from jarvis.voice.vision_tools import VisionAgentTools
@@ -506,6 +507,11 @@ class VoiceRuntimeController:
                     )
 
             await self.audio.start()
+            if isinstance(self.audio.detector, PairedWakeDetectorBridge):
+                LOGGER.info(
+                    "Wake detection source is paired DJI PCM from the GStreamer AV pipeline; "
+                    "the temporary conversation microphone is excluded from wake inference"
+                )
             if self._dev_control is not None:
                 control_task = asyncio.create_task(
                     self._dev_control.run(
@@ -864,13 +870,19 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         )
 
     predictor = load_livekit_predictor(Path(config.wake_model_path))
-    detector = LiveKitWakeDetector(
+    base_detector = LiveKitWakeDetector(
         predictor,
         threshold=config.wake_threshold,
         debounce_seconds=config.wake_debounce_seconds,
     )
+    paired_wake_bridge = (
+        PairedWakeDetectorBridge(base_detector)
+        if config.active_speaker_shadow_enabled
+        else None
+    )
+    detector = paired_wake_bridge or base_detector
     audio = LocalAudioRuntime(
-        detector,
+        detector,  # type: ignore[arg-type]
         input_device_name=config.audio_input_device,
         output_device_name=config.audio_output_device,
         pre_roll_seconds=config.audio_pre_roll_seconds,
@@ -890,6 +902,7 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
     speech_region_detector: SpeechRegionDetector | None = None
     if config.active_speaker_shadow_enabled:
         assert config.active_speaker_model_path is not None
+        assert paired_wake_bridge is not None
         discovered_sources = discover_windows_av_sources()
         if len(discovered_sources) != 1:
             raise RuntimeError(
@@ -918,6 +931,12 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
                 num_channels=num_channels,
                 samples_per_channel=samples_per_channel,
                 observed_at_monotonic=observed_at_monotonic,
+            )
+            paired_wake_bridge.feed_external_pcm(
+                data,
+                sample_rate=sample_rate,
+                num_channels=num_channels,
+                samples_per_channel=samples_per_channel,
             )
 
         active_speaker_av_source.set_audio_frame_tap(on_paired_audio)
