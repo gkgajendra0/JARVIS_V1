@@ -13,7 +13,6 @@ from livekit.agents import (
     ConversationItemAddedEvent,
     ErrorEvent,
     TurnHandlingOptions,
-    inference,
 )
 from livekit.agents.llm import ChatMessage
 from livekit.plugins import google, openai
@@ -24,12 +23,6 @@ from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.voice.agent import INSTRUCTIONS
 
 LOGGER = logging.getLogger(__name__)
-
-_GEMINI_VAD_ACTIVATION_THRESHOLD = 0.65
-_GEMINI_VAD_MIN_SPEECH_SECONDS = 0.12
-_GEMINI_VAD_MIN_SILENCE_SECONDS = 0.55
-_GEMINI_VAD_PREFIX_PADDING_SECONDS = 0.30
-_GEMINI_INTERRUPTION_MIN_SECONDS = 0.30
 
 
 def require_openai_api_key() -> str:
@@ -50,6 +43,10 @@ def require_google_api_key() -> str:
 
 def _create_realtime_model(config: JarvisConfig):
     if config.realtime_provider == "gemini":
+        # Gemini 3.1 + the currently pinned LiveKit Google adapter must retain
+        # provider-native activity/turn completion. The paired audio runtime
+        # separately gates AEC-clean PCM with local Silero only while JARVIS is
+        # speaking, so residual echo is filtered before Gemini's native VAD.
         return google.realtime.RealtimeModel(
             model=config.gemini_realtime_model,
             voice=config.gemini_realtime_voice,
@@ -59,7 +56,14 @@ def _create_realtime_model(config: JarvisConfig):
             output_audio_transcription={},
             realtime_input_config=google_types.RealtimeInputConfig(
                 automatic_activity_detection=google_types.AutomaticActivityDetection(
-                    disabled=True,
+                    start_of_speech_sensitivity=(
+                        google_types.StartSensitivity.START_SENSITIVITY_LOW
+                    ),
+                    end_of_speech_sensitivity=(
+                        google_types.EndSensitivity.END_SENSITIVITY_LOW
+                    ),
+                    prefix_padding_ms=300,
+                    silence_duration_ms=800,
                 )
             ),
         )
@@ -77,40 +81,6 @@ def _create_realtime_model(config: JarvisConfig):
             create_response=True,
             interrupt_response=True,
         ),
-    )
-
-
-def _create_session_vad(config: JarvisConfig):
-    """Return local turn VAD when provider-side activity detection is disabled."""
-    if config.realtime_provider != "gemini":
-        return None
-    return inference.VAD(
-        model="silero",
-        min_speech_duration=_GEMINI_VAD_MIN_SPEECH_SECONDS,
-        min_silence_duration=_GEMINI_VAD_MIN_SILENCE_SECONDS,
-        prefix_padding_duration=_GEMINI_VAD_PREFIX_PADDING_SECONDS,
-        max_buffered_speech=60.0,
-        activation_threshold=_GEMINI_VAD_ACTIVATION_THRESHOLD,
-    )
-
-
-def _create_turn_handling(config: JarvisConfig) -> TurnHandlingOptions:
-    if config.realtime_provider == "gemini":
-        return TurnHandlingOptions(
-            turn_detection="vad",
-            interruption={
-                "enabled": True,
-                "mode": "vad",
-                "min_duration": _GEMINI_INTERRUPTION_MIN_SECONDS,
-                "false_interruption_timeout": 1.0,
-                "resume_false_interruption": True,
-            },
-            preemptive_generation={"enabled": False},
-        )
-    return TurnHandlingOptions(
-        turn_detection=None,
-        interruption={"enabled": True},
-        preemptive_generation={"enabled": False},
     )
 
 
@@ -171,8 +141,12 @@ def create_voice_session(
     conversation = ConversationSession()
     livekit_session = AgentSession(
         llm=_create_realtime_model(config),
-        vad=_create_session_vad(config),
-        turn_handling=_create_turn_handling(config),
+        vad=None,
+        turn_handling=TurnHandlingOptions(
+            turn_detection=None,
+            interruption={"enabled": True},
+            preemptive_generation={"enabled": False},
+        ),
     )
     bridge = LiveKitConversationBridge(
         livekit_session,
