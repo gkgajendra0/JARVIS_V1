@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 from typing import Any
 
@@ -71,6 +70,13 @@ def _preferred_score(device: dict[str, Any], kind: str) -> int:
     return score
 
 
+def _is_stable_selector(value: str | None) -> bool:
+    if not value:
+        return False
+    normalized = value.strip().casefold()
+    return normalized.startswith("name:") and "|hostapi:" in normalized
+
+
 def _choose_device(
     kind: str,
     existing_selector: str | None,
@@ -80,7 +86,10 @@ def _choose_device(
     if not compatible:
         raise RuntimeError(f"No {kind} device accepting 48000 Hz was found")
 
-    if existing_selector:
+    # Legacy index:N selectors are intentionally not reused. PortAudio indices
+    # move when Windows devices appear/disappear, which is exactly the startup
+    # fragility this setup flow removes.
+    if _is_stable_selector(existing_selector):
         try:
             resolved = LocalAudioRuntime._resolve_device(
                 devices,
@@ -169,7 +178,9 @@ def _existing_file_or_prompt(
             return str(candidate)
 
     while True:
-        raw = input(f"{label} path{' (required)' if required else ' (blank to skip)'}: ").strip()
+        raw = input(
+            f"{label} path{' (required)' if required else ' (blank to skip)'}: "
+        ).strip()
         if not raw and not required:
             return None
         candidate = Path(raw).expanduser()
