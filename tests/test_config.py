@@ -1,6 +1,21 @@
+from pathlib import Path
+
 import pytest
 
 from jarvis.config import JarvisConfig
+
+
+@pytest.fixture(autouse=True)
+def _isolate_machine_config(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Keep config unit tests independent from the real PC machine profile."""
+    monkeypatch.setenv(
+        "JARVIS_MACHINE_CONFIG",
+        str(tmp_path / "machine.json"),
+    )
+    monkeypatch.delenv("JARVIS_RUNTIME_ENV_OVERRIDES", raising=False)
 
 
 def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:

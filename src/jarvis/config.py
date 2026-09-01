@@ -162,7 +162,7 @@ class JarvisConfig:
             raise ValueError("audio pre-roll must fit inside the ring buffer")
 
     @classmethod
-    def from_environment(cls) -> "JarvisConfig":
+    def from_environment(cls) -> JarvisConfig:
         """Load persisted machine settings, then apply environment overrides.
 
         The method name is retained for compatibility. Environment variables are
@@ -194,7 +194,9 @@ class JarvisConfig:
             startup_greeting_enabled=_configured_bool(
                 "JARVIS_STARTUP_GREETING", True, machine
             ),
-            wake_model_path=_configured_optional_text("JARVIS_WAKE_MODEL_PATH", machine),
+            wake_model_path=_configured_optional_text(
+                "JARVIS_WAKE_MODEL_PATH", machine
+            ),
             wake_threshold=_configured_float("JARVIS_WAKE_THRESHOLD", 0.68, machine),
             wake_debounce_seconds=_configured_float(
                 "JARVIS_WAKE_DEBOUNCE_SECONDS", 2.0, machine

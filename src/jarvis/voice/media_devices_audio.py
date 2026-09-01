@@ -22,7 +22,6 @@ from livekit import rtc
 from livekit.agents.voice import io
 
 from jarvis.voice.audio import (
-    CAPTURE_QUEUE_CAPACITY_FRAMES,
     DEVICE_CHANNELS,
     DEVICE_SAMPLE_RATE,
     FRAME_SAMPLES,
@@ -157,11 +156,7 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         loop.call_later(remaining, self._finish_segment, segment)
 
     def _finish_segment(self, segment: _PlaybackSegment) -> None:
-        if (
-            segment.completed
-            or segment.generation != self._generation
-            or self._closed
-        ):
+        if segment.completed or segment.generation != self._generation or self._closed:
             return
         segment.completed = True
         if segment in self._segments:

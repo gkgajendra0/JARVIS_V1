@@ -269,18 +269,20 @@ class GStreamerPairedAVSource:
             raise RuntimeError("paired AV source is already started")
 
         Gst = _load_gstreamer()
-        pipeline = Gst.parse_launch(build_pipeline_description(self.source, self.config))
+        pipeline = Gst.parse_launch(
+            build_pipeline_description(self.source, self.config)
+        )
         video_sink = pipeline.get_by_name("video_sink")
         audio_sink = pipeline.get_by_name("audio_sink")
         if video_sink is None or audio_sink is None:
             pipeline.set_state(Gst.State.NULL)
-            raise RuntimeError("paired AV pipeline did not expose both capture appsinks")
+            raise RuntimeError(
+                "paired AV pipeline did not expose both capture appsinks"
+            )
 
         clean_audio_sink = pipeline.get_by_name("clean_audio_sink")
         playback_src = pipeline.get_by_name("playback_src")
-        if self.playback_enabled and (
-            clean_audio_sink is None or playback_src is None
-        ):
+        if self.playback_enabled and (clean_audio_sink is None or playback_src is None):
             pipeline.set_state(Gst.State.NULL)
             raise RuntimeError(
                 "paired AV full-duplex pipeline did not expose AEC audio endpoints"
@@ -371,7 +373,9 @@ class GStreamerPairedAVSource:
             raise ValueError("paired playback frame size must be positive")
         payload = bytes(data)
         if len(payload) != samples_per_channel * 2:
-            raise ValueError("paired playback PCM byte length does not match int16 mono")
+            raise ValueError(
+                "paired playback PCM byte length does not match int16 mono"
+            )
 
         Gst = self._gst
         appsrc = self._playback_src
@@ -455,7 +459,9 @@ class GStreamerPairedAVSource:
 
         expected = self.config.width * self.config.height * 3
         if len(payload) < expected:
-            self._fail(RuntimeError("paired AV video buffer was smaller than BGR frame"))
+            self._fail(
+                RuntimeError("paired AV video buffer was smaller than BGR frame")
+            )
             return Gst.FlowReturn.ERROR
         image = np.frombuffer(payload[:expected], dtype=np.uint8).reshape(
             self.config.height,
@@ -575,7 +581,9 @@ def _select_source(
             raise RuntimeError(f"AV source not found: {source_id}")
         return matches[0]
     if len(sources) != 1:
-        raise RuntimeError("exactly one AV source is required unless --source-id is supplied")
+        raise RuntimeError(
+            "exactly one AV source is required unless --source-id is supplied"
+        )
     return sources[0]
 
 

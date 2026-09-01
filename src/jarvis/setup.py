@@ -45,7 +45,7 @@ def _supports_48k(device: dict[str, Any], kind: str) -> bool:
             samplerate=DEVICE_SAMPLE_RATE,
         )
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001 - hardware capability probe
         return False
 
 
@@ -292,7 +292,9 @@ def _remove_windows_user_overrides(names: list[str]) -> None:
             winreg.KEY_SET_VALUE,
         )
     except OSError as exc:
-        raise RuntimeError("Unable to open Windows User environment for migration") from exc
+        raise RuntimeError(
+            "Unable to open Windows User environment for migration"
+        ) from exc
 
     with key:
         for name in names:
@@ -321,7 +323,9 @@ def _migrate_legacy_overrides() -> None:
         "Remove these non-secret JARVIS overrides from Windows User environment",
         True,
     ):
-        print("Legacy overrides retained; they remain higher priority than machine.json.")
+        print(
+            "Legacy overrides retained; they remain higher priority than machine.json."
+        )
         return
 
     _remove_windows_user_overrides(legacy)

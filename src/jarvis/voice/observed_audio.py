@@ -30,15 +30,11 @@ class ObservedSessionAudioInput(SessionAudioInput):
         observed_at_monotonic: float | None = None,
     ) -> bool:
         observed_at = (
-            time.monotonic()
-            if observed_at_monotonic is None
-            else observed_at_monotonic
+            time.monotonic() if observed_at_monotonic is None else observed_at_monotonic
         )
 
         if observed_at < 0:
-            raise ValueError(
-                "audio observation timestamp must be non-negative"
-            )
+            raise ValueError("audio observation timestamp must be non-negative")
 
         accepted = super().push_frame(
             frame,
@@ -52,8 +48,7 @@ class ObservedSessionAudioInput(SessionAudioInput):
             self._observer(frame, observed_at)
         except Exception:
             LOGGER.exception(
-                "Passive session-audio observer failed; "
-                "conversation audio continues"
+                "Passive session-audio observer failed; conversation audio continues"
             )
 
         return True

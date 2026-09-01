@@ -128,7 +128,9 @@ async def test_clean_paired_pcm_switches_from_wake_to_active_session() -> None:
 
 
 @pytest.mark.asyncio
-async def test_clean_paired_pcm_preserves_pre_roll_timestamp_for_observed_input() -> None:
+async def test_clean_paired_pcm_preserves_pre_roll_timestamp_for_observed_input() -> (
+    None
+):
     detector = FakeDetector()
     runtime = make_runtime(
         detector,

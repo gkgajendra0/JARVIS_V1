@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-import jarvis.preflight as preflight
+from jarvis import preflight
 from jarvis.config import JarvisConfig
 from jarvis.preflight import PreflightCheck, StartupPreflightError
 

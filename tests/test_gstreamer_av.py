@@ -32,9 +32,7 @@ def _source() -> AVSourceDescriptor:
             ),
             display_name="Capture Input terminal (OsmoPocket3)",
         ),
-        capabilities=frozenset(
-            {SensorCapability.VIDEO, SensorCapability.AUDIO}
-        ),
+        capabilities=frozenset({SensorCapability.VIDEO, SensorCapability.AUDIO}),
         physical_device_id="19310408-e485-53ca-aea4-84f5edd68ed8",
     )
 
@@ -63,8 +61,7 @@ def test_pipeline_captures_paired_video_and_raw_mono_audio_once() -> None:
     assert "video/x-raw,format=BGR,width=1280,height=720,framerate=30/1" in pipeline
     assert "appsink name=video_sink" in pipeline
     assert (
-        'wasapi2src device="{0.0.1.00000000}.'
-        '{2789c851-7a26-4474-bdd7-c82256ca1fa6}"'
+        'wasapi2src device="{0.0.1.00000000}.{2789c851-7a26-4474-bdd7-c82256ca1fa6}"'
     ) in pipeline
     assert "provide-clock=true" in pipeline
     assert "audio/x-raw,format=S16LE,rate=48000,channels=1" in pipeline
@@ -101,7 +98,13 @@ def test_full_duplex_pipeline_keeps_echo_reference_before_render_resampling() ->
     probe_index = pipeline.index("webrtcechoprobe name=echo_probe")
     render_resample_index = pipeline.index("audioresample", probe_index)
     render_sink_index = pipeline.index("wasapi2sink", render_resample_index)
-    assert silence_index < mixer_index < probe_index < render_resample_index < render_sink_index
+    assert (
+        silence_index
+        < mixer_index
+        < probe_index
+        < render_resample_index
+        < render_sink_index
+    )
 
     appsrc_index = pipeline.index("appsrc name=playback_src")
     mixer_reference_index = pipeline.index("playback_mix.", appsrc_index)

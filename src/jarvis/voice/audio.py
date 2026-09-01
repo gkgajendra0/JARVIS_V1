@@ -730,14 +730,10 @@ class LocalAudioRuntime:
         observed_at_monotonic: float | None = None,
     ) -> None:
         observed_at = (
-            time.monotonic()
-            if observed_at_monotonic is None
-            else observed_at_monotonic
+            time.monotonic() if observed_at_monotonic is None else observed_at_monotonic
         )
         if observed_at < 0:
-            raise ValueError(
-                "audio observation timestamp must be non-negative"
-            )
+            raise ValueError("audio observation timestamp must be non-negative")
 
         self._ring.append(
             _TimedAudioFrame(
@@ -747,19 +743,13 @@ class LocalAudioRuntime:
         )
 
         self._ring_samples += frame.samples_per_channel
-        limit = int(
-            self._ring_buffer_seconds * DEVICE_SAMPLE_RATE
-        )
+        limit = int(self._ring_buffer_seconds * DEVICE_SAMPLE_RATE)
 
         while (
             self._ring
-            and self._ring_samples
-            - self._ring[0].frame.samples_per_channel
-            >= limit
+            and self._ring_samples - self._ring[0].frame.samples_per_channel >= limit
         ):
-            self._ring_samples -= (
-                self._ring.popleft().frame.samples_per_channel
-            )
+            self._ring_samples -= self._ring.popleft().frame.samples_per_channel
 
     def activate_session(self, session_input: SessionAudioInput) -> None:
         if self._active_input is not None:
@@ -772,18 +762,14 @@ class LocalAudioRuntime:
 
         for timed_frame in reversed(self._ring):
             selected.appendleft(timed_frame)
-            selected_samples += (
-                timed_frame.frame.samples_per_channel
-            )
+            selected_samples += timed_frame.frame.samples_per_channel
             if selected_samples >= pre_roll_samples:
                 break
 
         for timed_frame in selected:
             if not session_input.push_frame(
                 timed_frame.frame,
-                observed_at_monotonic=(
-                    timed_frame.observed_at_monotonic
-                ),
+                observed_at_monotonic=(timed_frame.observed_at_monotonic),
             ):
                 self._active_input = None
                 raise RuntimeError(

@@ -49,8 +49,13 @@ def build_production_voice_runtime(
         )
     if config.active_speaker_shadow_enabled and not config.speaker_shadow_enabled:
         raise RuntimeError("active-speaker shadow requires speaker shadow")
-    if config.active_speaker_shadow_enabled and config.active_speaker_model_path is None:
-        raise RuntimeError("LR-ASD model is required when active-speaker shadow is enabled")
+    if (
+        config.active_speaker_shadow_enabled
+        and config.active_speaker_model_path is None
+    ):
+        raise RuntimeError(
+            "LR-ASD model is required when active-speaker shadow is enabled"
+        )
 
     predictor = load_livekit_predictor(Path(config.wake_model_path))
     detector = LiveKitWakeDetector(

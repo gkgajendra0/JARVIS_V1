@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
 
 MACHINE_CONFIG_PATH_ENV = "JARVIS_MACHINE_CONFIG"
 RUNTIME_ENV_OVERRIDES_ENV = "JARVIS_RUNTIME_ENV_OVERRIDES"
@@ -88,7 +88,7 @@ def load_machine_settings(path: Path | None = None) -> dict[str, str]:
         ) from exc
 
     if not isinstance(payload, dict):
-        raise RuntimeError(
+        raise TypeError(
             f"Invalid JARVIS machine configuration at {target}: root must be an object"
         )
     if payload.get("schema_version") != MACHINE_CONFIG_SCHEMA_VERSION:
@@ -99,7 +99,7 @@ def load_machine_settings(path: Path | None = None) -> dict[str, str]:
 
     raw_settings = payload.get("settings")
     if not isinstance(raw_settings, dict):
-        raise RuntimeError(
+        raise TypeError(
             f"Invalid JARVIS machine configuration at {target}: settings must be an object"
         )
 
@@ -111,7 +111,7 @@ def load_machine_settings(path: Path | None = None) -> dict[str, str]:
                 "run jarvis-setup to regenerate the machine configuration"
             )
         if not isinstance(value, str):
-            raise RuntimeError(
+            raise TypeError(
                 f"Invalid persisted JARVIS setting {key!r} in {target}: value must be text"
             )
         settings[key] = value

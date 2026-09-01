@@ -179,11 +179,10 @@ class BargeInGate:
                         )
                         self._release_buffer()
                     continue
-                if event.type is vad.VADEventType.END_OF_SPEECH:
-                    if self._gate_open:
-                        self._gate_open = False
-                        self._buffer.clear()
-                        self._buffer_samples = 0
+                if event.type is vad.VADEventType.END_OF_SPEECH and self._gate_open:
+                    self._gate_open = False
+                    self._buffer.clear()
+                    self._buffer_samples = 0
         except asyncio.CancelledError:
             raise
         except Exception:

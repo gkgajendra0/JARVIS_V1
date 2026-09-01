@@ -117,9 +117,7 @@ def summarize_timing(buffers: list[TimedBuffer]) -> StreamTimingStats:
     for previous, current in pairwise(buffers):
         if previous.duration_seconds is None:
             continue
-        error = current.pts_seconds - (
-            previous.pts_seconds + previous.duration_seconds
-        )
+        error = current.pts_seconds - (previous.pts_seconds + previous.duration_seconds)
         timestamp_errors.append(abs(error))
         positive_gaps.append(max(0.0, error))
 
@@ -139,9 +137,7 @@ def summarize_timing(buffers: list[TimedBuffer]) -> StreamTimingStats:
             None if not positive_gaps else round(max(positive_gaps) * 1000, 3)
         ),
         max_timestamp_error_ms=(
-            None
-            if not timestamp_errors
-            else round(max(timestamp_errors) * 1000, 3)
+            None if not timestamp_errors else round(max(timestamp_errors) * 1000, 3)
         ),
         monotonic=monotonic,
     )
@@ -175,9 +171,7 @@ def _build_command(source: AVSourceDescriptor) -> list[str]:
     if gst_launch is None:
         raise RuntimeError("gst-launch-1.0 is not available on PATH")
 
-    audio_device = _mmdevice_id_from_pnp_instance(
-        source.audio_endpoint.stable_id
-    )
+    audio_device = _mmdevice_id_from_pnp_instance(source.audio_endpoint.stable_id)
     return [
         gst_launch,
         "-m",

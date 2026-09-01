@@ -25,12 +25,6 @@ def test_observer_sees_only_frames_accepted_by_session_queue() -> None:
 
     audio_input = ObservedSessionAudioInput(observer, capacity_frames=1)
 
-    assert (
-        audio_input.push_frame(_frame(1), observed_at_monotonic=12.5)
-        is True
-    )
-    assert (
-        audio_input.push_frame(_frame(2), observed_at_monotonic=13.5)
-        is False
-    )
+    assert audio_input.push_frame(_frame(1), observed_at_monotonic=12.5) is True
+    assert audio_input.push_frame(_frame(2), observed_at_monotonic=13.5) is False
     assert observed == [(1, 12.5)]

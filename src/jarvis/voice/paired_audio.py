@@ -148,11 +148,7 @@ class GStreamerPairedAudioOutput(io.AudioOutput):
         loop.call_later(remaining, self._finish_segment, segment)
 
     def _finish_segment(self, segment: _PlaybackSegment) -> None:
-        if (
-            segment.completed
-            or segment.generation != self._generation
-            or self._closed
-        ):
+        if segment.completed or segment.generation != self._generation or self._closed:
             return
         segment.completed = True
         if segment in self._segments:
@@ -254,7 +250,9 @@ class PairedAudioRuntime:
         if not self._av_source.running:
             raise RuntimeError("paired AV source must be running before paired audio")
         if not self._av_source.playback_enabled:
-            raise RuntimeError("paired AV source has no full-duplex playback/AEC branch")
+            raise RuntimeError(
+                "paired AV source has no full-duplex playback/AEC branch"
+            )
 
         self._loop = asyncio.get_running_loop()
         self.output = GStreamerPairedAudioOutput(self._av_source)
@@ -302,7 +300,9 @@ class PairedAudioRuntime:
             raise ValueError("paired canonical audio timestamp must be non-negative")
         payload = bytes(data)
         if len(payload) != samples_per_channel * 2:
-            raise ValueError("paired canonical PCM byte length does not match int16 mono")
+            raise ValueError(
+                "paired canonical PCM byte length does not match int16 mono"
+            )
 
         loop = self._loop
         if loop is None or loop.is_closed():

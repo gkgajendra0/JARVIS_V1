@@ -314,7 +314,9 @@ async def test_active_speaker_shadow_uses_separate_paired_audio_window() -> None
     session.emit(
         "conversation_item_added",
         ConversationItemAddedEvent(
-            item=ChatMessage(id="user-paired", role="user", content=["Testing paired audio"])
+            item=ChatMessage(
+                id="user-paired", role="user", content=["Testing paired audio"]
+            )
         ),
     )
     await asyncio.wait_for(submitted.wait(), timeout=1)

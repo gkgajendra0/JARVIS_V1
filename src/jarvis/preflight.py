@@ -86,7 +86,7 @@ def _audio_checks(config: JarvisConfig) -> list[PreflightCheck]:
 
     try:
         inputs, outputs = _audio_devices()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - hardware boundary must fail closed
         return [PreflightCheck("Audio inventory", False, str(exc))]
 
     try:
@@ -110,7 +110,7 @@ def _audio_checks(config: JarvisConfig) -> list[PreflightCheck]:
                 f"{input_info['name']} @ {DEVICE_SAMPLE_RATE} Hz",
             )
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - hardware boundary must fail closed
         checks.append(PreflightCheck("Conversation microphone", False, str(exc)))
 
     try:
@@ -136,7 +136,7 @@ def _audio_checks(config: JarvisConfig) -> list[PreflightCheck]:
                 f"{output_info['name']} @ {DEVICE_SAMPLE_RATE} Hz",
             )
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - hardware boundary must fail closed
         checks.append(
             PreflightCheck(
                 "Conversation speaker",

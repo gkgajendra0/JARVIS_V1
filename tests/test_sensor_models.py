@@ -39,9 +39,7 @@ def test_av_source_rejects_swapped_endpoint_kinds() -> None:
             display_name="Camera 1",
             video_endpoint=_audio(),
             audio_endpoint=_video(),
-            capabilities=frozenset(
-                {SensorCapability.VIDEO, SensorCapability.AUDIO}
-            ),
+            capabilities=frozenset({SensorCapability.VIDEO, SensorCapability.AUDIO}),
         )
 
 

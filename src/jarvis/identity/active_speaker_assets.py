@@ -34,7 +34,9 @@ def default_lr_asd_model_path() -> Path:
         return Path(configured).expanduser()
     local_app_data = os.getenv("LOCALAPPDATA")
     if local_app_data:
-        return Path(local_app_data) / "JARVIS" / "models" / "lr-asd" / LR_ASD_AVA_FILENAME
+        return (
+            Path(local_app_data) / "JARVIS" / "models" / "lr-asd" / LR_ASD_AVA_FILENAME
+        )
     xdg_cache = os.getenv("XDG_CACHE_HOME")
     if xdg_cache:
         return Path(xdg_cache) / "jarvis" / "models" / "lr-asd" / LR_ASD_AVA_FILENAME
@@ -66,7 +68,9 @@ def ensure_lr_asd_model(
 ) -> Path:
     if timeout_seconds <= 0:
         raise ValueError("timeout_seconds must be positive")
-    target = Path(path).expanduser() if path is not None else default_lr_asd_model_path()
+    target = (
+        Path(path).expanduser() if path is not None else default_lr_asd_model_path()
+    )
     if target.is_file():
         return verify_lr_asd_model(target)
 

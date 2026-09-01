@@ -10,7 +10,6 @@ from livekit.agents import vad
 from jarvis.voice.audio import SessionAudioInput
 from jarvis.voice.barge_in import BargeInGate
 
-
 _STOP = object()
 
 
@@ -132,7 +131,9 @@ async def test_confirmed_speech_releases_prefix_and_live_frames() -> None:
 
 
 @pytest.mark.asyncio
-async def test_playback_end_discards_unconfirmed_echo_and_restores_normal_flow() -> None:
+async def test_playback_end_discards_unconfirmed_echo_and_restores_normal_flow() -> (
+    None
+):
     fake_vad = FakeVAD()
     gate = BargeInGate(vad_model=fake_vad, buffer_seconds=0.05)
     target = SessionAudioInput(capacity_frames=10)
