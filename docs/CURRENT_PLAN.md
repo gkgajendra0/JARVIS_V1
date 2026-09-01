@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — STARTUP OPERABILITY ACCEPTED — DUAL POCKET3 AUDIO OWNERSHIP REJECTED — ADR-013 SINGLE-MICROPHONE ACTIVE-SPEAKER REPLACEMENT IMPLEMENTED — REAL-MACHINE ACCEPTANCE NEXT — THEN 3B.11 SCORE-DISTRIBUTION BAKE-OFF**
+**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — STARTUP OPERABILITY ACCEPTED — LIVEKIT 48-kHz FULL-DUPLEX AUDIO ACCEPTED — DUAL POCKET3 AUDIO OWNERSHIP REJECTED — ADR-013 SINGLE-MICROPHONE ACTIVE-SPEAKER INTEGRATION REAL-MACHINE ACCEPTED — LIVE VISION PREVIEW DEFAULT-ON — 3B.11 SCORE-DISTRIBUTION / NEGATIVE-SCENARIO BAKE-OFF NEXT**
 
 This file is the operational source of truth for what is done, what is accepted, and what happens next. Detailed evidence belongs in `docs/research/`; significant architecture decisions belong in `docs/decisions/`.
 
@@ -32,13 +32,15 @@ This file is the operational source of truth for what is done, what is accepted,
 | 3B.9 | Deferred | attention waits for fixed monitor-relative sensor |
 | 3B.10 | Accepted shadow provider | CAM++ speaker embedding foundation |
 | 3B.10A | Human-accepted | passive canonical user-turn capture + OWNER-context bridge |
-| Startup operability | Human-accepted configuration/preflight | `jarvis-setup`, machine profile, stable device selectors, consolidated preflight |
+| Startup operability | Human-accepted | `jarvis-setup`, machine profile, stable device selectors, consolidated preflight |
+| Conversation full duplex | Human-accepted | LiveKit MediaDevices + NVIDIA/TV 48 kHz |
+| 3B.11 integration boundary | Human-accepted | single Pocket3 mic owner + canonical PCM + normal timestamped Vision |
 
 T2 `CORROBORATED_OWNER` remains intentionally disabled.
 
 ---
 
-## Accepted startup operation
+## Accepted normal startup
 
 Normal operation no longer depends on rebuilding environment variables from chat/PowerShell history.
 
@@ -69,9 +71,7 @@ Decision: `docs/decisions/ADR-012_MACHINE_CONFIGURATION_AND_STARTUP_PREFLIGHT.md
 
 ---
 
-## Conversation audio — accepted
-
-Production conversation audio remains:
+## Accepted conversation audio
 
 ```text
 Pocket3 microphone @ 48 kHz
@@ -86,11 +86,11 @@ LiveKit MediaDevices output @ 48 kHz
 NVIDIA HDMI → 24'TV
 ```
 
-Real acceptance already proved:
+Real acceptance proved:
 
-- no false self-interruption while JARVIS speaks and the user is silent;
-- deliberate real human barge-in interrupts correctly;
-- Bluetooth/Tribit path is not the accepted render path.
+- JARVIS can complete speech without triggering on its own TV output;
+- deliberate human barge-in still interrupts correctly;
+- Bluetooth/Tribit is not the accepted production render path.
 
 Decision: `docs/decisions/ADR-011_LIVEKIT_MEDIADEVICES_48K_FULL_DUPLEX.md`.
 
@@ -98,43 +98,22 @@ Decision: `docs/decisions/ADR-011_LIVEKIT_MEDIADEVICES_48K_FULL_DUPLEX.md`.
 
 ## 3B.11 integration correction — dual Pocket3 audio ownership REJECTED
 
-The first active-speaker integration attempted two simultaneous consumers of the same Pocket3 microphone:
+Real-machine testing rejected two simultaneous independent consumers of the Pocket3 microphone.
 
 ```text
-Pocket3 mic
-   ├── LiveKit MediaDevices → conversation
-   └── GStreamer wasapi2src → raw LR-ASD evidence
+GStreamer first  → LiveKit/PortAudio microphone open fails
+PortAudio first  → GStreamer paired AV fails to reach PLAYING
 ```
 
-Real-machine tests rejected this boundary in both acquisition orders.
-
-### GStreamer first
-
-- paired GStreamer AV started;
-- Vision produced a real frame;
-- LiveKit then resolved the Pocket3 microphone but failed opening `sounddevice.InputStream` with `PaErrorCode -9996: Invalid device`.
-
-### PortAudio first
-
-- Pocket3 PortAudio stream opened and became active;
-- GStreamer paired AV then failed to reach PLAYING.
-
-Conclusion:
-
-```text
-GStreamer first  → LiveKit mic fails
-PortAudio first  → GStreamer paired AV fails
-```
-
-Therefore **two independent Pocket3 microphone owners are not a viable production architecture on this machine**.
+Therefore a production architecture with separate LiveKit and GStreamer microphone ownership is forbidden on this machine.
 
 Evidence: `docs/research/STEP_3B11_DUAL_AUDIO_OWNERSHIP_ACCEPTANCE_RESULTS.md`.
 
 ---
 
-## ADR-013 replacement — IMPLEMENTED, REAL-MACHINE ACCEPTANCE NEXT
+## ADR-013 replacement — REAL-MACHINE ACCEPTED
 
-Keep one microphone owner and reuse the canonical JARVIS timelines:
+Production Step-3 active-speaker diagnostics now use one microphone owner and the existing canonical JARVIS timelines:
 
 ```text
                             POCKET3
@@ -155,52 +134,55 @@ canonical timestamped user PCM               │
                             LR-ASD
 ```
 
-Implementation now exists in:
+Accepted real-machine run proved all of the following can operate together:
 
-- `src/jarvis/voice/canonical_active_speaker_runtime.py`;
-- `src/jarvis/voice/production_runtime.py`.
+- startup preflight;
+- Pocket3 LiveKit microphone capture;
+- NVIDIA/TV 48-kHz output;
+- WebRTC AEC/NS/HPF/AGC;
+- integrated Vision;
+- RF-DETR person detection;
+- persistent person tracking;
+- head detection;
+- wake detection;
+- Gemini realtime conversation;
+- speaker-shadow canonical turn capture;
+- LR-ASD CUDA inference;
+- target lock;
+- PTZ follow.
 
-The production builder no longer creates `GStreamerPairedAVSource` for active-speaker sensing.
+LR-ASD produced multiple real `SCORED` observations. This accepts the **integration boundary**, not an active-speaker threshold.
 
-This is deliberately a reuse/integration change, not a new DSP stack:
-
-- LiveKit remains the only Pocket3 microphone owner;
-- existing `ObservedSessionAudioInput` + `InMemorySpeakerTurnCapture` provide bounded canonical user-turn PCM with monotonic timestamps;
-- existing Vision frames use monotonic timestamps and exact frame/snapshot association;
-- existing LR-ASD provider remains unchanged;
-- no temporary WAV/video files;
-- no second microphone;
-- no new echo canceller;
-- no authority/prototype promotion.
+Evidence: `docs/research/STEP_3B11_SINGLE_OWNER_ACTIVE_SPEAKER_ACCEPTANCE_RESULTS.md`.
 
 Decision: `docs/decisions/ADR-013_SINGLE_OWNER_POCKET3_AUDIO_FOR_ACTIVE_SPEAKER.md`.
 
-### Immediate acceptance gate
+---
 
-Run the new production `jarvis-voice` on the real PC and prove:
+## Vision observability — default-on
 
-1. startup preflight passes with no manual runtime variables;
-2. Pocket3 microphone opens successfully through LiveKit MediaDevices;
-3. NVIDIA/TV 48-kHz output opens successfully;
-4. normal Vision starts simultaneously without GStreamer audio ownership;
-5. wake detection remains healthy;
-6. startup greeting / conversation playback remains healthy;
-7. JARVIS does not self-interrupt on its own TV speech;
-8. deliberate real barge-in still works;
-9. OWNER speech creates a bounded canonical speaker turn;
-10. Vision produces overlapping timestamped visual-track/head evidence;
-11. LR-ASD reaches a diagnostic `SCORED` result when evidence is sufficient;
-12. no threshold/prototype admission is enabled.
+When integrated Vision is enabled, normal production startup now opens the existing `OpenCVVisionObserver` window by default.
 
-If this gate fails, debug the exact failed boundary. Do not reintroduce dual microphone ownership.
+The window renders the same canonical interpretation JARVIS uses:
+
+- live Pocket3 frame;
+- person track boxes / IDs / confidence;
+- head boxes;
+- selected/locked target;
+- follow SAFE/ARMED state;
+- framing anchor;
+- pan/tilt/zoom command values;
+- analysis age.
+
+An explicit `JARVIS_VISION_PREVIEW=false` may suppress the window for headless/quiet diagnostic runs.
 
 ---
 
-## After ADR-013 real-machine acceptance
+## Immediate next work — 3B.11 score-distribution bake-off
 
-Proceed with the actual 3B.11 LR-ASD bake-off.
+The LR-ASD model is integrated and scoring, but no threshold is accepted yet.
 
-Required scenarios:
+Required real-machine scenarios:
 
 ```text
 A. OWNER visible + OWNER speaking
@@ -216,12 +198,13 @@ H. temporary OWNER head/face loss
 Measure:
 
 - LR-ASD raw score distributions;
+- temporal stability;
 - false active assignment to a silent OWNER face;
 - off-camera speech behavior;
 - replay/playback behavior;
 - overlap behavior;
 - timing/alignment sensitivity;
-- inference latency and GPU/CPU footprint;
+- inference latency / GPU / CPU footprint;
 - insufficient/ambiguous rate.
 
 No leaderboard/default threshold is accepted directly.
@@ -240,9 +223,9 @@ Only after a safe temporal rule is human-accepted may `ACTIVE_OWNER_SPEAKER` per
 6. Resolve authoritative OWNER-vs-UNKNOWN face separation when consenting live non-owner calibration becomes available, or keep T2 designed so provisional face evidence cannot be mistaken for authoritative identity.
 7. Define deterministic T2 `CORROBORATED_OWNER` composition from final accepted evidence.
 8. Run broader replay/stale/expiry/cross-session/cross-track/cross-actor/policy/degraded-mode tests.
-9. Remove obsolete GStreamer conversation/paired-audio and custom barge-in production plumbing after replacement acceptance.
+9. Remove obsolete GStreamer paired-conversation and custom barge-in production plumbing after replacement cleanup is safe.
 10. Final docs/quality-gate/roadmap reconciliation.
-11. Protected-main review and merge of Phase 3B.
+11. Protected-main review and merge of Phase 3B through draft PR #11.
 12. Revisit attention when fixed monitor-mounted hardware exists.
 
 ---
@@ -260,15 +243,24 @@ Only after a safe temporal rule is human-accepted may `ACTIVE_OWNER_SPEAKER` per
 
 ---
 
-## Documentation discipline
+## Branch / merge state
 
-- update `CURRENT_PLAN.md` whenever active slice/acceptance/next action changes;
-- update `CURRENT_ARCHITECTURE.md` whenever the production boundary changes;
-- significant architecture choices require ADRs;
-- real-machine results belong in `docs/research/`;
-- superseded experiments must be marked and eventually removed;
-- documentation reconciliation is part of acceptance, not later cleanup.
+Current active integration branch:
+
+```text
+feature/step-3b11-sensor-av-foundation
+```
+
+Current protected integration PR:
+
+```text
+PR #11 → main (DRAFT)
+```
+
+`main` does **not** yet contain this Phase-3B integration. The branch and PR must remain until the remaining 3B.11 acceptance and final reconciliation are complete. Do not delete the branch before protected-main merge.
+
+The older PR #10 is historical/superseded and is not the current integration path.
 
 ## Immediate Next Action
 
-**Pull the ADR-013 single-microphone implementation and run the real production `jarvis-voice` acceptance.**
+**Pull the latest feature branch, run `jarvis-voice`, confirm the live JARVIS Vision interpretation window appears, then begin the bounded 3B.11 score-distribution scenarios.**
