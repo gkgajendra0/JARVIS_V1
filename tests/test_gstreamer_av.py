@@ -84,7 +84,10 @@ def test_full_duplex_pipeline_keeps_echo_reference_before_render_resampling() ->
         ),
     )
 
+    assert "audiotestsrc name=playback_silence is-live=true wave=silence" in pipeline
+    assert "audiomixer name=playback_mix" in pipeline
     assert "appsrc name=playback_src" in pipeline
+    assert "playback_mix." in pipeline
     assert "webrtcechoprobe name=echo_probe" in pipeline
     assert "webrtcdsp name=aec_dsp probe=echo_probe echo-cancel=true" in pipeline
     assert "noise-suppression=false" in pipeline
@@ -93,10 +96,16 @@ def test_full_duplex_pipeline_keeps_echo_reference_before_render_resampling() ->
     assert "appsink name=clean_audio_sink" in pipeline
     assert f'wasapi2sink device="{render_id}" low-latency=true' in pipeline
 
+    silence_index = pipeline.index("audiotestsrc name=playback_silence")
+    mixer_index = pipeline.index("audiomixer name=playback_mix")
     probe_index = pipeline.index("webrtcechoprobe name=echo_probe")
     render_resample_index = pipeline.index("audioresample", probe_index)
     render_sink_index = pipeline.index("wasapi2sink", render_resample_index)
-    assert probe_index < render_resample_index < render_sink_index
+    assert silence_index < mixer_index < probe_index < render_resample_index < render_sink_index
+
+    appsrc_index = pipeline.index("appsrc name=playback_src")
+    mixer_reference_index = pipeline.index("playback_mix.", appsrc_index)
+    assert appsrc_index < mixer_reference_index
 
     raw_sink_index = pipeline.index("appsink name=audio_sink")
     clean_sink_index = pipeline.index("appsink name=clean_audio_sink")
