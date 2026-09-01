@@ -14,6 +14,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from itertools import pairwise
 
 import numpy as np
 
@@ -421,12 +422,8 @@ def main() -> int:
     finally:
         capture.close()
 
-    video_monotonic = all(
-        later >= earlier for earlier, later in zip(video_times, video_times[1:])
-    )
-    audio_monotonic = all(
-        later >= earlier for earlier, later in zip(audio_times, audio_times[1:])
-    )
+    video_monotonic = all(later >= earlier for earlier, later in pairwise(video_times))
+    audio_monotonic = all(later >= earlier for earlier, later in pairwise(audio_times))
     result = {
         "source_id": source.source_id,
         "display_name": source.display_name,
