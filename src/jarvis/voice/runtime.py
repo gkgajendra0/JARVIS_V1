@@ -509,12 +509,13 @@ class VoiceRuntimeController:
             await self.audio.start()
             if isinstance(self.audio, PairedAudioRuntime):
                 LOGGER.info(
-                    "Canonical microphone source is paired DJI PCM from GStreamer; "
+                    "Canonical microphone source is GStreamer WebRTC-AEC-cleaned DJI PCM; "
                     "no PortAudio or Voicemeeter input device is open"
                 )
                 LOGGER.info(
-                    "WebRTC APM is active on paired DJI conversation audio with Tribit "
-                    "physical playback supplied as the reverse-stream echo reference"
+                    "Full-duplex GStreamer AEC is active: JARVIS playback feeds "
+                    "webrtcechoprobe before physical render resampling, while raw paired "
+                    "DJI PCM remains available only for synchronized LR-ASD evidence"
                 )
             if self._dev_control is not None:
                 control_task = asyncio.create_task(
@@ -834,8 +835,8 @@ class VoiceRuntimeController:
             if self._active_speaker_provider is not None:
                 LOGGER.info(
                     "LR-ASD active-speaker shadow is active: synchronized Pocket3 video + "
-                    "paired DJI PCM are captured once by GStreamer, local Silero trims the "
-                    "paired audio, and scores remain diagnostic only; active-speaker "
+                    "raw paired DJI PCM are captured once by GStreamer, local Silero trims "
+                    "the paired audio, and scores remain diagnostic only; active-speaker "
                     "confirmation and prototype admission remain disabled"
                 )
             await active_end.wait()
@@ -872,6 +873,15 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         raise RuntimeError(
             "JARVIS_LR_ASD_MODEL_PATH is required when active-speaker shadow is enabled"
         )
+    if (
+        config.active_speaker_shadow_enabled
+        and config.audio_output_wasapi_device is None
+    ):
+        raise RuntimeError(
+            "JARVIS_AUDIO_OUTPUT_WASAPI_DEVICE is required when active-speaker paired "
+            "A/V is enabled so the GStreamer AEC graph has an explicit physical render "
+            "endpoint"
+        )
 
     predictor = load_livekit_predictor(Path(config.wake_model_path))
     detector = LiveKitWakeDetector(
@@ -894,6 +904,7 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
 
     if config.active_speaker_shadow_enabled:
         assert config.active_speaker_model_path is not None
+        assert config.audio_output_wasapi_device is not None
         discovered_sources = discover_windows_av_sources()
         if len(discovered_sources) != 1:
             raise RuntimeError(
@@ -905,11 +916,14 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         )
         active_speaker_av_source = GStreamerPairedAVSource(
             discovered_sources[0],
-            GStreamerPairedAVConfig(audio_rate=48_000),
+            GStreamerPairedAVConfig(
+                audio_rate=48_000,
+                playback_device_id=config.audio_output_wasapi_device,
+            ),
         )
         audio: LocalAudioRuntime | PairedAudioRuntime = PairedAudioRuntime(
             detector,
-            output_device_name=config.audio_output_device,
+            av_source=active_speaker_av_source,
             pre_roll_seconds=config.audio_pre_roll_seconds,
             ring_buffer_seconds=config.audio_ring_buffer_seconds,
         )
@@ -918,8 +932,13 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
                 "JARVIS_AUDIO_INPUT_DEVICE is ignored because paired GStreamer DJI PCM "
                 "is the canonical microphone source"
             )
+        if config.audio_output_device is not None:
+            LOGGER.info(
+                "JARVIS_AUDIO_OUTPUT_DEVICE is ignored in paired full-duplex mode; "
+                "JARVIS_AUDIO_OUTPUT_WASAPI_DEVICE is the canonical render endpoint"
+            )
 
-        def on_paired_audio(
+        def on_paired_raw_audio(
             data: bytes,
             sample_rate: int,
             num_channels: int,
@@ -934,8 +953,16 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
                 samples_per_channel=samples_per_channel,
                 observed_at_monotonic=observed_at_monotonic,
             )
+
+        def on_paired_clean_audio(
+            data: bytes,
+            sample_rate: int,
+            num_channels: int,
+            samples_per_channel: int,
+            observed_at_monotonic: float,
+        ) -> None:
             assert isinstance(audio, PairedAudioRuntime)
-            audio.feed_external_pcm(
+            audio.feed_clean_pcm(
                 data,
                 sample_rate=sample_rate,
                 num_channels=num_channels,
@@ -943,7 +970,8 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
                 observed_at_monotonic=observed_at_monotonic,
             )
 
-        active_speaker_av_source.set_audio_frame_tap(on_paired_audio)
+        active_speaker_av_source.set_audio_frame_tap(on_paired_raw_audio)
+        active_speaker_av_source.set_clean_audio_frame_tap(on_paired_clean_audio)
         active_speaker_visual_buffer = ActiveSpeakerVisualBuffer(
             max_seconds=config.max_utterance_seconds + 1.0
         )
