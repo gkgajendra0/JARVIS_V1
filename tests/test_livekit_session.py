@@ -19,8 +19,6 @@ from jarvis.voice.agent import INSTRUCTIONS
 from jarvis.voice.livekit_session import (
     LiveKitConversationBridge,
     _create_realtime_model,
-    _create_session_vad,
-    _create_turn_handling,
     create_voice_session,
     require_google_api_key,
     require_openai_api_key,
@@ -151,7 +149,7 @@ def test_gemini_api_key_is_required_only_for_gemini(
         _create_realtime_model(JarvisConfig(realtime_provider="gemini"))
 
 
-def test_gemini_model_disables_server_activity_detection(
+def test_gemini_model_keeps_provider_native_activity_detection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
@@ -182,47 +180,11 @@ def test_gemini_model_disables_server_activity_detection(
     assert captured["input_audio_transcription"] == {}
     assert captured["output_audio_transcription"] == {}
     activity = captured["realtime_input_config"].automatic_activity_detection
-    assert activity.disabled is True
-
-
-def test_gemini_session_uses_conservative_local_silero(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    captured: dict[str, Any] = {}
-    sentinel = object()
-
-    def fake_vad(**kwargs: Any) -> object:
-        captured.update(kwargs)
-        return sentinel
-
-    monkeypatch.setattr("jarvis.voice.livekit_session.inference.VAD", fake_vad)
-
-    vad = _create_session_vad(JarvisConfig(realtime_provider="gemini"))
-
-    assert vad is sentinel
-    assert captured == {
-        "model": "silero",
-        "min_speech_duration": 0.12,
-        "min_silence_duration": 0.55,
-        "prefix_padding_duration": 0.30,
-        "max_buffered_speech": 60.0,
-        "activation_threshold": 0.65,
-    }
-    assert _create_session_vad(JarvisConfig(realtime_provider="openai")) is None
-
-
-def test_gemini_turn_handling_requires_vad_barge_in() -> None:
-    handling = _create_turn_handling(JarvisConfig(realtime_provider="gemini"))
-
-    assert handling["turn_detection"] == "vad"
-    assert handling["interruption"] == {
-        "enabled": True,
-        "mode": "vad",
-        "min_duration": 0.30,
-        "false_interruption_timeout": 1.0,
-        "resume_false_interruption": True,
-    }
-    assert handling["preemptive_generation"] == {"enabled": False}
+    assert activity.disabled is not True
+    assert activity.start_of_speech_sensitivity == "START_SENSITIVITY_LOW"
+    assert activity.end_of_speech_sensitivity == "END_SENSITIVITY_LOW"
+    assert activity.prefix_padding_ms == 300
+    assert activity.silence_duration_ms == 800
 
 
 def test_openai_model_uses_stricter_vad_threshold(
