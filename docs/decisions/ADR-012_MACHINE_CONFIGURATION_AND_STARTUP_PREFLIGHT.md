@@ -55,6 +55,19 @@ On the current machine the intended production roles are:
 
 Setup automatically prefers those known roles when uniquely detected. If it cannot safely infer a device, it presents only 48-kHz-compatible candidates for explicit selection.
 
+### Managed LR-ASD asset
+
+When Step-3 active-speaker shadow is enabled, `jarvis-setup` must not require the operator to manually locate or manage the LR-ASD checkpoint.
+
+The accepted first active-speaker model is the official LR-ASD AVA checkpoint from the pinned upstream commit already recorded by the provider:
+
+- file: `weight/pretrain_AVA.model`;
+- upstream commit: `1b6dcd2d8fc2895683de6508ec6294ec47d388ca`;
+- expected size: `3,426,337` bytes;
+- expected Git blob SHA-1: `d724be582f6d34f1b099657235dedafa0668fd82`.
+
+If no valid configured checkpoint exists, setup downloads that exact pinned asset into the local JARVIS model cache, verifies byte count and Git-blob identity before atomic promotion, and persists the resulting local path. A mismatched/tampered download fails closed.
+
 ### One-time setup command
 
 Add:
@@ -67,7 +80,7 @@ The command:
 
 1. reuses valid stable existing settings;
 2. ignores legacy `index:N` audio selectors;
-3. validates or asks for required model paths;
+3. validates the required wake model and automatically resolves the pinned LR-ASD asset when active-speaker shadow is enabled;
 4. detects 48-kHz input/output devices;
 5. records vision/speaker/active-speaker feature choices;
 6. persists the non-secret machine profile;
@@ -136,6 +149,10 @@ Rejected. Real Windows testing demonstrated index drift when devices/default end
 
 Rejected. Conversation AEC is only accepted on a 48-kHz output path; silently falling back to the 44.1-kHz Tribit Bluetooth endpoint would reintroduce the proven self-echo failure.
 
+### Require manual LR-ASD checkpoint management
+
+Rejected. The active-speaker provider already pins an exact official upstream checkpoint identity, so making normal setup depend on a remembered path creates unnecessary operator state. Setup owns acquisition and integrity verification of that non-secret model asset.
+
 ## Consequences
 
 - Machine setup becomes an explicit product surface rather than chat/manual shell knowledge.
@@ -144,6 +161,7 @@ Rejected. Conversation AEC is only accepted on a 48-kHz output path; silently fa
 - Startup errors become consolidated and actionable.
 - Environment overrides remain available for development, but legacy ambient overrides must be cleaned up during migration.
 - Future hardware changes should be handled by rerunning `jarvis-setup`, not editing source code.
+- The pinned LR-ASD checkpoint is automatically managed like other model assets rather than becoming another manual startup prerequisite.
 
 ## Acceptance gate
 
@@ -151,7 +169,7 @@ Before this ADR is marked fully human-accepted on the current PC:
 
 1. install the updated editable package;
 2. clear legacy persistent non-secret `JARVIS_*` overrides that would shadow the machine profile;
-3. run `jarvis-setup` and confirm it persists stable Pocket3 + TV selectors;
+3. run `jarvis-setup` and confirm it persists stable Pocket3 + TV selectors and an integrity-verified local LR-ASD model path;
 4. run `jarvis-voice` from a fresh PowerShell without manually setting JARVIS configuration variables;
 5. confirm startup preflight passes and the production runtime starts;
 6. confirm `jarvis-dev` launches the same production runtime when tested on its configured branch.
