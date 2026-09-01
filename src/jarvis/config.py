@@ -60,6 +60,7 @@ class JarvisConfig:
     wake_debounce_seconds: float = 2.0
     audio_input_device: str | None = None
     audio_output_device: str | None = None
+    audio_output_wasapi_device: str | None = None
     audio_ring_buffer_seconds: float = 2.5
     audio_pre_roll_seconds: float = 0.75
     wake_cooldown_seconds: float = 1.0
@@ -106,7 +107,11 @@ class JarvisConfig:
                 normalized_value = str(value).strip()
                 object.__setattr__(self, name, normalized_value or None)
 
-        for name in ("audio_input_device", "audio_output_device"):
+        for name in (
+            "audio_input_device",
+            "audio_output_device",
+            "audio_output_wasapi_device",
+        ):
             value = getattr(self, name)
             if value is not None:
                 normalized_value = str(value).strip()
@@ -152,6 +157,9 @@ class JarvisConfig:
             audio_input_device=_optional_environment_text("JARVIS_AUDIO_INPUT_DEVICE"),
             audio_output_device=_optional_environment_text(
                 "JARVIS_AUDIO_OUTPUT_DEVICE"
+            ),
+            audio_output_wasapi_device=_optional_environment_text(
+                "JARVIS_AUDIO_OUTPUT_WASAPI_DEVICE"
             ),
             audio_ring_buffer_seconds=_environment_float(
                 "JARVIS_AUDIO_RING_BUFFER_SECONDS", 2.5
