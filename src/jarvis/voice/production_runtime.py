@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 from pathlib import Path
 
 from jarvis.config import JarvisConfig
@@ -23,6 +24,7 @@ from jarvis.identity.owner_context import (
 from jarvis.identity.speaker_turn import InMemorySpeakerTurnCapture
 from jarvis.identity.speech_region import LiveKitSileroSpeechRegionDetector
 from jarvis.logging_config import configure_logging
+from jarvis.preflight import StartupPreflightError, require_startup_preflight
 from jarvis.sensors.gstreamer_av import (
     GStreamerPairedAVConfig,
     GStreamerPairedAVSource,
@@ -39,21 +41,16 @@ LOGGER = logging.getLogger(__name__)
 def build_production_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
     """Build the validated full-duplex runtime without custom echo/barge-in gates."""
     if config.wake_model_path is None:
-        raise RuntimeError("JARVIS_WAKE_MODEL_PATH is required for Step-2 wake mode")
+        raise RuntimeError("wake model is required for Step-2 wake mode")
     if config.speaker_shadow_enabled and not config.vision_enabled:
         raise RuntimeError(
-            "JARVIS_SPEAKER_SHADOW_ENABLED requires JARVIS_VISION_ENABLED because "
-            "speaker prototype admission must be bound to independent live-owner context"
+            "speaker shadow requires vision because speaker prototype admission "
+            "must be bound to independent live-owner context"
         )
     if config.active_speaker_shadow_enabled and not config.speaker_shadow_enabled:
-        raise RuntimeError(
-            "JARVIS_ACTIVE_SPEAKER_SHADOW_ENABLED requires "
-            "JARVIS_SPEAKER_SHADOW_ENABLED"
-        )
+        raise RuntimeError("active-speaker shadow requires speaker shadow")
     if config.active_speaker_shadow_enabled and config.active_speaker_model_path is None:
-        raise RuntimeError(
-            "JARVIS_LR_ASD_MODEL_PATH is required when active-speaker shadow is enabled"
-        )
+        raise RuntimeError("LR-ASD model is required when active-speaker shadow is enabled")
 
     predictor = load_livekit_predictor(Path(config.wake_model_path))
     detector = LiveKitWakeDetector(
@@ -145,9 +142,8 @@ def build_production_voice_runtime(config: JarvisConfig) -> VoiceRuntimeControll
 
     if config.audio_output_wasapi_device is not None:
         LOGGER.info(
-            "JARVIS_AUDIO_OUTPUT_WASAPI_DEVICE is no longer used for conversation "
-            "playback; JARVIS_AUDIO_OUTPUT_DEVICE selects the LiveKit MediaDevices "
-            "48 kHz render endpoint"
+            "JARVIS_AUDIO_OUTPUT_WASAPI_DEVICE is ignored by production conversation "
+            "playback; JARVIS_AUDIO_OUTPUT_DEVICE selects the MediaDevices 48 kHz output"
         )
 
     return VoiceRuntimeController(
@@ -163,19 +159,25 @@ def build_production_voice_runtime(config: JarvisConfig) -> VoiceRuntimeControll
     )
 
 
-async def _run_from_environment() -> None:
+async def _run_from_configuration() -> None:
     config = JarvisConfig.from_environment()
     configure_logging(config.log_level)
+    require_startup_preflight(config)
     runtime = build_production_voice_runtime(config)
     await runtime.run()
 
 
-def main() -> None:
+def main() -> int:
     try:
-        asyncio.run(_run_from_environment())
+        asyncio.run(_run_from_configuration())
+        return 0
+    except StartupPreflightError as exc:
+        print(f"\n{exc}", file=sys.stderr)
+        return 2
     except KeyboardInterrupt:
         LOGGER.info("JARVIS voice runtime stopped")
+        return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
