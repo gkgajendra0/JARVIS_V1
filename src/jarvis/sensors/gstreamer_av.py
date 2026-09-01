@@ -1,9 +1,10 @@
 """Paired GStreamer camera/audio capture for synchronized perception.
 
 This module owns one GStreamer pipeline for a physically paired Windows AV source.
-Video is exposed through the existing CameraSource contract while paired mono PCM
-can be observed by active-speaker shadow code. It does not change trust state or
-conversation audio routing.
+Video and raw microphone PCM remain available for synchronized perception while an
+optional full-duplex playback/AEC branch exposes echo-cancelled microphone PCM for
+wake detection and realtime conversation. Raw PCM is never replaced by the cleaned
+branch because active-speaker corroboration needs the physical capture timeline.
 """
 
 from __future__ import annotations
@@ -24,6 +25,9 @@ from jarvis.vision.camera import CapturedFrame
 
 AudioFrameTap = Callable[[bytes, int, int, int, float], None]
 
+AEC_SAMPLE_RATE = 48_000
+AEC_CHANNELS = 1
+
 
 @dataclass(frozen=True, slots=True)
 class GStreamerPairedAVConfig:
@@ -31,12 +35,18 @@ class GStreamerPairedAVConfig:
     height: int = 720
     fps: int = 30
     audio_rate: int = 16_000
+    playback_device_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.width <= 0 or self.height <= 0 or self.fps <= 0:
             raise ValueError("paired AV video dimensions/fps must be positive")
         if self.audio_rate <= 0:
             raise ValueError("paired AV audio rate must be positive")
+        if self.playback_device_id is not None:
+            normalized = str(self.playback_device_id).strip()
+            if not normalized:
+                raise ValueError("paired AV playback device id must not be empty")
+            object.__setattr__(self, "playback_device_id", normalized)
 
 
 def _mmdevice_id_from_pnp_instance(instance_id: str) -> str:
@@ -54,38 +64,88 @@ def build_pipeline_description(
     source: AVSourceDescriptor,
     config: GStreamerPairedAVConfig,
 ) -> str:
-    """Return one paired capture pipeline with application-owned sinks."""
+    """Return one paired capture graph with optional full-duplex WebRTC AEC."""
 
     audio_device = _mmdevice_id_from_pnp_instance(source.audio_endpoint.stable_id)
     video_name = _gst_quote(source.video_endpoint.display_name)
     audio_name = _gst_quote(audio_device)
-    return " ".join(
+    parts = [
+        "mfvideosrc",
+        f"device-name={video_name}",
+        "!",
+        (
+            "video/x-raw,format=NV12,"
+            f"width={config.width},height={config.height},framerate={config.fps}/1"
+        ),
+        "!",
+        "videoconvert",
+        "!",
+        (
+            "video/x-raw,format=BGR,"
+            f"width={config.width},height={config.height},framerate={config.fps}/1"
+        ),
+        "!",
+        (
+            "appsink name=video_sink emit-signals=true sync=false "
+            "max-buffers=2 drop=true wait-on-eos=false"
+        ),
+    ]
+
+    if config.playback_device_id is not None:
+        playback_device = _gst_quote(config.playback_device_id)
+        playback_caps = _gst_quote(
+            "audio/x-raw,format=S16LE,layout=interleaved,rate=48000,channels=1"
+        )
+        parts.extend(
+            [
+                "appsrc",
+                "name=playback_src",
+                "is-live=true",
+                "format=time",
+                "do-timestamp=true",
+                "block=true",
+                "max-time=100000000",
+                f"caps={playback_caps}",
+                "!",
+                "queue",
+                "max-size-time=100000000",
+                "max-size-bytes=0",
+                "max-size-buffers=0",
+                "!",
+                "webrtcechoprobe",
+                "name=echo_probe",
+                "!",
+                "audioconvert",
+                "!",
+                "audioresample",
+                "!",
+                "wasapi2sink",
+                f"device={playback_device}",
+                "low-latency=true",
+            ]
+        )
+
+    parts.extend(
         [
-            "mfvideosrc",
-            f"device-name={video_name}",
-            "!",
-            (
-                "video/x-raw,format=NV12,"
-                f"width={config.width},height={config.height},framerate={config.fps}/1"
-            ),
-            "!",
-            "videoconvert",
-            "!",
-            (
-                "video/x-raw,format=BGR,"
-                f"width={config.width},height={config.height},framerate={config.fps}/1"
-            ),
-            "!",
-            (
-                "appsink name=video_sink emit-signals=true sync=false "
-                "max-buffers=2 drop=true wait-on-eos=false"
-            ),
             "wasapi2src",
             f"device={audio_name}",
             "low-latency=true",
             "provide-clock=true",
             "!",
             "audioconvert",
+            "!",
+            "audioresample",
+            "!",
+            (
+                "audio/x-raw,format=S16LE,"
+                f"rate={AEC_SAMPLE_RATE},channels={AEC_CHANNELS}"
+            ),
+            "!",
+            "tee",
+            "name=mic_capture",
+            "mic_capture.",
+            "!",
+            "queue",
             "!",
             "audioresample",
             "!",
@@ -97,6 +157,28 @@ def build_pipeline_description(
             ),
         ]
     )
+
+    if config.playback_device_id is not None:
+        parts.extend(
+            [
+                "mic_capture.",
+                "!",
+                "queue",
+                "!",
+                (
+                    "webrtcdsp name=aec_dsp probe=echo_probe echo-cancel=true "
+                    "noise-suppression=false gain-control=false "
+                    "high-pass-filter=false"
+                ),
+                "!",
+                (
+                    "appsink name=clean_audio_sink emit-signals=true sync=false "
+                    "max-buffers=64 drop=true wait-on-eos=false"
+                ),
+            ]
+        )
+
+    return " ".join(parts)
 
 
 def _load_gstreamer():
@@ -115,7 +197,7 @@ def _load_gstreamer():
 
 
 class GStreamerPairedAVSource:
-    """Capture paired video/audio once and expose timestamp-aligned application data."""
+    """Capture paired A/V once and optionally own the full-duplex AEC graph."""
 
     def __init__(
         self,
@@ -137,8 +219,10 @@ class GStreamerPairedAVSource:
         self._next_frame_id = 0
         self._read_error: RuntimeError | None = None
         self._audio_tap: AudioFrameTap | None = None
+        self._clean_audio_tap: AudioFrameTap | None = None
         self._monotonic_origin: float | None = None
         self._pipeline_clock_name: str | None = None
+        self._playback_src = None
 
     @property
     def running(self) -> bool:
@@ -148,9 +232,19 @@ class GStreamerPairedAVSource:
     def pipeline_clock_name(self) -> str | None:
         return self._pipeline_clock_name
 
+    @property
+    def playback_enabled(self) -> bool:
+        return self.config.playback_device_id is not None
+
     def set_audio_frame_tap(self, tap: AudioFrameTap | None) -> None:
+        """Set the raw physical-microphone tap used by synchronized perception."""
         with self._tap_lock:
             self._audio_tap = tap
+
+    def set_clean_audio_frame_tap(self, tap: AudioFrameTap | None) -> None:
+        """Set the WebRTC-AEC-cleaned microphone tap used by conversation audio."""
+        with self._tap_lock:
+            self._clean_audio_tap = tap
 
     def start(self) -> None:
         if self._pipeline is not None:
@@ -162,16 +256,30 @@ class GStreamerPairedAVSource:
         audio_sink = pipeline.get_by_name("audio_sink")
         if video_sink is None or audio_sink is None:
             pipeline.set_state(Gst.State.NULL)
-            raise RuntimeError("paired AV pipeline did not expose both appsinks")
+            raise RuntimeError("paired AV pipeline did not expose both capture appsinks")
+
+        clean_audio_sink = pipeline.get_by_name("clean_audio_sink")
+        playback_src = pipeline.get_by_name("playback_src")
+        if self.playback_enabled and (
+            clean_audio_sink is None or playback_src is None
+        ):
+            pipeline.set_state(Gst.State.NULL)
+            raise RuntimeError(
+                "paired AV full-duplex pipeline did not expose AEC audio endpoints"
+            )
 
         video_sink.connect("new-sample", self._on_video_sample)
         audio_sink.connect("new-sample", self._on_audio_sample)
+        if clean_audio_sink is not None:
+            clean_audio_sink.connect("new-sample", self._on_clean_audio_sample)
+
         self._stop.clear()
         self._read_error = None
         self._latest = None
         self._next_frame_id = 0
         self._gst = Gst
         self._pipeline = pipeline
+        self._playback_src = playback_src
 
         result = pipeline.set_state(Gst.State.PLAYING)
         if result == Gst.StateChangeReturn.FAILURE:
@@ -230,12 +338,58 @@ class GStreamerPairedAVSource:
                 return None
             return frame
 
+    def push_playback_pcm(
+        self,
+        data: bytes | bytearray | memoryview,
+        *,
+        sample_rate: int,
+        num_channels: int,
+        samples_per_channel: int,
+    ) -> None:
+        """Push canonical JARVIS PCM into the echo-reference/playback branch."""
+        if sample_rate != AEC_SAMPLE_RATE or num_channels != AEC_CHANNELS:
+            raise ValueError("paired playback PCM must be 48 kHz mono")
+        if samples_per_channel <= 0:
+            raise ValueError("paired playback frame size must be positive")
+        payload = bytes(data)
+        if len(payload) != samples_per_channel * 2:
+            raise ValueError("paired playback PCM byte length does not match int16 mono")
+
+        Gst = self._gst
+        appsrc = self._playback_src
+        if Gst is None or appsrc is None or not self.running:
+            raise RuntimeError("paired GStreamer playback is not running")
+
+        buffer = Gst.Buffer.new_allocate(None, len(payload), None)
+        buffer.fill(0, payload)
+        buffer.duration = Gst.util_uint64_scale(
+            samples_per_channel,
+            Gst.SECOND,
+            sample_rate,
+        )
+        result = appsrc.emit("push-buffer", buffer)
+        if result not in {Gst.FlowReturn.OK, Gst.FlowReturn.FLUSHING}:
+            raise RuntimeError(f"paired GStreamer playback push failed: {result}")
+
+    def flush_playback(self) -> None:
+        """Discard queued playback on interruption without flushing capture branches."""
+        Gst = self._gst
+        appsrc = self._playback_src
+        if Gst is None or appsrc is None or not self.running:
+            return
+        pad = appsrc.get_static_pad("src")
+        if pad is None:
+            return
+        pad.push_event(Gst.Event.new_flush_start())
+        pad.push_event(Gst.Event.new_flush_stop(False))
+
     def close(self) -> None:
         self._stop.set()
         with self._condition:
             self._condition.notify_all()
         with self._tap_lock:
             self._audio_tap = None
+            self._clean_audio_tap = None
 
         pipeline = self._pipeline
         Gst = self._gst
@@ -248,6 +402,7 @@ class GStreamerPairedAVSource:
 
         self._pipeline = None
         self._gst = None
+        self._playback_src = None
         self._bus_thread = None
         self._monotonic_origin = None
         self._pipeline_clock_name = None
@@ -300,7 +455,14 @@ class GStreamerPairedAVSource:
             self._condition.notify_all()
         return Gst.FlowReturn.OK
 
-    def _on_audio_sample(self, sink):
+    def _pull_audio_sample(
+        self,
+        sink,
+        *,
+        expected_rate: int,
+        tap: AudioFrameTap | None,
+        label: str,
+    ):
         Gst = self._gst
         if Gst is None:
             return 0
@@ -314,31 +476,49 @@ class GStreamerPairedAVSource:
 
         ok, mapping = buffer.map(Gst.MapFlags.READ)
         if not ok:
-            self._fail(RuntimeError("paired AV audio buffer mapping failed"))
+            self._fail(RuntimeError(f"paired AV {label} buffer mapping failed"))
             return Gst.FlowReturn.ERROR
         try:
             payload = bytes(mapping.data)
         finally:
             buffer.unmap(mapping)
         if not payload or len(payload) % 2:
-            self._fail(RuntimeError("paired AV audio buffer was not int16 PCM"))
+            self._fail(RuntimeError(f"paired AV {label} buffer was not int16 PCM"))
             return Gst.FlowReturn.ERROR
 
-        with self._tap_lock:
-            tap = self._audio_tap
         if tap is not None:
             try:
                 tap(
                     payload,
-                    self.config.audio_rate,
+                    expected_rate,
                     1,
                     len(payload) // 2,
                     observed_at,
                 )
             except Exception as exc:  # noqa: BLE001 - native callback boundary
-                self._fail(RuntimeError(f"paired AV audio tap failed: {exc}"))
+                self._fail(RuntimeError(f"paired AV {label} tap failed: {exc}"))
                 return Gst.FlowReturn.ERROR
         return Gst.FlowReturn.OK
+
+    def _on_audio_sample(self, sink):
+        with self._tap_lock:
+            tap = self._audio_tap
+        return self._pull_audio_sample(
+            sink,
+            expected_rate=self.config.audio_rate,
+            tap=tap,
+            label="raw audio",
+        )
+
+    def _on_clean_audio_sample(self, sink):
+        with self._tap_lock:
+            tap = self._clean_audio_tap
+        return self._pull_audio_sample(
+            sink,
+            expected_rate=AEC_SAMPLE_RATE,
+            tap=tap,
+            label="AEC-clean audio",
+        )
 
     def _bus_loop(self) -> None:
         Gst = self._gst
