@@ -48,6 +48,9 @@ active-speaker = [
     "python_speech_features==0.6",
     "scipy>=1.14,<2",
 ]
+sensor-av = [
+    "gstreamer-bundle==1.28.6; platform_system == 'Windows'",
+]
 dev = ["pytest>=8,<10", "pytest-asyncio>=0.23,<2", "ruff==0.16.5"]
 
 [tool.setuptools]
