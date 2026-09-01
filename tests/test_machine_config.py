@@ -33,7 +33,7 @@ def test_machine_config_refuses_unapproved_secret(tmp_path: Path) -> None:
         )
 
 
-def test_jarvis_config_uses_machine_profile_then_environment_override(
+def test_jarvis_config_uses_machine_profile_by_default(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -49,14 +49,12 @@ def test_jarvis_config_uses_machine_profile_then_environment_override(
         path,
     )
     monkeypatch.setenv("JARVIS_MACHINE_CONFIG", str(path))
-    for name in (
-        "JARVIS_REALTIME_PROVIDER",
-        "JARVIS_WAKE_MODEL_PATH",
-        "JARVIS_AUDIO_INPUT_DEVICE",
+    monkeypatch.delenv("JARVIS_RUNTIME_ENV_OVERRIDES", raising=False)
+    monkeypatch.setenv("JARVIS_REALTIME_PROVIDER", "openai")
+    monkeypatch.setenv(
         "JARVIS_AUDIO_OUTPUT_DEVICE",
-        "JARVIS_VISION_ENABLED",
-    ):
-        monkeypatch.delenv(name, raising=False)
+        "name:Stale Bluetooth|hostapi:Windows WASAPI",
+    )
 
     config = JarvisConfig.from_environment()
     assert config.realtime_provider == "gemini"
@@ -65,5 +63,31 @@ def test_jarvis_config_uses_machine_profile_then_environment_override(
     assert config.audio_output_device == "name:TV|hostapi:Windows WASAPI"
     assert config.vision_enabled is True
 
+
+def test_explicit_diagnostic_mode_allows_environment_override(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "machine.json"
+    save_machine_settings(
+        {"JARVIS_REALTIME_PROVIDER": "gemini"},
+        path,
+    )
+    monkeypatch.setenv("JARVIS_MACHINE_CONFIG", str(path))
+    monkeypatch.setenv("JARVIS_RUNTIME_ENV_OVERRIDES", "true")
     monkeypatch.setenv("JARVIS_REALTIME_PROVIDER", "openai")
+
     assert JarvisConfig.from_environment().realtime_provider == "openai"
+
+
+def test_environment_is_used_when_machine_setting_is_absent(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "machine.json"
+    save_machine_settings({}, path)
+    monkeypatch.setenv("JARVIS_MACHINE_CONFIG", str(path))
+    monkeypatch.delenv("JARVIS_RUNTIME_ENV_OVERRIDES", raising=False)
+    monkeypatch.setenv("JARVIS_REALTIME_PROVIDER", "gemini")
+
+    assert JarvisConfig.from_environment().realtime_provider == "gemini"
