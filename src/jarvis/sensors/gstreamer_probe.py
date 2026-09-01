@@ -16,6 +16,7 @@ import statistics
 import subprocess
 import time
 from dataclasses import asdict, dataclass
+from itertools import pairwise
 
 from jarvis.sensors.models import AVSourceDescriptor
 from jarvis.sensors.windows_discovery import discover_windows_av_sources
@@ -103,7 +104,7 @@ def summarize_timing(buffers: list[TimedBuffer]) -> StreamTimingStats:
         return StreamTimingStats(0, None, None, None, None, None, None, False)
 
     pts = [buffer.pts_seconds for buffer in buffers]
-    periods = [later - earlier for earlier, later in zip(pts, pts[1:])]
+    periods = [later - earlier for earlier, later in pairwise(pts)]
     monotonic = all(period >= 0 for period in periods)
     duration_values = [
         buffer.duration_seconds
@@ -113,7 +114,7 @@ def summarize_timing(buffers: list[TimedBuffer]) -> StreamTimingStats:
 
     timestamp_errors: list[float] = []
     positive_gaps: list[float] = []
-    for previous, current in zip(buffers, buffers[1:]):
+    for previous, current in pairwise(buffers):
         if previous.duration_seconds is None:
             continue
         error = current.pts_seconds - (
