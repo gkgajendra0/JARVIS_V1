@@ -2,7 +2,7 @@
 
 ## Status
 
-**IMPLEMENTED/HUMAN-ACCEPTED THROUGH PHASE 3B.10A. STARTUP MACHINE CONFIGURATION + PREFLIGHT ARE ACCEPTED FOR NORMAL OPERATION. LIVEKIT MEDIADEVICES + NVIDIA/TV 48-kHz CONVERSATION AUDIO IS THE ACCEPTED FULL-DUPLEX PATH. DUAL LIVEKIT + GSTREAMER POCKET3 MICROPHONE OWNERSHIP HAS BEEN REJECTED BY REAL-MACHINE EVIDENCE. ADR-013 SINGLE-MICROPHONE ACTIVE-SPEAKER REPLACEMENT IS IMPLEMENTED AND AWAITS REAL-MACHINE ACCEPTANCE. ATTENTION REMAINS DEFERRED. T2 REMAINS DISABLED.**
+**IMPLEMENTED/HUMAN-ACCEPTED THROUGH PHASE 3B.10A. STARTUP MACHINE CONFIGURATION + PREFLIGHT ARE ACCEPTED. LIVEKIT MEDIADEVICES + NVIDIA/TV 48-kHz CONVERSATION AUDIO IS ACCEPTED. DUAL LIVEKIT + GSTREAMER POCKET3 MICROPHONE OWNERSHIP IS REJECTED. ADR-013 SINGLE-MICROPHONE ACTIVE-SPEAKER INTEGRATION IS REAL-MACHINE ACCEPTED. LIVE VISION INTERPRETATION PREVIEW IS DEFAULT-ON WHEN VISION IS ENABLED. 3B.11 SCORE-DISTRIBUTION ACCEPTANCE IS NEXT. ATTENTION REMAINS DEFERRED. T2 REMAINS DISABLED.**
 
 This file describes current production boundaries. Detailed evidence belongs in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; significant choices belong in ADRs.
 
@@ -88,9 +88,9 @@ NVIDIA HDMI @ 48 kHz
 Requirements:
 
 - capture and render share one LiveKit `MediaDevices`/APM loop;
-- physical render must accept 48 kHz;
+- physical render accepts 48 kHz;
 - Bluetooth/Tribit 44.1-kHz A2DP is not the accepted production output;
-- JARVIS's own speech must not create false user turns;
+- JARVIS's own speech does not create false user turns;
 - real human barge-in remains supported by the realtime conversation stack rather than a custom local gate.
 
 Decision: `docs/decisions/ADR-011_LIVEKIT_MEDIADEVICES_48K_FULL_DUPLEX.md`.
@@ -123,6 +123,21 @@ LIVE_OWNER_CANDIDATE / UNKNOWN / AMBIGUOUS / INSUFFICIENT
 ```
 
 `LIVE_OWNER_CANDIDATE` remains evidence-only and does not create T2.
+
+### Operator-visible interpretation
+
+When integrated Vision is enabled, production starts the existing `OpenCVVisionObserver` by default. The observer renders the same canonical state used internally by JARVIS:
+
+- camera frame;
+- person tracks / IDs / confidence;
+- head boxes;
+- selected/locked target;
+- follow SAFE/ARMED state;
+- framing target;
+- pan/tilt/zoom command values;
+- analysis age.
+
+This is an observability/transparency surface, not a second perception path. It does not reopen the camera. `JARVIS_VISION_PREVIEW=false` may suppress the window for headless/quiet runs.
 
 ---
 
@@ -167,7 +182,7 @@ Real-machine evidence rejected both acquisition orders:
 - GStreamer first → LiveKit microphone open fails (`PaErrorCode -9996`);
 - PortAudio first → GStreamer paired AV pipeline fails to reach PLAYING.
 
-This establishes a hard current-machine design rule:
+Hard current-machine design rule:
 
 > **One Pocket3 microphone owner.**
 
@@ -175,9 +190,9 @@ Evidence: `docs/research/STEP_3B11_DUAL_AUDIO_OWNERSHIP_ACCEPTANCE_RESULTS.md`.
 
 ---
 
-## ADR-013 active-speaker architecture — implemented replacement
+## ADR-013 active-speaker architecture — real-machine accepted integration
 
-LR-ASD now reuses existing JARVIS timelines rather than opening another microphone:
+LR-ASD reuses existing JARVIS timelines rather than opening another microphone:
 
 ```text
                             POCKET3
@@ -210,13 +225,13 @@ Production implementation:
 - `src/jarvis/voice/production_runtime.py` — single-microphone production assembly;
 - `src/jarvis/identity/active_speaker.py` — LR-ASD provider + visual temporal buffer.
 
-The production builder no longer instantiates `GStreamerPairedAVSource` for active-speaker sensing.
+The production builder does not instantiate `GStreamerPairedAVSource` for active-speaker sensing.
 
 ### Timing boundary
 
 Both canonical audio observations and normal Vision frames use JARVIS monotonic timestamps.
 
-LR-ASD is allowed to score only when:
+LR-ASD scores only when:
 
 - there is a fresh same-track OWNER context;
 - the bounded canonical speech turn has timestamps;
@@ -226,9 +241,23 @@ LR-ASD is allowed to score only when:
 
 Insufficient timing/visual/speech evidence fails closed.
 
-### Important uncertainty retained
+### Real-machine acceptance
 
-The canonical audio is WebRTC AEC/NS/HPF/AGC processed rather than a second raw microphone stream. We do **not** assume this has zero impact on LR-ASD. That impact is measured during the real 3B.11 score-distribution bake-off before any active-speaker threshold is accepted.
+The accepted run simultaneously proved:
+
+- LiveKit Pocket3 microphone healthy;
+- NVIDIA/TV 48-kHz render healthy;
+- WebRTC AEC/NS/HPF/AGC healthy;
+- normal Vision healthy;
+- RF-DETR/tracking/head pipeline healthy;
+- wake + Gemini conversation healthy;
+- canonical speaker-turn capture healthy;
+- target lock / PTZ follow healthy;
+- LR-ASD CUDA inference reached real `SCORED` results.
+
+This accepts the **integration architecture only**. The canonical audio is processed by WebRTC AEC/NS/HPF/AGC rather than raw mic PCM, so deployment thresholds must come from the real score-distribution bake-off.
+
+Evidence: `docs/research/STEP_3B11_SINGLE_OWNER_ACTIVE_SPEAKER_ACCEPTANCE_RESULTS.md`.
 
 Decision: `docs/decisions/ADR-013_SINGLE_OWNER_POCKET3_AUDIO_FOR_ACTIVE_SPEAKER.md`.
 
@@ -292,21 +321,45 @@ Decision: `docs/decisions/ADR-007_STEP_3_ATTENTION_INTENT_EVIDENCE.md`.
 
 ## Current acceptance boundary
 
-The ADR-013 replacement is implemented but not yet human-accepted.
-
-Next real-machine proof must establish simultaneously:
+Integration is accepted. The next unresolved 3B.11 question is **classification**, not plumbing:
 
 ```text
-LiveKit Pocket3 microphone healthy
-+ TV 48-kHz render healthy
-+ normal Vision healthy
-+ wake/conversation healthy
-+ canonical user-turn timestamps healthy
-+ overlapping same-track visual frames healthy
-+ LR-ASD diagnostic scoring reachable
+real LR-ASD score distributions
+        +
+negative/replay/overlap scenarios
+        +
+timing robustness
+        ↓
+accepted temporal decision rule
+        ↓
+ACTIVE_OWNER_SPEAKER / OTHER_OR_OFFCAMERA /
+AMBIGUOUS / INSUFFICIENT
 ```
 
-No active-speaker threshold, persistent voice-template admission, or T2 promotion is enabled by this implementation.
+Until that rule is human-accepted:
+
+- `active_speaker_confirmed=False` remains deliberate;
+- CAM++ prototype admission remains disabled;
+- persistent voice enrollment remains disabled;
+- T2 remains disabled.
+
+---
+
+## Branch / integration control
+
+Active branch:
+
+```text
+feature/step-3b11-sensor-av-foundation
+```
+
+Current protected-main integration path:
+
+```text
+Draft PR #11 → main
+```
+
+`main` does not yet contain this Phase-3B work. The feature branch must not be deleted before protected-main merge. Older PR #10 is historical/superseded.
 
 ---
 
