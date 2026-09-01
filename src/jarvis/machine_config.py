@@ -4,9 +4,10 @@ The machine configuration stores stable hardware selectors, model paths, and
 feature switches that belong to one installed PC. Secrets never belong here;
 provider API keys remain in the process/Windows user environment.
 
-Environment variables intentionally remain supported as higher-priority runtime
-overrides so development and diagnostics do not require rewriting the persisted
-machine profile.
+For normal operation, persisted machine settings are authoritative. Runtime
+environment overrides for persisted settings are deliberately opt-in through
+``JARVIS_RUNTIME_ENV_OVERRIDES`` so stale inherited shell variables cannot
+silently replace the accepted machine profile.
 """
 
 from __future__ import annotations
@@ -17,7 +18,9 @@ from pathlib import Path
 from typing import Mapping
 
 MACHINE_CONFIG_PATH_ENV = "JARVIS_MACHINE_CONFIG"
+RUNTIME_ENV_OVERRIDES_ENV = "JARVIS_RUNTIME_ENV_OVERRIDES"
 MACHINE_CONFIG_SCHEMA_VERSION = 1
+_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 
 # Explicit allow-list prevents an API key or other secret from being persisted by
 # a future caller merely because it starts with JARVIS_.
@@ -60,6 +63,15 @@ def default_machine_config_path() -> Path:
     if local_app_data and local_app_data.strip():
         return Path(local_app_data) / "JARVIS" / "machine.json"
     return Path.home() / ".jarvis" / "machine.json"
+
+
+def runtime_environment_overrides_enabled() -> bool:
+    """Return whether persisted settings may be shadowed by environment values."""
+
+    value = os.getenv(RUNTIME_ENV_OVERRIDES_ENV)
+    if value is None:
+        return False
+    return value.strip().casefold() in _TRUE_VALUES
 
 
 def load_machine_settings(path: Path | None = None) -> dict[str, str]:
@@ -138,7 +150,15 @@ def configured_text(
     machine_settings: Mapping[str, str],
     default: str | None = None,
 ) -> str | None:
-    """Return environment override, then persisted setting, then default."""
+    """Return configured value using safe machine-first precedence.
+
+    Normal precedence is persisted machine setting, then environment value, then
+    default. Environment may override an existing persisted setting only when
+    ``JARVIS_RUNTIME_ENV_OVERRIDES`` is explicitly enabled for diagnostics.
+    """
+
+    if name in machine_settings and not runtime_environment_overrides_enabled():
+        return machine_settings[name]
 
     environment_value = os.getenv(name)
     if environment_value is not None:
