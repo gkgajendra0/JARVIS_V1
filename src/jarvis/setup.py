@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from jarvis.config import FALSE_VALUES, TRUE_VALUES, JarvisConfig
+from jarvis.identity.active_speaker_assets import ensure_lr_asd_model
 from jarvis.machine_config import (
     PERSISTABLE_SETTINGS,
     configured_text,
@@ -248,13 +249,16 @@ def _build_settings(existing: dict[str, str]) -> dict[str, str]:
 
     if active_enabled:
         active_current = configured_text("JARVIS_LR_ASD_MODEL_PATH", existing)
-        active_path = _existing_file_or_prompt(
-            "LR-ASD model",
-            active_current,
-            required=True,
-        )
-        assert active_path is not None
-        settings["JARVIS_LR_ASD_MODEL_PATH"] = active_path
+        configured_path = None
+        if active_current:
+            candidate = Path(active_current).expanduser()
+            if candidate.is_file():
+                configured_path = candidate
+        if configured_path is None:
+            print("Resolving official pinned LR-ASD AVA checkpoint...")
+        active_path = ensure_lr_asd_model(configured_path)
+        print(f"Using LR-ASD model: {active_path}")
+        settings["JARVIS_LR_ASD_MODEL_PATH"] = str(active_path)
     else:
         settings.pop("JARVIS_LR_ASD_MODEL_PATH", None)
 
