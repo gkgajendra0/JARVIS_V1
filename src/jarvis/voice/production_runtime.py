@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -91,6 +92,13 @@ def build_production_voice_runtime(
             "Step-3 active-speaker diagnostics use one Pocket3 microphone owner: "
             "canonical LiveKit user PCM + timestamped Vision track/head frames"
         )
+
+    # Integrated desktop Vision is observable by default. The observer renders
+    # the same canonical tracks/heads/target/follow/framing state JARVIS uses,
+    # rather than opening a second camera path. An explicit environment value can
+    # still disable the window for headless/quiet diagnostic runs.
+    if config.vision_enabled:
+        os.environ.setdefault("JARVIS_VISION_PREVIEW", "true")
 
     # The accepted normal Vision source is video-only OpenCV capture. The exact
     # frame/snapshot tap populates the LR-ASD visual buffer in monotonic time.
