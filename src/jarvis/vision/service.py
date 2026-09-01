@@ -9,7 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from threading import Event, RLock, Thread
 
-from jarvis.vision.camera import CapturedFrame
+from jarvis.vision.camera import CameraSource, CapturedFrame
 from jarvis.vision.diagnostics import VisionDiagnostics
 from jarvis.vision.observer import VisionObserver
 from jarvis.vision.runtime import VisionRuntime, VisionSnapshot
@@ -365,6 +365,7 @@ def build_default_vision_service(
     head_model_path: str | Path | None = None,
     evidence_observer: VisionObserver | None = None,
     frame_pair_tap: FramePairTap | None = None,
+    camera_source: CameraSource | None = None,
 ) -> VisionService:
     """Compose the benchmark-selected Step 2.5 hardware/runtime stack lazily."""
     from jarvis.vision.camera import OpenCVCameraSource
@@ -387,7 +388,7 @@ def build_default_vision_service(
 
     model_path = resolve_blazeface_model_path(head_model_path)
     runtime = VisionRuntime(
-        camera=OpenCVCameraSource(),
+        camera=camera_source or OpenCVCameraSource(),
         detector=RFDetrNanoDetector(),
         tracker=OCSORTAdapter(
             OCSORTConfig(
