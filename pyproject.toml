@@ -20,6 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
+jarvis-setup = "jarvis.setup:main"
 jarvis-voice = "jarvis.voice.production_runtime:main"
 jarvis-dev = "jarvis.dev_supervisor:main"
 jarvis-vision-preview = "jarvis.vision.preview:main"
