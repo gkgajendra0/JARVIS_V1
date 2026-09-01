@@ -5,7 +5,9 @@ from collections import defaultdict
 from types import SimpleNamespace
 from typing import Any
 
+import numpy as np
 import pytest
+from livekit import rtc
 from livekit.agents import (
     CloseEvent,
     CloseReason,
@@ -16,6 +18,7 @@ from livekit.agents.llm import ChatMessage
 
 from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationSession, ConversationStatus
+from jarvis.identity.speaker_turn import InMemorySpeakerTurnCapture
 from jarvis.voice.audio import LocalAudioOutput
 from jarvis.voice.livekit_session import LiveKitConversationBridge
 from jarvis.voice.runtime import (
@@ -187,6 +190,147 @@ async def test_provider_start_failure_marks_conversation_failed_and_cleans_up() 
     assert session.closed is True
     assert audio.deactivated is True
     assert conversation.status is ConversationStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_speaker_shadow_submits_only_after_committed_user_item() -> None:
+    session = FakeSession()
+    conversation = ConversationSession()
+    bridge = LiveKitConversationBridge(
+        session,  # type: ignore[arg-type]
+        conversation,
+        show_transcript=False,
+    )
+    audio = FakeAudio()
+    config = JarvisConfig(
+        speaker_shadow_enabled=True,
+        initial_request_timeout_seconds=1,
+    )
+    runtime = VoiceRuntimeController(
+        config,
+        audio,  # type: ignore[arg-type]
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+    )
+    submitted = asyncio.Event()
+    observed_turns = []
+
+    async def inspect_shadow_turn(turn, *, audio_turn_id: str) -> None:
+        del audio_turn_id
+        observed_turns.append(turn)
+        submitted.set()
+
+    runtime._inspect_shadow_turn = inspect_shadow_turn  # type: ignore[method-assign]
+    task = asyncio.create_task(runtime._run_one_session())
+    await session.started.wait()
+
+    frame_samples = 1_000
+    samples = np.full(frame_samples, 100, dtype=np.int16)
+    assert session.input.audio.push_frame(
+        rtc.AudioFrame(
+            data=samples.tobytes(),
+            sample_rate=1_000,
+            num_channels=1,
+            samples_per_channel=frame_samples,
+        )
+    )
+
+    session.emit("user_state_changed", SimpleNamespace(new_state="speaking"))
+    session.emit("user_state_changed", SimpleNamespace(new_state="listening"))
+    await asyncio.sleep(0)
+    assert observed_turns == []
+
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(id="user-1", role="user", content=["Can you hear me?"])
+        ),
+    )
+    await asyncio.wait_for(submitted.wait(), timeout=1)
+
+    assert len(observed_turns) == 1
+    assert observed_turns[0].duration_seconds == pytest.approx(1.0)
+    np.testing.assert_array_equal(observed_turns[0].samples, samples)
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_active_speaker_shadow_uses_separate_paired_audio_window() -> None:
+    session = FakeSession()
+    conversation = ConversationSession()
+    bridge = LiveKitConversationBridge(
+        session,  # type: ignore[arg-type]
+        conversation,
+        show_transcript=False,
+    )
+    audio = FakeAudio()
+    config = JarvisConfig(
+        speaker_shadow_enabled=True,
+        initial_request_timeout_seconds=1,
+    )
+    paired_capture = InMemorySpeakerTurnCapture(max_turn_seconds=2.0)
+    runtime = VoiceRuntimeController(
+        config,
+        audio,  # type: ignore[arg-type]
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+        active_speaker_audio_capture=paired_capture,
+    )
+    submitted = asyncio.Event()
+    observed: list[tuple[object, object]] = []
+
+    async def inspect_shadow_turn(
+        turn,
+        *,
+        audio_turn_id: str,
+        active_speaker_turn=None,
+    ) -> None:
+        del audio_turn_id
+        observed.append((turn, active_speaker_turn))
+        submitted.set()
+
+    runtime._inspect_shadow_turn = inspect_shadow_turn  # type: ignore[method-assign]
+    task = asyncio.create_task(runtime._run_one_session())
+    await session.started.wait()
+
+    canonical = np.full(1_000, 111, dtype=np.int16)
+    paired = np.full(1_000, 222, dtype=np.int16)
+    assert session.input.audio.push_frame(
+        rtc.AudioFrame(
+            data=canonical.tobytes(),
+            sample_rate=1_000,
+            num_channels=1,
+            samples_per_channel=1_000,
+        )
+    )
+    paired_capture.push_frame(
+        paired.tobytes(),
+        sample_rate=1_000,
+        num_channels=1,
+        samples_per_channel=1_000,
+        observed_at_monotonic=50.0,
+    )
+
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="user-paired", role="user", content=["Testing paired audio"]
+            )
+        ),
+    )
+    await asyncio.wait_for(submitted.wait(), timeout=1)
+
+    assert len(observed) == 1
+    canonical_turn, paired_turn = observed[0]
+    np.testing.assert_array_equal(canonical_turn.samples, canonical)
+    assert paired_turn is not None
+    np.testing.assert_array_equal(paired_turn.samples, paired)
+    assert paired_turn.start_monotonic == pytest.approx(50.0)
+    assert paired_turn.end_monotonic == pytest.approx(51.0)
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
 
 
 @pytest.mark.asyncio

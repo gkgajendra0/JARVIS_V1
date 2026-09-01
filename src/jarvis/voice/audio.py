@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 import time
 from collections import deque
@@ -15,6 +16,8 @@ from livekit import rtc
 from livekit.agents.voice import io
 
 from jarvis.voice.wakeword import LiveKitWakeDetector
+
+LOGGER = logging.getLogger(__name__)
 
 DEVICE_SAMPLE_RATE = 48_000
 DEVICE_CHANNELS = 1
@@ -40,7 +43,13 @@ class SessionAudioInput(io.AudioInput):
         )
         self._closed = False
 
-    def push_frame(self, frame: rtc.AudioFrame) -> bool:
+    def push_frame(
+        self,
+        frame: rtc.AudioFrame,
+        *,
+        observed_at_monotonic: float | None = None,
+    ) -> bool:
+        del observed_at_monotonic
         if self._closed or self._queue.full():
             return False
         self._queue.put_nowait(frame)
@@ -61,6 +70,12 @@ class SessionAudioInput(io.AudioInput):
         self._queue.put_nowait(_INPUT_CLOSED)
 
 
+@dataclass(frozen=True, slots=True)
+class _TimedAudioFrame:
+    frame: rtc.AudioFrame
+    observed_at_monotonic: float
+
+
 @dataclass(slots=True)
 class _OutputSegment:
     start_sample: int
@@ -69,7 +84,14 @@ class _OutputSegment:
 
 
 class LocalAudioOutput(io.AudioOutput):
-    """LiveKit output sink with physical-playout and interruption accounting."""
+    """LiveKit output sink with physical-playout and interruption accounting.
+
+    The LiveKit/JARVIS side remains at the canonical 48 kHz rate. Physical
+    speakers may expose a different native rate (notably 44.1 kHz Bluetooth
+    A2DP endpoints), so playback is resampled only at this boundary. The actual
+    physical signal is resampled back to the canonical rate before it is fed to
+    WebRTC APM as the reverse-stream echo reference.
+    """
 
     def __init__(
         self,
@@ -78,7 +100,15 @@ class LocalAudioOutput(io.AudioOutput):
         apm: Any = None,
         delay_estimator: Any = None,
         sample_rate: int = DEVICE_SAMPLE_RATE,
+        output_sample_rate: int | None = None,
     ) -> None:
+        if sample_rate <= 0:
+            raise ValueError("canonical output sample rate must be positive")
+        physical_rate = (
+            sample_rate if output_sample_rate is None else output_sample_rate
+        )
+        if physical_rate <= 0:
+            raise ValueError("physical output sample rate must be positive")
         super().__init__(
             label="JARVIS local speaker",
             capabilities=io.AudioOutputCapabilities(pause=True),
@@ -87,7 +117,13 @@ class LocalAudioOutput(io.AudioOutput):
         self._output_device = output_device
         self._apm = apm
         self._delay_estimator = delay_estimator
-        self._target_rate = sample_rate
+        self._canonical_rate = int(sample_rate)
+        self._canonical_frame_samples = self._canonical_rate * FRAME_SIZE_MS // 1000
+        self._target_rate = int(physical_rate)
+        self._physical_frame_samples = max(
+            1,
+            round(self._target_rate * FRAME_SIZE_MS / 1000),
+        )
         self._buffer = bytearray()
         self._lock = threading.Lock()
         self._segments: deque[_OutputSegment] = deque()
@@ -101,8 +137,14 @@ class LocalAudioOutput(io.AudioOutput):
         self._loop: asyncio.AbstractEventLoop | None = None
         self._resampler: rtc.AudioResampler | None = None
         self._resampler_input_rate: int | None = None
+        self._reverse_resampler: rtc.AudioResampler | None = None
+        self._reverse_buffer = bytearray()
         self._timing_error_count = 0
         self._apm_error_count = 0
+
+    @property
+    def physical_sample_rate(self) -> int:
+        return self._target_rate
 
     def start(self) -> None:
         if self._stream is not None:
@@ -116,7 +158,7 @@ class LocalAudioOutput(io.AudioOutput):
             channels=DEVICE_CHANNELS,
             device=self._output_device,
             samplerate=self._target_rate,
-            blocksize=FRAME_SAMPLES,
+            blocksize=self._physical_frame_samples,
         )
         self._stream.start()
 
@@ -150,25 +192,53 @@ class LocalAudioOutput(io.AudioOutput):
         except (AttributeError, RuntimeError, TypeError, ValueError):
             self._timing_error_count += 1
 
-        if self._apm is not None:
-            for start in range(0, frame_count, FRAME_SAMPLES):
-                chunk = outdata[start : start + FRAME_SAMPLES, 0]
-                if len(chunk) != FRAME_SAMPLES:
-                    break
-                try:
-                    self._apm.process_reverse_stream(
-                        rtc.AudioFrame(
-                            data=chunk.tobytes(),
-                            sample_rate=self._target_rate,
-                            num_channels=1,
-                            samples_per_channel=FRAME_SAMPLES,
-                        )
-                    )
-                except (AttributeError, RuntimeError, TypeError, ValueError):
-                    self._apm_error_count += 1
+        self._feed_reverse_apm(outdata[:, 0])
 
         if actual_samples and self._loop is not None:
             self._loop.call_soon_threadsafe(self._finish_played_segments)
+
+    def _feed_reverse_apm(self, physical_samples: np.ndarray) -> None:
+        if self._apm is None:
+            return
+        physical_frame = rtc.AudioFrame(
+            data=np.asarray(physical_samples, dtype=np.int16).tobytes(),
+            sample_rate=self._target_rate,
+            num_channels=1,
+            samples_per_channel=len(physical_samples),
+        )
+        try:
+            if self._target_rate == self._canonical_rate:
+                canonical_frames = [physical_frame]
+            else:
+                if self._reverse_resampler is None:
+                    self._reverse_resampler = rtc.AudioResampler(
+                        input_rate=self._target_rate,
+                        output_rate=self._canonical_rate,
+                        num_channels=1,
+                    )
+                canonical_frames = self._reverse_resampler.push(physical_frame)
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            self._apm_error_count += 1
+            return
+
+        for canonical in canonical_frames:
+            self._reverse_buffer.extend(bytes(canonical.data))
+
+        frame_bytes = self._canonical_frame_samples * 2
+        while len(self._reverse_buffer) >= frame_bytes:
+            chunk = bytes(self._reverse_buffer[:frame_bytes])
+            del self._reverse_buffer[:frame_bytes]
+            try:
+                self._apm.process_reverse_stream(
+                    rtc.AudioFrame(
+                        data=chunk,
+                        sample_rate=self._canonical_rate,
+                        num_channels=1,
+                        samples_per_channel=self._canonical_frame_samples,
+                    )
+                )
+            except (AttributeError, RuntimeError, TypeError, ValueError):
+                self._apm_error_count += 1
 
     def _frames_at_target_rate(self, frame: rtc.AudioFrame) -> list[rtc.AudioFrame]:
         if frame.sample_rate == self._target_rate:
@@ -304,7 +374,7 @@ class LocalAudioRuntime:
         self._output_device_name = output_device_name
         self._pre_roll_seconds = pre_roll_seconds
         self._ring_buffer_seconds = ring_buffer_seconds
-        self._ring: deque[rtc.AudioFrame] = deque()
+        self._ring: deque[_TimedAudioFrame] = deque()
         self._ring_samples = 0
         self._active_input: SessionAudioInput | None = None
         self._overflow_handler: Callable[[], None] | None = None
@@ -316,6 +386,83 @@ class LocalAudioRuntime:
         self.output: LocalAudioOutput | None = None
 
     @staticmethod
+    def _attach_host_api_names(
+        devices: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Add stable human-readable PortAudio host API names to device metadata."""
+        import sounddevice as sd
+
+        host_apis = list(sd.query_hostapis())
+        enriched: list[dict[str, Any]] = []
+        for device in devices:
+            item = dict(device)
+            host_api_name = "unknown"
+            try:
+                host_api_index = int(item.get("hostapi", -1))
+                if 0 <= host_api_index < len(host_apis):
+                    host_api_name = str(host_apis[host_api_index]["name"])
+            except (KeyError, TypeError, ValueError):
+                pass
+            item["hostapi_name"] = host_api_name
+            enriched.append(item)
+        return enriched
+
+    @staticmethod
+    def _parse_stable_device_selector(requested: str) -> dict[str, str] | None:
+        """Parse `name:<device>|hostapi:<api>` selectors.
+
+        Plain legacy names and `index:N` remain supported separately. Structured
+        selectors deliberately require both fields so an endpoint cannot silently
+        drift onto another PortAudio backend with the same friendly name.
+        """
+        if "|" not in requested and not requested.strip().casefold().startswith(
+            "name:"
+        ):
+            return None
+
+        fields: dict[str, str] = {}
+        for raw_part in requested.split("|"):
+            part = raw_part.strip()
+            if ":" not in part:
+                raise RuntimeError(
+                    "Configured audio device selector is invalid; expected "
+                    "name:<device>|hostapi:<host API>"
+                )
+            key, value = part.split(":", 1)
+            normalized_key = key.strip().casefold()
+            normalized_value = value.strip()
+            if normalized_key not in {"name", "hostapi"}:
+                raise RuntimeError(
+                    f"Configured audio device selector field is unsupported: {key.strip()}"
+                )
+            if normalized_key in fields:
+                raise RuntimeError(
+                    f"Configured audio device selector repeats field: {key.strip()}"
+                )
+            if not normalized_value:
+                raise RuntimeError(
+                    f"Configured audio device selector field is empty: {key.strip()}"
+                )
+            fields[normalized_key] = normalized_value
+
+        if set(fields) != {"name", "hostapi"}:
+            raise RuntimeError(
+                "Stable audio device selectors require both name:<device> and "
+                "hostapi:<host API>"
+            )
+        return fields
+
+    @staticmethod
+    def _device_choices(devices: list[dict[str, Any]]) -> str:
+        if not devices:
+            return "none"
+        return ", ".join(
+            f"index:{device['index']} {device['name']} "
+            f"(hostapi {device.get('hostapi_name', device.get('hostapi', 'unknown'))})"
+            for device in devices
+        )
+
+    @staticmethod
     def _resolve_device(
         devices: list[dict[str, Any]],
         requested: str | None,
@@ -324,7 +471,9 @@ class LocalAudioRuntime:
     ) -> int | None:
         if requested is None:
             return None
-        needle = requested.strip().casefold()
+
+        stripped = requested.strip()
+        needle = stripped.casefold()
         if needle.startswith("index:"):
             index_text = needle.removeprefix("index:").strip()
             try:
@@ -342,6 +491,40 @@ class LocalAudioRuntime:
                 )
             return requested_index
 
+        stable_selector = LocalAudioRuntime._parse_stable_device_selector(stripped)
+        if stable_selector is not None:
+            requested_name = stable_selector["name"].casefold()
+            requested_host_api = stable_selector["hostapi"].casefold()
+            host_api_matches = [
+                device
+                for device in devices
+                if str(device.get("hostapi_name", device.get("hostapi", ""))).casefold()
+                == requested_host_api
+            ]
+            exact_name_matches = [
+                device
+                for device in host_api_matches
+                if str(device["name"]).casefold() == requested_name
+            ]
+            matches = exact_name_matches or [
+                device
+                for device in host_api_matches
+                if requested_name in str(device["name"]).casefold()
+            ]
+            if not matches:
+                available = LocalAudioRuntime._device_choices(devices)
+                raise RuntimeError(
+                    f"Configured {kind} device not found for stable selector "
+                    f"{requested!r}. Available {kind} devices: {available}"
+                )
+            if len(matches) > 1:
+                choices = LocalAudioRuntime._device_choices(matches)
+                raise RuntimeError(
+                    f"Configured {kind} device selector is still ambiguous: "
+                    f"{requested!r}. Matches: {choices}"
+                )
+            return int(matches[0]["index"])
+
         exact = [
             device for device in devices if str(device["name"]).casefold() == needle
         ]
@@ -351,16 +534,102 @@ class LocalAudioRuntime:
         if not matches:
             raise RuntimeError(f"Configured {kind} device not found: {requested}")
         if len(matches) > 1:
-            choices = ", ".join(
-                f"index:{device['index']} {device['name']} "
-                f"(hostapi {device.get('hostapi', 'unknown')})"
-                for device in matches
-            )
+            choices = LocalAudioRuntime._device_choices(matches)
             raise RuntimeError(
-                f"Configured {kind} device is ambiguous; select an explicit "
-                f"index:<number>: {choices}"
+                f"Configured {kind} device is ambiguous; use a stable "
+                f"name:<device>|hostapi:<host API> selector: {choices}"
             )
         return int(matches[0]["index"])
+
+    @staticmethod
+    def _log_resolved_device(
+        devices: list[dict[str, Any]],
+        resolved_index: int | None,
+        *,
+        kind: str,
+    ) -> None:
+        if resolved_index is None:
+            LOGGER.info("JARVIS audio %s uses the system default device", kind)
+            return
+        device = next(
+            (
+                candidate
+                for candidate in devices
+                if int(candidate["index"]) == resolved_index
+            ),
+            None,
+        )
+        if device is None:
+            LOGGER.info("JARVIS audio %s resolved to index:%s", kind, resolved_index)
+            return
+        LOGGER.info(
+            "JARVIS audio %s resolved: %s | hostapi=%s | current_index=%s",
+            kind,
+            device["name"],
+            device.get("hostapi_name", device.get("hostapi", "unknown")),
+            resolved_index,
+        )
+
+    @staticmethod
+    def _select_output_sample_rate(output_device: int | None) -> int:
+        """Prefer canonical 48 kHz, then fall back to the endpoint native rate."""
+        import sounddevice as sd
+
+        probe_device = output_device
+        if probe_device is None:
+            try:
+                default_output = int(sd.default.device[1])
+            except (IndexError, TypeError, ValueError):
+                default_output = -1
+            if default_output >= 0:
+                probe_device = default_output
+
+        try:
+            sd.check_output_settings(
+                device=probe_device,
+                channels=DEVICE_CHANNELS,
+                dtype="int16",
+                samplerate=DEVICE_SAMPLE_RATE,
+            )
+            LOGGER.info(
+                "JARVIS audio output sample rate: canonical=%s Hz | physical=%s Hz",
+                DEVICE_SAMPLE_RATE,
+                DEVICE_SAMPLE_RATE,
+            )
+            return DEVICE_SAMPLE_RATE
+        except (sd.PortAudioError, TypeError, ValueError):
+            pass
+
+        try:
+            info = sd.query_devices(probe_device)
+            native_rate = round(float(info["default_samplerate"]))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError(
+                "Unable to determine the selected audio output device sample rate"
+            ) from exc
+        if native_rate <= 0:
+            raise RuntimeError(
+                f"Selected audio output device reported invalid sample rate: {native_rate}"
+            )
+        try:
+            sd.check_output_settings(
+                device=probe_device,
+                channels=DEVICE_CHANNELS,
+                dtype="int16",
+                samplerate=native_rate,
+            )
+        except (sd.PortAudioError, TypeError, ValueError) as exc:
+            raise RuntimeError(
+                "Selected audio output device supports neither canonical 48 kHz "
+                f"nor its reported native rate {native_rate} Hz"
+            ) from exc
+
+        LOGGER.info(
+            "JARVIS audio output sample rate negotiated: canonical=%s Hz | physical=%s Hz",
+            DEVICE_SAMPLE_RATE,
+            native_rate,
+        )
+        return native_rate
 
     def set_overflow_handler(self, callback: Callable[[], None]) -> None:
         self._overflow_handler = callback
@@ -385,16 +654,25 @@ class LocalAudioRuntime:
             num_channels=DEVICE_CHANNELS,
             blocksize=FRAME_SAMPLES,
         )
+        input_devices = self._attach_host_api_names(
+            self._media_devices.list_input_devices()
+        )
+        output_devices = self._attach_host_api_names(
+            self._media_devices.list_output_devices()
+        )
         input_device = self._resolve_device(
-            self._media_devices.list_input_devices(),
+            input_devices,
             self._input_device_name,
             kind="input",
         )
         output_device = self._resolve_device(
-            self._media_devices.list_output_devices(),
+            output_devices,
             self._output_device_name,
             kind="output",
         )
+        self._log_resolved_device(input_devices, input_device, kind="input")
+        self._log_resolved_device(output_devices, output_device, kind="output")
+        output_sample_rate = self._select_output_sample_rate(output_device)
         self._input_capture = self._open_input_capture(input_device)
         self._input_track = rtc.LocalAudioTrack.create_audio_track(
             "jarvis-local-microphone",
@@ -410,6 +688,7 @@ class LocalAudioRuntime:
             output_device=output_device,
             apm=self._input_capture.apm,
             delay_estimator=self._input_capture.delay_estimator,
+            output_sample_rate=output_sample_rate,
         )
         self.output.start()
         self.detector.enable()
@@ -421,31 +700,56 @@ class LocalAudioRuntime:
         assert self._input_stream is not None
         async for event in self._input_stream:
             frame = event.frame
+            observed_at_monotonic = time.monotonic()
             copied = rtc.AudioFrame(
                 data=bytes(frame.data),
                 sample_rate=frame.sample_rate,
                 num_channels=frame.num_channels,
                 samples_per_channel=frame.samples_per_channel,
             )
-            self._append_ring(copied)
+            self._append_ring(
+                copied,
+                observed_at_monotonic=observed_at_monotonic,
+            )
             if self._active_input is not None:
                 if (
-                    not self._active_input.push_frame(copied)
+                    not self._active_input.push_frame(
+                        copied,
+                        observed_at_monotonic=observed_at_monotonic,
+                    )
                     and self._overflow_handler is not None
                 ):
                     self._overflow_handler()
             else:
                 self.detector.feed(copied)
 
-    def _append_ring(self, frame: rtc.AudioFrame) -> None:
-        self._ring.append(frame)
+    def _append_ring(
+        self,
+        frame: rtc.AudioFrame,
+        *,
+        observed_at_monotonic: float | None = None,
+    ) -> None:
+        observed_at = (
+            time.monotonic() if observed_at_monotonic is None else observed_at_monotonic
+        )
+        if observed_at < 0:
+            raise ValueError("audio observation timestamp must be non-negative")
+
+        self._ring.append(
+            _TimedAudioFrame(
+                frame=frame,
+                observed_at_monotonic=observed_at,
+            )
+        )
+
         self._ring_samples += frame.samples_per_channel
         limit = int(self._ring_buffer_seconds * DEVICE_SAMPLE_RATE)
+
         while (
             self._ring
-            and self._ring_samples - self._ring[0].samples_per_channel >= limit
+            and self._ring_samples - self._ring[0].frame.samples_per_channel >= limit
         ):
-            self._ring_samples -= self._ring.popleft().samples_per_channel
+            self._ring_samples -= self._ring.popleft().frame.samples_per_channel
 
     def activate_session(self, session_input: SessionAudioInput) -> None:
         if self._active_input is not None:
@@ -453,15 +757,20 @@ class LocalAudioRuntime:
         self.detector.disable(clear_buffer=False)
         self._active_input = session_input
         pre_roll_samples = int(self._pre_roll_seconds * DEVICE_SAMPLE_RATE)
-        selected: deque[rtc.AudioFrame] = deque()
+        selected: deque[_TimedAudioFrame] = deque()
         selected_samples = 0
-        for frame in reversed(self._ring):
-            selected.appendleft(frame)
-            selected_samples += frame.samples_per_channel
+
+        for timed_frame in reversed(self._ring):
+            selected.appendleft(timed_frame)
+            selected_samples += timed_frame.frame.samples_per_channel
             if selected_samples >= pre_roll_samples:
                 break
-        for frame in selected:
-            if not session_input.push_frame(frame):
+
+        for timed_frame in selected:
+            if not session_input.push_frame(
+                timed_frame.frame,
+                observed_at_monotonic=(timed_frame.observed_at_monotonic),
+            ):
                 self._active_input = None
                 raise RuntimeError(
                     "session audio queue overflowed while adding pre-roll"

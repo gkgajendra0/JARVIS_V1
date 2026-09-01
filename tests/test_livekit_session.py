@@ -149,7 +149,7 @@ def test_gemini_api_key_is_required_only_for_gemini(
         _create_realtime_model(JarvisConfig(realtime_provider="gemini"))
 
 
-def test_gemini_model_uses_provider_specific_configuration(
+def test_gemini_model_keeps_provider_native_activity_detection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
@@ -180,6 +180,7 @@ def test_gemini_model_uses_provider_specific_configuration(
     assert captured["input_audio_transcription"] == {}
     assert captured["output_audio_transcription"] == {}
     activity = captured["realtime_input_config"].automatic_activity_detection
+    assert activity.disabled is not True
     assert activity.start_of_speech_sensitivity == "START_SENSITIVITY_LOW"
     assert activity.end_of_speech_sensitivity == "END_SENSITIVITY_LOW"
     assert activity.prefix_padding_ms == 300

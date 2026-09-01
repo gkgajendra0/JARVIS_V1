@@ -65,11 +65,12 @@ class HeadFirstFramingPolicy:
     def __init__(self, config: HeadFirstFramingConfig | None = None) -> None:
         self.config = config or HeadFirstFramingConfig()
 
-    def resolve(
+    def associated_head(
         self,
         target: TargetState | None,
         heads: list[HeadObservation],
-    ) -> FramingTarget | None:
+    ) -> HeadObservation | None:
+        """Return the same head that the framing policy associates with a target."""
         if target is None or target.track is None:
             return None
 
@@ -81,27 +82,49 @@ class HeadFirstFramingPolicy:
             body_height * self.config.maximum_head_vertical_fraction
         )
 
+        # A person detector and a face/head detector do not necessarily draw boxes
+        # with the same vertical extent. In close/cropped views RF-DETR may start a
+        # person box around the forehead/shoulders while BlazeFace extends above or
+        # below that boundary. Associate by bounded upper-body overlap rather than
+        # requiring the head *center* itself to lie inside the body box.
         candidates = [
             head
             for head in heads
             if head.confidence >= self.config.minimum_head_confidence
             and body.left - margin <= head.bounds.center_x <= body.right + margin
-            and body.top - margin <= head.bounds.center_y <= maximum_head_y + margin
+            and head.bounds.bottom >= body.top - margin
+            and head.bounds.top <= maximum_head_y + margin
         ]
+        if not candidates:
+            return None
 
-        if candidates:
-            expected_x = body.center_x
-            expected_y = (
-                body.top + body_height * self.config.body_fallback_vertical_fraction
-            )
-            head = min(
-                candidates,
-                key=lambda candidate: (
-                    (candidate.bounds.center_x - expected_x) ** 2
-                    + (candidate.bounds.center_y - expected_y) ** 2,
-                    -candidate.confidence,
-                ),
-            )
+        expected_x = body.center_x
+        expected_y = (
+            body.top + body_height * self.config.body_fallback_vertical_fraction
+        )
+        return min(
+            candidates,
+            key=lambda candidate: (
+                (candidate.bounds.center_x - expected_x) ** 2
+                + (candidate.bounds.center_y - expected_y) ** 2,
+                -candidate.confidence,
+            ),
+        )
+
+    def resolve(
+        self,
+        target: TargetState | None,
+        heads: list[HeadObservation],
+    ) -> FramingTarget | None:
+        if target is None or target.track is None:
+            return None
+
+        track = target.track
+        body = track.bounds
+        body_height = body.bottom - body.top
+        head = self.associated_head(target, heads)
+
+        if head is not None:
             return FramingTarget(
                 x=head.bounds.center_x,
                 y=head.bounds.center_y,

@@ -1,433 +1,375 @@
 # JARVIS V1 Current Architecture
 
-This document describes implemented, validated, human-accepted, and merged architecture only.
+## Status
 
-## Accepted Product Slices
+**IMPLEMENTED/HUMAN-ACCEPTED THROUGH PHASE 3B.10A. STARTUP MACHINE CONFIGURATION + PREFLIGHT ARE ACCEPTED. LIVEKIT MEDIADEVICES + NVIDIA/TV 48-kHz CONVERSATION AUDIO IS ACCEPTED. DUAL LIVEKIT + GSTREAMER POCKET3 MICROPHONE OWNERSHIP IS REJECTED. ADR-013 SINGLE-MICROPHONE ACTIVE-SPEAKER INTEGRATION IS REAL-MACHINE ACCEPTED. LIVE VISION INTERPRETATION PREVIEW IS DEFAULT-ON WHEN VISION IS ENABLED. 3B.11 SCORE-DISTRIBUTION ACCEPTANCE IS NEXT. ATTENTION REMAINS DEFERRED. T2 REMAINS DISABLED.**
 
-- Step 0 — Clean Foundation: accepted.
-- Step 1 — Natural Conversational Core: accepted on 2026-08-28.
-- Step 2 — Wake, Voice Session, and Audio Robustness: accepted on 2026-08-29.
-- Step 2.5 — Vision Sensor & Active Target Tracking Foundation: accepted on 2026-08-29 and merged to `main`.
-- Development supervisor (`jarvis-dev`) — accepted on 2026-08-30 and merged to protected `main`.
-- Time-aware startup greeting interaction — accepted on 2026-08-30.
-- Step 3A — Deterministic Authority Foundation + Windows strong verification/session invalidation: accepted on 2026-08-30 and merged to protected `main` through PR #7 (`6651de01d0c4ae81a25480ef26d2399181cee870`).
+This file describes current production boundaries. Detailed evidence belongs in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; significant choices belong in ADRs.
 
-Step 3 is not complete. Owner biometric identity, liveness, attention-provider integration, speaker identity, and full T0/T1/T2 trust derivation remain future Step-3 slices.
+---
 
-## Runtime Entry Points
-
-- `python -m jarvis` runs the minimal non-voice foundation lifecycle.
-- `jarvis-voice` runs the accepted voice runtime and, when enabled, the integrated Step-2.5 vision runtime.
-- `jarvis-dev` runs the accepted development supervisor around `jarvis-voice`; it watches protected `origin/main` by default and remains development tooling rather than normal user-facing authority.
-- `lk agent console src/jarvis/voice/entrypoint.py` remains a diagnostic harness rather than the normal background runtime.
-- `JARVIS_VISION_ENABLED=true` enables integrated vision.
-- `JARVIS_VISION_PREVIEW=true` enables the optional live observer window without opening a second camera pipeline.
-- `JARVIS_STARTUP_GREETING=true` is the default and enables one time-aware greeting per voice-runtime start; set it to `false` to disable the greeting without changing the rest of startup.
-
-## Development Supervisor
-
-`src/jarvis/dev_supervisor.py` is a long-running parent process used only for the development workflow.
+## Top-level production architecture
 
 ```text
-protected origin/main
-        |
-        v
-   jarvis-dev parent
-        |
-        +--> fetch + fast-forward check
-        |
-        +--> fixed scripted-TTS update question
-        |         |
-        |         v
-        |    finalized spoken transcript
-        |         |
-        |         v
-        |   deterministic Yes/No parser
-        |         |
-        |     explicit Yes only
-        |         |
-        +---------+
-        |
-        v
-clean child shutdown
-        |
-        v
-ff-only Git update
-        |
-        v
-restart jarvis-voice
-        |
-        v
-authenticated readiness handshake
-        |
-        +--> healthy: keep update
-        |
-        \--> unhealthy: restore previous SHA and restart last-known-good
+                           JARVIS V1
+                               │
+        ┌──────────────────────┼──────────────────────┐
+        │                      │                      │
+      VOICE                  VISION                AUTHORITY
+        │                      │                      │
+Pocket3 microphone      Pocket3 video          typed evidence
+        │                      │                      │
+LiveKit MediaDevices     OpenCV capture       deterministic trust
+AEC/NS/HPF/AGC                 │                      │
+        │                 RF-DETR + OC-SORT      proposal/risk/policy
+Gemini/OpenAI                  │                      │
+        │                 head/face/liveness    Windows Hello/FIDO2
+NVIDIA 48k → TV                │                      │
+        │                 OWNER context              │
+        └──────────────┬───────┘                      │
+                       │                              │
+            speaker / active-speaker                 │
+                 diagnostics                          │
+                       │                              │
+                 no direct authority ────────────────┘
 ```
 
-### Development authority boundary
+Identity/perception evidence never directly becomes execution permission.
 
-The realtime model does not decide whether a software update is approved. A fixed scripted-TTS adapter speaks the update question, the realtime voice path supplies finalized transcription, and deterministic JARVIS code parses explicit approval. Ambiguous speech, timeout, contradictory wording, or unavailable approval means No.
+---
 
-The development supervisor remains separate from the Step-3 authority runtime. Step 3A adds the reusable user-facing authority foundation; the supervisor does not silently inherit stronger identity semantics until explicitly integrated in a later accepted slice.
+## Persistent machine configuration — accepted
 
-### Git/update safety
-
-The supervisor:
-
-- refuses dirty working trees and wrong branches;
-- watches `origin/main` by default;
-- fetches without changing the running repository;
-- refuses non-fast-forward updates;
-- never pulls/restarts before explicit approval;
-- requests clean in-process shutdown before OS-level fallback;
-- uses `git pull --ff-only` for approved updates;
-- verifies the restarted child reaches the authenticated control-channel readiness point;
-- restores the previous local SHA and restarts it if the updated child fails readiness;
-- does not enter an automatic crash-restart loop.
-
-Repository `main` is protected by the active `Main safety gate` ruleset. Changes require PR flow, strict required status checks `ruff` and `pytest`, deletion protection, non-fast-forward protection, and no bypass actors.
-
-The parent supervisor intentionally does not replace its own running Python process during a child update. Supervisor-code changes take effect after the parent itself is restarted.
-
-## Authority Foundation — Step 3A
-
-Step 3A owns deterministic action authority before biometric providers are allowed to influence protected decisions.
+Normal startup is machine-profile driven:
 
 ```text
-Action request
-    |
-    v
+%LOCALAPPDATA%\JARVIS\machine.json
+        +
+Windows environment for provider secrets
+        ↓
+startup preflight
+        ↓
+jarvis-voice
+```
+
+Current accepted machine roles:
+
+- Pocket3 microphone: stable Windows WASAPI `name + hostapi` selector;
+- conversation output: NVIDIA `24'TV`, Windows WASAPI, 48 kHz;
+- wake model: persisted local path;
+- provider: Gemini on the current machine;
+- LR-ASD AVA checkpoint: automatically managed/integrity-verified local asset;
+- vision/speaker/active-speaker feature state: persisted.
+
+Machine profile values win over stale ambient non-secret `JARVIS_*` variables. Explicit diagnostic runtime overrides require `JARVIS_RUNTIME_ENV_OVERRIDES=true`. API keys remain environment-only.
+
+Decision: `docs/decisions/ADR-012_MACHINE_CONFIGURATION_AND_STARTUP_PREFLIGHT.md`.
+
+---
+
+## Production conversation audio — accepted
+
+```text
+Pocket3 microphone @ 48 kHz mono
+        ↓
+LiveKit rtc.MediaDevices.open_input()
+WebRTC AEC + NS + HPF + AGC
+        ↓
+JARVIS wake / AgentSession / realtime provider
+        ↓
+LiveKit MediaDevices OutputPlayer
+same APM reverse-render reference
+        ↓
+NVIDIA HDMI @ 48 kHz
+        ↓
+24'TV speakers
+```
+
+Requirements:
+
+- capture and render share one LiveKit `MediaDevices`/APM loop;
+- physical render accepts 48 kHz;
+- Bluetooth/Tribit 44.1-kHz A2DP is not the accepted production output;
+- JARVIS's own speech does not create false user turns;
+- real human barge-in remains supported by the realtime conversation stack rather than a custom local gate.
+
+Decision: `docs/decisions/ADR-011_LIVEKIT_MEDIADEVICES_48K_FULL_DUPLEX.md`.
+
+---
+
+## Vision / OWNER evidence — accepted foundation
+
+Normal Vision uses video-only OpenCV capture:
+
+```text
+Pocket3 video
+        ↓
+OpenCVCameraSource
+CapturedFrame(frame_id, captured_at=time.monotonic())
+        ↓
+RF-DETR person detection
+        ↓
+OC-SORT persistent visual track
+        ↓
+BlazeFace head association
+        ↓
+YuNet + SFace OWNER identity
+        +
+MiniFAS temporal passive liveness
+        ↓
+same Windows session + same visual track
+        ↓
+LIVE_OWNER_CANDIDATE / UNKNOWN / AMBIGUOUS / INSUFFICIENT
+```
+
+`LIVE_OWNER_CANDIDATE` remains evidence-only and does not create T2.
+
+### Operator-visible interpretation
+
+When integrated Vision is enabled, production starts the existing `OpenCVVisionObserver` by default. The observer renders the same canonical state used internally by JARVIS:
+
+- camera frame;
+- person tracks / IDs / confidence;
+- head boxes;
+- selected/locked target;
+- follow SAFE/ARMED state;
+- framing target;
+- pan/tilt/zoom command values;
+- analysis age.
+
+This is an observability/transparency surface, not a second perception path. It does not reopen the camera. `JARVIS_VISION_PREVIEW=false` may suppress the window for headless/quiet runs.
+
+---
+
+## Speaker identity — accepted shadow foundation
+
+Canonical user speech is captured in memory from the actual conversation input:
+
+```text
+LiveKit processed user PCM
+        ↓
+ObservedSessionAudioInput
+        ↓
+InMemorySpeakerTurnCapture
+        ↓
+speech-region + quality gate
+        ↓
+CAM++ shadow diagnostics
+```
+
+Current disposition:
+
+- CAM++ = provisional speaker-embedding provider;
+- ERes2NetV2 = fallback challenger;
+- no persistent voice template yet;
+- no accepted speaker threshold yet;
+- no prototype admission from mere visible OWNER context.
+
+---
+
+## Rejected architecture — dual Pocket3 microphone ownership
+
+The following architecture is **not production**:
+
+```text
+Pocket3 microphone
+   ├── LiveKit/PortAudio
+   └── GStreamer wasapi2src
+```
+
+Real-machine evidence rejected both acquisition orders:
+
+- GStreamer first → LiveKit microphone open fails (`PaErrorCode -9996`);
+- PortAudio first → GStreamer paired AV pipeline fails to reach PLAYING.
+
+Hard current-machine design rule:
+
+> **One Pocket3 microphone owner.**
+
+Evidence: `docs/research/STEP_3B11_DUAL_AUDIO_OWNERSHIP_ACCEPTANCE_RESULTS.md`.
+
+---
+
+## ADR-013 active-speaker architecture — real-machine accepted integration
+
+LR-ASD reuses existing JARVIS timelines rather than opening another microphone:
+
+```text
+                            POCKET3
+                               │
+                ┌──────────────┴──────────────┐
+                │                             │
+             AUDIO                           VIDEO
+                │                             │
+     LiveKit MediaDevices only         OpenCV Vision source
+     WebRTC AEC/NS/HPF/AGC                    │
+                │                     CapturedFrame.captured_at
+canonical accepted user PCM                   │
+                │                     exact track/head sequence
+ObservedSessionAudioInput                      │
+                │                             │
+InMemorySpeakerTurnCapture                     │
+                └──────────────┬──────────────┘
+                               │
+                    monotonic-time overlap
+                               │
+                            LR-ASD
+                               │
+                    diagnostic score only
+```
+
+Production implementation:
+
+- `src/jarvis/voice/media_devices_audio.py` — accepted full-duplex conversation path;
+- `src/jarvis/voice/canonical_active_speaker_runtime.py` — canonical-turn speaker/LR-ASD diagnostics;
+- `src/jarvis/voice/production_runtime.py` — single-microphone production assembly;
+- `src/jarvis/identity/active_speaker.py` — LR-ASD provider + visual temporal buffer.
+
+The production builder does not instantiate `GStreamerPairedAVSource` for active-speaker sensing.
+
+### Timing boundary
+
+Both canonical audio observations and normal Vision frames use JARVIS monotonic timestamps.
+
+LR-ASD scores only when:
+
+- there is a fresh same-track OWNER context;
+- the bounded canonical speech turn has timestamps;
+- the visual buffer contains sufficient same-track coverage over the speech interval;
+- temporal gaps remain within the provider boundary;
+- speaker quality is accepted.
+
+Insufficient timing/visual/speech evidence fails closed.
+
+### Real-machine acceptance
+
+The accepted run simultaneously proved:
+
+- LiveKit Pocket3 microphone healthy;
+- NVIDIA/TV 48-kHz render healthy;
+- WebRTC AEC/NS/HPF/AGC healthy;
+- normal Vision healthy;
+- RF-DETR/tracking/head pipeline healthy;
+- wake + Gemini conversation healthy;
+- canonical speaker-turn capture healthy;
+- target lock / PTZ follow healthy;
+- LR-ASD CUDA inference reached real `SCORED` results.
+
+This accepts the **integration architecture only**. The canonical audio is processed by WebRTC AEC/NS/HPF/AGC rather than raw mic PCM, so deployment thresholds must come from the real score-distribution bake-off.
+
+Evidence: `docs/research/STEP_3B11_SINGLE_OWNER_ACTIVE_SPEAKER_ACCEPTANCE_RESULTS.md`.
+
+Decision: `docs/decisions/ADR-013_SINGLE_OWNER_POCKET3_AUDIO_FOR_ACTIVE_SPEAKER.md`.
+
+---
+
+## Authority architecture — accepted and unchanged
+
+```text
+identity/context evidence
+        ↓
+graduated trust
+        ↓
 immutable ActionProposal
-(canonical material + fingerprint + expiry + session binding)
-    |
-    v
-RiskClassifier hard floor
-    |
-    +--> R5 RESTRICTED_DEV_ONLY -> deny normal runtime
-    |
-    v
-PolicyEngine (OPA adapter available, fail closed)
-    |
-    v
-Approval requirement + trust requirement + obligations
-    |
-    +--> direct / explicit approval paths
-    |
-    +--> R4 strong path
-             |
-             v
-      StrongApprovalService
-             |
-             v
-      StrongVerifier
-      (Windows Hello v1)
-             |
-      VERIFIED only
-             |
-             v
- proposal/session-bound one-time STRONG approval
-    |
-    v
-AuthorityService
-    |
-    +--> audit-before-protected-execution
-    |
-    v
-short-lived ExecutionPermit
-    |
-    v
-final pre-execution revalidation
-    |
-    v
-consume approval + permit exactly once
+        ↓
+deterministic risk floor
+        ↓
+OPA policy
+        ↓
+proposal-bound approval / strong verification
+        ↓
+final revalidation
+        ↓
+one-time permit
+        ↓
+execution + redacted audit
 ```
 
-### Canonical authority types
+Accepted trust vocabulary:
 
-`src/jarvis/authority/types.py` owns the accepted deterministic vocabulary:
+- T0 `UNVERIFIED`
+- T1 `PRESENT_CONTEXT`
+- T2 `CORROBORATED_OWNER`
+- T3 `VERIFIED_OWNER`
 
-- trust tiers T0 `UNVERIFIED`, T1 `PRESENT_CONTEXT`, T2 `CORROBORATED_OWNER`, T3 `VERIFIED_OWNER`;
-- risk classes R0 `ROUTINE`, R1 `PRIVATE_READ`, R2 `REVERSIBLE_LOCAL_CHANGE`, R3 `PERSISTENT_OR_EXTERNAL`, R4 `CRITICAL`, R5 `RESTRICTED_DEV_ONLY`;
-- approval requirements `NONE`, `DIRECT_INTENT`, `EXPLICIT`, `STRONG`;
-- attention states and typed evidence modalities.
+T2 is currently disabled until final multimodal corroboration is accepted.
 
-Model/provider confidence cannot directly set these authority states.
-
-### Exact-action proposals
-
-`src/jarvis/authority/proposal.py` owns immutable `ActionProposal` creation and validation. Material target/parameter content is canonicalized before SHA-256 fingerprinting. Proposal IDs, sessions, expiry, action origin, and risk-relevant attributes remain explicit. Unicode-normalized-key collisions are rejected, and the fingerprint is recomputed at authority boundaries so object mutation cannot silently preserve an old approval.
-
-A material parameter or target change requires a different proposal fingerprint and therefore a new approval.
-
-### Risk hard floors
-
-`src/jarvis/authority/risk.py` owns deterministic risk classification. Policy may add friction but cannot reduce the JARVIS hard floor. Critical security/financial/legal/destructive classes cannot be downgraded by model output or policy configuration.
-
-### Approval state
-
-`src/jarvis/authority/approval.py` owns pending/granted/denied/canceled/expired/consumed approval state. Approvals bind to proposal ID, proposal fingerprint, and authority session; expire; are invalidated with the session; and are one-time at execution.
-
-The generic grant API is prohibited from claiming `STRONG_VERIFIER`. Strong approval requires a bound `StrongVerificationResult` with a unique verification ID. A successful strong proof can be consumed only once and cannot mint multiple strong approvals.
-
-### Strong verification
-
-`src/jarvis/authority/verifier.py` defines the replaceable `StrongVerifier` boundary and the accepted Windows Hello adapter. The Windows implementation invokes a small .NET 9 desktop helper under `tools/windows/Jarvis.WindowsHelloVerifier`.
-
-The helper uses the desktop `UserConsentVerifierInterop.RequestVerificationForWindowAsync` route with a real WinForms message loop and an application-owned HWND. Its stdout contract is lowercase JSON and is executed/validated by Windows CI.
-
-A `StrongVerificationResult` contains:
-
-- status;
-- verifier ID;
-- unique verification ID;
-- exact proposal fingerprint;
-- exact authority session ID;
-- reason codes.
-
-`src/jarvis/authority/strong_approval.py` owns the only accepted bridge from strong verification to a STRONG approval. `VERIFIED` may grant one matching pending strong approval. Cancel/unavailable/error/mismatch fails closed and cannot fall back to voice, face, attention, or generic explicit approval.
-
-Windows Hello/PIN verification is platform strong verification; JARVIS receives only the verification result, not the PIN or biometric secret.
-
-### Windows session boundary
-
-`src/jarvis/authority/session.py` owns authority-session state and the Windows WTS provider/guard. The Windows adapter uses `WTSSessionInfoEx` explicit session lock state rather than assuming that a logged-on session is safe.
-
-Lock, user/session transition, disconnect/logoff, or other invalidation events cancel active authority state and permits for that JARVIS authority session.
-
-Windows session state is contextual evidence only; an unlocked desktop does not prove that the person in front of the camera/microphone is the OWNER.
-
-### Policy boundary
-
-`src/jarvis/authority/policy.py` owns the JARVIS `PolicyEngine` contract and fail-closed OPA adapter. OPA traffic is restricted to loopback, response shape is strict, and expected policy version is validated. Policy-engine failure, malformed output, unavailable policy, or version mismatch does not authorize protected actions.
-
-### Authority service and execution permit
-
-`src/jarvis/authority/service.py` combines risk hard floors, policy requirements, trust/attention/actor predicates, and bound approval state. Required audit happens before protected execution permission is issued.
-
-`src/jarvis/authority/permit.py` owns short-lived execution permits. Immediately before an executor may act, `AuthorityService.revalidate_and_consume()` checks proposal/session/fingerprint/risk/policy/approval bindings again. Successful execution authorization consumes the permit and approval exactly once. Mutation, expiry, replay, session change, audit failure, or changed authority state invalidates execution.
-
-Step 3A does not yet implement the later generic Step-7 executor. It defines the governance contract that future executors must require.
-
-### Audit boundary
-
-`src/jarvis/authority/audit.py` owns structured security/authority audit events plus in-memory and SQLite implementations. Sensitive metadata-key classes such as biometric embeddings and access tokens are rejected rather than casually logged.
-
-Operational telemetry is not the authority audit source of truth.
-
-### Attention contract only
-
-Step 3A establishes the typed attention evidence/authority predicate boundary but does not yet integrate a gaze/eye model into accepted runtime authority. Face/liveness/attention evidence remains non-authoritative until its later Step-3 slice is implemented and human-accepted.
-
-## Voice Runtime
-
-1. JARVIS opens one 48 kHz mono input stream and the selected output device.
-2. When enabled, JARVIS selects one deterministic startup line from a local time-of-day phrase pool and speaks it through the scripted-TTS adapter. Selection is random within the applicable pool, happens once per voice-runtime start, and greeting failure is non-fatal.
-3. While idle, microphone PCM stays local and feeds the wake detector through a controlled 16 kHz inference stream.
-4. A threshold/debounce policy accepts one wake event and disables further wake scoring during activation and conversation.
-5. Buffered wake-tail/pre-roll followed by live PCM enters one selected realtime-provider session.
-6. LiveKit/provider events are translated into canonical conversation state.
-7. Explicit exit, inactivity, cancellation, or recoverable provider failure closes the active session and returns to local wake detection.
-
-No realtime provider session is required while JARVIS is idle. Startup greeting text is selected by JARVIS code rather than generated by the realtime conversational model.
-
-## Vision Runtime
+Permanent invariant:
 
 ```text
-DJI Pocket 3
-    |
-    v
-OpenCV DirectShow CameraSource
-(latest-frame overwrite, 1280x720)
-    |
-    +--> MediaPipe BlazeFace Full-Range --> HeadObservation[]
-    |
-    +--> RF-DETR Nano BF16 --> Detection[] --> OC-SORT + DIoU --> Track[]
-                                                |
-                                          TargetManager
-                                                |
-                                   Head-first framing policy
-                                                |
-                              FollowController + ZoomController
-                                                |
-                                   duvc-ctl PtzController
-                                                |
-                                         Pocket 3 gimbal
-
-VisionSnapshot --> diagnostics --> voice tools
-             \--> optional live observer window
+face match       ≠ permission
+speaker match    ≠ permission
+liveness         ≠ permission
+active speaker   ≠ permission
+attention        ≠ permission
+wake word        ≠ owner
+Windows unlocked ≠ owner speaking
+LLM confidence   ≠ permission
 ```
 
-### Capture ownership
+Decision: `docs/decisions/ADR-006_STEP_3_IDENTITY_TRUST_AUTHORITY_GOVERNANCE.md`.
 
-`src/jarvis/vision/camera.py` owns the physical camera stream. The accepted Pocket 3 path uses OpenCV DirectShow, one camera owner, and an overwrite-slot latest-frame design rather than an accumulating queue. Controlled hardware testing sustained approximately 29.34 FPS at 1280x720.
+---
 
-### Person detection
+## Deferred attention boundary
 
-`src/jarvis/vision/detector.py` adapts RF-DETR Nano into JARVIS-owned normalized `Detection` values. Native PyTorch/CUDA BF16 is the accepted initial inference path. Detector candidate count is engineering telemetry and is not canonical visible-person truth.
+Attention/intent-to-engage remains deferred until a fixed monitor-mounted camera or stronger accepted eye/attention sensor exists. The movable Pocket3 is not treated as a stable monitor-relative gaze sensor.
 
-### Person tracking
+Decision: `docs/decisions/ADR-007_STEP_3_ATTENTION_INTENT_EVIDENCE.md`.
 
-`src/jarvis/vision/tracker.py` owns the provider-neutral `Tracker` boundary and adapters for mature Roboflow tracking implementations.
+---
 
-The accepted production default is OC-SORT with DIoU association and XYXY state estimation because live testing showed fast sitting/standing motion could produce large inter-analysis box jumps. Human validation confirmed the same track ID survived repeated fast sit/stand motion after this change. BoT-SORT and ByteTrack remain replaceable fallback adapters behind the same JARVIS contract.
+## Current acceptance boundary
 
-Tracker historical first-seen bookkeeping is time-bounded for long-running operation.
+Integration is accepted. The next unresolved 3B.11 question is **classification**, not plumbing:
 
-### Head-first framing
+```text
+real LR-ASD score distributions
+        +
+negative/replay/overlap scenarios
+        +
+timing robustness
+        ↓
+accepted temporal decision rule
+        ↓
+ACTIVE_OWNER_SPEAKER / OTHER_OR_OFFCAMERA /
+AMBIGUOUS / INSUFFICIENT
+```
 
-MediaPipe BlazeFace Full-Range supplies head evidence. Initial lock eligibility requires three consecutive linked-head frames. Once a target is locked:
+Until that rule is human-accepted:
 
-- `HEAD` is the primary pan/tilt framing anchor;
-- `HEAD_HOLD` briefly preserves trusted head height while the same body track supplies horizontal continuity;
-- `BODY` uses only the already locked body track with reduced-authority vertical control;
-- disappearance does not permit automatic target switching.
+- `active_speaker_confirmed=False` remains deliberate;
+- CAM++ prototype admission remains disabled;
+- persistent voice enrollment remains disabled;
+- T2 remains disabled.
 
-Head evidence is not identity or authorization.
+---
 
-### Target ownership and safety
+## Branch / integration control
 
-`TargetManager` owns exactly one explicitly selected track. Lock and arm are separate actions. Follow begins disarmed, missing target state produces no motion, target expiry clears selection and disarms follow, and a newly created unrelated track is never silently substituted for the selected target.
+Active branch:
 
-### PTZ and adaptive zoom
+```text
+feature/step-3b11-sensor-av-foundation
+```
 
-`src/jarvis/vision/ptz.py` adapts `duvc-ctl` Pocket 3 camera-control properties behind JARVIS-owned movement semantics. Pan, tilt, and zoom ranges are queried as hardware device units rather than assumed degrees.
+Current protected-main integration path:
 
-The accepted follow path includes calibrated Pocket 3 tilt polarity, direction-specific pan scaling, bounded command cadence, and adaptive zoom. Zoom is derived from the already locked body track's apparent size, uses hysteresis and a conservative hardware range cap, and cannot select or change a target.
+```text
+Draft PR #11 → main
+```
 
-### Live observer
+`main` does not yet contain this Phase-3B work. The feature branch must not be deleted before protected-main merge. Older PR #10 is historical/superseded.
 
-`src/jarvis/vision/observer.py` provides an optional small OpenCV observer window. It does not own the camera or run a second detector/tracker. It displays the latest camera frame together with the most recent canonical interpretation: track boxes/IDs, head boxes, selected target, framing source, pan/tilt/zoom command, follow state, and interpretation age.
+---
 
-Display refresh is decoupled from inference refresh so a smooth camera feed does not imply the perception model itself runs at camera FPS.
+## Documentation control
 
-## Canonical Conversation and Voice Components
+When a production boundary changes:
 
-`src/jarvis/conversation.py` owns provider-independent session lifecycle and accepted user/assistant turns. Provider history is operational state rather than canonical JARVIS truth.
-
-`src/jarvis/voice/wakeword.py` adapts the local LiveKit WakeWord model and receives PCM from the JARVIS audio owner rather than owning a microphone.
-
-`src/jarvis/voice/audio.py` owns physical microphone/speaker lifecycle, routing, AEC/noise-processing, activation pre-roll, and bounded queues.
-
-`src/jarvis/voice/runtime.py` owns startup greeting, idle/activation/active/recovery transitions, starts/stops the integrated vision service safely when enabled, and exposes the authenticated development-control client only when launched by `jarvis-dev`.
-
-`src/jarvis/voice/startup_greeting.py` owns the local time-of-day greeting pools and random selection semantics. It chooses text only; playback remains behind the shared scripted-speech boundary.
-
-`src/jarvis/voice/livekit_session.py` constructs the selected Gemini or OpenAI realtime provider and maps provider events into JARVIS state.
-
-`src/jarvis/voice/scripted_speech.py` owns deterministic system speech such as startup greetings and development update prompts behind a replaceable TTS boundary. This keeps fixed JARVIS-owned messages separate from realtime-model generation.
-
-`src/jarvis/voice/agent.py` owns JARVIS voice identity, language behavior, and capability-truthfulness constraints.
-
-`src/jarvis/voice/vision_tools.py` exposes only bounded inspection and explicit vision control actions. Voice-facing visible-person count comes from canonical tracks rather than raw detector candidates.
-
-`src/jarvis/dev_control.py` owns the narrow authenticated loopback protocol between the development supervisor and voice runtime, including update-approval and shutdown/readiness messages plus deterministic spoken approval parsing.
-
-## Authoritative State
-
-| State | Owner |
-| --- | --- |
-| Foundation lifecycle | `JarvisApp` |
-| Environment configuration | `JarvisConfig` |
-| Physical microphone/speaker | JARVIS local audio runtime |
-| Startup greeting text selection | `startup_greeting.py` |
-| Deterministic system speech playback | `ScriptedSpeech` adapter |
-| Wake inference | `WakeDetector` implementation |
-| Wake/idle/active/recovery lifecycle | `VoiceRuntimeController` |
-| Canonical accepted conversation | `ConversationSession` |
-| Camera capture | `CameraSource` implementation |
-| Person detections | `ObjectDetector` adapter -> canonical `Detection` |
-| Person tracks | `Tracker` adapter -> canonical `Track` |
-| Selected visual target | `TargetManager` |
-| Head/body framing semantics | JARVIS framing policy |
-| Follow/zoom movement intent | JARVIS follow/zoom controllers |
-| Pocket 3 hardware movement | `PtzController` adapter |
-| Vision diagnostics/observer | JARVIS vision service |
-| Development update detection/restart/rollback | `jarvis-dev` supervisor |
-| Development update approval interpretation | deterministic JARVIS parser in `dev_control.py` |
-| Development update distribution gate | protected GitHub `main` + required `ruff`/`pytest` checks |
-| Action proposal/fingerprint | `ActionProposal` |
-| Deterministic risk floor | `RiskClassifier` |
-| Policy evaluation boundary | JARVIS `PolicyEngine` / fail-closed OPA adapter |
-| Approval lifecycle | `ApprovalService` |
-| Strong verification -> strong approval bridge | `StrongApprovalService` |
-| Platform strong verification | `StrongVerifier`; Windows Hello adapter v1 |
-| Authority decision/pre-execution revalidation | `AuthorityService` |
-| Execution authorization receipt | `PermitRegistry` / `ExecutionPermit` |
-| Authority security audit | `AuditEventStore` |
-| Windows authority-session validity | `WindowsWtsSessionProvider` + `WindowsSessionGuard` |
-| Persistent OWNER biometric identity | Not implemented; Step 3B |
-| Face/liveness/attention/speaker-derived trust | Not implemented; later Step 3 |
-
-## External Dependencies
-
-Core accepted dependencies include:
-
-- Python 3.11 or newer;
-- Git and GitHub for the development supervisor workflow;
-- `livekit==1.1.15`;
-- `livekit-agents[google,openai]==1.7.1`;
-- `livekit-wakeword==0.2.1`;
-- OpenCV 5.0.0.93;
-- PyTorch / torchvision CUDA runtime used by RF-DETR;
-- `rfdetr==1.9.4`;
-- `trackers==2.6.0`;
-- `mediapipe==1.0.1`;
-- `duvc-ctl==2.1.0` on Windows;
-- .NET 9 SDK/runtime to build/run the accepted Windows Hello desktop helper during development;
-- optional local OPA runtime when the OPA `PolicyEngine` adapter is selected;
-- one selected realtime-provider account/key;
-- local wake-word and BlazeFace model assets outside the repository.
-
-## Validation and Human Evidence
-
-Protected `main` requires PR flow with strict `ruff` and `pytest` status checks. Step-specific hardware/human validation remains required where CI cannot prove the behavior.
-
-Real Windows + RTX 5060 Ti + DJI Pocket 3 use has established:
-
-- stable DirectShow capture and physical Pocket 3 PTZ control;
-- RF-DETR Nano CUDA inference;
-- stable canonical tracking under ordinary movement;
-- safe HEAD -> HEAD_HOLD -> BODY -> HEAD framing degradation/recovery;
-- explicit lock and separate arm behavior;
-- real pan/tilt/adaptive-zoom follow behavior;
-- target-loss stop/disarm semantics without intentional person switching;
-- truthful voice reporting based on canonical track state;
-- integrated observer sharing the same runtime state;
-- fast sit/stand motion preserving one OC-SORT track ID;
-- explicit owner confirmation that Step 2.5 is working well with no remaining blocking functional issue;
-- `jarvis-dev` detecting a remote update, speaking the approval question, accepting explicit spoken approval outside model authority, shutting JARVIS down cleanly, applying a fast-forward update, restarting voice/vision, and returning to wake mode without a shutdown timeout;
-- the final supervisor running on `main` while watching `origin/main` in default mode;
-- a real startup on the feature branch speaking the randomly selected late-night line `Online and ready, sir.` and then entering local wake detection normally;
-- Windows WTS reporting the active session unlocked;
-- `Win+L` producing authority invalidation for that session;
-- Windows Hello/PIN returning a real `VERIFIED` strong-verification result;
-- proposal/session-bound strong proof producing a STRONG approval and R4 `ALLOW`;
-- the execution permit and approval being consumed exactly once at final revalidation;
-- a real canceled Windows Hello verification producing canceled approval, authority `DENY`, `permit=None`, and no execution permission.
-
-Automated authority tests cover proposal canonicalization/integrity, Unicode collision rejection, risk hard floors, direct/spoken/strong approval semantics, attention-bound spoken approval, strong-proof binding and replay protection, policy failure/version validation, loopback restriction, audit failure, proposal/permit expiry, session invalidation, TOCTOU mutation, and one-time permit/approval consumption. Windows CI compiles the .NET 9 helper and executes its JSON contract probe. GitHub CI also runs Ruff and the complete pytest suite on clean runners.
-
-Earlier long endurance matrices from Step 2 remain waived and must not be represented as exhaustively validated.
-
-## Current Limitations
-
-- Step 3A governs authority but is not yet wired into broad user-facing capability execution; the Step-7 generic executor does not exist yet;
-- no persistent OWNER biometric profile or encrypted face-template store is accepted yet;
-- no face recognition, face liveness/anti-spoofing, gaze/attention model, speaker identity, or active-speaker association is accepted yet;
-- T2/T3 vocabulary exists, but ambient biometric trust derivation is not yet implemented; T3 in Phase 3A is supplied only in bounded strong-verification test/context paths rather than inferred from face/voice;
-- Windows Hello Face is not required by JARVIS; the accepted strong path can use Windows Hello PIN, while Pocket 3 remains ordinary RGB evidence rather than a Hello/TrueDepth-class authenticator;
-- perception updates are slower than raw camera capture; observer `analysis age` exposes that distinction;
-- no tracker can guarantee continuity through complete disappearance or arbitrary long occlusion;
-- head/person observations do not identify a human;
-- startup greetings are time-aware but not identity-aware; greeting text must not imply verified owner recognition;
-- spoken development-update approval is still a development-tool interaction gate and is not automatically upgraded to the Step-3 strong-authority flow;
-- the realtime approval session can still emit provider-side/internal assistant-response noise even though that model output is not routed as approval authority;
-- the running `jarvis-dev` parent must be restarted to load changes to supervisor code itself;
-- no general scene understanding, OCR, gesture understanding, or visual memory exists yet;
-- provider/network/cost/privacy constraints still apply to realtime conversation;
-- JARVIS is not yet installed as a production background Windows service.
-
-## Architecture Update Rule
-
-Only Step-3 slices that have completed research/decision, implementation, automated validation, real human acceptance, documentation reconciliation, and protected-main merge may appear here as current architecture. Vision, wake word, face recognition, voice recognition, attention, model confidence, or any other sensor evidence must never directly grant permission.
+1. update `CURRENT_ARCHITECTURE.md`;
+2. update `CURRENT_PLAN.md`;
+3. create/update an ADR for significant choices;
+4. record real-machine evidence under `docs/research/`;
+5. mark superseded experiments clearly;
+6. delete dead production plumbing after replacement acceptance.

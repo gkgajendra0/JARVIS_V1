@@ -290,7 +290,7 @@ def _start_jarvis(
     if os.name == "nt":
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
     process = subprocess.Popen(
-        [sys.executable, "-m", "jarvis.voice.runtime"],
+        [sys.executable, "-m", "jarvis.voice.production_runtime"],
         **kwargs,
     )
     print(f"JARVIS started (pid={process.pid}).")

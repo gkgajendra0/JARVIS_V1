@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -12,6 +14,7 @@ from jarvis.voice.audio import (
     LocalAudioRuntime,
     SessionAudioInput,
 )
+from jarvis.voice.observed_audio import ObservedSessionAudioInput
 
 
 def frame(value: int, samples: int = 480) -> rtc.AudioFrame:
@@ -39,6 +42,14 @@ class FakeMediaDevices:
     def open_input(self, **options):
         self.input_options = options
         return object()
+
+
+class FakeApm:
+    def __init__(self) -> None:
+        self.reverse_frames: list[rtc.AudioFrame] = []
+
+    def process_reverse_stream(self, audio_frame: rtc.AudioFrame) -> None:
+        self.reverse_frames.append(audio_frame)
 
 
 @pytest.mark.asyncio
@@ -78,6 +89,54 @@ async def test_activation_sends_pre_roll_in_order_without_reopening_device() -> 
     assert runtime.detector.enabled is False
 
 
+def test_activation_preserves_pre_roll_observation_timestamps() -> None:
+    runtime = LocalAudioRuntime(
+        FakeDetector(),  # type: ignore[arg-type]
+        input_device_name=None,
+        output_device_name=None,
+        pre_roll_seconds=0.02,
+        ring_buffer_seconds=0.05,
+    )
+
+    runtime._append_ring(
+        frame(1),
+        observed_at_monotonic=10.01,
+    )
+    runtime._append_ring(
+        frame(2),
+        observed_at_monotonic=10.02,
+    )
+    runtime._append_ring(
+        frame(3),
+        observed_at_monotonic=10.03,
+    )
+
+    observed: list[float] = []
+
+    session_input = ObservedSessionAudioInput(
+        lambda _frame, observed_at: observed.append(observed_at)
+    )
+
+    runtime.activate_session(session_input)
+
+    assert observed == [10.02, 10.03]
+
+
+def test_observed_session_audio_input_forwards_existing_timestamp() -> None:
+    observed: list[float] = []
+
+    session_input = ObservedSessionAudioInput(
+        lambda _frame, observed_at: observed.append(observed_at)
+    )
+
+    assert session_input.push_frame(
+        frame(1),
+        observed_at_monotonic=42.5,
+    )
+
+    assert observed == [42.5]
+
+
 def test_input_capture_has_bounded_provider_startup_cushion() -> None:
     runtime = LocalAudioRuntime(
         FakeDetector(),  # type: ignore[arg-type]
@@ -103,9 +162,24 @@ def test_input_capture_has_bounded_provider_startup_cushion() -> None:
 
 def test_device_name_resolution_rejects_missing_and_ambiguous_devices() -> None:
     devices = [
-        {"index": 6, "name": "Voicemeeter Out B1", "hostapi": 0},
-        {"index": 57, "name": "Voicemeeter Out B1", "hostapi": 2},
-        {"index": 58, "name": "Voicemeeter Out A5", "hostapi": 2},
+        {
+            "index": 6,
+            "name": "Voicemeeter Out B1",
+            "hostapi": 0,
+            "hostapi_name": "MME",
+        },
+        {
+            "index": 57,
+            "name": "Voicemeeter Out B1",
+            "hostapi": 2,
+            "hostapi_name": "Windows WASAPI",
+        },
+        {
+            "index": 58,
+            "name": "Voicemeeter Out A5",
+            "hostapi": 2,
+            "hostapi_name": "Windows WASAPI",
+        },
     ]
 
     assert LocalAudioRuntime._resolve_device(devices, "index:57", kind="input") == 57
@@ -118,6 +192,125 @@ def test_device_name_resolution_rejects_missing_and_ambiguous_devices() -> None:
         LocalAudioRuntime._resolve_device(devices, "index:B1", kind="input")
     with pytest.raises(RuntimeError, match=r"index:6.*index:57"):
         LocalAudioRuntime._resolve_device(devices, "Voicemeeter Out B1", kind="input")
+
+
+def test_stable_device_selector_disambiguates_host_api() -> None:
+    devices = [
+        {
+            "index": 6,
+            "name": "Voicemeeter Out B1 (VB-Audio Voicemeeter VAIO)",
+            "hostapi": 0,
+            "hostapi_name": "MME",
+        },
+        {
+            "index": 57,
+            "name": "Voicemeeter Out B1 (VB-Audio Voicemeeter VAIO)",
+            "hostapi": 2,
+            "hostapi_name": "Windows WASAPI",
+        },
+    ]
+
+    selector = "name:Voicemeeter Out B1|hostapi:Windows WASAPI"
+
+    assert LocalAudioRuntime._resolve_device(devices, selector, kind="input") == 57
+
+
+def test_stable_device_selector_survives_portaudio_index_drift() -> None:
+    selector = "name:Speakers (Tribit XSound Plus 2)|hostapi:Windows WASAPI"
+    before = [
+        {
+            "index": 54,
+            "name": "Speakers (Tribit XSound Plus 2)",
+            "hostapi": 2,
+            "hostapi_name": "Windows WASAPI",
+        }
+    ]
+    after = [
+        {
+            "index": 73,
+            "name": "Speakers (Tribit XSound Plus 2)",
+            "hostapi": 2,
+            "hostapi_name": "Windows WASAPI",
+        }
+    ]
+
+    assert LocalAudioRuntime._resolve_device(before, selector, kind="output") == 54
+    assert LocalAudioRuntime._resolve_device(after, selector, kind="output") == 73
+
+
+def test_stable_device_selector_fails_closed_on_missing_host_api() -> None:
+    devices = [
+        {
+            "index": 20,
+            "name": "Speakers (Tribit XSound Plus 2)",
+            "hostapi": 0,
+            "hostapi_name": "MME",
+        }
+    ]
+
+    selector = "name:Speakers (Tribit XSound Plus 2)|hostapi:Windows WASAPI"
+
+    with pytest.raises(RuntimeError, match="not found for stable selector"):
+        LocalAudioRuntime._resolve_device(devices, selector, kind="output")
+
+
+def test_stable_device_selector_requires_name_and_host_api() -> None:
+    devices = [
+        {
+            "index": 54,
+            "name": "Speakers (Tribit XSound Plus 2)",
+            "hostapi": 2,
+            "hostapi_name": "Windows WASAPI",
+        }
+    ]
+
+    with pytest.raises(RuntimeError, match="require both"):
+        LocalAudioRuntime._resolve_device(
+            devices,
+            "name:Speakers (Tribit XSound Plus 2)",
+            kind="output",
+        )
+
+
+def test_output_rate_prefers_canonical_when_endpoint_supports_it(monkeypatch) -> None:
+    checked: list[int] = []
+
+    def fake_check_output_settings(**options) -> None:
+        checked.append(int(options["samplerate"]))
+
+    fake_sounddevice = SimpleNamespace(
+        PortAudioError=RuntimeError,
+        default=SimpleNamespace(device=(-1, -1)),
+        check_output_settings=fake_check_output_settings,
+    )
+    monkeypatch.setitem(sys.modules, "sounddevice", fake_sounddevice)
+
+    assert LocalAudioRuntime._select_output_sample_rate(54) == 48_000
+    assert checked == [48_000]
+
+
+def test_output_rate_falls_back_to_native_endpoint_rate(monkeypatch) -> None:
+    checked: list[int] = []
+
+    def fake_check_output_settings(**options) -> None:
+        rate = int(options["samplerate"])
+        checked.append(rate)
+        if rate == 48_000:
+            raise ValueError("invalid sample rate")
+
+    fake_sounddevice = SimpleNamespace(
+        PortAudioError=RuntimeError,
+        default=SimpleNamespace(device=(-1, -1)),
+        check_output_settings=fake_check_output_settings,
+        query_devices=lambda device: {
+            "index": device,
+            "default_samplerate": 44_100.0,
+        },
+    )
+    monkeypatch.setitem(sys.modules, "sounddevice", fake_sounddevice)
+
+    assert LocalAudioRuntime._select_output_sample_rate(54) == 44_100
+    assert checked == [48_000, 44_100]
 
 
 @dataclass
@@ -148,4 +341,41 @@ async def test_local_output_reports_physical_completion_and_interruption() -> No
 
     assert finished[1].interrupted is True
     assert finished[1].playback_position == 0
+    await output.aclose()
+
+
+@pytest.mark.asyncio
+async def test_local_output_resamples_physical_playback_but_keeps_aec_canonical() -> (
+    None
+):
+    apm = FakeApm()
+    output = LocalAudioOutput(
+        output_device=None,
+        apm=apm,
+        output_sample_rate=44_100,
+    )
+    finished = []
+    output.on("playback_finished", finished.append)
+    output._loop = asyncio.get_running_loop()
+
+    for _ in range(10):
+        await output.capture_frame(frame(1000))
+    output.flush()
+
+    outdata = np.zeros((441, 1), dtype=np.int16)
+    for _ in range(20):
+        output._playback_callback(outdata, 441, TimeInfo(), None)
+        if finished and apm.reverse_frames:
+            break
+    await asyncio.sleep(0)
+
+    assert output.physical_sample_rate == 44_100
+    assert finished
+    assert finished[0].interrupted is False
+    assert finished[0].playback_position > 0
+    assert apm.reverse_frames
+    assert all(audio_frame.sample_rate == 48_000 for audio_frame in apm.reverse_frames)
+    assert all(
+        audio_frame.samples_per_channel == 480 for audio_frame in apm.reverse_frames
+    )
     await output.aclose()

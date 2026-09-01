@@ -43,6 +43,10 @@ def require_google_api_key() -> str:
 
 def _create_realtime_model(config: JarvisConfig):
     if config.realtime_provider == "gemini":
+        # Gemini 3.1 + the currently pinned LiveKit Google adapter must retain
+        # provider-native activity/turn completion. The paired audio runtime
+        # separately gates AEC-clean PCM with local Silero only while JARVIS is
+        # speaking, so residual echo is filtered before Gemini's native VAD.
         return google.realtime.RealtimeModel(
             model=config.gemini_realtime_model,
             voice=config.gemini_realtime_voice,

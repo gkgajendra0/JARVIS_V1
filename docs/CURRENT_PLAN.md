@@ -6,192 +6,261 @@
 
 ## Current Stage
 
-**PHASE 3A COMPLETE + MERGED — PHASE 3B OWNER IDENTITY + FACE/LIVENESS NEXT**
+**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — STARTUP OPERABILITY ACCEPTED — LIVEKIT 48-kHz FULL-DUPLEX AUDIO ACCEPTED — DUAL POCKET3 AUDIO OWNERSHIP REJECTED — ADR-013 SINGLE-MICROPHONE ACTIVE-SPEAKER INTEGRATION REAL-MACHINE ACCEPTED — LIVE VISION PREVIEW DEFAULT-ON — 3B.11 SCORE-DISTRIBUTION / NEGATIVE-SCENARIO BAKE-OFF NEXT**
 
-Step 0, Step 1, Step 2, Step 2.5, and Step 3A are complete. The development-only `jarvis-dev` supervisor and time-aware startup greetings are also implemented, automated-validated, human-accepted, and merged to protected `main`.
+This file is the operational source of truth for what is done, what is accepted, and what happens next. Detailed evidence belongs in `docs/research/`; significant architecture decisions belong in `docs/decisions/`.
 
-Step-3 research, security/privacy threat modeling, technology comparisons, canonical governance contracts, trust/risk vocabulary, degraded behavior, validation gates, and the Apple-inspired attention/intent amendment are complete. The combined architecture package received explicit human approval on 2026-08-30.
+---
 
-Phase 3A is implemented, automated-validated, human-accepted on real Windows hardware, documentation-reconciled, and merged to protected `main` through PR #7 on 2026-08-30. Merge commit: `6651de01d0c4ae81a25480ef26d2399181cee870`.
+## Completed / accepted foundation
 
-Accepted Phase-3A evidence includes a real Windows lock transition invalidating authority state, a real Windows Hello/PIN strong-verification success, proposal/session-bound STRONG approval, R4 authority allow, one-time execution-permit consumption, and a canceled Hello verification that produced DENY with no permit and no weak fallback.
+| Slice | Status | Current disposition |
+|---|---|---|
+| Step 0 | Complete | product/repo foundation |
+| Step 1 | Complete | realtime natural conversation architecture |
+| Step 2 | Complete | local wake + voice lifecycle |
+| Step 2.5 | Complete | Pocket3 vision/tracking/PTZ foundation |
+| Step 3A | Complete + merged | authority/policy/approval/audit/session boundaries |
+| 3B.1 | Accepted | encrypted single OWNER storage |
+| 3B.2/3 | Accepted | pinned YuNet + SFace runtime/assets |
+| 3B.4 | Accepted | Pocket3 face pipeline |
+| 3B.5A | Accepted baseline | positive OWNER face calibration |
+| 3B.6 | Accepted | encrypted multi-prototype OWNER enrollment |
+| 3B.7A | Accepted | active facial-liveness fallback |
+| 3B.7B | Human-accepted | passive MiniFAS temporal RGB liveness |
+| 3B.8 | Human-accepted | runtime OWNER identity + liveness binding |
+| 3B.9 | Deferred | attention waits for fixed monitor-relative sensor |
+| 3B.10 | Accepted shadow provider | CAM++ speaker embedding foundation |
+| 3B.10A | Human-accepted | passive canonical user-turn capture + OWNER-context bridge |
+| Startup operability | Human-accepted | `jarvis-setup`, machine profile, stable device selectors, consolidated preflight |
+| Conversation full duplex | Human-accepted | LiveKit MediaDevices + NVIDIA/TV 48 kHz |
+| 3B.11 integration boundary | Human-accepted | single Pocket3 mic owner + canonical PCM + normal timestamped Vision |
 
-Accepted ADRs:
+T2 `CORROBORATED_OWNER` remains intentionally disabled.
 
-- `docs/decisions/ADR-006_STEP_3_IDENTITY_TRUST_AUTHORITY_GOVERNANCE.md`
-- `docs/decisions/ADR-007_STEP_3_ATTENTION_INTENT_EVIDENCE.md`
+---
 
-Research artifacts:
+## Accepted normal startup
 
-- `docs/research/STEP_3_IDENTITY_TRUST_AUTHORITY_RESEARCH.md`
-- `docs/research/STEP_3_THREAT_PRIVACY_MODEL.md`
-- `docs/research/STEP_3_INDIA_PRIVACY_CONTEXT.md`
-- `docs/research/STEP_3_ARCHITECTURE_PROPOSAL.md`
-- `docs/research/STEP_3_ATTENTION_INTENT_AMENDMENT.md`
-
-## Step-3 Objective
-
-Build the smallest trustworthy governance foundation that can answer four separate questions without conflating them:
-
-1. **Who or what is present?** — identity/presence evidence.
-2. **How much should JARVIS trust that evidence for this session/action?** — graduated trust.
-3. **Is this specific requested action permitted?** — authority, policy, and consent.
-4. **What happened and why?** — privacy-aware observability/audit evidence.
-
-Step 3 does **not** yet implement the later generic capability runtime or broad computer/file/browser/email/device actions. It establishes the governance contracts those later steps must reuse.
-
-## Frozen Prerequisites
-
-The following are already accepted and must be treated as inputs, not redesigned casually:
-
-- natural realtime conversation and canonical accepted conversation state;
-- local wake detection and JARVIS-owned audio lifecycle;
-- Pocket 3 visual capture, RF-DETR person detection, OC-SORT tracking, head evidence, explicit target selection, and safe PTZ follow;
-- vision/head/person tracking as **evidence only**, never permission;
-- wake word as an activation signal only, never authentication;
-- `jarvis-dev` as development tooling outside model authority;
-- protected `main` requiring PR flow plus `ruff` and `pytest` checks;
-- explicit spoken software-update approval parsed deterministically outside the realtime model;
-- last-known-good rollback for failed development updates;
-- deterministic JARVIS-owned scripted speech for startup/system prompts;
-- Phase 3A deterministic authority contracts and Windows strong-verification/session boundaries.
-
-## Accepted Step-3 Non-Negotiable Invariants
-
-- Identity evidence is not execution permission.
-- Attention/gaze evidence is intent-to-engage evidence only; it is not identity, authentication, or execution permission.
-- Face recognition, voice recognition, attention, presence, Windows/session context, wake word, or model confidence must never directly grant consequential authority.
-- The model may recommend or explain; deterministic JARVIS-owned policy decides whether an action may proceed.
-- Capabilities cannot self-authorize or broaden their own permission.
-- Approval must bind to the materially relevant action, target, and parameters.
-- Ambiguous or missing approval must fail safely for consequential actions.
-- Trust friction should increase with consequence rather than making ordinary conversation annoying.
-- Observability must capture enough evidence to explain decisions without becoming hidden surveillance.
-- Raw audio/video, eye crops, gaze vectors, full transcripts, biometric material, secrets, and sensitive payloads are not retained merely because they are available.
-- Provider/device/model implementations remain replaceable behind JARVIS-owned contracts.
-- Pocket-3 RGB attention/liveness must never be represented as Face-ID-equivalent security or as iris authentication; Windows Hello/FIDO2 remains the strong-verification path.
-- A generic approval path may not claim `STRONG_VERIFIER`; a verified strong proof must be bound to the exact proposal/session and consumed only once.
-
-## Phase 3A — Authority Foundation — COMPLETE
-
-Accepted implementation includes:
-
-- canonical Step-3 trust/risk/approval/attention/evidence contracts;
-- immutable, expiring, session-bound `ActionProposal` canonicalization and SHA-256 material fingerprinting;
-- Unicode-normalized-key collision rejection and fingerprint re-computation at authority boundaries;
-- deterministic `RiskClassifier` with hard security floors that policy/model output cannot lower;
-- fail-closed `PolicyEngine` boundary and loopback-only OPA adapter with strict response/policy-version validation;
-- proposal-bound `ApprovalService` with expiry, cancellation, denial, one-time consumption, session invalidation, and strength ordering;
-- proposal/session-bound `StrongVerificationResult` carrying a unique one-time verification ID;
-- `StrongApprovalService` as the only path that can convert a verified strong proof into a STRONG approval;
-- prohibition on generic approval APIs pretending `STRONG_VERIFIER` happened;
-- `AuthorityService` decision, audit-before-protected-execution, short-lived execution permits, and final pre-execution revalidation/consumption;
-- structured privacy-aware audit boundary plus SQLite audit store and forbidden sensitive metadata keys;
-- Windows WTS session adapter using explicit lock state and authority invalidation on lock/session transition;
-- desktop Windows Hello adapter plus .NET 9 interop helper and lowercase JSON wire contract;
-- attention-evidence contract established without yet integrating an attention model;
-- failure-path tests for unauthorized execution, policy failure, approval/proof replay, proposal mutation, expiry, session invalidation, risk-floor downgrade, audit failure, and TOCTOU revalidation.
-
-Automated validation covers Ruff, the complete pytest suite, Windows .NET helper compilation, and execution of the helper JSON contract probe.
-
-Real-machine human acceptance on 2026-08-30 established:
-
-- current WTS session reports unlocked during normal use;
-- `Win+L` produces authority invalidation for the active session;
-- Windows Hello/PIN can produce `VERIFIED`;
-- verified proof is bound to the exact proposal fingerprint and session;
-- the resulting STRONG approval allows an R4 diagnostic proposal;
-- the resulting execution permit and approval are consumed exactly once;
-- canceling Windows Hello produces a canceled approval, authority `DENY`, and no execution permit.
-
-**Permanent Phase-3A rule:** no face, speaker, liveness, gaze, wake-word, or LLM output may directly authorize an action.
-
-## Phase 3B — Owner Identity + Face/Liveness — NEXT
-
-Phase 3B adds local OWNER enrollment and typed face/liveness evidence behind the already accepted authority contracts. It must not weaken or bypass Phase 3A.
-
-Planned work:
-
-1. implement the single-OWNER profile/enrollment lifecycle with explicit create/replace/delete semantics;
-2. implement DPAPI-backed key protection and envelope-encrypted biometric-template storage before persisting any owner biometric material;
-3. add model/version/checksum/license manifests for YuNet/SFace and MediaPipe assets;
-4. implement `FaceIdentityProvider` using YuNet + SFace on the selected/head crop rather than creating a second full-frame perception pipeline;
-5. benchmark/calibrate face matching on the real Pocket 3 across lighting, pose, glasses, distance, and ordinary appearance variation;
-6. implement randomized MediaPipe Face Landmarker active-liveness challenges on the same stable OWNER track;
-7. emit typed `FACE_MATCH` and `FACE_LIVENESS` evidence with quality, freshness, source/model IDs, verdicts, and reason codes;
-8. implement the first deterministic T0/T1/T2 trust derivation from Windows session + stable OWNER track + fresh face + fresh liveness, with no generic weighted confidence sum;
-9. test print/photo/phone-screen/video replay and track-association failure cases on the real Pocket 3;
-10. keep attention and speaker identity as subsequent evidence-provider slices unless needed to complete the approved T2 acceptance matrix.
-
-Phase 3B is not complete merely because face recognition works. Persistent owner storage, deletion/re-enrollment, spoof testing, freshness/invalidation, and trust derivation must all pass before face evidence can become accepted architecture.
-
-## Step-3 Deliverable Status
-
-- current research record — **DONE**;
-- concrete STRIDE + LINDDUN threat/privacy model — **DONE**;
-- India privacy-context record — **DONE**;
-- trust/risk vocabulary and canonical contracts — **APPROVED + IMPLEMENTED IN 3A**;
-- Apple-inspired attention/intent security amendment — **APPROVED; PROVIDER IMPLEMENTATION PENDING**;
-- scope/non-scope and human acceptance scenarios — **APPROVED**;
-- measurable security/privacy/latency/false-accept/false-reject/attention validation gates — **APPROVED**;
-- explicit human architecture approval — **DONE 2026-08-30**;
-- accepted ADRs for major decisions — **DONE**;
-- Phase 3A implementation — **DONE**;
-- Phase 3A automated validation — **DONE**;
-- Phase 3A real human acceptance — **DONE 2026-08-30**;
-- Phase 3A documentation reconciliation — **DONE**;
-- Phase 3A protected-main merge — **DONE 2026-08-30 (PR #7)**;
-- Phase 3B owner identity + face/liveness implementation — **NEXT**;
-- remaining Step-3 identity/attention/speaker validation — **PENDING**;
-- complete Step-3 human acceptance — **PENDING**.
-
-## Explicitly Out of Scope for Step 3
-
-- broad file/system/browser/device/email/calendar execution;
-- the Step-7 generic capability runtime;
-- long-term personal memory;
-- general scene understanding / VLM reasoning;
-- OCR, gestures, or visual memory;
-- proactive surveillance or continuous recording;
-- persistent gaze history, emotion/fatigue/interest inference, or behavioral eye tracking;
-- smart-glasses/HUD work;
-- unrestricted shell authority;
-- autonomous self-modification;
-- persistent guest/family identity roles;
-- cloud biometric recognition;
-- claims of Face-ID-equivalent or iris-authentication security from the Pocket 3 RGB camera.
-
-## Completion Gate
-
-Step 3 is complete only after:
+Normal operation no longer depends on rebuilding environment variables from chat/PowerShell history.
 
 ```text
-requirements
--> current research                         DONE
--> threat/privacy model                     DONE
--> technology/architecture proposal         DONE
--> attention/intent amendment               DONE
--> human architecture approval              DONE
--> accepted ADRs                            DONE
--> Phase 3A authority implementation        DONE
--> Phase 3A automated validation            DONE
--> Phase 3A real human acceptance           DONE
--> Phase 3A documentation reconciliation   DONE
--> Phase 3A protected-main merge            DONE
--> Phase 3B owner identity + face/liveness  NEXT
--> attention/speaker evidence implementation
--> full Step-3 automated validation
--> full real-human security/privacy acceptance
--> documentation reconciliation
--> protected-main merge(s)
+one-time jarvis-setup
+        ↓
+%LOCALAPPDATA%\JARVIS\machine.json
+        +
+Windows environment for API keys only
+        ↓
+jarvis-voice
 ```
 
-No Step-3 component becomes authoritative merely because a model/provider API works in isolation.
+Real-machine setup proved:
 
-## Immediate Next Actions
+- wake model persisted;
+- tuned wake threshold `0.82` preserved;
+- Pocket3 microphone persisted as stable `name + hostapi` selector;
+- NVIDIA `24'TV` persisted as stable 48-kHz output selector;
+- Gemini credential detected;
+- vision/speaker/active-speaker switches persisted;
+- official pinned LR-ASD AVA checkpoint acquired and integrity-verified automatically;
+- legacy non-secret `JARVIS_*` Windows User overrides removed;
+- stale inherited Tribit environment state no longer overrides the machine profile;
+- `jarvis-voice` preflight passes without manually setting runtime variables.
 
-1. Start Phase 3B from the protected `main` baseline created by PR #7.
-2. Create a dedicated Phase 3B implementation branch.
-3. Build OWNER lifecycle + encrypted biometric storage before persisting face templates.
-4. Integrate and benchmark YuNet/SFace + randomized MediaPipe liveness on the existing Pocket 3 selected-track crop.
-5. Only after real spoof/lighting/pose acceptance, allow typed face/liveness evidence to participate in deterministic T0/T1/T2 trust derivation.
+Decision: `docs/decisions/ADR-012_MACHINE_CONFIGURATION_AND_STARTUP_PREFLIGHT.md`.
+
+---
+
+## Accepted conversation audio
+
+```text
+Pocket3 microphone @ 48 kHz
+        ↓
+LiveKit rtc.MediaDevices
+WebRTC AEC + NS + HPF + AGC
+        ↓
+Gemini Live / AgentSession
+        ↓
+LiveKit MediaDevices output @ 48 kHz
+        ↓
+NVIDIA HDMI → 24'TV
+```
+
+Real acceptance proved:
+
+- JARVIS can complete speech without triggering on its own TV output;
+- deliberate human barge-in still interrupts correctly;
+- Bluetooth/Tribit is not the accepted production render path.
+
+Decision: `docs/decisions/ADR-011_LIVEKIT_MEDIADEVICES_48K_FULL_DUPLEX.md`.
+
+---
+
+## 3B.11 integration correction — dual Pocket3 audio ownership REJECTED
+
+Real-machine testing rejected two simultaneous independent consumers of the Pocket3 microphone.
+
+```text
+GStreamer first  → LiveKit/PortAudio microphone open fails
+PortAudio first  → GStreamer paired AV fails to reach PLAYING
+```
+
+Therefore a production architecture with separate LiveKit and GStreamer microphone ownership is forbidden on this machine.
+
+Evidence: `docs/research/STEP_3B11_DUAL_AUDIO_OWNERSHIP_ACCEPTANCE_RESULTS.md`.
+
+---
+
+## ADR-013 replacement — REAL-MACHINE ACCEPTED
+
+Production Step-3 active-speaker diagnostics now use one microphone owner and the existing canonical JARVIS timelines:
+
+```text
+                            POCKET3
+                               │
+                ┌──────────────┴──────────────┐
+                │                             │
+             AUDIO                           VIDEO
+                │                             │
+     LiveKit MediaDevices only        normal OpenCV Vision
+     AEC + NS + HPF + AGC                    │
+                │                     timestamped frame
+canonical timestamped user PCM               │
+                │                     exact track/head sequence
+                └──────────────┬──────────────┘
+                               │
+                       monotonic alignment
+                               │
+                            LR-ASD
+```
+
+Accepted real-machine run proved all of the following can operate together:
+
+- startup preflight;
+- Pocket3 LiveKit microphone capture;
+- NVIDIA/TV 48-kHz output;
+- WebRTC AEC/NS/HPF/AGC;
+- integrated Vision;
+- RF-DETR person detection;
+- persistent person tracking;
+- head detection;
+- wake detection;
+- Gemini realtime conversation;
+- speaker-shadow canonical turn capture;
+- LR-ASD CUDA inference;
+- target lock;
+- PTZ follow.
+
+LR-ASD produced multiple real `SCORED` observations. This accepts the **integration boundary**, not an active-speaker threshold.
+
+Evidence: `docs/research/STEP_3B11_SINGLE_OWNER_ACTIVE_SPEAKER_ACCEPTANCE_RESULTS.md`.
+
+Decision: `docs/decisions/ADR-013_SINGLE_OWNER_POCKET3_AUDIO_FOR_ACTIVE_SPEAKER.md`.
+
+---
+
+## Vision observability — default-on
+
+When integrated Vision is enabled, normal production startup now opens the existing `OpenCVVisionObserver` window by default.
+
+The window renders the same canonical interpretation JARVIS uses:
+
+- live Pocket3 frame;
+- person track boxes / IDs / confidence;
+- head boxes;
+- selected/locked target;
+- follow SAFE/ARMED state;
+- framing anchor;
+- pan/tilt/zoom command values;
+- analysis age.
+
+An explicit `JARVIS_VISION_PREVIEW=false` may suppress the window for headless/quiet diagnostic runs.
+
+---
+
+## Immediate next work — 3B.11 score-distribution bake-off
+
+The LR-ASD model is integrated and scoring, but no threshold is accepted yet.
+
+Required real-machine scenarios:
+
+```text
+A. OWNER visible + OWNER speaking
+B. OWNER visible + TV/phone/off-camera other speech
+C. OWNER visible + JARVIS playback only
+D. OWNER visible + OWNER replay from phone
+E. OWNER + another visible person; OWNER speaks
+F. OWNER + another visible person; other person speaks
+G. overlapping OWNER + other/background speech
+H. temporary OWNER head/face loss
+```
+
+Measure:
+
+- LR-ASD raw score distributions;
+- temporal stability;
+- false active assignment to a silent OWNER face;
+- off-camera speech behavior;
+- replay/playback behavior;
+- overlap behavior;
+- timing/alignment sensitivity;
+- inference latency / GPU / CPU footprint;
+- insufficient/ambiguous rate.
+
+No leaderboard/default threshold is accepted directly.
+
+Only after a safe temporal rule is human-accepted may `ACTIVE_OWNER_SPEAKER` permit **session-only** CAM++ prototype admission for the same actor/turn.
+
+---
+
+## Work after 3B.11 acceptance
+
+1. Permit session-only CAM++ prototype admission only when fresh OWNER+liveness and active-speaker evidence agree on the same actor/turn.
+2. Collect real speaker similarity distributions passively.
+3. Decide whether CAM++ separation is sufficient or ERes2NetV2 materially improves ambiguity.
+4. Run targeted non-owner / OWNER-replay / overlap acceptance before any speaker threshold promotion.
+5. Define persistent encrypted voice-template format only behind strongly verified OWNER enrollment/update semantics.
+6. Resolve authoritative OWNER-vs-UNKNOWN face separation when consenting live non-owner calibration becomes available, or keep T2 designed so provisional face evidence cannot be mistaken for authoritative identity.
+7. Define deterministic T2 `CORROBORATED_OWNER` composition from final accepted evidence.
+8. Run broader replay/stale/expiry/cross-session/cross-track/cross-actor/policy/degraded-mode tests.
+9. Remove obsolete GStreamer paired-conversation and custom barge-in production plumbing after replacement cleanup is safe.
+10. Final docs/quality-gate/roadmap reconciliation.
+11. Protected-main review and merge of Phase 3B through draft PR #11.
+12. Revisit attention when fixed monitor-mounted hardware exists.
+
+---
+
+## Non-negotiable Step-3 invariants
+
+- Identity evidence is not execution permission.
+- Face, voice, liveness, active-speaker, attention, wake word, Windows-unlocked state, or model confidence never directly authorize consequential actions.
+- Windows Hello/FIDO2 remains the strong-verification path for consequential authority.
+- `SPOOF` fails closed.
+- `UNCERTAIN` may request stronger evidence but may not silently upgrade trust.
+- Raw biometric audio/video is memory-only by default.
+- Provider/device/model boundaries remain replaceable.
+- T2 stays disabled until its final multimodal predicate is accepted.
+
+---
+
+## Branch / merge state
+
+Current active integration branch:
+
+```text
+feature/step-3b11-sensor-av-foundation
+```
+
+Current protected integration PR:
+
+```text
+PR #11 → main (DRAFT)
+```
+
+`main` does **not** yet contain this Phase-3B integration. The branch and PR must remain until the remaining 3B.11 acceptance and final reconciliation are complete. Do not delete the branch before protected-main merge.
+
+The older PR #10 is historical/superseded and is not the current integration path.
+
+## Immediate Next Action
+
+**Pull the latest feature branch, run `jarvis-voice`, confirm the live JARVIS Vision interpretation window appears, then begin the bounded 3B.11 score-distribution scenarios.**

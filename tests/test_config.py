@@ -1,6 +1,21 @@
+from pathlib import Path
+
 import pytest
 
 from jarvis.config import JarvisConfig
+
+
+@pytest.fixture(autouse=True)
+def _isolate_machine_config(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Keep config unit tests independent from the real PC machine profile."""
+    monkeypatch.setenv(
+        "JARVIS_MACHINE_CONFIG",
+        str(tmp_path / "machine.json"),
+    )
+    monkeypatch.delenv("JARVIS_RUNTIME_ENV_OVERRIDES", raising=False)
 
 
 def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -14,8 +29,13 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("JARVIS_WAKE_MODEL_PATH", " C:\\models\\jarvis.onnx ")
     monkeypatch.setenv("JARVIS_WAKE_THRESHOLD", "0.72")
     monkeypatch.setenv("JARVIS_AUDIO_PRE_ROLL_SECONDS", "0.8")
+    monkeypatch.setenv(
+        "JARVIS_AUDIO_OUTPUT_WASAPI_DEVICE",
+        " {0.0.0.00000000}.{render-endpoint} ",
+    )
     monkeypatch.setenv("JARVIS_VISION_ENABLED", "true")
     monkeypatch.setenv("JARVIS_BLAZEFACE_MODEL_PATH", " C:\\models\\blazeface.tflite ")
+    monkeypatch.setenv("JARVIS_SPEAKER_SHADOW_ENABLED", "true")
 
     config = JarvisConfig.from_environment()
 
@@ -29,8 +49,10 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.wake_model_path == "C:\\models\\jarvis.onnx"
     assert config.wake_threshold == 0.72
     assert config.audio_pre_roll_seconds == 0.8
+    assert config.audio_output_wasapi_device == "{0.0.0.00000000}.{render-endpoint}"
     assert config.vision_enabled is True
     assert config.vision_head_model_path == "C:\\models\\blazeface.tflite"
+    assert config.speaker_shadow_enabled is True
 
 
 def test_invalid_boolean_setting_fails_truthfully(
@@ -57,6 +79,15 @@ def test_invalid_vision_boolean_setting_fails_truthfully(
     monkeypatch.setenv("JARVIS_VISION_ENABLED", "sometimes")
 
     with pytest.raises(ValueError, match="JARVIS_VISION_ENABLED"):
+        JarvisConfig.from_environment()
+
+
+def test_invalid_speaker_shadow_boolean_setting_fails_truthfully(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("JARVIS_SPEAKER_SHADOW_ENABLED", "sometimes")
+
+    with pytest.raises(ValueError, match="JARVIS_SPEAKER_SHADOW_ENABLED"):
         JarvisConfig.from_environment()
 
 

@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 import cv2
 
 from jarvis.vision.camera import OpenCVCameraSource
@@ -13,6 +10,7 @@ from jarvis.vision.follow import FollowConfig, FollowController
 from jarvis.vision.head_mediapipe import (
     MediaPipeBlazeFaceConfig,
     MediaPipeBlazeFaceDetector,
+    default_blazeface_model_path,
 )
 from jarvis.vision.models import Track
 from jarvis.vision.ptz import DuvcPtzConfig, DuvcPtzController
@@ -21,7 +19,6 @@ from jarvis.vision.targeting import TargetManager
 from jarvis.vision.tracker import ByteTrackAdapter
 
 _WINDOW_NAME = "JARVIS Vision Follow"
-_HEAD_MODEL_NAME = "blaze_face_full_range.tflite"
 
 
 class _SelectionState:
@@ -61,17 +58,6 @@ class _SelectionState:
                 * (track.bounds.bottom - track.bounds.top)
             ),
         ).track_id
-
-
-def _head_model_path() -> Path:
-    configured = os.environ.get("JARVIS_BLAZEFACE_MODEL_PATH")
-    if configured:
-        return Path(configured)
-
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    if local_app_data:
-        return Path(local_app_data) / "JARVIS" / "models" / _HEAD_MODEL_NAME
-    return Path.home() / ".jarvis" / "models" / _HEAD_MODEL_NAME
 
 
 def _draw(image, snapshot, runtime: VisionRuntime):
@@ -168,7 +154,7 @@ def _draw(image, snapshot, runtime: VisionRuntime):
 
 
 def main() -> int:
-    model_path = _head_model_path()
+    model_path = default_blazeface_model_path()
     if not model_path.is_file():
         raise RuntimeError(
             "BlazeFace model is missing. Expected it at "

@@ -222,8 +222,10 @@ class ByteTrackAdapter(_RoboflowTrackerAdapter):
         now: float,
         frame: np.ndarray | None,
     ) -> object:
-        del frame
-        return self._tracker.update(self._to_external(detections), timestamp=now)
+        return self._tracker.update(
+            self._to_external(detections, frame=frame),
+            timestamp=now,
+        )
 
 
 class BoTSORTAdapter(_RoboflowTrackerAdapter):
