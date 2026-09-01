@@ -6,16 +6,16 @@ import asyncio
 from typing import Protocol
 
 from livekit.agents import tts
+from livekit.agents.voice import io
 from livekit.plugins import google, openai
 
 from jarvis.config import JarvisConfig
-from jarvis.voice.audio import LocalAudioOutput
 
 
 class ScriptedSpeech(Protocol):
     """Speak deterministic text without relying on realtime-model generation."""
 
-    async def speak(self, output: LocalAudioOutput, text: str) -> None: ...
+    async def speak(self, output: io.AudioOutput, text: str) -> None: ...
 
     async def aclose(self) -> None: ...
 
@@ -31,7 +31,7 @@ class LiveKitScriptedSpeech:
         self._engine = engine
         self._playback_timeout_seconds = playback_timeout_seconds
 
-    async def speak(self, output: LocalAudioOutput, text: str) -> None:
+    async def speak(self, output: io.AudioOutput, text: str) -> None:
         script = text.strip()
         if not script:
             raise ValueError("scripted speech text must not be empty")
