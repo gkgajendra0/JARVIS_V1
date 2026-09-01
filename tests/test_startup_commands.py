@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import jarvis.dev_supervisor as supervisor
 
@@ -14,7 +15,7 @@ def test_dev_supervisor_launches_same_production_runtime_as_jarvis_voice(
     monkeypatch,
 ) -> None:
     captured: dict[str, object] = {}
-    sentinel = object()
+    sentinel = SimpleNamespace(pid=12345)
 
     def fake_popen(args, **kwargs):
         captured["args"] = args
