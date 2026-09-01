@@ -6,13 +6,67 @@
 
 ## Current Stage
 
-**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — 3B.8 OWNER + LIVENESS HUMAN-ACCEPTED — 3B.9 ATTENTION DEFERRED — 3B.10/3B.10A SPEAKER FOUNDATION HUMAN-ACCEPTED — FULL-DUPLEX CONVERSATION AUDIO SOLUTION PROVEN + IMPLEMENTED — INTEGRATED AUDIO/SENSOR COEXISTENCE ACCEPTANCE NEXT — THEN 3B.11 ACTIVE-SPEAKER ACCEPTANCE**
+**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — 3B.8 OWNER + LIVENESS HUMAN-ACCEPTED — 3B.9 ATTENTION DEFERRED — 3B.10/3B.10A SPEAKER FOUNDATION HUMAN-ACCEPTED — FULL-DUPLEX CONVERSATION AUDIO SOLUTION PROVEN + IMPLEMENTED — MACHINE CONFIG + STARTUP PREFLIGHT IMPLEMENTED, REAL-MACHINE SETUP ACCEPTANCE NEXT — THEN INTEGRATED AUDIO/SENSOR COEXISTENCE — THEN 3B.11 ACTIVE-SPEAKER ACCEPTANCE**
 
 Step 0, Step 1, Step 2, Step 2.5, and Step 3A are complete. Phase 3A was real-machine accepted, reconciled, and merged through protected `main`.
 
 Phase 3B continues on `feature/step-3b11-sensor-av-foundation` / draft PR #10 and remains deliberately unmerged until the remaining identity/trust slices are integrated, real-machine accepted, reconciled, and ready for protected-main review.
 
 This file is the operational source of truth for **what is done, what is accepted, and what happens next**. Significant architecture decisions must also have an ADR; detailed benchmark evidence belongs in `docs/research/`.
+
+---
+
+## Startup operability correction — IMPLEMENTED, REAL-MACHINE ACCEPTANCE NEXT
+
+Normal JARVIS startup must not depend on reconstructing wake paths, audio indexes, vision flags, speaker flags, or model paths from chat/manual PowerShell history.
+
+Implemented startup model:
+
+```text
+one-time jarvis-setup
+        ↓
+%LOCALAPPDATA%\JARVIS\machine.json
+(non-secret machine configuration)
+        +
+Windows User/process environment
+(API keys only + optional explicit overrides)
+        ↓
+consolidated startup preflight
+        ↓
+jarvis-voice
+```
+
+Implemented properties:
+
+- new `jarvis-setup` command;
+- local schema-versioned machine profile with an explicit non-secret setting allow-list;
+- `OPENAI_API_KEY` / `GOOGLE_API_KEY` are never stored in machine JSON;
+- stable audio selectors use `name:<device>|hostapi:<host API>` rather than PortAudio `index:N`;
+- setup deliberately ignores legacy numeric audio selectors and redetects 48-kHz-capable hardware;
+- current-machine preference is Pocket3 microphone + NVIDIA/TV 48-kHz output when uniquely detected;
+- setup can migrate/remove legacy persisted non-secret `JARVIS_*` Windows User environment overrides after their useful values have been captured;
+- a fresh PowerShell is required after that one-time Windows User environment migration because a child process cannot rewrite its parent shell environment;
+- environment overrides remain available for deliberate diagnostics, but routine operation should use the machine profile;
+- production startup reports all core preflight failures together instead of failing one variable/device at a time;
+- preflight checks wake model, provider credential, stable 48-kHz conversation input/output, speaker↔vision dependencies and LR-ASD model when active-speaker shadow is enabled;
+- `jarvis-dev` now launches the same `jarvis.voice.production_runtime` used by `jarvis-voice`; it adds supervision only and is not a second voice architecture;
+- `.env.example` is now a reference/override document rather than the normal startup mechanism.
+
+Decision: `docs/decisions/ADR-012_MACHINE_CONFIGURATION_AND_STARTUP_PREFLIGHT.md`.
+
+### Startup acceptance gate
+
+Before continuing the audio/sensor coexistence benchmark:
+
+1. pull/install the latest editable package so `jarvis-setup` exists;
+2. run `jarvis-setup` once on the real PC;
+3. accept migration of legacy non-secret `JARVIS_*` Windows User overrides;
+4. open a fresh PowerShell;
+5. confirm `jarvis-setup --show` contains stable Pocket3 + TV selectors and required model/feature state;
+6. run `jarvis-voice` without manually setting JARVIS runtime variables;
+7. confirm consolidated preflight passes and production JARVIS starts.
+
+After this gate passes, record human acceptance and proceed immediately to integrated MediaDevices + raw GStreamer coexistence.
 
 ---
 
@@ -299,7 +353,7 @@ GStreamer synchronized sensor capture
 
 It no longer owns production conversation playback/AEC.
 
-### Immediate integration gate — NEXT
+### Integrated audio/sensor gate — AFTER STARTUP ACCEPTANCE
 
 Before deleting the historical paired-conversation/custom-barge-in code, run the real production `jarvis-voice` path with Step-3 active-speaker sensing enabled and prove that Windows permits these two consumers to coexist:
 
@@ -406,11 +460,12 @@ For Step 3 and later:
 
 ## Immediate Next Action
 
-**Run the integrated production audio/sensor coexistence acceptance on the real PC.**
+**Real-machine accept the new one-time machine setup + startup preflight flow.**
 
-If that passes:
+After that passes:
 
-1. record the acceptance result;
-2. remove obsolete paired-conversation/custom-Silero code;
-3. update this plan/architecture again;
-4. proceed directly to **3B.11 LR-ASD real-machine active-speaker acceptance**.
+1. record startup-operability human acceptance;
+2. run the integrated MediaDevices + raw GStreamer Pocket3 coexistence acceptance;
+3. remove obsolete paired-conversation/custom-Silero code if coexistence passes;
+4. update plan/architecture again;
+5. proceed directly to **3B.11 LR-ASD real-machine active-speaker acceptance**.
