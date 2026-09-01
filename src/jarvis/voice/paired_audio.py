@@ -10,6 +10,7 @@ used by this runtime.
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 import time
 from collections import deque
@@ -26,7 +27,10 @@ from jarvis.voice.audio import (
     FRAME_SAMPLES,
     SessionAudioInput,
 )
+from jarvis.voice.barge_in import BargeInGate
 from jarvis.voice.wakeword import LiveKitWakeDetector
+
+LOGGER = logging.getLogger(__name__)
 
 _NATIVE_QUEUE_CAPACITY = 500
 _FRAME_SECONDS = FRAME_SAMPLES / DEVICE_SAMPLE_RATE
@@ -227,6 +231,7 @@ class PairedAudioRuntime:
         self._overflow_handler: Callable[[], None] | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self.output: GStreamerPairedAudioOutput | None = None
+        self._barge_in_gate: BargeInGate | None = None
         self._started = False
 
         self._native_lock = threading.Lock()
@@ -254,8 +259,26 @@ class PairedAudioRuntime:
         self._loop = asyncio.get_running_loop()
         self.output = GStreamerPairedAudioOutput(self._av_source)
         self.output.start()
+        self._barge_in_gate = BargeInGate()
+        self.output.on("playback_started", self._on_playback_started)
+        self.output.on("playback_finished", self._on_playback_finished)
         self.detector.enable()
         self._started = True
+        LOGGER.info(
+            "AEC-clean local Silero barge-in gate is active during JARVIS playback"
+        )
+
+    def _on_playback_started(self, event) -> None:
+        del event
+        gate = self._barge_in_gate
+        if gate is not None:
+            gate.set_agent_speaking(True)
+
+    def _on_playback_finished(self, event) -> None:
+        del event
+        gate = self._barge_in_gate
+        if gate is not None:
+            gate.set_agent_speaking(False)
 
     def feed_clean_pcm(
         self,
@@ -343,13 +366,18 @@ class PairedAudioRuntime:
         self._append_ring(frame, observed_at_monotonic=observed_at_monotonic)
         active_input = self._active_input
         if active_input is not None:
-            if (
-                not active_input.push_frame(
+            gate = self._barge_in_gate
+            if gate is not None:
+                accepted = gate.push_frame(
                     frame,
                     observed_at_monotonic=observed_at_monotonic,
                 )
-                and self._overflow_handler is not None
-            ):
+            else:
+                accepted = active_input.push_frame(
+                    frame,
+                    observed_at_monotonic=observed_at_monotonic,
+                )
+            if not accepted and self._overflow_handler is not None:
                 self._overflow_handler()
         else:
             self.detector.feed(frame)
@@ -379,6 +407,9 @@ class PairedAudioRuntime:
             raise RuntimeError("a voice session already owns routed microphone audio")
         self.detector.disable(clear_buffer=False)
         self._active_input = session_input
+        gate = self._barge_in_gate
+        if gate is not None:
+            gate.set_target(session_input)
 
         pre_roll_samples = int(self._pre_roll_seconds * DEVICE_SAMPLE_RATE)
         selected: deque[_TimedAudioFrame] = deque()
@@ -394,6 +425,8 @@ class PairedAudioRuntime:
                 timed_frame.frame,
                 observed_at_monotonic=timed_frame.observed_at_monotonic,
             ):
+                if gate is not None:
+                    gate.set_target(None)
                 self._active_input = None
                 raise RuntimeError(
                     "session audio queue overflowed while adding paired pre-roll"
@@ -402,6 +435,9 @@ class PairedAudioRuntime:
     def deactivate_session(self) -> None:
         active = self._active_input
         self._active_input = None
+        gate = self._barge_in_gate
+        if gate is not None:
+            gate.set_target(None)
         if active is not None:
             active.close()
 
@@ -423,7 +459,14 @@ class PairedAudioRuntime:
             self._native_drain_scheduled = False
         self._pending_pcm.clear()
         self._pending_start_monotonic = None
-        if self.output is not None:
-            await self.output.aclose()
+        output = self.output
+        if output is not None:
+            output.off("playback_started", self._on_playback_started)
+            output.off("playback_finished", self._on_playback_finished)
+        if self._barge_in_gate is not None:
+            await self._barge_in_gate.aclose()
+            self._barge_in_gate = None
+        if output is not None:
+            await output.aclose()
             self.output = None
         await self.detector.aclose()
