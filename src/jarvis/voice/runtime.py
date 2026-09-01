@@ -52,7 +52,7 @@ from jarvis.voice.livekit_session import (
     create_voice_session,
 )
 from jarvis.voice.observed_audio import ObservedSessionAudioInput
-from jarvis.voice.paired_wake import PairedWakeDetectorBridge
+from jarvis.voice.paired_audio import PairedAudioRuntime
 from jarvis.voice.scripted_speech import ScriptedSpeech, build_scripted_speech
 from jarvis.voice.startup_greeting import select_startup_greeting
 from jarvis.voice.vision_tools import VisionAgentTools
@@ -166,7 +166,7 @@ class VoiceRuntimeController:
     def __init__(
         self,
         config: JarvisConfig,
-        audio: LocalAudioRuntime,
+        audio: LocalAudioRuntime | PairedAudioRuntime,
         *,
         session_factory: SessionFactory = create_voice_session,
         vision_service: VisionService | None = None,
@@ -507,10 +507,14 @@ class VoiceRuntimeController:
                     )
 
             await self.audio.start()
-            if isinstance(self.audio.detector, PairedWakeDetectorBridge):
+            if isinstance(self.audio, PairedAudioRuntime):
                 LOGGER.info(
-                    "Wake detection source is paired DJI PCM from the GStreamer AV pipeline; "
-                    "the temporary conversation microphone is excluded from wake inference"
+                    "Canonical microphone source is paired DJI PCM from GStreamer; "
+                    "no PortAudio or Voicemeeter input device is open"
+                )
+                LOGGER.info(
+                    "WebRTC APM is active on paired DJI conversation audio with Tribit "
+                    "physical playback supplied as the reverse-stream echo reference"
                 )
             if self._dev_control is not None:
                 control_task = asyncio.create_task(
@@ -870,23 +874,10 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         )
 
     predictor = load_livekit_predictor(Path(config.wake_model_path))
-    base_detector = LiveKitWakeDetector(
+    detector = LiveKitWakeDetector(
         predictor,
         threshold=config.wake_threshold,
         debounce_seconds=config.wake_debounce_seconds,
-    )
-    paired_wake_bridge = (
-        PairedWakeDetectorBridge(base_detector)
-        if config.active_speaker_shadow_enabled
-        else None
-    )
-    detector = paired_wake_bridge or base_detector
-    audio = LocalAudioRuntime(
-        detector,  # type: ignore[arg-type]
-        input_device_name=config.audio_input_device,
-        output_device_name=config.audio_output_device,
-        pre_roll_seconds=config.audio_pre_roll_seconds,
-        ring_buffer_seconds=config.audio_ring_buffer_seconds,
     )
 
     owner_context_state: OwnerContextState | None = None
@@ -900,9 +891,9 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
     active_speaker_audio_capture: InMemorySpeakerTurnCapture | None = None
     active_speaker_av_source: GStreamerPairedAVSource | None = None
     speech_region_detector: SpeechRegionDetector | None = None
+
     if config.active_speaker_shadow_enabled:
         assert config.active_speaker_model_path is not None
-        assert paired_wake_bridge is not None
         discovered_sources = discover_windows_av_sources()
         if len(discovered_sources) != 1:
             raise RuntimeError(
@@ -914,8 +905,19 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         )
         active_speaker_av_source = GStreamerPairedAVSource(
             discovered_sources[0],
-            GStreamerPairedAVConfig(audio_rate=16_000),
+            GStreamerPairedAVConfig(audio_rate=48_000),
         )
+        audio: LocalAudioRuntime | PairedAudioRuntime = PairedAudioRuntime(
+            detector,
+            output_device_name=config.audio_output_device,
+            pre_roll_seconds=config.audio_pre_roll_seconds,
+            ring_buffer_seconds=config.audio_ring_buffer_seconds,
+        )
+        if config.audio_input_device is not None:
+            LOGGER.info(
+                "JARVIS_AUDIO_INPUT_DEVICE is ignored because paired GStreamer DJI PCM "
+                "is the canonical microphone source"
+            )
 
         def on_paired_audio(
             data: bytes,
@@ -932,11 +934,13 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
                 samples_per_channel=samples_per_channel,
                 observed_at_monotonic=observed_at_monotonic,
             )
-            paired_wake_bridge.feed_external_pcm(
+            assert isinstance(audio, PairedAudioRuntime)
+            audio.feed_external_pcm(
                 data,
                 sample_rate=sample_rate,
                 num_channels=num_channels,
                 samples_per_channel=samples_per_channel,
+                observed_at_monotonic=observed_at_monotonic,
             )
 
         active_speaker_av_source.set_audio_frame_tap(on_paired_audio)
@@ -947,6 +951,14 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
             config.active_speaker_model_path
         )
         speech_region_detector = LiveKitSileroSpeechRegionDetector()
+    else:
+        audio = LocalAudioRuntime(
+            detector,
+            input_device_name=config.audio_input_device,
+            output_device_name=config.audio_output_device,
+            pre_roll_seconds=config.audio_pre_roll_seconds,
+            ring_buffer_seconds=config.audio_ring_buffer_seconds,
+        )
 
     vision_service = (
         build_default_vision_service(
