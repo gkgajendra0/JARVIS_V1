@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 from typing import Any
 
 from jarvis.config import FALSE_VALUES, TRUE_VALUES, JarvisConfig
 from jarvis.machine_config import (
+    PERSISTABLE_SETTINGS,
     configured_text,
     default_machine_config_path,
     load_machine_settings,
@@ -262,6 +264,66 @@ def _print_saved(path: Path) -> None:
     print("API keys are NOT stored in this file.")
 
 
+def _legacy_runtime_overrides() -> list[str]:
+    return sorted(name for name in PERSISTABLE_SETTINGS if os.getenv(name) is not None)
+
+
+def _remove_windows_user_overrides(names: list[str]) -> None:
+    if os.name != "nt":
+        return
+
+    import winreg
+
+    try:
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            "Environment",
+            0,
+            winreg.KEY_SET_VALUE,
+        )
+    except OSError as exc:
+        raise RuntimeError("Unable to open Windows User environment for migration") from exc
+
+    with key:
+        for name in names:
+            try:
+                winreg.DeleteValue(key, name)
+            except FileNotFoundError:
+                pass
+
+
+def _migrate_legacy_overrides() -> None:
+    legacy = _legacy_runtime_overrides()
+    if not legacy:
+        return
+
+    print("\nLegacy JARVIS runtime environment overrides detected:")
+    for name in legacy:
+        print(f"  {name}")
+    if os.name != "nt":
+        print(
+            "They still override the machine profile. Remove them from your shell "
+            "environment when migration is complete."
+        )
+        return
+
+    if not _ask_bool(
+        "Remove these non-secret JARVIS overrides from Windows User environment",
+        True,
+    ):
+        print("Legacy overrides retained; they remain higher priority than machine.json.")
+        return
+
+    _remove_windows_user_overrides(legacy)
+    # Ensure this setup process validates the newly persisted profile rather than
+    # the legacy values it inherited from its parent PowerShell. The parent shell
+    # cannot be changed by a child process, so a fresh shell is still required.
+    for name in legacy:
+        os.environ.pop(name, None)
+    print("Legacy Windows User overrides removed for future shells.")
+    print("Open a fresh PowerShell after setup before normal JARVIS use.")
+
+
 def run_setup(*, show_only: bool = False) -> int:
     target = default_machine_config_path()
     existing = load_machine_settings(target)
@@ -279,6 +341,7 @@ def run_setup(*, show_only: bool = False) -> int:
     settings = _build_settings(existing)
     path = save_machine_settings(settings, target)
     _print_saved(path)
+    _migrate_legacy_overrides()
 
     config = JarvisConfig.from_environment()
     checks = run_startup_preflight(config)
