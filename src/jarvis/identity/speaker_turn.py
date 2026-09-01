@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -37,27 +38,29 @@ class SpeakerTurnAudio:
 
 
 class InMemorySpeakerTurnCapture:
-    """Bounded rolling canonical-audio buffer for committed user turns.
+    """Bounded thread-safe rolling mono PCM buffer for committed user turns.
 
     Provider user-state transitions are intentionally not used as biometric audio
-    boundaries. The runtime continuously feeds canonical mono PCM here and takes a
-    bounded snapshot only when the conversation layer commits a user message. Raw
-    audio remains memory-only and is discarded from the rolling buffer after the
-    snapshot is taken.
+    boundaries. Runtime audio producers continuously feed PCM here and take a bounded
+    snapshot only when the conversation layer commits a user message. Raw audio stays
+    memory-only and is discarded from the rolling buffer after the snapshot is taken.
+    The internal lock also makes the same capture safe for native GStreamer callbacks.
     """
 
     def __init__(self, *, max_turn_seconds: float = 15.0) -> None:
         if max_turn_seconds <= 0:
             raise ValueError("speaker turn maximum duration must be positive")
         self.max_turn_seconds = max_turn_seconds
+        self._lock = threading.RLock()
         self._sample_rate: int | None = None
         self._chunks: deque[tuple[bytes, int, float]] = deque()
         self._buffered_samples = 0
 
     def clear(self) -> None:
-        self._sample_rate = None
-        self._chunks.clear()
-        self._buffered_samples = 0
+        with self._lock:
+            self._sample_rate = None
+            self._chunks.clear()
+            self._buffered_samples = 0
 
     def push_frame(
         self,
@@ -84,32 +87,35 @@ class InMemorySpeakerTurnCapture:
         if len(payload) != expected_bytes:
             raise ValueError("speaker frame byte length does not match int16 mono PCM")
 
-        if self._sample_rate is None:
-            self._sample_rate = sample_rate
-        elif sample_rate != self._sample_rate:
-            self.clear()
-            self._sample_rate = sample_rate
+        with self._lock:
+            if self._sample_rate is None:
+                self._sample_rate = sample_rate
+            elif sample_rate != self._sample_rate:
+                self._sample_rate = sample_rate
+                self._chunks.clear()
+                self._buffered_samples = 0
 
-        self._chunks.append((payload, samples_per_channel, observed_at))
-        self._buffered_samples += samples_per_channel
-        self._trim_to_limit()
+            self._chunks.append((payload, samples_per_channel, observed_at))
+            self._buffered_samples += samples_per_channel
+            self._trim_to_limit()
 
     def snapshot_recent_audio(self, *, clear: bool = True) -> SpeakerTurnAudio | None:
-        sample_rate = self._sample_rate
-        if sample_rate is None or not self._chunks or self._buffered_samples <= 0:
-            return None
+        with self._lock:
+            sample_rate = self._sample_rate
+            if sample_rate is None or not self._chunks or self._buffered_samples <= 0:
+                return None
 
-        chunks = tuple(self._chunks)
-        sample_count = self._buffered_samples
-        start_monotonic = chunks[0][2]
-        _, final_samples, final_observed_at = chunks[-1]
-        end_monotonic = final_observed_at + final_samples / sample_rate
-        payload = b"".join(chunk for chunk, _, _ in chunks)
-        samples = np.frombuffer(payload, dtype=np.int16, count=sample_count).copy()
+            chunks = tuple(self._chunks)
+            sample_count = self._buffered_samples
+            start_monotonic = chunks[0][2]
+            _, final_samples, final_observed_at = chunks[-1]
+            end_monotonic = final_observed_at + final_samples / sample_rate
+            payload = b"".join(chunk for chunk, _, _ in chunks)
+            samples = np.frombuffer(payload, dtype=np.int16, count=sample_count).copy()
 
-        if clear:
-            self._chunks.clear()
-            self._buffered_samples = 0
+            if clear:
+                self._chunks.clear()
+                self._buffered_samples = 0
 
         if samples.size == 0:
             return None
