@@ -2,7 +2,7 @@
 
 ## Status
 
-**IMPLEMENTED/HUMAN-ACCEPTED THROUGH PHASE 3B.10A, WITH THE 48-kHz LIVEKIT MEDIADEVICES CONVERSATION-AUDIO REPLACEMENT IMPLEMENTED AFTER REAL-MACHINE ACCEPTANCE. INTEGRATED MEDIADEVICES + RAW GSTREAMER SENSOR COEXISTENCE IS THE NEXT ACCEPTANCE GATE. 3B.11 ACTIVE-SPEAKER CORROBORATION FOLLOWS. ATTENTION REMAINS DEFERRED. T2 REMAINS DISABLED.**
+**IMPLEMENTED/HUMAN-ACCEPTED THROUGH PHASE 3B.10A, WITH THE 48-kHz LIVEKIT MEDIADEVICES CONVERSATION-AUDIO REPLACEMENT IMPLEMENTED AFTER REAL-MACHINE ACCEPTANCE. PERSISTENT MACHINE CONFIGURATION + CONSOLIDATED STARTUP PREFLIGHT ARE IMPLEMENTED AND AWAIT REAL-MACHINE ACCEPTANCE. INTEGRATED MEDIADEVICES + RAW GSTREAMER SENSOR COEXISTENCE FOLLOWS. 3B.11 ACTIVE-SPEAKER CORROBORATION FOLLOWS THAT. ATTENTION REMAINS DEFERRED. T2 REMAINS DISABLED.**
 
 This document records accepted production architecture and the exact replacement boundaries currently being integrated. Detailed benchmark evidence belongs in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; significant choices are recorded in ADRs.
 
@@ -22,9 +22,93 @@ JARVIS has accepted foundations for:
 - passive MiniFAS temporal RGB liveness plus randomized active challenge fallback;
 - runtime OWNER identity + liveness binding on the same Windows session and visual track;
 - CAM++ speaker-embedding foundation and passive turn-capture/OWNER-context bridge;
-- LiveKit `rtc.MediaDevices` full-duplex conversation audio at 48 kHz using WebRTC AEC/NS/HPF/AGC and the accepted NVIDIA HDMI/TV render path.
+- LiveKit `rtc.MediaDevices` full-duplex conversation audio at 48 kHz using WebRTC AEC/NS/HPF/AGC and the accepted NVIDIA HDMI/TV render path;
+- a schema-versioned local machine configuration boundary and one consolidated production startup preflight.
 
 T2 `CORROBORATED_OWNER` is still intentionally disabled until the final multimodal predicate is accepted.
+
+---
+
+## Machine configuration + startup lifecycle — IMPLEMENTED, REAL-MACHINE ACCEPTANCE PENDING
+
+Normal operation is no longer designed around manually reconstructing a large environment-variable block.
+
+Configuration layers:
+
+```text
+%LOCALAPPDATA%\JARVIS\machine.json
+(non-secret machine-specific state)
+        +
+Windows User/process environment
+(secrets + deliberate overrides)
+        ↓
+JarvisConfig
+        ↓
+startup preflight
+        ↓
+production runtime
+```
+
+Persisted machine state may contain:
+
+- realtime provider choice;
+- wake model path;
+- stable conversation input selector;
+- stable conversation output selector;
+- vision/speaker/active-speaker feature switches;
+- active-speaker model path;
+- other explicitly allow-listed non-secret JARVIS runtime settings.
+
+It may **not** contain provider API keys or arbitrary environment names. Provider credentials remain:
+
+- `OPENAI_API_KEY`;
+- `GOOGLE_API_KEY`.
+
+### Stable audio selectors
+
+PortAudio numeric indexes are not persistent device identity.
+
+Persisted device selectors use:
+
+```text
+name:<friendly device name>|hostapi:<PortAudio host API name>
+```
+
+`jarvis-setup` deliberately ignores legacy `index:N` selectors and redetects compatible endpoints. The current machine preference is Pocket3 microphone + NVIDIA/TV output, both accepting 48 kHz.
+
+### Legacy environment migration
+
+Existing non-secret `JARVIS_*` environment values remain higher-priority diagnostic overrides for compatibility. During one-time setup, useful values are first captured into the machine profile. On Windows, setup can then remove only allow-listed non-secret JARVIS runtime overrides from the User environment. API keys and `JARVIS_DEV_BRANCH` are outside that deletion set.
+
+A fresh PowerShell is required after migration because a child process cannot rewrite its parent process environment.
+
+### Startup preflight
+
+Every `jarvis-voice` production launch runs a consolidated preflight before opening the runtime. It reports all discovered startup failures in one pass and fails closed.
+
+Initial checks cover:
+
+- wake model availability;
+- selected realtime provider credential;
+- stable conversation microphone resolution + 48-kHz support;
+- stable conversation speaker resolution + 48-kHz support;
+- speaker-shadow dependency on vision;
+- active-speaker dependency on speaker shadow/vision;
+- LR-ASD model availability when active-speaker shadow is enabled.
+
+A failed check blocks startup with an actionable summary rather than allowing a later multi-stage traceback.
+
+### Startup commands
+
+`jarvis-setup` owns one-time machine setup. `jarvis-voice` owns normal production execution. `jarvis-dev` adds update/restart supervision but launches the exact same production runtime module:
+
+```text
+jarvis.voice.production_runtime
+```
+
+There is no longer an intentional second voice architecture behind `jarvis-dev`.
+
+Decision: `docs/decisions/ADR-012_MACHINE_CONFIGURATION_AND_STARTUP_PREFLIGHT.md`.
 
 ---
 
