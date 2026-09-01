@@ -39,6 +39,11 @@ from jarvis.identity.speech_region import (
     SpeechRegionDetector,
 )
 from jarvis.logging_config import configure_logging
+from jarvis.sensors.gstreamer_av import (
+    GStreamerPairedAVConfig,
+    GStreamerPairedAVSource,
+)
+from jarvis.sensors.windows_discovery import discover_windows_av_sources
 from jarvis.vision.service import VisionService, build_default_vision_service
 from jarvis.voice.agent import JarvisVoiceAgent
 from jarvis.voice.audio import LocalAudioRuntime, SessionAudioInput
@@ -167,6 +172,8 @@ class VoiceRuntimeController:
         owner_context_state: OwnerContextState | None = None,
         active_speaker_visual_buffer: ActiveSpeakerVisualBuffer | None = None,
         active_speaker_provider: LrAsdActiveSpeakerProvider | None = None,
+        active_speaker_audio_capture: InMemorySpeakerTurnCapture | None = None,
+        active_speaker_av_source: GStreamerPairedAVSource | None = None,
         speech_region_detector: SpeechRegionDetector | None = None,
         scripted_speech: ScriptedSpeech | None = None,
         startup_greeting_factory: StartupGreetingFactory = select_startup_greeting,
@@ -178,6 +185,8 @@ class VoiceRuntimeController:
         self._owner_context_state = owner_context_state
         self._active_speaker_visual_buffer = active_speaker_visual_buffer
         self._active_speaker_provider = active_speaker_provider
+        self._active_speaker_audio_capture = active_speaker_audio_capture
+        self._active_speaker_av_source = active_speaker_av_source
         self._speech_region_detector = speech_region_detector
         self._vision_tools = (
             VisionAgentTools(vision_service) if vision_service is not None else None
@@ -359,18 +368,75 @@ class VoiceRuntimeController:
             ",".join(result.reason_codes) if result.reason_codes else "none",
         )
 
+    async def _inspect_paired_active_speaker_turn(
+        self,
+        turn: SpeakerTurnAudio | None,
+        *,
+        audio_turn_id: str,
+    ) -> None:
+        if self._active_speaker_provider is None:
+            return
+        if turn is None:
+            LOGGER.info(
+                "Active speaker shadow turn %s | state=insufficient | "
+                "active_speaker_confirmed=False | prototype_admission=False | "
+                "reasons=paired_audio_window_missing",
+                audio_turn_id,
+            )
+            return
+
+        analysis_turn = turn
+        speech_detector = self._speech_region_detector
+        if speech_detector is not None:
+            region = await speech_detector.extract(turn)
+            if region.turn is None:
+                LOGGER.info(
+                    "Active speaker shadow turn %s | state=insufficient | "
+                    "paired_captured=%.2fs | active_speaker_confirmed=False | "
+                    "prototype_admission=False | reasons=%s",
+                    audio_turn_id,
+                    turn.duration_seconds,
+                    region.reason,
+                )
+                return
+            analysis_turn = region.turn
+
+        quality = await asyncio.to_thread(
+            assess_speaker_segment,
+            analysis_turn.samples,
+            sample_rate=analysis_turn.sample_rate,
+        )
+        LOGGER.info(
+            "Active speaker paired-audio turn %s | captured=%.2fs | speech=%.2fs | "
+            "rms %.1f dBFS | accepted=%s | source=paired_gstreamer_av | reasons=%s",
+            audio_turn_id,
+            turn.duration_seconds,
+            analysis_turn.duration_seconds,
+            quality.rms_dbfs,
+            quality.accepted,
+            ",".join(quality.reason_codes) if quality.reason_codes else "none",
+        )
+        await self._inspect_active_speaker_turn(
+            analysis_turn,
+            audio_turn_id=audio_turn_id,
+            quality_accepted=quality.accepted,
+        )
+
     async def _inspect_shadow_turn(
         self,
         turn: SpeakerTurnAudio,
         *,
         audio_turn_id: str,
+        active_speaker_turn: SpeakerTurnAudio | None = None,
     ) -> None:
         analysis_turn = turn
         speech_segments = 0
+        speaker_region_available = True
         if self._speech_region_detector is not None:
             region = await self._speech_region_detector.extract(turn)
             speech_segments = region.segment_count
             if region.turn is None:
+                speaker_region_available = False
                 owner_context_live = bool(
                     self._owner_context_state is not None
                     and self._owner_context_state.has_fresh_live_owner_candidate()
@@ -385,42 +451,36 @@ class VoiceRuntimeController:
                     owner_context_live,
                     region.reason,
                 )
-                LOGGER.info(
-                    "Active speaker shadow turn %s | state=insufficient | "
-                    "active_speaker_confirmed=False | prototype_admission=False | "
-                    "reasons=%s",
-                    audio_turn_id,
-                    region.reason,
-                )
-                return
-            analysis_turn = region.turn
+            else:
+                analysis_turn = region.turn
 
-        quality = await asyncio.to_thread(
-            assess_speaker_segment,
-            analysis_turn.samples,
-            sample_rate=analysis_turn.sample_rate,
-        )
-        owner_context_live = bool(
-            self._owner_context_state is not None
-            and self._owner_context_state.has_fresh_live_owner_candidate()
-        )
-        LOGGER.info(
-            "Speaker shadow turn %s | captured=%.2fs | speech=%.2fs | segments=%s | "
-            "rms %.1f dBFS | accepted=%s | live_owner_context=%s | "
-            "active_speaker_confirmed=False | prototype_admission=False | reasons=%s",
-            audio_turn_id,
-            turn.duration_seconds,
-            analysis_turn.duration_seconds,
-            speech_segments,
-            quality.rms_dbfs,
-            quality.accepted,
-            owner_context_live,
-            ",".join(quality.reason_codes) if quality.reason_codes else "none",
-        )
-        await self._inspect_active_speaker_turn(
-            analysis_turn,
+        if speaker_region_available:
+            quality = await asyncio.to_thread(
+                assess_speaker_segment,
+                analysis_turn.samples,
+                sample_rate=analysis_turn.sample_rate,
+            )
+            owner_context_live = bool(
+                self._owner_context_state is not None
+                and self._owner_context_state.has_fresh_live_owner_candidate()
+            )
+            LOGGER.info(
+                "Speaker shadow turn %s | captured=%.2fs | speech=%.2fs | segments=%s | "
+                "rms %.1f dBFS | accepted=%s | live_owner_context=%s | "
+                "active_speaker_confirmed=False | prototype_admission=False | reasons=%s",
+                audio_turn_id,
+                turn.duration_seconds,
+                analysis_turn.duration_seconds,
+                speech_segments,
+                quality.rms_dbfs,
+                quality.accepted,
+                owner_context_live,
+                ",".join(quality.reason_codes) if quality.reason_codes else "none",
+            )
+
+        await self._inspect_paired_active_speaker_turn(
+            active_speaker_turn,
             audio_turn_id=audio_turn_id,
-            quality_accepted=quality.accepted,
         )
 
     async def run(self) -> None:
@@ -432,6 +492,18 @@ class VoiceRuntimeController:
                 await asyncio.to_thread(self._vision_service.start)
                 vision_started = True
                 LOGGER.info("JARVIS integrated vision is active in SAFE mode")
+                paired_source = self._active_speaker_av_source
+                if paired_source is not None:
+                    if paired_source.pipeline_clock_name != "GstAudioSrcClock":
+                        raise RuntimeError(
+                            "active-speaker paired AV source did not select GstAudioSrcClock"
+                        )
+                    LOGGER.info(
+                        "Paired active-speaker AV source is active: %s (%s) on %s",
+                        paired_source.source.display_name,
+                        paired_source.source.source_id,
+                        paired_source.pipeline_clock_name,
+                    )
 
             await self.audio.start()
             if self._dev_control is not None:
@@ -544,6 +616,8 @@ class VoiceRuntimeController:
                     )
             if self._active_speaker_visual_buffer is not None:
                 self._active_speaker_visual_buffer.clear()
+            if self._active_speaker_audio_capture is not None:
+                self._active_speaker_audio_capture.clear()
 
     async def _run_update_approval_session(
         self,
@@ -626,6 +700,9 @@ class VoiceRuntimeController:
             if self.config.speaker_shadow_enabled
             else None
         )
+        paired_turn_capture = self._active_speaker_audio_capture
+        if paired_turn_capture is not None:
+            paired_turn_capture.clear()
         shadow_tasks: set[asyncio.Task[None]] = set()
 
         def on_audio_frame(
@@ -658,11 +735,26 @@ class VoiceRuntimeController:
             turn = turn_capture.snapshot_recent_audio()
             if turn is None:
                 return
-            audio_turn_id = str(uuid.uuid4())
-            task = asyncio.create_task(
-                self._inspect_shadow_turn(turn, audio_turn_id=audio_turn_id),
-                name=f"jarvis-speaker-shadow-{audio_turn_id[:8]}",
+            active_speaker_turn = (
+                paired_turn_capture.snapshot_recent_audio()
+                if paired_turn_capture is not None
+                else None
             )
+            audio_turn_id = str(uuid.uuid4())
+            if paired_turn_capture is None:
+                task = asyncio.create_task(
+                    self._inspect_shadow_turn(turn, audio_turn_id=audio_turn_id),
+                    name=f"jarvis-speaker-shadow-{audio_turn_id[:8]}",
+                )
+            else:
+                task = asyncio.create_task(
+                    self._inspect_shadow_turn(
+                        turn,
+                        audio_turn_id=audio_turn_id,
+                        active_speaker_turn=active_speaker_turn,
+                    ),
+                    name=f"jarvis-speaker-shadow-{audio_turn_id[:8]}",
+                )
             shadow_tasks.add(task)
             task.add_done_callback(shadow_tasks.discard)
 
@@ -726,15 +818,15 @@ class VoiceRuntimeController:
             if turn_capture is not None:
                 LOGGER.info(
                     "Speaker shadow bridge active: committed user turns snapshot a bounded "
-                    "memory-only canonical-audio window + live-owner context; prototype "
-                    "admission remains disabled until active-speaker corroboration is accepted"
+                    "memory-only canonical conversation-audio window + live-owner context; "
+                    "prototype admission remains disabled"
                 )
             if self._active_speaker_provider is not None:
                 LOGGER.info(
-                    "LR-ASD active-speaker shadow is active: local Silero trims committed "
-                    "canonical-audio windows, real visual cadence is preserved, scores remain "
-                    "diagnostic only; active-speaker confirmation and prototype admission "
-                    "remain disabled"
+                    "LR-ASD active-speaker shadow is active: synchronized Pocket3 video + "
+                    "paired DJI PCM are captured once by GStreamer, local Silero trims the "
+                    "paired audio, and scores remain diagnostic only; active-speaker "
+                    "confirmation and prototype admission remain disabled"
                 )
             await active_end.wait()
         finally:
@@ -746,6 +838,8 @@ class VoiceRuntimeController:
                 await asyncio.gather(*tuple(shadow_tasks), return_exceptions=True)
             if turn_capture is not None:
                 turn_capture.clear()
+            if paired_turn_capture is not None:
+                paired_turn_capture.clear()
 
 
 def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
@@ -791,9 +885,42 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
 
     active_speaker_visual_buffer: ActiveSpeakerVisualBuffer | None = None
     active_speaker_provider: LrAsdActiveSpeakerProvider | None = None
+    active_speaker_audio_capture: InMemorySpeakerTurnCapture | None = None
+    active_speaker_av_source: GStreamerPairedAVSource | None = None
     speech_region_detector: SpeechRegionDetector | None = None
     if config.active_speaker_shadow_enabled:
         assert config.active_speaker_model_path is not None
+        discovered_sources = discover_windows_av_sources()
+        if len(discovered_sources) != 1:
+            raise RuntimeError(
+                "active-speaker shadow requires exactly one physically paired Windows AV "
+                f"source; discovered {len(discovered_sources)}"
+            )
+        active_speaker_audio_capture = InMemorySpeakerTurnCapture(
+            max_turn_seconds=config.max_utterance_seconds
+        )
+        active_speaker_av_source = GStreamerPairedAVSource(
+            discovered_sources[0],
+            GStreamerPairedAVConfig(audio_rate=16_000),
+        )
+
+        def on_paired_audio(
+            data: bytes,
+            sample_rate: int,
+            num_channels: int,
+            samples_per_channel: int,
+            observed_at_monotonic: float,
+        ) -> None:
+            assert active_speaker_audio_capture is not None
+            active_speaker_audio_capture.push_frame(
+                data,
+                sample_rate=sample_rate,
+                num_channels=num_channels,
+                samples_per_channel=samples_per_channel,
+                observed_at_monotonic=observed_at_monotonic,
+            )
+
+        active_speaker_av_source.set_audio_frame_tap(on_paired_audio)
         active_speaker_visual_buffer = ActiveSpeakerVisualBuffer(
             max_seconds=config.max_utterance_seconds + 1.0
         )
@@ -811,6 +938,7 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
                 if active_speaker_visual_buffer is not None
                 else None
             ),
+            camera_source=active_speaker_av_source,
         )
         if config.vision_enabled
         else None
@@ -822,6 +950,8 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         owner_context_state=owner_context_state,
         active_speaker_visual_buffer=active_speaker_visual_buffer,
         active_speaker_provider=active_speaker_provider,
+        active_speaker_audio_capture=active_speaker_audio_capture,
+        active_speaker_av_source=active_speaker_av_source,
         speech_region_detector=speech_region_detector,
     )
 
