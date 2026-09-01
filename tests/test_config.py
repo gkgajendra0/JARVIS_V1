@@ -14,6 +14,10 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("JARVIS_WAKE_MODEL_PATH", " C:\\models\\jarvis.onnx ")
     monkeypatch.setenv("JARVIS_WAKE_THRESHOLD", "0.72")
     monkeypatch.setenv("JARVIS_AUDIO_PRE_ROLL_SECONDS", "0.8")
+    monkeypatch.setenv(
+        "JARVIS_AUDIO_OUTPUT_WASAPI_DEVICE",
+        " {0.0.0.00000000}.{render-endpoint} ",
+    )
     monkeypatch.setenv("JARVIS_VISION_ENABLED", "true")
     monkeypatch.setenv("JARVIS_BLAZEFACE_MODEL_PATH", " C:\\models\\blazeface.tflite ")
     monkeypatch.setenv("JARVIS_SPEAKER_SHADOW_ENABLED", "true")
@@ -30,6 +34,7 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.wake_model_path == "C:\\models\\jarvis.onnx"
     assert config.wake_threshold == 0.72
     assert config.audio_pre_roll_seconds == 0.8
+    assert config.audio_output_wasapi_device == "{0.0.0.00000000}.{render-endpoint}"
     assert config.vision_enabled is True
     assert config.vision_head_model_path == "C:\\models\\blazeface.tflite"
     assert config.speaker_shadow_enabled is True
