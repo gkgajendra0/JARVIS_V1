@@ -335,7 +335,7 @@ class GStreamerPairedAVSource:
                     len(payload) // 2,
                     observed_at,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - native callback boundary
                 self._fail(RuntimeError(f"paired AV audio tap failed: {exc}"))
                 return Gst.FlowReturn.ERROR
         return Gst.FlowReturn.OK
