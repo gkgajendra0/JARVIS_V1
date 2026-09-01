@@ -1,114 +1,104 @@
 # ADR-010 — Full-Duplex GStreamer WebRTC AEC Media Fabric
 
-**Status:** Accepted — implementation integrated, live JARVIS acceptance pending  
-**Date:** 2026-09-01
+**Status:** SUPERSEDED FOR CONVERSATION AUDIO BY ADR-011  
+**Original date:** 2026-09-01
 
-## Context
+> Historical decision record. The isolated GStreamer/WebRTC AEC experiment produced useful DSP evidence, but real JARVIS/Gemini conversation acceptance failed on the Tribit Bluetooth render path. `ADR-011_LIVEKIT_MEDIADEVICES_48K_FULL_DUPLEX.md` is the current production conversation-audio decision. GStreamer remains in the architecture only for synchronized raw Pocket3 A/V evidence used by Step-3 perception/active-speaker work.
 
-The paired DJI Pocket 3 microphone hears JARVIS speech played through the physical room speaker. In realtime conversation this acoustic echo can be interpreted as new user speech, causing false barge-in/self-interruption.
+## Original context
 
-The previous paired-audio implementation attempted to solve this in Python by playing through PortAudio, resampling the rendered PCM back to the WebRTC Audio Processing Module reverse stream, estimating output/capture delay, and calling `process_reverse_stream()`/`process_stream()` manually. The underlying WebRTC APM is mature, but JARVIS was taking responsibility for the hardest part: keeping the far-end reference, Bluetooth render latency, capture timing, and processing delay aligned across separate audio systems.
+The paired DJI Pocket3 microphone hears JARVIS speech played through the physical room speaker. In realtime conversation this acoustic echo can be interpreted as new user speech, causing false barge-in/self-interruption.
 
-The active Step 3B sensor architecture already requires one GStreamer source to own the physically paired Pocket 3 video + microphone capture for synchronized active-speaker evidence. A second microphone owner would violate that architecture.
+The previous paired-audio implementation attempted to solve this in Python by playing through PortAudio, resampling rendered PCM back to the WebRTC Audio Processing Module reverse stream, estimating output/capture delay and calling `process_reverse_stream()`/`process_stream()` manually. The underlying WebRTC APM is mature, but JARVIS was taking responsibility for difficult far-end reference/timing alignment across separate audio systems.
 
-## Decision
+Step 3B also required synchronized Pocket3 video + raw microphone capture for active-speaker evidence, which motivated investigating one GStreamer media graph.
 
-Use one GStreamer full-duplex media graph as the paired JARVIS acoustic front end.
+## Original decision
 
-The graph owns:
+The experiment used one GStreamer full-duplex graph for:
 
-- Pocket 3 microphone capture through `wasapi2src`.
-- JARVIS speaker PCM through `appsrc`.
-- the exact far-end reference through `webrtcechoprobe`.
-- WebRTC acoustic echo cancellation through `webrtcdsp`.
-- physical speaker render through `wasapi2sink`.
-- paired video capture in the existing GStreamer graph.
+- Pocket3 microphone capture through `wasapi2src`;
+- JARVIS speaker PCM through `appsrc`;
+- far-end reference through `webrtcechoprobe`;
+- WebRTC echo cancellation through `webrtcdsp`;
+- physical speaker render through `wasapi2sink`;
+- paired video capture in the same graph.
 
-The playback reference is normalized to 48 kHz mono before `webrtcechoprobe`. Physical render conversion happens **after** the echo probe, allowing the current 48 kHz JARVIS/Pocket 3 canonical format to coexist with the Tribit XSound Plus 2 44.1 kHz Bluetooth render endpoint.
+Raw microphone PCM was retained separately from AEC-cleaned PCM so LR-ASD/active-speaker work could preserve the physical capture timeline.
 
-The microphone splits into two semantically distinct branches:
+## Isolated evidence that originally motivated acceptance
 
-1. **Raw paired PCM** — retained for synchronized LR-ASD/active-speaker evidence.
-2. **AEC-cleaned PCM** — canonical for wake detection, conversation/VAD, realtime-provider input, and speaker-identity shadow analysis.
+The hardware experiment used the actual Pocket3 microphone and Tribit XSound Plus 2 Bluetooth speaker. Pocket3 capture was 48 kHz; the Tribit render endpoint negotiated 44.1 kHz.
 
-The two branches must not be silently substituted for each other.
+In controlled speaker-only windows, measured AEC reduction was roughly 40–52 dB. In controlled human-speech windows, raw-vs-clean speech level differed by roughly 0.5–0.8 dB. This showed that GStreamer's WebRTC DSP could suppress a controlled echo signal without simply muting all microphone input.
 
-The initial production DSP settings intentionally match the validated baseline:
+That evidence remains valid as an **isolated DSP experiment**. It was not sufficient to prove production conversational behavior.
 
-- `echo-cancel=true`
-- `noise-suppression=false`
-- `gain-control=false`
-- `high-pass-filter=false`
+## Real acceptance failure
 
-Noise suppression, gain control, and other processing may be evaluated independently later; they are not bundled into the AEC migration because preserving human double-talk/barge-in is more important than maximizing suppression.
+Subsequent real Gemini Live runs disproved this path as the production conversation architecture.
 
-The paired full-duplex path requires an explicit Windows WASAPI IMMDevice render endpoint through `JARVIS_AUDIO_OUTPUT_WASAPI_DEVICE`. It fails closed when that endpoint is not configured instead of following the mutable Windows default render device.
+While JARVIS spoke through the Tribit Bluetooth path, the transcript repeatedly created fake user turns from JARVIS's own speech. Examples included fragments such as:
 
-Deprecated WebRTC DSP timing flags such as `delay-agnostic` and `extended-filter` are not enabled. The current GStreamer/WebRTC implementation owns echo timing inside the shared media graph.
+- `and separate storage`;
+- `Pardon me?`;
+- `You interrupted.`
 
-## Evidence
+A later custom AEC-clean local Silero barge-in gate also falsely admitted residual assistant audio after approximately the configured minimum speech duration. That gate is therefore rejected as a production solution as well.
 
-The isolated hardware acceptance test used the actual Pocket 3 microphone and Tribit XSound Plus 2 Bluetooth speaker. The Pocket 3 capture path was 48 kHz; the Tribit physical render endpoint negotiated 44.1 kHz.
+The failure established that isolated dB suppression was not the acceptance criterion that matters. The real requirement is:
 
-In the controlled speaker-only region, AEC reduced measured RMS by roughly **40–52 dB** in multiple one-second windows. During the controlled human-speech region, raw versus cleaned speech level differed by only roughly **0.5–0.8 dB**, showing that the microphone was not merely muted while the speaker was active.
+```text
+JARVIS speaking + human silent
+→ no user turn / no self-interruption
 
-This validates the architecture baseline. Final acceptance still requires a real JARVIS/Gemini conversation run with spoken output and deliberate human interruption.
+JARVIS speaking + real human interruption
+→ real barge-in accepted
+```
 
-## Alternatives considered
+The GStreamer + Tribit Bluetooth conversation path did not meet the first requirement reliably.
 
-### Continue the custom Python/LiveKit APM reverse-stream path
+## Replacement decision
 
-Rejected for the paired production path. WebRTC APM itself is appropriate, but manually reconstructing physical render timing across PortAudio, Bluetooth, resampling, and GStreamer capture creates unnecessary synchronization responsibility and had already produced unstable self-echo behavior.
+ADR-011 selected the mature LiveKit `rtc.MediaDevices` full-duplex path with a native 48-kHz physical render endpoint.
 
-### Windows endpoint/native AEC
+Accepted production conversation path:
 
-Not selected as the primary architecture because behavior depends on endpoint/driver support and would not give JARVIS one explicit cross-device media fabric for Pocket 3 capture plus Tribit playback.
+```text
+Pocket3 microphone @ 48 kHz
+        ↓
+LiveKit MediaDevices
+WebRTC AEC + NS + HPF + AGC
+        ↓
+Gemini Live / AgentSession
+        ↓
+LiveKit MediaDevices OutputPlayer @ 48 kHz
+        ↓
+NVIDIA HDMI → 24'TV speakers
+```
 
-### Noise suppression only
+The exact Pocket3 + TV/NVIDIA 48-kHz path passed real acceptance: long assistant speech completed without self-trigger and deliberate human barge-in still worked.
 
-Rejected. Noise suppression does not have the exact far-end reference needed to distinguish JARVIS speech from near-end human speech.
+See `docs/decisions/ADR-011_LIVEKIT_MEDIADEVICES_48K_FULL_DUPLEX.md`.
 
-### Commercial AEC stacks
+## What remains from ADR-010
 
-Krisp/NVIDIA-class solutions remain possible future challengers, but they add licensing/platform coupling without first exhausting the mature WebRTC AEC already available in the installed GStreamer stack.
+GStreamer remains valuable for synchronized perception:
 
-## Why this choice
+```text
+Pocket3 paired raw A/V
+        ↓
+GStreamer synchronized sensor capture
+        ├── video → Vision / visual track sequence
+        └── raw audio → LR-ASD / active-speaker diagnostics
+```
 
-- Uses mature WebRTC AEC instead of inventing echo cancellation.
-- Gives the AEC the exact far-end JARVIS PCM reference.
-- Keeps capture and render in one GStreamer clock/media domain.
-- Preserves the single-owner Pocket 3 sensor invariant.
-- Preserves raw synchronized audio for LR-ASD while providing a separate conversational clean signal.
-- Handles the real 48 kHz Pocket 3 / 44.1 kHz Bluetooth speaker combination.
-- Removes the custom delay-estimation/reverse-stream burden from the paired production path.
+It no longer owns production conversation playback, conversation AEC or provider microphone audio in the production runtime builder.
 
-## Consequences and tradeoffs
+## Historical lessons retained
 
-- Paired Step 3B operation now depends on the GStreamer `webrtcdsp`, `webrtcechoprobe`, and WASAPI2 plugins being present.
-- The physical output endpoint must be configured explicitly and may need refreshing if Windows creates a new Bluetooth endpoint identity after device re-pairing.
-- Playback buffering/interruption semantics now cross the LiveKit `AudioOutput` abstraction and GStreamer `appsrc`; live acceptance must verify flush/barge-in behavior.
-- The non-paired `LocalAudioRuntime` remains as an independent fallback path and is not migrated by this ADR.
-
-## Replacement boundary
-
-The paired runtime consumes a GStreamer-backed audio output plus canonical 48 kHz mono cleaned PCM. A future AEC engine can replace the DSP internals if it preserves:
-
-- one physical microphone owner,
-- exact far-end reference,
-- synchronized raw A/V evidence,
-- clean conversation PCM,
-- human double-talk preservation,
-- bounded latency and interruption semantics.
-
-## Reconsider when
-
-Revisit this decision if real JARVIS acceptance shows any of the following despite correct endpoint selection:
-
-- repeated self-interruption from residual JARVIS speech,
-- human barge-in is materially suppressed,
-- unacceptable Bluetooth/render latency,
-- GStreamer playback flush is unreliable,
-- raw Pocket 3 A/V synchronization regresses,
-- a clearly superior supported AEC stack provides materially better double-talk performance with equal or lower integration complexity.
-
-A later decision may move realtime-provider activity truth to the local Silero/JARVIS turn controller. That is deliberately separate from this AEC migration.
+- Use mature RTC echo cancellation rather than inventing acoustic DSP or custom barge-in classifiers.
+- Isolated suppression metrics do not replace real full-duplex conversational acceptance.
+- Bluetooth/render timing can invalidate an otherwise reasonable AEC design on the actual hardware path.
+- Raw synchronized sensor evidence and conversational audio do not need to share the same playback/AEC owner.
+- Superseded experiments should remain documented long enough to preserve the reason they were rejected, then be removed from production code once replacement integration is proven.
