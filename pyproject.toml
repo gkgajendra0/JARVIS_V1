@@ -12,6 +12,7 @@ dependencies = [
     "livekit==1.1.15",
     "livekit-agents[google,openai]==1.7.1",
     "livekit-wakeword==0.2.1",
+    "sounddevice>=0.5,<1",
     "numpy>=2,<3",
     "opencv-python==5.0.0.93",
     "opencv-contrib-python==5.0.0.93",
@@ -19,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-jarvis-voice = "jarvis.voice.runtime:main"
+jarvis-voice = "jarvis.voice.production_runtime:main"
 jarvis-dev = "jarvis.dev_supervisor:main"
 jarvis-vision-preview = "jarvis.vision.preview:main"
 jarvis-vision-follow = "jarvis.vision.follow_live:main"
@@ -27,7 +28,6 @@ jarvis-face-model-smoke = "jarvis.identity.model_smoke:main"
 jarvis-face-live-benchmark = "jarvis.identity.live_face_benchmark:main"
 jarvis-face-calibrate = "jarvis.identity.calibration:main"
 jarvis-face-calibrate-owner = "jarvis.identity.owner_calibration:main"
-jarvis-owner-enroll = "jarvis.identity.owner_enrollment:main"
 jarvis-face-liveness = "jarvis.identity.liveness_live:main"
 jarvis-passive-pad-benchmark = "jarvis.identity.passive_pad_benchmark:main"
 jarvis-owner-evidence-live = "jarvis.identity.owner_evidence_live:main"
