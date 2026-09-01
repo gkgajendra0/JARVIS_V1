@@ -17,9 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from collections import deque
-from collections.abc import Callable
 from typing import Protocol
 
 from livekit import rtc
@@ -47,27 +45,24 @@ class _VADModel(Protocol):
     def stream(self) -> _VADStream: ...
 
 
-class BargeInGatedSessionAudioInput(SessionAudioInput):
-    """Suppress residual assistant echo while preserving real human barge-in."""
+class BargeInGate:
+    """Filter AEC-cleaned PCM before it enters the active realtime session."""
 
     def __init__(
         self,
-        observer: Callable[[rtc.AudioFrame, float], None] | None = None,
         *,
-        capacity_frames: int = 1_000,
         vad_model: _VADModel | None = None,
         buffer_seconds: float = _BARGE_BUFFER_SECONDS,
     ) -> None:
-        super().__init__(capacity_frames=capacity_frames)
         if buffer_seconds <= 0:
             raise ValueError("barge-in buffer duration must be positive")
-        self._observer = observer
         self._buffer_limit_samples = round(buffer_seconds * DEVICE_SAMPLE_RATE)
         self._buffer: deque[tuple[rtc.AudioFrame, float]] = deque()
         self._buffer_samples = 0
+        self._target: SessionAudioInput | None = None
         self._agent_speaking = False
         self._gate_open = False
-        self._closed_gate = False
+        self._closed = False
         self._vad_model = vad_model or inference.VAD(
             model="silero",
             min_speech_duration=_BARGE_VAD_MIN_SPEECH_SECONDS,
@@ -94,6 +89,12 @@ class BargeInGatedSessionAudioInput(SessionAudioInput):
     def buffered_frames(self) -> int:
         return len(self._buffer)
 
+    def set_target(self, target: SessionAudioInput | None) -> None:
+        self._target = target
+        if target is None:
+            self._gate_open = False
+            self._reset_closed_gate()
+
     def set_agent_speaking(self, speaking: bool) -> None:
         """Update assistant playout state used to arm/disarm echo gating."""
         speaking = bool(speaking)
@@ -104,6 +105,9 @@ class BargeInGatedSessionAudioInput(SessionAudioInput):
             if not self._gate_open:
                 self._reset_closed_gate()
             return
+        # If genuine near-end speech already opened the gate, keep forwarding
+        # until Silero publishes END_OF_SPEECH so the user's full utterance is
+        # not clipped merely because assistant playout stopped.
         if not self._gate_open:
             self._reset_closed_gate()
 
@@ -111,32 +115,34 @@ class BargeInGatedSessionAudioInput(SessionAudioInput):
         self,
         frame: rtc.AudioFrame,
         *,
-        observed_at_monotonic: float | None = None,
+        observed_at_monotonic: float,
     ) -> bool:
-        if self._closed_gate:
+        if self._closed:
             return False
-        observed_at = (
-            time.monotonic()
-            if observed_at_monotonic is None
-            else observed_at_monotonic
-        )
-        if observed_at < 0:
+        target = self._target
+        if target is None:
+            return False
+        if observed_at_monotonic < 0:
             raise ValueError("barge-in audio timestamp must be non-negative")
 
-        # Once real speech has opened the gate, preserve the complete utterance
-        # even if assistant playout stops before Silero publishes END_OF_SPEECH.
         if self._gate_open:
             self._vad_stream.push_frame(frame)
-            return self._forward(frame, observed_at)
+            return target.push_frame(
+                frame,
+                observed_at_monotonic=observed_at_monotonic,
+            )
 
         # Outside assistant speech, provider-native activity detection receives
-        # the canonical AEC-clean microphone without delay.
+        # canonical AEC-clean audio with zero additional latency.
         if not self._agent_speaking:
-            return self._forward(frame, observed_at)
+            return target.push_frame(
+                frame,
+                observed_at_monotonic=observed_at_monotonic,
+            )
 
         # During assistant speech, retain a bounded prefix and let Silero decide
         # whether this is real near-end speech or residual far-end echo.
-        self._buffer.append((frame, observed_at))
+        self._buffer.append((frame, observed_at_monotonic))
         self._buffer_samples += frame.samples_per_channel
         while (
             self._buffer
@@ -146,24 +152,20 @@ class BargeInGatedSessionAudioInput(SessionAudioInput):
             old_frame, _ = self._buffer.popleft()
             self._buffer_samples -= old_frame.samples_per_channel
         self._vad_stream.push_frame(frame)
-        # Withheld echo is intentionally treated as accepted by the router; it
-        # is not a session queue overflow.
+        # Withheld echo is intentionally accepted by the router; it is not a
+        # downstream microphone queue overflow.
         return True
 
-    def close(self) -> None:
-        if self._closed_gate:
+    async def aclose(self) -> None:
+        if self._closed:
             return
-        self._closed_gate = True
+        self._closed = True
+        self._target = None
         self._buffer.clear()
         self._buffer_samples = 0
         self._vad_task.cancel()
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-        if loop is not None and not loop.is_closed():
-            loop.create_task(self._vad_stream.aclose())
-        super().close()
+        await asyncio.gather(self._vad_task, return_exceptions=True)
+        await self._vad_stream.aclose()
 
     async def _consume_vad(self) -> None:
         try:
@@ -195,30 +197,23 @@ class BargeInGatedSessionAudioInput(SessionAudioInput):
             self._release_buffer()
 
     def _release_buffer(self) -> None:
+        target = self._target
+        if target is None:
+            self._buffer.clear()
+            self._buffer_samples = 0
+            return
         buffered = tuple(self._buffer)
         self._buffer.clear()
         self._buffer_samples = 0
         for frame, observed_at in buffered:
-            if not self._forward(frame, observed_at):
+            if not target.push_frame(
+                frame,
+                observed_at_monotonic=observed_at,
+            ):
                 LOGGER.error(
                     "Voice session microphone queue overflowed while releasing barge-in prefix"
                 )
                 break
-
-    def _forward(self, frame: rtc.AudioFrame, observed_at: float) -> bool:
-        accepted = super().push_frame(
-            frame,
-            observed_at_monotonic=observed_at,
-        )
-        if not accepted or self._observer is None:
-            return accepted
-        try:
-            self._observer(frame, observed_at)
-        except Exception:
-            LOGGER.exception(
-                "Passive session-audio observer failed; conversation audio continues"
-            )
-        return True
 
     def _reset_closed_gate(self) -> None:
         self._buffer.clear()
