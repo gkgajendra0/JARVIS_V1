@@ -192,7 +192,13 @@ def _existing_file_or_prompt(
 
 
 def _build_settings(existing: dict[str, str]) -> dict[str, str]:
+    # First capture every allow-listed legacy runtime value so migration does not
+    # silently discard tuned thresholds, voices, timeouts, or model locations.
     settings = dict(existing)
+    for name in PERSISTABLE_SETTINGS:
+        value = os.getenv(name)
+        if value is not None:
+            settings[name] = value.strip()
 
     provider = configured_text("JARVIS_REALTIME_PROVIDER", existing, "gemini")
     provider = (provider or "gemini").strip().casefold()
