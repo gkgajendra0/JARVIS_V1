@@ -1,6 +1,6 @@
 # ADR-012 — Persistent Machine Configuration and Startup Preflight
 
-**Status:** Accepted — implementation integrated, real-machine setup acceptance pending  
+**Status:** Accepted — implementation integrated, real-machine startup acceptance pending  
 **Date:** 2026-09-01
 
 ## Context
@@ -10,6 +10,8 @@ JARVIS had accumulated a large set of environment-variable prerequisites for nor
 That operating model is not acceptable for a personal assistant. Normal use must not depend on remembering chat history or reproducing a long block of shell configuration before every launch.
 
 The Windows audio work also proved that PortAudio indexes are unstable when devices/default endpoints change. A persisted `index:N` is therefore not a machine identity.
+
+A first real-machine startup acceptance attempt exposed a second configuration problem: the persisted machine profile correctly selected the NVIDIA/TV output, but the launching process still inherited an old Tribit `JARVIS_AUDIO_OUTPUT_DEVICE` value. Because the initial implementation let ambient `JARVIS_*` environment values override the persisted profile automatically, preflight selected the stale Bluetooth value and blocked startup. This proved that normal operation cannot treat inherited runtime variables as higher priority than an accepted machine profile.
 
 ## Decision
 
@@ -36,9 +38,31 @@ Provider credentials remain outside the machine JSON and are read only from the 
 
 ### Configuration precedence
 
-For the current migration, existing `JARVIS_*` process/user environment variables remain higher-priority diagnostic overrides over the persisted machine profile. This preserves existing development behavior.
+For persisted non-secret JARVIS runtime settings, the machine profile is authoritative by default.
 
-Consequently, legacy persistent non-secret `JARVIS_*` overrides should be removed once `jarvis-setup` has migrated the machine into the local profile. In particular, legacy numeric audio selectors such as `index:45` or `index:57` must not remain as ambient overrides.
+Normal precedence is:
+
+```text
+persisted machine setting
+        ↓
+process environment value only when the setting is absent
+        ↓
+default
+```
+
+A process may deliberately override an existing persisted machine setting only by explicitly enabling:
+
+```text
+JARVIS_RUNTIME_ENV_OVERRIDES=true
+```
+
+This opt-in diagnostic mode preserves targeted development overrides without allowing stale inherited variables to silently replace accepted machine state.
+
+`JARVIS_MACHINE_CONFIG` remains a direct environment-controlled path selector because it chooses which machine profile is loaded rather than representing a persisted runtime setting.
+
+Provider API keys remain normal environment-only secrets and are not affected by this precedence rule.
+
+Legacy persistent non-secret `JARVIS_*` overrides should still be removed after migration so the Windows user environment remains clean, but stale values inherited by an already-running parent process can no longer break normal startup.
 
 ### Stable audio identity
 
@@ -137,6 +161,10 @@ No routine wake-path, device-index, vision, or model-path shell reconstruction i
 
 Rejected for normal operation. Environment overrides remain useful for diagnostics, but making them the sole durable machine state caused repeated startup friction and made operation depend on external notes/chat history.
 
+### Ambient environment always overrides machine profile
+
+Rejected after real-machine acceptance failure. A stale inherited Tribit selector overrode the correctly persisted NVIDIA/TV selector and blocked startup. Diagnostic overrides must therefore be explicit rather than ambient.
+
 ### Commit a `.env` file
 
 Rejected. It creates secret-handling risk, encourages machine-specific repository state, and conflicts with the requirement that the repository stay clean and portable.
@@ -159,7 +187,8 @@ Rejected. The active-speaker provider already pins an exact official upstream ch
 - Local non-secret configuration survives shell restarts and repo updates.
 - API keys remain outside repository/local machine JSON.
 - Startup errors become consolidated and actionable.
-- Environment overrides remain available for development, but legacy ambient overrides must be cleaned up during migration.
+- Persisted machine state is protected from stale ambient runtime variables.
+- Explicit `JARVIS_RUNTIME_ENV_OVERRIDES=true` remains available for deliberate diagnostics.
 - Future hardware changes should be handled by rerunning `jarvis-setup`, not editing source code.
 - The pinned LR-ASD checkpoint is automatically managed like other model assets rather than becoming another manual startup prerequisite.
 
@@ -168,8 +197,8 @@ Rejected. The active-speaker provider already pins an exact official upstream ch
 Before this ADR is marked fully human-accepted on the current PC:
 
 1. install the updated editable package;
-2. clear legacy persistent non-secret `JARVIS_*` overrides that would shadow the machine profile;
-3. run `jarvis-setup` and confirm it persists stable Pocket3 + TV selectors and an integrity-verified local LR-ASD model path;
-4. run `jarvis-voice` from a fresh PowerShell without manually setting JARVIS configuration variables;
-5. confirm startup preflight passes and the production runtime starts;
+2. run `jarvis-setup` and confirm it persists stable Pocket3 + TV selectors and an integrity-verified local LR-ASD model path;
+3. confirm legacy Windows User `JARVIS_*` runtime overrides are removed where present;
+4. run `jarvis-voice` without manually setting JARVIS runtime configuration variables, even if the launching parent process still contains stale inherited values;
+5. confirm startup preflight uses the persisted Pocket3 + TV configuration and the production runtime starts;
 6. confirm `jarvis-dev` launches the same production runtime when tested on its configured branch.
