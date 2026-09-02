@@ -71,9 +71,7 @@ def _sha256(path: Path) -> str:
 def verify_sortformer_model(path: str | Path) -> Path:
     candidate = Path(path).expanduser()
     if not candidate.is_file():
-        raise SortformerAssetIntegrityError(
-            f"Sortformer model is missing: {candidate}"
-        )
+        raise SortformerAssetIntegrityError(f"Sortformer model is missing: {candidate}")
     size = candidate.stat().st_size
     if size != SORTFORMER_MODEL_SIZE_BYTES:
         raise SortformerAssetIntegrityError(
