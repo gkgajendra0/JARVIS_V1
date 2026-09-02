@@ -156,7 +156,9 @@ async def run_conversation_focus_benchmark(
     with_vision: bool,
 ) -> int:
     if sys.platform != "win32":
-        print("This real-machine conversation-focus benchmark currently targets Windows.")
+        print(
+            "This real-machine conversation-focus benchmark currently targets Windows."
+        )
         return 2
     if capture_seconds < 3.0:
         raise ValueError("capture_seconds must be at least 3 seconds")
@@ -177,7 +179,9 @@ async def run_conversation_focus_benchmark(
     try:
         observer = build_default_enrolled_speaker_observer()
     except SpeakerShadowRuntimeError as exc:
-        raise RuntimeError(f"CAM++ OWNER observer is required for this benchmark: {exc}") from exc
+        raise RuntimeError(
+            f"CAM++ OWNER observer is required for this benchmark: {exc}"
+        ) from exc
 
     vision_service = None
     if with_vision:
