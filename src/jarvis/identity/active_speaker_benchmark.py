@@ -11,7 +11,7 @@ import statistics
 import time
 import uuid
 from dataclasses import asdict, dataclass, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -601,7 +601,7 @@ async def _run_one_scenario(
             scripted_speech=scripted_speech,
             audio_output=audio_output,
         )
-    except Exception as exc:
+    except (RuntimeError, TimeoutError) as exc:
         return ScenarioObservation(
             key=spec.key,
             name=spec.name,
@@ -834,9 +834,12 @@ def _threshold_analysis(observations: list[ScenarioObservation]) -> dict[str, An
         points.append(point)
         if best_f1 is None or point["f1"] > best_f1["f1"]:
             best_f1 = point
-        if p >= 0.99 and r > 0:
-            if precision_99 is None or r > precision_99["recall"]:
-                precision_99 = point
+        if (
+            p >= 0.99
+            and r > 0
+            and (precision_99 is None or r > precision_99["recall"])
+        ):
+            precision_99 = point
 
     base.update(
         {
@@ -878,7 +881,7 @@ def _build_report(
     return {
         "schema_version": 1,
         "step": "3B.11",
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "created_at_utc": datetime.now(UTC).isoformat(),
         "provider_id": LR_ASD_PROVIDER_ID,
         "lr_asd_source_commit": LR_ASD_SOURCE_COMMIT,
         "device": str(provider.device),
