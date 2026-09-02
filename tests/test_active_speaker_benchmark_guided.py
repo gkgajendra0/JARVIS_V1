@@ -7,9 +7,11 @@ import pytest
 from jarvis.identity import active_speaker_benchmark_guided as guided
 from jarvis.identity.active_speaker_benchmark_guided import (
     _capture_seconds_from_argv,
+    _focused_output_path,
     _guided_capture_factory,
     _h_cue_schedule,
     _scenario_readiness_lines,
+    _selected_scenarios_from_argv,
 )
 
 
@@ -34,6 +36,22 @@ def test_h_cue_schedule_places_a_short_occlusion_in_middle() -> None:
     assert hide_start == 1.65
     assert hide_duration == 0.7
     assert hide_start + hide_duration < 4.0
+
+
+def test_selected_scenarios_filters_wrapper_argument_and_preserves_order() -> None:
+    scenarios, cleaned, focused = _selected_scenarios_from_argv(
+        ["--seconds", "5", "--scenarios", "H,A,D", "--device", "cuda"]
+    )
+
+    assert focused is True
+    assert [scenario.key for scenario in scenarios] == ["A", "D", "H"]
+    assert cleaned == ["--seconds", "5", "--device", "cuda"]
+    assert _focused_output_path(scenarios).name == "step3b11_lr_asd_bakeoff_ADH.json"
+
+
+def test_selected_scenarios_rejects_unknown_keys() -> None:
+    with pytest.raises(ValueError, match="valid keys are A-H"):
+        _selected_scenarios_from_argv(["--scenarios=A,Z"])
 
 
 @pytest.mark.asyncio
