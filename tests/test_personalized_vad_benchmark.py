@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from jarvis.identity.personalized_vad_benchmark import (
     _active_fraction_after,
@@ -39,7 +40,7 @@ def test_transition_ms_finds_sustained_owner_onset() -> None:
         above=True,
     )
 
-    assert onset == 505.0
+    assert onset == pytest.approx(505.0)
 
 
 def test_transition_ms_finds_sustained_owner_offset() -> None:
@@ -55,7 +56,7 @@ def test_transition_ms_finds_sustained_owner_offset() -> None:
         above=False,
     )
 
-    assert offset == 205.0
+    assert offset == pytest.approx(205.0)
 
 
 def test_active_fraction_after_ignores_transition_tail() -> None:
