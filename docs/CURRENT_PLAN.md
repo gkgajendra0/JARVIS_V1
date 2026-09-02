@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — STARTUP OPERABILITY ACCEPTED — LIVEKIT 48-kHz FULL-DUPLEX AUDIO ACCEPTED — DUAL POCKET3 AUDIO OWNERSHIP REJECTED — ADR-013 SINGLE-MICROPHONE ACTIVE-SPEAKER INTEGRATION REAL-MACHINE ACCEPTED — LIVE VISION PREVIEW DEFAULT-ON — 3B.11 SCORE-DISTRIBUTION / NEGATIVE-SCENARIO BAKE-OFF NEXT**
+**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — STARTUP OPERABILITY ACCEPTED — LIVEKIT 48-kHz FULL-DUPLEX AUDIO ACCEPTED — ADR-013 SINGLE-MICROPHONE ACTIVE-SPEAKER BOUNDARY ACCEPTED — 3B.11 LR-ASD CORE EVIDENCE ACCEPTED WITH E/F PENDING + OVERLAP GAP DISCOVERED — 3B.12 AUDIO-FIRST CAM++ SPEAKER SHADOW IMPLEMENTED, REAL-MACHINE ENROLLMENT/UX ACCEPTANCE NEXT**
 
 This file is the operational source of truth for what is done, what is accepted, and what happens next. Detailed evidence belongs in `docs/research/`; significant architecture decisions belong in `docs/decisions/`.
 
@@ -35,6 +35,8 @@ This file is the operational source of truth for what is done, what is accepted,
 | Startup operability | Human-accepted | `jarvis-setup`, machine profile, stable device selectors, consolidated preflight |
 | Conversation full duplex | Human-accepted | LiveKit MediaDevices + NVIDIA/TV 48 kHz |
 | 3B.11 integration boundary | Human-accepted | single Pocket3 mic owner + canonical PCM + normal timestamped Vision |
+| 3B.11 A/B/C/D/G/H evidence | Accepted diagnostic evidence | A positive; B/D strong negatives; C/H fail closed; G exposes overlap semantics gap |
+| 3B.12 implementation | Code complete, machine acceptance pending | encrypted OWNER voice prototypes + asynchronous per-turn CAM++ shadow |
 
 T2 `CORROBORATED_OWNER` remains intentionally disabled.
 
@@ -66,6 +68,11 @@ Real-machine setup proved:
 - legacy non-secret `JARVIS_*` Windows User overrides removed;
 - stale inherited Tribit environment state no longer overrides the machine profile;
 - `jarvis-voice` preflight passes without manually setting runtime variables.
+
+3B.12 changes the dependency semantics:
+
+- passive CAM++ speaker shadow is audio-only and does **not** require Vision;
+- LR-ASD active-speaker shadow still requires both speaker shadow and Vision.
 
 Decision: `docs/decisions/ADR-012_MACHINE_CONFIGURATION_AND_STARTUP_PREFLIGHT.md`.
 
@@ -113,7 +120,7 @@ Evidence: `docs/research/STEP_3B11_DUAL_AUDIO_OWNERSHIP_ACCEPTANCE_RESULTS.md`.
 
 ## ADR-013 replacement — REAL-MACHINE ACCEPTED
 
-Production Step-3 active-speaker diagnostics now use one microphone owner and the existing canonical JARVIS timelines:
+Production Step-3 active-speaker diagnostics use one microphone owner and the existing canonical JARVIS timelines:
 
 ```text
                             POCKET3
@@ -151,7 +158,7 @@ Accepted real-machine run proved all of the following can operate together:
 - target lock;
 - PTZ follow.
 
-LR-ASD produced multiple real `SCORED` observations. This accepts the **integration boundary**, not an active-speaker threshold.
+LR-ASD produced real `SCORED` observations. This accepts the integration boundary, not an active-speaker authority threshold.
 
 Evidence: `docs/research/STEP_3B11_SINGLE_OWNER_ACTIVE_SPEAKER_ACCEPTANCE_RESULTS.md`.
 
@@ -159,74 +166,116 @@ Decision: `docs/decisions/ADR-013_SINGLE_OWNER_POCKET3_AUDIO_FOR_ACTIVE_SPEAKER.
 
 ---
 
-## Vision observability — default-on
+## 3B.11 score-distribution status
 
-When integrated Vision is enabled, normal production startup now opens the existing `OpenCVVisionObserver` window by default.
+The corrected real-machine A-H harness has produced enough evidence to stop broad scripted testing while the remaining architecture is developed.
 
-The window renders the same canonical interpretation JARVIS uses:
+| Scenario | Current evidence | Disposition |
+|---|---|---|
+| A. OWNER visible + OWNER speaking | focused zero-offset mean `0.8676`, median `0.9248` | KEEP — clean positive |
+| B. OWNER visible + TV/off-camera speech | zero-offset mean about `0.0014` | KEEP — strong negative |
+| C. OWNER visible + JARVIS playback only | `quality_rejected` | KEEP — system-level fail-closed evidence, not LR-ASD threshold sample |
+| D. OWNER visible + OWNER replay from phone | zero-offset mean about `0.0014` | KEEP — replay negative for LR-ASD |
+| E. OWNER + another visible; OWNER speaks | pending real second person | PARK |
+| F. OWNER + another visible; other speaks | pending real second person | PARK |
+| G. overlapping OWNER + other/background speech | zero-offset mean about `0.8253` | KEEP — real architecture gap, never binary threshold training |
+| H. temporary OWNER head/face loss | `insufficient` | KEEP — expected visual fail-close |
 
-- live Pocket3 frame;
-- person track boxes / IDs / confidence;
-- head boxes;
-- selected/locked target;
-- follow SAFE/ARMED state;
-- framing anchor;
-- pan/tilt/zoom command values;
-- analysis age.
+Scenario G is not an LR-ASD error. OWNER really is speaking, so LR-ASD correctly reports visible OWNER speech. The missing question is whether OWNER is the **only** active speaker responsible for the mixed turn. That requires a separate overlap / concurrent-speaker detector.
 
-An explicit `JARVIS_VISION_PREVIEW=false` may suppress the window for headless/quiet diagnostic runs.
+Therefore:
+
+- do not rerun B/C/D/G/H randomly;
+- A is now clean and frozen;
+- E/F wait for a real second visible person;
+- G remains `AMBIGUOUS` / fail-closed at authority level;
+- no LR-ASD deployment threshold is promoted yet;
+- `ACTIVE_OWNER_SPEAKER` remains disabled.
 
 ---
 
-## Immediate next work — 3B.11 score-distribution bake-off
+## 3B.12 — audio-first parallel OWNER speaker shadow
 
-The LR-ASD model is integrated and scoring, but no threshold is accepted yet.
+Normal conversation should not require OWNER to face the camera and should not wait for a biometric gate.
 
-Required real-machine scenarios:
+Accepted implementation direction:
 
 ```text
-A. OWNER visible + OWNER speaking
-B. OWNER visible + TV/phone/off-camera other speech
-C. OWNER visible + JARVIS playback only
-D. OWNER visible + OWNER replay from phone
-E. OWNER + another visible person; OWNER speaks
-F. OWNER + another visible person; other person speaks
-G. overlapping OWNER + other/background speech
-H. temporary OWNER head/face loss
+                         canonical user PCM
+                                │
+             ┌──────────────────┼──────────────────┐
+             │                  │                  │
+      realtime conversation   speech-region      later overlap /
+             path              + quality          speaker-change
+             │                  │                  observer
+             │                  ↓
+             │             CAM++ embedding
+             │                  │
+             │          encrypted OWNER
+             │          prototype comparison
+             │                  │
+             └──────────────────┼──────────────────┘
+                                ↓
+                       rolling evidence state
 ```
 
-Measure:
+Current 3B.12 implementation provides:
 
-- LR-ASD raw score distributions;
-- temporal stability;
-- false active assignment to a silent OWNER face;
-- off-camera speech behavior;
-- replay/playback behavior;
-- overlap behavior;
-- timing/alignment sensitivity;
-- inference latency / GPU / CPU footprint;
-- insufficient/ambiguous rate.
+1. one-time explicit OWNER voice enrollment;
+2. capture through the accepted LiveKit MediaDevices/WebRTC microphone path;
+3. multiple natural English/Hindi/Hinglish/near/far speech regions;
+4. existing quality gate before enrollment/scoring;
+5. bounded deterministic CAM++ OWNER prototype set;
+6. encrypted storage inside the existing OWNER profile boundary;
+7. Windows-Hello/OPA/audit-gated exact profile replacement;
+8. raw enrollment audio memory-only and discarded;
+9. read-only runtime comparison — no normal-conversation self-enrollment;
+10. per-turn CAM++ work off the conversation critical path using background tasks / `asyncio.to_thread`;
+11. CAM++ and LR-ASD diagnostics may run in parallel when both are enabled;
+12. short/poor regions stay `INSUFFICIENT`, never `UNKNOWN_SPEAKER` merely due bad evidence;
+13. missing speaker enrollment/model/dependency disables the diagnostic observer rather than making normal JARVIS unavailable;
+14. no speaker threshold, OWNER classification, prototype auto-admission, or authority effect yet.
 
-No leaderboard/default threshold is accepted directly.
+The exact CAM++ model remains the real-machine Step 3B.10 winner. Previous deployment-PC measurements were roughly:
 
-Only after a safe temporal rule is human-accepted may `ACTIVE_OWNER_SPEAKER` permit **session-only** CAM++ prototype admission for the same actor/turn.
+- CAM++ ~54 ms median for a ~3 s region;
+- TitaNet-Large ~143 ms;
+- ERes2NetV2 ~319 ms.
+
+Decision: `docs/decisions/ADR-014_AUDIO_FIRST_SPEAKER_SHADOW.md`.
 
 ---
 
-## Work after 3B.11 acceptance
+## Immediate next work — 3B.12 real-machine acceptance
 
-1. Permit session-only CAM++ prototype admission only when fresh OWNER+liveness and active-speaker evidence agree on the same actor/turn.
-2. Collect real speaker similarity distributions passively.
-3. Decide whether CAM++ separation is sufficient or ERes2NetV2 materially improves ambiguity.
-4. Run targeted non-owner / OWNER-replay / overlap acceptance before any speaker threshold promotion.
-5. Define persistent encrypted voice-template format only behind strongly verified OWNER enrollment/update semantics.
-6. Resolve authoritative OWNER-vs-UNKNOWN face separation when consenting live non-owner calibration becomes available, or keep T2 designed so provisional face evidence cannot be mistaken for authoritative identity.
-7. Define deterministic T2 `CORROBORATED_OWNER` composition from final accepted evidence.
-8. Run broader replay/stale/expiry/cross-session/cross-track/cross-actor/policy/degraded-mode tests.
-9. Remove obsolete GStreamer paired-conversation and custom barge-in production plumbing after replacement cleanup is safe.
-10. Final docs/quality-gate/roadmap reconciliation.
-11. Protected-main review and merge of Phase 3B through draft PR #11.
-12. Revisit attention when fixed monitor-mounted hardware exists.
+No more full A-H ceremony is required now.
+
+1. Pull `step3b12-speaker-shadow-runtime`.
+2. Install/register the `speaker` optional runtime and new `jarvis-speaker-enroll` command.
+3. Run the one-time OWNER speaker enrollment.
+4. Confirm the existing face template is preserved and VOICE is added to the encrypted OWNER profile.
+5. Start normal `jarvis-voice` use.
+6. Observe per-turn CAM++ similarity + embedding latency passively during ordinary conversation.
+7. Reject the implementation if normal conversation feels slower or unstable; speaker diagnostics are never allowed to block normal UX.
+8. Do not select a production speaker threshold from enrollment data alone.
+
+---
+
+## Work after 3B.12 UX acceptance
+
+1. Research and benchmark mature streaming overlap / speaker-change technology for Scenario G, with NVIDIA Streaming Sortformer as a primary candidate rather than inventing a custom detector.
+2. Keep overlap detection parallel to conversation and measure real RTX 5060 Ti latency/GPU impact before leaving it enabled permanently.
+3. Add fresh same-speaker continuity for very short follow-ups only after speaker-change/overlap semantics are accepted.
+4. Research mature replay/synthetic-voice countermeasures before audio-only speaker evidence can influence consequential authority.
+5. Run E/F with a real second visible person when naturally available; do not substitute a photo/video.
+6. Collect direct non-owner human speaker distributions before any CAM++ threshold promotion.
+7. Decide whether CAM++ remains sufficient or a slower challenger materially improves difficult cases.
+8. Resolve authoritative OWNER-vs-UNKNOWN face separation when consenting live non-owner calibration becomes available, or keep T2 designed so provisional face evidence cannot be mistaken for authoritative identity.
+9. Define deterministic T2 `CORROBORATED_OWNER` composition only from final accepted evidence.
+10. Run broader replay/stale/expiry/cross-session/cross-track/cross-actor/policy/degraded-mode tests.
+11. Remove obsolete GStreamer paired-conversation and custom barge-in production plumbing only after replacement cleanup is safe.
+12. Final docs/quality-gate/roadmap reconciliation.
+13. Revisit attention when fixed monitor-mounted hardware exists.
 
 ---
 
@@ -239,28 +288,36 @@ Only after a safe temporal rule is human-accepted may `ACTIVE_OWNER_SPEAKER` per
 - `UNCERTAIN` may request stronger evidence but may not silently upgrade trust.
 - Raw biometric audio/video is memory-only by default.
 - Provider/device/model boundaries remain replaceable.
+- Normal conversation must not be blocked by speaker-shadow diagnostics.
+- Normal conversation must never auto-enroll/adapt the OWNER voice template from its own similarity score.
 - T2 stays disabled until its final multimodal predicate is accepted.
 
 ---
 
 ## Branch / merge state
 
-Current active integration branch:
+Current implementation branch:
 
 ```text
-feature/step-3b11-sensor-av-foundation
+step3b12-speaker-shadow-runtime
 ```
 
-Current protected integration PR:
+It is stacked directly on:
 
 ```text
-PR #11 → main (DRAFT)
+step3b11-lr-asd-bakeoff
 ```
 
-`main` does **not** yet contain this Phase-3B integration. The branch and PR must remain until the remaining 3B.11 acceptance and final reconciliation are complete. Do not delete the branch before protected-main merge.
+Step 3B.11 PR state:
 
-The older PR #10 is historical/superseded and is not the current integration path.
+```text
+PR #13 → open; do not merge yet
+```
+
+E/F remain pending and Scenario G still needs an overlap/concurrent-speaker layer, so Step 3B.11 authority acceptance is not complete.
+
+`step3b12-speaker-shadow-runtime` should remain separate until one-time OWNER voice enrollment and ordinary-conversation UX are accepted on the real JARVIS machine. Do not merge it directly to protected main ahead of its Step 3B.11 base.
 
 ## Immediate Next Action
 
-**Pull the latest feature branch, run `jarvis-voice`, confirm the live JARVIS Vision interpretation window appears, then begin the bounded 3B.11 score-distribution scenarios.**
+**Complete CI on `step3b12-speaker-shadow-runtime`, then perform one-time `jarvis-speaker-enroll` on the real JARVIS machine and use normal `jarvis-voice` conversation to evaluate whether asynchronous per-turn CAM++ is effectively invisible to UX.**
