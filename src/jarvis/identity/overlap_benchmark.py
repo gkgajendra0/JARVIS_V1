@@ -18,7 +18,10 @@ from jarvis.identity.sortformer_assets import (
     SortformerAssetError,
     ensure_sortformer_model,
 )
-from jarvis.identity.sortformer_native import NativeSortformerDiarizer, SortformerNativeError
+from jarvis.identity.sortformer_native import (
+    NativeSortformerDiarizer,
+    SortformerNativeError,
+)
 from jarvis.identity.speaker_benchmark import InMemorySegmentRecorder, segment_metrics
 from jarvis.vision.service import build_default_vision_service
 from jarvis.voice.audio import SessionAudioInput
@@ -101,7 +104,11 @@ def _process_gpu_memory_mib() -> float | None:
             text=True,
             timeout=10,
         )
-    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+    except (
+        FileNotFoundError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+    ):
         return None
 
     total = 0.0
@@ -404,7 +411,12 @@ def main() -> None:
                 with_vision=not args.without_vision,
             )
         )
-    except (SortformerAssetError, SortformerNativeError, ValueError, RuntimeError) as exc:
+    except (
+        SortformerAssetError,
+        SortformerNativeError,
+        ValueError,
+        RuntimeError,
+    ) as exc:
         print(f"overlap benchmark failed: {exc}")
         code = 2
     raise SystemExit(code)
