@@ -47,7 +47,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 turn.samples,
                 sample_rate=turn.sample_rate,
             )
-        except Exception:  # noqa: BLE001 - shadow diagnostics must never break UX
+        except Exception:
             LOGGER.exception(
                 "Enrolled speaker shadow turn %s failed; conversation is unaffected",
                 audio_turn_id,
