@@ -10,8 +10,8 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 | 1 | Natural Conversational Core | CAP-001, CAP-005, CAP-006, CAP-007 | DONE |
 | 2 | Wake, Voice Session, and Audio Robustness | CAP-002, CAP-003 | DONE |
 | 2.5 | Vision Sensor & Active Target Tracking Foundation | Camera/PTZ boundaries, local person detection/tracking, deterministic target lock, active following | DONE |
-| 3 | Identity, Graduated Trust, Authority, and Observability Foundation | CAP-004, CAP-034, CAP-035, CAP-036, CAP-037 | ACTIVE |
-| 4 | Live Context and Personal Memory | CAP-008 through CAP-013 | PLANNED |
+| 3 | Identity, Graduated Trust, Authority, and Observability Foundation | CAP-004, CAP-034, CAP-035, CAP-036, CAP-037 | DONE |
+| 4 | Live Context and Personal Memory | CAP-008 through CAP-013 | ACTIVE |
 | 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | PLANNED |
 | 6 | Knowledge, Current Research, and Truthfulness | CAP-014 through CAP-017 | PLANNED |
 | 7 | Governed Capability Runtime + Local Files/System/Project Safe Reads | CAP-018, CAP-021, CAP-022, CAP-032 | PLANNED |
@@ -31,24 +31,24 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 
 ## Why Step 2.5 Exists
 
-Step 2.5 was a deliberately bounded roadmap interlude approved after Step 2. It established a reusable visual sensor and active-attention foundation before Step 3. The DJI Pocket 3 experimentally proved USB webcam and programmable PTZ behavior, and the accepted visual runtime now provides presence/tracking/head evidence that Step 3 may consume.
+Step 2.5 was a deliberately bounded roadmap interlude approved after Step 2. It established a reusable visual sensor and active-target foundation before Step 3. The DJI Pocket 3 experimentally proved USB webcam and programmable PTZ behavior, and the accepted visual runtime now provides presence/tracking/head evidence that later identity/awareness layers may consume.
 
-Step 2.5 does **not** grant identity, authentication, permission, passive surveillance, semantic scene memory, or consequential device authority. Vision emits evidence; Step 3 owns trust and authority decisions.
+Step 2.5 does **not** itself grant identity, authentication, permission, passive surveillance, semantic scene memory, or consequential device authority.
 
 ## Development Supervisor Interlude
 
 After Step 2.5 acceptance and before Step 3 implementation, the development workflow received one bounded infrastructure improvement: `jarvis-dev`.
 
-This is **not** a new product step and does not change roadmap numbering. It is development tooling that:
+This is **not** a product step and does not change roadmap numbering. It:
 
-- watches protected `origin/main` for new commits;
-- never pulls/restarts without one explicit owner approval;
+- watches protected `origin/main`;
+- never pulls/restarts without explicit owner approval;
 - asks through JARVIS voice using fixed scripted TTS;
 - keeps approval interpretation deterministic and outside model authority;
 - performs clean child shutdown and restart;
 - verifies restarted-child readiness through the authenticated local control channel;
 - restores the previous last-known-good revision if the updated child fails readiness;
-- relies on protected `main` PR flow with required `ruff` and `pytest` gates.
+- relies on protected `main` PR flow with required quality gates.
 
 The normal user-facing runtime does not gain Git/self-update authority merely because this development supervisor exists.
 
@@ -82,10 +82,6 @@ Research for future steps is intentionally deferred until those steps become act
 
 ## Strategic Evolution Milestones
 
-The old JARVIS strategic roadmap expressed the desired evolution as governed foundation -> perception -> memory -> reliable action -> daily assistant -> multi-capability orchestration -> governed agents -> governed learning/improvement -> personal intelligence runtime. V1 preserves that product direction while simplifying the implementation sequence.
-
-The V1 milestones are:
-
 1. **Conversational Presence** — Steps 1-2.
 2. **Perception Foundation** — Step 2.5.
 3. **Governed Personal Foundation** — Steps 3-5.
@@ -114,7 +110,7 @@ Completed outcome: manual realtime conversation, multilingual English/Hindi/Hing
 
 ## Step 2 - Wake, Voice Session, and Audio Robustness
 
-Completed outcome: local wake detection, one JARVIS-owned audio path, preserved wake tail, realtime follow-up conversation, explicit return to idle, and clean re-wake work on the target Windows system. Extended endurance and device-failure trials were explicitly waived and remain recorded as unverified residual risks.
+Completed outcome: local wake detection, one JARVIS-owned audio path, preserved wake tail, realtime follow-up conversation, explicit return to idle, and clean re-wake work on the target Windows system. Extended endurance and device-failure trials were explicitly waived and remain recorded as residual risks.
 
 ## Step 2.5 - Vision Sensor & Active Target Tracking Foundation
 
@@ -122,9 +118,27 @@ Completed outcome: one JARVIS-owned Pocket 3 camera path, replaceable detector/t
 
 ## Step 3 - Identity, Graduated Trust, Authority, and Observability
 
-Goal: research and define the minimum trustworthy governance foundation required before later capabilities may read, write, communicate, or control anything. Step 3 does not implement those later actions or the Step-7 capability runtime.
+Completed outcome: the minimum trustworthy governance/identity foundation required before later capabilities may act. Step 3 established deterministic trust/risk/proposal/approval/audit contracts, Windows-session invalidation, Windows Hello strong verification, encrypted OWNER face/voice profile boundaries, accepted face/liveness evidence, a single-microphone LiveKit production audio path, and non-authoritative CAM++/LR-ASD speaker diagnostics.
 
-Step 3 is now active. Vision/head/person tracking may provide evidence, but no sensor/model/provider may grant permission directly. Current research, threat modeling, trust vocabulary, authority/approval contracts, privacy-aware observability, and realistic identity-evidence technology comparisons must be completed before implementation is approved.
+Step 3 deliberately closes with T2 `CORROBORATED_OWNER` disabled and biometric speaker/active-speaker thresholds unpromoted. Known overlap, replay/deepfake, non-owner calibration, short-turn continuity, and attention improvements are deferred until a later product capability makes them necessary. This preserves the rule that identity evidence never directly grants consequential execution permission.
+
+Closure evidence: `docs/research/STEP_3_CLOSURE_ACCEPTANCE.md`.
+
+## Step 4 - Live Context and Personal Memory
+
+Goal: give JARVIS one coherent, privacy-aware context/memory owner so useful personal/project continuity survives beyond a single conversation without turning every utterance into permanent memory.
+
+Step 4 covers:
+
+- live session/task/project context;
+- durable semantic facts/preferences/rules;
+- episodic events/milestones;
+- reflection and memory-candidate generation;
+- provenance, confidence, correction, supersession, and forgetting;
+- retrieval of relevant personal/project memory;
+- transient emotional interaction context that does not become permanent identity labeling by default.
+
+Technology is **not selected yet**. Step 4 begins with requirements recovery and current-2026 technology research. Models may propose memory candidates but may not directly mutate canonical durable memory.
 
 ## Final Target - Personal Intelligence Runtime
 
@@ -146,4 +160,4 @@ At that point JARVIS should be able to:
 
 ## Roadmap Change Rule
 
-A future idea may be added here when it represents real product intent, but it must not automatically interrupt the active step. The active step changes only through deliberate planning and human approval. Step 2.5 was such an explicitly approved interruption and is now complete.
+A future idea may be added here when it represents real product intent, but it must not automatically interrupt the active step. The active step changes only through deliberate planning and human approval.
