@@ -8,6 +8,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Self
 
 import numpy as np
 
@@ -262,7 +263,7 @@ class NativeSortformerDiarizer:
         if audio.size == 0:
             raise ValueError("audio must not be empty")
         audio_seconds = float(audio.size / sample_rate)
-        push_size = max(1, int(round(sample_rate * push_seconds)))
+        push_size = max(1, round(sample_rate * push_seconds))
         stream = ctypes.c_void_p()
         self._check(
             self._lib.nemo_speech_diar_stream_open(
@@ -345,7 +346,7 @@ class NativeSortformerDiarizer:
             handle.close()
             self._dll_dir_handle = None
 
-    def __enter__(self) -> NativeSortformerDiarizer:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type, exc, traceback) -> None:
