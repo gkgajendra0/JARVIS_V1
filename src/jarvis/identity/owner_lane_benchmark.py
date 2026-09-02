@@ -23,8 +23,14 @@ from jarvis.identity.sortformer_lane import (
     OwnerLaneAnalysis,
     analyze_owner_lane_sequence,
 )
-from jarvis.identity.sortformer_live import NativeSortformerLiveStream, SortformerLiveSnapshot
-from jarvis.identity.sortformer_native import NativeSortformerDiarizer, SortformerNativeError
+from jarvis.identity.sortformer_live import (
+    NativeSortformerLiveStream,
+    SortformerLiveSnapshot,
+)
+from jarvis.identity.sortformer_native import (
+    NativeSortformerDiarizer,
+    SortformerNativeError,
+)
 from jarvis.identity.speaker_benchmark import InMemorySegmentRecorder, segment_metrics
 from jarvis.identity.speaker_shadow import (
     EnrolledSpeakerShadowObserver,
@@ -76,7 +82,9 @@ async def _capture(
     instructions: str,
     duration_seconds: float,
 ) -> tuple[np.ndarray, int]:
-    await asyncio.to_thread(input, f"\n[{label}] {instructions}\nPress Enter when ready... ")
+    await asyncio.to_thread(
+        input, f"\n[{label}] {instructions}\nPress Enter when ready... "
+    )
     print("  3...")
     await asyncio.sleep(0.35)
     print("  2...")
@@ -107,7 +115,11 @@ def _score_phase(
 ) -> None:
     metrics = segment_metrics(samples, sample_rate)
     score = observer.score(samples, sample_rate=sample_rate)
-    cosine = "n/a" if score.max_reference_cosine is None else f"{score.max_reference_cosine:.4f}"
+    cosine = (
+        "n/a"
+        if score.max_reference_cosine is None
+        else f"{score.max_reference_cosine:.4f}"
+    )
     print(
         f"  {label}: audio={metrics.duration_seconds:.2f}s | RMS={metrics.rms_dbfs:.1f} dBFS | "
         f"CAM++={cosine} ({score.state}, {score.embedding_ms:.1f} ms)"
@@ -310,7 +322,9 @@ def _run_persistent_stream(
     with NativeSortformerLiveStream(diarizer) as stream:
         last_frame_count = -1
         for offset in range(0, samples.size, push_size):
-            result = stream.push(samples[offset : offset + push_size], sample_rate=sample_rate)
+            result = stream.push(
+                samples[offset : offset + push_size], sample_rate=sample_rate
+            )
             latencies.append(result.push_latency_ms)
             if result.snapshot.frame_count != last_frame_count:
                 updates.append(
@@ -321,7 +335,10 @@ def _run_persistent_stream(
                 )
                 last_frame_count = result.snapshot.frame_count
         final_snapshot = stream.finish()
-        if not updates or final_snapshot.frame_count != updates[-1].snapshot.frame_count:
+        if (
+            not updates
+            or final_snapshot.frame_count != updates[-1].snapshot.frame_count
+        ):
             updates.append(
                 _LiveUpdate(
                     audio_seconds=stream.audio_seconds_total,
@@ -343,7 +360,9 @@ async def run_owner_lane_benchmark(
     with_vision: bool,
 ) -> int:
     if sys.platform != "win32":
-        print("This real-machine persistent OWNER-lane benchmark currently targets Windows.")
+        print(
+            "This real-machine persistent OWNER-lane benchmark currently targets Windows."
+        )
         return 2
     if capture_seconds < 3.0:
         raise ValueError("capture_seconds must be at least 3 seconds")
@@ -472,14 +491,18 @@ async def run_owner_lane_benchmark(
             )
 
         if final_snapshot.frame_start != 0:
-            raise RuntimeError("benchmark unexpectedly exceeded Sortformer probability retention horizon")
+            raise RuntimeError(
+                "benchmark unexpectedly exceeded Sortformer probability retention horizon"
+            )
         availability = np.full(final_snapshot.frame_count, np.nan, dtype=np.float64)
         previous = 0
         for update in updates:
             snapshot = update.snapshot
             first = max(previous, snapshot.frame_start)
             for frame_index in range(first, snapshot.frame_count):
-                if frame_index < availability.size and not np.isfinite(availability[frame_index]):
+                if frame_index < availability.size and not np.isfinite(
+                    availability[frame_index]
+                ):
                     availability[frame_index] = update.audio_seconds
             previous = max(previous, snapshot.frame_count)
         availability[~np.isfinite(availability)] = audio_seconds
@@ -506,7 +529,9 @@ async def run_owner_lane_benchmark(
         max_ms = float(np.max(push_array)) if push_array.size else 0.0
         print("\nPerformance")
         print(f"  continuous_audio = {audio_seconds:.2f}s")
-        print(f"  processing = {elapsed * 1000.0:.1f} ms | RTF={elapsed / audio_seconds:.3f}")
+        print(
+            f"  processing = {elapsed * 1000.0:.1f} ms | RTF={elapsed / audio_seconds:.3f}"
+        )
         print(
             f"  push_ms median={median_ms:.1f} p95={p95_ms:.1f} max={max_ms:.1f} | "
             f"live_updates={len(updates)}"
@@ -516,14 +541,18 @@ async def run_owner_lane_benchmark(
         print(f"  owner_lane_reacquired = {analysis.owner_lane_reacquired}")
         print(f"  phone_lane_stable = {analysis.phone_lane_stable}")
         print(f"  owner_phone_lanes_distinct = {analysis.owner_phone_lanes_distinct}")
-        print(f"  overlap_concurrent_fraction = {analysis.overlap_concurrent_fraction:.3f}")
+        print(
+            f"  overlap_concurrent_fraction = {analysis.overlap_concurrent_fraction:.3f}"
+        )
         print("  production_turn_gate_enabled = False")
         print("  CAM++_threshold_promoted = False")
         print("  T2_or_authority_effect = False")
         print("  raw_audio_saved = False")
         if analysis.functional_pass:
             print("STEP_3B13_PERSISTENT_OWNER_LANE = FUNCTIONAL_PASS")
-            print("Decision latency still requires human review before production turn gating.")
+            print(
+                "Decision latency still requires human review before production turn gating."
+            )
             return 0
         print("STEP_3B13_PERSISTENT_OWNER_LANE = FAIL")
         return 1
@@ -550,7 +579,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--model", type=Path, default=None)
     parser.add_argument("--dll", type=Path, default=None)
-    parser.add_argument("--capture-seconds", type=float, default=_DEFAULT_CAPTURE_SECONDS)
+    parser.add_argument(
+        "--capture-seconds", type=float, default=_DEFAULT_CAPTURE_SECONDS
+    )
     parser.add_argument("--push-seconds", type=float, default=_DEFAULT_PUSH_SECONDS)
     parser.add_argument("--threshold", type=float, default=_DEFAULT_THRESHOLD)
     parser.add_argument("--inactive-frames", type=int, default=_DEFAULT_INACTIVE_FRAMES)
@@ -576,7 +607,12 @@ def main() -> None:
                 with_vision=not args.without_vision,
             )
         )
-    except (SortformerAssetError, SortformerNativeError, ValueError, RuntimeError) as exc:
+    except (
+        SortformerAssetError,
+        SortformerNativeError,
+        ValueError,
+        RuntimeError,
+    ) as exc:
         print(f"persistent OWNER-lane benchmark failed: {exc}")
         code = 2
     raise SystemExit(code)
