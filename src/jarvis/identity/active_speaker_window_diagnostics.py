@@ -53,10 +53,10 @@ def diagnose_visual_window_failure(
     window_start = max(start_monotonic, end_monotonic - max_duration_seconds)
     # Same-package diagnostics intentionally inspect the buffer under its own lock.
     # No samples are mutated and no raw frames leave memory.
-    with buffer._lock:  # noqa: SLF001
+    with buffer._lock:
         track_samples = tuple(
             sample
-            for sample in buffer._samples  # noqa: SLF001
+            for sample in buffer._samples
             if sample.visual_track_id == visual_track_id
         )
         candidates = tuple(
