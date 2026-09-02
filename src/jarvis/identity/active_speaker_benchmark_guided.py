@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Any
 
 from jarvis.identity import active_speaker_benchmark as benchmark
@@ -31,6 +32,57 @@ def _capture_seconds_from_argv(argv: Sequence[str]) -> float:
             except ValueError:
                 return _DEFAULT_CAPTURE_SECONDS
     return _DEFAULT_CAPTURE_SECONDS
+
+
+def _selected_scenarios_from_argv(
+    argv: Sequence[str],
+) -> tuple[tuple[Any, ...], list[str], bool]:
+    """Extract wrapper-only --scenarios while preserving benchmark arguments."""
+    requested: str | None = None
+    cleaned: list[str] = []
+    index = 0
+    while index < len(argv):
+        value = argv[index]
+        if value.startswith("--scenarios="):
+            if requested is not None:
+                raise ValueError("--scenarios may be provided only once")
+            requested = value.split("=", 1)[1]
+            index += 1
+            continue
+        if value == "--scenarios":
+            if requested is not None:
+                raise ValueError("--scenarios may be provided only once")
+            if index + 1 >= len(argv):
+                raise ValueError("--scenarios requires comma-separated keys, e.g. A,D,H")
+            requested = argv[index + 1]
+            index += 2
+            continue
+        cleaned.append(value)
+        index += 1
+
+    if requested is None:
+        return tuple(benchmark.SCENARIOS), cleaned, False
+
+    keys = {item.strip().upper() for item in requested.split(",") if item.strip()}
+    if not keys:
+        raise ValueError("--scenarios requires at least one scenario key")
+    known = {scenario.key for scenario in benchmark.SCENARIOS}
+    unknown = sorted(keys - known)
+    if unknown:
+        raise ValueError(
+            "unknown scenario key(s): " + ", ".join(unknown) + "; valid keys are A-H"
+        )
+    selected = tuple(scenario for scenario in benchmark.SCENARIOS if scenario.key in keys)
+    return selected, cleaned, True
+
+
+def _has_output_argument(argv: Sequence[str]) -> bool:
+    return any(value == "--output" or value.startswith("--output=") for value in argv)
+
+
+def _focused_output_path(scenarios: Sequence[Any]) -> Path:
+    suffix = "".join(scenario.key for scenario in scenarios)
+    return Path(f"step3b11_lr_asd_bakeoff_{suffix}.json")
 
 
 def _scenario_readiness_lines(key: str, duration_seconds: float) -> tuple[str, ...]:
@@ -165,7 +217,17 @@ def _guided_capture_factory(
 
 def main() -> None:
     """Run the bake-off with cues aligned to the actual capture window."""
-    duration_seconds = _capture_seconds_from_argv(sys.argv[1:])
+    original_argv = list(sys.argv)
+    original_scenarios = benchmark.SCENARIOS
+    selected_scenarios, cleaned_argv, focused = _selected_scenarios_from_argv(
+        sys.argv[1:]
+    )
+    if focused and not _has_output_argument(cleaned_argv):
+        cleaned_argv.extend(["--output", str(_focused_output_path(selected_scenarios))])
+    sys.argv = [sys.argv[0], *cleaned_argv]
+    benchmark.SCENARIOS = selected_scenarios
+
+    duration_seconds = _capture_seconds_from_argv(cleaned_argv)
     original_input: Any = benchmark.__dict__.get("input")
     had_module_input = "input" in benchmark.__dict__
     original_capture = benchmark._capture_scenario_audio
@@ -179,9 +241,16 @@ def main() -> None:
         duration_seconds=duration_seconds,
     )
     try:
+        if focused:
+            print(
+                "Focused scenario run: "
+                + ", ".join(scenario.key for scenario in selected_scenarios)
+            )
         benchmark.main()
     finally:
         benchmark._capture_scenario_audio = original_capture  # type: ignore[assignment]
+        benchmark.SCENARIOS = original_scenarios
+        sys.argv = original_argv
         if had_module_input:
             benchmark.input = original_input  # type: ignore[attr-defined]
         else:
