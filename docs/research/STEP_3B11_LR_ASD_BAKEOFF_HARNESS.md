@@ -1,47 +1,29 @@
 # Step 3B.11 — LR-ASD score-distribution bake-off harness
 
-Status: **IMPLEMENTED ON INTEGRATION BRANCH — REAL-MACHINE A-H RUN NEXT**
+Status: **IMPLEMENTED + REAL-MACHINE EVIDENCE ACCEPTED FOR STEP-3 CLOSURE**
 
 Date: 2026-09-02
 
 ## Purpose
 
-The accepted single-microphone LR-ASD integration can produce real scores, but those scores are not yet calibrated for JARVIS. This harness exists to collect the first controlled positive, negative, ambiguous, insufficient, and AV-offset distributions from the actual JARVIS machine before any threshold or temporal rule is promoted.
+The accepted single-microphone LR-ASD integration needed real JARVIS-machine evidence before any active-speaker threshold or temporal rule could be considered. This harness collected controlled positive, negative, ambiguous, insufficient, and AV-offset evidence while preserving the accepted production sensor boundary.
 
-No active-speaker threshold is selected by this implementation.
+No active-speaker deployment threshold was selected.
 
-## Research-first decision
+## Research-first boundary
 
-The harness deliberately reuses mature components instead of recreating them:
+The harness reuses mature existing components rather than recreating them:
 
-- **LR-ASD** remains the active-speaker model and official frontend/model implementation already accepted by Step 3B.11.
-- **LiveKit MediaDevices/WebRTC APM** remains the only Pocket3 microphone owner and provides the canonical AEC + NS + HPF + AGC PCM used by the benchmark.
-- **Existing JARVIS Vision** remains the only camera/track/head timeline.
-- **Existing OWNER identity + passive liveness context** identifies the locked OWNER visual track used for LR-ASD evidence.
-- **Existing LiveKit Silero VAD** performs the same speech-region gate used by the canonical production shadow path.
-- **scikit-learn `precision_recall_curve`** provides exploratory threshold operating points instead of a hand-written metric implementation.
-- **PyTorch CUDA events / CUDA peak-memory counters** provide synchronized GPU inference timing and allocation telemetry.
-- **psutil** provides process CPU-time and resident-memory telemetry on Windows.
+- **LR-ASD** official model/frontend implementation;
+- **LiveKit MediaDevices/WebRTC APM** as the only Pocket3 microphone owner and source of canonical AEC + NS + HPF + AGC PCM;
+- existing JARVIS Vision as the only camera/track/head timeline;
+- existing OWNER identity + passive liveness context for locked OWNER track binding;
+- existing LiveKit Silero VAD for speech-region extraction;
+- scikit-learn for exploratory precision/recall analysis;
+- PyTorch CUDA telemetry for GPU inference timing/allocation;
+- psutil for process CPU/RSS telemetry.
 
-The only custom work is JARVIS-specific orchestration: canonical sensor capture, A-H scenario control, owner-track binding, AV-offset replay of the in-memory visual timeline, evidence classification, and derived-score reporting.
-
-## Why AV-offset testing is mandatory
-
-Active-speaker detection is supposed to depend on audio/visual synchrony, not merely the simultaneous presence of speech and a face. Published ASD synchronization research has shown that models can remain overconfident on deliberately unsynchronized audio/video. Therefore the harness tests the same captured speech region against shifted visual-source windows instead of assuming the current monotonic alignment is correct.
-
-Default sweep:
-
-```text
--300 ms
--200 ms
--100 ms
-   0 ms
-+100 ms
-+200 ms
-+300 ms
-```
-
-Shifted observations are diagnostic only and are never fed into binary threshold fitting.
+Custom work is limited to JARVIS-specific orchestration: scenario control, canonical sensor capture, OWNER-track binding, AV-offset replay of the in-memory visual timeline, evidence classification, and derived-score reporting.
 
 ## Canonical runtime boundary
 
@@ -74,126 +56,108 @@ LR-ASD visual frontend
 
 The benchmark never opens another microphone or camera.
 
-## Scenario contract
+## Scenario contract and accepted evidence
 
-| Key | Controlled scenario | Expected evidence class | Used for exploratory binary curve? |
-| --- | --- | --- | --- |
-| A | OWNER visible + OWNER speaks | positive | yes, 0 ms only |
-| B | OWNER visible + off-camera/TV speech | negative | yes, 0 ms only |
-| C | OWNER visible + JARVIS playback only | negative / ideally no canonical speech after AEC | yes if LR-ASD is reached |
-| D | OWNER visible + OWNER replay from another device | negative | yes, 0 ms only |
-| E | OWNER + other visible; OWNER speaks | positive | yes, 0 ms only |
-| F | OWNER + other visible; other person speaks | negative | yes, 0 ms only |
-| G | overlapping OWNER + other/background speech | ambiguous | no |
-| H | temporary OWNER head loss while speaking | insufficient / fail closed | no |
+| Key | Controlled scenario | Expected class | Real-machine evidence | Step-3 disposition |
+| --- | --- | --- | --- | --- |
+| A | OWNER visible + OWNER speaks | positive | 0-ms mean `0.8676`, median `0.9248` | accepted clean positive |
+| B | OWNER visible + off-camera/TV speech | negative | mean about `0.0014` | accepted strong negative |
+| C | OWNER visible + JARVIS playback only | negative / ideally no canonical speech | `quality_rejected` | accepted fail-close; not threshold sample |
+| D | OWNER visible + replay of OWNER voice from another device | negative | mean about `0.0014` | accepted replay negative for LR-ASD |
+| E | OWNER + another visible; OWNER speaks | positive | not collected with a real second person | waived for Step-3 closure while T2/authority remain disabled |
+| F | OWNER + another visible; other speaks | negative | not collected with a real second person | waived for Step-3 closure while T2/authority remain disabled |
+| G | overlapping OWNER + other/background speech | ambiguous | mean about `0.8253` | accepted architecture-gap evidence; never binary threshold training |
+| H | temporary OWNER head loss while speaking | insufficient | `insufficient` | accepted expected fail-close |
 
-G and H are safety-behavior tests. They are not coerced into positive/negative labels.
+G and H remain safety/semantics evidence and are never coerced into positive/negative threshold labels.
+
+## What Scenario G proved
+
+Scenario G is not an LR-ASD failure. OWNER really is speaking, so a high active-speaker score is semantically reasonable. The missing question is whether OWNER is the **only** active speaker responsible for the mixed turn.
+
+Therefore:
+
+- LR-ASD may answer “is the visible OWNER speaking?”;
+- LR-ASD alone may not authorize the entire mixed utterance as OWNER-only speech;
+- future stronger audio/AV authority requires separate overlap / concurrent-speaker evidence;
+- streaming diarization/overlap technology may be revisited later when a product capability needs it;
+- Step 3 closes safely because `active_speaker_confirmed=False`, voice authority is disabled, and T2 remains disabled.
+
+## AV-offset diagnostics
+
+The harness supports shifted visual-source windows at:
+
+```text
+-300 ms
+-200 ms
+-100 ms
+   0 ms
++100 ms
++200 ms
++300 ms
+```
+
+The clean OWNER A run remained high across the ±300-ms sweep. This is useful evidence that synchronization score alone must not be treated as a security/authorization signal. Shifted observations remain diagnostic only and are excluded from binary fitting.
 
 ## OWNER track binding
 
-At benchmark startup the operator stands alone in view. The harness waits for the already-accepted OWNER identity+liveness state, then calls the existing Vision `lock_only_confirmed_person()` control. The locked track ID and Windows session ID are retained for the A-H run.
-
-Every scenario requires that same fresh locked OWNER context at its start. If the context has changed or disappeared, the scenario is marked `precondition_failed` rather than silently scoring another actor.
-
-This is especially important for E/F, where a second visible person is introduced after the OWNER track has already been established.
+At benchmark startup the operator stands alone in view. The harness waits for already-accepted OWNER identity/liveness, locks that confirmed person, and retains the locked track ID + Windows session ID. Every scenario requires the same fresh OWNER context; missing/changing context fails the scenario precondition instead of silently scoring another actor.
 
 ## JARVIS playback scenario
 
-Scenario C does not use an external recording. It invokes the existing provider-adapted `ScriptedSpeech` path through the already-open `MediaDevicesAudioOutput`.
+Scenario C uses the existing `ScriptedSpeech` path through the accepted physical LiveKit MediaDevices output/AEC route. The observed canonical residual failed the speaker quality gate. This is retained as system-level fail-closed evidence; it is **not** claimed that AEC completely removed playback and it is not used as a scored LR-ASD negative sample.
 
-This exercises the same physical speaker render that feeds the LiveKit/WebRTC AEC reverse stream. If AEC removes playback strongly enough that Silero finds no canonical speech, the scenario is recorded as `no_speech` with `jarvis_playback_removed_or_below_speech_gate`; LR-ASD is not forced to score silence.
+## Frame-level / telemetry evidence
 
-## Frame-level LR-ASD trace
+The benchmark records derived evidence only:
 
-Production `LrAsdActiveSpeakerProvider` currently publishes aggregate mean/median/min/max values only. The benchmark needs the real temporal distribution.
-
-To avoid changing production authority behavior, the harness uses a benchmark-only subclass that intercepts the already-computed output of `_multicontext_probabilities()`. It does not duplicate the LR-ASD model, frontend, MFCC logic, or checkpoint loading.
-
-For each scored offset, the derived report stores:
-
-- full averaged multicontext LR-ASD frame-score trace;
+- averaged multicontext LR-ASD frame-score trace;
 - mean / median / minimum / maximum;
-- visual frame count and unique frame count;
+- visual frame count and uniqueness;
 - source FPS and maximum source gap;
-- synchronized wall-clock inference latency;
-- CUDA kernel timing when CUDA is active;
-- CUDA baseline, peak allocation, and inference peak delta;
-- process CPU seconds consumed;
-- process RSS before and after inference.
+- wall-clock/CUDA inference telemetry;
+- CUDA allocation telemetry;
+- process CPU/RSS telemetry.
+
+No raw microphone PCM, raw video, face/head crops, speaker embeddings, voiceprints, or OWNER biometric templates are persisted.
 
 ## Exploratory threshold analysis
 
-After the run, the harness calls `sklearn.metrics.precision_recall_curve` using only zero-offset scored traces from A/B/C/D/E/F.
+The harness can call `sklearn.metrics.precision_recall_curve` using only eligible zero-offset binary scenarios. The output is exploratory evidence only.
 
-Each scenario's frame scores receive weights summing to one, so a scenario with more frames cannot dominate only because it lasted slightly longer.
-
-The report may expose exploratory operating points such as the maximum observed F1 point. These are evidence summaries only:
+Final Step-3 state remains:
 
 ```text
 DEPLOYMENT THRESHOLD SELECTED = FALSE
 ACTIVE_OWNER_SPEAKER = DISABLED
+T2 CORROBORATED_OWNER = DISABLED
 ```
 
-One A-H run contains temporally correlated frame samples. It is the first real distribution, not deployment calibration. Human review of separation, temporal stability, negative tails, offset sensitivity, and G/H fail-closed behavior remains required before a temporal rule can be proposed.
+The Step-3 product boundary does not require inventing a threshold merely because a benchmark can compute one.
 
-## Persistence boundary
-
-The benchmark writes one derived JSON report by default:
-
-```text
-step3b11_lr_asd_bakeoff.json
-```
-
-The report is git-ignored and contains scores/telemetry only.
-
-It does **not** persist:
-
-- raw microphone PCM;
-- raw video;
-- face/head crops;
-- speaker embeddings;
-- voiceprints;
-- OWNER biometric templates.
-
-## Installation
-
-The benchmark dependencies are intentionally separate from production runtime dependencies:
+## Installation / retained diagnostic use
 
 ```powershell
 pip install -e ".[vision,active-speaker-benchmark]"
-```
-
-This installs the already-required LR-ASD frontend dependencies plus current pinned benchmark tooling (`scikit-learn` and `psutil`) without forcing those analysis packages into normal JARVIS installs.
-
-## Run
-
-From the repository virtual environment with the normal machine configuration already established:
-
-```powershell
 jarvis-active-speaker-benchmark
 ```
 
-Default controlled capture duration is 4 seconds per scenario. The harness prompts before every scenario and permits `s` to skip or `q` to finish early.
-
-Optional examples:
+Focused examples remain available for future diagnostic work:
 
 ```powershell
-jarvis-active-speaker-benchmark --seconds 5
-jarvis-active-speaker-benchmark --offsets-ms=-300,-200,-100,0,100,200,300
-jarvis-active-speaker-benchmark --output .\step3b11_lr_asd_bakeoff_run1.json
+jarvis-active-speaker-benchmark --scenarios A
+jarvis-active-speaker-benchmark --scenarios E,F
 ```
 
-## Acceptance sequence after implementation
+E/F should use a real second visible person when revisited; photos/videos are not substitutes.
 
-1. Pass repository formatting/lint/unit-test gates.
-2. Run A-H once on the real JARVIS machine.
-3. Review the generated JSON plus console zero-offset summaries.
-4. Inspect positive/negative separation and negative maximum tails.
-5. Inspect whether score quality degrades under deliberate AV offsets.
-6. Confirm G remains ambiguous and H fails closed for lost visual continuity.
-7. Only then define a candidate temporal rule and decide whether another controlled run is necessary.
+## Closure
 
-Until that evidence is accepted, `active_speaker_confirmed` remains false, CAM++ prototype admission remains disabled, and T2 remains disabled.
+The broad A–H bake-off is no longer the active work item. Step-3 closure evidence and residual risks are consolidated in:
+
+`docs/research/STEP_3_CLOSURE_ACCEPTANCE.md`
+
+Future overlap/diarization, replay/deepfake hardening, E/F calibration, or threshold work should only be reopened when a later product capability creates a concrete requirement.
 
 ## External references
 
@@ -202,4 +166,4 @@ Until that evidence is accepted, `active_speaker_confirmed` remains false, CAM++
 - PyTorch CUDA semantics/timing: `https://docs.pytorch.org/docs/stable/notes/cuda.html`
 - PyTorch CUDA peak allocation: `https://docs.pytorch.org/docs/stable/generated/torch.cuda.memory.max_memory_allocated.html`
 - psutil documentation: `https://psutil.readthedocs.io/`
-- Rethinking Audio-visual Synchronization for Active Speaker Detection: `https://arxiv.org/abs/2212.06470`
+- Rethinking Audio-visual Synchronization for Active Speaker Detection: `https://arxiv.org/abs/2206.10421`
