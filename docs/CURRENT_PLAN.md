@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — STARTUP OPERABILITY ACCEPTED — LIVEKIT 48-kHz FULL-DUPLEX AUDIO ACCEPTED — ADR-013 SINGLE-MICROPHONE ACTIVE-SPEAKER BOUNDARY ACCEPTED — 3B.11 LR-ASD CORE EVIDENCE ACCEPTED WITH E/F PENDING + OVERLAP GAP DISCOVERED — 3B.12 AUDIO-FIRST CAM++ SPEAKER SHADOW IMPLEMENTED, REAL-MACHINE ENROLLMENT/UX ACCEPTANCE NEXT**
+**PHASE 3A COMPLETE + MERGED — PHASE 3B ACTIVE — STARTUP OPERABILITY ACCEPTED — LIVEKIT 48-kHz FULL-DUPLEX AUDIO ACCEPTED — ADR-013 SINGLE-MICROPHONE ACTIVE-SPEAKER BOUNDARY ACCEPTED — 3B.11 LR-ASD CORE EVIDENCE ACCEPTED WITH E/F PENDING + OVERLAP GAP DISCOVERED — 3B.12 AUDIO-FIRST CAM++ SPEAKER SHADOW IMPLEMENTED + REAL-MACHINE OWNER VOICE ENROLLMENT ACCEPTED — NORMAL-CONVERSATION UX/SIMILARITY ACCEPTANCE NEXT**
 
 This file is the operational source of truth for what is done, what is accepted, and what happens next. Detailed evidence belongs in `docs/research/`; significant architecture decisions belong in `docs/decisions/`.
 
@@ -36,7 +36,8 @@ This file is the operational source of truth for what is done, what is accepted,
 | Conversation full duplex | Human-accepted | LiveKit MediaDevices + NVIDIA/TV 48 kHz |
 | 3B.11 integration boundary | Human-accepted | single Pocket3 mic owner + canonical PCM + normal timestamped Vision |
 | 3B.11 A/B/C/D/G/H evidence | Accepted diagnostic evidence | A positive; B/D strong negatives; C/H fail closed; G exposes overlap semantics gap |
-| 3B.12 implementation | Code complete, machine acceptance pending | encrypted OWNER voice prototypes + asynchronous per-turn CAM++ shadow |
+| 3B.12 implementation | Code accepted | encrypted OWNER voice prototypes + asynchronous per-turn CAM++ shadow |
+| 3B.12 OWNER voice enrollment | Real-machine accepted | 12 quality-qualified regions → 6 encrypted CAM++ prototypes; face + voice preserved in OWNER profile |
 
 T2 `CORROBORATED_OWNER` remains intentionally disabled.
 
@@ -246,18 +247,42 @@ Decision: `docs/decisions/ADR-014_AUDIO_FIRST_SPEAKER_SHADOW.md`.
 
 ---
 
-## Immediate next work — 3B.12 real-machine acceptance
+## 3B.12 OWNER voice enrollment — REAL-MACHINE ACCEPTED
 
-No more full A-H ceremony is required now.
+Real-machine enrollment completed successfully through `jarvis-speaker-enroll` using the accepted Pocket3 → LiveKit MediaDevices/WebRTC microphone path.
 
-1. Pull `step3b12-speaker-shadow-runtime`.
-2. Install/register the `speaker` optional runtime and new `jarvis-speaker-enroll` command.
-3. Run the one-time OWNER speaker enrollment.
-4. Confirm the existing face template is preserved and VOICE is added to the encrypted OWNER profile.
-5. Start normal `jarvis-voice` use.
-6. Observe per-turn CAM++ similarity + embedding latency passively during ordinary conversation.
-7. Reject the implementation if normal conversation feels slower or unstable; speaker diagnostics are never allowed to block normal UX.
-8. Do not select a production speaker threshold from enrollment data alone.
+Observed acceptance evidence:
+
+- 12/12 final enrollment regions accepted;
+- two low-energy attempts were correctly rejected at `-53.1 dBFS` and `-71.1 dBFS` and were not enrolled;
+- accepted regions covered natural English, Hindi, Hinglish, normal desk distance, slightly quieter speech, and a slightly farther microphone position;
+- `prototype_count = 6`;
+- `embedding_dimension = 192`;
+- prototype coverage cosine: minimum `0.7593`, p05 `0.7749`, median `0.8726`;
+- Windows Hello authorized the exact persistent profile update;
+- OWNER `profile_version = 2`;
+- preserved modalities are `['face', 'voice']`;
+- raw audio was not persisted;
+- no speaker threshold was selected;
+- speaker identity grants no authority;
+- terminal result: `STEP_3B12_SPEAKER_ENROLLMENT = PASS`.
+
+This accepts the persistent OWNER voice-template lifecycle and real-machine enrollment UX. It does **not** accept a speaker decision threshold or any trust/authority upgrade.
+
+---
+
+## Immediate next work — 3B.12 normal-conversation UX + passive similarity acceptance
+
+No more enrollment or full A-H ceremony is required now.
+
+1. Start normal `jarvis-voice` operation with the accepted machine configuration.
+2. Talk to JARVIS naturally; do not use a scripted benchmark yet.
+3. Confirm ordinary response/barge-in UX feels unchanged while CAM++ runs in the background.
+4. Observe per-turn `max_owner_cosine`, `embedding_ms`, quality/insufficient outcomes, and any observer exceptions.
+5. Confirm poor/very-short turns fail closed as `INSUFFICIENT` rather than becoming false non-owner decisions.
+6. Collect a small ordinary OWNER-only similarity sample across English/Hindi/Hinglish and normal conversational variation.
+7. Do not select a production speaker threshold from enrollment or OWNER-only data.
+8. If normal conversation becomes slower or unstable, reject/disable the shadow implementation rather than compromising the realtime path.
 
 ---
 
@@ -316,8 +341,8 @@ PR #13 → open; do not merge yet
 
 E/F remain pending and Scenario G still needs an overlap/concurrent-speaker layer, so Step 3B.11 authority acceptance is not complete.
 
-`step3b12-speaker-shadow-runtime` should remain separate until one-time OWNER voice enrollment and ordinary-conversation UX are accepted on the real JARVIS machine. Do not merge it directly to protected main ahead of its Step 3B.11 base.
+`step3b12-speaker-shadow-runtime` should remain separate until ordinary-conversation CAM++ UX/similarity acceptance is complete on the real JARVIS machine. Do not merge it directly to protected main ahead of its Step 3B.11 base.
 
 ## Immediate Next Action
 
-**Complete CI on `step3b12-speaker-shadow-runtime`, then perform one-time `jarvis-speaker-enroll` on the real JARVIS machine and use normal `jarvis-voice` conversation to evaluate whether asynchronous per-turn CAM++ is effectively invisible to UX.**
+**Run normal `jarvis-voice` conversation on the real JARVIS machine, confirm CAM++ remains invisible to realtime UX, and capture the resulting enrolled-speaker shadow logs (`max_owner_cosine`, `embedding_ms`, and `INSUFFICIENT` outcomes) for passive OWNER-only evaluation.**
