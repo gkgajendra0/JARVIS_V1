@@ -418,7 +418,9 @@ async def run_transition_benchmark(
         print(f"  phone_lane_stable = {phone_lane_stable}")
         print(f"  owner_phone_lanes_distinct = {owner_phone_lanes_distinct}")
         print(f"  overlap_concurrent_fraction = {overlap_concurrent_fraction:.3f}")
-        print("  acoustic_owner_inactive_ms = " + _format_ms(acoustic_owner_inactive_ms))
+        print(
+            "  acoustic_owner_inactive_ms = " + _format_ms(acoustic_owner_inactive_ms)
+        )
         print("  live_owner_inactive_ms = " + _format_ms(live_owner_inactive_ms))
         print("  production_turn_gate_enabled = False")
         print("  CAM++_threshold_promoted = False")
