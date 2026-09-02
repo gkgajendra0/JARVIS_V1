@@ -48,8 +48,8 @@ class NativeSortformerLiveStream:
             raise SortformerNativeError("Sortformer model is closed")
         self._diarizer = diarizer
         self._stream = ctypes.c_void_p()
-        diarizer._check(  # noqa: SLF001 - same-package ABI adapter
-            diarizer._lib.nemo_speech_diar_stream_open(  # noqa: SLF001
+        diarizer._check(
+            diarizer._lib.nemo_speech_diar_stream_open(
                 model,
                 ctypes.byref(self._stream),
             ),
@@ -87,8 +87,8 @@ class NativeSortformerLiveStream:
         if audio.size == 0:
             raise ValueError("audio must not be empty")
         started = time.perf_counter()
-        self._diarizer._check(  # noqa: SLF001
-            self._diarizer._lib.nemo_speech_diar_stream_push_f32(  # noqa: SLF001
+        self._diarizer._check(
+            self._diarizer._lib.nemo_speech_diar_stream_push_f32(
                 self._stream,
                 audio.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
                 audio.size,
@@ -107,7 +107,7 @@ class NativeSortformerLiveStream:
     def snapshot(self) -> SortformerLiveSnapshot:
         if not self._stream.value:
             raise SortformerNativeError("Sortformer live stream is closed")
-        lib = self._diarizer._lib  # noqa: SLF001
+        lib = self._diarizer._lib
         frame_count = int(lib.nemo_speech_diar_frame_count(self._stream))
         frame_start = int(lib.nemo_speech_diar_frame_probs_start(self._stream))
         retained_frames = frame_count - frame_start
@@ -118,7 +118,7 @@ class NativeSortformerLiveStream:
             dtype=np.float32,
         )
         if probabilities.size:
-            self._diarizer._check(  # noqa: SLF001
+            self._diarizer._check(
                 lib.nemo_speech_diar_frame_probs(
                     self._stream,
                     probabilities.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
@@ -138,10 +138,8 @@ class NativeSortformerLiveStream:
         if not self._stream.value:
             raise SortformerNativeError("Sortformer live stream is closed")
         if not self._finished:
-            self._diarizer._check(  # noqa: SLF001
-                self._diarizer._lib.nemo_speech_diar_stream_finish(  # noqa: SLF001
-                    self._stream
-                ),
+            self._diarizer._check(
+                self._diarizer._lib.nemo_speech_diar_stream_finish(self._stream),
                 "nemo_speech_diar_stream_finish",
             )
             self._finished = True
@@ -149,9 +147,7 @@ class NativeSortformerLiveStream:
 
     def close(self) -> None:
         if self._stream.value:
-            self._diarizer._lib.nemo_speech_diar_stream_close(  # noqa: SLF001
-                self._stream
-            )
+            self._diarizer._lib.nemo_speech_diar_stream_close(self._stream)
             self._stream.value = None
 
     def __enter__(self) -> Self:
