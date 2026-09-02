@@ -17,6 +17,62 @@ class SortformerNativeError(RuntimeError):
     pass
 
 
+@dataclass(frozen=True, slots=True)
+class SortformerGeometry:
+    """Explicit NeMo-Speech.cpp streaming geometry overrides.
+
+    Values are expressed in Sortformer encoder frames. The current v2 model emits
+    one frame every 80 ms. These overrides are benchmark inputs only until a real
+    JARVIS-machine latency/quality bake-off accepts one configuration.
+    """
+
+    name: str
+    chunk_frames: int
+    right_context_frames: int
+    left_context_frames: int
+    fifo_frames: int
+    spkcache_frames: int
+    update_period_frames: int
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("Sortformer geometry name must not be empty")
+        if self.chunk_frames < 1:
+            raise ValueError("chunk_frames must be positive")
+        if self.right_context_frames < 0 or self.left_context_frames < 0:
+            raise ValueError("Sortformer context frames must be non-negative")
+        if self.fifo_frames < 0:
+            raise ValueError("fifo_frames must be non-negative")
+        if self.spkcache_frames < 1 or self.update_period_frames < 1:
+            raise ValueError("Sortformer cache/update frames must be positive")
+
+    @property
+    def input_buffer_frames(self) -> int:
+        return self.chunk_frames + self.right_context_frames
+
+
+# Published nvidia/diar_streaming_sortformer_4spk-v2 operating points.
+# Model-card latency is input buffering only and excludes compute time.
+NVIDIA_SORTFORMER_LOW_LATENCY = SortformerGeometry(
+    name="nvidia_low_latency_1p04s",
+    chunk_frames=6,
+    right_context_frames=7,
+    left_context_frames=0,
+    fifo_frames=188,
+    spkcache_frames=188,
+    update_period_frames=144,
+)
+NVIDIA_SORTFORMER_ULTRA_LOW_LATENCY = SortformerGeometry(
+    name="nvidia_ultra_low_latency_0p32s",
+    chunk_frames=3,
+    right_context_frames=1,
+    left_context_frames=0,
+    fifo_frames=188,
+    spkcache_frames=188,
+    update_period_frames=144,
+)
+
+
 class _DiarModelConfig(ctypes.Structure):
     _fields_ = [
         ("size", ctypes.c_size_t),
@@ -125,6 +181,7 @@ class NativeSortformerDiarizer:
         library_path: Path | None = None,
         gpu: int = 0,
         preset: str = "streaming",
+        geometry: SortformerGeometry | None = None,
     ) -> None:
         if not model_path.is_file():
             raise SortformerNativeError(
@@ -135,6 +192,7 @@ class NativeSortformerDiarizer:
 
         self.model_path = model_path.resolve()
         self.library_path = find_nemo_speech_library(library_path)
+        self.geometry = geometry
         self._dll_dir_handle = None
         if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
             self._dll_dir_handle = os.add_dll_directory(str(self.library_path.parent))
@@ -156,12 +214,18 @@ class NativeSortformerDiarizer:
             model_path=model_path_bytes,
             gpu=gpu,
             preset=preset_bytes,
-            chunk_frames=0,
-            right_context_frames=0,
-            left_context_frames=-1,
-            fifo_frames=0,
-            spkcache_frames=0,
-            update_period_frames=0,
+            chunk_frames=geometry.chunk_frames if geometry is not None else 0,
+            right_context_frames=(
+                geometry.right_context_frames if geometry is not None else 0
+            ),
+            left_context_frames=(
+                geometry.left_context_frames if geometry is not None else -1
+            ),
+            fifo_frames=geometry.fifo_frames if geometry is not None else 0,
+            spkcache_frames=geometry.spkcache_frames if geometry is not None else 0,
+            update_period_frames=(
+                geometry.update_period_frames if geometry is not None else 0
+            ),
         )
         started = time.perf_counter()
         status = self._lib.nemo_speech_diar_create(
