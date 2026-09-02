@@ -43,6 +43,22 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             if observer is not None:
                 await asyncio.to_thread(observer.close)
 
+    def _owner_context_diagnostic(self) -> tuple[bool, str, str]:
+        context = self._owner_context_state
+        if context is None:
+            return False, "unavailable", "owner_context_state_not_configured"
+        snapshot = context.snapshot()
+        assessment = snapshot.assessment
+        if assessment is None:
+            return (
+                False,
+                "none",
+                snapshot.invalidation_reason or "owner_context_not_observed",
+            )
+        live = context.has_fresh_live_owner_candidate()
+        reasons = ",".join(assessment.reason_codes) if assessment.reason_codes else "none"
+        return live, assessment.state.value, reasons
+
     async def _score_enrolled_speaker(
         self,
         turn: SpeakerTurnAudio,
@@ -145,19 +161,21 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             region = await speech_detector.extract(turn)
             speech_segments = region.segment_count
             if region.turn is None:
-                owner_context_live = bool(
-                    self._owner_context_state is not None
-                    and self._owner_context_state.has_fresh_live_owner_candidate()
+                owner_context_live, owner_context_state, owner_context_reasons = (
+                    self._owner_context_diagnostic()
                 )
                 LOGGER.info(
                     "Speaker shadow turn %s | source=canonical_livekit_pcm | "
                     "captured=%.2fs | speech=none | accepted=False | "
-                    "live_owner_context=%s | enrolled_speaker_scored=False | "
+                    "live_owner_context=%s | owner_context_state=%s | "
+                    "owner_context_reasons=%s | enrolled_speaker_scored=False | "
                     "active_speaker_confirmed=False | prototype_admission=False | "
                     "reasons=%s",
                     audio_turn_id,
                     turn.duration_seconds,
                     owner_context_live,
+                    owner_context_state,
+                    owner_context_reasons,
                     region.reason,
                 )
                 if overlap_task is not None:
@@ -170,14 +188,14 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             analysis_turn.samples,
             sample_rate=analysis_turn.sample_rate,
         )
-        owner_context_live = bool(
-            self._owner_context_state is not None
-            and self._owner_context_state.has_fresh_live_owner_candidate()
+        owner_context_live, owner_context_state, owner_context_reasons = (
+            self._owner_context_diagnostic()
         )
         LOGGER.info(
             "Speaker shadow turn %s | source=canonical_livekit_pcm | captured=%.2fs | "
             "speech=%.2fs | segments=%s | rms %.1f dBFS | accepted=%s | "
-            "live_owner_context=%s | active_speaker_confirmed=False | "
+            "live_owner_context=%s | owner_context_state=%s | "
+            "owner_context_reasons=%s | active_speaker_confirmed=False | "
             "prototype_admission=False | reasons=%s",
             audio_turn_id,
             turn.duration_seconds,
@@ -186,6 +204,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             quality.rms_dbfs,
             quality.accepted,
             owner_context_live,
+            owner_context_state,
+            owner_context_reasons,
             ",".join(quality.reason_codes) if quality.reason_codes else "none",
         )
 
