@@ -142,8 +142,7 @@ def interpret_sortformer_probabilities(
     else:
         speaker_sequence = tuple(speaker for speaker, _ in stable_runs)
         changed = any(
-            previous != current
-            for previous, current in pairwise(speaker_sequence)
+            previous != current for previous, current in pairwise(speaker_sequence)
         )
         if changed:
             state = OverlapState.SPEAKER_CHANGE
