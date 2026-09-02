@@ -834,11 +834,7 @@ def _threshold_analysis(observations: list[ScenarioObservation]) -> dict[str, An
         points.append(point)
         if best_f1 is None or point["f1"] > best_f1["f1"]:
             best_f1 = point
-        if (
-            p >= 0.99
-            and r > 0
-            and (precision_99 is None or r > precision_99["recall"])
-        ):
+        if p >= 0.99 and r > 0 and (precision_99 is None or r > precision_99["recall"]):
             precision_99 = point
 
     base.update(
