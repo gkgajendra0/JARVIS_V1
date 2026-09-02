@@ -1,26 +1,35 @@
 # Step 3B.13 — Native Sortformer real-machine benchmark
 
-Status: **READY FOR REAL JARVIS-MACHINE GATE — NOT PRODUCTION INTEGRATED**
+Status: **REAL-MACHINE FUNCTIONAL PASS — PRODUCTION SHADOW INTEGRATION IN PROGRESS**
 
-Date: 2026-09-02
+Date: 2026-09-03
 
 ## Purpose
 
-This benchmark answers one bounded question before any production integration:
+This benchmark answered one bounded question before production integration:
 
 > Can NVIDIA's native Windows Sortformer path distinguish clean single-speaker speech from the already-known Scenario G overlap on the real JARVIS RTX 5060 Ti machine without creating unacceptable runtime contention?
 
-It does not enable T2, actor authority, a speaker threshold, or a production overlap threshold.
+Result: **YES — functional pass on the real JARVIS machine with normal Vision running.**
+
+This acceptance does not by itself enable T2, actor authority, a CAM++ speaker threshold, or an authority-bearing overlap threshold.
 
 ## Pinned external/runtime boundary
 
-NeMo-Speech.cpp source revision researched for this gate:
+NeMo-Speech.cpp source/installer revision researched for this gate:
 
 ```text
 56b60d432f1731d6d5b28a4c5a31cbaf871daba1
 ```
 
-The native installer downloads backend-matched release archives and verifies them against NVIDIA-published SHA-256 files. JARVIS does not execute or vendor NVIDIA's installer itself.
+Pinned runtime release:
+
+```text
+NeMo-Speech.cpp 0.1.0
+windows/x86_64/cuda
+```
+
+The NVIDIA v0.1.0 release provides a prebuilt Windows CUDA archive plus published SHA-256 sidecar. The real machine used `-BinaryOnly`, so missing `nvcc` did not trigger an unnecessary source build or CUDA Toolkit installation.
 
 The benchmark model is managed by JARVIS and pinned to:
 
@@ -33,7 +42,32 @@ sha256     = 0679cfeb1ce356d0dea9470b31274f4bfc7eb927497d82005483770666da998a
 license    = CC-BY-4.0
 ```
 
-The Hugging Face revision explicitly added the Q8 GGUF for local NeMo-Speech.cpp inference. JARVIS verifies both exact byte count and SHA-256 before loading it.
+JARVIS verifies both exact byte count and SHA-256 before loading it.
+
+## Real machine
+
+Observed deployment machine/runtime:
+
+```text
+GPU    = NVIDIA GeForce RTX 5060 Ti, 8150 MiB visible VRAM
+Driver = 596.49
+CUDA driver compatibility reported by nvidia-smi = 13.2
+NeMo-Speech.cpp = 0.1.0 native CUDA binary
+Sortformer capacity = 4 speakers
+Sortformer frame step = 0.080 s
+```
+
+The native runtime self-report showed:
+
+```text
+accelerator_available      = true
+accelerator_compiled       = true
+driver_runtime_compatible  = true
+diarization                = true
+backend_cuda               = true
+```
+
+`nvcc` was not installed and was not required because the accepted path used NVIDIA's prebuilt binary rather than a source build.
 
 ## Architecture under test
 
@@ -54,13 +88,13 @@ SINGLE_SPEAKER / OVERLAP_DETECTED / SPEAKER_CHANGE /
 AMBIGUOUS / INSUFFICIENT
 ```
 
-The benchmark never opens a second microphone.
+The benchmark never opened a second microphone.
 
-Vision is enabled by default during the benchmark so GPU contention is representative of the accepted RF-DETR runtime.
+Normal JARVIS Vision/RF-DETR was enabled throughout so the result includes representative GPU contention.
 
-## One-time NVIDIA runtime installation
+## Accepted one-time runtime installation
 
-Run from the JARVIS repository in PowerShell. Download the installer from the pinned NVIDIA commit rather than piping current `main` directly into PowerShell:
+The safe installation form used for the real gate was:
 
 ```powershell
 $nemoCommit = "56b60d432f1731d6d5b28a4c5a31cbaf871daba1"
@@ -69,131 +103,161 @@ Invoke-WebRequest `
   "https://raw.githubusercontent.com/NVIDIA/NeMo-Speech.cpp/$nemoCommit/scripts/install.ps1" `
   -OutFile $installer
 
-# Inspect the downloaded script before execution if desired:
-Get-Item $installer
-
-powershell -ExecutionPolicy Bypass -File $installer -Backend cuda
+powershell -ExecutionPolicy Bypass -File $installer `
+  -Version 0.1.0 `
+  -Backend cuda `
+  -BinaryOnly
 ```
 
-Do **not** pass `-Source` for this first benchmark. The preferred path is NVIDIA's backend-matched prebuilt archive; the installer verifies the downloaded archive against its published SHA-256 sidecar.
+Using `-BinaryOnly` is intentional. It prevents silent fallback into a source build that would require `nvcc`, Visual Studio/C++, CMake, and Ninja.
 
-Default install prefix on Windows:
+Default install prefix:
 
 ```text
 %LOCALAPPDATA%\Programs\NeMoSpeech
 ```
 
-Verify the installed executable explicitly without relying on a newly refreshed PATH:
+Accepted checks:
 
-```powershell
-& "$env:LOCALAPPDATA\Programs\NeMoSpeech\bin\nemo-speech.exe" --version
+```text
+nemo-speech --version -> nemo-speech 0.1.0
+nemo_speech_asr_c.dll exists -> True
 ```
 
-If the runtime installs elsewhere, set:
+## Real A/B/G result
 
-```powershell
-$env:JARVIS_NEMO_SPEECH_DLL = "C:\path\to\nemo_speech_asr_c.dll"
-```
-
-## JARVIS branch/setup
-
-```powershell
-git fetch origin
-git switch step3-final-identity-completion
-git pull origin step3-final-identity-completion
-
-python -m pip install -e ".[vision,overlap-benchmark]"
-```
-
-The first benchmark run downloads the pinned ~147 MB GGUF into JARVIS's managed local model directory and verifies its hash. No Hugging Face CLI or Python NeMo installation is required.
-
-## Guided benchmark
-
-Run:
-
-```powershell
-jarvis-overlap-benchmark
-```
-
-The harness asks for only three short captures:
+The guided benchmark ran three ~6 second captures through canonical LiveKit PCM with Vision active.
 
 ### A — OWNER only
 
-- TV/phone/other people silent;
-- OWNER speaks naturally for the full capture.
-
-Expected diagnostic state:
-
 ```text
-SINGLE_SPEAKER
+audio              = 5.99 s
+RMS                = -20.3 dBFS
+inference          = 363.9 ms
+RTF                = 0.061
+push median/p95/max= 2.1 / 55.4 / 228.5 ms
+output frames      = 75
+speech frames      = 61
+overlap frames     = 0
+peak active        = 1
+overlap fraction   = 0.000
+stable runs        = ((0, 61),)
+state              = SINGLE_SPEAKER
 ```
 
-### B — other/TV speech only
+A includes first-run/cold CUDA graph work; later captures were materially faster.
 
-- OWNER remains silent;
-- play clear human speech from TV/phone, or use a real second person.
-
-This is useful background evidence but is not itself a pass/fail identity test because diarization labels speakers generically rather than as GK/non-GK.
-
-### G — overlap
-
-- OWNER speaks naturally;
-- TV/phone/another person speaks audibly at the same time for most of the capture.
-
-Expected diagnostic state:
+### B — external phone/TV speech only
 
 ```text
-OVERLAP_DETECTED
+audio              = 5.99 s
+RMS                = -26.5 dBFS
+inference          = 135.4 ms
+RTF                = 0.023
+push median/p95/max= 1.8 / 27.0 / 27.9 ms
+output frames      = 75
+speech frames      = 75
+overlap frames     = 0
+peak active        = 1
+overlap fraction   = 0.000
+stable runs        = ((0, 75),)
+state              = SINGLE_SPEAKER
 ```
 
-## Telemetry recorded
+This is expected: diarization identifies speaker structure, not OWNER identity.
 
-Derived console evidence only:
-
-- model/runtime identity;
-- exact model size + SHA;
-- model load time;
-- speaker capacity/frame step;
-- captured duration/RMS/peak/clipping;
-- inference time and real-time factor;
-- per-push median/p95/max latency;
-- process GPU memory before/after;
-- process RSS before/after;
-- frame/speech/overlap counts;
-- longest overlap run;
-- stable speaker runs;
-- final diagnostic state.
-
-Raw audio is not persisted.
-
-## First functional gate
-
-The harness prints:
+### G — OWNER + external speech overlap
 
 ```text
+audio              = 5.99 s
+RMS                = -18.7 dBFS
+inference          = 148.0 ms
+RTF                = 0.025
+push median/p95/max= 1.9 / 27.0 / 38.4 ms
+output frames      = 75
+speech frames      = 67
+overlap frames     = 14
+longest overlap run= 6 frames (~480 ms)
+peak active        = 2
+overlap fraction   = 0.209
+stable runs        = ((0, 7), (1, 5), (0, 14), (1, 16), (0, 10))
+state              = OVERLAP_DETECTED
+reason             = concurrent_speaker_activity
+```
+
+This closes the exact signal gap exposed by the previous LR-ASD Scenario G run:
+
+```text
+LR-ASD: visible OWNER is speaking     -> may be YES
+CAM++: audio sounds like OWNER        -> may be YES
+Sortformer: another speaker overlaps  -> YES
+
+therefore spoken actor evidence       -> AMBIGUOUS / fail closed
+```
+
+The final actor-composition rule is not enabled yet; this benchmark proves the missing concurrent-speaker signal is available.
+
+## Functional acceptance
+
+The harness printed:
+
+```text
+A clean single-speaker = True
+G overlap detected = True
+threshold_promoted = False
+authority_effect = False
+raw_audio_saved = False
 STEP_3B13_NATIVE_SORTFORMER_BENCHMARK = FUNCTIONAL_PASS
 ```
 
-only if:
+**3B.13 native signal gate: ACCEPTED.**
 
-```text
-A -> SINGLE_SPEAKER
-G -> OVERLAP_DETECTED
-```
+## Performance interpretation
 
-Even a functional pass does not automatically promote the model to production. Human review also considers:
+The warm real-machine captures ran at approximately `RTF 0.023–0.025`, far below real time. Push p95 was about `27 ms` after warm-up. RF-DETR Vision remained active throughout and the benchmark completed normally.
 
-- RTF / evidence delay;
-- VRAM/RSS;
-- RF-DETR contention;
-- stability;
-- whether the machine still feels responsive.
+The current `nvidia-smi --query-compute-apps=pid,used_memory` telemetry returned `0.0 MiB` for the Python process even though the native runtime explicitly selected `CUDA0`. Under the current Windows/WDDM + native-DLL path that per-process counter is therefore treated as **not reliable**, not as proof of zero GPU memory use. RSS rose during the combined benchmark process and reached roughly 2.6 GiB, but that includes Vision/model/runtime state and is not attributed solely to Sortformer.
 
-If v2 fails this gate, do not weaken the gate. Reconsider Sortformer v2.1 through another deployment path or the pyannote/diart alternatives documented in `STEP_3_FINAL_IDENTITY_SECURITY_RESEARCH.md`.
+The accepted performance evidence is therefore:
+
+- native runtime explicitly selected RTX 5060 Ti CUDA backend;
+- driver/runtime compatibility passed;
+- Vision and Sortformer coexisted successfully;
+- warm RTF ~0.025;
+- warm push p95 ~27 ms;
+- no observed benchmark instability.
+
+A normal-conversation shadow run is still required to judge perceived UX before any evidence can influence trust.
+
+## Production shadow integration rule
+
+After this pass, Sortformer may be integrated only as a background observer over full committed canonical PCM:
+
+- no second microphone;
+- no blocking conversation path;
+- model stays warm;
+- scoring failures never break normal conversation;
+- `SINGLE_SPEAKER`, `OVERLAP_DETECTED`, `SPEAKER_CHANGE`, `AMBIGUOUS`, `INSUFFICIENT` remain diagnostic evidence;
+- no overlap threshold becomes authority merely because this benchmark used `0.5`;
+- T2 and spoken approval remain disabled until identity-session composition and attack/degraded tests are complete.
+
+## Next acceptance gate
+
+Run ordinary `jarvis-voice` with Sortformer shadow integrated and verify:
+
+1. startup remains clean;
+2. normal single-speaker OWNER turns report `single_speaker`;
+3. a deliberate OWNER + phone/TV overlap turn reports `overlap_detected`;
+4. CAM++ and LR-ASD still run normally;
+5. responses remain subjectively realtime;
+6. no observer exception affects conversation.
+
+After that gate, proceed to live non-OWNER CAM++ calibration and anti-spoof bake-off rather than promoting authority prematurely.
 
 ## Upstream references
 
 - NeMo-Speech.cpp installation: `https://github.com/NVIDIA/NeMo-Speech.cpp/blob/56b60d432f1731d6d5b28a4c5a31cbaf871daba1/docs/install.md`
 - NeMo-Speech.cpp diarization C ABI: `https://github.com/NVIDIA/NeMo-Speech.cpp/blob/56b60d432f1731d6d5b28a4c5a31cbaf871daba1/include/nemo_speech/diar.h`
+- NeMo-Speech.cpp v0.1.0 release: `https://github.com/NVIDIA/NeMo-Speech.cpp/releases/tag/v0.1.0`
 - Sortformer v2: `https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2`
 - Q8 GGUF addition: `https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2/commit/5240a64075176943f677d30fa2171c780229f341`
