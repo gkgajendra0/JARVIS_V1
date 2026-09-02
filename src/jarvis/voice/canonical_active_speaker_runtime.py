@@ -59,7 +59,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 snapshot.invalidation_reason or "owner_context_not_observed",
             )
         live = context.has_fresh_live_owner_candidate()
-        reasons = ",".join(assessment.reason_codes) if assessment.reason_codes else "none"
+        reasons = (
+            ",".join(assessment.reason_codes) if assessment.reason_codes else "none"
+        )
         return live, assessment.state.value, reasons
 
     async def _inspect_active_speaker_turn(
