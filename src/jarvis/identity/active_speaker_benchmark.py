@@ -462,6 +462,28 @@ async def _wait_for_live_owner(
     return None
 
 
+async def _wait_for_expected_owner(
+    state: OwnerContextState,
+    *,
+    owner_track_id: int,
+    windows_session_id: str,
+    timeout_seconds: float,
+) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        snapshot = state.snapshot()
+        assessment = snapshot.assessment
+        if (
+            assessment is not None
+            and state.has_fresh_live_owner_candidate()
+            and assessment.visual_track_id == owner_track_id
+            and assessment.session_id == windows_session_id
+        ):
+            return True
+        await asyncio.sleep(0.1)
+    return False
+
+
 async def _establish_owner_lock(
     state: OwnerContextState,
     vision_service: Any,
@@ -530,6 +552,7 @@ async def _run_one_scenario(
     offsets_ms: tuple[int, ...],
     owner_track_id: int,
     windows_session_id: str,
+    owner_wait_seconds: float,
     owner_state: OwnerContextState,
     visual_buffer: ActiveSpeakerVisualBuffer,
     turn_capture: InMemorySpeakerTurnCapture,
@@ -568,12 +591,25 @@ async def _run_one_scenario(
 
     before = owner_state.snapshot()
     assessment = before.assessment
-    if (
-        assessment is None
-        or not owner_state.has_fresh_live_owner_candidate()
-        or assessment.visual_track_id != owner_track_id
-        or assessment.session_id != windows_session_id
-    ):
+    already_ready = bool(
+        assessment is not None
+        and owner_state.has_fresh_live_owner_candidate()
+        and assessment.visual_track_id == owner_track_id
+        and assessment.session_id == windows_session_id
+    )
+    if not already_ready:
+        print(
+            f"  Waiting up to {owner_wait_seconds:.1f}s for fresh locked OWNER context..."
+        )
+        already_ready = await _wait_for_expected_owner(
+            owner_state,
+            owner_track_id=owner_track_id,
+            windows_session_id=windows_session_id,
+            timeout_seconds=owner_wait_seconds,
+        )
+        before = owner_state.snapshot()
+
+    if not already_ready:
         return ScenarioObservation(
             key=spec.key,
             name=spec.name,
@@ -1001,6 +1037,7 @@ async def run_active_speaker_benchmark(args: argparse.Namespace) -> int:
                     offsets_ms=args.offsets_ms,
                     owner_track_id=owner_track_id,
                     windows_session_id=windows_session_id,
+                    owner_wait_seconds=args.owner_wait_seconds,
                     owner_state=owner_state,
                     visual_buffer=visual_buffer,
                     turn_capture=turn_capture,
