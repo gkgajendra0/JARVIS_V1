@@ -12,9 +12,9 @@ import numpy as np
 from jarvis.config import JarvisConfig
 from jarvis.identity.firered_pvad import FireRedPVadUnavailable, FireRedPersonalizedVad
 from jarvis.identity.owner_lane_benchmark import (
-    _NoOpWakeDetector,
     _capture,
     _consume_frames,
+    _NoOpWakeDetector,
     _phase_windows,
     _score_phase,
 )
@@ -86,9 +86,8 @@ def _active_fraction_after(
     offset_seconds: float,
 ) -> float | None:
     centers = (np.arange(probabilities.size, dtype=np.float64) + 0.5) * frame_seconds
-    mask = (
-        (centers >= phase.start_seconds + offset_seconds)
-        & (centers < phase.end_seconds)
+    mask = (centers >= phase.start_seconds + offset_seconds) & (
+        centers < phase.end_seconds
     )
     selected = probabilities[mask]
     if selected.size == 0:
@@ -155,7 +154,9 @@ async def run_personalized_vad_benchmark(
     print("------------------------------------------------------")
     print("BENCHMARK ONLY: production wake/Gemini/barge-in are unchanged.")
     print("Security/identity continues to own the unfiltered canonical mixed PCM.")
-    print("The temporary ECAPA target embedding and all captured audio remain memory-only.")
+    print(
+        "The temporary ECAPA target embedding and all captured audio remain memory-only."
+    )
     print(f"candidate = {FIRERED_PVAD_MODEL_ID}")
     print(f"model_revision = {FIRERED_PVAD_MODEL_REVISION}")
     print(f"pvad_onnx_sha256 = {FIRERED_PVAD_ONNX_SHA256}")
@@ -234,7 +235,9 @@ async def run_personalized_vad_benchmark(
                 duration_seconds=capture_seconds,
             )
             if sample_rate != reference_rate:
-                raise RuntimeError("canonical sample rate changed between pVAD captures")
+                raise RuntimeError(
+                    "canonical sample rate changed between pVAD captures"
+                )
             captures.append((label, samples, sample_rate))
 
         print("\nCapture sanity / existing CAM++ shadow")
@@ -342,7 +345,10 @@ async def run_personalized_vad_benchmark(
 
         print("\nFireRed pVAD target-speaker evidence")
         print(f"  model_build_ms = {model_build_ms:.1f}")
-        print(f"  ECAPA target embedding = dim={target_embedding.shape[1]} | norm={target_norm:.4f} | {embedding_ms:.1f} ms")
+        print(
+            f"  ECAPA target embedding = dim={target_embedding.shape[1]} | "
+            f"norm={target_norm:.4f} | {embedding_ms:.1f} ms"
+        )
         for name in required:
             item = stats[name]
             print(
@@ -358,11 +364,19 @@ async def run_personalized_vad_benchmark(
         )
         print(
             "  OWNER inactive while phone continues in B2 = "
-            + ("n/a" if owner_offset_b2_ms is None else f"{owner_offset_b2_ms:.0f} ms")
+            + (
+                "n/a"
+                if owner_offset_b2_ms is None
+                else f"{owner_offset_b2_ms:.0f} ms"
+            )
         )
         print(
             "  OWNER reacquire after phone stops = "
-            + ("n/a" if owner_reacquire_a_ms is None else f"{owner_reacquire_a_ms:.0f} ms")
+            + (
+                "n/a"
+                if owner_reacquire_a_ms is None
+                else f"{owner_reacquire_a_ms:.0f} ms"
+            )
         )
         print(
             "  B2 active_fraction after 0.25/0.50/1.00s = "
@@ -379,9 +393,7 @@ async def run_personalized_vad_benchmark(
             f"  pVAD processing={run.processing_seconds * 1000.0:.1f} ms | "
             f"RTF={run.realtime_factor:.3f}"
         )
-        print(
-            f"  frame_ms median={median_ms:.3f} p95={p95_ms:.3f} max={max_ms:.3f}"
-        )
+        print(f"  frame_ms median={median_ms:.3f} p95={p95_ms:.3f} max={max_ms:.3f}")
 
         print("\nBenchmark disposition")
         print("  target_embedding_persisted = False")
@@ -427,7 +439,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--reference-seconds", type=float, default=_DEFAULT_REFERENCE_SECONDS
     )
-    parser.add_argument("--capture-seconds", type=float, default=_DEFAULT_CAPTURE_SECONDS)
+    parser.add_argument(
+        "--capture-seconds", type=float, default=_DEFAULT_CAPTURE_SECONDS
+    )
     parser.add_argument(
         "--without-vision",
         action="store_true",
