@@ -1,15 +1,14 @@
 """Operator guidance for the Step 3B.11 active-speaker bake-off.
 
-This module deliberately wraps the diagnostic runner instead of changing its
-measurement logic.  It adds an explicit READY -> COUNTDOWN -> CAPTURE protocol so
-human actions start at a reproducible point in every A-H trial.
+This module wraps the diagnostic runner without changing its measurement logic.
+Human actions follow an explicit READY -> OWNER CHECK -> COUNTDOWN -> CAPTURE flow
+so START/STOP and HIDE/SHOW cues are aligned with the real capture window.
 """
 
 from __future__ import annotations
 
+import asyncio
 import sys
-import threading
-import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -40,20 +39,45 @@ def _scenario_readiness_lines(key: str, duration_seconds: float) -> tuple[str, .
         "READY PHASE: this scenario is NOT capturing yet.",
         "Arrange the complete scene first. Do not start the test action yet.",
         (
-            "Press Enter only when everything is positioned and ready. Then you get "
-            f"a {_COUNTDOWN_SECONDS}-second countdown."
+            "Press Enter only when everything is positioned and ready. JARVIS will "
+            "validate the fresh OWNER context before the countdown starts."
         ),
+        "If OWNER needs recovery, stay visible and wait; do NOT start the action.",
         f"Begin only at >>> START NOW <<< and stop at >>> STOP NOW <<< ({duration}).",
     )
     actions = {
-        "A": "A: Stay visible and silent while preparing. On START NOW, speak naturally and keep speaking.",
-        "B": "B: Stay visible and silent. Have TV/off-camera speech paused and ready; start it on START NOW.",
-        "C": "C: Stay visible and silent. Do nothing on START NOW; JARVIS playback is automatic.",
-        "D": "D: Stay visible and silent. Have your recorded voice ready on the phone; press play on START NOW.",
-        "E": "E: You and the other person must already be visible. Other person stays silent; YOU speak on START NOW.",
-        "F": "F: You and the other person must already be visible. YOU stay silent; OTHER person speaks on START NOW.",
-        "G": "G: Keep both speech sources ready. On START NOW, you and the other/TV speech overlap together.",
-        "H": "H: Start speaking on START NOW and keep speaking continuously. Follow the HIDE/SHOW cues printed during capture.",
+        "A": (
+            "A: Stay visible and silent while preparing. On START NOW, speak "
+            "naturally and keep speaking."
+        ),
+        "B": (
+            "B: Stay visible and silent. Have TV/off-camera speech paused and ready; "
+            "start it on START NOW."
+        ),
+        "C": (
+            "C: Stay visible and silent. Do nothing on START NOW; JARVIS playback "
+            "is automatic."
+        ),
+        "D": (
+            "D: Stay visible and silent. Have your recorded voice ready on the "
+            "phone; press play on START NOW."
+        ),
+        "E": (
+            "E: You and the other person must already be visible. Other person "
+            "stays silent; YOU speak on START NOW."
+        ),
+        "F": (
+            "F: You and the other person must already be visible. YOU stay silent; "
+            "OTHER person speaks on START NOW."
+        ),
+        "G": (
+            "G: Keep both speech sources ready. On START NOW, you and the other/TV "
+            "speech overlap together."
+        ),
+        "H": (
+            "H: Start speaking on START NOW and keep speaking continuously. Follow "
+            "the HIDE/SHOW cues printed during capture."
+        ),
     }
     return common + (actions[key],)
 
@@ -64,28 +88,20 @@ def _h_cue_schedule(duration_seconds: float) -> tuple[float, float]:
     return hide_start, hide_duration
 
 
-def _print_stop_cue(duration_seconds: float) -> None:
-    time.sleep(duration_seconds)
-    print("\n  >>> STOP NOW — CAPTURE WINDOW ENDED <<<", flush=True)
-
-
-def _print_h_timed_cues(duration_seconds: float) -> None:
+async def _print_h_timed_cues(duration_seconds: float) -> None:
     hide_start, hide_duration = _h_cue_schedule(duration_seconds)
-    time.sleep(hide_start)
+    await asyncio.sleep(hide_start)
     print("\n  >>> HIDE YOUR HEAD NOW — KEEP SPEAKING <<<", flush=True)
-    time.sleep(hide_duration)
+    await asyncio.sleep(hide_duration)
     print("\n  >>> SHOW YOUR HEAD AGAIN — KEEP SPEAKING <<<", flush=True)
-    remaining = max(0.0, duration_seconds - hide_start - hide_duration)
-    time.sleep(remaining)
-    print("\n  >>> STOP NOW — CAPTURE WINDOW ENDED <<<", flush=True)
 
 
-def _run_countdown() -> None:
+async def _run_countdown() -> None:
     print()
-    print("  Get ready. Do NOT start yet.", flush=True)
+    print("  OWNER READY. Get ready. Do NOT start yet.", flush=True)
     for remaining in range(_COUNTDOWN_SECONDS, 0, -1):
         print(f"  {remaining}...", flush=True)
-        time.sleep(1.0)
+        await asyncio.sleep(1.0)
 
 
 def _guided_input_factory(
@@ -107,13 +123,22 @@ def _guided_input_factory(
         print()
         for line in _scenario_readiness_lines(spec.key, duration_seconds):
             print(f"  {line}")
-        response = original_input("  READY? Enter=start countdown, s=skip, q=finish > ")
-        normalized = response.strip().casefold()
+        response = original_input(
+            "  READY? Enter=validate OWNER, s=skip, q=finish > "
+        )
         scenario_index += 1
-        if normalized in {"s", "skip", "q", "quit", "exit"}:
-            return response
+        return response
 
-        _run_countdown()
+    return guided_input
+
+
+def _guided_capture_factory(
+    original_capture: Callable[..., Any],
+    *,
+    duration_seconds: float,
+) -> Callable[..., Any]:
+    async def guided_capture(spec: Any, **kwargs: Any) -> Any:
+        await _run_countdown()
         print(
             f"  >>> START NOW — CAPTURE IS LIVE ({duration_seconds:.1f}s) <<<",
             flush=True,
@@ -122,34 +147,45 @@ def _guided_input_factory(
             print(
                 "  Stay silent and visible; JARVIS playback/capture is automatic."
             )
-        elif spec.key == "H":
-            threading.Thread(
-                target=_print_h_timed_cues,
-                args=(duration_seconds,),
-                name="jarvis-step3b11-h-cues",
-                daemon=True,
-            ).start()
-        else:
-            threading.Thread(
-                target=_print_stop_cue,
-                args=(duration_seconds,),
-                name=f"jarvis-step3b11-{spec.key}-stop-cue",
-                daemon=True,
-            ).start()
-        return response
 
-    return guided_input
+        h_cues: asyncio.Task[None] | None = None
+        if spec.key == "H":
+            h_cues = asyncio.create_task(
+                _print_h_timed_cues(duration_seconds),
+                name="jarvis-step3b11-h-cues",
+            )
+
+        try:
+            return await original_capture(spec, **kwargs)
+        finally:
+            if h_cues is not None:
+                if not h_cues.done():
+                    h_cues.cancel()
+                await asyncio.gather(h_cues, return_exceptions=True)
+            print("\n  >>> STOP NOW — CAPTURE WINDOW ENDED <<<", flush=True)
+
+    return guided_capture
 
 
 def main() -> None:
-    """Run the existing bake-off with deterministic operator-facing trial cues."""
+    """Run the bake-off with cues aligned to the actual capture window."""
     duration_seconds = _capture_seconds_from_argv(sys.argv[1:])
     original_input: Any = benchmark.__dict__.get("input")
     had_module_input = "input" in benchmark.__dict__
-    benchmark.input = _guided_input_factory(input, duration_seconds=duration_seconds)  # type: ignore[attr-defined]
+    original_capture = benchmark._capture_scenario_audio
+
+    benchmark.input = _guided_input_factory(  # type: ignore[attr-defined]
+        input,
+        duration_seconds=duration_seconds,
+    )
+    benchmark._capture_scenario_audio = _guided_capture_factory(  # type: ignore[assignment]
+        original_capture,
+        duration_seconds=duration_seconds,
+    )
     try:
         benchmark.main()
     finally:
+        benchmark._capture_scenario_audio = original_capture  # type: ignore[assignment]
         if had_module_input:
             benchmark.input = original_input  # type: ignore[attr-defined]
         else:
