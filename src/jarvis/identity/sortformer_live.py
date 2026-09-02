@@ -79,7 +79,9 @@ class NativeSortformerLiveStream:
         if self._sample_rate is None:
             self._sample_rate = sample_rate
         elif sample_rate != self._sample_rate:
-            raise ValueError("sample_rate cannot change within a Sortformer live stream")
+            raise ValueError(
+                "sample_rate cannot change within a Sortformer live stream"
+            )
 
         audio = _to_float32_mono(samples)
         if audio.size == 0:
