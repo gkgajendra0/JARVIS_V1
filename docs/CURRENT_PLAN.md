@@ -2,172 +2,212 @@
 
 ## Active Step
 
-**Step 4 — Live Context and Personal Memory**
+**Step 3 — Identity, Graduated Trust, Authority, and Observability Foundation**
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 ACTIVE — REQUIREMENTS RECOVERY + CURRENT-TECHNOLOGY RESEARCH NEXT**
+**REOPENED FOR FINAL IDENTITY/VOICE SECURITY COMPLETION — STEP 4 PAUSED**
 
 This file is the operational source of truth for current work. Detailed evidence belongs in `docs/research/`; significant architecture decisions belong in `docs/decisions/`.
 
 ---
 
-## Step 3 — DONE
+## Why Step 3 is reopened
 
-Step 3 is complete on protected `main` through PR #15 / merge commit `360a72c58402fbe357fa409437a4ce181921d837`.
+The previously merged Step-3 checkpoint correctly established the authority skeleton, OWNER face/liveness, encrypted face+voice profile, Windows Hello, CAM++ speaker shadow, LR-ASD diagnostics, and the single-owner LiveKit audio architecture. However, human review identified that the intended graduated-trust system was closed before the remaining evidence-composition and spoken-actor security work was finished.
 
-Accepted foundation:
+The original accepted architecture intended a usable T2 `CORROBORATED_OWNER` path for bounded R1/R2/R3 authority while keeping voice alone non-authoritative and reserving Windows Hello/T3 for critical R4 operations.
 
-- deterministic T0–T3 graduated trust;
-- deterministic R0–R5 risk floors;
-- immutable proposal fingerprints and proposal-bound approvals;
-- fail-closed policy boundary and final execution revalidation;
-- privacy-aware audit/observability state;
-- Windows-session invalidation;
-- Windows Hello strong verification for consequential authority;
-- encrypted local OWNER profile;
-- accepted Pocket3 face identity + active/passive liveness evidence;
-- one production Pocket3 microphone owner through LiveKit MediaDevices/WebRTC AEC+NS+HPF+AGC;
-- LR-ASD active-speaker diagnostics on canonical user PCM + Vision timelines;
-- encrypted CAM++ OWNER voice enrollment;
-- asynchronous per-turn CAM++ speaker-shadow scoring that does not block normal conversation.
+Therefore Step 4 is paused. We will finish the already-discovered Step-3 work rather than silently deferring it.
 
-Final Step-3 authority boundary:
+Active tracking issue: GitHub Issue #14 — `Step 3 final identity/security completion`.
+
+Branch:
 
 ```text
-face identity            = accepted evidence
-face liveness            = accepted evidence
-CAM++ speaker similarity = shadow evidence only
-LR-ASD active speaker    = shadow evidence only
-T2 CORROBORATED_OWNER    = disabled
-Windows Hello            = strong verification path
+step3-final-identity-completion
 ```
 
-No speaker threshold or LR-ASD threshold is promoted. Identity/perception evidence does not directly grant consequential execution permission.
+---
 
-Closure evidence: `docs/research/STEP_3_CLOSURE_ACCEPTANCE.md`.
+## Accepted foundation — KEEP
 
-Deferred identity hardening is tracked in GitHub Issue #14 and must not automatically interrupt Step 4:
+Do not redesign these unless new evidence exposes a material problem:
 
-- overlap / concurrent-speaker and speaker-change detection;
-- replay/synthetic/cloned-voice countermeasures;
-- direct non-OWNER CAM++ distributions and any future threshold;
-- E/F with a real second visible person;
-- short-turn same-speaker continuity;
-- fixed monitor-relative attention/gaze;
-- any future T2 composition or biometric authority promotion.
+- T0–T3 trust vocabulary and deterministic R0–R5 risk floors;
+- immutable proposal fingerprints and proposal-bound approval records;
+- OPA fail-closed policy boundary;
+- final pre-execution revalidation and one-time permits;
+- privacy-aware local audit;
+- Windows-session invalidation;
+- Windows Hello strong verification;
+- encrypted local OWNER profile with FACE + VOICE modalities;
+- YuNet/SFace OWNER identity and accepted active/passive liveness;
+- Pocket3 person/head/track Vision pipeline;
+- one production Pocket3 microphone owner through LiveKit MediaDevices/WebRTC AEC + NS + HPF + AGC;
+- canonical timestamped user PCM reused by conversation and diagnostics;
+- CAM++ audio-first OWNER speaker shadow;
+- LR-ASD visible-OWNER active-speaker diagnostics;
+- no raw biometric media persistence by default;
+- no sensor/model directly grants execution permission.
 
 ---
 
-## Step 4 goal
+## Known evidence already accepted
 
-Build **one JARVIS-owned personal-context and memory system** that makes JARVIS meaningfully continuous across conversations without turning every utterance into permanent memory.
+### CAM++
 
-Step 4 owns:
+- one-time real-machine OWNER enrollment passed;
+- 12 accepted natural samples -> 6 persisted 192-d prototypes;
+- enrollment coverage cosine min `0.7593`, p05 `0.7749`, median `0.8726`;
+- first ordinary-conversation OWNER observations: `0.6737–0.7450`;
+- observed CAM++ inference: `57.5–173.2 ms`, asynchronous/non-blocking;
+- short/poor/missed speech becomes `INSUFFICIENT`, not non-OWNER;
+- no production speaker threshold selected yet.
 
-- CAP-008 Live Session Context;
-- CAP-009 Long-Term Personal Memory;
-- CAP-010 Episodic Memory;
-- CAP-011 Semantic Memory;
-- CAP-012 Reflection and Session Learning;
-- CAP-013 Emotional Interaction Context.
+### LR-ASD
 
-No memory database/provider/framework has been selected yet. Research comes before implementation.
-
----
-
-## Product behavior Step 4 must deliver
-
-### Live context
-
-JARVIS should understand the current working situation without forcing every turn into durable storage:
-
-- current goal/task;
-- active project/topic;
-- recent relevant decisions/results;
-- unresolved issues/pending next steps;
-- current-session corrections and constraints.
-
-Live context may expire with the session/task unless deliberately promoted to durable memory.
-
-### Durable semantic memory
-
-JARVIS should retain genuinely useful long-lived facts such as approved preferences, personal/project facts, stable rules, and explicit corrections.
-
-Durable facts require enough metadata to support:
-
-- provenance;
-- time/freshness;
-- confidence/verification state;
-- correction;
-- supersession;
-- deletion/forgetting.
-
-### Episodic memory
-
-JARVIS may retain meaningful events/milestones/outcomes where later recall is useful, without logging every conversation as an episode.
-
-Examples of the category include completed project milestones, meaningful failures/fixes, significant decisions, and explicit user-requested memories.
-
-### Reflection / memory candidates
-
-Models may help identify candidate memories after conversations or important events, but model output is a **proposal**, not durable-memory authority.
-
-JARVIS-owned policy decides whether a candidate is stored, ignored, merged, superseded, or requires explicit confirmation.
-
-### Emotional interaction context
-
-Transient signals may help JARVIS respond naturally during the current interaction, but inferred mood/emotion must not become a permanent identity label by default.
+- A OWNER visible + OWNER speaks: strong positive, mean about `0.8676`;
+- B TV/off-camera speech: strong negative, about `0.0014`;
+- C JARVIS playback: quality-rejected/fail-closed diagnostic;
+- D replayed OWNER voice while OWNER visually silent: about `0.0014`;
+- G OWNER + concurrent other/background speech: high, about `0.8253`, proving LR-ASD means “visible OWNER is speaking” rather than “OWNER is the only speaker”;
+- H temporary OWNER head loss: `INSUFFICIENT`;
+- E/F remain pending a real second visible person.
 
 ---
 
-## Hard requirements inherited from PRODUCT.md
+## Final Step-3 completion scope
 
-- not every sentence becomes durable memory;
-- explicit current user input outranks passive inference, old memory, or stale preference;
-- durable memory carries provenance and enough timing/confidence metadata for correction/supersession;
-- correction and forgetting are first-class;
-- session context is separate from durable memory;
-- provider history/caches are not automatically canonical JARVIS memory;
-- transient emotional interpretations stay transient by default;
-- secrets are never normal model context;
-- models do not write directly to persistent memory;
-- conversation/context/memory must not have duplicate authoritative owners;
-- providers/storage/retrieval components remain replaceable;
-- raw full transcripts/provider payloads must not be durably retained merely because they are available.
+### 3B.13 — streaming overlap / speaker-change evidence
+
+Goal: close Scenario G without creating another microphone owner or blocking the realtime conversation path.
+
+Research candidates:
+
+- NVIDIA Streaming Sortformer v2.1 — leading candidate;
+- pyannote Community-1 — strong offline/self-hosted reference, but no native streaming path out of the box;
+- diart/pyannote streaming — reference alternative requiring older/extra streaming infrastructure.
+
+Required output vocabulary is JARVIS-owned and non-authoritative by itself:
+
+```text
+SINGLE_SPEAKER
+OVERLAP_DETECTED
+SPEAKER_CHANGE
+AMBIGUOUS
+INSUFFICIENT
+```
+
+No production integration until the candidate passes a real RTX 5060 Ti latency/VRAM/contention benchmark.
+
+### Speaker calibration
+
+Collect direct live non-OWNER CAM++ distributions and sufficient OWNER variation before freezing any `OWNER_SPEAKER_CANDIDATE` threshold. Vendor/default thresholds remain forbidden.
+
+### Anti-spoof / replay / cloned voice
+
+Research and benchmark a separate spoof countermeasure. Current reference family is ASVspoof5 (AASIST / RawNet2 / SASV). Speaker similarity and spoof probability stay separate evidence types.
+
+No anti-spoof model is accepted until it demonstrates useful behavior on the JARVIS microphone path and does not harm realtime UX.
+
+### Short-turn continuity
+
+Only after overlap/speaker-change semantics are accepted, permit very short utterances to inherit a recent high-quality OWNER speaker state when:
+
+- same authority/Windows session;
+- same active conversation;
+- recent fresh speaker evidence;
+- no speaker change;
+- no overlap/ambiguity/playback concern;
+- no device discontinuity;
+- the short turn is not the sole basis for stronger authority.
+
+### Missing TrustEvaluator / IdentitySession composition
+
+Implement one JARVIS-owned deterministic evidence resolver that owns freshness/continuity/subject binding and derives T0/T1/T2/T3.
+
+No weighted multimodal confidence score.
+
+Initial T2 composition must require at minimum:
+
+- expected active/unlocked Windows session;
+- fresh accepted OWNER face evidence;
+- fresh accepted liveness bound to the same visual track/session;
+- no identity/track/session ambiguity relevant to the action.
+
+Speaker and active-speaker/overlap evidence may strengthen spoken actor association but voice alone cannot create T2.
+
+T3 remains fresh proposal-bound strong verification through Windows Hello.
+
+### Spoken actor binding
+
+For spoken approvals or voice-originated consequential intent, derive `actor_unambiguous` only from accepted fresh evidence. Any overlap, spoof concern, stale binding, conflicting speaker, lost track, or insufficient evidence must fail closed or step up to Windows Hello according to policy.
+
+### Authority integration
+
+Restore the intended graduated-trust UX:
+
+```text
+R0 routine                  -> T0
+R1 private read             -> T2
+R2 reversible local change  -> T2
+R3 persistent/external      -> T2 + exact approval / policy
+R4 critical                 -> T3 + proposal-bound Windows Hello
+R5 restricted/dev-only      -> deny normal runtime
+```
+
+This does not make voice a password. It makes multimodal evidence useful through deterministic JARVIS trust.
 
 ---
 
-## Step 4 research questions
+## Research findings already established for 3B.13
 
-Before selecting architecture or code, answer these with current 2026 evidence:
+- NVIDIA currently ships `nvidia/diar_streaming_sortformer_4spk-v2.1`, a true streaming four-speaker model with overlap-aware diarization and published low-latency configurations including about 1.04 s.
+- The v2.1 checkpoint is roughly 471 MB and uses the NVIDIA Open Model License; NeMo source code is Apache-2.0 but model terms must be tracked separately.
+- NeMo Labs Voice Agent uses v2.1 by default, but its high-level wrapper currently collapses to one speaker label per turn. JARVIS must consume underlying frame-level speaker activity/probabilities for Scenario G rather than copy that wrapper semantics.
+- pyannote Community-1 is a strong open-source diarization reference with overlap detection, but pyannote explicitly states streaming diarization is not available out of the box; `diart` is its nearest streaming route.
+- ASVspoof5 officially provides AASIST and RawNet2 countermeasure baselines plus spoof-aware speaker-verification/SASV references. AASIST code is MIT-licensed. These are benchmark references, not automatic production choices.
 
-1. What mature memory/context frameworks or patterns are actually suitable for a local-first personal assistant in 2026?
-2. Which responsibilities should JARVIS own directly versus delegate to commodity storage/retrieval infrastructure?
-3. What is the best boundary between live working context, semantic memory, episodic memory, and reflection?
-4. What storage model best supports provenance, temporal validity, correction, supersession, and deletion?
-5. Where are embeddings useful, and where would exact structured lookup be safer/better?
-6. How should retrieval avoid flooding the realtime model with irrelevant memory?
-7. How should memory candidates be extracted without allowing the LLM to self-author durable truth?
-8. How should explicit user corrections immediately supersede older facts?
-9. Which memory data should remain strictly local, and what—if anything—may be sent to cloud models for reasoning?
-10. How do we migrate/learn from old JARVIS memory work without recreating its duplicate context/memory owners?
-11. What current tools/frameworks materially outperform custom implementation for extraction, retrieval, graph/temporal memory, or lifecycle management?
-12. How do we test memory quality: precision of recall, false memories, stale recall, correction, deletion, privacy, latency, and token cost?
+Detailed evidence belongs in `docs/research/STEP_3_FINAL_IDENTITY_SECURITY_RESEARCH.md`.
 
 ---
 
-## Immediate Step-4 work order
+## Implementation / validation order
 
-1. Read the Step-4 capability requirements in `PRODUCT.md`.
-2. Inspect relevant mappings/lessons in `LEGACY_REQUIREMENTS_MAP.md` and only the necessary old-JARVIS memory/context implementation evidence.
-3. Research current 2026 memory/context technology and serious alternatives.
-4. Produce a requirements + technology comparison document.
-5. Select the smallest suitable architecture with one authoritative JARVIS memory owner and replaceable provider boundaries.
-6. Define privacy/data-lifecycle rules and acceptance tests.
-7. Present the architecture for human approval.
-8. Only then implement Step 4.
+1. Finish current-2026 research and pin exact candidate/model/runtime/license boundaries.
+2. Build **benchmark-only** overlap/diarization adapter + telemetry harness; do not wire authority yet.
+3. Real-machine RTX 5060 Ti benchmark of Sortformer-class candidate: latency, RTF, VRAM, CPU/RAM, contention with RF-DETR/LR-ASD/CAM++/conversation.
+4. If accepted, integrate overlap/speaker-change evidence in shadow mode on canonical PCM.
+5. Rerun Scenario G and verify ambiguity is explicit.
+6. Build non-OWNER CAM++ calibration harness/collection and freeze threshold only from real distributions.
+7. Build anti-spoof benchmark adapter/harness; real replay + synthetic/re-encoded samples; reject weak candidates.
+8. Integrate accepted spoof evidence in shadow/fail-closed form.
+9. Implement short-turn continuity.
+10. Implement IdentitySession / TrustEvaluator and spoken actor binding.
+11. Integrate T2/T3 contexts with AuthorityService.
+12. Run automated threat/degraded-mode tests.
+13. Run focused real-machine acceptance, including E/F when a real second person is available.
+14. Reconcile docs, CI, protected-main merge.
+15. Only then resume Step 4.
+
+---
+
+## Hard stop conditions
+
+Reject or reconfigure a candidate if any of these occur:
+
+- noticeable realtime conversation slowdown;
+- unstable Windows deployment;
+- unacceptable GPU/VRAM contention on RTX 5060 Ti;
+- second/duplicate microphone ownership;
+- hidden cloud biometric processing;
+- false certainty instead of `AMBIGUOUS`/`INSUFFICIENT`;
+- provider/model license incompatible with JARVIS use;
+- raw biometric media persistence without explicit approved need;
+- model/provider output bypassing JARVIS trust/policy;
+- threshold chosen from vendor defaults or OWNER-only data.
 
 ## Immediate Next Action
 
-**Begin Step-4 requirements recovery and current-technology research. Do not implement a memory provider/database until the research and architecture decision are complete.**
+**Complete the research document and build the benchmark-only Streaming Sortformer v2.1 path. Do not promote any new authority until real-machine overlap/performance evidence exists.**
