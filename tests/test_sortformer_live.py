@@ -55,7 +55,9 @@ class _FakeLib:
         frames = self.samples // 1600
         values = []
         for index in range(frames):
-            values.extend((0.9 if index % 2 == 0 else 0.1, 0.1 if index % 2 == 0 else 0.9))
+            values.extend(
+                (0.9 if index % 2 == 0 else 0.1, 0.1 if index % 2 == 0 else 0.9)
+            )
         assert int(capacity) >= len(values)
         for index, value in enumerate(values):
             out[index] = value
