@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -15,6 +17,7 @@ from jarvis.identity.active_speaker_benchmark import (
     _parse_offsets,
     _shifted_visual_window,
     _threshold_samples,
+    _wait_for_expected_owner,
 )
 
 
@@ -90,6 +93,52 @@ def test_offset_parser_requires_zero_and_bounds_extremes() -> None:
         _parse_offsets("-100,100")
     with pytest.raises(Exception, match="1000"):
         _parse_offsets("0,1001")
+
+
+@pytest.mark.asyncio
+async def test_wait_for_expected_owner_recovers_only_same_track_and_session() -> None:
+    class FakeState:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def snapshot(self) -> SimpleNamespace:
+            self.calls += 1
+            assessment = None
+            if self.calls >= 2:
+                assessment = SimpleNamespace(visual_track_id=7, session_id="wts:1")
+            return SimpleNamespace(assessment=assessment, invalidation_reason=None)
+
+        def has_fresh_live_owner_candidate(self) -> bool:
+            return self.calls >= 2
+
+    state = FakeState()
+    assert await _wait_for_expected_owner(  # type: ignore[arg-type]
+        state,
+        owner_track_id=7,
+        windows_session_id="wts:1",
+        timeout_seconds=0.5,
+    )
+
+
+@pytest.mark.asyncio
+async def test_wait_for_expected_owner_rejects_replacement_track() -> None:
+    class FakeState:
+        def snapshot(self) -> SimpleNamespace:
+            return SimpleNamespace(
+                assessment=SimpleNamespace(visual_track_id=8, session_id="wts:1"),
+                invalidation_reason=None,
+            )
+
+        def has_fresh_live_owner_candidate(self) -> bool:
+            return True
+
+    state = FakeState()
+    assert not await _wait_for_expected_owner(  # type: ignore[arg-type]
+        state,
+        owner_track_id=7,
+        windows_session_id="wts:1",
+        timeout_seconds=0.02,
+    )
 
 
 def test_shifted_visual_window_uses_shifted_source_but_returns_audio_timeline() -> None:
