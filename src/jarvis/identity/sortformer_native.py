@@ -126,7 +126,9 @@ class NativeSortformerDiarizer:
         preset: str = "streaming",
     ) -> None:
         if not model_path.is_file():
-            raise SortformerNativeError(f"Sortformer model does not exist: {model_path}")
+            raise SortformerNativeError(
+                f"Sortformer model does not exist: {model_path}"
+            )
         if not preset:
             raise ValueError("preset must not be empty")
 
@@ -169,7 +171,9 @@ class NativeSortformerDiarizer:
         self._check(status, "nemo_speech_diar_create")
         if not self._model.value:
             self.close()
-            raise SortformerNativeError("NeMo-Speech.cpp returned a null diarization model")
+            raise SortformerNativeError(
+                "NeMo-Speech.cpp returned a null diarization model"
+            )
 
         self.num_speakers = int(self._lib.nemo_speech_diar_num_speakers(self._model))
         self.seconds_per_frame = float(
@@ -177,7 +181,9 @@ class NativeSortformerDiarizer:
         )
         if self.num_speakers < 2 or self.seconds_per_frame <= 0.0:
             self.close()
-            raise SortformerNativeError("invalid Sortformer model metadata from runtime")
+            raise SortformerNativeError(
+                "invalid Sortformer model metadata from runtime"
+            )
 
     def _configure_abi(self) -> None:
         lib = self._lib
@@ -266,7 +272,9 @@ class NativeSortformerDiarizer:
             "nemo_speech_diar_stream_open",
         )
         if not stream.value:
-            raise SortformerNativeError("NeMo-Speech.cpp returned a null diarization stream")
+            raise SortformerNativeError(
+                "NeMo-Speech.cpp returned a null diarization stream"
+            )
 
         push_latencies: list[float] = []
         started = time.perf_counter()
@@ -302,9 +310,7 @@ class NativeSortformerDiarizer:
                 self._check(
                     self._lib.nemo_speech_diar_frame_probs(
                         stream,
-                        probabilities.ctypes.data_as(
-                            ctypes.POINTER(ctypes.c_float)
-                        ),
+                        probabilities.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
                         probabilities.size,
                     ),
                     "nemo_speech_diar_frame_probs",
@@ -312,7 +318,9 @@ class NativeSortformerDiarizer:
         finally:
             self._lib.nemo_speech_diar_stream_close(stream)
 
-        realtime_factor = inference_seconds / audio_seconds if audio_seconds else float("inf")
+        realtime_factor = (
+            inference_seconds / audio_seconds if audio_seconds else float("inf")
+        )
         return SortformerRun(
             probabilities=probabilities,
             frame_count=frame_count,
