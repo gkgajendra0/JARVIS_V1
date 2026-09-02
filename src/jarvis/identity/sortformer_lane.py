@@ -137,9 +137,7 @@ def _inactive_availability_ms(
         return None
     below = probabilities[:, lane] < threshold
     for end_position in range(consecutive_frames - 1, eligible.size):
-        window = eligible[
-            end_position - consecutive_frames + 1 : end_position + 1
-        ]
+        window = eligible[end_position - consecutive_frames + 1 : end_position + 1]
         if bool(np.all(below[window])):
             available = float(np.max(availability_seconds[window]))
             if np.isfinite(available):
