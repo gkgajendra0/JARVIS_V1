@@ -2,43 +2,43 @@
 
 ## Status
 
-**IMPLEMENTED/HUMAN-ACCEPTED THROUGH PHASE 3B.10A. STARTUP MACHINE CONFIGURATION + PREFLIGHT ARE ACCEPTED. LIVEKIT MEDIADEVICES + NVIDIA/TV 48-kHz CONVERSATION AUDIO IS ACCEPTED. DUAL LIVEKIT + GSTREAMER POCKET3 MICROPHONE OWNERSHIP IS REJECTED. ADR-013 SINGLE-MICROPHONE ACTIVE-SPEAKER INTEGRATION IS REAL-MACHINE ACCEPTED. LIVE VISION INTERPRETATION PREVIEW IS DEFAULT-ON WHEN VISION IS ENABLED. 3B.11 SCORE-DISTRIBUTION ACCEPTANCE IS NEXT. ATTENTION REMAINS DEFERRED. T2 REMAINS DISABLED.**
+**STEP 3 ACCEPTED FOR CLOSURE. IDENTITY / TRUST / AUTHORITY / OBSERVABILITY FOUNDATION IS IMPLEMENTED. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 REMAINS DISABLED. STEP 4 MEMORY/CONTEXT RESEARCH IS NEXT AFTER PROTECTED-MAIN MERGE.**
 
-This file describes current production boundaries. Detailed evidence belongs in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; significant choices belong in ADRs.
+This file describes only architecture that actually exists and is accepted. Detailed experiments/evidence belong in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; durable decisions belong in `docs/decisions/`.
 
 ---
 
-## Top-level production architecture
+## Top-level accepted architecture
 
 ```text
-                           JARVIS V1
-                               │
-        ┌──────────────────────┼──────────────────────┐
-        │                      │                      │
-      VOICE                  VISION                AUTHORITY
-        │                      │                      │
-Pocket3 microphone      Pocket3 video          typed evidence
-        │                      │                      │
-LiveKit MediaDevices     OpenCV capture       deterministic trust
-AEC/NS/HPF/AGC                 │                      │
-        │                 RF-DETR + OC-SORT      proposal/risk/policy
-Gemini/OpenAI                  │                      │
-        │                 head/face/liveness    Windows Hello/FIDO2
-NVIDIA 48k → TV                │                      │
-        │                 OWNER context              │
-        └──────────────┬───────┘                      │
-                       │                              │
-            speaker / active-speaker                 │
-                 diagnostics                          │
-                       │                              │
-                 no direct authority ────────────────┘
+                               JARVIS V1
+                                   │
+          ┌────────────────────────┼────────────────────────┐
+          │                        │                        │
+        VOICE                    VISION                  AUTHORITY
+          │                        │                        │
+Pocket3 microphone          Pocket3 video            typed evidence
+          │                        │                        │
+LiveKit MediaDevices        OpenCV camera            deterministic trust
+AEC + NS + HPF + AGC             │                        │
+          │                 RF-DETR + OC-SORT          proposal/risk/policy
+          │                        │                        │
+Gemini/OpenAI               head/face/liveness       approvals / Windows Hello
+          │                        │                        │
+NVIDIA 48 kHz → TV          OWNER context                 │
+          │                        │                        │
+          ├──── CAM++ speaker shadow ─────┐                │
+          │                               │                │
+          └──── LR-ASD active-speaker ────┴── evidence ───┤
+                                                          │
+                                      no sensor/model grants permission
 ```
 
-Identity/perception evidence never directly becomes execution permission.
+Permanent rule: **identity/perception evidence is not execution permission.**
 
 ---
 
-## Persistent machine configuration — accepted
+## Machine configuration and startup
 
 Normal startup is machine-profile driven:
 
@@ -52,22 +52,25 @@ startup preflight
 jarvis-voice
 ```
 
-Current accepted machine roles:
+Accepted current-machine roles:
 
 - Pocket3 microphone: stable Windows WASAPI `name + hostapi` selector;
 - conversation output: NVIDIA `24'TV`, Windows WASAPI, 48 kHz;
 - wake model: persisted local path;
-- provider: Gemini on the current machine;
-- LR-ASD AVA checkpoint: automatically managed/integrity-verified local asset;
-- vision/speaker/active-speaker feature state: persisted.
+- provider: Gemini on the current machine, with provider boundary retained;
+- LR-ASD AVA checkpoint: managed/integrity-verified local asset;
+- CAM++ speaker model: managed/integrity-verified local asset;
+- vision/speaker/active-speaker feature switches: persisted.
 
-Machine profile values win over stale ambient non-secret `JARVIS_*` variables. Explicit diagnostic runtime overrides require `JARVIS_RUNTIME_ENV_OVERRIDES=true`. API keys remain environment-only.
+Machine profile values outrank stale non-secret ambient `JARVIS_*` overrides unless explicit diagnostic override mode is enabled. API keys remain environment-only.
 
 Decision: `docs/decisions/ADR-012_MACHINE_CONFIGURATION_AND_STARTUP_PREFLIGHT.md`.
 
 ---
 
-## Production conversation audio — accepted
+## Conversation audio — one production microphone owner
+
+Accepted production path:
 
 ```text
 Pocket3 microphone @ 48 kHz mono
@@ -75,10 +78,12 @@ Pocket3 microphone @ 48 kHz mono
 LiveKit rtc.MediaDevices.open_input()
 WebRTC AEC + NS + HPF + AGC
         ↓
-JARVIS wake / AgentSession / realtime provider
+canonical processed user PCM
+        ├── wake / AgentSession / realtime conversation
+        ├── CAM++ speaker shadow
+        └── LR-ASD audio input
         ↓
-LiveKit MediaDevices OutputPlayer
-same APM reverse-render reference
+LiveKit MediaDevices output / APM render reference
         ↓
 NVIDIA HDMI @ 48 kHz
         ↓
@@ -87,183 +92,155 @@ NVIDIA HDMI @ 48 kHz
 
 Requirements:
 
-- capture and render share one LiveKit `MediaDevices`/APM loop;
-- physical render accepts 48 kHz;
-- Bluetooth/Tribit 44.1-kHz A2DP is not the accepted production output;
-- JARVIS's own speech does not create false user turns;
-- real human barge-in remains supported by the realtime conversation stack rather than a custom local gate.
+- LiveKit MediaDevices is the only production Pocket3 microphone owner;
+- capture and render share one WebRTC APM/AEC reference;
+- Bluetooth/Tribit 44.1-kHz A2DP is not the accepted production render path;
+- JARVIS playback should not become a normal user turn;
+- real human barge-in remains handled by the realtime conversation stack;
+- speaker/active-speaker diagnostics consume the canonical PCM and never open a second production microphone path.
 
-Decision: `docs/decisions/ADR-011_LIVEKIT_MEDIADEVICES_48K_FULL_DUPLEX.md`.
+Rejected architecture:
+
+```text
+Pocket3 mic
+   ├── LiveKit/PortAudio
+   └── independent GStreamer wasapi2src
+```
+
+Real hardware showed that dual independent ownership is not reliable on this machine. Historical GStreamer paired-A/V diagnostic code may remain for engineering evidence/explicit diagnostics, but it is not the `jarvis-voice` production path.
+
+Decisions:
+
+- `docs/decisions/ADR-011_LIVEKIT_MEDIADEVICES_48K_FULL_DUPLEX.md`
+- `docs/decisions/ADR-013_SINGLE_OWNER_POCKET3_AUDIO_FOR_ACTIVE_SPEAKER.md`
 
 ---
 
-## Vision / OWNER evidence — accepted foundation
+## Vision / OWNER evidence
 
-Normal Vision uses video-only OpenCV capture:
+Accepted Vision pipeline:
 
 ```text
 Pocket3 video
         ↓
 OpenCVCameraSource
-CapturedFrame(frame_id, captured_at=time.monotonic())
+monotonic CapturedFrame
         ↓
 RF-DETR person detection
         ↓
-OC-SORT persistent visual track
+OC-SORT persistent track
         ↓
-BlazeFace head association
+head association
         ↓
 YuNet + SFace OWNER identity
         +
 MiniFAS temporal passive liveness
+        +
+active-liveness fallback when required
         ↓
 same Windows session + same visual track
         ↓
-LIVE_OWNER_CANDIDATE / UNKNOWN / AMBIGUOUS / INSUFFICIENT
+OWNER-context evidence
 ```
 
-`LIVE_OWNER_CANDIDATE` remains evidence-only and does not create T2.
+OWNER visual evidence is bound to session/track/freshness and remains evidence rather than permission.
 
-### Operator-visible interpretation
+The integrated Vision preview displays the same canonical runtime state; it is an observability surface, not a second camera/perception owner.
 
-When integrated Vision is enabled, production starts the existing `OpenCVVisionObserver` by default. The observer renders the same canonical state used internally by JARVIS:
-
-- camera frame;
-- person tracks / IDs / confidence;
-- head boxes;
-- selected/locked target;
-- follow SAFE/ARMED state;
-- framing target;
-- pan/tilt/zoom command values;
-- analysis age.
-
-This is an observability/transparency surface, not a second perception path. It does not reopen the camera. `JARVIS_VISION_PREVIEW=false` may suppress the window for headless/quiet runs.
+Attention/gaze remains deferred because the movable Pocket3 is not a stable monitor-relative gaze sensor.
 
 ---
 
-## Speaker identity — accepted shadow foundation
+## Encrypted OWNER profile
 
-Canonical user speech is captured in memory from the actual conversation input:
+JARVIS maintains a local encrypted OWNER profile. Current accepted modalities are:
 
 ```text
-LiveKit processed user PCM
+face + voice
+```
+
+Voice enrollment is explicit and Windows-Hello-gated. Raw enrollment audio is memory-only and discarded. Normal conversation cannot auto-enroll or adapt OWNER voice prototypes from similarity alone.
+
+---
+
+## Audio-first CAM++ speaker shadow
+
+Accepted speaker path:
+
+```text
+canonical LiveKit processed user PCM
         ↓
 ObservedSessionAudioInput
         ↓
-InMemorySpeakerTurnCapture
+bounded in-memory turn capture
         ↓
-speech-region + quality gate
+local Silero speech-region gate
         ↓
-CAM++ shadow diagnostics
+quality gate
+        ↓
+CAM++ embedding
+        ↓
+encrypted OWNER prototype comparison
+        ↓
+diagnostic similarity only
 ```
+
+Real-machine enrollment accepted:
+
+- 12 accepted natural speech samples;
+- 6 persisted prototypes;
+- embedding dimension 192;
+- enrollment coverage min `0.7593`, p05 `0.7749`, median `0.8726`.
+
+First ordinary-conversation accepted OWNER similarities were `0.6737–0.7450`. CAM++ inference was observed at `57.5–173.2 ms` and ran asynchronously off the conversation critical path.
 
 Current disposition:
 
-- CAM++ = provisional speaker-embedding provider;
-- ERes2NetV2 = fallback challenger;
-- no persistent voice template yet;
-- no accepted speaker threshold yet;
-- no prototype admission from mere visible OWNER context.
+- no production OWNER threshold selected;
+- no speaker classification promoted to authority;
+- poor/short/missed speech becomes `INSUFFICIENT`, not “not OWNER”;
+- speaker shadow can operate without Vision;
+- missing enrollment/model/dependency disables the diagnostic observer rather than normal conversation.
+
+Decision: `docs/decisions/ADR-014_AUDIO_FIRST_SPEAKER_SHADOW.md`.
 
 ---
 
-## Rejected architecture — dual Pocket3 microphone ownership
+## LR-ASD active-speaker shadow
 
-The following architecture is **not production**:
+Accepted integration:
 
 ```text
-Pocket3 microphone
-   ├── LiveKit/PortAudio
-   └── GStreamer wasapi2src
+canonical LiveKit user PCM ───────────────┐
+                                           ├── monotonic overlap → LR-ASD
+normal Vision OWNER track/head timeline ──┘
 ```
 
-Real-machine evidence rejected both acquisition orders:
+The provider scores only when speech quality, fresh same-track OWNER context, timestamps, and sufficient visual continuity are available. Missing evidence fails closed.
 
-- GStreamer first → LiveKit microphone open fails (`PaErrorCode -9996`);
-- PortAudio first → GStreamer paired AV pipeline fails to reach PLAYING.
+Accepted controlled evidence includes:
 
-Hard current-machine design rule:
+- OWNER speech: strong positive;
+- TV/off-camera speech: strong negative;
+- OWNER voice replay while OWNER is visually silent: strong negative for LR-ASD;
+- temporary head loss: insufficient;
+- OWNER + concurrent background/other speech: high LR-ASD score because OWNER really is speaking.
 
-> **One Pocket3 microphone owner.**
+The last case is a known semantic boundary: LR-ASD does not prove OWNER is the only speaker in mixed audio. Therefore active-speaker confirmation remains disabled and future overlap/diarization work is required before stronger audio/AV authority can be considered.
 
-Evidence: `docs/research/STEP_3B11_DUAL_AUDIO_OWNERSHIP_ACCEPTANCE_RESULTS.md`.
+No LR-ASD deployment threshold is selected.
+
+Evidence:
+
+- `docs/research/STEP_3B11_SINGLE_OWNER_ACTIVE_SPEAKER_ACCEPTANCE_RESULTS.md`
+- `docs/research/STEP_3B11_LR_ASD_BAKEOFF_HARNESS.md`
+- `docs/research/STEP_3_CLOSURE_ACCEPTANCE.md`
 
 ---
 
-## ADR-013 active-speaker architecture — real-machine accepted integration
+## Authority architecture
 
-LR-ASD reuses existing JARVIS timelines rather than opening another microphone:
-
-```text
-                            POCKET3
-                               │
-                ┌──────────────┴──────────────┐
-                │                             │
-             AUDIO                           VIDEO
-                │                             │
-     LiveKit MediaDevices only         OpenCV Vision source
-     WebRTC AEC/NS/HPF/AGC                    │
-                │                     CapturedFrame.captured_at
-canonical accepted user PCM                   │
-                │                     exact track/head sequence
-ObservedSessionAudioInput                      │
-                │                             │
-InMemorySpeakerTurnCapture                     │
-                └──────────────┬──────────────┘
-                               │
-                    monotonic-time overlap
-                               │
-                            LR-ASD
-                               │
-                    diagnostic score only
-```
-
-Production implementation:
-
-- `src/jarvis/voice/media_devices_audio.py` — accepted full-duplex conversation path;
-- `src/jarvis/voice/canonical_active_speaker_runtime.py` — canonical-turn speaker/LR-ASD diagnostics;
-- `src/jarvis/voice/production_runtime.py` — single-microphone production assembly;
-- `src/jarvis/identity/active_speaker.py` — LR-ASD provider + visual temporal buffer.
-
-The production builder does not instantiate `GStreamerPairedAVSource` for active-speaker sensing.
-
-### Timing boundary
-
-Both canonical audio observations and normal Vision frames use JARVIS monotonic timestamps.
-
-LR-ASD scores only when:
-
-- there is a fresh same-track OWNER context;
-- the bounded canonical speech turn has timestamps;
-- the visual buffer contains sufficient same-track coverage over the speech interval;
-- temporal gaps remain within the provider boundary;
-- speaker quality is accepted.
-
-Insufficient timing/visual/speech evidence fails closed.
-
-### Real-machine acceptance
-
-The accepted run simultaneously proved:
-
-- LiveKit Pocket3 microphone healthy;
-- NVIDIA/TV 48-kHz render healthy;
-- WebRTC AEC/NS/HPF/AGC healthy;
-- normal Vision healthy;
-- RF-DETR/tracking/head pipeline healthy;
-- wake + Gemini conversation healthy;
-- canonical speaker-turn capture healthy;
-- target lock / PTZ follow healthy;
-- LR-ASD CUDA inference reached real `SCORED` results.
-
-This accepts the **integration architecture only**. The canonical audio is processed by WebRTC AEC/NS/HPF/AGC rather than raw mic PCM, so deployment thresholds must come from the real score-distribution bake-off.
-
-Evidence: `docs/research/STEP_3B11_SINGLE_OWNER_ACTIVE_SPEAKER_ACCEPTANCE_RESULTS.md`.
-
-Decision: `docs/decisions/ADR-013_SINGLE_OWNER_POCKET3_AUDIO_FOR_ACTIVE_SPEAKER.md`.
-
----
-
-## Authority architecture — accepted and unchanged
+Accepted deterministic authority flow:
 
 ```text
 identity/context evidence
@@ -274,15 +251,15 @@ immutable ActionProposal
         ↓
 deterministic risk floor
         ↓
-OPA policy
+fail-closed OPA policy
         ↓
 proposal-bound approval / strong verification
         ↓
 final revalidation
         ↓
-one-time permit
+one-time execution permit
         ↓
-execution + redacted audit
+execution result + privacy-aware audit
 ```
 
 Accepted trust vocabulary:
@@ -292,9 +269,9 @@ Accepted trust vocabulary:
 - T2 `CORROBORATED_OWNER`
 - T3 `VERIFIED_OWNER`
 
-T2 is currently disabled until final multimodal corroboration is accepted.
+**T2 remains disabled.** The current strong-verification path for consequential authority is Windows Hello.
 
-Permanent invariant:
+Permanent invariants:
 
 ```text
 face match       ≠ permission
@@ -311,65 +288,38 @@ Decision: `docs/decisions/ADR-006_STEP_3_IDENTITY_TRUST_AUTHORITY_GOVERNANCE.md`
 
 ---
 
-## Deferred attention boundary
+## Privacy / observability boundary
 
-Attention/intent-to-engage remains deferred until a fixed monitor-mounted camera or stronger accepted eye/attention sensor exists. The movable Pocket3 is not treated as a stable monitor-relative gaze sensor.
-
-Decision: `docs/decisions/ADR-007_STEP_3_ATTENTION_INTENT_EVIDENCE.md`.
-
----
-
-## Current acceptance boundary
-
-Integration is accepted. The next unresolved 3B.11 question is **classification**, not plumbing:
-
-```text
-real LR-ASD score distributions
-        +
-negative/replay/overlap scenarios
-        +
-timing robustness
-        ↓
-accepted temporal decision rule
-        ↓
-ACTIVE_OWNER_SPEAKER / OTHER_OR_OFFCAMERA /
-AMBIGUOUS / INSUFFICIENT
-```
-
-Until that rule is human-accepted:
-
-- `active_speaker_confirmed=False` remains deliberate;
-- CAM++ prototype admission remains disabled;
-- persistent voice enrollment remains disabled;
-- T2 remains disabled.
+- raw biometric audio/video is memory-only by default;
+- encrypted bounded biometric templates exist only for explicit accepted enrollment;
+- secrets/tokens are not normal logs/model context;
+- audit records operational state/authority decisions rather than becoming surveillance;
+- diagnostic model outputs cannot silently change authority;
+- failures/insufficient evidence remain explicit.
 
 ---
 
-## Branch / integration control
+## Step-3 deferred identity work
 
-Active branch:
+The following are deliberately **not current architecture** and do not block Step-3 completion:
 
-```text
-feature/step-3b11-sensor-av-foundation
-```
+- streaming overlap/speaker-change detection;
+- replay/synthetic/cloned-voice countermeasures;
+- direct non-owner CAM++ calibration and any speaker threshold;
+- real second-person E/F LR-ASD calibration;
+- short-turn speaker continuity;
+- lip reading / AV target-speaker extraction;
+- fixed-camera attention/gaze;
+- any T2 composition or biometric authority promotion.
 
-Current protected-main integration path:
-
-```text
-Draft PR #11 → main
-```
-
-`main` does not yet contain this Phase-3B work. The feature branch must not be deleted before protected-main merge. Older PR #10 is historical/superseded.
+They may be revisited when a later product capability demonstrates a concrete requirement.
 
 ---
 
-## Documentation control
+## Next architecture work
 
-When a production boundary changes:
+After the Step-3 closure PR merges, **Step 4 — Live Context and Personal Memory** is active.
 
-1. update `CURRENT_ARCHITECTURE.md`;
-2. update `CURRENT_PLAN.md`;
-3. create/update an ADR for significant choices;
-4. record real-machine evidence under `docs/research/`;
-5. mark superseded experiments clearly;
-6. delete dead production plumbing after replacement acceptance.
+Step 4 must introduce exactly one authoritative JARVIS context/memory owner, keep session context separate from durable memory, preserve provenance/correction/forgetting, prevent models from directly writing durable memory, and keep storage/retrieval providers replaceable.
+
+No Step-4 storage/provider architecture is selected yet; research comes first.

@@ -227,12 +227,11 @@ def _build_settings(existing: dict[str, str]) -> dict[str, str]:
 
     speaker_default = _parse_bool(
         configured_text("JARVIS_SPEAKER_SHADOW_ENABLED", existing),
-        vision_enabled,
+        True,
     )
-    speaker_enabled = (
-        _ask_bool("Enable passive speaker-identity shadow", speaker_default)
-        if vision_enabled
-        else False
+    speaker_enabled = _ask_bool(
+        "Enable passive audio-only speaker-identity shadow",
+        speaker_default,
     )
     settings["JARVIS_SPEAKER_SHADOW_ENABLED"] = str(speaker_enabled).lower()
 
@@ -241,8 +240,8 @@ def _build_settings(existing: dict[str, str]) -> dict[str, str]:
         False,
     )
     active_enabled = (
-        _ask_bool("Enable Step-3 active-speaker shadow", active_default)
-        if speaker_enabled
+        _ask_bool("Enable Step-3 active-speaker visual shadow", active_default)
+        if speaker_enabled and vision_enabled
         else False
     )
     settings["JARVIS_ACTIVE_SPEAKER_SHADOW_ENABLED"] = str(active_enabled).lower()

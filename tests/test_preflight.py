@@ -43,6 +43,63 @@ def test_preflight_reports_all_core_checks_without_opening_devices(
     }
 
 
+def test_preflight_allows_audio_only_speaker_shadow(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    wake = tmp_path / "jarvis.onnx"
+    wake.write_bytes(b"model")
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setattr(preflight, "_audio_checks", lambda _config: [])
+
+    checks = preflight.run_startup_preflight(
+        JarvisConfig(
+            realtime_provider="gemini",
+            wake_model_path=str(wake),
+            audio_input_device="name:Osmo|hostapi:Windows WASAPI",
+            audio_output_device="name:TV|hostapi:Windows WASAPI",
+            vision_enabled=False,
+            speaker_shadow_enabled=True,
+            active_speaker_shadow_enabled=False,
+        )
+    )
+
+    assert all(check.ok for check in checks)
+    speaker = next(check for check in checks if check.label == "Speaker shadow mode")
+    assert "does not require vision" in speaker.detail
+
+
+def test_preflight_still_requires_vision_for_active_speaker_shadow(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    wake = tmp_path / "jarvis.onnx"
+    wake.write_bytes(b"model")
+    lr_asd = tmp_path / "lr-asd.pth"
+    lr_asd.write_bytes(b"model")
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    monkeypatch.setattr(preflight, "_audio_checks", lambda _config: [])
+
+    checks = preflight.run_startup_preflight(
+        JarvisConfig(
+            realtime_provider="gemini",
+            wake_model_path=str(wake),
+            audio_input_device="name:Osmo|hostapi:Windows WASAPI",
+            audio_output_device="name:TV|hostapi:Windows WASAPI",
+            vision_enabled=False,
+            speaker_shadow_enabled=True,
+            active_speaker_shadow_enabled=True,
+            active_speaker_model_path=str(lr_asd),
+        )
+    )
+
+    active = next(
+        check for check in checks if check.label == "Active-speaker dependency"
+    )
+    assert active.ok is False
+    assert "requires vision" in active.detail
+
+
 def test_require_preflight_fails_once_after_aggregating_failures(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

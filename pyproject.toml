@@ -33,6 +33,8 @@ jarvis-face-liveness = "jarvis.identity.liveness_live:main"
 jarvis-passive-pad-benchmark = "jarvis.identity.passive_pad_benchmark:main"
 jarvis-owner-evidence-live = "jarvis.identity.owner_evidence_live:main"
 jarvis-speaker-benchmark = "jarvis.identity.speaker_benchmark:main"
+jarvis-speaker-enroll = "jarvis.identity.speaker_enrollment:main"
+jarvis-active-speaker-benchmark = "jarvis.identity.active_speaker_benchmark_guided:main"
 
 [project.optional-dependencies]
 vision = [
@@ -48,6 +50,12 @@ speaker = ["sherpa-onnx==1.13.6"]
 active-speaker = [
     "python_speech_features==0.6",
     "scipy>=1.14,<2",
+]
+active-speaker-benchmark = [
+    "python_speech_features==0.6",
+    "scipy>=1.14,<2",
+    "scikit-learn==1.9.0",
+    "psutil==7.2.2",
 ]
 sensor-av = [
     "gstreamer-bundle==1.28.6; platform_system == 'Windows'",

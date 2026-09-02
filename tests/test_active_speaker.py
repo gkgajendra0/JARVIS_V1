@@ -11,6 +11,7 @@ from jarvis.identity.active_speaker import (
     ActiveSpeakerState,
     ActiveSpeakerVisualBuffer,
     _context_frame_ranges,
+    _mfcc_fft_size,
 )
 from jarvis.vision.camera import CapturedFrame
 from jarvis.vision.head import HeadObservation
@@ -119,6 +120,14 @@ def test_lr_asd_context_ranges_cover_every_frame_for_each_duration() -> None:
             left_end == right_start
             for (_, left_end), (right_start, _) in pairwise(ranges)
         )
+
+
+def test_lr_asd_mfcc_fft_never_truncates_low_cadence_window() -> None:
+    assert _mfcc_fft_size(25.0) == 512
+    assert _mfcc_fft_size(18.0) == 1024
+
+    frame_samples = round(0.025 * 25.0 / 12.5 * 16_000)
+    assert _mfcc_fft_size(12.5) >= frame_samples
 
 
 def test_visual_buffer_preserves_lower_real_cadence_without_duplication() -> None:

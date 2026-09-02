@@ -154,20 +154,12 @@ def run_startup_preflight(config: JarvisConfig) -> list[PreflightCheck]:
         *_audio_checks(config),
     ]
 
-    if config.speaker_shadow_enabled and not config.vision_enabled:
+    if config.speaker_shadow_enabled:
         checks.append(
             PreflightCheck(
-                "Speaker/vision dependency",
-                False,
-                "speaker shadow requires vision",
-            )
-        )
-    elif config.speaker_shadow_enabled:
-        checks.append(
-            PreflightCheck(
-                "Speaker/vision dependency",
+                "Speaker shadow mode",
                 True,
-                "speaker shadow is bound to vision OWNER context",
+                "audio-only speaker shadow does not require vision",
             )
         )
 
