@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 
 from jarvis.config import JarvisConfig
-from jarvis.identity.firered_pvad import FireRedPVadUnavailable, FireRedPersonalizedVad
+from jarvis.identity.firered_pvad import FireRedPersonalizedVad, FireRedPVadUnavailable
 from jarvis.identity.owner_lane_benchmark import (
     _capture,
     _consume_frames,
