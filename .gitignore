@@ -7,6 +7,7 @@ __pycache__/
 build/
 dist/
 .env
+step3b11_lr_asd_bakeoff*.json
 
 # .NET build outputs
 **/bin/
