@@ -36,6 +36,7 @@ jarvis-speaker-benchmark = "jarvis.identity.speaker_benchmark:main"
 jarvis-speaker-enroll = "jarvis.identity.speaker_enrollment:main"
 jarvis-active-speaker-benchmark = "jarvis.identity.active_speaker_benchmark_guided:main"
 jarvis-overlap-benchmark = "jarvis.identity.overlap_benchmark:main"
+jarvis-conversation-focus-benchmark = "jarvis.voice.conversation_focus_benchmark:main"
 
 [project.optional-dependencies]
 vision = [
@@ -59,13 +60,17 @@ active-speaker-benchmark = [
     "psutil==7.2.2",
 ]
 overlap-benchmark = ["psutil==7.2.2"]
+conversation-focus-benchmark = [
+    "livekit-plugins-hush==0.3.3",
+    "sherpa-onnx==1.13.6",
+]
 sensor-av = [
     "gstreamer-bundle==1.28.6; platform_system == 'Windows'",
 ]
 dev = ["pytest>=8,<10", "pytest-asyncio>=0.23,<2", "ruff==0.16.5"]
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = "src"
 
 [tool.setuptools.packages.find]
 where = ["src"]
