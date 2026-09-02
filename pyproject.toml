@@ -33,6 +33,7 @@ jarvis-face-liveness = "jarvis.identity.liveness_live:main"
 jarvis-passive-pad-benchmark = "jarvis.identity.passive_pad_benchmark:main"
 jarvis-owner-evidence-live = "jarvis.identity.owner_evidence_live:main"
 jarvis-speaker-benchmark = "jarvis.identity.speaker_benchmark:main"
+jarvis-speaker-enroll = "jarvis.identity.speaker_enrollment:main"
 jarvis-active-speaker-benchmark = "jarvis.identity.active_speaker_benchmark_guided:main"
 
 [project.optional-dependencies]

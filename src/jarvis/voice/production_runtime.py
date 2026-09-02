@@ -1,9 +1,9 @@
 """Production JARVIS voice-runtime assembly.
 
-Conversation audio uses LiveKit MediaDevices/WebRTC AEC at 48 kHz. Step-3
-active-speaker diagnostics reuse the same canonical timestamped user PCM and the
-existing timestamped Vision frame/track sequence; production no longer opens the
-Pocket3 microphone a second time through GStreamer.
+Conversation audio uses LiveKit MediaDevices/WebRTC AEC at 48 kHz. Speaker
+identity and active-speaker diagnostics reuse the same canonical timestamped user
+PCM. Speaker identity is a parallel shadow observer and never blocks normal
+conversation or grants authority.
 """
 
 from __future__ import annotations
@@ -22,6 +22,11 @@ from jarvis.identity.active_speaker import (
 from jarvis.identity.owner_context import (
     OwnerContextState,
     build_default_owner_context_observer,
+)
+from jarvis.identity.speaker_shadow import (
+    EnrolledSpeakerShadowObserver,
+    SpeakerShadowRuntimeError,
+    build_default_enrolled_speaker_observer,
 )
 from jarvis.identity.speech_region import LiveKitSileroSpeechRegionDetector
 from jarvis.logging_config import configure_logging
@@ -42,13 +47,10 @@ def build_production_voice_runtime(
     """Build the production single-microphone-owner voice/vision runtime."""
     if config.wake_model_path is None:
         raise RuntimeError("wake model is required for Step-2 wake mode")
-    if config.speaker_shadow_enabled and not config.vision_enabled:
-        raise RuntimeError(
-            "speaker shadow requires vision because speaker prototype admission "
-            "must be bound to independent live-owner context"
-        )
     if config.active_speaker_shadow_enabled and not config.speaker_shadow_enabled:
         raise RuntimeError("active-speaker shadow requires speaker shadow")
+    if config.active_speaker_shadow_enabled and not config.vision_enabled:
+        raise RuntimeError("active-speaker shadow requires vision")
     if (
         config.active_speaker_shadow_enabled
         and config.active_speaker_model_path is None
@@ -74,15 +76,31 @@ def build_production_voice_runtime(
         ring_buffer_seconds=config.audio_ring_buffer_seconds,
     )
 
+    speaker_shadow_observer: EnrolledSpeakerShadowObserver | None = None
+    if config.speaker_shadow_enabled:
+        try:
+            speaker_shadow_observer = build_default_enrolled_speaker_observer()
+            LOGGER.info(
+                "Enrolled CAM++ OWNER speaker shadow is loaded: %s prototypes; "
+                "per-turn scoring is asynchronous and has no authority effect",
+                speaker_shadow_observer.template.prototype_count,
+            )
+        except SpeakerShadowRuntimeError as exc:
+            # Speaker shadow is diagnostic. Missing enrollment/model/dependency must
+            # never make ordinary JARVIS conversation unavailable.
+            LOGGER.warning(
+                "Enrolled speaker shadow is unavailable and will stay disabled: %s",
+                exc,
+            )
+
     owner_context_state: OwnerContextState | None = None
     evidence_observer = None
-    if config.speaker_shadow_enabled:
+    if config.vision_enabled and config.speaker_shadow_enabled:
         evidence_observer = build_default_owner_context_observer()
         owner_context_state = evidence_observer.state
 
     active_speaker_visual_buffer: ActiveSpeakerVisualBuffer | None = None
     active_speaker_provider: LrAsdActiveSpeakerProvider | None = None
-    speech_region_detector: LiveKitSileroSpeechRegionDetector | None = None
 
     if config.active_speaker_shadow_enabled:
         assert config.active_speaker_model_path is not None
@@ -92,11 +110,18 @@ def build_production_voice_runtime(
         active_speaker_provider = LrAsdActiveSpeakerProvider(
             config.active_speaker_model_path
         )
-        speech_region_detector = LiveKitSileroSpeechRegionDetector()
         LOGGER.info(
             "Step-3 active-speaker diagnostics use one Pocket3 microphone owner: "
             "canonical LiveKit user PCM + timestamped Vision track/head frames"
         )
+
+    # Speaker identity needs clean voiced regions even when LR-ASD is disabled.
+    # This detector runs only inside the already-background shadow turn task.
+    speech_region_detector = (
+        LiveKitSileroSpeechRegionDetector()
+        if config.speaker_shadow_enabled
+        else None
+    )
 
     # Integrated desktop Vision is observable by default. The observer renders
     # the same canonical tracks/heads/target/follow/framing state JARVIS uses,
@@ -105,8 +130,6 @@ def build_production_voice_runtime(
     if config.vision_enabled:
         os.environ.setdefault("JARVIS_VISION_PREVIEW", "true")
 
-    # The accepted normal Vision source is video-only OpenCV capture. The exact
-    # frame/snapshot tap populates the LR-ASD visual buffer in monotonic time.
     vision_service = (
         build_default_vision_service(
             head_model_path=config.vision_head_model_path,
@@ -135,6 +158,7 @@ def build_production_voice_runtime(
         active_speaker_visual_buffer=active_speaker_visual_buffer,
         active_speaker_provider=active_speaker_provider,
         speech_region_detector=speech_region_detector,
+        speaker_shadow_observer=speaker_shadow_observer,
     )
 
 
