@@ -99,9 +99,7 @@ def _guided_input_factory(
         print()
         for line in _scenario_readiness_lines(spec.key, duration_seconds):
             print(f"  {line}")
-        response = original_input(
-            "  READY? Enter=start countdown, s=skip, q=finish > "
-        )
+        response = original_input("  READY? Enter=start countdown, s=skip, q=finish > ")
         normalized = response.strip().casefold()
         scenario_index += 1
         if normalized in {"s", "skip", "q", "quit", "exit"}:
@@ -113,7 +111,9 @@ def _guided_input_factory(
             flush=True,
         )
         if spec.key == "C":
-            print("  Stay silent and visible; JARVIS playback will start automatically.")
+            print(
+                "  Stay silent and visible; JARVIS playback will start automatically."
+            )
         elif spec.key == "H":
             threading.Thread(
                 target=_print_h_timed_cues,
