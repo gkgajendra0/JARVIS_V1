@@ -53,7 +53,9 @@ def _selected_scenarios_from_argv(
             if requested is not None:
                 raise ValueError("--scenarios may be provided only once")
             if index + 1 >= len(argv):
-                raise ValueError("--scenarios requires comma-separated keys, e.g. A,D,H")
+                raise ValueError(
+                    "--scenarios requires comma-separated keys, e.g. A,D,H"
+                )
             requested = argv[index + 1]
             index += 2
             continue
@@ -72,7 +74,9 @@ def _selected_scenarios_from_argv(
         raise ValueError(
             "unknown scenario key(s): " + ", ".join(unknown) + "; valid keys are A-H"
         )
-    selected = tuple(scenario for scenario in benchmark.SCENARIOS if scenario.key in keys)
+    selected = tuple(
+        scenario for scenario in benchmark.SCENARIOS if scenario.key in keys
+    )
     return selected, cleaned, True
 
 
