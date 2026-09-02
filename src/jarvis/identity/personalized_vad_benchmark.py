@@ -364,11 +364,7 @@ async def run_personalized_vad_benchmark(
         )
         print(
             "  OWNER inactive while phone continues in B2 = "
-            + (
-                "n/a"
-                if owner_offset_b2_ms is None
-                else f"{owner_offset_b2_ms:.0f} ms"
-            )
+            + ("n/a" if owner_offset_b2_ms is None else f"{owner_offset_b2_ms:.0f} ms")
         )
         print(
             "  OWNER reacquire after phone stops = "
