@@ -3,19 +3,18 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
-import time
 from pathlib import Path
 
 import numpy as np
 
 from jarvis.config import JarvisConfig
 from jarvis.identity.owner_lane_benchmark import (
-    _NoOpWakeDetector,
     _capture,
     _consume_frames,
     _live_inactive_ms,
     _live_onset_ms,
     _live_overlap_ms,
+    _NoOpWakeDetector,
     _phase_windows,
     _run_persistent_stream,
     _score_phase,
