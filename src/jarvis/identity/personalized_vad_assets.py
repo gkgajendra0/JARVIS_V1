@@ -28,7 +28,9 @@ def default_personalized_vad_asset_dir() -> Path:
         return Path(configured).expanduser()
     local_app_data = os.getenv("LOCALAPPDATA")
     if local_app_data:
-        return Path(local_app_data) / "JARVIS" / "models" / "personalized-vad" / "firered"
+        return (
+            Path(local_app_data) / "JARVIS" / "models" / "personalized-vad" / "firered"
+        )
     xdg_cache = os.getenv("XDG_CACHE_HOME")
     if xdg_cache:
         return Path(xdg_cache) / "jarvis" / "models" / "personalized-vad" / "firered"
@@ -48,7 +50,9 @@ def verify_personalized_vad_assets(path: str | Path) -> Path:
     model = root / FIRERED_PVAD_ONNX_FILENAME
     speaker_dir = root / FIRERED_PVAD_SPEAKER_DIRNAME
     if not model.is_file():
-        raise PersonalizedVadAssetIntegrityError(f"FireRed pVAD model is missing: {model}")
+        raise PersonalizedVadAssetIntegrityError(
+            f"FireRed pVAD model is missing: {model}"
+        )
     if model.stat().st_size != FIRERED_PVAD_ONNX_SIZE_BYTES:
         raise PersonalizedVadAssetIntegrityError(
             "FireRed pVAD model size mismatch: "
@@ -74,7 +78,11 @@ def verify_personalized_vad_assets(path: str | Path) -> Path:
 
 
 def ensure_personalized_vad_assets(path: str | Path | None = None) -> Path:
-    target = Path(path).expanduser() if path is not None else default_personalized_vad_asset_dir()
+    target = (
+        Path(path).expanduser()
+        if path is not None
+        else default_personalized_vad_asset_dir()
+    )
     try:
         return verify_personalized_vad_assets(target)
     except PersonalizedVadAssetIntegrityError:
