@@ -6,6 +6,9 @@ import numpy as np
 import pytest
 
 from jarvis.identity.sortformer_native import (
+    NVIDIA_SORTFORMER_LOW_LATENCY,
+    NVIDIA_SORTFORMER_ULTRA_LOW_LATENCY,
+    SortformerGeometry,
     SortformerNativeError,
     _to_float32_mono,
     resolve_sortformer_model,
@@ -38,6 +41,41 @@ def test_float_audio_is_clipped_to_pcm_range() -> None:
 def test_nonfinite_audio_is_rejected() -> None:
     with pytest.raises(ValueError, match="non-finite"):
         _to_float32_mono(np.asarray([0.0, np.inf], dtype=np.float32))
+
+
+def test_published_low_latency_geometry_matches_model_card() -> None:
+    geometry = NVIDIA_SORTFORMER_LOW_LATENCY
+
+    assert geometry.chunk_frames == 6
+    assert geometry.right_context_frames == 7
+    assert geometry.input_buffer_frames == 13
+    assert geometry.fifo_frames == 188
+    assert geometry.spkcache_frames == 188
+    assert geometry.update_period_frames == 144
+
+
+def test_published_ultra_low_latency_geometry_matches_model_card() -> None:
+    geometry = NVIDIA_SORTFORMER_ULTRA_LOW_LATENCY
+
+    assert geometry.chunk_frames == 3
+    assert geometry.right_context_frames == 1
+    assert geometry.input_buffer_frames == 4
+    assert geometry.fifo_frames == 188
+    assert geometry.spkcache_frames == 188
+    assert geometry.update_period_frames == 144
+
+
+def test_invalid_geometry_is_rejected_before_native_runtime() -> None:
+    with pytest.raises(ValueError, match="chunk_frames"):
+        SortformerGeometry(
+            name="bad",
+            chunk_frames=0,
+            right_context_frames=0,
+            left_context_frames=0,
+            fifo_frames=1,
+            spkcache_frames=1,
+            update_period_frames=1,
+        )
 
 
 def test_explicit_model_path_is_resolved(tmp_path: Path) -> None:
