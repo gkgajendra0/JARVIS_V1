@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import hashlib
 import os
 import subprocess
 import sys
@@ -12,11 +11,14 @@ import numpy as np
 
 from jarvis.config import JarvisConfig
 from jarvis.identity.overlap import OverlapEvidence, interpret_sortformer_probabilities
-from jarvis.identity.sortformer_native import (
-    NativeSortformerDiarizer,
-    SortformerNativeError,
-    resolve_sortformer_model,
+from jarvis.identity.sortformer_assets import (
+    SORTFORMER_MODEL_ID,
+    SORTFORMER_MODEL_REVISION,
+    SORTFORMER_MODEL_SHA256,
+    SortformerAssetError,
+    ensure_sortformer_model,
 )
+from jarvis.identity.sortformer_native import NativeSortformerDiarizer, SortformerNativeError
 from jarvis.identity.speaker_benchmark import InMemorySegmentRecorder, segment_metrics
 from jarvis.vision.service import build_default_vision_service
 from jarvis.voice.audio import SessionAudioInput
@@ -76,14 +78,6 @@ async def _capture(
         raise
     print("  >>> STOP <<<")
     return samples, sample_rate
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _process_rss_mib() -> float | None:
@@ -198,7 +192,7 @@ def _analyze_capture(
 
 async def run_overlap_benchmark(
     *,
-    model_path: Path,
+    model_path: Path | None,
     library_path: Path | None,
     capture_seconds: float,
     push_seconds: float,
@@ -212,15 +206,17 @@ async def run_overlap_benchmark(
         raise ValueError("capture_seconds must be at least 3 seconds")
 
     config = JarvisConfig.from_environment()
-    model_path = resolve_sortformer_model(model_path)
+    model_path = ensure_sortformer_model(model_path)
     print("JARVIS Step 3B.13 native overlap benchmark")
     print("------------------------------------------")
     print("Benchmark only: no production authority or threshold is changed.")
     print("Audio comes only from the accepted LiveKit MediaDevices/WebRTC path.")
     print("Raw audio is memory-only and is discarded when this process exits.")
     print(f"Sortformer model = {model_path}")
+    print(f"model_id = {SORTFORMER_MODEL_ID}")
+    print(f"model_revision = {SORTFORMER_MODEL_REVISION}")
     print(f"model_size_mib = {model_path.stat().st_size / (1024**2):.1f}")
-    print(f"model_sha256 = {_sha256(model_path)}")
+    print(f"model_sha256 = {SORTFORMER_MODEL_SHA256}")
     print(f"diagnostic_activity_threshold = {threshold:.3f}")
 
     vision_service = None
@@ -288,7 +284,7 @@ async def run_overlap_benchmark(
             )
             captures["B_OTHER_ONLY"] = await _capture(
                 recorder,
-                label="B OTHER/Tv ONLY",
+                label="B OTHER/TV ONLY",
                 instructions=(
                     "Stay silent. Play clearly audible TV/phone speech or have another "
                     "person speak for the whole capture."
@@ -361,7 +357,9 @@ def _parser() -> argparse.ArgumentParser:
         "--model",
         type=Path,
         default=None,
-        help="Sortformer GGUF path (or set JARVIS_SORTFORMER_MODEL_PATH)",
+        help=(
+            "Pinned Sortformer GGUF path. Omit to download/verify the managed JARVIS asset."
+        ),
     )
     parser.add_argument(
         "--dll",
@@ -396,10 +394,9 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = _parser().parse_args()
     try:
-        model_path = resolve_sortformer_model(args.model)
         code = asyncio.run(
             run_overlap_benchmark(
-                model_path=model_path,
+                model_path=args.model,
                 library_path=args.dll,
                 capture_seconds=args.capture_seconds,
                 push_seconds=args.push_seconds,
@@ -407,7 +404,7 @@ def main() -> None:
                 with_vision=not args.without_vision,
             )
         )
-    except (SortformerNativeError, ValueError, RuntimeError) as exc:
+    except (SortformerAssetError, SortformerNativeError, ValueError, RuntimeError) as exc:
         print(f"overlap benchmark failed: {exc}")
         code = 2
     raise SystemExit(code)
