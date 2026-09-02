@@ -12,6 +12,9 @@ import asyncio
 import logging
 from typing import Any
 
+from jarvis.identity.active_speaker_window_diagnostics import (
+    diagnose_visual_window_failure,
+)
 from jarvis.identity.overlap_shadow import NativeOverlapShadowObserver
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_shadow import EnrolledSpeakerShadowObserver
@@ -58,6 +61,92 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         live = context.has_fresh_live_owner_candidate()
         reasons = ",".join(assessment.reason_codes) if assessment.reason_codes else "none"
         return live, assessment.state.value, reasons
+
+    async def _inspect_active_speaker_turn(
+        self,
+        turn: SpeakerTurnAudio,
+        *,
+        audio_turn_id: str,
+        quality_accepted: bool,
+    ) -> None:
+        provider = self._active_speaker_provider
+        visual_buffer = self._active_speaker_visual_buffer
+        context = self._owner_context_state
+        if (
+            provider is None
+            or visual_buffer is None
+            or not quality_accepted
+            or turn.start_monotonic is None
+            or turn.end_monotonic is None
+            or context is None
+        ):
+            await super()._inspect_active_speaker_turn(
+                turn,
+                audio_turn_id=audio_turn_id,
+                quality_accepted=quality_accepted,
+            )
+            return
+
+        snapshot = context.snapshot()
+        assessment = snapshot.assessment
+        if assessment is None or not context.has_fresh_live_owner_candidate():
+            await super()._inspect_active_speaker_turn(
+                turn,
+                audio_turn_id=audio_turn_id,
+                quality_accepted=quality_accepted,
+            )
+            return
+
+        visual = visual_buffer.build_window(
+            visual_track_id=assessment.visual_track_id,
+            start_monotonic=turn.start_monotonic,
+            end_monotonic=turn.end_monotonic,
+        )
+        if visual is not None:
+            await super()._inspect_active_speaker_turn(
+                turn,
+                audio_turn_id=audio_turn_id,
+                quality_accepted=quality_accepted,
+            )
+            return
+
+        diagnostic = diagnose_visual_window_failure(
+            visual_buffer,
+            visual_track_id=assessment.visual_track_id,
+            start_monotonic=turn.start_monotonic,
+            end_monotonic=turn.end_monotonic,
+        )
+        LOGGER.info(
+            "Active speaker shadow turn %s | state=insufficient | track=%s | "
+            "visual_candidates=%s/%s | start_gap_ms=%s | end_gap_ms=%s | "
+            "max_gap_ms=%s | source_fps=%s | active_speaker_confirmed=False | "
+            "prototype_admission=False | reasons=%s",
+            audio_turn_id,
+            assessment.visual_track_id,
+            diagnostic.candidate_count,
+            diagnostic.track_sample_count,
+            (
+                f"{diagnostic.start_gap_seconds * 1000.0:.1f}"
+                if diagnostic.start_gap_seconds is not None
+                else "n/a"
+            ),
+            (
+                f"{diagnostic.end_gap_seconds * 1000.0:.1f}"
+                if diagnostic.end_gap_seconds is not None
+                else "n/a"
+            ),
+            (
+                f"{diagnostic.maximum_source_gap_seconds * 1000.0:.1f}"
+                if diagnostic.maximum_source_gap_seconds is not None
+                else "n/a"
+            ),
+            (
+                f"{diagnostic.source_fps:.2f}"
+                if diagnostic.source_fps is not None
+                else "n/a"
+            ),
+            diagnostic.reason_code,
+        )
 
     async def _score_enrolled_speaker(
         self,
