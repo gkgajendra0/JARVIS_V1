@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from itertools import pairwise
 
 import numpy as np
 
@@ -142,11 +143,7 @@ def interpret_sortformer_probabilities(
         speaker_sequence = tuple(speaker for speaker, _ in stable_runs)
         changed = any(
             previous != current
-            for previous, current in zip(
-                speaker_sequence,
-                speaker_sequence[1:],
-                strict=False,
-            )
+            for previous, current in pairwise(speaker_sequence)
         )
         if changed:
             state = OverlapState.SPEAKER_CHANGE
