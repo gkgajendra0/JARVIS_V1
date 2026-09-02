@@ -26,9 +26,7 @@ from jarvis.identity.speaker_template import (
 from jarvis.identity.store import OwnerProfileStoreError, SqliteOwnerProfileStore
 from jarvis.identity.types import BiometricModality, DecryptedTemplate
 
-CAMPP_ENROLLMENT_COMPATIBILITY = (
-    f"campplus:{CAMPP_MODEL_SHA256}:prototype-set-v1"
-)
+CAMPP_ENROLLMENT_COMPATIBILITY = f"campplus:{CAMPP_MODEL_SHA256}:prototype-set-v1"
 
 
 class SpeakerShadowRuntimeError(RuntimeError):

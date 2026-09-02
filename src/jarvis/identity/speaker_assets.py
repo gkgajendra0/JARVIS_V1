@@ -35,11 +35,19 @@ def default_campp_model_path() -> Path:
         return Path(configured).expanduser()
     local_app_data = os.getenv("LOCALAPPDATA")
     if local_app_data:
-        return Path(local_app_data) / "JARVIS" / "models" / "speaker" / CAMPP_MODEL_FILENAME
+        return (
+            Path(local_app_data)
+            / "JARVIS"
+            / "models"
+            / "speaker"
+            / CAMPP_MODEL_FILENAME
+        )
     xdg_cache = os.getenv("XDG_CACHE_HOME")
     if xdg_cache:
         return Path(xdg_cache) / "jarvis" / "models" / "speaker" / CAMPP_MODEL_FILENAME
-    return Path.home() / ".cache" / "jarvis" / "models" / "speaker" / CAMPP_MODEL_FILENAME
+    return (
+        Path.home() / ".cache" / "jarvis" / "models" / "speaker" / CAMPP_MODEL_FILENAME
+    )
 
 
 def verify_campp_model(path: str | Path) -> Path:

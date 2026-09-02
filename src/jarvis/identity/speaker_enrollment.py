@@ -213,7 +213,9 @@ def _preserved_templates(store: SqliteOwnerProfileStore) -> list[TemplateInput]:
         if modality is BiometricModality.VOICE:
             continue
         loaded = store.load_template(modality)
-        preserved.append(TemplateInput(metadata=loaded.metadata, payload=loaded.payload))
+        preserved.append(
+            TemplateInput(metadata=loaded.metadata, payload=loaded.payload)
+        )
     return preserved
 
 
@@ -269,7 +271,9 @@ def _commit_voice_template(
 
         loaded = store.load_template(BiometricModality.VOICE)
         if loaded.metadata != template.metadata or loaded.payload != template.payload:
-            raise RuntimeError("persisted OWNER voice template did not round-trip exactly")
+            raise RuntimeError(
+                "persisted OWNER voice template did not round-trip exactly"
+            )
         profile = store.get_owner()
         print(f"profile_version = {profile.profile_version}")
         print(f"modalities = {[item.value for item in profile.modalities]}")
@@ -293,8 +297,12 @@ async def run_speaker_enrollment(
 
     print("JARVIS OWNER speaker enrollment")
     print("-------------------------------")
-    print("One-time enrollment only. Normal JARVIS conversations will not ask for this.")
-    print("Capture uses the accepted LiveKit MediaDevices/WebRTC 48 kHz microphone path.")
+    print(
+        "One-time enrollment only. Normal JARVIS conversations will not ask for this."
+    )
+    print(
+        "Capture uses the accepted LiveKit MediaDevices/WebRTC 48 kHz microphone path."
+    )
     print("Raw audio is memory-only and is discarded immediately after each segment.")
     print("Only a small encrypted CAM++ prototype set will be persisted.")
     print("Windows Hello must approve the final exact OWNER profile replacement.")
@@ -341,7 +349,9 @@ async def run_speaker_enrollment(
                 f"p05={prototype_set.coverage_p05:.4f}, "
                 f"median={prototype_set.coverage_median:.4f}"
             )
-            print("Windows Hello will now authorize this exact encrypted profile update.")
+            print(
+                "Windows Hello will now authorize this exact encrypted profile update."
+            )
             _commit_voice_template(
                 template=template,
                 data_dir=default_identity_data_dir(),

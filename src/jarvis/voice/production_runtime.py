@@ -118,9 +118,7 @@ def build_production_voice_runtime(
     # Speaker identity needs clean voiced regions even when LR-ASD is disabled.
     # This detector runs only inside the already-background shadow turn task.
     speech_region_detector = (
-        LiveKitSileroSpeechRegionDetector()
-        if config.speaker_shadow_enabled
-        else None
+        LiveKitSileroSpeechRegionDetector() if config.speaker_shadow_enabled else None
     )
 
     # Integrated desktop Vision is observable by default. The observer renders

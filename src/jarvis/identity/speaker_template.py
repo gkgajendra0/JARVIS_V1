@@ -93,7 +93,9 @@ def build_speaker_prototype_set(
                 best_distance = distance
                 best_index = index
         if best_index is None:
-            raise SpeakerTemplateError("unable to select distinct OWNER speaker prototypes")
+            raise SpeakerTemplateError(
+                "unable to select distinct OWNER speaker prototypes"
+            )
         used.add(best_index)
         selected.append(normalized[best_index])
 
@@ -188,9 +190,7 @@ def deserialize_speaker_prototype_set(payload: bytes) -> np.ndarray:
         raise SpeakerTemplateError("speaker template contains non-finite values")
     norms = np.linalg.norm(matrix, axis=1)
     if not np.allclose(norms, 1.0, atol=1e-4):
-        raise SpeakerTemplateError(
-            "speaker template prototypes are not L2-normalized"
-        )
+        raise SpeakerTemplateError("speaker template prototypes are not L2-normalized")
     return matrix
 
 
