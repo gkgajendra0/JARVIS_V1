@@ -833,12 +833,20 @@ class VoiceRuntimeController:
                     "prototype admission remains disabled"
                 )
             if self._active_speaker_provider is not None:
-                LOGGER.info(
-                    "LR-ASD active-speaker shadow is active: synchronized Pocket3 video + "
-                    "raw paired DJI PCM are captured once by GStreamer, local Silero trims "
-                    "the paired audio, and scores remain diagnostic only; active-speaker "
-                    "confirmation and prototype admission remain disabled"
-                )
+                if paired_turn_capture is None:
+                    LOGGER.info(
+                        "LR-ASD active-speaker shadow is active: canonical LiveKit user PCM + "
+                        "timestamped Pocket3 Vision owner/head frames are reused; scores remain "
+                        "diagnostic only; active-speaker confirmation and prototype admission "
+                        "remain disabled"
+                    )
+                else:
+                    LOGGER.info(
+                        "LR-ASD active-speaker shadow is active in historical paired-A/V mode: "
+                        "synchronized Pocket3 video + raw paired DJI PCM are captured once by "
+                        "GStreamer; scores remain diagnostic only; active-speaker confirmation "
+                        "and prototype admission remain disabled"
+                    )
             await active_end.wait()
         finally:
             self._cancel_timeout()
