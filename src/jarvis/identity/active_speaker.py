@@ -493,6 +493,14 @@ def _resample_audio(
     )
 
 
+def _mfcc_fft_size(source_fps: float) -> int:
+    if not math.isfinite(source_fps) or source_fps <= 0:
+        raise ValueError("LR-ASD MFCC source fps must be positive and finite")
+    cadence_scale = LR_ASD_VISUAL_FPS / source_fps
+    frame_samples = max(1, round(0.025 * cadence_scale * LR_ASD_AUDIO_RATE))
+    return max(512, 1 << (frame_samples - 1).bit_length())
+
+
 def _mfcc_features(samples: np.ndarray, source_fps: float) -> np.ndarray:
     from python_speech_features import mfcc
 
@@ -504,6 +512,7 @@ def _mfcc_features(samples: np.ndarray, source_fps: float) -> np.ndarray:
             numcep=13,
             winlen=0.025 * cadence_scale,
             winstep=0.010 * cadence_scale,
+            nfft=_mfcc_fft_size(source_fps),
         ),
         dtype=np.float32,
     )
