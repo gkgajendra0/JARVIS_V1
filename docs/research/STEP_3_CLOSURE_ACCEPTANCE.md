@@ -1,8 +1,10 @@
 # Step 3 — Closure Acceptance
 
-Status: **HUMAN-ACCEPTED FOR CLOSURE — PROTECTED-MAIN PR/CI/MERGE PENDING**
+Status: **DONE — HUMAN-ACCEPTED + CI-PASSED + MERGED TO PROTECTED `main`**
 
 Date: 2026-09-02
+
+Integration: PR #15, merge commit `360a72c58402fbe357fa409437a4ce181921d837`.
 
 ## Purpose
 
@@ -14,7 +16,7 @@ Step 3 is not a promise to perfect biometric perception. Advanced overlap separa
 
 ### Authority and governance
 
-Accepted and previously human-tested:
+Accepted:
 
 - T0–T3 trust vocabulary;
 - deterministic R0–R5 risk floors;
@@ -29,7 +31,7 @@ Accepted and previously human-tested:
 
 ### OWNER visual evidence
 
-Accepted foundation:
+Accepted:
 
 - encrypted single OWNER profile;
 - YuNet/SFace OWNER matching;
@@ -41,7 +43,7 @@ Accepted foundation:
 
 ### Audio ownership and conversation
 
-Accepted real-machine production path:
+Accepted production path:
 
 ```text
 Pocket3 microphone @ 48 kHz
@@ -59,8 +61,6 @@ Dual independent Pocket3 microphone ownership by LiveKit + GStreamer was rejecte
 
 ## LR-ASD diagnostic evidence
 
-The controlled 3B.11 runs established:
-
 | Scenario | Result | Closure interpretation |
 | --- | --- | --- |
 | A OWNER visible + OWNER speech | mean `0.8676`, median `0.9248` at 0 ms | clean positive |
@@ -72,7 +72,7 @@ The controlled 3B.11 runs established:
 | G OWNER + concurrent other/background speech | mean about `0.8253` | semantic overlap gap; never owner-only authority |
 | H temporary OWNER head loss | insufficient | expected fail-close |
 
-Scenario G is not an LR-ASD model error: the visible OWNER really is speaking. The missing information is whether another speaker is also active. Streaming diarization/overlap detection is therefore a future prerequisite before stronger audio/AV authority promotion, but is not required to close Step 3 while all such authority remains disabled.
+Scenario G is not an LR-ASD model error: OWNER really is speaking. The missing information is whether another speaker is also active. Streaming diarization/overlap detection is therefore a future prerequisite before stronger audio/AV authority promotion, but is not required while all such authority remains disabled.
 
 No LR-ASD deployment threshold is selected.
 
@@ -80,11 +80,10 @@ No LR-ASD deployment threshold is selected.
 
 ### Enrollment
 
-Real-machine one-time OWNER enrollment passed:
+Real-machine OWNER enrollment passed:
 
 - 12 accepted natural speech samples;
-- English, Hindi, Hinglish, normal/quiet/near/far variation;
-- 6 bounded persisted prototypes;
+- 6 persisted prototypes;
 - embedding dimension `192`;
 - coverage cosine min `0.7593`, p05 `0.7749`, median `0.8726`;
 - existing face profile preserved and VOICE added;
@@ -94,7 +93,7 @@ Real-machine one-time OWNER enrollment passed:
 
 ### Normal conversation
 
-The first ordinary JARVIS session with enrolled CAM++ produced these quality-qualified OWNER observations:
+Ordinary JARVIS use produced:
 
 | Cosine | Embedding latency |
 | ---: | ---: |
@@ -106,9 +105,9 @@ The first ordinary JARVIS session with enrolled CAM++ produced these quality-qua
 Observed mean cosine: about `0.7092`.
 Observed median embedding latency: about `115.7 ms`.
 
-CAM++ ran asynchronously off the normal conversation critical path and did not block responses. This accepts the non-blocking UX architecture, not an OWNER threshold.
+CAM++ ran asynchronously off the conversation critical path and did not block responses. A `0.46 s` turn correctly failed quality as too short. One otherwise understood user turn was missed by local Silero with maximum probability `0.2034`; the observer returned insufficient rather than inventing an identity decision.
 
-A `0.46 s` turn correctly failed quality as too short. One otherwise understood user turn was missed by local Silero with maximum probability `0.2034`; the observer returned insufficient rather than inventing an identity decision. This remains a known coverage limitation.
+This accepts the non-blocking UX architecture, not an OWNER threshold.
 
 ## Final Step-3 trust disposition
 
@@ -121,11 +120,11 @@ T2 CORROBORATED_OWNER    = disabled
 Windows Hello            = strong verification path
 ```
 
-No CAM++ threshold is selected. No normal conversation self-enrollment/adaptation is allowed. No speaker similarity, LR-ASD score, face match, liveness result, wake word, Windows unlocked state, or model confidence directly grants consequential execution permission.
+No normal-conversation self-enrollment/adaptation is allowed. No speaker similarity, LR-ASD score, face match, liveness result, wake word, Windows-unlocked state, or model confidence directly grants consequential execution permission.
 
 ## Explicit residual risks / deferred work
 
-These are recorded rather than silently treated as solved:
+Tracked in Issue #14:
 
 1. Concurrent-speaker/overlap detection for Scenario G.
 2. Replay/synthetic/cloned-voice countermeasures before audio-only evidence can support sensitive authority.
@@ -136,20 +135,22 @@ These are recorded rather than silently treated as solved:
 7. Any eventual T2 composition requires a new explicit architecture/acceptance decision.
 8. Local Silero may occasionally miss a provider-understood user turn; failure remains `INSUFFICIENT`.
 
-None of these can currently elevate authority because the relevant trust promotions remain disabled.
+None can currently elevate authority because the relevant trust promotions remain disabled.
 
-## Step-3 quality-gate conclusion
+## Final quality-gate result
 
-- Scope: PASS — future identity research is frozen rather than expanding Step 3 indefinitely.
-- Architecture ownership: PASS — one production Pocket3 mic owner; identity is evidence, authority is deterministic JARVIS-owned governance.
-- Automated validation: PASS on the implemented 3B.12 head before final documentation reconciliation; final closure head must pass protected checks again.
-- Truthfulness: PASS — unknown/insufficient/ambiguous states remain explicit and no biometric authority is falsely claimed.
-- Authority/risk: PASS — strong consequential verification remains Windows Hello; T2 stays disabled.
+- Scope: PASS.
+- Architecture ownership: PASS.
+- Automated validation: PASS — final PR head passed Ruff, full pytest, Windows DPAPI, and Windows Hello helper checks.
+- Truthfulness: PASS — unknown/insufficient/ambiguous states remain explicit; no biometric authority falsely claimed.
+- Authority/risk: PASS — consequential strong verification remains Windows Hello; T2 stays disabled.
 - Privacy: PASS — raw biometric media is memory-only by default; encrypted bounded templates only where explicitly enrolled.
-- Resilience: PASS — missing speaker model/enrollment disables the diagnostic observer rather than normal conversation.
+- Resilience: PASS — missing speaker model/enrollment disables diagnostics rather than normal conversation.
 - Performance/human acceptance: PASS — normal conversation remained usable with asynchronous CAM++ enabled.
-- Cleanup/documentation/Git: pending only final closure reconciliation, PR, green checks, and protected-main merge.
+- Cleanup/documentation/Git: PASS — PR #13 was closed as superseded, PR #15 merged the coherent Step-3 checkpoint, and Step 4 is active.
 
-## Completion rule
+## Completion
 
-After the final Step-3 closure PR passes required GitHub checks and merges into protected `main`, Step 3 is `DONE` and Step 4 becomes the sole active product slice.
+**Step 3 is DONE.**
+
+Future identity hardening is backlog work, not an implicit continuation of Step 3. The active product slice is now Step 4 — Live Context and Personal Memory.
