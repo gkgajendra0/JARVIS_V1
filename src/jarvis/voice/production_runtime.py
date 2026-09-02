@@ -130,7 +130,12 @@ def build_production_voice_runtime(
                 overlap_shadow_observer.runtime_version,
                 overlap_shadow_observer.model_load_ms,
             )
-        except (SortformerAssetError, SortformerNativeError, OSError, ValueError) as exc:
+        except (
+            SortformerAssetError,
+            SortformerNativeError,
+            OSError,
+            ValueError,
+        ) as exc:
             # Step 3B.13 remains fail-open for conversation and fail-closed for
             # identity authority while the shadow integration is being accepted.
             LOGGER.warning(
