@@ -123,9 +123,7 @@ def _guided_input_factory(
         print()
         for line in _scenario_readiness_lines(spec.key, duration_seconds):
             print(f"  {line}")
-        response = original_input(
-            "  READY? Enter=validate OWNER, s=skip, q=finish > "
-        )
+        response = original_input("  READY? Enter=validate OWNER, s=skip, q=finish > ")
         scenario_index += 1
         return response
 
@@ -144,9 +142,7 @@ def _guided_capture_factory(
             flush=True,
         )
         if spec.key == "C":
-            print(
-                "  Stay silent and visible; JARVIS playback/capture is automatic."
-            )
+            print("  Stay silent and visible; JARVIS playback/capture is automatic.")
 
         h_cues: asyncio.Task[None] | None = None
         if spec.key == "H":
