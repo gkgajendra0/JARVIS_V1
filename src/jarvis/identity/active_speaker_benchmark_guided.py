@@ -43,7 +43,7 @@ def _scenario_readiness_lines(key: str, duration_seconds: float) -> tuple[str, .
             "Press Enter only when everything is positioned and ready. Then you get "
             f"a {_COUNTDOWN_SECONDS}-second countdown."
         ),
-        f"Begin the action only when you see >>> START NOW <<<; hold it for {duration}.",
+        f"Begin only at >>> START NOW <<< and stop at >>> STOP NOW <<< ({duration}).",
     )
     actions = {
         "A": "A: Stay visible and silent while preparing. On START NOW, speak naturally and keep speaking.",
@@ -64,12 +64,20 @@ def _h_cue_schedule(duration_seconds: float) -> tuple[float, float]:
     return hide_start, hide_duration
 
 
+def _print_stop_cue(duration_seconds: float) -> None:
+    time.sleep(duration_seconds)
+    print("\n  >>> STOP NOW — CAPTURE WINDOW ENDED <<<", flush=True)
+
+
 def _print_h_timed_cues(duration_seconds: float) -> None:
     hide_start, hide_duration = _h_cue_schedule(duration_seconds)
     time.sleep(hide_start)
     print("\n  >>> HIDE YOUR HEAD NOW — KEEP SPEAKING <<<", flush=True)
     time.sleep(hide_duration)
     print("\n  >>> SHOW YOUR HEAD AGAIN — KEEP SPEAKING <<<", flush=True)
+    remaining = max(0.0, duration_seconds - hide_start - hide_duration)
+    time.sleep(remaining)
+    print("\n  >>> STOP NOW — CAPTURE WINDOW ENDED <<<", flush=True)
 
 
 def _run_countdown() -> None:
@@ -112,13 +120,20 @@ def _guided_input_factory(
         )
         if spec.key == "C":
             print(
-                "  Stay silent and visible; JARVIS playback will start automatically."
+                "  Stay silent and visible; JARVIS playback/capture is automatic."
             )
         elif spec.key == "H":
             threading.Thread(
                 target=_print_h_timed_cues,
                 args=(duration_seconds,),
                 name="jarvis-step3b11-h-cues",
+                daemon=True,
+            ).start()
+        else:
+            threading.Thread(
+                target=_print_stop_cue,
+                args=(duration_seconds,),
+                name=f"jarvis-step3b11-{spec.key}-stop-cue",
                 daemon=True,
             ).start()
         return response
