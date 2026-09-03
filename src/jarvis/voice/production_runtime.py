@@ -1,9 +1,9 @@
 """Production JARVIS voice-runtime assembly.
 
-Conversation audio uses LiveKit MediaDevices/WebRTC AEC at 48 kHz. Speaker
-identity, overlap, and active-speaker diagnostics reuse the same canonical
-timestamped user PCM. Identity diagnostics are parallel shadow observers and never
-block normal conversation or grant authority.
+Conversation audio uses LiveKit MediaDevices/WebRTC AEC at 48 kHz. The accepted
+OWNER face+liveness+Windows-session path can provide short-lived bounded T2 context.
+CAM++, overlap, and active-speaker diagnostics reuse the same canonical timestamped
+user PCM but remain parallel shadow evidence with no authority effect.
 """
 
 from __future__ import annotations
@@ -99,11 +99,17 @@ def build_production_voice_runtime(
                 exc,
             )
 
+    # Bounded T2 is intentionally independent of speaker/ASD shadow thresholds.
+    # It comes only from the accepted 3B.8 OWNER face+liveness path bound to WTS.
     owner_context_state: OwnerContextState | None = None
     evidence_observer = None
-    if config.vision_enabled and config.speaker_shadow_enabled:
+    if config.vision_enabled:
         evidence_observer = build_default_owner_context_observer()
         owner_context_state = evidence_observer.state
+        LOGGER.info(
+            "OWNER face+liveness context is loaded for bounded T2; critical actions "
+            "remain T3 strong-verifier only"
+        )
 
     active_speaker_visual_buffer: ActiveSpeakerVisualBuffer | None = None
     active_speaker_provider: LrAsdActiveSpeakerProvider | None = None
