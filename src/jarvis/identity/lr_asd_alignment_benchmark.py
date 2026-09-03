@@ -93,6 +93,13 @@ class SlidingSummary:
     active_fraction: float | None
 
 
+@dataclass(frozen=True, slots=True)
+class PhaseEvidence:
+    proof: PhaseAudioProof
+    offsets: tuple[OffsetPhaseScore, ...]
+    zero_sliding: SlidingSummary
+
+
 def _parse_offsets(value: str) -> tuple[int, ...]:
     try:
         parsed = tuple(int(item.strip()) for item in value.split(",") if item.strip())
@@ -362,6 +369,65 @@ async def _score_sliding_summary(
     )
 
 
+async def _score_phase_immediately(
+    provider: _TraceLrAsdProvider,
+    visual_buffer: ActiveSpeakerVisualBuffer,
+    speech_detector: LiveKitSileroSpeechRegionDetector,
+    capture: PhaseCapture,
+    *,
+    visual_track_id: int,
+    windows_session_id: str,
+    offsets_ms: tuple[int, ...],
+    threshold: float,
+    trailing_frames: int,
+    analysis_margin_seconds: float,
+    window_seconds: float,
+    step_seconds: float,
+) -> PhaseEvidence:
+    print(f"  Scoring {capture.name} immediately while its Vision evidence is fresh...")
+    offsets: list[OffsetPhaseScore] = []
+    for offset_ms in offsets_ms:
+        score = await _score_phase_offset(
+            provider,
+            visual_buffer,
+            capture,
+            visual_track_id=visual_track_id,
+            windows_session_id=windows_session_id,
+            offset_ms=offset_ms,
+            threshold=threshold,
+            analysis_margin_seconds=analysis_margin_seconds,
+        )
+        offsets.append(score)
+        if score.state == ActiveSpeakerState.SCORED.value:
+            print(
+                f"    {offset_ms:+5d} ms | median={_format_score(score.median_score)} | "
+                f"activity={_format_score(score.activity_fraction)}"
+            )
+        else:
+            reasons = ",".join(score.reason_codes) if score.reason_codes else "none"
+            print(f"    {offset_ms:+5d} ms | {score.state} | reasons={reasons}")
+
+    zero_sliding = await _score_sliding_summary(
+        provider,
+        visual_buffer,
+        capture,
+        visual_track_id=visual_track_id,
+        windows_session_id=windows_session_id,
+        offset_ms=0,
+        threshold=threshold,
+        trailing_frames=trailing_frames,
+        analysis_margin_seconds=analysis_margin_seconds,
+        window_seconds=window_seconds,
+        step_seconds=step_seconds,
+    )
+    proof = await _audio_proof(capture, speech_detector)
+    return PhaseEvidence(
+        proof=proof,
+        offsets=tuple(offsets),
+        zero_sliding=zero_sliding,
+    )
+
+
 def _print_audio_proof(proof: PhaseAudioProof) -> None:
     max_vad = (
         "n/a"
@@ -388,6 +454,10 @@ def _print_sliding(summary: SlidingSummary) -> None:
         f"max={_format_score(summary.maximum)} | "
         f"active_fraction={_format_score(summary.active_fraction)}"
     )
+
+
+def _offset_by_value(evidence: PhaseEvidence, offset_ms: int) -> OffsetPhaseScore:
+    return next(item for item in evidence.offsets if item.offset_ms == offset_ms)
 
 
 async def run_alignment_benchmark(args: argparse.Namespace) -> int:
@@ -428,7 +498,7 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
     owner_observer = build_default_owner_context_observer()
     owner_state = owner_observer.state
     visual_buffer = ActiveSpeakerVisualBuffer(
-        max_seconds=args.phase_seconds * 3.0 + 15.0
+        max_seconds=max(20.0, args.phase_seconds + 2 * maximum_offset_seconds + 4.0)
     )
     vision_service = build_default_vision_service(
         head_model_path=config.vision_head_model_path,
@@ -462,6 +532,8 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
     audio_started = False
     phone_capture: PhaseCapture | None = None
     owner_capture: PhaseCapture | None = None
+    phone_evidence: PhaseEvidence | None = None
+    owner_evidence: PhaseEvidence | None = None
 
     print("JARVIS Step 3 LR-ASD AV-alignment diagnostic")
     print("-----------------------------------------------")
@@ -469,6 +541,7 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
     print(
         "Uses canonical LiveKit/WebRTC-processed Pocket3 PCM + existing Vision track."
     )
+    print("Each phase is scored immediately before the operator changes scene state.")
     print("No raw audio/video/crops are persisted.")
     print(f"phase_seconds = {args.phase_seconds:.2f}")
     print(f"analysis_margin_seconds = {analysis_margin_seconds:.2f}")
@@ -512,6 +585,22 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
             name="PHONE_ONLY",
             seconds=args.phase_seconds,
         )
+        phone_evidence = await _score_phase_immediately(
+            provider,
+            visual_buffer,
+            speech_detector,
+            phone_capture,
+            visual_track_id=owner_track_id,
+            windows_session_id=windows_session_id,
+            offsets_ms=args.offsets_ms,
+            threshold=args.threshold,
+            trailing_frames=args.trailing_frames,
+            analysis_margin_seconds=analysis_margin_seconds,
+            window_seconds=args.window_seconds,
+            step_seconds=args.step_seconds,
+        )
+        phone_capture.turn.samples.fill(0)
+        print("  PHONE_ONLY derived evidence retained; raw phase PCM cleared.")
 
         command = await asyncio.to_thread(
             input,
@@ -531,36 +620,32 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
             seconds=args.phase_seconds,
         )
         print("  >>> STOP <<<", flush=True)
+        owner_evidence = await _score_phase_immediately(
+            provider,
+            visual_buffer,
+            speech_detector,
+            owner_capture,
+            visual_track_id=owner_track_id,
+            windows_session_id=windows_session_id,
+            offsets_ms=args.offsets_ms,
+            threshold=args.threshold,
+            trailing_frames=args.trailing_frames,
+            analysis_margin_seconds=analysis_margin_seconds,
+            window_seconds=args.window_seconds,
+            step_seconds=args.step_seconds,
+        )
+        owner_capture.turn.samples.fill(0)
+        print("  OWNER_ONLY derived evidence retained; raw phase PCM cleared.")
 
         print("\nCanonical phase audio proof")
-        phone_proof = await _audio_proof(phone_capture, speech_detector)
-        owner_proof = await _audio_proof(owner_capture, speech_detector)
-        _print_audio_proof(phone_proof)
-        _print_audio_proof(owner_proof)
+        _print_audio_proof(phone_evidence.proof)
+        _print_audio_proof(owner_evidence.proof)
 
-        print("\nFull-phase AV offset sweep")
+        print("\nFull-phase AV offset comparison")
         comparisons: list[OffsetComparison] = []
         for offset_ms in args.offsets_ms:
-            phone_score = await _score_phase_offset(
-                provider,
-                visual_buffer,
-                phone_capture,
-                visual_track_id=owner_track_id,
-                windows_session_id=windows_session_id,
-                offset_ms=offset_ms,
-                threshold=args.threshold,
-                analysis_margin_seconds=analysis_margin_seconds,
-            )
-            owner_score = await _score_phase_offset(
-                provider,
-                visual_buffer,
-                owner_capture,
-                visual_track_id=owner_track_id,
-                windows_session_id=windows_session_id,
-                offset_ms=offset_ms,
-                threshold=args.threshold,
-                analysis_margin_seconds=analysis_margin_seconds,
-            )
+            phone_score = _offset_by_value(phone_evidence, offset_ms)
+            owner_score = _offset_by_value(owner_evidence, offset_ms)
             separation = (
                 None
                 if phone_score.median_score is None or owner_score.median_score is None
@@ -573,12 +658,20 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
                 median_separation=separation,
             )
             comparisons.append(comparison)
+            phone_reason = (
+                ""
+                if phone_score.state == ActiveSpeakerState.SCORED.value
+                else f" [{','.join(phone_score.reason_codes) or 'no_reason'}]"
+            )
+            owner_reason = (
+                ""
+                if owner_score.state == ActiveSpeakerState.SCORED.value
+                else f" [{','.join(owner_score.reason_codes) or 'no_reason'}]"
+            )
             print(
-                f"  {offset_ms:+5d} ms | phone med={_format_score(phone_score.median_score)} "
-                f"act={_format_score(phone_score.activity_fraction)} | "
-                f"owner med={_format_score(owner_score.median_score)} "
-                f"act={_format_score(owner_score.activity_fraction)} | "
-                f"separation={_format_score(separation)}"
+                f"  {offset_ms:+5d} ms | phone med={_format_score(phone_score.median_score)}"
+                f"{phone_reason} | owner med={_format_score(owner_score.median_score)}"
+                f"{owner_reason} | separation={_format_score(separation)}"
             )
 
         best = _best_offset(comparisons)
@@ -591,9 +684,7 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
         )
         if best is None:
             print("  best_diagnostic_offset = n/a (insufficient scored evidence)")
-            best_offset_ms = 0
         else:
-            best_offset_ms = best.offset_ms
             print(
                 f"  best_diagnostic_offset = {best.offset_ms:+d} ms | "
                 f"phone_median={_format_score(best.phone.median_score)} | "
@@ -604,44 +695,17 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
             "  NOTE: best_diagnostic_offset is evidence only, not a production correction."
         )
 
-        print("\nSettled 1-second gate evidence")
-        offsets_to_check = tuple(dict.fromkeys((0, best_offset_ms)))
-        sliding: list[SlidingSummary] = []
-        for offset_ms in offsets_to_check:
-            for capture in (phone_capture, owner_capture):
-                summary = await _score_sliding_summary(
-                    provider,
-                    visual_buffer,
-                    capture,
-                    visual_track_id=owner_track_id,
-                    windows_session_id=windows_session_id,
-                    offset_ms=offset_ms,
-                    threshold=args.threshold,
-                    trailing_frames=args.trailing_frames,
-                    analysis_margin_seconds=analysis_margin_seconds,
-                    window_seconds=args.window_seconds,
-                    step_seconds=args.step_seconds,
-                )
-                sliding.append(summary)
-                _print_sliding(summary)
+        print("\nSettled 1-second gate evidence at canonical 0 ms")
+        _print_sliding(phone_evidence.zero_sliding)
+        _print_sliding(owner_evidence.zero_sliding)
 
-        best_phone = next(
-            item
-            for item in sliding
-            if item.phase == "PHONE_ONLY" and item.offset_ms == best_offset_ms
-        )
-        best_owner = next(
-            item
-            for item in sliding
-            if item.phase == "OWNER_ONLY" and item.offset_ms == best_offset_ms
-        )
         structural_candidate = bool(
-            phone_proof.speech_fraction >= 0.20
-            and owner_proof.speech_fraction >= 0.20
-            and best_phone.active_fraction is not None
-            and best_owner.active_fraction is not None
-            and best_phone.active_fraction <= 0.25
-            and best_owner.active_fraction >= 0.60
+            phone_evidence.proof.speech_fraction >= 0.20
+            and owner_evidence.proof.speech_fraction >= 0.20
+            and phone_evidence.zero_sliding.active_fraction is not None
+            and owner_evidence.zero_sliding.active_fraction is not None
+            and phone_evidence.zero_sliding.active_fraction <= 0.25
+            and owner_evidence.zero_sliding.active_fraction >= 0.60
         )
 
         print("\nSafety disposition")
