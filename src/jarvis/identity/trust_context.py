@@ -57,7 +57,9 @@ class OwnerTrustContextProvider:
     def snapshot(self) -> OwnerTrustContextSnapshot:
         owner_snapshot = self._owner_context.snapshot()
         assessment = owner_snapshot.assessment
-        fallback_session_id = assessment.session_id if assessment is not None else "wts:unavailable"
+        fallback_session_id = (
+            assessment.session_id if assessment is not None else "wts:unavailable"
+        )
 
         try:
             windows_session = self._windows_session_provider.current_session()
@@ -93,7 +95,8 @@ class OwnerTrustContextProvider:
                 windows_session_valid=True,
                 visual_track_id=None,
                 observed_at_monotonic=None,
-                reason=owner_snapshot.invalidation_reason or "t2_owner_context_not_observed",
+                reason=owner_snapshot.invalidation_reason
+                or "t2_owner_context_not_observed",
             )
 
         if assessment.session_id != windows_session.session_id:
