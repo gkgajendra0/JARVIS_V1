@@ -73,7 +73,7 @@ def test_best_offset_maximizes_owner_phone_median_separation() -> None:
     assert best.offset_ms == 200
 
 
-def test_window_end_times_excludes_unsettled_prefix() -> None:
+def test_window_end_times_excludes_unsettled_prefix_and_tail() -> None:
     values = _window_end_times(
         start_monotonic=10.0,
         end_monotonic=13.0,
@@ -82,4 +82,4 @@ def test_window_end_times_excludes_unsettled_prefix() -> None:
         step_seconds=0.5,
     )
 
-    assert values == (11.5, 12.0, 12.5, 13.0)
+    assert values == (11.5, 12.0, 12.5)
