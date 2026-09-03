@@ -427,7 +427,9 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
 
     owner_observer = build_default_owner_context_observer()
     owner_state = owner_observer.state
-    visual_buffer = ActiveSpeakerVisualBuffer(max_seconds=args.phase_seconds * 3.0 + 15.0)
+    visual_buffer = ActiveSpeakerVisualBuffer(
+        max_seconds=args.phase_seconds * 3.0 + 15.0
+    )
     vision_service = build_default_vision_service(
         head_model_path=config.vision_head_model_path,
         evidence_observer=owner_observer,
@@ -464,7 +466,9 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
     print("JARVIS Step 3 LR-ASD AV-alignment diagnostic")
     print("-----------------------------------------------")
     print("DIAGNOSTIC ONLY: no threshold, prototype, T2, or authority change is made.")
-    print("Uses canonical LiveKit/WebRTC-processed Pocket3 PCM + existing Vision track.")
+    print(
+        "Uses canonical LiveKit/WebRTC-processed Pocket3 PCM + existing Vision track."
+    )
     print("No raw audio/video/crops are persisted.")
     print(f"phase_seconds = {args.phase_seconds:.2f}")
     print(f"analysis_margin_seconds = {analysis_margin_seconds:.2f}")
@@ -596,7 +600,9 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
                 f"owner_median={_format_score(best.owner.median_score)} | "
                 f"separation={_format_score(best.median_separation)}"
             )
-        print("  NOTE: best_diagnostic_offset is evidence only, not a production correction.")
+        print(
+            "  NOTE: best_diagnostic_offset is evidence only, not a production correction."
+        )
 
         print("\nSettled 1-second gate evidence")
         offsets_to_check = tuple(dict.fromkeys((0, best_offset_ms)))
