@@ -6,27 +6,24 @@
 
 ## Current Stage
 
-**REOPENED FOR FINAL IDENTITY/VOICE SECURITY COMPLETION — STEP 4 PAUSED**
+**FINALIZATION — BOUNDED T2 ACTIVATED; STEP 4 STILL PAUSED UNTIL ONE PRODUCTION SMOKE**
 
-This file is the operational source of truth for current work. Detailed evidence belongs in `docs/research/`; significant architecture decisions belong in `docs/decisions/`.
+This file is the operational source of truth for current work. Detailed evidence belongs
+in `docs/research/`; significant architecture decisions belong in `docs/decisions/`.
 
 ---
 
-## Why Step 3 is reopened
+## Owner decision on 2026-09-03
 
-The previously merged Step-3 checkpoint correctly established the authority skeleton, OWNER face/liveness, encrypted face+voice profile, Windows Hello, CAM++ speaker shadow, LR-ASD diagnostics, and the single-owner LiveKit audio architecture. However, human review identified that the intended graduated-trust system was closed before the remaining evidence-composition and spoken-actor security work was finished.
+Step 3 will not remain blocked waiting for every biometric/voice diagnostic to become
+perfect. The accepted OWNER face+liveness path is now allowed to provide useful,
+short-lived **T2 `CORROBORATED_OWNER`** context in the normal production JARVIS runtime.
 
-The original accepted architecture intended a usable T2 `CORROBORATED_OWNER` path for bounded R1/R2/R3 authority while keeping voice alone non-authoritative and reserving Windows Hello/T3 for critical R4 operations.
+This is a bounded trust decision, not a claim that biometrics are strong authentication.
+T3 remains proposal-bound strong verification through Windows Hello/FIDO2-class intent
+for critical actions.
 
-Therefore Step 4 is paused. We will finish the already-discovered Step-3 work rather than silently deferring it.
-
-Active tracking issue: GitHub Issue #14 — `Step 3 final identity/security completion`.
-
-Branch:
-
-```text
-step3-final-identity-completion
-```
+ADR: `docs/decisions/ADR-015_BOUNDED_T2_OWNER_CONTEXT.md`.
 
 ---
 
@@ -40,7 +37,7 @@ Do not redesign these unless new evidence exposes a material problem:
 - final pre-execution revalidation and one-time permits;
 - privacy-aware local audit;
 - Windows-session invalidation;
-- Windows Hello strong verification;
+- Windows Hello strong verification for T3;
 - encrypted local OWNER profile with FACE + VOICE modalities;
 - YuNet/SFace OWNER identity and accepted active/passive liveness;
 - Pocket3 person/head/track Vision pipeline;
@@ -49,165 +46,153 @@ Do not redesign these unless new evidence exposes a material problem:
 - CAM++ audio-first OWNER speaker shadow;
 - LR-ASD visible-OWNER active-speaker diagnostics;
 - no raw biometric media persistence by default;
-- no sensor/model directly grants execution permission.
+- model/sensor evidence never grants an execution permit directly.
 
 ---
 
-## Known evidence already accepted
+## Bounded T2 — IMPLEMENTED
 
-### CAM++
+The production trust bridge may emit T2 only when all are true:
 
-- one-time real-machine OWNER enrollment passed;
-- 12 accepted natural samples -> 6 persisted 192-d prototypes;
-- enrollment coverage cosine min `0.7593`, p05 `0.7749`, median `0.8726`;
-- first ordinary-conversation OWNER observations: `0.6737–0.7450`;
-- observed CAM++ inference: `57.5–173.2 ms`, asynchronous/non-blocking;
-- short/poor/missed speech becomes `INSUFFICIENT`, not non-OWNER;
-- no production speaker threshold selected yet.
+1. temporal enrolled OWNER SFace evidence is `OWNER_CANDIDATE`;
+2. passive MiniFAS liveness is `LIVE` for the same visual track;
+3. fused OWNER evidence is fresh (2-second TTL);
+4. evidence is bound to the current Windows WTS session; and
+5. the Windows session is active and unlocked.
 
-### LR-ASD
+Any stale evidence, ambiguity, unknown subject, spoof/uncertain liveness, WTS mismatch,
+Windows lock, or WTS failure drops the context to T0/UNVERIFIED.
 
-- A OWNER visible + OWNER speaks: strong positive, mean about `0.8676`;
-- B TV/off-camera speech: strong negative, about `0.0014`;
-- C JARVIS playback: quality-rejected/fail-closed diagnostic;
-- D replayed OWNER voice while OWNER visually silent: about `0.0014`;
-- G OWNER + concurrent other/background speech: high, about `0.8253`, proving LR-ASD means “visible OWNER is speaking” rather than “OWNER is the only speaker”;
-- H temporary OWNER head loss: `INSUFFICIENT`;
-- E/F remain pending a real second visible person.
-
----
-
-## Final Step-3 completion scope
-
-### 3B.13 — streaming overlap / speaker-change evidence
-
-Goal: close Scenario G without creating another microphone owner or blocking the realtime conversation path.
-
-Research candidates:
-
-- NVIDIA Streaming Sortformer v2.1 — leading candidate;
-- pyannote Community-1 — strong offline/self-hosted reference, but no native streaming path out of the box;
-- diart/pyannote streaming — reference alternative requiring older/extra streaming infrastructure.
-
-Required output vocabulary is JARVIS-owned and non-authoritative by itself:
+The bridge deliberately emits:
 
 ```text
-SINGLE_SPEAKER
-OVERLAP_DETECTED
-SPEAKER_CHANGE
-AMBIGUOUS
-INSUFFICIENT
+trust_tier = T2 / CORROBORATED_OWNER
+actor_unambiguous = false
+attention = unavailable
 ```
 
-No production integration until the candidate passes a real RTX 5060 Ti latency/VRAM/contention benchmark.
+Seeing a live enrolled OWNER is useful presence/identity context, but it does not prove
+that the OWNER spoke a specific command. Spoken actor binding remains separate.
 
-### Speaker calibration
-
-Collect direct live non-OWNER CAM++ distributions and sufficient OWNER variation before freezing any `OWNER_SPEAKER_CANDIDATE` threshold. Vendor/default thresholds remain forbidden.
-
-### Anti-spoof / replay / cloned voice
-
-Research and benchmark a separate spoof countermeasure. Current reference family is ASVspoof5 (AASIST / RawNet2 / SASV). Speaker similarity and spoof probability stay separate evidence types.
-
-No anti-spoof model is accepted until it demonstrates useful behavior on the JARVIS microphone path and does not harm realtime UX.
-
-### Short-turn continuity
-
-Only after overlap/speaker-change semantics are accepted, permit very short utterances to inherit a recent high-quality OWNER speaker state when:
-
-- same authority/Windows session;
-- same active conversation;
-- recent fresh speaker evidence;
-- no speaker change;
-- no overlap/ambiguity/playback concern;
-- no device discontinuity;
-- the short turn is not the sole basis for stronger authority.
-
-### Missing TrustEvaluator / IdentitySession composition
-
-Implement one JARVIS-owned deterministic evidence resolver that owns freshness/continuity/subject binding and derives T0/T1/T2/T3.
-
-No weighted multimodal confidence score.
-
-Initial T2 composition must require at minimum:
-
-- expected active/unlocked Windows session;
-- fresh accepted OWNER face evidence;
-- fresh accepted liveness bound to the same visual track/session;
-- no identity/track/session ambiguity relevant to the action.
-
-Speaker and active-speaker/overlap evidence may strengthen spoken actor association but voice alone cannot create T2.
-
-T3 remains fresh proposal-bound strong verification through Windows Hello.
-
-### Spoken actor binding
-
-For spoken approvals or voice-originated consequential intent, derive `actor_unambiguous` only from accepted fresh evidence. Any overlap, spoof concern, stale binding, conflicting speaker, lost track, or insufficient evidence must fail closed or step up to Windows Hello according to policy.
-
-### Authority integration
-
-Restore the intended graduated-trust UX:
+### Current authority floors
 
 ```text
 R0 routine                  -> T0
-R1 private read             -> T2
-R2 reversible local change  -> T2
-R3 persistent/external      -> T2 + exact approval / policy
-R4 critical                 -> T3 + proposal-bound Windows Hello
-R5 restricted/dev-only      -> deny normal runtime
+R1 private read             -> T2 + policy/direct-intent rules
+R2 reversible local change  -> T2 + policy/direct-intent rules
+R3 persistent/external      -> T2 + approval + actor_unambiguous
+R4 critical                 -> T3 + proposal-bound strong verification
+R5 restricted/dev-only      -> T3 + strong verification + extra context
 ```
 
-This does not make voice a password. It makes multimodal evidence useful through deterministic JARVIS trust.
+Because current T2 intentionally has `actor_unambiguous=false`, persistent/external
+spoken actions continue to fail closed until actor binding is accepted. Critical actions
+remain T3 regardless.
 
 ---
 
-## Research findings already established for 3B.13
+## LR-ASD disposition — STOP BASIC CALIBRATION
 
-- NVIDIA currently ships `nvidia/diar_streaming_sortformer_4spk-v2.1`, a true streaming four-speaker model with overlap-aware diarization and published low-latency configurations including about 1.04 s.
-- The v2.1 checkpoint is roughly 471 MB and uses the NVIDIA Open Model License; NeMo source code is Apache-2.0 but model terms must be tracked separately.
-- NeMo Labs Voice Agent uses v2.1 by default, but its high-level wrapper currently collapses to one speaker label per turn. JARVIS must consume underlying frame-level speaker activity/probabilities for Scenario G rather than copy that wrapper semantics.
-- pyannote Community-1 is a strong open-source diarization reference with overlap detection, but pyannote explicitly states streaming diarization is not available out of the box; `diart` is its nearest streaming route.
-- ASVspoof5 officially provides AASIST and RawNet2 countermeasure baselines plus spoof-aware speaker-verification/SASV references. AASIST code is MIT-licensed. These are benchmark references, not automatic production choices.
+Real-machine Pocket3 testing established enough for the current architectural decision:
 
-Detailed evidence belongs in `docs/research/STEP_3_FINAL_IDENTITY_SECURITY_RESEARCH.md`.
+- replay/phone speech while visible OWNER is silent repeatedly scores strongly negative;
+- this includes playback of the OWNER's own recorded voice;
+- canonical 0 ms A/V alignment is adequate; no fixed offset is promoted;
+- full-phase genuine OWNER speech can score strongly positive;
+- short 1-second and 2-second genuine-OWNER recall varies across runs;
+- therefore no LR-ASD deployment threshold/window is promoted to authority.
 
----
+LR-ASD remains useful **corroborative/negative evidence**, not the sole T2 gate. Do not
+run more basic phone-replay/alignment experiments unless a concrete production failure
+or model/runtime change creates a new question.
 
-## Implementation / validation order
-
-1. Finish current-2026 research and pin exact candidate/model/runtime/license boundaries.
-2. Build **benchmark-only** overlap/diarization adapter + telemetry harness; do not wire authority yet.
-3. Real-machine RTX 5060 Ti benchmark of Sortformer-class candidate: latency, RTF, VRAM, CPU/RAM, contention with RF-DETR/LR-ASD/CAM++/conversation.
-4. If accepted, integrate overlap/speaker-change evidence in shadow mode on canonical PCM.
-5. Rerun Scenario G and verify ambiguity is explicit.
-6. Build non-OWNER CAM++ calibration harness/collection and freeze threshold only from real distributions.
-7. Build anti-spoof benchmark adapter/harness; real replay + synthetic/re-encoded samples; reject weak candidates.
-8. Integrate accepted spoof evidence in shadow/fail-closed form.
-9. Implement short-turn continuity.
-10. Implement IdentitySession / TrustEvaluator and spoken actor binding.
-11. Integrate T2/T3 contexts with AuthorityService.
-12. Run automated threat/degraded-mode tests.
-13. Run focused real-machine acceptance, including E/F when a real second person is available.
-14. Reconcile docs, CI, protected-main merge.
-15. Only then resume Step 4.
+CAM++ and Sortformer likewise remain supporting evidence until their own thresholds and
+actor-binding semantics are accepted. Voice alone cannot create T2.
 
 ---
 
-## Hard stop conditions
+## Production voice behavior
 
-Reject or reconfigure a candidate if any of these occur:
+Normal `jarvis-dev` now receives a dedicated `inspect_identity_context` tool when Vision
+OWNER context is configured. It exposes only derived trust information:
 
-- noticeable realtime conversation slowdown;
-- unstable Windows deployment;
-- unacceptable GPU/VRAM contention on RTX 5060 Ti;
-- second/duplicate microphone ownership;
-- hidden cloud biometric processing;
-- false certainty instead of `AMBIGUOUS`/`INSUFFICIENT`;
-- provider/model license incompatible with JARVIS use;
-- raw biometric media persistence without explicit approved need;
-- model/provider output bypassing JARVIS trust/policy;
-- threshold chosen from vendor defaults or OWNER-only data.
+- current trust tier;
+- T2 active/inactive;
+- Windows-session validity;
+- bound visual track id;
+- actor-binding status; and
+- non-sensitive reason codes.
+
+It never exposes raw images, face templates, SFace similarity values, liveness scores,
+or other biometric material.
+
+Tracker IDs alone remain non-identity evidence. JARVIS may call a person GK/the OWNER
+only when the dedicated identity context currently reports T2.
+
+---
+
+## Remaining Step-3 hardening
+
+These are important, but they no longer block the existence of bounded T2:
+
+### Spoken actor binding
+
+Derive `actor_unambiguous=true` only from accepted fresh turn-specific evidence. Any
+speaker conflict, overlap, spoof concern, stale binding, lost track, or insufficient
+evidence must fail closed or step up to Windows Hello according to risk.
+
+### Speaker calibration
+
+Collect real non-OWNER CAM++ data before selecting an OWNER-speaker threshold. Never use
+vendor defaults or OWNER-only data as a production threshold.
+
+### Voice anti-spoof
+
+Keep speaker identity and spoof probability as separate evidence. Benchmark an
+ASVspoof/SASV-class candidate only if it materially improves the spoken actor-binding
+problem on the JARVIS microphone route.
+
+### Overlap / speaker-change evidence
+
+Sortformer-class overlap evidence remains useful for Scenario G and actor ambiguity.
+It must stay on canonical PCM and must not become a second microphone owner.
+
+### Short-turn continuity
+
+If later implemented, short turns may inherit recent accepted speaker state only within
+the same session/conversation and only when no overlap/change/spoof/device discontinuity
+exists. Inherited voice state can never be the sole basis for stronger authority.
+
+---
+
+## Implementation / validation order from here
+
+1. Run CI for the bounded T2 implementation.
+2. Run **one** normal production smoke: `jarvis-dev`, establish live OWNER context, ask
+   JARVIS who it currently identifies/trusts and what trust level it sees.
+3. If that smoke passes, record bounded T2 as accepted production behavior.
+4. Continue spoken actor-binding/overlap/anti-spoof hardening as separate bounded work;
+   do not reopen basic LR-ASD replay/alignment calibration without a new failure.
+5. Complete automated threat/degraded-mode checks around T2/T3 policy boundaries.
+6. Reconcile final Step-3 docs and human review.
+7. Merge only after the Step-3 draft PR is intentionally approved, then resume Step 4.
+
+---
+
+## Hard boundaries
+
+- T2 never implies T3.
+- Critical actions remain T3 + strong verification.
+- Current face+liveness T2 never sets `actor_unambiguous=true`.
+- Persistent/external actions require accepted actor binding in addition to T2.
+- CAM++/LR-ASD/Sortformer thresholds are not silently promoted.
+- No second microphone owner.
+- No hidden cloud biometric processing.
+- No raw biometric media persistence without explicit approved need.
+- No model/provider output bypasses JARVIS policy/authority.
+- Any missing/stale/conflicting identity evidence fails closed.
 
 ## Immediate Next Action
 
-**Complete the research document and build the benchmark-only Streaming Sortformer v2.1 path. Do not promote any new authority until real-machine overlap/performance evidence exists.**
+**Finish CI on bounded T2, then perform one normal `jarvis-dev` identity/trust smoke. No
+more LR-ASD replay/alignment experiments are required for this decision.**
