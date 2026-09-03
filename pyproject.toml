@@ -40,6 +40,7 @@ jarvis-owner-lane-benchmark = "jarvis.identity.owner_lane_benchmark:main"
 jarvis-owner-lane-transition-benchmark = "jarvis.identity.owner_lane_transition_benchmark:main"
 jarvis-owner-lane-geometry-benchmark = "jarvis.identity.owner_lane_geometry_benchmark:main"
 jarvis-personalized-vad-benchmark = "jarvis.identity.personalized_vad_benchmark:main"
+jarvis-personalized-vad-official-benchmark = "jarvis.identity.personalized_vad_official_benchmark:main"
 jarvis-conversation-focus-benchmark = "jarvis.voice.conversation_focus_benchmark:main"
 
 [project.optional-dependencies]
