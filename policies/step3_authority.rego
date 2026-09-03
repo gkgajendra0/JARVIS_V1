@@ -85,7 +85,7 @@ decision := {
     "required_trust": 2,
     "approval_requirement": "explicit",
     "require_owner_attentive": false,
-    "require_actor_unambiguous": false,
+    "require_actor_unambiguous": true,
     "audit_required": true,
     "reason_codes": [],
     "policy_version": "step3-v1",
