@@ -1,9 +1,9 @@
-"""Canonical user-PCM speaker, overlap, and active-speaker shadow diagnostics.
+"""Canonical user-PCM identity diagnostics plus bounded live OWNER T2 context.
 
-The controller keeps identity diagnostics off the conversation critical path. Each
-committed user turn is already submitted as a background task by VoiceRuntimeController;
-this specialization runs overlap evidence on the full canonical turn, trims voiced
-PCM once for CAM++/LR-ASD, and keeps every diagnostic non-authoritative.
+Committed user turns keep CAM++, overlap, and LR-ASD off the conversation critical
+path. The accepted face+liveness+Windows-session OWNER context separately feeds the
+bounded T2 trust bridge; speaker/overlap/active-speaker diagnostics remain
+non-authoritative until their own acceptance gates are complete.
 """
 
 from __future__ import annotations
@@ -19,13 +19,15 @@ from jarvis.identity.overlap_shadow import NativeOverlapShadowObserver
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_shadow import EnrolledSpeakerShadowObserver
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
+from jarvis.identity.trust_context import OwnerTrustContextProvider
 from jarvis.voice.runtime import VoiceRuntimeController
+from jarvis.voice.vision_tools import VisionAgentTools
 
 LOGGER = logging.getLogger(__name__)
 
 
 class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
-    """Run CAM++, Sortformer, and LR-ASD shadow analysis on canonical microphone PCM."""
+    """Run canonical identity diagnostics and expose accepted bounded T2 context."""
 
     def __init__(
         self,
@@ -34,9 +36,22 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         overlap_shadow_observer: NativeOverlapShadowObserver | None = None,
         **kwargs: Any,
     ) -> None:
+        vision_service = kwargs.get("vision_service")
         super().__init__(*args, **kwargs)
         self._speaker_shadow_observer = speaker_shadow_observer
         self._overlap_shadow_observer = overlap_shadow_observer
+        self._owner_trust_context_provider: OwnerTrustContextProvider | None = None
+        if vision_service is not None and self._owner_context_state is not None:
+            trust_provider = OwnerTrustContextProvider(self._owner_context_state)
+            self._owner_trust_context_provider = trust_provider
+            self._vision_tools = VisionAgentTools(
+                vision_service,
+                trust_context_provider=trust_provider,
+            )
+            LOGGER.info(
+                "Bounded T2 OWNER context is active: live face+liveness+unlocked WTS; "
+                "actor binding remains false and T3 remains strong-verifier only"
+            )
 
     async def run(self) -> None:
         try:
