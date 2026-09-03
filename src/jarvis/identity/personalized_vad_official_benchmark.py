@@ -165,7 +165,9 @@ async def run_official_parity_benchmark(
                 duration_seconds=capture_seconds,
             )
             if sample_rate != reference_rate:
-                raise RuntimeError("canonical sample rate changed between pVAD captures")
+                raise RuntimeError(
+                    "canonical sample rate changed between pVAD captures"
+                )
             captures.append((label, samples, sample_rate))
 
         print("\nCapture sanity / existing CAM++ shadow")
