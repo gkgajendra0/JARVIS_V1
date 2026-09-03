@@ -71,7 +71,7 @@ def test_phase_for_time_uses_transition_boundaries() -> None:
     assert _phase_for_time(12.0, **boundaries) == "A_OWNER_ONLY"
 
 
-def test_stable_transition_delay_includes_first_window_inference() -> None:
+def test_stable_transition_delay_waits_for_final_confirming_window() -> None:
     observations = [
         _observation(10.10, 0.20),
         _observation(10.20, 0.80),
@@ -87,14 +87,15 @@ def test_stable_transition_delay_includes_first_window_inference() -> None:
     )
 
     assert delay is not None
-    assert abs(delay - 250.0) < 1e-6
+    assert abs(delay - 450.0) < 1e-6
 
 
-def test_stable_inactive_transition_ignores_insufficient_windows() -> None:
+def test_insufficient_window_breaks_stable_transition_streak() -> None:
     observations = [
-        _observation(20.10, None),
-        _observation(20.20, 0.10, inference_ms=40.0),
+        _observation(20.10, 0.10, inference_ms=40.0),
+        _observation(20.20, None),
         _observation(20.40, 0.20, inference_ms=40.0),
+        _observation(20.60, 0.10, inference_ms=40.0),
     ]
 
     delay = _stable_transition_delay_ms(
@@ -106,7 +107,7 @@ def test_stable_inactive_transition_ignores_insufficient_windows() -> None:
     )
 
     assert delay is not None
-    assert abs(delay - 240.0) < 1e-6
+    assert abs(delay - 640.0) < 1e-6
 
 
 def test_active_fraction_uses_only_scored_windows_in_phase() -> None:
@@ -117,8 +118,11 @@ def test_active_fraction_uses_only_scored_windows_in_phase() -> None:
         _observation(1.6, 0.9, phase="B1_PHONE_ONLY"),
     ]
 
-    assert _active_fraction(
-        observations,
-        phase="A_OWNER_ONLY",
-        threshold=0.5,
-    ) == 0.5
+    assert (
+        _active_fraction(
+            observations,
+            phase="A_OWNER_ONLY",
+            threshold=0.5,
+        )
+        == 0.5
+    )
