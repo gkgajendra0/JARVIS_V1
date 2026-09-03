@@ -65,8 +65,8 @@ active-speaker-benchmark = [
 ]
 overlap-benchmark = ["psutil==7.2.2"]
 personalized-vad-benchmark = [
-    "speechbrain==1.0.3",
-    "torchaudio==2.13.0",
+    "speechbrain==1.1.1",
+    "torchaudio==2.11.0",
     "huggingface-hub>=0.34,<2",
 ]
 conversation-focus-benchmark = [
