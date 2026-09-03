@@ -16,11 +16,11 @@ import numpy as np
 from jarvis.config import JarvisConfig
 from jarvis.identity.active_speaker import ActiveSpeakerState, ActiveSpeakerVisualBuffer
 from jarvis.identity.active_speaker_benchmark import (
-    _NoOpWakeDetector,
-    _TraceLrAsdProvider,
     _drain_audio,
     _establish_owner_lock,
+    _NoOpWakeDetector,
     _shifted_visual_window,
+    _TraceLrAsdProvider,
 )
 from jarvis.identity.lr_asd_turn_gate_benchmark import _slice_turn
 from jarvis.identity.owner_context import build_default_owner_context_observer
