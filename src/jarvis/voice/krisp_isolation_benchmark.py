@@ -162,8 +162,10 @@ async def run_krisp_isolation_benchmark(
         scenarios = (
             (
                 "S_OWNER_PRIME",
-                "Phone/TV completely silent. Speak naturally yourself for the whole capture. "
-                "This primes the conversation before competing speech appears.",
+                (
+                    "Phone/TV completely silent. Speak naturally yourself for the whole "
+                    "capture. This primes the conversation before competing speech appears."
+                ),
                 owner_prime_seconds,
             ),
             (
