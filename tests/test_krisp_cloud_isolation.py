@@ -26,7 +26,9 @@ def test_as_pcm16_mono_clips_float_input() -> None:
     assert converted.tolist() == [-32767, -32767, 0, 16384, 32767, 32767]
 
 
-def test_require_cloud_environment_reports_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_require_cloud_environment_reports_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     for name in ("LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"):
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(KrispCloudIsolationUnavailable) as exc_info:
@@ -37,7 +39,9 @@ def test_require_cloud_environment_reports_missing(monkeypatch: pytest.MonkeyPat
     assert "LIVEKIT_API_SECRET" in message
 
 
-def test_require_cloud_environment_returns_values(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_require_cloud_environment_returns_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     values = {
         "LIVEKIT_URL": "wss://example.livekit.cloud",
         "LIVEKIT_API_KEY": "key",
