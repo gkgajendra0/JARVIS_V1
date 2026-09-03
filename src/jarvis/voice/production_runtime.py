@@ -101,15 +101,25 @@ def build_production_voice_runtime(
 
     # Bounded T2 is intentionally independent of speaker/ASD shadow thresholds.
     # It comes only from the accepted 3B.8 OWNER face+liveness path bound to WTS.
+    # If the local identity stack cannot load, fail closed for trust while keeping
+    # ordinary conversation/vision available.
     owner_context_state: OwnerContextState | None = None
     evidence_observer = None
     if config.vision_enabled:
-        evidence_observer = build_default_owner_context_observer()
-        owner_context_state = evidence_observer.state
-        LOGGER.info(
-            "OWNER face+liveness context is loaded for bounded T2; critical actions "
-            "remain T3 strong-verifier only"
-        )
+        try:
+            evidence_observer = build_default_owner_context_observer()
+        except Exception as exc:
+            LOGGER.warning(
+                "OWNER face+liveness context is unavailable; bounded T2 stays "
+                "disabled while ordinary JARVIS continues: %s",
+                exc,
+            )
+        else:
+            owner_context_state = evidence_observer.state
+            LOGGER.info(
+                "OWNER face+liveness context is loaded for bounded T2; critical "
+                "actions remain T3 strong-verifier only"
+            )
 
     active_speaker_visual_buffer: ActiveSpeakerVisualBuffer | None = None
     active_speaker_provider: LrAsdActiveSpeakerProvider | None = None
