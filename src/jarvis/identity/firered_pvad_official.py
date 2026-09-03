@@ -181,7 +181,9 @@ class FireRedOfficialParityVad:
             )
         return np.ascontiguousarray(target), elapsed_ms
 
-    def _infer_waveform(self, waveform: np.ndarray, exp_filter) -> tuple[
+    def _infer_waveform(
+        self, waveform: np.ndarray, exp_filter
+    ) -> tuple[
         np.ndarray,
         np.ndarray,
         tuple[float, ...],
