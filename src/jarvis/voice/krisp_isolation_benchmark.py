@@ -59,7 +59,9 @@ def _slice_like(
     return result
 
 
-def _comparison(observer, raw, isolated, *, label: str, sample_rate: int) -> _PhaseComparison:
+def _comparison(
+    observer, raw, isolated, *, label: str, sample_rate: int
+) -> _PhaseComparison:
     raw_metrics = segment_metrics(raw, sample_rate)
     isolated_metrics = segment_metrics(isolated, sample_rate)
     raw_score = observer.score(raw, sample_rate=sample_rate)
@@ -196,7 +198,9 @@ async def run_krisp_isolation_benchmark(
             if expected_rate is None:
                 expected_rate = sample_rate
             elif sample_rate != expected_rate:
-                raise RuntimeError("canonical sample rate changed between Krisp captures")
+                raise RuntimeError(
+                    "canonical sample rate changed between Krisp captures"
+                )
             captures.append((label, samples, sample_rate))
 
         assert expected_rate is not None
@@ -216,9 +220,7 @@ async def run_krisp_isolation_benchmark(
             )
 
         combined = np.concatenate([samples for _, samples, _ in captures])
-        runner = KrispCloudIsolationRunner(
-            noise_suppression_level=suppression_level
-        )
+        runner = KrispCloudIsolationRunner(noise_suppression_level=suppression_level)
         print("\nReplaying the exact captured sequence through Krisp VIVA...")
         isolation = await runner.run(combined, sample_rate=expected_rate)
         isolated_captures = _slice_like(isolation.samples, captures)
@@ -274,7 +276,9 @@ async def run_krisp_isolation_benchmark(
             f"  end_to_end_wall={isolation.wall_seconds:.2f}s | "
             f"wall/audio={isolation.realtime_factor:.3f}"
         )
-        print("  NOTE: wall time includes LiveKit Cloud transport + room setup, not just VIVA DSP.")
+        print(
+            "  NOTE: wall time includes LiveKit Cloud transport + room setup, not just VIVA DSP."
+        )
 
         print("\nSafety disposition")
         print("  security_stream_filtered = False")
