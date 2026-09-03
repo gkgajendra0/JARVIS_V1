@@ -108,7 +108,7 @@ def build_production_voice_runtime(
     if config.vision_enabled:
         try:
             evidence_observer = build_default_owner_context_observer()
-        except Exception as exc:
+        except (OSError, RuntimeError, ValueError) as exc:
             LOGGER.warning(
                 "OWNER face+liveness context is unavailable; bounded T2 stays "
                 "disabled while ordinary JARVIS continues: %s",
