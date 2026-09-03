@@ -2,12 +2,13 @@
 
 These are universal completion rules for major JARVIS product slices. Individual steps may add stricter criteria in `CURRENT_PLAN.md`.
 
-A step is not `DONE` merely because code exists or unit tests pass.
+A step is not `DONE` merely because code exists or unit tests pass. A deliberately deferred item also does not have to keep a step open forever when its unavailable behavior is explicitly bounded, fails safely, is documented, and does not block the next slice.
 
 ## 1. Scope Gate
 
 - The implementation matches the approved active slice.
 - Explicit non-scope remains unimplemented.
+- Deferred hardening is recorded with its current fail-safe product limitation and reconsideration trigger.
 - No unrelated technology or future-capability detour has been smuggled in.
 - No old-JARVIS runtime dependency has been introduced.
 - Future capability ideas are recorded without automatically replacing the current release.
@@ -50,10 +51,11 @@ A green PR head is necessary but not always sufficient. Hardware/provider/Window
 - Current/fresh claims have source/freshness evidence when the product slice requires it.
 - A source/router/provider classification cannot become a false spoken claim merely because the requested source/capability was unavailable.
 - Read-only evidence is not described as though a write/action occurred.
+- A deferred capability must be reported as unavailable rather than simulated by a weaker path.
 
 ## 5. Authority and Risk Gate
 
-The exact implementation is researched in Step 3, but all future capability work must preserve a proportional-risk model.
+All future capability work must preserve the accepted Step-3 proportional-risk model.
 
 ### Low-risk read
 
@@ -86,7 +88,8 @@ Expected behaviour:
 - separate read/draft/proposal from commit/send/write authority;
 - explicit approval bound to the materially relevant target/content/parameters;
 - preview/draft-before-commit where practical;
-- stronger confirmation when rollback is unavailable.
+- stronger confirmation when rollback is unavailable;
+- if a required actor-binding or trust signal is intentionally not yet accepted, the action remains blocked or uses an explicitly accepted stronger verification path rather than silently weakening the floor.
 
 ### Destructive, financial, security-sensitive, or self-modifying action
 
@@ -94,7 +97,7 @@ Examples: destructive deletion, unrestricted shell/installation/security changes
 
 Expected behaviour:
 
-- separately designed future governance;
+- separately designed governance;
 - exact-action binding;
 - strong step-up trust where appropriate;
 - backup/dry-run/rollback when applicable;
@@ -154,21 +157,22 @@ Do not optimize against imaginary requirements; measure the user-critical path f
 
 The user must be able to use the feature normally, not only through synthetic tests.
 
-The active plan should define concrete human acceptance scenarios. A major slice remains incomplete until those scenarios are accepted or explicitly waived with a documented reason.
+The active plan should define concrete human acceptance scenarios. A major slice remains incomplete until those scenarios are accepted or explicitly waived/deferred with a documented reason and safe product boundary.
 
-Human testing should validate the product behaviour, not just that a technical provider responds. Examples: conversational naturalness, correction behavior, no repeated unnecessary approvals, truthful failures, useful latency, and predictable cancellation/rollback.
+Human testing should validate product behaviour, not just that a technical provider responds.
 
 ## 10. Documentation Reconciliation Gate
 
 Before a major step is marked `DONE`:
 
-- `CURRENT_PLAN.md` reflects the final accepted state and the next active slice;
+- `CURRENT_PLAN.md` reflects the final accepted state and next active slice;
 - `CURRENT_ARCHITECTURE.md` reflects the architecture that actually exists;
-- `ROADMAP.md` marks the completed and active steps correctly;
+- `ROADMAP.md` marks completed/active steps correctly;
 - `PRODUCT.md` is updated only if permanent product intent changed;
 - a research record exists if a major technology selection required research;
-- an ADR exists if a major architecture/technology decision needs durable reasoning;
+- an ADR exists if a major architecture/technology/deferral decision needs durable reasoning;
 - capability status/step mapping remains internally consistent;
+- residual limitations that affect future capabilities are explicit;
 - accepted development/runtime infrastructure that changes future workflow or authority boundaries is documented rather than left only in PR history.
 
 Do not create duplicate final/historical copies. Git history is the archive.

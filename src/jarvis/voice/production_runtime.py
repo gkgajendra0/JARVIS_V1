@@ -1,9 +1,9 @@
 """Production JARVIS voice-runtime assembly.
 
-Conversation audio uses LiveKit MediaDevices/WebRTC AEC at 48 kHz. Speaker
-identity and active-speaker diagnostics reuse the same canonical timestamped user
-PCM. Speaker identity is a parallel shadow observer and never blocks normal
-conversation or grants authority.
+Conversation audio uses LiveKit MediaDevices/WebRTC AEC at 48 kHz. The accepted
+OWNER face+liveness+Windows-session path can provide short-lived bounded T2 context.
+CAM++, overlap, and active-speaker diagnostics reuse the same canonical timestamped
+user PCM but remain parallel shadow evidence with no authority effect.
 """
 
 from __future__ import annotations
@@ -19,10 +19,16 @@ from jarvis.identity.active_speaker import (
     ActiveSpeakerVisualBuffer,
     LrAsdActiveSpeakerProvider,
 )
+from jarvis.identity.overlap_shadow import (
+    NativeOverlapShadowObserver,
+    build_default_overlap_shadow_observer,
+)
 from jarvis.identity.owner_context import (
     OwnerContextState,
     build_default_owner_context_observer,
 )
+from jarvis.identity.sortformer_assets import SortformerAssetError
+from jarvis.identity.sortformer_native import SortformerNativeError
 from jarvis.identity.speaker_shadow import (
     EnrolledSpeakerShadowObserver,
     SpeakerShadowRuntimeError,
@@ -93,14 +99,31 @@ def build_production_voice_runtime(
                 exc,
             )
 
+    # Bounded T2 is intentionally independent of speaker/ASD shadow thresholds.
+    # It comes only from the accepted 3B.8 OWNER face+liveness path bound to WTS.
+    # If the local identity stack cannot load, fail closed for trust while keeping
+    # ordinary conversation/vision available.
     owner_context_state: OwnerContextState | None = None
     evidence_observer = None
-    if config.vision_enabled and config.speaker_shadow_enabled:
-        evidence_observer = build_default_owner_context_observer()
-        owner_context_state = evidence_observer.state
+    if config.vision_enabled:
+        try:
+            evidence_observer = build_default_owner_context_observer()
+        except (OSError, RuntimeError, ValueError) as exc:
+            LOGGER.warning(
+                "OWNER face+liveness context is unavailable; bounded T2 stays "
+                "disabled while ordinary JARVIS continues: %s",
+                exc,
+            )
+        else:
+            owner_context_state = evidence_observer.state
+            LOGGER.info(
+                "OWNER face+liveness context is loaded for bounded T2; critical "
+                "actions remain T3 strong-verifier only"
+            )
 
     active_speaker_visual_buffer: ActiveSpeakerVisualBuffer | None = None
     active_speaker_provider: LrAsdActiveSpeakerProvider | None = None
+    overlap_shadow_observer: NativeOverlapShadowObserver | None = None
 
     if config.active_speaker_shadow_enabled:
         assert config.active_speaker_model_path is not None
@@ -114,6 +137,27 @@ def build_production_voice_runtime(
             "Step-3 active-speaker diagnostics use one Pocket3 microphone owner: "
             "canonical LiveKit user PCM + timestamped Vision track/head frames"
         )
+        try:
+            overlap_shadow_observer = build_default_overlap_shadow_observer()
+            LOGGER.info(
+                "Native Sortformer overlap shadow is loaded: runtime=%s | "
+                "model_load_ms=%.1f | per-turn scoring is asynchronous and has no "
+                "authority effect",
+                overlap_shadow_observer.runtime_version,
+                overlap_shadow_observer.model_load_ms,
+            )
+        except (
+            SortformerAssetError,
+            SortformerNativeError,
+            OSError,
+            ValueError,
+        ) as exc:
+            # Step 3B.13 remains fail-open for conversation and fail-closed for
+            # identity authority while the shadow integration is being accepted.
+            LOGGER.warning(
+                "Native Sortformer overlap shadow is unavailable and will stay disabled: %s",
+                exc,
+            )
 
     # Speaker identity needs clean voiced regions even when LR-ASD is disabled.
     # This detector runs only inside the already-background shadow turn task.
@@ -157,6 +201,7 @@ def build_production_voice_runtime(
         active_speaker_provider=active_speaker_provider,
         speech_region_detector=speech_region_detector,
         speaker_shadow_observer=speaker_shadow_observer,
+        overlap_shadow_observer=overlap_shadow_observer,
     )
 
 

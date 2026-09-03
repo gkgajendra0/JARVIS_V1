@@ -113,6 +113,7 @@ def hard_floor_for(risk_class: RiskClass) -> PolicyRequirements:
         return PolicyRequirements(
             required_trust=TrustTier.CORROBORATED_OWNER,
             approval_requirement=ApprovalRequirement.DIRECT_INTENT,
+            require_actor_unambiguous=True,
             audit_required=True,
         )
     if risk_class is RiskClass.CRITICAL:

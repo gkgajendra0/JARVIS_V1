@@ -2,9 +2,9 @@
 
 ## Status
 
-**STEP 3 COMPLETE + MERGED. IDENTITY / TRUST / AUTHORITY / OBSERVABILITY FOUNDATION IS ACCEPTED ON `main`. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 REMAINS DISABLED. STEP 4 MEMORY/CONTEXT ARCHITECTURE IS NOT YET SELECTED.**
+**STEP 3 CORE ARCHITECTURE IS ACCEPTED ON THE FINALIZATION BRANCH. BOUNDED T2 IS ACTIVE IN PRODUCTION. SPOKEN ACTOR BINDING IS DEFERRED, SO NORMAL T2 KEEPS `actor_unambiguous=false`. PR #18 IS NOT YET MERGED TO `main`.**
 
-This file describes only architecture that actually exists and is accepted. Detailed experiments/evidence belong in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; durable decisions belong in `docs/decisions/`.
+This file describes architecture that actually exists and is accepted. Active work order belongs in `docs/CURRENT_PLAN.md`; experiments/evidence belong in `docs/research/`; durable decisions belong in `docs/decisions/`.
 
 ---
 
@@ -17,24 +17,28 @@ This file describes only architecture that actually exists and is accepted. Deta
           │                        │                        │
         VOICE                    VISION                  AUTHORITY
           │                        │                        │
-Pocket3 microphone          Pocket3 video            typed evidence
+Pocket3 microphone          Pocket3 video            typed context/evidence
           │                        │                        │
-LiveKit MediaDevices        OpenCV camera            deterministic trust
+LiveKit MediaDevices        OpenCV camera            T0-T3 trust
 AEC + NS + HPF + AGC             │                        │
-          │                 RF-DETR + OC-SORT          proposal/risk/policy
+          │                 RF-DETR + OC-SORT          ActionProposal
+canonical user PCM               │                        │
+          │                 head/face association      R0-R5 risk floor
           │                        │                        │
-realtime provider           head/face/liveness       approvals / Windows Hello
+          │                 YuNet + SFace              fail-closed OPA
+          │                        +                        │
+          │                 MiniFAS liveness           approvals
           │                        │                        │
-NVIDIA 48 kHz → TV          OWNER context                 │
+          │                 bounded OWNER T2      Windows Hello / T3
           │                        │                        │
-          ├──── CAM++ speaker shadow ─────┐                │
-          │                               │                │
-          └──── LR-ASD active-speaker ────┴── evidence ───┤
-                                                          │
-                                      no sensor/model grants permission
+          ├── CAM++ speaker shadow ─────┐                 │
+          ├── LR-ASD active-speaker ────┼── diagnostics ──┤
+          └── Sortformer overlap ───────┘                 │
+                                                           │
+                                      final revalidation + one-time permit
 ```
 
-Permanent rule: **identity/perception evidence is not execution permission.**
+Permanent rule: **identity/perception/model evidence is not execution permission.**
 
 ---
 
@@ -49,19 +53,18 @@ Windows environment for provider secrets
         ↓
 startup preflight
         ↓
-jarvis-voice
+jarvis-voice / jarvis-dev
 ```
 
-Accepted current-machine roles:
+Accepted target-machine roles:
 
 - Pocket3 microphone selected by stable Windows WASAPI `name + hostapi` identity;
 - conversation output through NVIDIA `24'TV` at 48 kHz;
-- local wake model path persisted;
+- local wake model persisted;
 - realtime provider boundary retained;
-- LR-ASD and CAM++ model assets locally managed/integrity checked;
-- vision/speaker/active-speaker switches persisted.
-
-API keys remain outside normal machine-profile state.
+- LR-ASD/CAM++/Sortformer assets locally managed;
+- Vision, speaker, and active-speaker switches persisted;
+- API keys remain outside normal machine-profile state.
 
 Decision: `docs/decisions/ADR-012_MACHINE_CONFIGURATION_AND_STARTUP_PREFLIGHT.md`.
 
@@ -76,9 +79,10 @@ LiveKit rtc.MediaDevices.open_input()
 WebRTC AEC + NS + HPF + AGC
         ↓
 canonical processed user PCM
-        ├── wake / AgentSession / realtime conversation
+        ├── wake / realtime conversation
         ├── CAM++ speaker shadow
-        └── LR-ASD audio input
+        ├── LR-ASD active-speaker shadow
+        └── native Sortformer overlap shadow
         ↓
 LiveKit MediaDevices output / APM render reference
         ↓
@@ -89,19 +93,10 @@ Requirements:
 
 - LiveKit MediaDevices is the only production Pocket3 microphone owner;
 - capture and render share the WebRTC APM/AEC reference;
-- speaker/active-speaker diagnostics reuse canonical PCM;
-- diagnostics do not open a second production microphone;
-- Bluetooth/Tribit is not the accepted production render path.
+- identity diagnostics reuse canonical PCM;
+- diagnostics never open a second production microphone.
 
-Rejected production architecture:
-
-```text
-Pocket3 mic
-   ├── LiveKit/PortAudio
-   └── independent GStreamer wasapi2src
-```
-
-Historical paired-GStreamer diagnostic code may remain as engineering evidence, but it is not the `jarvis-voice` production path.
+Rejected production architecture: independent simultaneous LiveKit + GStreamer ownership of the Pocket3 microphone.
 
 Decisions:
 
@@ -110,7 +105,7 @@ Decisions:
 
 ---
 
-## Vision / OWNER evidence
+## Vision and bounded OWNER T2
 
 ```text
 Pocket3 video
@@ -123,71 +118,80 @@ OC-SORT persistent track
         ↓
 head association
         ↓
-YuNet + SFace OWNER identity
+YuNet + SFace temporal OWNER identity
         +
 MiniFAS temporal passive liveness
+        ↓
+same visual track + fresh evidence
         +
-active-liveness fallback when required
+current active/unlocked matching Windows WTS session
         ↓
-same Windows session + same visual track
-        ↓
-OWNER-context evidence
+T2 CORROBORATED_OWNER
 ```
 
-OWNER visual evidence is freshness/session/track bound and remains evidence rather than permission.
+T2 is short-lived contextual OWNER trust. The production bridge requires:
 
-Attention/gaze remains deferred because the movable Pocket3 is not a stable monitor-relative gaze sensor.
+1. temporal enrolled OWNER SFace state `OWNER_CANDIDATE`;
+2. passive liveness `LIVE` on the same visual track;
+3. fresh fused evidence (2-second runtime TTL);
+4. matching Windows WTS session; and
+5. active/unlocked Windows session.
+
+Any stale evidence, identity ambiguity, unknown subject, spoof/uncertain liveness, WTS mismatch, Windows lock, or WTS failure drops the context to `UNVERIFIED`.
+
+Normal T2 currently emits:
+
+```text
+trust_tier = CORROBORATED_OWNER
+actor_unambiguous = false
+attention_state = UNAVAILABLE
+```
+
+The production smoke on 2026-09-04 confirmed that normal JARVIS can identify the visible user as OWNER and report Tier 2 without falsely claiming T3.
+
+Decision: `docs/decisions/ADR-015_BOUNDED_T2_OWNER_CONTEXT.md`.
 
 ---
 
 ## Encrypted OWNER profile
 
-The accepted local encrypted OWNER profile currently contains:
+The accepted local encrypted OWNER profile contains FACE + VOICE modalities.
 
-```text
-face + voice
-```
+Properties:
 
-Voice enrollment is explicit and Windows-Hello-gated. Raw enrollment audio is memory-only and discarded. Normal conversation cannot auto-enroll or adapt OWNER voice prototypes from similarity alone.
+- one OWNER profile;
+- AES-256-GCM protected payloads;
+- DPAPI-sealed per-profile key material;
+- explicit Windows-Hello-gated profile mutations;
+- face templates are multi-prototype SFace data;
+- voice templates are CAM++ prototypes;
+- raw enrollment audio/video is not retained by default;
+- normal conversation cannot auto-enroll or silently adapt OWNER templates.
 
 ---
 
 ## Audio-first CAM++ speaker shadow
 
 ```text
-canonical LiveKit processed user PCM
+canonical LiveKit user PCM
         ↓
-ObservedSessionAudioInput
-        ↓
-bounded in-memory turn capture
-        ↓
-local Silero speech-region gate
-        ↓
-quality gate
+local speech-region + quality gate
         ↓
 CAM++ embedding
         ↓
-encrypted OWNER prototype comparison
+encrypted OWNER voice prototype comparison
         ↓
-diagnostic similarity only
+diagnostic similarity
 ```
 
-Real-machine acceptance:
+Accepted behavior:
 
-- 12 accepted enrollment samples;
-- 6 persisted prototypes;
-- 192-dimensional embeddings;
-- enrollment coverage min `0.7593`, p05 `0.7749`, median `0.8726`;
-- ordinary-conversation OWNER similarities observed at `0.6737–0.7450`;
-- observed inference `57.5–173.2 ms` and non-blocking to conversation.
+- asynchronous and non-blocking to conversation;
+- short/poor/missed speech becomes `INSUFFICIENT`;
+- no production OWNER-speaker threshold is promoted;
+- no CAM++ result directly changes authority.
 
-Current disposition:
-
-- no production OWNER speaker threshold selected;
-- no speaker classification promoted to authority;
-- poor/short/missed speech becomes `INSUFFICIENT`;
-- speaker shadow may operate without Vision;
-- missing enrollment/model/dependency disables the diagnostic observer rather than normal conversation.
+CAM++ remains reusable evidence for future spoken actor binding.
 
 Decision: `docs/decisions/ADR-014_AUDIO_FIRST_SPEAKER_SHADOW.md`.
 
@@ -198,26 +202,30 @@ Decision: `docs/decisions/ADR-014_AUDIO_FIRST_SPEAKER_SHADOW.md`.
 ```text
 canonical LiveKit user PCM ───────────────┐
                                            ├── monotonic overlap → LR-ASD
-normal Vision OWNER track/head timeline ──┘
+Vision OWNER track/head timeline ─────────┘
 ```
 
-The provider scores only when speech quality, fresh same-track OWNER context, timestamps, and sufficient visual continuity are available.
+Accepted evidence demonstrates useful positive OWNER-speaking and strong negative phone/off-camera/replayed-speech behavior, but short-window genuine-OWNER recall is variable. Canonical 0 ms alignment is retained; no fixed AV correction and no production LR-ASD threshold are promoted.
 
-Accepted evidence includes:
+LR-ASD remains corroborative/negative evidence for future actor binding, not a T2 or authority gate by itself.
 
-- OWNER speech → strong positive;
-- TV/off-camera speech → strong negative;
-- replayed OWNER voice while OWNER visually silent → strong negative for LR-ASD;
-- temporary head loss → insufficient;
-- OWNER + concurrent other/background speech → high LR-ASD because OWNER really is speaking.
+Do not reopen basic replay/alignment calibration unless a new production failure or model/runtime change creates a new question.
 
-That last case is a known semantic boundary: LR-ASD does not prove OWNER is the only speaker in mixed audio. No active-speaker deployment threshold is selected and `active_speaker_confirmed` remains false.
+---
 
-Evidence:
+## Native Sortformer overlap shadow
 
-- `docs/research/STEP_3B11_SINGLE_OWNER_ACTIVE_SPEAKER_ACCEPTANCE_RESULTS.md`
-- `docs/research/STEP_3B11_LR_ASD_BAKEOFF_HARNESS.md`
-- `docs/research/STEP_3_CLOSURE_ACCEPTANCE.md`
+The production runtime also reuses canonical PCM for native NeMo-Speech Sortformer overlap/speaker-change evidence on the RTX 5060 Ti.
+
+Purpose:
+
+- identify multi-speaker/overlap ambiguity;
+- provide speaker-change evidence for future turn-specific actor binding;
+- remain asynchronous and non-authoritative.
+
+The production T2 smoke successfully loaded the native CUDA runtime and produced `single_speaker` evidence during normal OWNER turns.
+
+Sortformer does not own another microphone and does not directly grant authority.
 
 ---
 
@@ -226,11 +234,11 @@ Evidence:
 ```text
 identity/context evidence
         ↓
-graduated trust
+InteractionContext / graduated trust
         ↓
 immutable ActionProposal
         ↓
-deterministic risk floor
+deterministic R0-R5 risk floor
         ↓
 fail-closed OPA policy
         ↓
@@ -250,7 +258,20 @@ Accepted trust vocabulary:
 - T2 `CORROBORATED_OWNER`
 - T3 `VERIFIED_OWNER`
 
-**T2 remains disabled.** Windows Hello remains the accepted strong-verification path for consequential authority.
+Accepted current risk boundary:
+
+```text
+R0 ROUTINE                  -> T0
+R1 PRIVATE_READ             -> T2 + policy/direct-intent rules
+R2 REVERSIBLE_LOCAL_CHANGE  -> T2 + policy/direct-intent rules
+R3 PERSISTENT_OR_EXTERNAL   -> T2 + approval + actor_unambiguous
+R4 CRITICAL                 -> T3 + strong verification
+R5 RESTRICTED_DEV_ONLY      -> T3 + strong verification + extra context
+```
+
+Because current T2 deliberately keeps `actor_unambiguous=false`, spoken R3 persistent/external actions remain fail-closed until spoken actor binding is explicitly resumed and accepted.
+
+Critical R4 authority remains T3 / Windows Hello strong verification.
 
 Permanent invariants:
 
@@ -259,49 +280,52 @@ face match       ≠ permission
 speaker match    ≠ permission
 liveness         ≠ permission
 active speaker   ≠ permission
-attention        ≠ permission
+overlap model    ≠ permission
 wake word        ≠ owner
 Windows unlocked ≠ owner speaking
 LLM confidence   ≠ permission
 ```
 
-Decision: `docs/decisions/ADR-006_STEP_3_IDENTITY_TRUST_AUTHORITY_GOVERNANCE.md`.
+Decisions:
+
+- `docs/decisions/ADR-006_STEP_3_IDENTITY_TRUST_AUTHORITY_GOVERNANCE.md`
+- `docs/decisions/ADR-015_BOUNDED_T2_OWNER_CONTEXT.md`
+- `docs/decisions/ADR-016_DEFER_SPOKEN_ACTOR_BINDING_AND_RESUME_ROADMAP.md`
 
 ---
 
-## Privacy / observability boundary
+## Privacy and observability boundary
 
 - raw biometric audio/video is memory-only by default;
 - bounded encrypted biometric templates exist only through explicit enrollment;
-- secrets/tokens are not normal logs/model context;
-- audit records state transitions/authority decisions without becoming surveillance;
+- secrets/tokens are not normal logs or model context;
+- audit records authority/state transitions without becoming hidden surveillance;
 - diagnostic model outputs cannot silently change authority;
 - failures and insufficient evidence remain explicit.
 
 ---
 
-## Deferred identity work
+## Deferred identity hardening
 
-Not current architecture and not Step-4 blockers:
+Not current Step-4 blockers:
 
-- streaming overlap/speaker-change detection;
-- replay/synthetic/cloned-voice countermeasures;
-- direct non-owner speaker calibration/thresholds;
-- E/F real-second-person LR-ASD calibration;
-- short-turn speaker continuity;
+- turn-specific spoken actor binding;
+- non-OWNER CAM++ calibration required for that binding;
+- additional replay/synthetic/cloned-voice defenses if research proves useful;
+- short-turn actor continuity if practical use needs it;
+- stronger overlap/diarization semantics beyond current Sortformer evidence;
 - lip reading / AV target-speaker extraction;
-- fixed-camera attention/gaze;
-- any T2 composition or biometric authority promotion.
+- fixed-camera attention/gaze.
 
-Tracked in Issue #14.
+These remain a bounded future hardening package. They must plug into the existing `InteractionContext.actor_unambiguous` / authority path rather than create a parallel authorization system.
 
 ---
 
 ## Step 4 architecture state
 
-**No Step-4 storage/memory framework is selected yet.**
+**No Step-4 memory/storage architecture is accepted yet.**
 
-Research must first define one authoritative JARVIS context/memory owner and establish boundaries among:
+Step 4 must begin research-first and define one authoritative context/memory owner with clear boundaries among:
 
 - live/session working context;
 - durable semantic memory;
@@ -311,4 +335,4 @@ Research must first define one authoritative JARVIS context/memory owner and est
 - retrieval/ranking;
 - transient emotional interaction state.
 
-Models may propose memory candidates but may not directly mutate durable canonical memory. Provider/storage/retrieval boundaries must remain replaceable.
+Models may propose memory candidates but may not directly mutate canonical durable memory. Provider/storage/retrieval boundaries must remain replaceable.

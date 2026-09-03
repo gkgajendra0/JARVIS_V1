@@ -82,6 +82,7 @@ class LocalPolicy:
             req = PolicyRequirements(
                 TrustTier.CORROBORATED_OWNER,
                 ApprovalRequirement.EXPLICIT,
+                require_actor_unambiguous=True,
             )
         elif risk is RiskClass.CRITICAL:
             req = PolicyRequirements(
@@ -387,7 +388,7 @@ def test_spoken_r3_requires_fresh_attention() -> None:
     assert decision.reason_codes == ("spoken_approval_requires_attention",)
 
 
-def test_spoken_r3_requires_unambiguous_actor() -> None:
+def test_r3_hard_floor_requires_unambiguous_actor() -> None:
     clock = FakeClock()
     authority, approvals, _ = service(clock)
     p = proposal(
@@ -406,7 +407,7 @@ def test_spoken_r3_requires_unambiguous_actor() -> None:
         approval_id=approval_id,
     )
     assert decision.effect is AuthorityEffect.DENY
-    assert decision.reason_codes == ("spoken_approval_requires_actor_binding",)
+    assert decision.reason_codes == ("actor_ambiguous",)
 
 
 def test_r3_spoken_approval_allows_when_attention_bound() -> None:

@@ -35,6 +35,16 @@ jarvis-owner-evidence-live = "jarvis.identity.owner_evidence_live:main"
 jarvis-speaker-benchmark = "jarvis.identity.speaker_benchmark:main"
 jarvis-speaker-enroll = "jarvis.identity.speaker_enrollment:main"
 jarvis-active-speaker-benchmark = "jarvis.identity.active_speaker_benchmark_guided:main"
+jarvis-lr-asd-turn-gate-benchmark = "jarvis.identity.lr_asd_turn_gate_benchmark:main"
+jarvis-lr-asd-alignment-benchmark = "jarvis.identity.lr_asd_alignment_benchmark:main"
+jarvis-overlap-benchmark = "jarvis.identity.overlap_benchmark:main"
+jarvis-owner-lane-benchmark = "jarvis.identity.owner_lane_benchmark:main"
+jarvis-owner-lane-transition-benchmark = "jarvis.identity.owner_lane_transition_benchmark:main"
+jarvis-owner-lane-geometry-benchmark = "jarvis.identity.owner_lane_geometry_benchmark:main"
+jarvis-personalized-vad-benchmark = "jarvis.identity.personalized_vad_benchmark:main"
+jarvis-personalized-vad-official-benchmark = "jarvis.identity.personalized_vad_official_benchmark:main"
+jarvis-conversation-focus-benchmark = "jarvis.voice.conversation_focus_benchmark:main"
+jarvis-krisp-isolation-benchmark = "jarvis.voice.krisp_isolation_benchmark:main"
 
 [project.optional-dependencies]
 vision = [
@@ -56,6 +66,20 @@ active-speaker-benchmark = [
     "scipy>=1.14,<2",
     "scikit-learn==1.9.0",
     "psutil==7.2.2",
+]
+overlap-benchmark = ["psutil==7.2.2"]
+personalized-vad-benchmark = [
+    "speechbrain==1.1.1",
+    "torchaudio==2.11.0",
+    "huggingface-hub>=0.34,<2",
+]
+conversation-focus-benchmark = [
+    "livekit-plugins-hush==0.3.3",
+    "sherpa-onnx==1.13.6",
+]
+krisp-benchmark = [
+    "livekit-plugins-krisp==0.3.0",
+    "livekit-api==1.2.1",
 ]
 sensor-av = [
     "gstreamer-bundle==1.28.6; platform_system == 'Windows'",

@@ -1,173 +1,149 @@
 # JARVIS V1 Current Plan
 
-## Active Step
+## Active state
 
-**Step 4 — Live Context and Personal Memory**
+**STEP 3 PRODUCT SCOPE ACCEPTED — DOCUMENTATION / PROTECTED-MAIN MERGE REMAIN. SPOKEN ACTOR BINDING IS EXPLICITLY DEFERRED.**
 
-## Current Stage
+After the Step-3 branch is reviewed and merged, the next active product slice is **Step 4 — Live Context and Personal Memory**.
 
-**STEP 3 COMPLETE + MERGED — STEP 4 ACTIVE — REQUIREMENTS RECOVERY + CURRENT-TECHNOLOGY RESEARCH NEXT**
-
-This file is the operational source of truth for current work. Detailed evidence belongs in `docs/research/`; significant architecture decisions belong in `docs/decisions/`.
+This file is the operational source of truth for current work. Detailed evidence belongs in `docs/research/`; durable architecture decisions belong in `docs/decisions/`.
 
 ---
 
-## Step 3 — DONE
+## Step 3 accepted outcome
 
-Step 3 is complete on protected `main` through PR #15 / merge commit `360a72c58402fbe357fa409437a4ce181921d837`.
+The following are accepted production foundations:
 
-Accepted foundation:
-
-- deterministic T0–T3 graduated trust;
-- deterministic R0–R5 risk floors;
-- immutable proposal fingerprints and proposal-bound approvals;
-- fail-closed policy boundary and final execution revalidation;
-- privacy-aware audit/observability state;
+- T0–T3 trust vocabulary and deterministic R0–R5 risk floors;
+- immutable ActionProposal fingerprints and proposal-bound approvals;
+- fail-closed OPA policy boundary;
+- final pre-execution revalidation and one-time execution permits;
+- privacy-aware local audit;
 - Windows-session invalidation;
-- Windows Hello strong verification for consequential authority;
-- encrypted local OWNER profile;
-- accepted Pocket3 face identity + active/passive liveness evidence;
-- one production Pocket3 microphone owner through LiveKit MediaDevices/WebRTC AEC+NS+HPF+AGC;
-- LR-ASD active-speaker diagnostics on canonical user PCM + Vision timelines;
-- encrypted CAM++ OWNER voice enrollment;
-- asynchronous per-turn CAM++ speaker-shadow scoring that does not block normal conversation.
+- Windows Hello strong verification for T3;
+- encrypted local OWNER profile with FACE + VOICE modalities;
+- YuNet/SFace temporal OWNER identity;
+- MiniFAS passive liveness plus active-liveness fallback;
+- Pocket3 person/head/track Vision pipeline;
+- one production Pocket3 microphone owner through LiveKit MediaDevices/WebRTC AEC + NS + HPF + AGC;
+- canonical timestamped user PCM shared by conversation and diagnostics;
+- CAM++ enrolled-speaker shadow;
+- LR-ASD visible active-speaker shadow;
+- native Sortformer overlap/speaker-change shadow on RTX 5060 Ti;
+- production bounded T2 `CORROBORATED_OWNER` bridge;
+- no raw biometric media persistence by default;
+- no model/sensor output directly grants execution permission.
 
-Final Step-3 authority boundary:
+### Bounded T2 production acceptance
+
+Normal `jarvis-dev` on the real target machine passed the production smoke on 2026-09-04:
+
+- OWNER face+liveness context loaded successfully;
+- OWNER context became `live_owner_candidate`;
+- Vision kept tracking count separate from identity;
+- JARVIS used the dedicated identity context and identified the visible user as OWNER;
+- JARVIS reported **Tier 2** when directly asked for current trust;
+- T3 was not falsely claimed;
+- CAM++, LR-ASD, and Sortformer remained non-authoritative diagnostics;
+- Code Quality CI run #1244 passed on checkpoint `e8a9073`.
+
+**Bounded T2 is accepted. Basic T2 and LR-ASD replay/alignment calibration are closed unless a new production failure appears.**
+
+---
+
+## Accepted authority boundary
 
 ```text
-face identity            = accepted evidence
-face liveness            = accepted evidence
-CAM++ speaker similarity = shadow evidence only
-LR-ASD active speaker    = shadow evidence only
-T2 CORROBORATED_OWNER    = disabled
-Windows Hello            = strong verification path
+R0 ROUTINE                  -> T0
+R1 PRIVATE_READ             -> T2 + policy/direct-intent rules
+R2 REVERSIBLE_LOCAL_CHANGE  -> T2 + policy/direct-intent rules
+R3 PERSISTENT_OR_EXTERNAL   -> T2 + approval + actor_unambiguous
+R4 CRITICAL                 -> T3 + proposal-bound strong verification
+R5 RESTRICTED_DEV_ONLY      -> T3 + strong verification + extra context
 ```
 
-No speaker threshold or LR-ASD threshold is promoted. Identity/perception evidence does not directly grant consequential execution permission.
+Current bounded T2 deliberately emits:
 
-Closure evidence: `docs/research/STEP_3_CLOSURE_ACCEPTANCE.md`.
+```text
+trust_tier = T2 / CORROBORATED_OWNER
+actor_unambiguous = false
+attention = unavailable
+```
 
-Deferred identity hardening is tracked in GitHub Issue #14 and must not automatically interrupt Step 4:
-
-- overlap / concurrent-speaker and speaker-change detection;
-- replay/synthetic/cloned-voice countermeasures;
-- direct non-OWNER CAM++ distributions and any future threshold;
-- E/F with a real second visible person;
-- short-turn same-speaker continuity;
-- fixed monitor-relative attention/gaze;
-- any future T2 composition or biometric authority promotion.
+This means JARVIS can know **GK/the OWNER is currently present and live** without pretending that every spoken command has been proven to come from GK.
 
 ---
 
-## Step 4 goal
+## Explicitly deferred Step-3 hardening
 
-Build **one JARVIS-owned personal-context and memory system** that makes JARVIS meaningfully continuous across conversations without turning every utterance into permanent memory.
+### Spoken actor binding
 
-Step 4 owns:
+Turn-specific spoken actor binding is **deferred**, not lost and not silently treated as complete.
 
-- CAP-008 Live Session Context;
-- CAP-009 Long-Term Personal Memory;
-- CAP-010 Episodic Memory;
-- CAP-011 Semantic Memory;
-- CAP-012 Reflection and Session Learning;
-- CAP-013 Emotional Interaction Context.
+The unresolved question is:
 
-No memory database/provider/framework has been selected yet. Research comes before implementation.
+> Did this exact spoken command come from the OWNER?
 
----
+Existing reusable evidence for future work:
 
-## Product behavior Step 4 must deliver
+- CAM++ enrolled-speaker similarity;
+- LR-ASD visible-speaker corroboration/negative evidence;
+- native Sortformer overlap/speaker-change evidence;
+- fresh T2 OWNER presence;
+- Windows-session binding.
 
-### Live context
+Until actor binding is intentionally resumed and accepted:
 
-JARVIS should understand the current working situation without forcing every turn into durable storage:
+- `actor_unambiguous` remains false for normal bounded T2;
+- spoken R3 persistent/external actions remain fail-closed;
+- no CAM++/LR-ASD/Sortformer threshold is promoted merely to complete Step 3;
+- critical R4 actions remain T3/Windows Hello regardless.
 
-- current goal/task;
-- active project/topic;
-- recent relevant decisions/results;
-- unresolved issues/pending next steps;
-- current-session corrections and constraints.
+Decision: `docs/decisions/ADR-016_DEFER_SPOKEN_ACTOR_BINDING_AND_RESUME_ROADMAP.md`.
 
-Live context may expire with the session/task unless deliberately promoted to durable memory.
-
-### Durable semantic memory
-
-JARVIS should retain genuinely useful long-lived facts such as approved preferences, personal/project facts, stable rules, and explicit corrections.
-
-Durable facts require enough metadata to support:
-
-- provenance;
-- time/freshness;
-- confidence/verification state;
-- correction;
-- supersession;
-- deletion/forgetting.
-
-### Episodic memory
-
-JARVIS may retain meaningful events/milestones/outcomes where later recall is useful, without logging every conversation as an episode.
-
-Examples of the category include completed project milestones, meaningful failures/fixes, significant decisions, and explicit user-requested memories.
-
-### Reflection / memory candidates
-
-Models may help identify candidate memories after conversations or important events, but model output is a **proposal**, not durable-memory authority.
-
-JARVIS-owned policy decides whether a candidate is stored, ignored, merged, superseded, or requires explicit confirmation.
-
-### Emotional interaction context
-
-Transient signals may help JARVIS respond naturally during the current interaction, but inferred mood/emotion must not become a permanent identity label by default.
+Actor binding is **not a blocker for Step 4 or unrelated roadmap work**.
 
 ---
 
-## Hard requirements inherited from PRODUCT.md
+## Other deferred identity improvements
 
-- not every sentence becomes durable memory;
-- explicit current user input outranks passive inference, old memory, or stale preference;
-- durable memory carries provenance and enough timing/confidence metadata for correction/supersession;
-- correction and forgetting are first-class;
-- session context is separate from durable memory;
-- provider history/caches are not automatically canonical JARVIS memory;
-- transient emotional interpretations stay transient by default;
-- secrets are never normal model context;
-- models do not write directly to persistent memory;
-- conversation/context/memory must not have duplicate authoritative owners;
-- providers/storage/retrieval components remain replaceable;
-- raw full transcripts/provider payloads must not be durably retained merely because they are available.
+These are backlog items, not current Step-4 prerequisites:
+
+- real non-OWNER speaker calibration unless needed by future actor binding;
+- voice replay/synthetic/cloned-voice countermeasures unless research shows they materially improve a real authority threat;
+- short-turn speaker continuity unless needed for practical actor binding;
+- stronger overlap/diarization semantics beyond the current native Sortformer evidence;
+- fixed monitor-relative attention/gaze sensing;
+- lip reading / target-speaker extraction.
+
+Do not reopen them simply because they exist in old research notes.
 
 ---
 
-## Step 4 research questions
+## Hard boundaries that future steps inherit
 
-Before selecting architecture or code, answer these with current 2026 evidence:
-
-1. What mature memory/context frameworks or patterns are actually suitable for a local-first personal assistant in 2026?
-2. Which responsibilities should JARVIS own directly versus delegate to commodity storage/retrieval infrastructure?
-3. What is the best boundary between live working context, semantic memory, episodic memory, and reflection?
-4. What storage model best supports provenance, temporal validity, correction, supersession, and deletion?
-5. Where are embeddings useful, and where would exact structured lookup be safer/better?
-6. How should retrieval avoid flooding the realtime model with irrelevant memory?
-7. How should memory candidates be extracted without allowing the LLM to self-author durable truth?
-8. How should explicit user corrections immediately supersede older facts?
-9. Which memory data should remain strictly local, and what—if anything—may be sent to cloud models for reasoning?
-10. How do we migrate/learn from old JARVIS memory work without recreating its duplicate context/memory owners?
-11. What current tools/frameworks materially outperform custom implementation for extraction, retrieval, graph/temporal memory, or lifecycle management?
-12. How do we test memory quality: precision of recall, false memories, stale recall, correction, deletion, privacy, latency, and token cost?
+- T2 never implies T3.
+- Critical actions remain T3 + strong verification.
+- Current face+liveness T2 never sets `actor_unambiguous=true` by itself.
+- Spoken R3 persistent/external actions remain unavailable until actor binding is accepted.
+- No second production Pocket3 microphone owner.
+- No hidden cloud biometric processing.
+- No raw biometric media persistence without an explicit approved need.
+- No model/provider output bypasses JARVIS policy/authority.
+- Missing, stale, ambiguous, or conflicting identity evidence fails closed.
+- Future capabilities must reuse the existing authority path rather than invent parallel permission systems.
 
 ---
 
-## Immediate Step-4 work order
+## Closure actions before Step 4 branch work
 
-1. Read the Step-4 capability requirements in `PRODUCT.md`.
-2. Inspect relevant mappings/lessons in `LEGACY_REQUIREMENTS_MAP.md` and only the necessary old-JARVIS memory/context implementation evidence.
-3. Research current 2026 memory/context technology and serious alternatives.
-4. Produce a requirements + technology comparison document.
-5. Select the smallest suitable architecture with one authoritative JARVIS memory owner and replaceable provider boundaries.
-6. Define privacy/data-lifecycle rules and acceptance tests.
-7. Present the architecture for human approval.
-8. Only then implement Step 4.
+1. Reconcile Step-3 source-of-truth documentation to bounded T2 + deferred actor binding.
+2. Ensure final Step-3 branch CI is green.
+3. Review PR #18 as the coherent Step-3 final checkpoint.
+4. Merge through protected `main` only after explicit human approval.
+5. Restore any intentionally stashed local-only helper files after branch transition if still needed.
+6. Begin Step 4 with requirements recovery and current-technology research; do not carry speculative old memory architecture forward automatically.
 
-## Immediate Next Action
+## Immediate next action
 
-**Begin Step-4 requirements recovery and current-technology research. Do not implement a memory provider/database until the research and architecture decision are complete.**
+**Finish Step-3 documentation/Git closure, then begin Step 4 research. Spoken actor binding remains a documented future hardening package rather than a current blocker.**
