@@ -103,7 +103,7 @@ def test_unknown_and_ambiguous_bands_fail_safe() -> None:
     )
 
 
-def test_owner_candidate_evidence_is_typed_but_explicitly_provisional() -> None:
+def test_owner_candidate_evidence_is_typed_and_requires_live_binding_for_t2() -> None:
     window = _window()
     for index in range(15):
         assessment = window.observe(_observation(index, 0.80))
@@ -113,7 +113,10 @@ def test_owner_candidate_evidence_is_typed_but_explicitly_provisional() -> None:
     assert evidence.verdict is EvidenceVerdict.MATCH
     assert evidence.visual_track_id == 7
     assert evidence.session_id == "wts:3"
-    assert "provisional_temporal_owner_candidate_t2_disabled" in evidence.reason_codes
+    assert (
+        "temporal_owner_candidate_t2_eligible_with_live_binding"
+        in evidence.reason_codes
+    )
 
 
 def test_long_gap_resets_owner_temporal_window() -> None:
@@ -191,7 +194,7 @@ def test_max_prototype_cosine_uses_best_normalized_prototype() -> None:
     assert score == pytest.approx(0.9938837, rel=1e-5)
 
 
-def test_live_owner_candidate_binding_does_not_grant_t2() -> None:
+def test_live_owner_candidate_binding_is_bounded_t2_eligible() -> None:
     window = _window()
     for index in range(15):
         identity = window.observe(_observation(index, 0.82))
@@ -199,7 +202,7 @@ def test_live_owner_candidate_binding_does_not_grant_t2() -> None:
     combined = bind_owner_liveness(identity, _liveness(PassiveLivenessState.LIVE))
 
     assert combined.state is OwnerLivenessBindingState.LIVE_OWNER_CANDIDATE
-    assert not combined.face_evidence_grants_t2
+    assert combined.face_evidence_grants_t2
     assert not combined.requires_active_challenge
 
 
@@ -233,6 +236,7 @@ def test_spoofed_owner_presentation_fails_closed() -> None:
     combined = bind_owner_liveness(identity, _liveness(PassiveLivenessState.SPOOF))
 
     assert combined.state is OwnerLivenessBindingState.SPOOFED_OWNER_PRESENTATION
+    assert not combined.face_evidence_grants_t2
     assert not combined.requires_active_challenge
 
 
@@ -261,3 +265,4 @@ def test_cross_track_or_stale_binding_is_rejected_or_insufficient() -> None:
         _liveness(PassiveLivenessState.LIVE, observed_at=20.0),
     )
     assert stale.state is OwnerLivenessBindingState.INSUFFICIENT
+    assert not stale.face_evidence_grants_t2
