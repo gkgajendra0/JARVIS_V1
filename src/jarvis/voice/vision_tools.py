@@ -1,21 +1,31 @@
-"""Voice-agent tools for inspecting and explicitly controlling local vision tests."""
+"""Voice-agent tools for inspecting local vision and bounded OWNER trust context."""
 
 from __future__ import annotations
 
 from livekit.agents import RunContext, function_tool
 
+from jarvis.identity.trust_context import OwnerTrustContextProvider
 from jarvis.vision.service import VisionService
 
 
 class VisionAgentTools:
-    """Bind one integrated VisionService to a small LiveKit tool surface."""
+    """Bind integrated VisionService and optional T2 context to LiveKit tools."""
 
-    def __init__(self, service: VisionService) -> None:
+    def __init__(
+        self,
+        service: VisionService,
+        *,
+        trust_context_provider: OwnerTrustContextProvider | None = None,
+    ) -> None:
         self._service = service
+        self._trust_context_provider = trust_context_provider
 
     @property
     def tools(self) -> list:
-        return [self.inspect_vision, self.control_vision_follow]
+        tools = [self.inspect_vision, self.control_vision_follow]
+        if self._trust_context_provider is not None:
+            tools.insert(1, self.inspect_identity_context)
+        return tools
 
     def _voice_report(self, *, event_limit: int) -> dict[str, object]:
         """Expose tracker truth without detector-candidate telemetry to the LLM."""
@@ -60,10 +70,9 @@ class VisionAgentTools:
         for tracked-person count, head-detection count, target/follow state, current
         framing source, adaptive zoom command state, and recent tracking transitions.
         `framing_source` may be `head`, `head_hold`, `body`, or null; do not describe
-        a current head detection when the status says `head_hold` or `body`. Do not
-        use this tool to infer clothing colour, arbitrary objects, text, furniture,
-        facial appearance, identity, or any other visual detail absent from the
-        returned fields.
+        a current head detection when the status says `head_hold` or `body`. Identity
+        is deliberately not inferred by this tracker tool; use `inspect_identity_context`
+        when that separate production identity tool is available.
         """
         del context
         return {
@@ -82,9 +91,51 @@ class VisionAgentTools:
                 "general_object_recognition",
                 "text_or_ocr",
                 "scene_description",
-                "facial_appearance_or_identity",
+                "identity_from_tracker_alone",
             ],
             **self._voice_report(event_limit=16),
+        }
+
+    @function_tool()
+    async def inspect_identity_context(self, context: RunContext) -> dict[str, object]:
+        """Read the current bounded OWNER trust level without exposing biometrics.
+
+        T2/CORROBORATED_OWNER means fresh enrolled OWNER face evidence and passive
+        liveness agree on the same visible track in the current unlocked Windows
+        session. T2 is short-lived contextual trust, not strong T3 verification and
+        not proof that the OWNER spoke a particular command. Critical actions still
+        require T3/Windows Hello. Raw templates, biometric scores, and images are never
+        returned by this tool.
+        """
+        del context
+        provider = self._trust_context_provider
+        if provider is None:
+            return {
+                "available": False,
+                "trust_tier": "UNVERIFIED",
+                "trust_level": 0,
+                "t2_active": False,
+                "t3_verified": False,
+                "actor_unambiguous": False,
+                "reason_codes": ["identity_context_not_configured"],
+            }
+        snapshot = provider.snapshot()
+        authority_context = snapshot.context
+        return {
+            "available": True,
+            "trust_tier": authority_context.trust_tier.name,
+            "trust_level": int(authority_context.trust_tier),
+            "t2_active": snapshot.t2_active,
+            "t3_verified": False,
+            "windows_session_valid": authority_context.windows_session_valid,
+            "actor_unambiguous": authority_context.actor_unambiguous,
+            "visual_track_id": snapshot.visual_track_id,
+            "reason_codes": list(snapshot.reason_codes),
+            "semantics": (
+                "T2 corroborates live OWNER presence for bounded authority. It does "
+                "not establish spoken actor binding and never replaces T3 strong "
+                "verification for critical actions."
+            ),
         }
 
     @function_tool()
