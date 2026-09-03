@@ -42,6 +42,7 @@ jarvis-owner-lane-geometry-benchmark = "jarvis.identity.owner_lane_geometry_benc
 jarvis-personalized-vad-benchmark = "jarvis.identity.personalized_vad_benchmark:main"
 jarvis-personalized-vad-official-benchmark = "jarvis.identity.personalized_vad_official_benchmark:main"
 jarvis-conversation-focus-benchmark = "jarvis.voice.conversation_focus_benchmark:main"
+jarvis-krisp-isolation-benchmark = "jarvis.voice.krisp_isolation_benchmark:main"
 
 [project.optional-dependencies]
 vision = [
@@ -73,6 +74,10 @@ personalized-vad-benchmark = [
 conversation-focus-benchmark = [
     "livekit-plugins-hush==0.3.3",
     "sherpa-onnx==1.13.6",
+]
+krisp-benchmark = [
+    "livekit-plugins-krisp==0.3.0",
+    "livekit-api==1.2.1",
 ]
 sensor-av = [
     "gstreamer-bundle==1.28.6; platform_system == 'Windows'",
