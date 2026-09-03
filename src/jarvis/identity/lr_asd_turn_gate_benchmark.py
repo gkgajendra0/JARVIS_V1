@@ -21,9 +21,9 @@ from jarvis.identity.active_speaker import (
     LrAsdActiveSpeakerProvider,
 )
 from jarvis.identity.active_speaker_benchmark import (
-    _NoOpWakeDetector,
     _drain_audio,
     _establish_owner_lock,
+    _NoOpWakeDetector,
 )
 from jarvis.identity.owner_context import build_default_owner_context_observer
 from jarvis.identity.speaker_turn import InMemorySpeakerTurnCapture, SpeakerTurnAudio
