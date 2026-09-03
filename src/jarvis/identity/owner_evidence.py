@@ -24,7 +24,7 @@ class OwnerIdentityState(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class OwnerIdentityThresholds:
-    """Provisional 3B.8 evidence-only bands; these do not grant T2."""
+    """Bounded T2 OWNER-candidate bands; these never grant T3 verification."""
 
     window_size: int = 15
     owner_candidate_min: float = 0.65
@@ -146,7 +146,7 @@ class TemporalOwnerIdentity:
         )
         if similarity >= self.thresholds.owner_candidate_min:
             state = OwnerIdentityState.OWNER_CANDIDATE
-            reasons = ("provisional_temporal_owner_candidate_t2_disabled",)
+            reasons = ("temporal_owner_candidate_t2_eligible_with_live_binding",)
         elif similarity <= self.thresholds.unknown_max:
             state = OwnerIdentityState.UNKNOWN
             reasons = ("temporal_owner_similarity_very_low",)
@@ -229,7 +229,7 @@ class OwnerLivenessBindingAssessment:
 
     @property
     def face_evidence_grants_t2(self) -> bool:
-        return False
+        return self.state is OwnerLivenessBindingState.LIVE_OWNER_CANDIDATE
 
     @property
     def requires_active_challenge(self) -> bool:
@@ -276,7 +276,7 @@ def bind_owner_liveness(
         reasons = ("owner_liveness_insufficient",)
     elif liveness.state is PassiveLivenessState.LIVE:
         state = OwnerLivenessBindingState.LIVE_OWNER_CANDIDATE
-        reasons = ("live_owner_candidate_t2_disabled",)
+        reasons = ("live_owner_candidate_t2_eligible",)
     elif liveness.state is PassiveLivenessState.UNCERTAIN:
         state = OwnerLivenessBindingState.ACTIVE_CHALLENGE_ELIGIBLE
         reasons = ("owner_candidate_passive_liveness_uncertain",)
