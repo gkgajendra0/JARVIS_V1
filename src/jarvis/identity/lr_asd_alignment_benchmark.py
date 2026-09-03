@@ -23,6 +23,7 @@ from jarvis.identity.active_speaker_benchmark import (
     _shifted_visual_window,
 )
 from jarvis.identity.lr_asd_turn_gate_benchmark import _slice_turn
+from jarvis.identity.owner_context import build_default_owner_context_observer
 from jarvis.identity.speaker_turn import InMemorySpeakerTurnCapture, SpeakerTurnAudio
 from jarvis.identity.speech_region import LiveKitSileroSpeechRegionDetector
 from jarvis.vision.service import build_default_vision_service
@@ -118,7 +119,11 @@ def _rms_dbfs(samples: np.ndarray) -> float:
     return 20.0 * math.log10(rms)
 
 
-def _trace_activity_fraction(trace: tuple[float, ...], *, threshold: float) -> float | None:
+def _trace_activity_fraction(
+    trace: tuple[float, ...],
+    *,
+    threshold: float,
+) -> float | None:
     if not trace:
         return None
     return sum(value >= threshold for value in trace) / len(trace)
@@ -153,7 +158,7 @@ def _window_end_times(
     step_seconds: float,
 ) -> tuple[float, ...]:
     first_end = start_monotonic + settle_seconds + window_seconds
-    last_end = end_monotonic
+    last_end = end_monotonic - settle_seconds
     if first_end > last_end + 1e-9:
         return ()
     values: list[float] = []
@@ -183,7 +188,6 @@ async def _capture_phase(
         start_monotonic=started,
         end_monotonic=ended,
     )
-    captured.samples.fill(0)
     if phase_turn is None:
         raise RuntimeError(f"{name} canonical audio interval could not be sliced")
     return PhaseCapture(
@@ -224,10 +228,10 @@ async def _score_phase_offset(
     windows_session_id: str,
     offset_ms: int,
     threshold: float,
-    settle_seconds: float,
+    analysis_margin_seconds: float,
 ) -> OffsetPhaseScore:
-    start = capture.started_at_monotonic + settle_seconds
-    end = capture.ended_at_monotonic
+    start = capture.started_at_monotonic + analysis_margin_seconds
+    end = capture.ended_at_monotonic - analysis_margin_seconds
     analysis_turn = _slice_turn(
         capture.turn,
         start_monotonic=start,
@@ -296,7 +300,7 @@ async def _score_sliding_summary(
     offset_ms: int,
     threshold: float,
     trailing_frames: int,
-    settle_seconds: float,
+    analysis_margin_seconds: float,
     window_seconds: float,
     step_seconds: float,
 ) -> SlidingSummary:
@@ -304,7 +308,7 @@ async def _score_sliding_summary(
     for end_time in _window_end_times(
         start_monotonic=capture.started_at_monotonic,
         end_monotonic=capture.ended_at_monotonic,
-        settle_seconds=settle_seconds,
+        settle_seconds=analysis_margin_seconds,
         window_seconds=window_seconds,
         step_seconds=step_seconds,
     ):
@@ -359,7 +363,11 @@ async def _score_sliding_summary(
 
 
 def _print_audio_proof(proof: PhaseAudioProof) -> None:
-    max_vad = "n/a" if proof.max_vad_probability is None else f"{proof.max_vad_probability:.3f}"
+    max_vad = (
+        "n/a"
+        if proof.max_vad_probability is None
+        else f"{proof.max_vad_probability:.3f}"
+    )
     print(
         f"  {proof.name}: captured={proof.captured_seconds:.2f}s | "
         f"rms={proof.rms_dbfs:.1f} dBFS | speech={proof.speech_seconds:.2f}s | "
@@ -394,8 +402,6 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
     ):
         if not math.isfinite(value) or value <= 0:
             raise ValueError(f"{name} must be positive and finite")
-    if args.phase_seconds <= args.settle_seconds + args.window_seconds:
-        raise ValueError("phase-seconds must exceed settle-seconds + window-seconds")
     if args.window_seconds < 1.0:
         raise ValueError("LR-ASD alignment window must be at least 1.0 second")
     if args.step_seconds > args.window_seconds:
@@ -404,6 +410,13 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
         raise ValueError("trailing-frames must be in [1, 25]")
     if not 0.0 < args.threshold < 1.0:
         raise ValueError("diagnostic threshold must be in (0, 1)")
+
+    maximum_offset_seconds = max(abs(value) for value in args.offsets_ms) / 1000.0
+    analysis_margin_seconds = max(args.settle_seconds, maximum_offset_seconds)
+    if args.phase_seconds <= 2 * analysis_margin_seconds + args.window_seconds:
+        raise ValueError(
+            "phase-seconds must exceed twice the AV analysis margin plus window-seconds"
+        )
 
     config = JarvisConfig.from_environment()
     if not config.vision_enabled:
@@ -444,6 +457,7 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
 
     consumer_task: asyncio.Task[None] | None = None
     vision_started = False
+    audio_started = False
     phone_capture: PhaseCapture | None = None
     owner_capture: PhaseCapture | None = None
 
@@ -453,7 +467,7 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
     print("Uses canonical LiveKit/WebRTC-processed Pocket3 PCM + existing Vision track.")
     print("No raw audio/video/crops are persisted.")
     print(f"phase_seconds = {args.phase_seconds:.2f}")
-    print(f"settle_seconds = {args.settle_seconds:.2f}")
+    print(f"analysis_margin_seconds = {analysis_margin_seconds:.2f}")
     print(f"offsets_ms = {','.join(str(value) for value in args.offsets_ms)}")
     print(f"diagnostic_activity_threshold = {args.threshold:.3f}")
 
@@ -461,6 +475,7 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
         await asyncio.to_thread(vision_service.start)
         vision_started = True
         await audio.start()
+        audio_started = True
         consumer_task = asyncio.create_task(
             _drain_audio(session_input),
             name="jarvis-lr-asd-alignment-audio-drain",
@@ -503,12 +518,9 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
         )
         if command.strip().casefold() in {"q", "quit", "exit"}:
             return 130
-        print("  3...", flush=True)
-        await asyncio.sleep(1.0)
-        print("  2...", flush=True)
-        await asyncio.sleep(1.0)
-        print("  1...", flush=True)
-        await asyncio.sleep(1.0)
+        for value in (3, 2, 1):
+            print(f"  {value}...", flush=True)
+            await asyncio.sleep(1.0)
         owner_capture = await _capture_phase(
             turn_capture,
             name="OWNER_ONLY",
@@ -533,7 +545,7 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
                 windows_session_id=windows_session_id,
                 offset_ms=offset_ms,
                 threshold=args.threshold,
-                settle_seconds=args.settle_seconds,
+                analysis_margin_seconds=analysis_margin_seconds,
             )
             owner_score = await _score_phase_offset(
                 provider,
@@ -543,7 +555,7 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
                 windows_session_id=windows_session_id,
                 offset_ms=offset_ms,
                 threshold=args.threshold,
-                settle_seconds=args.settle_seconds,
+                analysis_margin_seconds=analysis_margin_seconds,
             )
             separation = (
                 None
@@ -600,7 +612,7 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
                     offset_ms=offset_ms,
                     threshold=args.threshold,
                     trailing_frames=args.trailing_frames,
-                    settle_seconds=args.settle_seconds,
+                    analysis_margin_seconds=analysis_margin_seconds,
                     window_seconds=args.window_seconds,
                     step_seconds=args.step_seconds,
                 )
@@ -645,11 +657,13 @@ async def run_alignment_benchmark(args: argparse.Namespace) -> int:
                 capture.turn.samples.fill(0)
         turn_capture.clear()
         visual_buffer.clear()
-        audio.deactivate_session()
+        if audio_started:
+            audio.deactivate_session()
         if consumer_task is not None:
             consumer_task.cancel()
             await asyncio.gather(consumer_task, return_exceptions=True)
-        await audio.aclose()
+        if audio_started:
+            await audio.aclose()
         if vision_started:
             await asyncio.to_thread(vision_service.stop)
 
