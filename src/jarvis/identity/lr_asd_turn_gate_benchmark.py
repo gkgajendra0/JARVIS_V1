@@ -148,26 +148,26 @@ def _stable_transition_delay_ms(
     active: bool,
     stable_windows: int,
 ) -> float | None:
-    eligible = [
-        item
-        for item in observations
-        if item.window_end_monotonic >= boundary_monotonic
-        and item.trailing_score is not None
-    ]
-    for index in range(0, len(eligible) - stable_windows + 1):
-        block = eligible[index : index + stable_windows]
-        matches = [
-            item.trailing_score >= threshold if active else item.trailing_score < threshold
-            for item in block
-            if item.trailing_score is not None
-        ]
-        if len(matches) != stable_windows or not all(matches):
+    run: list[SlidingObservation] = []
+    for item in observations:
+        if item.window_end_monotonic < boundary_monotonic:
             continue
-        first = block[0]
-        inference_seconds = (first.inference_ms or 0.0) / 1000.0
+        score = item.trailing_score
+        if score is None:
+            run.clear()
+            continue
+        matches = score >= threshold if active else score < threshold
+        if not matches:
+            run.clear()
+            continue
+        run.append(item)
+        if len(run) < stable_windows:
+            continue
+        decision = run[-1]
+        inference_seconds = (decision.inference_ms or 0.0) / 1000.0
         return max(
             0.0,
-            (first.window_end_monotonic + inference_seconds - boundary_monotonic)
+            (decision.window_end_monotonic + inference_seconds - boundary_monotonic)
             * 1000.0,
         )
     return None
@@ -187,10 +187,6 @@ def _active_fraction(
     if not scores:
         return None
     return sum(score >= threshold for score in scores) / len(scores)
-
-
-def _format_optional(value: float | None, *, decimals: int = 3) -> str:
-    return "n/a" if value is None else f"{value:.{decimals}f}"
 
 
 async def _countdown() -> None:
@@ -264,7 +260,9 @@ async def run_lr_asd_turn_gate_benchmark(args: argparse.Namespace) -> int:
     print("JARVIS Step 3 LR-ASD sliding OWNER-speaking gate benchmark")
     print("---------------------------------------------------------")
     print("BENCHMARK ONLY: production Gemini/barge-in/trust/authority are unchanged.")
-    print("One canonical Pocket3 audio stream + the existing timestamped OWNER head track.")
+    print(
+        "One canonical Pocket3 audio stream + the existing timestamped OWNER head track."
+    )
     print("No raw audio/video/crops are written to disk.")
     print(f"window_seconds = {args.window_seconds:.2f}")
     print(f"step_seconds = {args.step_seconds:.2f}")
@@ -344,7 +342,10 @@ async def run_lr_asd_turn_gate_benchmark(args: argparse.Namespace) -> int:
 
         print("\nScoring 1-second sliding audiovisual windows...")
         observations: list[SlidingObservation] = []
-        first_end = max(turn.start_monotonic + args.window_seconds, b1_start + args.window_seconds)
+        first_end = max(
+            turn.start_monotonic + args.window_seconds,
+            b1_start + args.window_seconds,
+        )
         last_end = min(turn.end_monotonic, capture_end)
         end_time = first_end
         while end_time <= last_end + 1e-6:
@@ -394,7 +395,7 @@ async def run_lr_asd_turn_gate_benchmark(args: argparse.Namespace) -> int:
             )
             inference_ms = (time.perf_counter() - started) * 1000.0
             trailing_score: float | None = None
-            if assessment.state is ActiveSpeakerState.SCORED and trace:
+            if assessment.state == ActiveSpeakerState.SCORED and trace:
                 tail = trace[-min(args.trailing_frames, len(trace)) :]
                 trailing_score = float(statistics.median(tail))
             observations.append(
@@ -433,12 +434,17 @@ async def run_lr_asd_turn_gate_benchmark(args: argparse.Namespace) -> int:
             if not phase_scores:
                 print(f"  {phase}: scored_windows=0")
                 continue
+            active_fraction = _active_fraction(
+                observations,
+                phase=phase,
+                threshold=args.threshold,
+            )
             print(
                 f"  {phase}: scored_windows={len(phase_scores)} | "
                 f"mean={statistics.mean(phase_scores):.4f} | "
                 f"median={statistics.median(phase_scores):.4f} | "
                 f"min={min(phase_scores):.4f} | max={max(phase_scores):.4f} | "
-                f"active_fraction={_active_fraction(observations, phase=phase, threshold=args.threshold):.3f}"
+                f"active_fraction={active_fraction:.3f}"
             )
 
         owner_onset_ms = _stable_transition_delay_ms(
@@ -470,19 +476,11 @@ async def run_lr_asd_turn_gate_benchmark(args: argparse.Namespace) -> int:
         )
         print(
             "  OWNER inactive while phone continues after G->B2 = "
-            + (
-                "n/a"
-                if owner_inactive_ms is None
-                else f"{owner_inactive_ms:.0f} ms"
-            )
+            + ("n/a" if owner_inactive_ms is None else f"{owner_inactive_ms:.0f} ms")
         )
         print(
             "  OWNER reacquire after phone stops B2->A = "
-            + (
-                "n/a"
-                if owner_reacquire_ms is None
-                else f"{owner_reacquire_ms:.0f} ms"
-            )
+            + ("n/a" if owner_reacquire_ms is None else f"{owner_reacquire_ms:.0f} ms")
         )
         print(
             "  NOTE: projected availability = sliding window end time + measured "
@@ -500,16 +498,24 @@ async def run_lr_asd_turn_gate_benchmark(args: argparse.Namespace) -> int:
             )
 
         b1_fraction = _active_fraction(
-            observations, phase="B1_PHONE_ONLY", threshold=args.threshold
+            observations,
+            phase="B1_PHONE_ONLY",
+            threshold=args.threshold,
         )
         g_fraction = _active_fraction(
-            observations, phase="G_OWNER_PLUS_PHONE", threshold=args.threshold
+            observations,
+            phase="G_OWNER_PLUS_PHONE",
+            threshold=args.threshold,
         )
         b2_fraction = _active_fraction(
-            observations, phase="B2_PHONE_ONLY", threshold=args.threshold
+            observations,
+            phase="B2_PHONE_ONLY",
+            threshold=args.threshold,
         )
         a_fraction = _active_fraction(
-            observations, phase="A_OWNER_ONLY", threshold=args.threshold
+            observations,
+            phase="A_OWNER_ONLY",
+            threshold=args.threshold,
         )
         structural_pass = bool(
             b1_fraction is not None
@@ -581,7 +587,9 @@ def main() -> None:
     try:
         raise SystemExit(asyncio.run(run_lr_asd_turn_gate_benchmark(args)))
     except KeyboardInterrupt:
-        print("\nLR-ASD sliding turn-gate benchmark stopped; no raw media was persisted.")
+        print(
+            "\nLR-ASD sliding turn-gate benchmark stopped; no raw media was persisted."
+        )
         raise SystemExit(130) from None
 
 
