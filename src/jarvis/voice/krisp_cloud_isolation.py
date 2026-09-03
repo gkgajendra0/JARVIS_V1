@@ -204,9 +204,7 @@ class KrispCloudIsolationRunner:
 
             frame_samples = sample_rate // 100
             tail_samples = round(trailing_silence_seconds * sample_rate)
-            replay = np.concatenate(
-                [pcm, np.zeros(tail_samples, dtype=np.int16)]
-            )
+            replay = np.concatenate([pcm, np.zeros(tail_samples, dtype=np.int16)])
             for offset in range(0, replay.size, frame_samples):
                 chunk = replay[offset : offset + frame_samples]
                 if chunk.size < frame_samples:
