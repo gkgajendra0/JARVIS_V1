@@ -4,15 +4,15 @@
 
 **EVIDENCE IN PROGRESS — THESE RESULTS DO NOT APPROVE THE FINAL STEP-4 ARCHITECTURE.**
 
-This document records measured evidence for the Step-4 technology decision. Results must distinguish between reference-environment measurements and measurements from the real JARVIS Windows machine.
+This document records measured evidence for the Step-4 technology decision. Results distinguish between reference-environment measurements and measurements from the real JARVIS Windows machine.
 
-The reproducible research harness is:
+Reproducible harness:
 
 - `tools/research/step4_memory_sqlite_bakeoff.py`
 
-No runtime code under `src/jarvis` is changed by the bake-off.
+No runtime code under `src/jarvis` is changed by this bake-off.
 
-## 1. SQLite temporal + FTS reference-environment spike
+## 1. SQLite temporal + FTS bake-off
 
 ### Purpose
 
@@ -26,77 +26,134 @@ Test whether plain SQLite can satisfy the important canonical-memory mechanics b
 - explicit-forget deletion from canonical + derived FTS representations;
 - low-latency local lookup at a scale much larger than the expected early personal-memory corpus.
 
-### Reference environment
+### 1.1 Reference-environment result
 
-The initial research execution used Python's built-in SQLite 3.46.1 in the research execution environment, not the owner's Windows JARVIS machine.
+Initial research execution used Python's built-in SQLite 3.46.1 in the research execution environment.
 
 Corpus size: **30,000 synthetic fact records**.
 
-### Temporal correctness
+Temporal semantics passed all tested assertions:
 
-The spike passed all tested assertions:
+1. at an old system time, JARVIS can recover what it believed then;
+2. after a genuine preference change, the old value remains valid for its historical interval while the new value is current truth;
+3. after a correction, current knowledge uses the corrected historical value while a system-time query can still recover JARVIS's earlier mistaken belief;
+4. therefore the relational bitemporal pattern can represent the required distinction between **when a fact was true** and **when JARVIS learned/believed it**.
 
-1. At an old system time, JARVIS can recover what it believed at that time.
-2. After a genuine preference change, current knowledge can retain the old value for the old valid-time interval while exposing the new value as current truth.
-3. After a correction, current knowledge can answer the historical period using the corrected value while a system-time query can still show what JARVIS had previously believed.
-4. The test therefore supports the required distinction between **when a fact was true** and **when JARVIS learned/believed it**.
-
-This validates the *pattern*, not the final production schema.
-
-### Reference latency
-
-30,000-record corpus:
+Reference latency:
 
 | Query | p50 | p95 | Maximum observed |
 |---|---:|---:|---:|
 | Exact structured current-fact lookup | ~0.008 ms | ~0.009 ms | ~0.35 ms |
-| FTS5 English (`wake detector` + `TV`) | ~3.25 ms | ~4.84 ms | ~7.44 ms |
-| FTS5 Hindi (`रिसर्च` + `implementation`) | ~3.45 ms | ~5.12 ms | ~7.32 ms |
-| FTS5 Hinglish (`existing technology` + `Jarvis`) | ~2.89 ms | ~3.20 ms | ~4.28 ms |
+| FTS5 English | ~3.25 ms | ~4.84 ms | ~7.44 ms |
+| FTS5 Hindi | ~3.45 ms | ~5.12 ms | ~7.32 ms |
+| FTS5 Hinglish | ~2.89 ms | ~3.20 ms | ~4.28 ms |
 
-These numbers are **not acceptance thresholds** and must not be used as Windows performance guarantees. They show only that there is no evidence yet that SQLite/FTS5 is too slow for this workload class.
+These reference numbers are not acceptance thresholds.
 
-### FTS5 deletion finding
+### 1.2 Real JARVIS Windows-machine result — PASS
 
-The reference SQLite build supports the FTS5 `secure-delete` configuration. A dedicated forget-path test also verified zero normal FTS hits and zero canonical rows after physical deletion of an isolated test memory.
+The owner reran the exact research harness on the actual JARVIS Windows/Python 3.11 environment on **2026-09-04**.
 
-Important caveat: the real JARVIS Python/SQLite build must be tested because FTS5 feature availability depends on the SQLite version bundled with that Python environment.
+Result:
+
+```json
+{
+  "status": "PASS",
+  "purpose": "research-only; not a production architecture approval",
+  "python_sqlite_version": "3.45.1",
+  "seed_records": 30000,
+  "seed_seconds": 0.5354,
+  "temporal_semantics": {
+    "old_system_knew_old_tyre": true,
+    "current_system_knows_historical_tyre": true,
+    "current_system_knows_current_tyre": true,
+    "old_system_exposes_pre_correction_belief": true,
+    "current_system_uses_corrected_history": true
+  },
+  "fts_secure_delete": {
+    "supported": true,
+    "detail": "enabled for research FTS table"
+  },
+  "latency": {
+    "exact_current_fact": {
+      "p50_ms": 0.0165,
+      "p95_ms": 0.0186,
+      "max_ms": 0.2087
+    },
+    "fts_english": {
+      "p50_ms": 4.0938,
+      "p95_ms": 4.6056,
+      "max_ms": 6.1346
+    },
+    "fts_hindi": {
+      "p50_ms": 4.3506,
+      "p95_ms": 4.695,
+      "max_ms": 6.0042
+    },
+    "fts_hinglish": {
+      "p50_ms": 3.7851,
+      "p95_ms": 3.9048,
+      "max_ms": 4.1437
+    }
+  },
+  "forget_zero_recall": {
+    "before_delete_fts_hits": 1,
+    "after_delete_fts_hits": 0,
+    "after_delete_canonical_rows": 0
+  },
+  "database_bytes": 16928768
+}
+```
+
+Interpretation:
+
+- **Temporal correctness passed on the real machine.** Both historical-change and later-correction semantics behaved as required.
+- **FTS5 `secure-delete` is available** in the actual bundled SQLite 3.45.1 environment.
+- **Explicit forget passed zero-recall verification** for the tested isolated record: zero canonical rows and zero normal FTS hits after deletion.
+- Exact current-fact lookup remained effectively negligible for the intended runtime path.
+- English/Hindi/Hinglish FTS p95 remained below 5 ms in this 30,000-record local test.
+- The resulting test database was ~16.9 MB, which gives no current storage-size concern at this scale.
+
+These numbers are still measurements, not hard production thresholds. They establish that there is currently **no performance or feature evidence requiring a heavier canonical database**.
 
 Relevant SQLite documentation:
 
 - https://www.sqlite.org/fts5.html
 - https://www.sqlite.org/wal.html
 
-### Current conclusion
+### Current SQLite disposition
 
 **KEEP SQLITE + FTS5 AS THE LEADING CANONICAL/LEXICAL CANDIDATE. DO NOT ADD XTDB/QDRANT/GRAPHITI/LANCEDB TO THE RUNTIME YET.**
 
 Reason:
 
-- the temporal semantics required by JARVIS are representable with the mature bitemporal pattern;
-- structured lookup is trivially fast in this scale test;
-- lexical FTS remains comfortably small in this reference test;
-- SQLite WAL is designed to allow readers and a writer to progress concurrently on the same host, with one writer at a time, which matches JARVIS's expected low write concurrency;
-- additional database services would add operational, failure, security, synchronization, and self-diagnostic surface without measured benefit yet.
+- required temporal semantics are representable using the proven bitemporal relational pattern;
+- that pattern passed on the actual JARVIS Windows environment;
+- structured lookup is comfortably fast at the tested scale;
+- local English/Hindi/Hinglish lexical retrieval is comfortably fast at the tested scale;
+- FTS5 secure-delete is supported on the real machine;
+- the tested forget path removed both canonical and derived searchable representation;
+- SQLite WAL matches the expected low-write-concurrency, same-host JARVIS workload;
+- additional database services would currently add operational, failure, synchronization, security, and self-diagnostic surface without measured benefit.
 
-This conclusion remains provisional until the Windows rerun and retrieval-quality bake-off are complete.
+This is still provisional until retrieval quality and the other remaining Step-4 bake-offs are complete.
 
 ## 2. Retrieval-quality bake-off — pending
 
-Latency is not enough. FTS5 should be expected to miss semantic paraphrases where important words do not overlap.
+Latency is not enough. A small lexical probe already demonstrated expected FTS5 misses when a semantic paraphrase has weak word overlap, including concepts such as:
+
+- `which device gives Jarvis eyes?` versus a stored camera fact;
+- `meri bike kaunsi hai?` versus a stored motorcycle fact.
+
+This gives a measured reason to evaluate semantic retrieval instead of adding embeddings by convention.
 
 The next retrieval bake-off must compare:
 
 1. exact structured lookup;
 2. FTS5 BM25;
-3. FTS5 + one local multilingual embedding candidate;
-4. FTS5 + the alternate embedding candidate;
-5. add a vector engine only if the embedding path proves useful enough to justify it.
-
-Current embedding candidates retained for the bake-off:
-
-- Qwen3-Embedding-0.6B;
-- BGE-M3.
+3. FTS5 + Qwen3-Embedding-0.6B;
+4. FTS5 + BGE-M3;
+5. a dedicated vector engine only if semantic retrieval proves valuable enough to justify additional runtime state.
 
 The corpus must include English, Hindi, Hinglish, semantic paraphrases, stale facts, superseded facts, and absent-answer/abstention cases.
 
@@ -106,15 +163,15 @@ Current research supports using provider-native structured outputs rather than b
 
 Evidence:
 
-- OpenAI supports JSON-Schema Structured Outputs.
-- Gemini structured outputs support JSON Schema and Pydantic-based Python schemas, while explicitly recommending application-level semantic validation even after schema validation.
+- OpenAI supports JSON-Schema Structured Outputs;
+- Gemini structured outputs support JSON Schema and Pydantic-based Python schemas, while recommending application-level semantic validation after schema validation.
 
 Sources:
 
 - https://openai.com/index/introducing-structured-outputs-in-the-api/
 - https://ai.google.dev/gemini-api/docs/structured-output
 
-The bake-off must measure **semantic correctness**, not merely valid JSON:
+The bake-off must measure semantic correctness, not merely valid JSON:
 
 - correct candidate classification;
 - false durable-memory candidate rate;
@@ -132,7 +189,7 @@ SQLCipher remains the leading whole-database encryption family, but the Python/W
 Current finding:
 
 - the `sqlcipher3` 0.6.2 PyPI project has CPython 3.11 Windows x86-64 wheels;
-- PyPI marks those uploads as **not using Trusted Publishing**;
+- PyPI marks those uploads as not using Trusted Publishing;
 - therefore convenience alone is not enough to approve that dependency for long-lived personal memory.
 
 Source:
@@ -162,7 +219,7 @@ Research is complete only after all of the following are measured or explicitly 
 - [x] memory-framework landscape research;
 - [x] first SQLite bitemporal correctness spike;
 - [x] first SQLite/FTS reference latency spike;
-- [ ] rerun SQLite/FTS spike on the actual JARVIS Windows environment;
+- [x] rerun SQLite/FTS spike on the actual JARVIS Windows environment;
 - [ ] multilingual retrieval-quality bake-off;
 - [ ] OpenAI/Gemini memory-candidate extraction bake-off;
 - [ ] SQLCipher/DPAPI Windows encryption/package spike;
