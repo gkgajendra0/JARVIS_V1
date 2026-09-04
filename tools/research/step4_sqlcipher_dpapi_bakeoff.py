@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
+import importlib.util
 import json
 import os
 import shutil
@@ -13,11 +14,22 @@ from typing import Any
 import sqlcipher3
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SRC_ROOT = REPO_ROOT / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+CRYPTO_PATH = REPO_ROOT / "src" / "jarvis" / "identity" / "crypto.py"
 
-from jarvis.identity.crypto import KeyProtectionError, WindowsDpapiKeyProtector  # noqa: E402
+
+def load_dpapi_types() -> tuple[type[Exception], type[Any]]:
+    """Load only the existing DPAPI implementation without importing identity package."""
+    module_name = "jarvis_step4_identity_crypto_probe"
+    spec = importlib.util.spec_from_file_location(module_name, CRYPTO_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load DPAPI module from {CRYPTO_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module.KeyProtectionError, module.WindowsDpapiKeyProtector
+
+
+KeyProtectionError, WindowsDpapiKeyProtector = load_dpapi_types()
 
 PURPOSE = "memory-sqlcipher-master-key-v1"
 KEY_BYTES = 32
@@ -335,7 +347,7 @@ def main() -> None:
         "notes": [
             "All stored values are synthetic test markers.",
             "The raw database key is never written to the JSON report.",
-            "The harness imports the existing identity DPAPI protector only to validate the current Windows primitive; production memory must use a neutral security boundary rather than importing identity internals.",
+            "The harness loads the existing identity crypto.py directly to validate the current Windows DPAPI primitive without executing jarvis.identity package initialization; production memory must use a neutral security boundary rather than importing identity internals.",
         ],
     }
 
