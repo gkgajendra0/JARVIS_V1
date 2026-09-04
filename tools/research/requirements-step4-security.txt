@@ -1,0 +1,4 @@
+# Research-only Step 4 Windows encryption/package spike.
+# Do not add these to production runtime dependencies from this file.
+sqlcipher3==0.6.2
+cryptography==50.0.1
