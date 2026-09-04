@@ -110,7 +110,7 @@ def corrupt_copy(source: Path, target: Path) -> None:
 def run_memory_security_subprocess_probe(artifact_dir: Path) -> dict[str, Any]:
     """Probe enhanced SQLCipher memory security without risking the parent process."""
     probe_db = artifact_dir / "memory-security-probe.db"
-    child_code = r'''
+    child_code = r"""
 import os
 import sys
 import sqlcipher3
@@ -118,7 +118,7 @@ import sqlcipher3
 path = sys.argv[1]
 key = os.urandom(32)
 conn = sqlcipher3.connect(path)
-conn.execute(f'''PRAGMA key = "x'{key.hex()}'"''')
+conn.execute("PRAGMA key = \"x'%s'\"" % key.hex())
 conn.execute("PRAGMA cipher_memory_security = ON")
 conn.execute("CREATE TABLE probe(id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
 conn.execute("INSERT INTO probe(value) VALUES ('synthetic-memory-security-probe')")
@@ -126,7 +126,7 @@ conn.commit()
 count = conn.execute("SELECT count(*) FROM probe").fetchone()[0]
 conn.close()
 print(f"PROBE_OK={count}", flush=True)
-'''
+"""
     try:
         completed = subprocess.run(
             [sys.executable, "-c", child_code, str(probe_db)],
