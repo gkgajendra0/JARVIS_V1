@@ -27,6 +27,7 @@ Sources reviewed 2026-09-04:
 - https://pypi.org/project/sqlcipher3/
 - https://github.com/coleifer/sqlcipher3
 - https://learn.microsoft.com/windows/win32/api/dpapi/nf-dpapi-cryptunprotectdata
+- https://learn.microsoft.com/windows/win32/seccrypto/example-c-program-using-cryptprotectdata
 
 ## Key-management direction
 
@@ -52,6 +53,19 @@ SQLCipher full-database encryption using the random raw key
 This avoids storing a plaintext passphrase/key and avoids inventing a JARVIS cryptographic format.
 
 The research harness may import the existing identity DPAPI class to validate the already-implemented Windows primitive. **Production memory must not import identity internals.** If selected, the common protector must move behind a neutral `jarvis.security` boundary or equivalent architecture during implementation.
+
+## Recovery boundary — separate from local encryption
+
+DPAPI user-scope is deliberately tied to the Windows user profile and normally the same computer. Microsoft also warns that an administrator-forced password reset can make previously protected data unrecoverable in some scenarios.
+
+Therefore:
+
+- this spike proves **same-user / same-machine backup and restore** only;
+- copying `memory.db` plus the DPAPI-wrapped key blob to another PC is **not** a complete disaster-recovery design;
+- the final Step-4 architecture must separately decide whether JARVIS needs a portable recovery/export mechanism (for example, an owner-approved recovery key or encrypted export) for machine loss/reinstallation;
+- any portable recovery mechanism must not weaken the normal local DPAPI boundary or silently create a second plaintext key store.
+
+Do not interpret “encrypted backup exists” as “backup is recoverable on arbitrary hardware.”
 
 ## Real-machine assertions
 
