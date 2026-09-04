@@ -1,4 +1,4 @@
-# Step 4 — Gemini extraction rate-limit observation (Windows)
+# Step 4 — Gemini extraction free-tier quota observation (Windows)
 
 ## Status
 
@@ -6,45 +6,47 @@
 
 On the real JARVIS Windows machine on 2026-09-04, the full `gemini-3.8-flash` Step-4 memory-candidate extraction bake-off was first attempted with the harness default `--delay-ms 100`.
 
-The run produced only 5 schema-valid model responses out of 24 cases. All 5 successful responses were core-exact against the fixed benchmark contract (English 2/2, Hindi 2/2, Hinglish 1/1). The remaining 19 cases failed before semantic evaluation with Gemini API `429` rate-limit errors.
+The run produced only 5 schema-valid model responses out of 24 cases. All 5 successful responses were core-exact against the fixed benchmark contract (English 2/2, Hindi 2/2, Hinglish 1/1). The remaining 19 cases failed before semantic evaluation with Gemini API `429` quota errors.
 
 Observed API error detail included:
 
 - quota metric: `generativelanguage.googleapis.com/generate_content_free_tier_requests`;
 - active limit reported by the API: `20`;
 - model: `gemini-3.8-flash`;
-- retry windows around 60 seconds, counting downward and then resetting around the next minute window.
+- provider error: `429 RESOURCE_EXHAUSTED` / too many requests.
 
-Google's Gemini API rate-limit documentation distinguishes requests-per-minute (RPM), tokens-per-minute (TPM), and requests-per-day (RPD), and explicitly notes that exceeding an RPM limit such as 20 causes subsequent requests within that minute to fail. Active limits are project/model-specific and are visible in Google AI Studio.
+An initial interpretation treated the reported limit as a 20-RPM ceiling because some errors included retry windows around one minute. That interpretation was then tested rather than assumed.
 
-Source:
+A second run used the identical model, corpus, prompt, schema, and scoring contract but increased pacing to `--delay-ms 3500`, comfortably below 20 request starts per minute when combined with model latency. That paced run produced **0 schema-valid responses out of 24**. Therefore request pacing did not resolve the quota condition and the earlier 20-RPM interpretation was rejected.
 
-- https://ai.google.dev/gemini-api/docs/rate-limits
+Current external evidence on 2026-09-04:
 
-## Interpretation
+- Google's Gemini API rate-limit documentation states that quotas may include RPM, TPM, and RPD; usage is evaluated against each dimension; limits are project/model-specific; and RPD quotas reset at midnight Pacific time: https://ai.google.dev/gemini-api/docs/rate-limits
+- A Google AI Developers Forum report published 2026-09-03 specifically reports the Gemini 3.8 Flash free tier as **20 RPD** and contrasts it with higher RPD allowances on Flash-Lite: https://discuss.ai.google.dev/t/gemini-3-8-flash-free-tier-20-rpd-is-too-limited-for-practical-evaluation/180609
 
-The measured behavior is consistent with the project hitting a **20 RPM** free-tier request limit. Therefore the first full Gemini run is not a quality comparison against OpenAI Terra.
+## Correct interpretation
 
-Do **not** interpret the harness's `core_exact_accuracy=0.2083` from that partial run as Gemini semantic accuracy: it is simply 5 successful/core-exact responses divided by the 24 requested cases while 19 cases were unevaluable due to provider quota errors.
+The evidence is consistent with the JARVIS Gemini project having exhausted the **20 requests-per-day (RPD)** free-tier allowance for `gemini-3.8-flash`, not merely an RPM limit.
 
-The 5 actually evaluable Gemini responses were 5/5 core-exact.
+The first partial run is therefore **not** a quality comparison against OpenAI Terra. Do **not** interpret `core_exact_accuracy=0.2083` as Gemini semantic accuracy: it is simply 5 successful/core-exact responses divided by the 24 requested cases while 19 cases were unevaluable due to provider quota errors.
 
-## Correct rerun protocol
+The five actually evaluable Gemini responses were 5/5 core-exact.
+
+The second paced run (`--delay-ms 3500`) is also not a quality result: 24/24 calls were rejected before semantic evaluation because the daily quota was already exhausted.
+
+## Correct continuation protocol
+
+Do not rerun all 24 Gemini cases after the daily quota reset. Preserve the five successful case results from the first partial run and create a corpus containing only the 19 previously unevaluable cases. This fits within a fresh 20-RPD allowance and avoids wasting free-tier requests.
 
 Keep the exact same:
 
-- 24-case corpus;
+- 24-case benchmark contract;
 - `gemini-3.8-flash` model;
-- Pydantic extraction contract;
+- Pydantic extraction schema;
 - JARVIS system policy;
-- scoring logic.
+- expected labels;
+- scoring semantics.
 
-Change only request pacing. Rerun Gemini with `--delay-ms 3500`. Since calls are sequential and model latency is additional to this delay, this keeps request starts comfortably below the observed 20-RPM ceiling without changing semantic test conditions.
+After Google's daily reset at midnight Pacific time, run only the 19 missing cases. Then combine those results with the five already valid cases before performing the OpenAI-vs-Gemini quality comparison.
 
-Use the Windows-safe UTF-8 runner:
-
-```powershell
-.\.step4-extraction-venv\Scripts\python.exe tools\research\step4_extraction_utf8_runner.py --output .step4-gemini-full-paced.json --providers gemini --delay-ms 3500
-```
-
-Only a complete 24/24 schema-valid/provider-success run is eligible for the OpenAI-vs-Gemini quality comparison. Provider quota errors must be treated as operational failures, not semantic misses.
+Provider quota failures must always be reported separately from semantic/model failures.
