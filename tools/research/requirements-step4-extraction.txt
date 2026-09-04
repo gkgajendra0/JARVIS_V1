@@ -1,0 +1,5 @@
+# Research-only dependencies for Step 4 structured memory-candidate extraction.
+# Keep separate from production JARVIS dependencies until technology selection is approved.
+openai==3.8.0
+google-genai==2.22.0
+pydantic==2.13.5
