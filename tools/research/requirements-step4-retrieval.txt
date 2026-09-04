@@ -1,0 +1,5 @@
+# Research-only dependencies for the Step 4 semantic retrieval bake-off.
+# Keep these out of the production JARVIS dependency set until the bake-off
+# demonstrates a material retrieval-quality benefit.
+sentence-transformers==6.0.1
+transformers==5.16.1
