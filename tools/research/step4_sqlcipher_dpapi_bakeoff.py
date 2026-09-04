@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import sqlite3 as stdlib_sqlite
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -106,6 +107,54 @@ def corrupt_copy(source: Path, target: Path) -> None:
     target.write_bytes(data)
 
 
+def run_memory_security_subprocess_probe(artifact_dir: Path) -> dict[str, Any]:
+    """Probe enhanced SQLCipher memory security without risking the parent process."""
+    probe_db = artifact_dir / "memory-security-probe.db"
+    child_code = r'''
+import os
+import sys
+import sqlcipher3
+
+path = sys.argv[1]
+key = os.urandom(32)
+conn = sqlcipher3.connect(path)
+conn.execute(f'''PRAGMA key = "x'{key.hex()}'"''')
+conn.execute("PRAGMA cipher_memory_security = ON")
+conn.execute("CREATE TABLE probe(id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
+conn.execute("INSERT INTO probe(value) VALUES ('synthetic-memory-security-probe')")
+conn.commit()
+count = conn.execute("SELECT count(*) FROM probe").fetchone()[0]
+conn.close()
+print(f"PROBE_OK={count}", flush=True)
+'''
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", child_code, str(probe_db)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "passed": False,
+            "returncode": None,
+            "timed_out": True,
+            "stdout": (exc.stdout or "")[-2000:],
+            "stderr": (exc.stderr or "")[-4000:],
+        }
+
+    return {
+        "passed": completed.returncode == 0 and "PROBE_OK=1" in completed.stdout,
+        "returncode": completed.returncode,
+        "timed_out": False,
+        "stdout": completed.stdout[-2000:],
+        "stderr": completed.stderr[-4000:],
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -128,6 +177,9 @@ def main() -> None:
         shutil.rmtree(artifact_dir)
     artifact_dir.mkdir(parents=True)
 
+    print("STEP4_SQLCIPHER_STAGE=memory_security_subprocess_probe", flush=True)
+    memory_security_probe = run_memory_security_subprocess_probe(artifact_dir)
+
     db_path = artifact_dir / "memory.db"
     sealed_key_path = artifact_dir / "memory.key.dpapi"
     backup_dir = artifact_dir / "backup"
@@ -135,6 +187,7 @@ def main() -> None:
     restored_db = artifact_dir / "restored-memory.db"
     corrupted_db = artifact_dir / "corrupted-memory.db"
 
+    print("STEP4_SQLCIPHER_STAGE=dpapi", flush=True)
     raw_key = os.urandom(KEY_BYTES)
     protector = WindowsDpapiKeyProtector()
     sealed = protector.seal(raw_key, purpose=PURPOSE)
@@ -150,6 +203,7 @@ def main() -> None:
 
     raw_key_not_in_sealed_blob = raw_key not in sealed
 
+    print("STEP4_SQLCIPHER_STAGE=core_database", flush=True)
     conn = sqlcipher3.connect(str(db_path))
     key_connection(conn, raw_key)
 
@@ -158,11 +212,14 @@ def main() -> None:
     compile_options = [row[0] for row in conn.execute("PRAGMA compile_options")]
     provider = scalar(conn, "PRAGMA cipher_provider")
     provider_version = scalar(conn, "PRAGMA cipher_provider_version")
+    memory_security_default = scalar(conn, "PRAGMA cipher_memory_security")
 
     if not cipher_version:
         raise RuntimeError("PRAGMA cipher_version returned no SQLCipher version")
 
-    conn.execute("PRAGMA cipher_memory_security = ON")
+    # Keep SQLCipher's enhanced all-SQLite-memory security at its supported
+    # default here. It is probed separately in a child process above because
+    # native wrapper/platform failures must not erase the at-rest test result.
     conn.execute("PRAGMA temp_store = MEMORY")
     temp_store = scalar(conn, "PRAGMA temp_store")
     conn.execute("PRAGMA secure_delete = ON")
@@ -224,10 +281,12 @@ def main() -> None:
     conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     conn.close()
 
+    print("STEP4_SQLCIPHER_STAGE=negative_key_tests", flush=True)
     plaintext_sqlite_blocked = negative_plain_sqlite_open(db_path)
     wrong_key_blocked = negative_wrong_key_open(db_path)
     closed_leaks = scan_files([db_path, sealed_key_path], needles)
 
+    print("STEP4_SQLCIPHER_STAGE=backup_restore", flush=True)
     backup_db = backup_dir / "memory.db"
     backup_key = backup_dir / "memory.key.dpapi"
     shutil.copy2(db_path, backup_db)
@@ -242,6 +301,7 @@ def main() -> None:
     )
     restored.close()
 
+    print("STEP4_SQLCIPHER_STAGE=corruption", flush=True)
     corrupt_copy(db_path, corrupted_db)
     corruption_detected = False
     corruption_detail: str | list[str] | None = None
@@ -265,6 +325,7 @@ def main() -> None:
         corruption_detected = True
         corruption_detail = type(exc).__name__
 
+    print("STEP4_SQLCIPHER_STAGE=forget", flush=True)
     forgetting = open_keyed(db_path, raw_key)
     forgetting.execute("PRAGMA secure_delete = ON")
     forgetting.execute("DELETE FROM memory_fts WHERE memory_id = 2")
@@ -335,7 +396,9 @@ def main() -> None:
             "journal_mode": journal_mode,
             "temp_store": temp_store,
             "secure_delete": secure_delete,
+            "cipher_memory_security_default": memory_security_default,
         },
+        "enhanced_memory_security_probe": memory_security_probe,
         "leak_scans": {
             "while_wal_live": live_leaks,
             "after_close": closed_leaks,
@@ -347,6 +410,8 @@ def main() -> None:
         "notes": [
             "All stored values are synthetic test markers.",
             "The raw database key is never written to the JSON report.",
+            "Core PASS evaluates at-rest encryption/storage behavior using SQLCipher's supported default enhanced-memory-security setting.",
+            "PRAGMA cipher_memory_security=ON is an optional enhanced all-SQLite-memory feature and is probed in a separate child process so a native wrapper/platform failure cannot erase the core result.",
             "The harness loads the existing identity crypto.py directly to validate the current Windows DPAPI primitive without executing jarvis.identity package initialization; production memory must use a neutral security boundary rather than importing identity internals.",
         ],
     }
@@ -355,6 +420,7 @@ def main() -> None:
         json.dumps(result, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    print("STEP4_SQLCIPHER_STAGE=result_written", flush=True)
     print(json.dumps(result, indent=2, ensure_ascii=True))
 
 
