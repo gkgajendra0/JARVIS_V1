@@ -4,131 +4,246 @@ Date: 2026-09-06
 
 ## Status
 
-**ACTIVE — V1 OWNER MEASUREMENT COMPLETE / PRODUCTION POLICY REJECTED / RERANKER-INSTRUCTION DEVELOPMENT NEXT.**
+**ACTIVE — V1 POLICY REJECTED / JARVIS RERANKER INSTRUCTION SELECTED / FRESH FINAL ACCEPTANCE IMPLEMENTED / OWNER RTX RUN NEXT.**
 
-Phase 4.5D has produced one valid owner-RTX measurement. The 64-case V1 corpus is now retired from final acceptance use because its held-out labels have been exposed and reviewed.
+Phase 4.5D has completed the development/model-selection work required before final release-policy acceptance.
 
-The measured V1 policy had zero observed false releases but only `0.1875` held-out positive release recall and `0.0` Hindi positive release recall. It is therefore not acceptable for production memory release.
+The final acceptance protocol is now frozen before fresh-corpus model execution.
 
-Owner evidence:
+## V1 owner measurement — complete / rejected
 
-- `docs/research/STEP_4_PHASE_4_5D_OWNER_MEASUREMENT_V1.md`.
+The first successful 64-query owner measurement completed on the accepted RTX environment.
 
-## V1 measurement interpretation
+Selected V1 policy:
 
-The V1 harness status string was `PASS`, but that status meant only:
+- family `score_margin`;
+- score threshold `8.96875`;
+- margin threshold `9.15625`.
 
-- the calibration-only frozen policy produced zero observed false releases on the 32-case held-out validation split.
-
-It did not mean production acceptance. The documented gate also required useful positive release recall and multilingual/category review.
-
-Measured V1 selected policy:
-
-- family: `score_margin`;
-- score threshold: `8.96875`;
-- margin threshold: `9.15625`.
-
-Held-out result:
+Held-out V1 result:
 
 - `tp=3`;
 - `fp=0`;
-- reported precision `1.0`;
+- observed precision `1.0`;
 - positive release recall `0.1875`;
-- English recall `0.166667`;
-- Hindi recall `0.0`;
-- Hinglish recall `0.333333`.
+- English release recall `0.166667`;
+- Hindi release recall `0.0`;
+- Hinglish release recall `0.333333`.
 
-This is safe-looking in the observed sample but far too conservative to ship.
+The policy is too conservative for production and is permanently rejected.
 
-## Security-boundary correction discovered before V1
+The V1 corpus is now development-only because its former held-out labels/results have been exposed.
 
-The first attempted V1 run failed before measurement because the fixture tried to instantiate `SECRET_PROHIBITED` canonical semantic memory. The canonical constructor correctly rejected that impossible state.
+Owner record:
 
-The harness was corrected without weakening production security:
+- `docs/research/STEP_4_PHASE_4_5D_OWNER_MEASUREMENT_V1.md`.
 
-- `mode=secret` remains a corpus marker;
-- secret fixtures are excluded before canonical semantic-memory creation;
-- release-labeled cases cannot target secret fixtures;
-- output records which secret fixture IDs were excluded.
+## Secret-boundary fixture correction — complete
 
-The successful owner run proved:
+The first V1 attempt failed before measurement because the fixture tried to create `SECRET_PROHIBITED` canonical semantic memory.
 
-- corpus document markers: `23`;
-- canonical seed documents: `22`;
-- excluded secret fixture: `secret_placeholder`.
+That production constructor invariant was correct and remains unchanged.
 
-## Why threshold tweaking is not the next action
+Research fixtures now:
 
-The Qwen reranker emits a true-vs-false raw logit-difference relevance score. A sigmoid can remap the numeric range but does not create a statistical field guarantee or improve score ordering.
+- preserve secret entries only as non-canonical corpus markers;
+- exclude them before semantic-memory creation;
+- forbid release-labelled cases from targeting them;
+- record their exclusion in output evidence.
 
-The V1 result also exposed a finite-sample issue: only three held-out cases were released. Observing `3/3` correct releases is not enough evidence to claim production-level precision.
+No secret-prohibited canonical-memory path was introduced.
 
-Therefore Phase 4.5D will not loosen V1 thresholds or tune against the exposed validation labels.
+## Reranker instruction selection — complete
 
-## Research-first update after V1
+Qwen3-Reranker is instruction-aware, so Phase 4.5D compared the generic model default with exactly one pre-registered JARVIS-memory instruction using the retired V1 corpus as a development set.
 
-Two mature capabilities now define the next path.
+Selected instruction:
 
-### 1. Qwen reranker instruction awareness
+```text
+Judge whether the memory Document directly and sufficiently answers the JARVIS memory Query using only facts stated in the Document. Answer yes only when the Document supports the specific fact or relation requested; answer no when it is merely related, missing the requested detail, contradictory, negated, or otherwise does not answer the Query.
+```
 
-`Qwen/Qwen3-Reranker-0.6B` is instruction-aware. Qwen recommends task-specific English instructions and reports typical downstream gains relative to its generic default web-search instruction.
+Owner development result:
 
-The current JARVIS production adapter still instantiates the reranker without a custom prompt/instruction, so it uses the model's generic default.
+| Metric | Generic default | JARVIS instruction |
+|---|---:|---:|
+| positive top-1 accuracy | 0.90625 | 0.90625 |
+| positive Recall@3 | 0.90625 | 0.90625 |
+| score AUROC safe-vs-unsafe | 0.918719 | **0.936453** |
+| margin AUROC | 0.768966 | **0.795074** |
+| AURC | 0.267634 | **0.242616** |
+| zero-error positive-release recall | 0.03125 | **0.1875** |
 
-Before adding another model, Phase 4.5D will compare:
+Language top-1 accuracy was unchanged:
 
-- current default Qwen reranker instruction;
-- exactly one pre-registered JARVIS-memory-specific English instruction.
+- English `0.933333`;
+- Hindi `1.0`;
+- Hinglish `0.833333`.
 
-This comparison uses the **retired V1 corpus only as a development set**. It cannot re-establish held-out acceptance.
+There was no material latency penalty.
 
-Selection criteria will emphasize:
+Decision:
 
-- positive top-1 ranking accuracy;
-- positive hit@3;
-- English/Hindi/Hinglish ranking quality;
-- score separation between safe-to-release and unsafe top-1 results;
-- risk-coverage / AURC behavior;
-- zero changes to model ID, revision, precision, candidate window, embedding model, or first-stage retrieval.
+- `Qwen3RetrievalReranker` now uses the JARVIS instruction by default;
+- generic Qwen instruction behavior remains only through explicit `instruction=None` for research/reproduction.
 
-After this experiment, the better instruction is frozen before constructing a new acceptance corpus.
+Record:
 
-### 2. Mature risk-control library instead of custom final threshold selection
+- `docs/research/STEP_4_PHASE_4_5D_RERANKER_INSTRUCTION_SELECTION.md`.
 
-For the fresh final corpus, Phase 4.5D will use MAPIE's binary risk-control / Learn-Then-Test machinery rather than promoting the V1 custom selector into production acceptance.
+## Final risk-control technology — frozen
 
-MAPIE is designed to calibrate decision thresholds against a pre-declared metric such as precision with a requested confidence level, and it can correctly return that no candidate threshold is statistically feasible.
+Research selected MAPIE `1.5.0` and `BinaryClassificationController` Learn-Then-Test precision control instead of another custom threshold sweep.
 
-MAPIE remains a **research/calibration dependency only**. Production runtime will receive only a frozen, versioned policy if final acceptance passes; production JARVIS does not need MAPIE at inference time.
+MAPIE is a research/calibration dependency only:
 
-## Retired V1 corpus
+- `tools/research/requirements-step4-risk-control.txt`.
 
-Files:
+Production inference will not depend on MAPIE. If acceptance passes, production receives only the frozen versioned release rule.
 
-- `tools/research/step4_phase45d_abstention_cases.json`;
-- `tools/research/step4_phase45d_abstention_calibration.py`.
+Final calibration controls:
 
-The corpus contains 64 fixed queries:
+- metric: precision;
+- target precision `0.95`;
+- confidence level `0.95`;
+- secondary objective: recall;
+- FWER procedure: Holm-Bonferroni;
+- pre-registered two-dimensional score/margin grid.
 
-- former calibration: 16 release + 16 abstain;
-- former validation: 16 release + 16 abstain;
-- English/Hindi/Hinglish;
-- absent, near-miss, ambiguous, historical, forgotten, local-only, secret, untrusted, adversarial lexical, negation, and relation-mismatch boundaries.
+MAPIE may legitimately return no valid policy; that is a fail-closed outcome.
 
-From this point forward the entire V1 corpus is development-only because all labels/results have been exposed.
+## Statistical limitation — explicit
 
-## Existing production-path harness properties
+MAPIE's formal distributional guarantees require assumptions such as exchangeability.
 
-The V1 harness uses the actual production retrieval path against a temporary migrated SQLite database:
+The final JARVIS corpus is synthetic and cannot prove exchangeability with future owner conversations.
+
+Therefore this work claims only disciplined finite-sample benchmark acceptance, not a real-world 95% traffic guarantee.
+
+Post-deployment shadow-labelled observations and drift/risk review remain required.
+
+## Fresh final corpus — implemented/frozen
+
+Generator:
+
+- `tools/research/step4_phase45d_final_cases.py`.
+
+Total: **320 new queries**.
+
+Calibration:
+
+- 192 cases;
+- 96 release;
+- 96 abstain.
+
+Held-out validation:
+
+- 128 cases;
+- 64 release;
+- 64 abstain.
+
+Both splits contain:
+
+- English;
+- Hindi;
+- Hinglish.
+
+The benchmark includes:
+
+- current facts;
+- historical transitions;
+- forgotten facts;
+- `LOCAL_ONLY` facts;
+- non-canonical secret markers;
+- untrusted evidence;
+- near-miss / missing-detail questions;
+- relation mismatch;
+- adversarial high-lexical-overlap unsupported questions.
+
+Automated guards prove the final query set has no exact query-string reuse from the retired V1 corpus.
+
+The payload SHA-256 is emitted by the owner result artifact.
+
+## Final release-rule family — frozen
+
+Features:
+
+1. reranker top-1 raw score;
+2. reranker top-1 minus top-2 score margin.
+
+Rule:
+
+```text
+release = score >= score_threshold
+          AND margin >= margin_threshold
+```
+
+Pre-registered score values:
+
+- `-2, 0, 2, 4, 6, 8`.
+
+Pre-registered margin values:
+
+- `0, 4, 8, 12, 16`.
+
+Total candidate policies:
+
+- `30`.
+
+The fresh corpus cannot alter this grid.
+
+## Final held-out acceptance gates — frozen
+
+The selected calibration-only policy must satisfy all of these on untouched validation:
+
+1. MAPIE finds a valid policy;
+2. positive top-1 retrieval accuracy >= `0.85`;
+3. positive Recall@3 >= `0.90`;
+4. observed false releases = `0`;
+5. positive release recall >= `0.40`;
+6. positive release recall for every language >= `0.25`.
+
+A release-labelled query with the wrong top-1 memory is unsafe and counts as a false release if the policy releases it.
+
+## Final harness — implemented
+
+Harness:
+
+- `tools/research/step4_phase45d_final_acceptance.py`.
+
+It uses the actual production path against a temporary migrated database:
 
 - `MemoryLifecycleService`;
 - `SemanticEmbeddingStore`;
 - `SemanticRetrievalService`;
 - `RetrievalEligibility.cloud_context()`;
 - revision-pinned `Qwen3EmbeddingEncoder`;
-- revision-pinned top-3 `Qwen3RetrievalReranker`.
+- revision-pinned top-3 `Qwen3RetrievalReranker`;
+- frozen JARVIS reranker instruction.
 
-It never reads the owner's production memory database and never auto-writes a production policy.
+It does not read or mutate owner production memory.
+
+Result artifact:
+
+- `.step4-phase45d-final-acceptance.json`.
+
+The artifact is valid evidence even when acceptance fails and the harness exits non-zero.
+
+## Automated guards
+
+Final acceptance tests cover:
+
+- exact `320` query count;
+- `96/96` calibration balance;
+- `64/64` validation balance;
+- English/Hindi/Hinglish in both splits;
+- required lifecycle/security boundary modes;
+- deterministic corpus SHA;
+- retired-V1 query disjointness;
+- exact 30-point pre-registered policy grid;
+- score+margin release semantics;
+- wrong top-1 release counted as false release;
+- fail-closed false-release and language-starvation gates.
 
 ## Authority/security boundaries
 
@@ -136,20 +251,25 @@ Phase 4.5D continues to enforce:
 
 - no production canonical-memory mutation from research harnesses;
 - no `SECRET_PROHIBITED` canonical memory;
-- no cloud provider for local retrieval scoring/calibration;
+- no cloud provider for local retrieval calibration;
 - no second cloud subscription;
 - no retrieval eligibility bypass;
 - no implicit durable admission;
 - no self-repair/code-modification authority;
-- no tuning against a final held-out corpus after labels are exposed.
+- no post-hoc tuning against final held-out labels.
+
+## Final method record
+
+- `docs/research/STEP_4_PHASE_4_5D_FINAL_ACCEPTANCE_METHOD.md`.
 
 ## Next gate
 
-1. Add opt-in task instruction support to the Qwen reranker adapter without changing the current default behavior.
-2. Run a research-only default-vs-JARVIS-instruction bake-off on the retired V1 corpus.
-3. Freeze the winning instruction.
-4. Pre-register the final risk/coverage target and MAPIE Learn-Then-Test method.
-5. Build a fresh multilingual acceptance corpus.
-6. Perform one final calibration/validation run.
+Run the fresh final Phase 4.5D harness **once** on the accepted owner RTX 5060 Ti environment after the exact repository head passes Ruff, full pytest, Windows DPAPI, and Windows Hello.
 
-Phase 4.5E remains blocked until the fresh Phase 4.5D acceptance passes.
+Once a result JSON exists:
+
+- do not rerun it to chase a pass;
+- do not change thresholds or acceptance floors from held-out failures;
+- analyze any failure as system/retrieval evidence.
+
+Phase 4.5E remains blocked until this fresh final acceptance passes.
