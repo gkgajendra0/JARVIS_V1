@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from google import genai
+from openai import AsyncOpenAI
 
 from jarvis.memory.candidates import (
     MemoryCandidateType,
@@ -63,6 +65,27 @@ class FakeGeminiClient:
         interactions = FakeGeminiInteractions(output_text)
         self.aio = SimpleNamespace(interactions=interactions)
         self.interactions = interactions
+
+
+@pytest.mark.asyncio
+async def test_pinned_openai_client_exposes_production_parse_surface() -> None:
+    client = AsyncOpenAI(api_key="sk-test-only")
+    try:
+        assert callable(client.responses.parse)
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_pinned_gemini_client_exposes_production_and_bakeoff_surfaces() -> None:
+    client = genai.Client(api_key="test-only")
+    async_client = client.aio
+    try:
+        assert callable(async_client.interactions.create)
+        assert callable(client.interactions.create)
+    finally:
+        client.close()
+        await async_client.aclose()
 
 
 @pytest.mark.asyncio
