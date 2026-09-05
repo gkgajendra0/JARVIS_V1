@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASES 4.0A–4.4 COMPLETE — PHASE 4.5 ACTIVE / 4.5A–4.5B COMPLETE / 4.5C OWNER-PC COMPATIBILITY NEXT**
+**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE / OWNER RTX ABSTENTION CALIBRATION NEXT**
 
 This file is the operational source of truth for current work. Detailed measured evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` describes architecture that actually exists and has passed acceptance.
 
@@ -61,46 +61,57 @@ Owner-PC production acceptance proved session-local candidate quarantine, physic
 
 ### Phase 4.5 local retrieval stack — SELECTED
 
-The 2026 incumbent/challenger bake-off is complete on the actual JARVIS RTX 5060 Ti.
+**Embedding:** `Qwen/Qwen3-Embedding-0.6B`
 
-**Selected embedding:** `Qwen/Qwen3-Embedding-0.6B`
+- immutable revision `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`;
+- exact JARVIS memory retrieval instruction;
+- normalized 256-dimensional Matryoshka output;
+- local exact cosine initially.
 
-Production retrieval contract:
+**First stage:**
 
-- JARVIS memory-specific query instruction;
-- normalized embeddings;
-- 256-dimensional Matryoshka output;
-- model-native BF16 path where supported;
-- exact local cosine initially;
-- SQLite FTS5 lexical rank;
-- equal-weight RRF, measured contract `k=60`, lexical window `10`;
-- top-3 `Qwen/Qwen3-Reranker-0.6B` at model-default BF16;
-- exact reranker-score tie -> preserve first-stage fused rank -> stable memory ID;
-- no dedicated ANN/vector extension until scale evidence requires one;
-- no absolute embedding/reranker threshold until a larger abstention corpus is measured.
+- eligible-current SQLite FTS5 lexical rank;
+- exact Qwen dense rank;
+- equal-weight RRF, `k=60`, lexical window `10`;
+- no ANN/vector extension until scale evidence requires one.
 
-Measured Qwen owner-machine evidence:
+**Reranker:** `Qwen/Qwen3-Reranker-0.6B`
 
-- dense Recall@1 `0.8824`, Recall@3 `1.0000`, MRR `0.9412`;
-- FTS5 + Qwen RRF Recall@1 `0.9412`, Recall@3 `1.0000`, MRR `0.9608`;
+- immutable revision `e61197ed45024b0ed8a2d74b80b4d909f1255473`;
+- top 3 candidates;
+- model-default BF16 path;
+- exact reranker-score tie -> first-stage fused rank -> stable assertion ID.
+
+Owner-machine model-selection evidence:
+
+- Qwen hybrid Recall@1 `0.9412`, Recall@3 `1.0000`, MRR `0.9608`;
 - hybrid p50 `63.2179 ms`, p95 `68.7911 ms`;
-- peak CUDA allocation `1,292,429,824` bytes;
-- top-3 Qwen reranker previously measured Recall@1/Recall@3/MRR `1.0000` on the same fixed retrieval corpus;
-- BF16 reranker precision follow-up showed zero repeat/order instability.
-
-Rejected challenger: **`google/embeddinggemma-300m`**.
-
-Reason:
-
-- dense overall Recall@1 tied Qwen at `0.8824`;
-- actual hybrid Recall@1 regressed to `0.7647`;
-- Hindi fixed case failed at rank 1 and Hinglish hybrid Recall@1 fell to `0.7143`;
-- hybrid p50/p95 were slower (`84.0370 / 96.7016 ms`);
-- measured peak CUDA and process RSS were higher despite the smaller parameter count.
+- earlier reranker follow-up reached Recall@1/Recall@3/MRR `1.0000` on the fixed selection corpus;
+- EmbeddingGemma was rejected because the actual multilingual hybrid path regressed and measured latency/RAM/VRAM did not improve.
 
 Selection record:
 
 - `docs/research/STEP_4_PHASE_4_5_EMBEDDING_SELECTION.md`.
+
+### Phase 4.5C accepted production GPU compatibility
+
+Owner-machine acceptance preserved the existing Step-3 stack exactly:
+
+- Torch `2.13.0+cu132` before and after retrieval dependency install;
+- Torchvision `0.28.0+cu132` before and after;
+- Sentence Transformers `6.0.1`;
+- Transformers `5.16.1`;
+- `pip check` clean;
+- `torchvision`, `rfdetr`, `trackers`, `mediapipe`, and `cv2` all import in the same process;
+- real Qwen embedding + reranker both run together on the RTX 5060 Ti;
+- camera memory ranks top-1 through dense and reranker checks;
+- combined Qwen peak CUDA allocation `2,462,774,784` bytes.
+
+No compatibility rerun is required unless model/dependency/Torch revisions change.
+
+Result record:
+
+- `docs/research/STEP_4_PHASE_4_5C_IMPLEMENTATION_STATUS.md`.
 
 ---
 
@@ -149,14 +160,14 @@ query/context need
 
 Implemented and validated:
 
-- SQLCipher schema v2 for derived semantic vectors;
+- SQLCipher schema v2 derived semantic vectors;
 - canonical assertion FK with `ON DELETE CASCADE`;
-- explicit model ID + immutable revision + dimension + dtype/byte-order + content fingerprint metadata;
+- model/revision/dimension/dtype/byte-order/content-fingerprint lineage;
 - little-endian float32 vector BLOB representation;
-- deterministic stale-vector detection semantics;
-- automated proof that canonical physical `forget()` removes the derived vector.
+- deterministic stale-vector detection;
+- canonical physical forget -> zero derived vector rows.
 
-Result record:
+Result:
 
 - `docs/research/STEP_4_PHASE_4_5A_IMPLEMENTATION_RESULT.md`.
 
@@ -165,68 +176,76 @@ Result record:
 Implemented and validated:
 
 - current eligible assertion selection before ranking;
-- assertion + provenance-source authority/sensitivity filtering;
-- safe locally constructed FTS5 MATCH grammar;
-- exact dense cosine over encrypted/rebuildable current vectors;
-- stale vector exclusion by model/revision/content contract;
+- assertion + provenance authority/sensitivity filtering;
+- safe FTS5 MATCH construction;
+- exact dense cosine over encrypted/rebuildable vectors;
+- stale vector exclusion;
 - equal-weight RRF (`k=60`, lexical window `10`);
 - deterministic first-stage ordering;
 - no ANN dependency.
 
 GitHub Actions run `33983727641` passed Ruff, full pytest, Windows DPAPI, and Windows Hello.
 
-Result record:
+Result:
 
 - `docs/research/STEP_4_PHASE_4_5B_IMPLEMENTATION_RESULT.md`.
 
-#### Phase 4.5C — Qwen local model adapters — ACTIVE / OWNER-PC COMPATIBILITY NEXT
+#### Phase 4.5C — Qwen local model adapters — COMPLETE
 
-Implemented production adapter contract:
+Implemented and owner-accepted:
 
-- lazy `Qwen/Qwen3-Embedding-0.6B` adapter;
-- immutable embedding revision `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`;
+- lazy revision-pinned Qwen embedder and reranker adapters;
 - 256d normalized query/document encoding;
 - exact measured JARVIS query instruction;
-- lazy top-3 `Qwen/Qwen3-Reranker-0.6B` adapter;
-- immutable reranker revision `e61197ed45024b0ed8a2d74b80b4d909f1255473`;
-- deterministic exact-score tie handling;
+- top-3 reranker;
+- deterministic ties;
 - `trust_remote_code=False`;
 - no model import/load in ordinary unit-test/startup paths;
-- fake-backed automated adapter tests;
-- isolated optional `retrieval` dependency extra using the measured Sentence Transformers `6.0.1` + Transformers `5.16.1` versions;
-- retrieval extra does **not** own or change the production Torch pin.
+- isolated optional `retrieval` dependency extra;
+- retrieval extra does not own/change Torch;
+- owner RTX compatibility PASS with the accepted Step-3 vision environment.
 
-Owner-machine compatibility gate:
-
-- preserve accepted `torch==2.13.0` / `torchvision==0.28.0` vision stack;
-- verify existing vision imports in the same process;
-- run real CUDA embedding + top-3 reranking with both Qwen models resident;
-- record combined CUDA memory;
-- do not wire retrieval into production voice until this gate passes.
-
-Harness:
-
-- `tools/research/step4_phase45c_runtime_compatibility.py`.
-
-Status record:
+Result:
 
 - `docs/research/STEP_4_PHASE_4_5C_IMPLEMENTATION_STATUS.md`.
 
-#### Phase 4.5D — abstention calibration — BLOCKED ON 4.5C
+#### Phase 4.5D — abstention calibration — ACTIVE
 
-Expand the acceptance corpus with many more:
+Research and implementation are ready for measured owner-machine calibration.
 
-- absent-answer queries;
-- ambiguous/near-miss queries;
-- stale/superseded/history cases;
-- corrected and forgotten memories;
-- sensitivity boundaries;
-- adversarial/poisoned content;
-- English/Hindi/Hinglish paraphrases.
+Research decision:
 
-No absolute embedding/reranker cutoff is approved before this measurement.
+- Qwen reranker scores are decision/logit scores, not universal probabilities;
+- do not guess an absolute score/cosine cutoff;
+- use fixed labeled calibration and held-out validation splits;
+- derive threshold candidates only from calibration observations/midpoints;
+- minimize false releases first, then maximize correct release recall, then prefer simpler policy;
+- freeze policy before validation;
+- any validation false release is blocking and must not be tuned away using validation labels.
+
+Fixed corpus:
+
+- 64 queries total;
+- calibration: 16 release + 16 abstain;
+- validation: 16 release + 16 abstain;
+- English/Hindi/Hinglish;
+- absent, near-miss, ambiguous, historical, forgotten, local-only, secret, untrusted, adversarial lexical, negation, and relation-mismatch boundaries.
+
+Harness:
+
+- `tools/research/step4_phase45d_abstention_calibration.py`;
+- uses the real production lifecycle, embedding store, eligibility, FTS5+dense+RRF retrieval service, Qwen embedder, and Qwen reranker against a temporary synthetic/project-style database;
+- does not read owner production memory;
+- does not auto-write a production threshold.
+
+Research/status records:
+
+- `docs/research/STEP_4_PHASE_4_5D_ABSTENTION_RESEARCH.md`;
+- `docs/research/STEP_4_PHASE_4_5D_IMPLEMENTATION_STATUS.md`.
 
 #### Phase 4.5E — ContextAssembler integration + owner acceptance — BLOCKED ON 4.5D
+
+After an abstention/release policy is measured and accepted:
 
 - release only accepted retrieval evidence through `ContextAssembler`;
 - preserve bounded context budgets and evidence metadata;
@@ -243,10 +262,14 @@ No absolute embedding/reranker cutoff is approved before this measurement.
 3. Phase 4.2 — LiveContext + ContextAssembler — **COMPLETE**.
 4. Phase 4.3 — explicit remember/correct/forget/inspect — **COMPLETE**.
 5. Phase 4.4 — structured extraction/candidate quarantine — **COMPLETE**.
-6. Phase 4.5 — semantic retrieval + abstention calibration — **ACTIVE**.
-7. Phase 4.6 — episodic/reflection learning for meaningful outcomes/decisions/incidents, not raw transcripts.
-8. Phase 4.7 — Capability Registry + CycloneDX + authoritative self-knowledge aggregation, no autonomous repair.
-9. Phase 4.8 — final hardening, multilingual/adversarial/privacy/security/backup tests, real use, reconciliation, ADR, protected-main merge.
+6. Phase 4.5A — derived-vector lifecycle — **COMPLETE**.
+7. Phase 4.5B — lexical+dense+RRF core — **COMPLETE**.
+8. Phase 4.5C — local Qwen adapters + GPU compatibility — **COMPLETE**.
+9. Phase 4.5D — abstention calibration — **ACTIVE**.
+10. Phase 4.5E — ContextAssembler integration + owner acceptance — **BLOCKED ON 4.5D**.
+11. Phase 4.6 — episodic/reflection learning for meaningful outcomes/decisions/incidents, not raw transcripts.
+12. Phase 4.7 — Capability Registry + CycloneDX + authoritative self-knowledge aggregation, no autonomous repair.
+13. Phase 4.8 — final hardening, multilingual/adversarial/privacy/security/backup tests, real use, reconciliation, ADR, protected-main merge.
 
 ---
 
@@ -259,12 +282,15 @@ No absolute embedding/reranker cutoff is approved before this measurement.
 - persisted crash-resume LiveContext;
 - relationship/graph memory;
 - automatic provider chat-history synchronization;
+- learned probability calibrator for semantic release, until enough independent real labeled data exists;
 - autonomous diagnosis/repair/self-improvement.
 
 ---
 
 ## Immediate Next Action
 
-**RUN PHASE 4.5C OWNER-MACHINE GPU/DEPENDENCY COMPATIBILITY ACCEPTANCE.**
+**RUN THE FIXED PHASE 4.5D OWNER RTX ABSTENTION CALIBRATION ONCE.**
 
-Pull the final Phase-4.5C head into the accepted Windows `.venv`, install only the isolated `retrieval` extra, prove the Torch release remains `2.13.0`, and run `tools/research/step4_phase45c_runtime_compatibility.py` with the existing vision stack present. Do not begin Phase 4.5D or production voice integration until that compatibility result passes and is recorded.
+Use the accepted Windows `.venv` and existing cached Qwen models. Generate `.step4-phase45d-abstention-calibration.json`, then review calibration + held-out validation evidence before accepting any production release/abstain policy.
+
+Do not rerun Phase 4.5C. Do not tune a policy against held-out validation merely to make the result pass. Do not begin Phase 4.5E until Phase 4.5D is formally accepted.
