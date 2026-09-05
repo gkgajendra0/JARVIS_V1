@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import Callable
 
 from google.genai import types as google_types
@@ -19,6 +18,7 @@ from livekit.agents.llm import ChatMessage
 from livekit.plugins import google, openai
 from openai.types.beta.realtime.session import TurnDetection
 
+from jarvis.ai_provider import require_provider_api_key
 from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.memory.live_context import LiveContext
@@ -30,24 +30,9 @@ AcceptedTurnObserver = Callable[[ConversationTurn], None]
 ConversationCloseObserver = Callable[[], None]
 
 
-def require_openai_api_key() -> str:
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is required before starting voice mode")
-    return api_key
-
-
-def require_google_api_key() -> str:
-    api_key = os.getenv("GOOGLE_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError(
-            "GOOGLE_API_KEY is required before starting Gemini voice mode"
-        )
-    return api_key
-
-
 def _create_realtime_model(config: JarvisConfig):
-    if config.realtime_provider == "gemini":
+    api_key = require_provider_api_key(config.ai_provider, purpose="realtime voice")
+    if config.ai_provider == "gemini":
         # Gemini 3.1 + the currently pinned LiveKit Google adapter must retain
         # provider-native activity/turn completion. The paired audio runtime
         # separately gates AEC-clean PCM with local Silero only while JARVIS is
@@ -55,7 +40,7 @@ def _create_realtime_model(config: JarvisConfig):
         return google.realtime.RealtimeModel(
             model=config.gemini_realtime_model,
             voice=config.gemini_realtime_voice,
-            api_key=require_google_api_key(),
+            api_key=api_key,
             instructions=INSTRUCTIONS,
             input_audio_transcription={},
             output_audio_transcription={},
@@ -76,7 +61,7 @@ def _create_realtime_model(config: JarvisConfig):
     return openai.realtime.RealtimeModel(
         model=config.realtime_model,
         voice=config.realtime_voice,
-        api_key=require_openai_api_key(),
+        api_key=api_key,
         input_audio_noise_reduction="far_field",
         turn_detection=TurnDetection(
             type="server_vad",
