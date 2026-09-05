@@ -54,6 +54,7 @@ class ContextItem:
     source_turn_id: str | None
     source_ref: str | None
     role: ConversationRole | None
+    interrupted: bool
     sensitivity: Sensitivity
     priority: LiveContextPriority
     budget_units: int
@@ -192,6 +193,7 @@ class ContextAssembler:
             source_turn_id=entry.source_turn_id,
             source_ref=entry.source_ref,
             role=None,
+            interrupted=False,
             sensitivity=entry.sensitivity,
             priority=entry.priority,
             budget_units=self._estimate(text),
@@ -205,6 +207,7 @@ class ContextAssembler:
             source_turn_id=turn.turn_id,
             source_ref=None,
             role=turn.role,
+            interrupted=turn.interrupted,
             sensitivity=Sensitivity.STANDARD,
             priority=(
                 LiveContextPriority.CRITICAL if current else LiveContextPriority.NORMAL
