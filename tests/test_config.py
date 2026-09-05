@@ -96,7 +96,9 @@ def test_memory_candidate_extraction_is_default_off() -> None:
         },
     ],
 )
-def test_memory_candidate_extraction_requires_explicit_configuration(kwargs: dict) -> None:
+def test_memory_candidate_extraction_requires_explicit_configuration(
+    kwargs: dict,
+) -> None:
     with pytest.raises(ValueError, match="CANDIDATE_EXTRACTION"):
         JarvisConfig(**kwargs)
 
