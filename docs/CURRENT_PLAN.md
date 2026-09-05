@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASE 4.0A COMPLETE — PHASE 4.1 COMPLETE — PHASE 4.2 COMPLETE — PHASE 4.3 COMPLETE — PHASE 4.4 ACTIVE**
+**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASE 4.0A COMPLETE — PHASE 4.1 COMPLETE — PHASE 4.2 COMPLETE — PHASE 4.3 COMPLETE — PHASE 4.4 ACTIVE / MODEL SELECTED**
 
 This file is the operational source of truth for current work. Detailed measured evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` describes architecture that actually exists and has passed acceptance.
 
@@ -101,15 +101,24 @@ Voice, scripted cloud TTS, memory extraction and future cloud-reasoning/tool wor
 - model proposes candidate only;
 - deterministic JARVIS policy owns admission;
 - extraction defaults OFF until configured;
-- extraction model must be explicit;
 - implicit durable admission remains OFF until separately measured and accepted.
 
-Current Gemini model-selection strategy:
+**Selected Gemini extraction model: `gemini-3.5-flash-lite`.**
 
-1. test `gemini-3.5-flash-lite` first because Google positions it for high-throughput, low-cost simple data extraction;
-2. select it if the fixed safety/correctness corpus passes;
-3. only if it materially fails, run the identical corpus on `gemini-3.8-flash` as the quality-ceiling escalation;
-4. do not introduce OpenAI or another provider merely for memory extraction.
+Measured owner-PC production-aligned evidence:
+
+- 14/14 provider-eligible cases schema-valid;
+- 100% intent/type/durable core exact accuracy;
+- zero false durable proposals;
+- zero missed durable candidates;
+- English 10/10, Hindi 1/1, Hinglish 3/3 core exact;
+- p50 latency ~1.636 s, p95/max ~2.415 s;
+- 6,748 input + 1,293 output tokens for the full 14-call run;
+- reviewed semantic payloads sufficient for non-authoritative quarantine evidence.
+
+`gemini-3.8-flash` was not run because the staged escalation condition was not met.
+
+Model-selection record: `docs/research/STEP_4_PHASE_4_4_GEMINI_MODEL_SELECTION.md`.
 
 ### Retrieval target for Phase 4.5
 
@@ -212,7 +221,7 @@ Records:
 
 ---
 
-## Phase 4.4 — ACTIVE
+## Phase 4.4 — ACTIVE / MODEL SELECTED
 
 Core structured extraction and candidate-quarantine boundaries are implemented behind a default-OFF rollout gate.
 
@@ -230,32 +239,34 @@ Implemented properties include:
 - process/session-local `MemoryCandidateQuarantine` only;
 - cancellation and physical quarantine disposal on session close;
 - no `MemoryService` call, SQLCipher assertion write, FTS write, embedding write or automatic admission;
-- extraction model must be explicitly configured; no guessed model default;
 - no independent extraction-provider setting;
 - Step-3 audio/vision/authority path remains unchanged.
 
-The fixed extraction harness has been realigned to production. Non-user sources, explicit Phase-4.3 commands and locally detectable secrets are tested as deterministic pre-provider gates instead of being sent to an LLM to decide source authority.
+The fixed extraction harness mirrors production. Non-user sources, explicit Phase-4.3 commands and locally detectable secrets are tested as deterministic pre-provider gates rather than being sent to an LLM to decide source authority.
 
-The earlier Terra/Gemini provisional tie is retained as historical technology evidence only. It does not create an OpenAI production dependency.
+The first two-case Flash-Lite smoke exposed ambiguous intent prompt semantics while preserving valid structure. Research-first correction clarified the production taxonomy; the identical rerun passed 2/2. The subsequent full 14-provider-case run passed all measured semantic/safety gates, so `gemini-3.5-flash-lite` is selected and the 3.8 escalation is stopped.
+
+Per-payload review found only non-authoritative lexical normalization variation (`I`/`user`/`we`, occasionally verbose predicates). No provider output is canonical truth, and future implicit durable admission must define deterministic subject/predicate normalization separately before storage.
 
 Current records:
 
 - `docs/research/STEP_4_PHASE_4_4_IMPLEMENTATION_DECISIONS.md`;
+- `docs/research/STEP_4_PHASE_4_4_GEMINI_MODEL_SELECTION.md`;
 - `docs/research/STEP_4_MEMORY_EXTRACTION_BAKEOFF_PLAN.md`;
 - `docs/research/STEP_4_MEMORY_EXTRACTION_PROVISIONAL_TIE.md` (historical/provisional only).
 
-Latest pre-selection documented branch CI run `33967397439`: pytest / Ruff / Windows DPAPI / Windows Hello all PASS.
+Latest integrated pre-acceptance CI commit `c3c0dbee16af560f775cf71c1961bd9360f693a9`, Code Quality run `33968527219`: pytest / Ruff / Windows DPAPI / Windows Hello all PASS.
 
 Remaining before Phase 4.4 can close:
 
-1. run a 2-case owner-PC `gemini-3.5-flash-lite` smoke using the existing Google API project;
-2. if smoke succeeds, run the full production-aligned provider-eligible corpus on Flash-Lite;
-3. require safety/correctness first, including zero schema/provider failures and zero false durable proposals on expected non-durable provider-eligible cases;
-4. inspect every core semantic mismatch and English/Hindi/Hinglish breakdown;
-5. select Flash-Lite if sufficient; only if it materially fails, escalate to `gemini-3.8-flash` using the identical corpus;
-6. run narrow owner-PC production-path acceptance after the model decision;
-7. prove candidate extraction creates no durable memory and normal wake/Pocket3/Gemini behavior remains stable;
-8. write Phase-4.4 implementation/acceptance closure.
+1. run narrow owner-PC production-path acceptance with candidate extraction enabled using `gemini-3.5-flash-lite`;
+2. prove normal wake/Pocket3/Gemini conversation remains stable;
+3. prove accepted USER turns can create session-local quarantine candidates while transient/non-durable turns are dropped;
+4. prove explicit Phase-4.3 memory controls still remain on their governed path;
+5. prove no implicit candidate becomes canonical SQLCipher memory;
+6. prove session close disposes quarantine and normal return-to-wake remains intact;
+7. write Phase-4.4 owner acceptance + implementation closure records;
+8. only then begin Phase 4.5 semantic retrieval.
 
 Phase 4.5 remains blocked.
 
@@ -267,7 +278,7 @@ Phase 4.5 remains blocked.
 2. Phase 4.1 — canonical memory kernel — **COMPLETE**.
 3. Phase 4.2 — LiveContext + ContextAssembler — **COMPLETE**.
 4. Phase 4.3 — explicit remember/correct/forget/inspect — **COMPLETE**.
-5. Phase 4.4 — structured extraction/candidate quarantine — **ACTIVE**; implicit durable admission remains OFF.
+5. Phase 4.4 — structured extraction/candidate quarantine — **ACTIVE; MODEL SELECTED; OWNER PRODUCTION ACCEPTANCE NEXT**.
 6. Phase 4.5 — Qwen semantic retrieval + FTS/RRF/top-3 reranker + abstention calibration — **BLOCKED BY 4.4**.
 7. Phase 4.6 — episodic/reflection learning for meaningful outcomes/decisions/incidents, not raw transcripts.
 8. Phase 4.7 — Capability Registry + CycloneDX + authoritative self-knowledge aggregation, no autonomous repair.
@@ -287,6 +298,7 @@ Phase 4.5 remains blocked.
 - `docs/research/STEP_4_PHASE_4_3_OWNER_PC_ACCEPTANCE.md`;
 - `docs/research/STEP_4_PHASE_4_3_IMPLEMENTATION_RESULT.md`;
 - `docs/research/STEP_4_PHASE_4_4_IMPLEMENTATION_DECISIONS.md`;
+- `docs/research/STEP_4_PHASE_4_4_GEMINI_MODEL_SELECTION.md`;
 - `docs/research/STEP_4_MEMORY_EXTRACTION_BAKEOFF_PLAN.md`;
 - `docs/research/STEP_4_RETRIEVAL_TECHNOLOGY_DECISION.md`;
 - `docs/research/STEP_4_SQLCIPHER_417_WINDOWS_RESULT.md`;
@@ -298,6 +310,7 @@ Phase 4.5 remains blocked.
 
 - portable disaster recovery/export;
 - implicit durable auto-admission threshold;
+- deterministic canonical subject/predicate normalization for any future implicit admission;
 - semantic abstention threshold;
 - dedicated ANN/vector derivative if scale needs it;
 - persisted crash-resume LiveContext;
@@ -309,6 +322,6 @@ Phase 4.5 remains blocked.
 
 ## Immediate Next Action
 
-**RUN THE PHASE-4.4 GEMINI 3.5 FLASH-LITE TWO-CASE SMOKE.**
+**RUN PHASE-4.4 OWNER-PC PRODUCTION-PATH ACCEPTANCE WITH `gemini-3.5-flash-lite`.**
 
-Use the production schema/prompt and deterministic pre-provider gates under the owner's existing Google API project. If the model/API/schema smoke succeeds, proceed to the full fixed corpus. Do not run Gemini 3.8 Flash unless Flash-Lite materially fails the safety/correctness gate. Implicit durable admission remains OFF throughout Phase 4.4.
+Enable candidate extraction only for the narrow acceptance run under the existing Gemini provider/account. Keep implicit durable admission OFF. Verify candidate quarantine behavior, durable-memory absence, session disposal, and unchanged wake/Pocket3/Gemini/vision/return-to-wake behavior. Do not begin Phase 4.5 until this acceptance and the Phase-4.4 closure record are complete.
