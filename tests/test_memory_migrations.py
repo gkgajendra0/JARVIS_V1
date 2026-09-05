@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from jarvis.memory.migrations import (
+from jarvis.memory.migration_runner import (
     MemoryMigrationIntegrityError,
     MemoryMigrationRunner,
     MemorySchemaTooNewError,
