@@ -56,9 +56,7 @@ def _rrf_fuse(
     """
 
     fts_rank = {memory_id: rank for rank, memory_id in enumerate(fts_ids, start=1)}
-    dense_rank = {
-        memory_id: rank for rank, memory_id in enumerate(dense_ids, start=1)
-    }
+    dense_rank = {memory_id: rank for rank, memory_id in enumerate(dense_ids, start=1)}
     candidates = set(fts_rank) | set(dense_rank)
 
     scores: dict[str, float] = {}
@@ -82,9 +80,7 @@ def _rrf_fuse(
 
     top_score = scores[ranked[0]]
     raw_top_ties = sorted(
-        memory_id
-        for memory_id in ranked
-        if abs(scores[memory_id] - top_score) < 1e-15
+        memory_id for memory_id in ranked if abs(scores[memory_id] - top_score) < 1e-15
     )
     return ranked, scores, raw_top_ties
 
@@ -207,7 +203,9 @@ def main() -> None:
         "load_seconds": round(load_seconds, 4),
         "corpus_encode_seconds": round(corpus_encode_seconds, 4),
         "peak_cuda_bytes": (
-            int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None
+            int(torch.cuda.max_memory_allocated())
+            if torch.cuda.is_available()
+            else None
         ),
         "metrics": {
             "fts5": base._positive_metrics(fts_rankings),
