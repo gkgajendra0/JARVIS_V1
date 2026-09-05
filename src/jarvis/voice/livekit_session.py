@@ -20,6 +20,7 @@ from openai.types.beta.realtime.session import TurnDetection
 
 from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationRole, ConversationSession
+from jarvis.memory.live_context import LiveContext
 from jarvis.voice.agent import INSTRUCTIONS
 
 LOGGER = logging.getLogger(__name__)
@@ -91,11 +92,13 @@ class LiveKitConversationBridge:
         self,
         session: AgentSession,
         conversation: ConversationSession,
+        live_context: LiveContext,
         *,
         show_transcript: bool,
     ) -> None:
         self.livekit_session = session
         self.conversation = conversation
+        self.live_context = live_context
         self._show_transcript = show_transcript
         self._seen_item_ids: set[str] = set()
         session.on("conversation_item_added", self._on_conversation_item_added)
@@ -120,6 +123,8 @@ class LiveKitConversationBridge:
             interrupted=interrupted,
             external_item_id=item.id,
         )
+        if not self.live_context.observe_turn(turn):
+            raise RuntimeError("canonical accepted turn was already present in LiveContext")
         self._seen_item_ids.add(item.id)
         if self._show_transcript:
             suffix = " [interrupted]" if turn.interrupted else ""
@@ -138,12 +143,14 @@ class LiveKitConversationBridge:
             self.conversation.fail()
         else:
             self.conversation.close()
+        self.live_context.clear()
 
 
 def create_voice_session(
     config: JarvisConfig,
 ) -> tuple[AgentSession, LiveKitConversationBridge]:
     conversation = ConversationSession()
+    live_context = LiveContext(max_recent_turns=config.live_context_recent_turns)
     livekit_session = AgentSession(
         llm=_create_realtime_model(config),
         vad=None,
@@ -156,6 +163,7 @@ def create_voice_session(
     bridge = LiveKitConversationBridge(
         livekit_session,
         conversation,
+        live_context,
         show_transcript=config.show_transcript,
     )
     return livekit_session, bridge
