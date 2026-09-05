@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from jarvis.memory.candidates import MemoryCandidateExtractor, MemoryExtractionProposal
+from .candidates import MemoryCandidateExtractor, MemoryExtractionProposal
 
 
 _EXTRACTION_SYSTEM_PROMPT = """You extract one structured JARVIS memory proposal from exactly one accepted USER utterance.
