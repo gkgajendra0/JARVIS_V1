@@ -1,5 +1,6 @@
-from pathlib import Path
+from __future__ import annotations
 
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HARNESS = ROOT / "tools" / "research" / "step4_phase45_embedding_bakeoff.py"
