@@ -119,6 +119,11 @@ def _load_fixture(path: Path) -> dict[str, Any]:
     all_memory_ids = set(doc_ids) | set(replacement_ids)
     if len(all_memory_ids) != len(doc_ids) + len(replacement_ids):
         raise ValueError("replacement memory IDs must be unique")
+    secret_prohibited_ids = {
+        str(item["memory_id"]).strip()
+        for item in documents
+        if item.get("mode") == "secret"
+    }
 
     query_ids: set[str] = set()
     counts: Counter[tuple[str, str]] = Counter()
@@ -144,6 +149,10 @@ def _load_fixture(path: Path) -> dict[str, Any]:
             if not isinstance(expected, str) or expected not in all_memory_ids:
                 raise ValueError(
                     f"release case {case_id} needs a known expected memory"
+                )
+            if expected in secret_prohibited_ids:
+                raise ValueError(
+                    f"release case {case_id} cannot target a secret-prohibited fixture"
                 )
         elif expected is not None:
             raise ValueError(
@@ -226,6 +235,12 @@ def _draft(predicate: str, text: str, mode: str) -> SemanticAssertionDraft:
     )
 
 
+def _is_seedable_fixture_mode(mode: str) -> bool:
+    """Return whether a synthetic fixture may enter canonical semantic memory."""
+
+    return mode != "secret"
+
+
 async def _populate_database(
     payload: dict[str, Any],
     lifecycle: MemoryLifecycleService,
@@ -242,6 +257,8 @@ async def _populate_database(
         predicate = str(item["predicate"])
         mode = str(item["mode"])
         text = str(item["text"])
+        if not _is_seedable_fixture_mode(mode):
+            continue
         source = _source(memory_id, mode)
         record = await lifecycle.create(_draft(predicate, text, mode), source)
         memory_to_assertion[memory_id] = record.assertion_id
@@ -497,6 +514,11 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
 
     fixture_path = Path(args.cases).resolve()
     payload = _load_fixture(fixture_path)
+    secret_prohibited_document_ids = [
+        str(item["memory_id"])
+        for item in payload["documents"]
+        if str(item["mode"]) == "secret"
+    ]
     device = None if args.device == "auto" else args.device
     if device == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA requested but torch.cuda.is_available() is false")
@@ -659,6 +681,9 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
         },
         "corpus": {
             "documents": len(payload["documents"]),
+            "canonical_seed_documents": len(payload["documents"])
+            - len(secret_prohibited_document_ids),
+            "secret_prohibited_documents_excluded_before_canonical_create": secret_prohibited_document_ids,
             "queries": len(payload["queries"]),
             "calibration": split_summary(calibration),
             "validation": split_summary(validation),
