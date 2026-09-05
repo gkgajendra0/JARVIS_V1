@@ -9,7 +9,6 @@ from pydantic import ValidationError
 
 from .candidates import MemoryCandidateExtractor, MemoryExtractionProposal
 
-
 _EXTRACTION_SYSTEM_PROMPT = """You extract one structured JARVIS memory proposal from exactly one accepted USER utterance.
 
 You only propose evidence. You never establish canonical truth, mutate memory, or decide authority.
