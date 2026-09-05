@@ -1,5 +1,6 @@
-# Research-only dependencies for Step 4 structured memory-candidate extraction.
-# Keep separate from production JARVIS dependencies until technology selection is approved.
-openai==3.8.0
+# Research-only environment for the Step 4 extraction bake-off.
+# Provider SDK/Pydantic versions intentionally match production JARVIS so the
+# benchmark measures the same client/schema surface the runtime will execute.
+openai==2.54.0
 google-genai==2.22.0
 pydantic==2.13.5
