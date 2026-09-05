@@ -22,136 +22,91 @@
 
 **REAL OWNER-PC VOICE ACCEPTANCE: PASS.**
 
-**PHASE 4.3 FINAL CLOSURE: PENDING FINAL CI.**
+**PHASE 4.3 FINAL CLOSURE: PASS.**
 
 Date: 2026-09-05
 
-This record captures the real JARVIS Windows owner-machine acceptance evidence for the first production persistent-memory rollout. Phase 4.3 is not marked complete in this record until the post-acceptance closure commit also passes the repository quality gates.
+This record captures the real JARVIS Windows owner-machine acceptance evidence for the first production persistent-memory rollout.
 
 ## 1. Retained SQLCipher package integrity — PASS
 
-The retained JARVIS SQLCipher 4.17.0 CPython 3.11 Win64 wheel was downloaded from the successful GitHub Actions artifact and installed into the owner machine's existing `.venv` only after SHA-256 verification.
-
-Wheel:
+Accepted wheel:
 
 `sqlcipher3-0.6.2+jarvis.sqlcipher4170-cp311-cp311-win_amd64.whl`
 
-Expected SHA-256:
-
-`f0b005bea9fe2451870266d1f3aa697c05383de21e6ebdf2bef470a4fad1dbba`
-
-Owner-machine measured SHA-256:
+Expected and owner-machine SHA-256:
 
 `f0b005bea9fe2451870266d1f3aa697c05383de21e6ebdf2bef470a4fad1dbba`
 
 Result: **MATCH / PASS**.
 
-Pip reported successful installation of `sqlcipher3-0.6.2+jarvis.sqlcipher4170`.
-
 ## 2. Production encrypted-memory adapter smoke — PASS
 
-The owner machine ran `tools/research/step4_sqlcipher_production_adapter_smoke.py` using the installed retained wheel and the production `SqlCipherMemoryDatabaseFactory` + Windows DPAPI boundary.
+The owner machine ran `tools/research/step4_sqlcipher_production_adapter_smoke.py` using the retained wheel and production `SqlCipherMemoryDatabaseFactory` + Windows DPAPI boundary.
 
 Measured runtime:
 
-- SQLCipher: `4.17.0 community`;
-- SQLite: `3.53.3`;
-- result: `PASS`;
-- leaks: `[]`.
+- SQLCipher `4.17.0 community`;
+- SQLite `3.53.3`;
+- result `PASS`;
+- leaks `[]`.
 
-Every production-adapter assertion passed:
-
-- cipher status/version;
-- SQLite version;
-- migration ledger/version;
-- FTS first-open synchronization;
-- encrypted reopen current assertion;
-- encrypted reopen FTS;
-- DPAPI-protected key sidecar exists;
-- stdlib plaintext SQLite open blocked;
-- synthetic marker absent from storage artifacts.
-
-The smoke used a disposable owner-PC temporary directory under `%TEMP%`; it did not write the real personal-memory database.
+Validated properties included cipher/version checks, migration ledger/version, FTS synchronization, encrypted reopen, DPAPI-protected key material, plaintext stdlib SQLite blocking, and clean storage-marker scan.
 
 ## 3. First real voice remember — PASS
 
-With `JARVIS_MEMORY_ENABLED=true`, the normal production voice runtime started without changing provider-native turn detection or the accepted Step-3 audio/vision architecture.
-
-The owner explicitly said:
+With `JARVIS_MEMORY_ENABLED=true`, the owner explicitly said:
 
 `Remember that my phase 4 test city is Sagar.`
 
-JARVIS acknowledged the explicit remember request. The process was then returned to idle and fully stopped.
+JARVIS acknowledged the explicit remember request and the process was fully stopped.
 
 ## 4. First cross-session voice recall — FAIL, ROOT CAUSE FIXED
 
-On a new production process/session, the owner asked:
+On a new process the owner asked:
 
 `Jarvis, what do you remember about my phase four test city?`
 
-The realtime tool attempted predicate `phase_four_test_city` and returned no current memory.
+The tool attempted `phase_four_test_city` while the stored key was `phase_4_test_city`.
 
-This exposed a deterministic key-normalization defect rather than a storage/encryption failure: the original remembered target canonicalized to `phase_4_test_city`, while the later ASR/model wording `phase four test city` canonicalized to `phase_four_test_city`.
+This was deterministic spoken-number key normalization, not storage loss. The failure is recorded in `docs/research/STEP_4_PHASE_4_3_OWNER_ACCEPTANCE_FAILURE_1.md`.
 
-The defect was recorded separately in `docs/research/STEP_4_PHASE_4_3_OWNER_ACCEPTANCE_FAILURE_1.md`.
+Research preceded the fix. Mature dependency `number-parser==0.3.2` was selected for bounded spoken-number normalization and the exact owner failure gained regression coverage.
 
-The fix uses the mature `number-parser==0.3.2` dependency for bounded spoken-number normalization before canonical predicate construction rather than custom number-word parsing. Automated regression coverage reproducing `phase 4` -> `phase four` passes.
+## 5. Durable encrypted persistence after fix — PASS
 
-## 5. Owner-PC normalization + durable encrypted persistence verification — PASS
-
-After pulling the fix and installing the pinned dependency, the owner machine measured:
+Without re-saving, the owner directly reopened the real production encrypted memory runtime and measured:
 
 ```text
 DIGIT = phase_4_test_city
 WORDS = phase_4_test_city
-```
-
-The owner then opened the real production encrypted memory runtime directly, without re-saving the memory, and exact-inspected using the spoken-word form `phase four test city`.
-
-Measured result:
-
-```text
 FOUND=True
 PREDICATE=phase_4_test_city
 VALUE=Sagar
 SENSITIVITY=standard
 ```
 
-This proves the original explicit remember operation durably committed to the real encrypted production database, survived a complete process restart, reopened successfully through DPAPI + SQLCipher, and required no repair write.
+This proved the first explicit voice remember had persisted correctly across a complete process restart.
 
-## 6. Cross-session production voice recall after fix — PASS
+## 6. Cross-session voice recall after fix — PASS
 
-After a fresh production `jarvis-voice` process restart, the owner asked:
+After a fresh production process restart, exact inspect hit `phase_4_test_city` and JARVIS returned `Sagar`.
 
-`Jarvis, what do you remember about my phase four test city?`
+## 7. Explicit voice correction — PASS
 
-The runtime logged:
-
-`Explicit memory inspect hit | predicate=phase_4_test_city | sensitivity=standard | verification=unverified`
-
-JARVIS replied that the Phase 4 test city was `Sagar`.
-
-This proved production voice recall from the canonical encrypted store across process boundaries.
-
-## 7. Explicit production voice correction — PASS
-
-The owner later said:
+The owner said:
 
 `Jarvis, correct my phase 4 test city memory to Indore.`
 
-The runtime logged a committed correction for canonical predicate `phase_4_test_city`, and JARVIS confirmed the Phase 4 test city was now set to `Indore`.
+The runtime committed correction for `phase_4_test_city` and JARVIS confirmed the new current value.
 
 ## 8. Cross-session corrected-value recall — PASS
 
-After another full production process restart, the owner asked for the same memory and JARVIS returned `Indore`, not the superseded `Sagar` value.
+After another full process restart, JARVIS returned `Indore`, not superseded `Sagar`.
 
-The owner directly accepted this run as passing. This satisfies the correction persistence requirement.
+## 9. Explicit voice forget — PASS
 
-For the remaining acceptance runs, startup greetings were disabled using the supported `JARVIS_STARTUP_GREETING=false` configuration so repeated test starts did not consume unnecessary provider/audio budget.
-
-## 9. Explicit production voice forget — PASS
-
-In a fresh production process, the owner said:
+The owner said:
 
 `Jarvis, forget my phase four test city memory.`
 
@@ -159,47 +114,29 @@ The runtime logged:
 
 `Explicit memory forget committed | predicate=phase_4_test_city`
 
-The mutation log did not echo either the current `Indore` value or the superseded `Sagar` value. JARVIS confirmed the forget operation and returned to local wake detection normally.
-
-This proves the explicit forget request reached the canonical durable lifecycle through the production voice path.
+Mutation metadata did not echo `Indore` or `Sagar`.
 
 ## 10. Cross-process physical forget — PASS
 
-After a complete `jarvis-voice` process restart, the owner asked:
-
-`Jarvis, what do you remember about my phase four test city?`
-
-The exact lookup returned:
+After complete restart, the owner asked for the same memory. Exact lookup returned:
 
 `ToolError while executing tool: no current memory for predicate 'phase_4_test_city'`
 
-JARVIS stated that it retained no memory of the Phase 4 test city. Neither `Indore` nor `Sagar` was returned.
+JARVIS returned neither `Indore` nor `Sagar`.
 
-This proves the memory remained physically absent after reopening the production encrypted store in a new process rather than merely disappearing from process-local state.
+This proves the memory remained absent after reopening the encrypted store rather than merely disappearing from process-local state.
 
 ## 11. Implicit ordinary statement admission — REJECTED / PASS
 
-The owner made an ordinary statement without explicit durable-memory authorization:
+The owner said, without explicit durable-memory authorization:
 
 `Jarvis my phase four ordinary test animal is otter.`
 
-The production runtime rejected the attempted memory mutation with:
+The runtime rejected the attempted write:
 
 `ToolError while executing tool: latest user turn does not explicitly authorize remember`
 
-JARVIS told the owner that an explicit request would be required.
-
-After another complete process restart, the owner asked:
-
-`Jarvis, what do you remember about my phase four ordinary test animal?`
-
-The exact canonical lookup returned:
-
-`ToolError while executing tool: no current memory for predicate 'phase_4_ordinary_test_animal'`
-
-JARVIS did not return `otter`.
-
-This proves both runtime authorization rejection and durable absence across process boundaries while implicit admission remains disabled.
+After a full restart, exact lookup for `phase_4_ordinary_test_animal` returned no current memory and JARVIS did not return `otter`.
 
 ## 12. Credential/secret voice request — REJECTED / PASS
 
@@ -207,42 +144,46 @@ The owner made an explicit remember request containing a clearly synthetic API-k
 
 The realtime assistant refused the request and stated that credentials such as API keys cannot be stored. No memory mutation tool was invoked and no commit log was emitted.
 
-This production behavior is consistent with the architecture boundary: the model has no direct canonical durable-write authority, implicit admission is disabled, and durable mutation is available only through the governed memory tool/`MemoryService` path. The deterministic secret guard itself is independently covered by automated tests that force the tool path and reject obvious API-key/credential/OTP/recovery/private-key-style content before write.
+This is consistent with the accepted boundary: the model has no direct durable-write authority, implicit admission is disabled, and durable mutation exists only through governed memory tools/`MemoryService`. Automated tests separately force the tool path and prove deterministic credential/secret rejection before write.
 
-No real credential or secret was used during acceptance.
+No real secret was used.
 
-## 13. Stable production behavior remained usable — PASS
+## 13. Stable production behavior — PASS
 
-Across the acceptance sequence, the normal runtime repeatedly demonstrated:
+Across acceptance runs:
 
-- Pocket 3 remained the production conversation microphone;
+- Pocket 3 remained the production microphone;
 - wake detection remained usable;
 - LiveKit MediaDevices/WebRTC audio remained active;
 - provider conversation remained usable;
 - vision remained integrated in SAFE mode;
-- CAM++ speaker similarity remained shadow-only;
-- LR-ASD active-speaker scoring remained shadow-only;
-- neither shadow diagnostic gained authority effect;
-- JARVIS repeatedly returned to local wake detection after conversations;
-- no production mic-routing workaround to Voicemeeter was introduced.
+- CAM++ and LR-ASD remained shadow-only with no authority effect;
+- JARVIS repeatedly returned to local wake detection;
+- no production mic-routing workaround was introduced.
 
-The acceptance sequence therefore did not require destabilizing the accepted Step-3 production audio/vision architecture.
+Startup greetings were disabled only for repeated acceptance runs via supported `JARVIS_STARTUP_GREETING=false`; normal production greeting capability was not removed.
 
-## 14. Owner acceptance conclusion
+## 14. Final closure CI — PASS
 
-The real owner-PC sequence has now proved:
+Post-acceptance closure commit:
 
-1. approved SQLCipher/DPAPI production adapter works;
-2. explicit remember persists across processes;
-3. exact inspect recalls across processes;
-4. explicit correction replaces current truth;
-5. corrected truth persists across processes;
-6. explicit forget succeeds without value leakage in mutation metadata;
-7. forgotten truth remains absent after encrypted-store reopen;
-8. implicit ordinary statements are not durably admitted;
-9. explicit synthetic credential-memory requests are rejected;
-10. normal wake/audio/provider/vision/return-to-sleep behavior remains usable.
+`69f909d5287d640fa23b7c9206bfef1c0964e70e`
 
-**Owner-PC Phase 4.3 acceptance: PASS.**
+GitHub Actions Code Quality run:
 
-Phase 4.4 remains blocked only until the post-acceptance closure commit passes the full repository quality gates and the Phase 4.3 closure documents are reconciled.
+`33962138222`
+
+Result: **SUCCESS**.
+
+Jobs:
+
+- pytest: **PASS**;
+- Ruff format + lint: **PASS**;
+- Windows DPAPI smoke: **PASS**;
+- Windows Hello helper build/contract: **PASS**.
+
+## 15. Conclusion
+
+The real owner-PC sequence proved approved SQLCipher/DPAPI operation, explicit remember/inspect/correct/forget across process boundaries, physical forget, implicit-admission rejection, synthetic credential rejection, and stable production voice behavior.
+
+**Phase 4.3 owner acceptance and closure: PASS.**
