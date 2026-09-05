@@ -180,3 +180,9 @@ def test_predicate_normalization_is_deterministic_and_unicode_safe() -> None:
     assert canonical_memory_predicate("पसंदीदा जगह") == "पसंदीदा_जगह"
     with pytest.raises(ValueError):
         canonical_memory_predicate("---")
+
+
+def test_predicate_normalization_folds_spoken_number_variants() -> None:
+    assert canonical_memory_predicate("phase 4 test city") == "phase_4_test_city"
+    assert canonical_memory_predicate("phase four test city") == "phase_4_test_city"
+    assert canonical_memory_predicate("चरण चार परीक्षण शहर") == "चरण_4_परीक्षण_शहर"
