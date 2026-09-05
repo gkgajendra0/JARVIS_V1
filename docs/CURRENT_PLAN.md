@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASES 4.0A, 4.1, 4.2, 4.3 AND 4.4 COMPLETE — PHASE 4.5 ACTIVE / RESEARCH REFRESH NEXT**
+**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASES 4.0A–4.4 COMPLETE — PHASE 4.5 ACTIVE / RESEARCH REFRESH COMPLETE / LOCAL EMBEDDING BAKE-OFF NEXT**
 
 This file is the operational source of truth for current work. Detailed measured evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` describes architecture that actually exists and has passed acceptance.
 
@@ -144,7 +144,7 @@ Closure records:
 
 Add semantic retrieval over **eligible canonical memory** without letting retrieval establish, modify, resurrect, or override truth.
 
-The previously researched target architecture is:
+The accepted direction remains:
 
 ```text
 structured / temporal / authority / sensitivity eligibility
@@ -152,21 +152,49 @@ structured / temporal / authority / sensitivity eligibility
  -> SQLite FTS5 + local dense embeddings
  -> rank fusion
  -> small candidate set
- -> local reranker
+ -> local reranker only if measured benefit remains
  -> abstention / release policy
  -> ContextAssembler
 ```
 
-The prior research candidate stack was:
+### Research refresh result
 
-```text
-FTS5
- + Qwen3-Embedding-0.6B
- + reciprocal-rank fusion
- + Qwen3-Reranker-0.6B
-```
+Current 2026 research has been refreshed before implementation.
 
-**Do not implement this stack blindly.** Per the project research-first rule, Phase 4.5 begins with a fresh web verification of current model/library/runtime options and Windows/RTX suitability before code changes.
+Measured incumbent:
+
+- `Qwen/Qwen3-Embedding-0.6B`;
+- 256d Matryoshka;
+- JARVIS retrieval instruction;
+- existing owner-machine Recall@3 = 1.0000;
+- existing RRF Recall@1 = 0.9412;
+- existing top-3 Qwen reranker result = 1.0000 Recall@1/MRR.
+
+Only new challenger worth a fresh bake-off:
+
+- `google/embeddinggemma-300m`;
+- ~308M parameters;
+- 100+ languages;
+- on-device/private design;
+- Matryoshka embeddings;
+- materially smaller model than the incumbent;
+- official Sentence Transformers path.
+
+Current mature inference boundary:
+
+- Sentence Transformers 6.0.x family;
+- native Qwen embedding integration;
+- native current CrossEncoder support for Qwen3 rerankers.
+
+Vector extension decision:
+
+- `sqlite-vec` remains pre-v1 -> not selected;
+- `sqliteai/sqlite-vector` reached 1.0 and is the preferred future extension candidate if scale proves a need;
+- initial Phase-4.5 base path remains exact local cosine over derived embeddings because no current JARVIS measurement requires ANN/native vector indexing.
+
+Research record:
+
+- `docs/research/STEP_4_PHASE_4_5_RESEARCH_REFRESH.md`.
 
 ### Phase 4.5 mandatory invariants
 
@@ -183,19 +211,20 @@ FTS5
 - local retrieval must not alter Step-3 audio/vision/authority behavior;
 - abstention thresholds must be measured, not guessed.
 
-### Phase 4.5 planned evidence sequence
+### Phase 4.5 evidence sequence
 
-1. research-refresh current embedding/reranker/runtime options;
-2. select the smallest sufficient local retrieval stack;
-3. define derived embedding storage/rebuild/forget semantics;
-4. implement lexical + dense retrieval behind an explicit interface;
-5. implement deterministic rank fusion;
-6. implement local reranking only if measured benefit justifies it;
-7. build a fixed semantic retrieval corpus including exact, paraphrase, stale, corrected, forgotten, sensitive and no-answer cases;
-8. calibrate abstention from measured data rather than an arbitrary score;
-9. integrate only through `ContextAssembler`;
-10. run automated + owner-PC acceptance;
-11. write Phase-4.5 closure before Phase 4.6 begins.
+1. build a **research-only** fixed-corpus local bake-off using current stable Sentence Transformers;
+2. compare exactly two embedding candidates: Qwen3-Embedding-0.6B incumbent vs EmbeddingGemma 300M challenger;
+3. keep deterministic eligibility, FTS5 and RRF identical between candidates;
+4. measure Recall@1, Recall@3, MRR, multilingual breakdown, no-answer behavior, encode p50/p95, model-load time, GPU/process memory and hybrid latency;
+5. select EmbeddingGemma only if it materially reduces resources while meeting the required JARVIS retrieval quality; otherwise keep Qwen;
+6. add Qwen3-Reranker-0.6B only if first-stage ordering errors remain and the reranker materially fixes them;
+7. benchmark exact-vector scan at realistic memory scale before considering `sqlite-vector`;
+8. define derived embedding storage/rebuild/physical-forget semantics;
+9. implement production retrieval only after the bake-off selection is documented;
+10. expand corpus for no-answer/stale/corrected/forgotten/sensitive/adversarial cases and calibrate abstention from data;
+11. integrate retrieval only through `ContextAssembler`;
+12. run automated + owner-PC acceptance and write Phase-4.5 closure.
 
 ---
 
@@ -228,6 +257,6 @@ FTS5
 
 ## Immediate Next Action
 
-**BEGIN PHASE-4.5 RESEARCH REFRESH BEFORE IMPLEMENTATION.**
+**BUILD THE PHASE-4.5 RESEARCH-ONLY LOCAL EMBEDDING BAKE-OFF HARNESS.**
 
-Re-verify current local embedding, reranking, SQLite/FTS/vector-adjacent tooling, model licensing, Windows/CUDA support, memory footprint, multilingual quality and deployment maturity. Prefer mature existing solutions over custom retrieval infrastructure. Do not write Phase-4.5 production code until that comparison is documented and the retrieval architecture is reconfirmed.
+Do not modify production retrieval yet. Reuse the existing fixed JARVIS multilingual corpus and deterministic eligibility/FTS/RRF logic. Compare only Qwen3-Embedding-0.6B against EmbeddingGemma 300M under the current stable Sentence Transformers runtime, then select from measured owner-machine quality/resource data. Reranker and vector-extension decisions remain conditional on measured need.
