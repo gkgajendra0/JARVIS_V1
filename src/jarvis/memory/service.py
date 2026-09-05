@@ -5,6 +5,8 @@ from __future__ import annotations
 import unicodedata
 from dataclasses import dataclass
 
+from number_parser import parse as parse_number_words
+
 from .assertions import SemanticAssertionDraft, SemanticAssertionRecord
 from .lifecycle import MemoryLifecycleService
 from .provenance import MemorySource
@@ -37,10 +39,28 @@ class MemoryAmbiguousError(MemoryServiceError):
     pass
 
 
+def normalize_memory_surface(value: str) -> str:
+    """Normalize user-facing memory text without introducing fuzzy semantics.
+
+    Spoken number words are folded to digits before canonical key comparison so
+    equivalent ASR/model forms such as ``phase four`` and ``phase 4`` resolve to
+    the same deterministic key. English normalization always runs; Hindi number
+    normalization is applied only when Devanagari is present.
+    """
+
+    if not isinstance(value, str):
+        raise TypeError("memory surface must be a string")
+    normalized = unicodedata.normalize("NFKC", value.strip())
+    normalized = parse_number_words(normalized, language="en")
+    if any("\u0900" <= character <= "\u097f" for character in normalized):
+        normalized = parse_number_words(normalized, language="hi")
+    return normalized.casefold()
+
+
 def canonical_memory_predicate(value: str) -> str:
     if not isinstance(value, str):
         raise TypeError("predicate must be a string")
-    normalized_input = unicodedata.normalize("NFKC", value.strip()).casefold()
+    normalized_input = normalize_memory_surface(value)
     characters: list[str] = []
     previous_was_separator = False
     for character in normalized_input:
