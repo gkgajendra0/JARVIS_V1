@@ -108,6 +108,33 @@ async def test_explicit_voice_tools_round_trip_only_after_canonical_user_command
 
 
 @pytest.mark.asyncio
+async def test_numeric_wording_variants_resolve_same_exact_memory_key(
+    tmp_path: Path,
+) -> None:
+    service, writer, reader = _service(tmp_path / "numeric-variant.db")
+    conversation = _conversation("Remember that my phase 4 test city is Sagar.")
+    tools = MemoryAgentTools(service, conversation)
+    try:
+        remembered = await tools.remember(
+            predicate="phase 4 test city",
+            value="Sagar",
+        )
+        assert remembered["predicate"] == "phase_4_test_city"
+
+        conversation.accept_turn(
+            ConversationRole.USER,
+            "What do you remember about my phase four test city?",
+        )
+        inspected = await tools.inspect(predicate="phase four test city")
+        assert inspected["ok"] is True
+        assert inspected["predicate"] == "phase_4_test_city"
+        assert inspected["value"] == "Sagar"
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
 async def test_voice_tool_mutation_refuses_implicit_or_assistant_only_authority(
     tmp_path: Path,
 ) -> None:
