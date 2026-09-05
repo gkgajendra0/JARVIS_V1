@@ -27,7 +27,9 @@ def _ids(prefix: str):
     return lambda: f"{prefix}-{next(counter)}"
 
 
-def _service(path: Path) -> tuple[MemoryService, SerialConnectionWorker, SerialConnectionWorker]:
+def _service(
+    path: Path,
+) -> tuple[MemoryService, SerialConnectionWorker, SerialConnectionWorker]:
     def factory() -> sqlite3.Connection:
         connection = sqlite3.connect(path)
         connection.execute("PRAGMA foreign_keys = ON")
