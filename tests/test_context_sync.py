@@ -9,7 +9,7 @@ from jarvis.voice.context_sync import (
 
 def test_openai_realtime_allows_mid_session_context_update() -> None:
     capability = provider_context_sync_capability(
-        JarvisConfig(realtime_provider="openai", realtime_model="gpt-realtime")
+        JarvisConfig(ai_provider="openai", realtime_model="gpt-realtime")
     )
 
     assert capability.provider == "openai"
@@ -21,7 +21,7 @@ def test_openai_realtime_allows_mid_session_context_update() -> None:
 def test_gemini_31_fails_closed_to_initial_history_only() -> None:
     capability = provider_context_sync_capability(
         JarvisConfig(
-            realtime_provider="gemini",
+            ai_provider="gemini",
             gemini_realtime_model="gemini-3.1-flash-live-preview",
         )
     )
@@ -35,7 +35,7 @@ def test_gemini_31_fails_closed_to_initial_history_only() -> None:
 def test_older_gemini_realtime_model_keeps_generic_update_capability() -> None:
     capability = provider_context_sync_capability(
         JarvisConfig(
-            realtime_provider="gemini",
+            ai_provider="gemini",
             gemini_realtime_model="gemini-2.5-flash-native-audio-preview-12-2025",
         )
     )
