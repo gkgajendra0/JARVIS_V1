@@ -5,18 +5,35 @@ from tools.research import step4_memory_extraction_bakeoff as bakeoff
 from jarvis.memory.candidates import MemoryExtractionProposal
 from jarvis.memory.extractors import MEMORY_EXTRACTION_SYSTEM_PROMPT
 
-CASES_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "tools"
-    / "research"
-    / "step4_memory_extraction_cases.json"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CASES_PATH = REPO_ROOT / "tools" / "research" / "step4_memory_extraction_cases.json"
+RESEARCH_REQUIREMENTS_PATH = (
+    REPO_ROOT / "tools" / "research" / "requirements-step4-extraction.txt"
 )
+PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 
 
 def test_research_bakeoff_reuses_production_schema_and_prompt() -> None:
     assert bakeoff.MemoryExtractionProposal is MemoryExtractionProposal
     assert bakeoff.MEMORY_EXTRACTION_SYSTEM_PROMPT == MEMORY_EXTRACTION_SYSTEM_PROMPT
     assert "rationale" not in MemoryExtractionProposal.model_fields
+
+
+def test_research_sdk_pins_match_direct_production_dependencies() -> None:
+    production_text = PYPROJECT_PATH.read_text(encoding="utf-8")
+    research_requirements = {
+        line.strip()
+        for line in RESEARCH_REQUIREMENTS_PATH.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+
+    for pinned_dependency in (
+        "openai==2.54.0",
+        "google-genai==2.22.0",
+        "pydantic==2.13.5",
+    ):
+        assert f'"{pinned_dependency}"' in production_text
+        assert pinned_dependency in research_requirements
 
 
 def test_research_corpus_taxonomy_and_pre_provider_partition_match_runtime() -> None:
