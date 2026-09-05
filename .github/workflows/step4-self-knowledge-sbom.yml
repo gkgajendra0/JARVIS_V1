@@ -103,4 +103,5 @@ jobs:
           name: step4-self-knowledge-sbom
           path: .step4-self-knowledge/
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 14
