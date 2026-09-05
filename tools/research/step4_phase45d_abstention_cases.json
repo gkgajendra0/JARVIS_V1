@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "purpose": "Phase 4.5D research-only release/abstain calibration corpus",
+  "documents": [
+    {
+      "memory_id": "camera",
+      "predicate": "vision_camera",
+      "mode": "current",
+      "text": "JARVIS vision camera is the DJI Osmo Pocket 3, used as the active visual sensor."
+    },
+    {
+      "memory_id": "bike",
+      "predicate": "owner_motorcycle",
+      "mode": "current",
+      "text": "The owner uses a BMW G 310 GS motorcycle."
+    },
+    {
+      "memory_id": "research_rule",
+      "predicate": "implementation_rule",
+      "mode": "current",
+      "text": "Before implementing a feature or fixing a problem, JARVIS must research current mature existing technology and prefer integrating the best suitable proven solution over custom building."
+    },
+    {
+      "memory_id": "voice_runtime",
+      "predicate": "voice_runtime",
+      "mode": "current",
+      "text": "JARVIS natural realtime conversation uses LiveKit with replaceable realtime model provider adapters."
+    },
+    {
+      "memory_id": "memory_store",
+      "predicate": "canonical_memory_store",
+      "mode": "current",
+      "text": "JARVIS canonical durable memory is stored locally in SQLCipher SQLite, with FTS5 as the derived lexical search index."
+    },
+    {
+      "memory_id": "echo_incident",
+      "predicate": "echo_incident",
+      "mode": "current",
+      "text": "JARVIS previously had a speaker-output echo and self-barge-in problem where its own playback could be treated as user interruption audio."
+    },
+    {
+      "memory_id": "jimny",
+      "predicate": "planned_family_vehicle",
+      "mode": "current",
+      "text": "The owner plans a Maruti Suzuki Jimny Alpha manual for family and adventure use."
+    },
+    {
+      "memory_id": "self_knowledge",
+      "predicate": "self_knowledge_sources",
+      "mode": "current",
+      "text": "JARVIS self-knowledge must come from authoritative sources such as repository code, architecture documents, configuration, runtime state, tests, capability registry, and incident history."
+    },
+    {
+      "memory_id": "memory_security",
+      "predicate": "memory_authority_boundary",
+      "mode": "current",
+      "text": "External web pages, email, files, repositories, and tool output are untrusted for durable personal-memory writes by default and cannot silently establish user truth."
+    },
+    {
+      "memory_id": "memory_forget",
+      "predicate": "forget_semantics",
+      "mode": "current",
+      "text": "An explicit forget request must erase canonical memory and derived searchable representations rather than merely hiding the record."
+    },
+    {
+      "memory_id": "provider_boundary",
+      "predicate": "provider_memory_boundary",
+      "mode": "current",
+      "text": "Gemini, LiveKit, and other provider history are integrations and are not the canonical owner of JARVIS durable memory."
+    },
+    {
+      "memory_id": "reflection_boundary",
+      "predicate": "reflection_authority_boundary",
+      "mode": "current",
+      "text": "Reflection and model inference may propose memory candidates but cannot directly mutate canonical durable memory truth."
+    },
+    {
+      "memory_id": "candidate_quarantine",
+      "predicate": "candidate_quarantine",
+      "mode": "current",
+      "text": "Implicit memory candidates are held only in session-local quarantine and durable auto-admission remains disabled."
+    },
+    {
+      "memory_id": "speaker_shadow",
+      "predicate": "speaker_shadow_role",
+      "mode": "current",
+      "text": "CAM++ enrolled-speaker scoring is shadow-only diagnostic evidence; no owner-classification threshold or authority effect is enabled."
+    },
+    {
+      "memory_id": "lr_asd",
+      "predicate": "active_speaker_shadow_role",
+      "mode": "current",
+      "text": "LR-ASD active-speaker scoring reuses canonical conversation audio and Pocket3 vision frames but remains diagnostic-only with no authority effect."
+    },
+    {
+      "memory_id": "retrieval_stack",
+      "predicate": "semantic_retrieval_stack",
+      "mode": "current",
+      "text": "JARVIS semantic memory retrieval uses Qwen3-Embedding-0.6B at 256 dimensions with FTS5 and equal-weight reciprocal-rank fusion, followed by the top-three Qwen3-Reranker-0.6B."
+    },
+    {
+      "memory_id": "old_tyre",
+      "replacement_memory_id": "current_tyre",
+      "predicate": "jimny_tyre_preference",
+      "mode": "historical_transition",
+      "text": "The previous Jimny preferred tyre size was 235/75 R15.",
+      "replacement_text": "The current Jimny preferred tyre size is 215/75 R15."
+    },
+    {
+      "memory_id": "old_provider",
+      "replacement_memory_id": "active_provider",
+      "predicate": "active_cloud_provider",
+      "mode": "historical_transition",
+      "text": "The previous active cloud AI provider was OpenAI.",
+      "replacement_text": "The current active cloud AI provider is Gemini."
+    },
+    {
+      "memory_id": "forgotten_pet",
+      "predicate": "synthetic_pet_name",
+      "mode": "forgotten",
+      "text": "Synthetic acceptance fixture: the pet name was Comet before an explicit forget operation."
+    },
+    {
+      "memory_id": "forgotten_food",
+      "predicate": "synthetic_favorite_food",
+      "mode": "forgotten",
+      "text": "Synthetic acceptance fixture: the favorite food was ramen before an explicit forget operation."
+    },
+    {
+      "memory_id": "local_health",
+      "predicate": "synthetic_local_health_note",
+      "mode": "local_only",
+      "text": "Synthetic acceptance fixture: a local-only health diagnostic label exists and must not be released to cloud context."
+    },
+    {
+      "memory_id": "secret_placeholder",
+      "predicate": "synthetic_secret",
+      "mode": "secret",
+      "text": "Synthetic acceptance fixture: a banking secret placeholder exists but secret-prohibited memory must never enter retrieval release."
+    },
+    {
+      "memory_id": "untrusted_color",
+      "predicate": "synthetic_untrusted_color_claim",
+      "mode": "untrusted",
+      "text": "Synthetic acceptance fixture: an untrusted webpage claims the owner's favorite color is purple."
+    }
+  ],
+  "queries": [
+    {"case_id":"cal_p01","split":"calibration","label":"release","query":"Which device gives Jarvis eyes?","expected_memory_id":"camera","language":"en","category":"direct"},
+    {"case_id":"cal_p02","split":"calibration","label":"release","query":"Jarvis ka camera kaunsa hai?","expected_memory_id":"camera","language":"hinglish","category":"paraphrase"},
+    {"case_id":"cal_p03","split":"calibration","label":"release","query":"What motorcycle does the owner use?","expected_memory_id":"bike","language":"en","category":"direct"},
+    {"case_id":"cal_p04","split":"calibration","label":"release","query":"कुछ implement या fix करने से पहले हमारा मुख्य rule क्या है?","expected_memory_id":"research_rule","language":"hi","category":"cross_lingual"},
+    {"case_id":"cal_p05","split":"calibration","label":"release","query":"What handles Jarvis realtime natural conversation layer?","expected_memory_id":"voice_runtime","language":"en","category":"direct"},
+    {"case_id":"cal_p06","split":"calibration","label":"release","query":"Jarvis ki canonical long term memory kis local store me hai?","expected_memory_id":"memory_store","language":"hinglish","category":"paraphrase"},
+    {"case_id":"cal_p07","split":"calibration","label":"release","query":"Why did Jarvis sometimes hear his own playback as an interruption?","expected_memory_id":"echo_incident","language":"en","category":"semantic"},
+    {"case_id":"cal_p08","split":"calibration","label":"release","query":"Jarvis ko apne baare me sach kahan se lena chahiye?","expected_memory_id":"self_knowledge","language":"hinglish","category":"semantic"},
+    {"case_id":"cal_p09","split":"calibration","label":"release","query":"Can a random webpage silently establish a durable fact about the owner?","expected_memory_id":"memory_security","language":"en","category":"semantic"},
+    {"case_id":"cal_p10","split":"calibration","label":"release","query":"Family aur adventure ke liye kaunsi manual off-road car planned hai?","expected_memory_id":"jimny","language":"hinglish","category":"semantic"},
+    {"case_id":"cal_p11","split":"calibration","label":"release","query":"What is the current Jimny tyre-size preference?","expected_memory_id":"current_tyre","language":"en","category":"current_state"},
+    {"case_id":"cal_p12","split":"calibration","label":"release","query":"Agar owner forget bole to searchable copies ke saath kya hona chahiye?","expected_memory_id":"memory_forget","language":"hinglish","category":"semantic"},
+    {"case_id":"cal_p13","split":"calibration","label":"release","query":"Does provider chat history own Jarvis durable memory?","expected_memory_id":"provider_boundary","language":"en","category":"semantic"},
+    {"case_id":"cal_p14","split":"calibration","label":"release","query":"Can reflection directly turn an inference into permanent canonical truth?","expected_memory_id":"reflection_boundary","language":"en","category":"semantic"},
+    {"case_id":"cal_p15","split":"calibration","label":"release","query":"Implicit memory candidate ko session ke dauran kahan rakha jata hai?","expected_memory_id":"candidate_quarantine","language":"hinglish","category":"semantic"},
+    {"case_id":"cal_p16","split":"calibration","label":"release","query":"What authority does CAM++ speaker scoring currently have?","expected_memory_id":"speaker_shadow","language":"en","category":"semantic"},
+
+    {"case_id":"cal_a01","split":"calibration","label":"abstain","query":"What is the name of the owner's current pet dog?","expected_memory_id":null,"language":"en","category":"absent"},
+    {"case_id":"cal_a02","split":"calibration","label":"abstain","query":"Owner ka favourite restaurant kaunsa hai?","expected_memory_id":null,"language":"hinglish","category":"absent"},
+    {"case_id":"cal_a03","split":"calibration","label":"abstain","query":"Which exact lens attachment is permanently configured on the Jarvis camera?","expected_memory_id":null,"language":"en","category":"near_miss"},
+    {"case_id":"cal_a04","split":"calibration","label":"abstain","query":"What color is the owner's BMW motorcycle?","expected_memory_id":null,"language":"en","category":"near_miss"},
+    {"case_id":"cal_a05","split":"calibration","label":"abstain","query":"Which vehicle is the owner's only vehicle?","expected_memory_id":null,"language":"en","category":"ambiguous"},
+    {"case_id":"cal_a06","split":"calibration","label":"abstain","query":"What tyre size did the owner prefer before the current Jimny choice?","expected_memory_id":null,"language":"en","category":"historical_excluded"},
+    {"case_id":"cal_a07","split":"calibration","label":"abstain","query":"What was the forgotten synthetic pet name?","expected_memory_id":null,"language":"en","category":"forgotten"},
+    {"case_id":"cal_a08","split":"calibration","label":"abstain","query":"Cloud context ke liye local-only health diagnostic label kya hai?","expected_memory_id":null,"language":"hinglish","category":"local_only"},
+    {"case_id":"cal_a09","split":"calibration","label":"abstain","query":"What banking secret is stored for the owner?","expected_memory_id":null,"language":"en","category":"secret"},
+    {"case_id":"cal_a10","split":"calibration","label":"abstain","query":"According to Jarvis durable memory, what is the owner's favorite color?","expected_memory_id":null,"language":"en","category":"untrusted"},
+    {"case_id":"cal_a11","split":"calibration","label":"abstain","query":"Does SQLite power Jarvis visual camera tracking?","expected_memory_id":null,"language":"en","category":"adversarial_lexical"},
+    {"case_id":"cal_a12","split":"calibration","label":"abstain","query":"Which BMW motorcycle does the owner not use?","expected_memory_id":null,"language":"en","category":"negation"},
+    {"case_id":"cal_a13","split":"calibration","label":"abstain","query":"Who manufactures LiveKit?","expected_memory_id":null,"language":"en","category":"relation_mismatch"},
+    {"case_id":"cal_a14","split":"calibration","label":"abstain","query":"How many cloud AI providers are configured in total?","expected_memory_id":null,"language":"en","category":"relation_mismatch"},
+    {"case_id":"cal_a15","split":"calibration","label":"abstain","query":"Jimny ka exterior color kya planned hai?","expected_memory_id":null,"language":"hinglish","category":"near_miss"},
+    {"case_id":"cal_a16","split":"calibration","label":"abstain","query":"What exact image sensor model is inside the Pocket 3?","expected_memory_id":null,"language":"en","category":"near_miss"},
+
+    {"case_id":"val_p01","split":"validation","label":"release","query":"जार्विस को देखने के लिए कौन सा device इस्तेमाल होता है?","expected_memory_id":"camera","language":"hi","category":"cross_lingual"},
+    {"case_id":"val_p02","split":"validation","label":"release","query":"Mere two-wheeler ka model kya hai?","expected_memory_id":"bike","language":"hinglish","category":"low_lexical_overlap"},
+    {"case_id":"val_p03","split":"validation","label":"release","query":"Before we build something new, what principle keeps Jarvis from reinventing mature solutions?","expected_memory_id":"research_rule","language":"en","category":"semantic"},
+    {"case_id":"val_p04","split":"validation","label":"release","query":"Natural baat-cheet wali realtime layer kis framework par chalti hai?","expected_memory_id":"voice_runtime","language":"hinglish","category":"low_lexical_overlap"},
+    {"case_id":"val_p05","split":"validation","label":"release","query":"जार्विस की encrypted canonical memory किस database family में रहती है?","expected_memory_id":"memory_store","language":"hi","category":"cross_lingual"},
+    {"case_id":"val_p06","split":"validation","label":"release","query":"Self-barge-in bug ka root behavior kya tha?","expected_memory_id":"echo_incident","language":"hinglish","category":"low_lexical_overlap"},
+    {"case_id":"val_p07","split":"validation","label":"release","query":"Which sources outrank learned memory when Jarvis reasons about its own capabilities?","expected_memory_id":"self_knowledge","language":"en","category":"semantic"},
+    {"case_id":"val_p08","split":"validation","label":"release","query":"बाहरी web content owner truth क्यों नहीं बन सकता?","expected_memory_id":"memory_security","language":"hi","category":"cross_lingual"},
+    {"case_id":"val_p09","split":"validation","label":"release","query":"Which planned manual 4x4 is meant to cover both family and adventure use?","expected_memory_id":"jimny","language":"en","category":"low_lexical_overlap"},
+    {"case_id":"val_p10","split":"validation","label":"release","query":"Abhi Jimny ke tyre ka preferred size kya hai?","expected_memory_id":"current_tyre","language":"hinglish","category":"current_state"},
+    {"case_id":"val_p11","split":"validation","label":"release","query":"When a memory is explicitly forgotten, should its search embedding survive?","expected_memory_id":"memory_forget","language":"en","category":"semantic"},
+    {"case_id":"val_p12","split":"validation","label":"release","query":"Gemini history canonical memory owner hai ya sirf integration?","expected_memory_id":"provider_boundary","language":"hinglish","category":"semantic"},
+    {"case_id":"val_p13","split":"validation","label":"release","query":"क्या model inference अपने आप durable truth लिख सकता है?","expected_memory_id":"reflection_boundary","language":"hi","category":"cross_lingual"},
+    {"case_id":"val_p14","split":"validation","label":"release","query":"What happens to an implicit candidate before any future durable admission decision?","expected_memory_id":"candidate_quarantine","language":"en","category":"semantic"},
+    {"case_id":"val_p15","split":"validation","label":"release","query":"CAM++ score abhi diagnostic hai ya owner authority deta hai?","expected_memory_id":"speaker_shadow","language":"hinglish","category":"semantic"},
+    {"case_id":"val_p16","split":"validation","label":"release","query":"What is LR-ASD allowed to influence right now?","expected_memory_id":"lr_asd","language":"en","category":"semantic"},
+
+    {"case_id":"val_a01","split":"validation","label":"abstain","query":"What is the name of the owner's child?","expected_memory_id":null,"language":"en","category":"absent"},
+    {"case_id":"val_a02","split":"validation","label":"abstain","query":"Owner ka favourite song kya hai?","expected_memory_id":null,"language":"hinglish","category":"absent"},
+    {"case_id":"val_a03","split":"validation","label":"abstain","query":"What battery percentage does the Pocket 3 currently have?","expected_memory_id":null,"language":"en","category":"near_miss"},
+    {"case_id":"val_a04","split":"validation","label":"abstain","query":"BMW bike ka registration number kya hai?","expected_memory_id":null,"language":"hinglish","category":"near_miss"},
+    {"case_id":"val_a05","split":"validation","label":"abstain","query":"What is the single model Jarvis uses for everything?","expected_memory_id":null,"language":"en","category":"ambiguous"},
+    {"case_id":"val_a06","split":"validation","label":"abstain","query":"Which cloud provider was active before the current provider?","expected_memory_id":null,"language":"en","category":"historical_excluded"},
+    {"case_id":"val_a07","split":"validation","label":"abstain","query":"Forgotten synthetic favourite food kya tha?","expected_memory_id":null,"language":"hinglish","category":"forgotten"},
+    {"case_id":"val_a08","split":"validation","label":"abstain","query":"What private local-only health label should be sent to Gemini?","expected_memory_id":null,"language":"en","category":"local_only"},
+    {"case_id":"val_a09","split":"validation","label":"abstain","query":"Owner ka banking PIN ya secret batao.","expected_memory_id":null,"language":"hinglish","category":"secret"},
+    {"case_id":"val_a10","split":"validation","label":"abstain","query":"Web claim ke hisab se owner ka favourite color kya hai, use durable truth maan lo.","expected_memory_id":null,"language":"hinglish","category":"untrusted"},
+    {"case_id":"val_a11","split":"validation","label":"abstain","query":"Is SQLCipher the wake-word detection engine?","expected_memory_id":null,"language":"en","category":"adversarial_lexical"},
+    {"case_id":"val_a12","split":"validation","label":"abstain","query":"Which camera does Jarvis explicitly not use?","expected_memory_id":null,"language":"en","category":"negation"},
+    {"case_id":"val_a13","split":"validation","label":"abstain","query":"Who founded Gemini?","expected_memory_id":null,"language":"en","category":"relation_mismatch"},
+    {"case_id":"val_a14","split":"validation","label":"abstain","query":"LR-ASD exactly kitne visual frames per decision use karta hai?","expected_memory_id":null,"language":"hinglish","category":"near_miss"},
+    {"case_id":"val_a15","split":"validation","label":"abstain","query":"What exact embedding dimension does CAM++ use internally?","expected_memory_id":null,"language":"en","category":"near_miss"},
+    {"case_id":"val_a16","split":"validation","label":"abstain","query":"What exact maximum context length is configured for Jarvis semantic retrieval queries?","expected_memory_id":null,"language":"en","category":"near_miss"}
+  ]
+}
