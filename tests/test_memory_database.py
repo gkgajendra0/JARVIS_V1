@@ -139,12 +139,12 @@ def test_new_database_is_keyed_before_read_and_migrated(tmp_path: Path) -> None:
 
     connection = database.open()
     try:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 1
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
         assert (
             connection.execute(
                 "SELECT count(*) FROM jarvis_schema_migration"
             ).fetchone()[0]
-            == 1
+            == 2
         )
     finally:
         connection.close()
@@ -171,7 +171,7 @@ def test_existing_database_reuses_protected_key_and_migrations(tmp_path: Path) -
     try:
         assert (
             second.execute("SELECT count(*) FROM jarvis_schema_migration").fetchone()[0]
-            == 1
+            == 2
         )
     finally:
         second.close()
@@ -206,12 +206,12 @@ def test_protected_key_without_database_retries_initialization(tmp_path: Path) -
     retried_database = factory(database_path, retry_driver)
     retried = retried_database.open()
     try:
-        assert retried.execute("PRAGMA user_version").fetchone()[0] == 1
+        assert retried.execute("PRAGMA user_version").fetchone()[0] == 2
         assert (
             retried.execute("SELECT count(*) FROM jarvis_schema_migration").fetchone()[
                 0
             ]
-            == 1
+            == 2
         )
     finally:
         retried.close()
