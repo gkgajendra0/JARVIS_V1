@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import re
+import unicodedata
 from dataclasses import dataclass
 
 from .assertions import SemanticAssertionDraft, SemanticAssertionRecord
@@ -13,7 +13,6 @@ from .types import FreshnessClass, Sensitivity, ValueType
 
 _PERSONAL_SCOPE = "personal"
 _OWNER_SUBJECT = "owner"
-_NON_WORD = re.compile(r"[^\w]+", flags=re.UNICODE)
 
 
 class MemoryServiceError(RuntimeError):
@@ -35,7 +34,21 @@ class MemoryAmbiguousError(MemoryServiceError):
 def canonical_memory_predicate(value: str) -> str:
     if not isinstance(value, str):
         raise TypeError("predicate must be a string")
-    normalized = _NON_WORD.sub("_", value.strip().casefold()).strip("_")
+    normalized_input = unicodedata.normalize("NFKC", value.strip()).casefold()
+    characters: list[str] = []
+    previous_was_separator = False
+    for character in normalized_input:
+        category_group = unicodedata.category(character)[0]
+        if character == "_" or category_group in {"L", "M", "N"}:
+            characters.append(character)
+            previous_was_separator = False
+            continue
+        if characters and not previous_was_separator:
+            characters.append("_")
+            previous_was_separator = True
+    normalized = "".join(characters).strip("_")
+    while "__" in normalized:
+        normalized = normalized.replace("__", "_")
     if not normalized:
         raise ValueError("predicate must contain letters or digits")
     if len(normalized) > 96:

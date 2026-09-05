@@ -29,7 +29,10 @@ def _conversation(text: str) -> ConversationSession:
 @pytest.mark.parametrize(
     ("action", "text"),
     [
-        (ExplicitMemoryAction.REMEMBER, "Remember that my Jimny tyre size is 235/75 R15."),
+        (
+            ExplicitMemoryAction.REMEMBER,
+            "Remember that my Jimny tyre size is 235/75 R15.",
+        ),
         (ExplicitMemoryAction.REMEMBER, "Mera tyre size 235/75 R15 yaad rakhna."),
         (ExplicitMemoryAction.REMEMBER, "याद रखो कि मेरा टायर साइज़ 235/75 R15 है।"),
         (ExplicitMemoryAction.CORRECT, "That memory is wrong; it is 215/75 R15."),
@@ -38,7 +41,10 @@ def _conversation(text: str) -> ConversationSession:
         (ExplicitMemoryAction.FORGET, "Forget my Jimny tyre size."),
         (ExplicitMemoryAction.FORGET, "Mera tyre size bhool jao."),
         (ExplicitMemoryAction.FORGET, "मेरा टायर साइज़ भूल जाओ।"),
-        (ExplicitMemoryAction.INSPECT, "What do you remember about my Jimny tyre size?"),
+        (
+            ExplicitMemoryAction.INSPECT,
+            "What do you remember about my Jimny tyre size?",
+        ),
         (ExplicitMemoryAction.INSPECT, "Mere tyre size ke baare mein kya yaad hai?"),
         (ExplicitMemoryAction.INSPECT, "मेरे टायर साइज़ के बारे में क्या याद है?"),
     ],

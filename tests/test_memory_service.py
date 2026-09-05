@@ -36,7 +36,9 @@ def _ids(prefix: str):
     return lambda: f"{prefix}-{next(counter)}"
 
 
-def _source(source_id: str, sensitivity: Sensitivity = Sensitivity.STANDARD) -> MemorySource:
+def _source(
+    source_id: str, sensitivity: Sensitivity = Sensitivity.STANDARD
+) -> MemorySource:
     return MemorySource(
         source_id=source_id,
         source_class=MemorySourceClass.OWNER_EXPLICIT,
@@ -77,7 +79,9 @@ def _services(
 
 
 @pytest.mark.asyncio
-async def test_explicit_remember_inspect_correct_forget_round_trip(tmp_path: Path) -> None:
+async def test_explicit_remember_inspect_correct_forget_round_trip(
+    tmp_path: Path,
+) -> None:
     writer, reader = _workers(tmp_path / "memory-service.db")
     _, service = _services(writer, reader)
     try:
@@ -115,7 +119,9 @@ async def test_explicit_remember_inspect_correct_forget_round_trip(tmp_path: Pat
 
 
 @pytest.mark.asyncio
-async def test_remember_existing_exact_predicate_requires_correction(tmp_path: Path) -> None:
+async def test_remember_existing_exact_predicate_requires_correction(
+    tmp_path: Path,
+) -> None:
     writer, reader = _workers(tmp_path / "memory-exists.db")
     _, service = _services(writer, reader)
     try:
@@ -136,7 +142,9 @@ async def test_remember_existing_exact_predicate_requires_correction(tmp_path: P
 
 
 @pytest.mark.asyncio
-async def test_exact_target_resolution_fails_closed_when_ambiguous(tmp_path: Path) -> None:
+async def test_exact_target_resolution_fails_closed_when_ambiguous(
+    tmp_path: Path,
+) -> None:
     writer, reader = _workers(tmp_path / "memory-ambiguous.db")
     lifecycle, service = _services(writer, reader)
     try:

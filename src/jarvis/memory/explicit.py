@@ -30,8 +30,13 @@ class MemorySecretRejectedError(ValueError):
 
 _WHITESPACE = re.compile(r"\s+")
 _NEGATION_PATTERNS = (
-    re.compile(r"\b(?:do not|don't|dont|never)\b.{0,24}\b(?:remember|save|note|forget|delete|remove)\b"),
-    re.compile(r"\b(?:mat|nahi|nahin)\b.{0,24}\b(?:yaad|bhool|save|delete|remove)\b"),
+    re.compile(
+        r"\b(?:do not|don't|dont|never)\b.{0,24}\b"
+        r"(?:remember|save|note|forget|delete|remove)\b"
+    ),
+    re.compile(
+        r"\b(?:mat|nahi|nahin)\b.{0,24}\b(?:yaad|bhool|save|delete|remove)\b"
+    ),
     re.compile(r"(?:मत|नहीं).{0,24}(?:याद|भूल|सेव|डिलीट)"),
 )
 _REMEMBER_PATTERNS = (
@@ -51,6 +56,7 @@ _CORRECT_PATTERNS = (
     re.compile(r"\bcorrect\b"),
     re.compile(r"\bupdate\b.{0,24}\b(?:memory|remembered|stored)\b"),
     re.compile(r"\bchange\b.{0,24}\b(?:memory|remembered|stored)\b"),
+    re.compile(r"\bthat\s+memory\s+is\s+wrong\b"),
     re.compile(r"\b(?:that(?:'s| is)|this is)\s+wrong\b"),
     re.compile(r"\bgalat\s+(?:hai|tha|thi)\b"),
     re.compile(r"गलत\s+(?:है|था|थी)"),
