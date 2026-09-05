@@ -123,6 +123,15 @@ def factory(
     )
 
 
+def remove_database_artifacts(database_path: Path) -> None:
+    for path in (
+        database_path,
+        Path(f"{database_path}-wal"),
+        Path(f"{database_path}-shm"),
+    ):
+        path.unlink(missing_ok=True)
+
+
 def test_new_database_is_keyed_before_read_and_migrated(tmp_path: Path) -> None:
     database_path = tmp_path / "memory.db"
     driver = FakeSqlCipherDriver()
@@ -171,21 +180,66 @@ def test_existing_database_reuses_protected_key_and_migrations(tmp_path: Path) -
     assert len(driver.connections) == 2
 
 
-def test_database_and_key_must_exist_as_a_pair(tmp_path: Path) -> None:
+def test_existing_database_without_protected_key_fails_closed(tmp_path: Path) -> None:
     database_path = tmp_path / "memory.db"
     database_path.write_bytes(b"existing-database")
     driver = FakeSqlCipherDriver()
 
     with pytest.raises(MemoryDatabaseKeyError, match="key is missing"):
         factory(database_path, driver).open()
-    assert driver.connections == []
 
-    database_path.unlink()
-    key_path = default_memory_key_path(database_path)
-    key_path.write_bytes(b"orphan-key")
-    with pytest.raises(MemoryDatabaseKeyError, match="database is missing"):
-        factory(database_path, driver).open()
     assert driver.connections == []
+    assert database_path.read_bytes() == b"existing-database"
+
+
+def test_protected_key_without_database_retries_initialization(tmp_path: Path) -> None:
+    database_path = tmp_path / "memory.db"
+    first_driver = FakeSqlCipherDriver()
+    first_database = factory(database_path, first_driver)
+
+    first = first_database.open()
+    first.close()
+    sealed_before = first_database.key_path.read_bytes()
+    remove_database_artifacts(database_path)
+
+    retry_driver = FakeSqlCipherDriver()
+    retried_database = factory(database_path, retry_driver)
+    retried = retried_database.open()
+    try:
+        assert retried.execute("PRAGMA user_version").fetchone()[0] == 1
+        assert (
+            retried.execute("SELECT count(*) FROM jarvis_schema_migration").fetchone()[0]
+            == 1
+        )
+    finally:
+        retried.close()
+
+    assert database_path.exists()
+    assert retried_database.key_path.read_bytes() == sealed_before
+    assert len(retry_driver.connections) == 1
+
+
+def test_failed_key_only_retry_preserves_existing_key_and_removes_new_db(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "memory.db"
+    first_database = factory(database_path, FakeSqlCipherDriver())
+    first = first_database.open()
+    first.close()
+    sealed_before = first_database.key_path.read_bytes()
+    remove_database_artifacts(database_path)
+
+    retry_database = factory(
+        database_path,
+        FakeSqlCipherDriver(cipher_status=0),
+    )
+    with pytest.raises(MemoryDatabaseEncryptionError):
+        retry_database.open()
+
+    assert not database_path.exists()
+    assert not Path(f"{database_path}-wal").exists()
+    assert not Path(f"{database_path}-shm").exists()
+    assert retry_database.key_path.read_bytes() == sealed_before
 
 
 @pytest.mark.parametrize(
