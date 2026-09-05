@@ -177,7 +177,7 @@ def main() -> None:
     leaks = marker_leaks(leak_paths)
 
     checks = {
-        "cipher_status": first_cipher_status == 1,
+        "cipher_status": int(first_cipher_status or 0) == 1,
         "cipher_version": str(first_cipher_version).startswith("4.17.0"),
         "sqlite_version": first_sqlite_version == "3.53.3",
         "migration_version": first_user_version == 1,
