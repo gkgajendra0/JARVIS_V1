@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Callable
 
 from google.genai import types as google_types
 from livekit.agents import (
@@ -19,11 +20,14 @@ from livekit.plugins import google, openai
 from openai.types.beta.realtime.session import TurnDetection
 
 from jarvis.config import JarvisConfig
-from jarvis.conversation import ConversationRole, ConversationSession
+from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.memory.live_context import LiveContext
 from jarvis.voice.agent import INSTRUCTIONS
 
 LOGGER = logging.getLogger(__name__)
+
+AcceptedTurnObserver = Callable[[ConversationTurn], None]
+ConversationCloseObserver = Callable[[], None]
 
 
 def require_openai_api_key() -> str:
@@ -101,9 +105,39 @@ class LiveKitConversationBridge:
         self.live_context = live_context
         self._show_transcript = show_transcript
         self._seen_item_ids: set[str] = set()
+        self._accepted_turn_observers: list[AcceptedTurnObserver] = []
+        self._close_observers: list[ConversationCloseObserver] = []
         session.on("conversation_item_added", self._on_conversation_item_added)
         session.on("error", self._on_error)
         session.on("close", self._on_close)
+
+    def add_accepted_turn_observer(self, observer: AcceptedTurnObserver) -> None:
+        if not callable(observer):
+            raise TypeError("accepted-turn observer must be callable")
+        self._accepted_turn_observers.append(observer)
+
+    def add_close_observer(self, observer: ConversationCloseObserver) -> None:
+        if not callable(observer):
+            raise TypeError("conversation-close observer must be callable")
+        self._close_observers.append(observer)
+
+    def _notify_accepted_turn(self, turn: ConversationTurn) -> None:
+        for observer in tuple(self._accepted_turn_observers):
+            try:
+                observer(turn)
+            except Exception:
+                LOGGER.exception(
+                    "Accepted-turn observer failed; canonical conversation is unaffected"
+                )
+
+    def _notify_close(self) -> None:
+        for observer in tuple(self._close_observers):
+            try:
+                observer()
+            except Exception:
+                LOGGER.exception(
+                    "Conversation-close observer failed; session shutdown is unaffected"
+                )
 
     def _on_conversation_item_added(self, event: ConversationItemAddedEvent) -> None:
         item = event.item
@@ -131,6 +165,7 @@ class LiveKitConversationBridge:
         if self._show_transcript:
             suffix = " [interrupted]" if turn.interrupted else ""
             LOGGER.info("%s: %s%s", turn.role.value, turn.text, suffix)
+        self._notify_accepted_turn(turn)
 
     def _on_error(self, event: ErrorEvent) -> None:
         summary = getattr(event.error, "label", type(event.error).__name__)
@@ -146,6 +181,7 @@ class LiveKitConversationBridge:
         else:
             self.conversation.close()
         self.live_context.clear()
+        self._notify_close()
 
 
 def create_voice_session(
