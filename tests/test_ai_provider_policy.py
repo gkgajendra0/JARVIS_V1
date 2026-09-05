@@ -39,7 +39,9 @@ def test_configured_provider_accepts_legacy_machine_profile_without_env_override
     monkeypatch.delenv(LEGACY_REALTIME_PROVIDER_SETTING, raising=False)
     monkeypatch.delenv("JARVIS_RUNTIME_ENV_OVERRIDES", raising=False)
 
-    assert configured_ai_provider({LEGACY_REALTIME_PROVIDER_SETTING: "gemini"}) == "gemini"
+    assert (
+        configured_ai_provider({LEGACY_REALTIME_PROVIDER_SETTING: "gemini"}) == "gemini"
+    )
 
 
 def test_canonical_provider_wins_over_legacy_alias_inside_machine_profile(
@@ -60,7 +62,9 @@ def test_canonical_provider_wins_over_legacy_alias_inside_machine_profile(
 
 def test_production_source_has_one_provider_selector_and_one_credential_owner() -> None:
     credential_literals = {"OPENAI_API_KEY", "GOOGLE_API_KEY"}
-    credential_owners: dict[str, set[Path]] = {value: set() for value in credential_literals}
+    credential_owners: dict[str, set[Path]] = {
+        value: set() for value in credential_literals
+    }
     forbidden_secondary_selector = "memory_candidate_extraction_provider"
 
     for path in SOURCE_ROOT.rglob("*.py"):
