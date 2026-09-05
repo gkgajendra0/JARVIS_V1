@@ -85,6 +85,7 @@ def test_provider_sdk_imports_stay_inside_approved_adapter_boundaries() -> None:
     allowed = {
         Path("src/jarvis/memory/extractors.py"),
         Path("src/jarvis/voice/livekit_session.py"),
+        Path("src/jarvis/voice/scripted_speech.py"),
     }
     violations: list[tuple[Path, str]] = []
 
