@@ -6,7 +6,6 @@ import os
 from typing import Any
 
 from pydantic import ValidationError
-
 from .candidates import MemoryCandidateExtractor, MemoryExtractionProposal
 
 
