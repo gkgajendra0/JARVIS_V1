@@ -56,18 +56,18 @@ SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from jarvis.memory.candidates import (  # noqa: E402
+from jarvis.memory.candidates import (
     MemoryCandidateType,
     MemoryExtractionIntent,
     MemoryExtractionProposal,
     MemoryExtractionSensitivity,
 )
-from jarvis.memory.explicit import (  # noqa: E402
+from jarvis.memory.explicit import (
     MemorySecretRejectedError,
     is_explicit_memory_control_text,
     reject_prohibited_secret,
 )
-from jarvis.memory.extractors import MEMORY_EXTRACTION_SYSTEM_PROMPT  # noqa: E402
+from jarvis.memory.extractors import MEMORY_EXTRACTION_SYSTEM_PROMPT
 
 DIRECT_USER_SOURCE = "direct_user"
 NON_USER_EXPECTED_INTENT = MemoryExtractionIntent.UNTRUSTED.value
