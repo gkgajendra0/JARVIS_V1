@@ -175,7 +175,9 @@ def _policy_metrics(
     safe_fn = int(np.sum(~released & safe))
     safe_tn = int(np.sum(~released & ~safe))
     precision = tp / (tp + fp) if tp + fp else 1.0
-    positive_release_recall = tp / int(np.sum(release_labels)) if np.any(release_labels) else 0.0
+    positive_release_recall = (
+        tp / int(np.sum(release_labels)) if np.any(release_labels) else 0.0
+    )
     return {
         "tp": tp,
         "fp": fp,
@@ -185,7 +187,9 @@ def _policy_metrics(
         "positive_release_recall": round(positive_release_recall, 6),
         "released_cases": int(np.sum(released)),
         "released_case_ids": [
-            case.case_id for case, decision in zip(cases, released, strict=True) if decision
+            case.case_id
+            for case, decision in zip(cases, released, strict=True)
+            if decision
         ],
         "false_release_case_ids": [
             case.case_id
@@ -270,7 +274,9 @@ def _calibrate_policy(
     }
 
 
-async def _score_cases(args: argparse.Namespace) -> tuple[list[FinalCaseResult], dict[str, Any]]:
+async def _score_cases(
+    args: argparse.Namespace,
+) -> tuple[list[FinalCaseResult], dict[str, Any]]:
     import torch
 
     device = None if args.device == "auto" else args.device
@@ -293,7 +299,9 @@ async def _score_cases(args: argparse.Namespace) -> tuple[list[FinalCaseResult],
         embedder = Qwen3EmbeddingEncoder(device=device)
         reranker = Qwen3RetrievalReranker(device=device)
         if reranker.instruction != JARVIS_MEMORY_RERANK_INSTRUCTION:
-            raise RuntimeError("final acceptance must use the frozen JARVIS reranker instruction")
+            raise RuntimeError(
+                "final acceptance must use the frozen JARVIS reranker instruction"
+            )
 
         try:
             populate_started = time.perf_counter()
@@ -322,7 +330,9 @@ async def _score_cases(args: argparse.Namespace) -> tuple[list[FinalCaseResult],
                 )
                 retrieval_ms = (time.perf_counter_ns() - started) / 1_000_000
                 if not first_stage:
-                    raise RuntimeError(f"no first-stage candidates for {item['case_id']}")
+                    raise RuntimeError(
+                        f"no first-stage candidates for {item['case_id']}"
+                    )
 
                 started = time.perf_counter_ns()
                 reranked = reranker.rerank(query, first_stage)
@@ -334,7 +344,9 @@ async def _score_cases(args: argparse.Namespace) -> tuple[list[FinalCaseResult],
                 second_score = (
                     reranked[1].rerank_score if len(reranked) > 1 else top.rerank_score
                 )
-                top_memory_id = assertion_to_memory.get(top.candidate.assertion.assertion_id)
+                top_memory_id = assertion_to_memory.get(
+                    top.candidate.assertion.assertion_id
+                )
                 if top_memory_id is None:
                     raise RuntimeError(
                         f"unknown assertion returned for {item['case_id']}: "
@@ -355,12 +367,16 @@ async def _score_cases(args: argparse.Namespace) -> tuple[list[FinalCaseResult],
                         case_id=str(item["case_id"]),
                         split=str(item["split"]),
                         label=label,
-                        expected_memory_id=str(expected) if expected is not None else None,
+                        expected_memory_id=str(expected)
+                        if expected is not None
+                        else None,
                         language=str(item["language"]),
                         category=str(item["category"]),
                         top_memory_id=top_memory_id,
-                        positive_top1_correct=label == "release" and top_memory_id == expected,
-                        positive_hit_at_3=label == "release" and expected in top3_memory_ids,
+                        positive_top1_correct=label == "release"
+                        and top_memory_id == expected,
+                        positive_hit_at_3=label == "release"
+                        and expected in top3_memory_ids,
                         rerank_score=float(top.rerank_score),
                         rerank_margin=float(top.rerank_score - second_score),
                         dense_score=float(dense_score),
@@ -401,7 +417,9 @@ async def _score_cases(args: argparse.Namespace) -> tuple[list[FinalCaseResult],
         "torch_version": str(torch.__version__),
         "cuda_runtime": str(torch.version.cuda),
         "cuda_available": bool(torch.cuda.is_available()),
-        "device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        "device_name": torch.cuda.get_device_name(0)
+        if torch.cuda.is_available()
+        else None,
     }
     return results, {"timing": timing, "environment": environment}
 
