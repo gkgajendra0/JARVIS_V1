@@ -22,7 +22,15 @@ def load_harness():
             pass
 
 
-def case(module, case_id: str, *, safe: bool, score: float, margin: float, language: str = "en"):
+def case(
+    module,
+    case_id: str,
+    *,
+    safe: bool,
+    score: float,
+    margin: float,
+    language: str = "en",
+):
     return module.DevCase(
         case_id=case_id,
         label="release" if safe else "abstain",
