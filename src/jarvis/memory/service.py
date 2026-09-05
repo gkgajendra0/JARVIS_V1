@@ -9,7 +9,13 @@ from .assertions import SemanticAssertionDraft, SemanticAssertionRecord
 from .lifecycle import MemoryLifecycleService
 from .provenance import MemorySource
 from .query import CanonicalMemoryReader
-from .types import FreshnessClass, Sensitivity, ValueType
+from .types import (
+    AuthorityClass,
+    FreshnessClass,
+    MemorySourceClass,
+    Sensitivity,
+    ValueType,
+)
 
 _PERSONAL_SCOPE = "personal"
 _OWNER_SUBJECT = "owner"
@@ -156,6 +162,7 @@ class MemoryService:
     ) -> str:
         key = canonical_memory_predicate(predicate)
         current = await self._require_one_current(key)
+        self._validate_owner_explicit_source(source, current.sensitivity)
         forgotten = await self._lifecycle.forget(
             current.assertion_id,
             source,
@@ -212,17 +219,37 @@ class MemoryService:
             sensitivity=sensitivity,
         )
 
-    @staticmethod
+    @classmethod
     def _validate_write_policy(
+        cls,
         source: MemorySource,
         sensitivity: Sensitivity,
         freshness_class: FreshnessClass,
     ) -> None:
+        cls._validate_owner_explicit_source(source, sensitivity)
+        if not isinstance(freshness_class, FreshnessClass):
+            raise TypeError("freshness_class must be a FreshnessClass")
+
+    @staticmethod
+    def _validate_owner_explicit_source(
+        source: MemorySource,
+        sensitivity: Sensitivity,
+    ) -> None:
         if not isinstance(source, MemorySource):
             raise TypeError("source must be a MemorySource")
+        if source.source_class is not MemorySourceClass.OWNER_EXPLICIT:
+            raise MemoryServiceError(
+                "explicit memory mutation requires owner-explicit source provenance"
+            )
+        if source.authority_class is not AuthorityClass.OWNER_EXPLICIT:
+            raise MemoryServiceError(
+                "explicit memory mutation requires owner-explicit authority"
+            )
         if not isinstance(sensitivity, Sensitivity):
             raise TypeError("sensitivity must be a Sensitivity")
         if sensitivity is Sensitivity.SECRET_PROHIBITED:
             raise ValueError("secret-prohibited content cannot be remembered")
-        if not isinstance(freshness_class, FreshnessClass):
-            raise TypeError("freshness_class must be a FreshnessClass")
+        if source.sensitivity is not sensitivity:
+            raise MemoryServiceError(
+                "explicit memory source sensitivity must match the stored memory"
+            )
