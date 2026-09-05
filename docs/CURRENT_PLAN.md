@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 RESEARCH/TECHNOLOGY/ARCHITECTURE APPROVED — PHASE 4.0A IMPLEMENTATION ACTIVE**
+**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASE 4.0A COMPLETE — PHASE 4.1 CANONICAL MEMORY KERNEL ACTIVE**
 
 This file is the operational source of truth for current work. Detailed evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` continues to describe only architecture that actually exists and has passed acceptance.
 
@@ -91,7 +91,7 @@ Step 4 also lays the machine-readable self-knowledge foundation required by late
 
 ## Step-4 research disposition — COMPLETE
 
-The research-first technology gates are sufficiently answered and the resulting architecture has owner approval.
+The research-first technology gates are answered and the resulting architecture has owner approval.
 
 ### Canonical storage
 
@@ -101,8 +101,6 @@ Selected direction:
 - FTS5 derived lexical index;
 - JARVIS-owned bitemporal-style valid/system-time lifecycle;
 - no graph/vector/database service as canonical truth owner.
-
-Real-machine SQLite/FTS testing demonstrated the required temporal behavior, multilingual lexical lookup, secure-delete availability, and explicit-forget cleanup at 30,000 synthetic records.
 
 ### Encryption / key protection
 
@@ -124,7 +122,7 @@ Selected architecture:
 - `MemoryCandidateExtractor` protocol;
 - JARVIS `MemoryPolicy` retains all durable-write authority.
 
-Provider result remains a **provisional quality tie on shared evidence** between OpenAI Terra and Gemini 3.8 Flash. Provider selection therefore remains replaceable/configurable and does not block implementation.
+Provider result remains a **provisional quality tie on shared evidence** between OpenAI Terra and Gemini 3.8 Flash. Provider selection remains replaceable/configurable.
 
 ### Retrieval
 
@@ -141,7 +139,7 @@ structured / temporal / authority / sensitivity eligibility
  -> JARVIS ContextAssembler
 ```
 
-No vector database is selected. Embeddings remain derived/rebuildable. Broad automatic semantic context injection remains calibration-gated because no production abstention threshold has been invented.
+No vector database is selected. Embeddings remain derived/rebuildable. Broad automatic semantic context injection remains calibration-gated.
 
 ### Self-knowledge
 
@@ -153,8 +151,6 @@ Selected direction:
 - CycloneDX 1.7 + `cyclonedx-bom` = generated dependency inventory;
 - verified incident/episode memory = historical learned evidence;
 - learned observations never silently override declared/current truth.
-
-The Windows self-knowledge spike passed with 92 SBOM components, 8 research capability declarations, 45 authoritative source fingerprints, and zero failed validation checks.
 
 ### Async DB boundary
 
@@ -191,44 +187,77 @@ Approval record: `docs/research/STEP_4_ARCHITECTURE_APPROVAL.md`.
 
 ---
 
-## Phase 4.0A — ACTIVE
+## Phase 4.0A — COMPLETE
 
-Scope:
+Delivered:
 
 - stable JARVIS-owned `session_id`;
 - stable JARVIS-owned `turn_id`;
-- timezone-aware UTC `accepted_at` on accepted turns;
-- provider/LiveKit item IDs retained only as optional external provenance;
-- neutral shared `jarvis.security` boundary for the already-proven Windows DPAPI key protector;
-- preserve existing `jarvis.identity` compatibility and behavior;
-- update the Step-4 SQLCipher security probe to consume the neutral security boundary;
-- all existing Step-1/2/3 automated quality gates must remain green.
+- timezone-aware UTC `accepted_at`;
+- LiveKit/provider item IDs retained only as `external_item_id` provenance;
+- neutral shared `jarvis.security` DPAPI boundary;
+- existing `jarvis.identity` compatibility preserved;
+- SQLCipher research probe moved to the neutral security primitive;
+- focused provenance and DPAPI compatibility tests.
 
-Implementation branch:
+Validation record:
 
-`implementation/step-4-memory-context`
+`docs/research/STEP_4_PHASE_4_0A_VALIDATION.md`
 
-Implemented so far on the branch:
+Final validation run `33947865564`:
 
-- `ConversationSession` now owns stable session provenance;
-- `ConversationTurn` now owns stable turn provenance and aware UTC acceptance time;
-- LiveKit provider IDs are stored only as `external_item_id` diagnostic metadata;
-- DPAPI/key-protection primitive has moved behind `jarvis.security` with compatibility exports retained through `jarvis.identity`;
-- focused provenance and Windows DPAPI compatibility tests added;
-- research SQLCipher/DPAPI probe updated to the neutral module.
+- Ruff: PASS;
+- pytest: PASS;
+- Windows Hello helper: PASS;
+- Windows DPAPI: PASS.
 
-**Phase 4.0A remains ACTIVE until the final branch quality run is green and the implementation diff is reconciled.**
+Final diff reconciliation found only the approved provenance/security/test/documentation surface. No canonical memory database or LLM memory write was introduced.
 
-No canonical memory database, LLM memory write, or automatic durable learning is part of 4.0A.
+---
+
+## Phase 4.1 — ACTIVE
+
+Goal: build the deterministic encrypted canonical memory kernel before any model is allowed to propose or write memory.
+
+Approved implementation scope:
+
+- memory domain enums/value objects and provenance contracts;
+- `MemoryStore` protocol;
+- SQLCipher connection/key lifecycle;
+- thin thread-affinity database worker boundary;
+- ordered, auditable schema migrations;
+- relational canonical schema and safe current-state query/view;
+- bitemporal-style valid/system-time lifecycle fields;
+- deterministic semantic assertion creation/change/correction/retraction/verification/expiration;
+- FTS5 derived index with tested synchronization and secure-delete behavior;
+- explicit physical forget across canonical + derived representations;
+- deterministic exact current/history queries;
+- privacy-aware operation metadata without forgotten plaintext.
+
+Phase 4.1 implementation decisions being applied from current research:
+
+- SQLCipher key is set before the first database read, then validated with a real schema read;
+- one serialized writer follows SQLite's one-writer concurrency model; WAL permits concurrent readers;
+- application schema versioning uses ordered SQL migrations with JARVIS-owned version state rather than an ORM migration framework;
+- FTS5 is a derived external-content-style index synchronized by deterministic database triggers/rebuild logic;
+- FTS5 `secure-delete=1` and core SQLite/SQLCipher `PRAGMA secure_delete=ON` are both required for the forget path;
+- production code must not silently fall back from SQLCipher to plaintext SQLite;
+- the unverified research PyPI wheel is not promoted as the production packaging decision; the selected production target remains the pinned reproducible SQLCipher 4.17 Windows artifact.
+
+Not in Phase 4.1:
+
+- LLM extraction;
+- candidate auto-admission;
+- semantic embedding/reranking;
+- provider context injection;
+- autonomous repair.
 
 ---
 
 ## Remaining approved implementation order
 
-1. **Phase 4.0A — provenance + neutral security boundary** — ACTIVE.
-2. **Phase 4.1 — canonical memory kernel**
-   - SQLCipher store, migrations, temporal schema, provenance, lifecycle, FTS, explicit forget;
-   - no LLM auto-write.
+1. **Phase 4.0A — provenance + neutral security boundary** — COMPLETE.
+2. **Phase 4.1 — canonical memory kernel** — ACTIVE.
 3. **Phase 4.2 — LiveContext + ContextAssembler**
    - session state, sensitivity/context-release policy, turn-scoped provider integration.
 4. **Phase 4.3 — explicit remember/correct/forget/inspect**
@@ -254,6 +283,7 @@ No canonical memory database, LLM memory write, or automatic durable learning is
 - `docs/research/STEP_4_FINAL_TECHNOLOGY_DECISION.md`;
 - `docs/research/STEP_4_ARCHITECTURE_PROPOSAL.md`;
 - `docs/research/STEP_4_ARCHITECTURE_APPROVAL.md`;
+- `docs/research/STEP_4_PHASE_4_0A_VALIDATION.md`;
 - `docs/research/STEP_4_RETRIEVAL_TECHNOLOGY_DECISION.md`;
 - `docs/research/STEP_4_MEMORY_EXTRACTION_PROVISIONAL_TIE.md`;
 - `docs/research/STEP_4_SQLCIPHER_417_WINDOWS_RESULT.md`;
@@ -280,6 +310,6 @@ These do not reopen the selected architecture:
 
 ## Immediate Next Action
 
-**COMPLETE PHASE 4.0A AUTOMATED VALIDATION AND DIFF RECONCILIATION.**
+**IMPLEMENT PHASE 4.1 CANONICAL MEMORY KERNEL TEST-FIRST.**
 
-Do not start Phase 4.1 until Phase 4.0A is green and its provenance/security compatibility boundary is confirmed. Do not implement automatic LLM memory writing as part of this gate.
+Start with domain/provenance contracts, migration/schema definition, and the fail-closed SQLCipher connection boundary. Do not add LLM memory writes, implicit durable admission, or semantic provider injection in this phase.
