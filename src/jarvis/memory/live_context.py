@@ -272,9 +272,7 @@ class LiveContext:
             active_topic=self._active_topic,
             entities=tuple(self._sorted_entries(self._entities)),
             unresolved_work=tuple(self._sorted_entries(self._unresolved_work)),
-            interaction_context=tuple(
-                self._sorted_entries(self._interaction_context)
-            ),
+            interaction_context=tuple(self._sorted_entries(self._interaction_context)),
             observed_at_ns=now_ns,
         )
 
