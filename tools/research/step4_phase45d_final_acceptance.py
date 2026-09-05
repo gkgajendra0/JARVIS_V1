@@ -267,7 +267,7 @@ def _calibrate_policy(
         "fwer_method": "bonferroni_holm",
         "best_predict_param_choice": "recall",
         "tested_predict_params": PREDICT_PARAMS.tolist(),
-        "tested_predict_param_count": int(len(PREDICT_PARAMS)),
+        "tested_predict_param_count": len(PREDICT_PARAMS),
         "valid_predict_params": valid,
         "valid_predict_param_count": len(valid),
         "best_predict_param": list(best) if best is not None else None,
