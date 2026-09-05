@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import pytest
 
@@ -53,7 +54,9 @@ def _conversation() -> ConversationSession:
 
 
 @pytest.mark.asyncio
-async def test_runtime_processes_user_turn_in_background_and_quarantines_only() -> None:
+async def test_runtime_processes_user_turn_in_background_and_quarantines_only(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     conversation = _conversation()
     turn = conversation.accept_turn(ConversationRole.USER, "My home city is Indore.")
     extractor = FakeExtractor()
@@ -72,11 +75,15 @@ async def test_runtime_processes_user_turn_in_background_and_quarantines_only() 
     assert len(runtime.quarantine.snapshot()) == 1
     assert runtime.pending_task_count == 0
 
-    runtime.close()
+    with caplog.at_level(logging.INFO, logger="jarvis.memory.candidate_runtime"):
+        runtime.close()
 
     assert runtime.closed is True
     assert runtime.quarantine.disposed is True
     assert runtime.quarantine.snapshot() == ()
+    assert "disposed_candidates=1" in caplog.text
+    assert "quarantine_disposed=True" in caplog.text
+    assert "durable_admission=False" in caplog.text
 
 
 @pytest.mark.asyncio
