@@ -27,7 +27,7 @@ class ProviderContextSyncCapability:
 def provider_context_sync_capability(
     config: JarvisConfig,
 ) -> ProviderContextSyncCapability:
-    """Return the supported context-sync boundary for the configured realtime model.
+    """Return the supported context-sync boundary for the active realtime model.
 
     This is intentionally conservative. A provider/model is not considered safe for
     automatic mid-session synchronization merely because LiveKit exposes a common
@@ -38,7 +38,7 @@ def provider_context_sync_capability(
     if not isinstance(config, JarvisConfig):
         raise TypeError("config must be a JarvisConfig")
 
-    if config.realtime_provider == "gemini":
+    if config.ai_provider == "gemini":
         model = config.gemini_realtime_model
         if model.casefold().startswith("gemini-3.1-"):
             return ProviderContextSyncCapability(
