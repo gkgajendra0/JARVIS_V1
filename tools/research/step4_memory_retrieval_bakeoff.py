@@ -21,11 +21,11 @@ implementation details.
 Suggested research environment from the repository root::
 
     py -3.11 -m venv .step4-retrieval-venv
-    .\.step4-retrieval-venv\Scripts\python.exe -m pip install -U pip
-    .\.step4-retrieval-venv\Scripts\python.exe -m pip install \
+    .\\.step4-retrieval-venv\\Scripts\\python.exe -m pip install -U pip
+    .\\.step4-retrieval-venv\\Scripts\\python.exe -m pip install \
         -r tools\research\requirements-step4-retrieval.txt
-    .\.step4-retrieval-venv\Scripts\python.exe \
-        tools\research\step4_memory_retrieval_bakeoff.py
+    .\\.step4-retrieval-venv\\Scripts\\python.exe \
+        tools\research\\step4_memory_retrieval_bakeoff.py
 
 Model files are downloaded by Hugging Face/Sentence Transformers on first use.
 """
@@ -40,10 +40,8 @@ import sqlite3
 import statistics
 import time
 from dataclasses import dataclass
-from typing import Iterable
 
 import numpy as np
-
 
 MODELS = {
     "qwen": "Qwen/Qwen3-Embedding-0.6B",

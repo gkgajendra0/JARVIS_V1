@@ -8,8 +8,8 @@ stdout bytes, and writes them directly to the requested result file.
 
 Example::
 
-    .\.step4-extraction-venv\Scripts\python.exe \
-        tools\research\step4_extraction_utf8_runner.py \
+    .\\.step4-extraction-venv\\Scripts\\python.exe \
+        tools\research\\step4_extraction_utf8_runner.py \
         --output .step4-openai-full.json --providers openai
 
 All arguments other than ``--output`` are passed through unchanged to

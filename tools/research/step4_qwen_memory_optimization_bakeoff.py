@@ -19,10 +19,9 @@ import statistics
 import time
 
 import numpy as np
+import step4_memory_retrieval_bakeoff as base
 import torch
 from sentence_transformers import SentenceTransformer
-
-import step4_memory_retrieval_bakeoff as base
 
 MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"
 JARVIS_MEMORY_PROMPT = (

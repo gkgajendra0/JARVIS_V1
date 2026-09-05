@@ -16,17 +16,17 @@ scores semantic policy correctness, especially false durable writes.
 Suggested isolated environment::
 
     py -3.11 -m venv .step4-extraction-venv
-    .\.step4-extraction-venv\Scripts\python.exe -m pip install -U pip
-    .\.step4-extraction-venv\Scripts\python.exe -m pip install \
+    .\\.step4-extraction-venv\\Scripts\\python.exe -m pip install -U pip
+    .\\.step4-extraction-venv\\Scripts\\python.exe -m pip install \
         -r tools\research\requirements-step4-extraction.txt
 
 Run one provider at a time if desired::
 
-    .\.step4-extraction-venv\Scripts\python.exe \
-        tools\research\step4_memory_extraction_bakeoff.py --providers openai
+    .\\.step4-extraction-venv\\Scripts\\python.exe \
+        tools\research\\step4_memory_extraction_bakeoff.py --providers openai
 
-    .\.step4-extraction-venv\Scripts\python.exe \
-        tools\research\step4_memory_extraction_bakeoff.py --providers gemini
+    .\\.step4-extraction-venv\\Scripts\\python.exe \
+        tools\research\\step4_memory_extraction_bakeoff.py --providers gemini
 
 Environment variables:
 
@@ -46,8 +46,7 @@ import time
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ValidationError
-
+from pydantic import BaseModel, Field
 
 Intent = Literal[
     "remember",

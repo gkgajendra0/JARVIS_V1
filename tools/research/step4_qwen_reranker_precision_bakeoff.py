@@ -23,11 +23,10 @@ import statistics
 import time
 
 import numpy as np
+import step4_hybrid_rrf_bakeoff as hybrid
+import step4_memory_retrieval_bakeoff as base
 import torch
 from sentence_transformers import CrossEncoder, SentenceTransformer
-
-import step4_memory_retrieval_bakeoff as base
-import step4_hybrid_rrf_bakeoff as hybrid
 from step4_qwen_memory_optimization_bakeoff import JARVIS_MEMORY_PROMPT
 
 EMBED_MODEL = "Qwen/Qwen3-Embedding-0.6B"
