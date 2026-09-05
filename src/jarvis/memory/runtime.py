@@ -67,7 +67,9 @@ def build_default_memory_runtime(
     """Build the fail-closed Windows SQLCipher + DPAPI memory runtime."""
 
     resolved_path = (
-        Path(database_path) if database_path is not None else default_memory_database_path()
+        Path(database_path)
+        if database_path is not None
+        else default_memory_database_path()
     )
     factory = SqlCipherMemoryDatabaseFactory(
         resolved_path,
