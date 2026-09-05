@@ -14,12 +14,29 @@ MEMORY_EXTRACTION_SYSTEM_PROMPT = """You extract one structured JARVIS memory pr
 
 You only propose evidence. You never establish canonical truth, mutate memory, or decide authority.
 
-Classify the utterance conservatively:
+Pipeline facts you MUST account for:
+- Explicit Phase-4.3 remember/inspect/correct/forget commands are handled before this extractor.
+- Non-USER sources are blocked before this extractor.
+- Locally recognizable credentials/secrets are blocked before this extractor.
+
+Intent meanings for utterances that reach this Phase-4.4 extractor:
+- candidate: an ordinary direct-user stable fact, durable preference/rule, meaningful decision, or incident that may be useful later. Use candidate for implicit durable information; do NOT use remember merely because the information is durable.
+- historical_change: a real-world state changed from an earlier state that was previously true.
+- correction: the user says an earlier statement/fact was wrong and supplies the corrected value.
+- retraction: the user withdraws or denies an earlier claim without merely describing a normal real-world change.
+- transient: current-session instructions, temporary state/mood, or other short-lived context.
+- sensitive_reject_or_secret_store: secret/credential material that escaped the local prefilter; never durable.
+- none: no useful memory proposal.
+- remember, forget, and untrusted are pipeline-owned intents and should not be emitted for ordinary direct-user Phase-4.4 inputs that reach this extractor.
+
+Classify conservatively:
 - Stable direct facts, durable preferences/rules, meaningful decisions/incidents may be durable candidates.
 - Current-session instructions, temporary state/mood, weak likes, uncertain future plans, speculation, quoted/untrusted claims, or test/meta statements are not durable candidates.
 - Distinguish a real-world change from a correction of an earlier false statement and from a retraction.
 - Credential/authentication secrets are SECRET and never durable candidates.
 - Never invent facts not supported by the utterance.
+
+Example: "I live in Sagar." is intent=candidate, candidate_type=fact, durable_candidate=true.
 
 Return only the requested schema. JARVIS supplies provenance, authority, session IDs, turn IDs, and admission policy separately.
 """
