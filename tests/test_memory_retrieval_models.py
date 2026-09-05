@@ -174,7 +174,7 @@ def test_embedding_adapter_rejects_wrong_model_output_shape() -> None:
         encoder.encode_query("query")
 
 
-def test_reranker_is_lazy_top3_revision_pinned_and_preserves_first_stage_ties() -> None:
+def test_reranker_defaults_to_measured_jarvis_instruction_and_preserves_ties() -> None:
     created: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
     model = FakeRerankerModel([0.5, 0.5, 0.7])
 
@@ -190,6 +190,7 @@ def test_reranker_is_lazy_top3_revision_pinned_and_preserves_first_stage_ties() 
         candidate("d", "delta", 4),
     ]
     assert reranker.loaded is False
+    assert reranker.instruction == JARVIS_MEMORY_RERANK_INSTRUCTION
 
     ranked = reranker.rerank("memory query", inputs)
 
@@ -201,6 +202,8 @@ def test_reranker_is_lazy_top3_revision_pinned_and_preserves_first_stage_ties() 
         "revision": QWEN3_RERANKER_REVISION,
         "device": "cuda",
         "trust_remote_code": False,
+        "prompts": {"jarvis_memory": JARVIS_MEMORY_RERANK_INSTRUCTION},
+        "default_prompt_name": "jarvis_memory",
     }
     assert [item.candidate.assertion.assertion_id for item in ranked] == ["c", "a", "b"]
     assert [item.rerank_rank for item in ranked] == [1, 2, 3]
@@ -215,7 +218,7 @@ def test_reranker_is_lazy_top3_revision_pinned_and_preserves_first_stage_ties() 
     assert predict_kwargs == {"show_progress_bar": False}
 
 
-def test_reranker_custom_instruction_is_opt_in_cross_encoder_prompt() -> None:
+def test_reranker_generic_instruction_can_be_explicitly_disabled_for_research() -> None:
     created: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
     model = FakeRerankerModel([0.8])
 
@@ -223,14 +226,10 @@ def test_reranker_custom_instruction_is_opt_in_cross_encoder_prompt() -> None:
         created.append((args, kwargs))
         return model
 
-    reranker = Qwen3RetrievalReranker(
-        instruction=JARVIS_MEMORY_RERANK_INSTRUCTION,
-        model_factory=factory,
-    )
-
+    reranker = Qwen3RetrievalReranker(instruction=None, model_factory=factory)
     ranked = reranker.rerank("memory query", [candidate("a", "alpha", 1)])
 
-    assert reranker.instruction == JARVIS_MEMORY_RERANK_INSTRUCTION
+    assert reranker.instruction is None
     assert ranked[0].rerank_score == pytest.approx(0.8)
     args, kwargs = created[0]
     assert args == (QWEN3_RERANKER_MODEL_ID,)
@@ -238,8 +237,6 @@ def test_reranker_custom_instruction_is_opt_in_cross_encoder_prompt() -> None:
         "revision": QWEN3_RERANKER_REVISION,
         "device": "cuda",
         "trust_remote_code": False,
-        "prompts": {"jarvis_memory": JARVIS_MEMORY_RERANK_INSTRUCTION},
-        "default_prompt_name": "jarvis_memory",
     }
 
 
