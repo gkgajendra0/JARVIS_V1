@@ -255,13 +255,22 @@ class MemoryAgentTools:
         value: str,
         sensitivity: str = "standard",
     ) -> dict[str, object]:
-        """Remember one explicit personal text fact or preference durably.
+        """Durably remember only an explicit user-commanded personal memory.
 
-        Use only when the user's latest utterance explicitly asks JARVIS to remember
-        something. `predicate` must be a short target phrase directly named in that
+        STRICT invocation condition: the latest accepted USER utterance itself must
+        explicitly command JARVIS to remember/store/save the information, for example
+        "Remember that my home city is Sagar" or "Yaad rakhna ki meri city Sagar
+        hai". Do NOT call this tool for declarative/implicit facts such as "My home
+        city is Sagar", "I bought a Jimny", or "My candidate test animal is falcon",
+        even if the fact seems stable, personal, important, or useful later. Those
+        implicit facts belong to the separate Phase-4.4 candidate-extraction path.
+        If explicit remember intent is absent or uncertain, do not call this tool.
+
+        `predicate` must be a short target phrase directly named in the same latest
         utterance, such as `home city` or `jimny tyre size`. `value` must also come
-        directly from the latest utterance. `sensitivity` may be `standard`, `private`,
-        or `local_only`. Never use this tool for credentials, secrets, or inferred facts.
+        directly from that utterance. `sensitivity` may be `standard`, `private`, or
+        `local_only`. Never use this tool for credentials, secrets, inferred facts,
+        or implicit candidate promotion.
         """
         context.disallow_interruptions()
         return await self._call_tool(
