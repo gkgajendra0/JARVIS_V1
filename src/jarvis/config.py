@@ -10,6 +10,7 @@ from jarvis.machine_config import configured_text, load_machine_settings
 
 VALID_LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})
 VALID_REALTIME_PROVIDERS = frozenset({"gemini", "openai"})
+VALID_MEMORY_CANDIDATE_PROVIDERS = frozenset({"gemini", "openai"})
 TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 FALSE_VALUES = frozenset({"0", "false", "no", "off"})
 
@@ -108,6 +109,9 @@ class JarvisConfig:
     max_utterance_seconds: float = 15.0
     live_context_recent_turns: int = 24
     memory_enabled: bool = False
+    memory_candidate_extraction_enabled: bool = False
+    memory_candidate_extraction_provider: str | None = None
+    memory_candidate_extraction_model: str | None = None
     vision_enabled: bool = False
     vision_head_model_path: str | None = None
     speaker_shadow_enabled: bool = False
@@ -142,11 +146,43 @@ class JarvisConfig:
             "wake_model_path",
             "vision_head_model_path",
             "active_speaker_model_path",
+            "memory_candidate_extraction_model",
         ):
             value = getattr(self, name)
             if value is not None:
                 normalized_value = str(value).strip()
                 object.__setattr__(self, name, normalized_value or None)
+
+        candidate_provider = self.memory_candidate_extraction_provider
+        if candidate_provider is not None:
+            normalized_candidate_provider = str(candidate_provider).strip().lower()
+            if normalized_candidate_provider not in VALID_MEMORY_CANDIDATE_PROVIDERS:
+                raise ValueError(
+                    "Unsupported JARVIS_MEMORY_CANDIDATE_EXTRACTION_PROVIDER: "
+                    f"{candidate_provider!r}"
+                )
+            object.__setattr__(
+                self,
+                "memory_candidate_extraction_provider",
+                normalized_candidate_provider,
+            )
+
+        if self.memory_candidate_extraction_enabled:
+            if not self.memory_enabled:
+                raise ValueError(
+                    "JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED requires "
+                    "JARVIS_MEMORY_ENABLED"
+                )
+            if self.memory_candidate_extraction_provider is None:
+                raise ValueError(
+                    "JARVIS_MEMORY_CANDIDATE_EXTRACTION_PROVIDER is required when "
+                    "candidate extraction is enabled"
+                )
+            if self.memory_candidate_extraction_model is None:
+                raise ValueError(
+                    "JARVIS_MEMORY_CANDIDATE_EXTRACTION_MODEL is required when "
+                    "candidate extraction is enabled"
+                )
 
         for name in (
             "audio_input_device",
@@ -254,6 +290,15 @@ class JarvisConfig:
                 "JARVIS_LIVE_CONTEXT_RECENT_TURNS", 24, machine
             ),
             memory_enabled=_configured_bool("JARVIS_MEMORY_ENABLED", False, machine),
+            memory_candidate_extraction_enabled=_configured_bool(
+                "JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED", False, machine
+            ),
+            memory_candidate_extraction_provider=_configured_optional_text(
+                "JARVIS_MEMORY_CANDIDATE_EXTRACTION_PROVIDER", machine
+            ),
+            memory_candidate_extraction_model=_configured_optional_text(
+                "JARVIS_MEMORY_CANDIDATE_EXTRACTION_MODEL", machine
+            ),
             vision_enabled=_configured_bool("JARVIS_VISION_ENABLED", False, machine),
             vision_head_model_path=_configured_optional_text(
                 "JARVIS_BLAZEFACE_MODEL_PATH", machine
