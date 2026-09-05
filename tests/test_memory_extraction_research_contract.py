@@ -40,10 +40,10 @@ def test_research_corpus_taxonomy_and_pre_provider_partition_match_runtime() -> 
         "explicit_remember_en",
         "explicit_remember_hi",
         "explicit_remember_hinglish",
-        "correction",
         "forget_explicit",
         "secret_request",
     } <= explicit_ids
+    assert "correction" in provider_ids
     assert provider_ids.isdisjoint(non_user_ids)
     assert provider_ids.isdisjoint(explicit_ids)
     assert provider_ids
