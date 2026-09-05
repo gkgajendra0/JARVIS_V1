@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from collections import Counter
 from pathlib import Path
 from types import ModuleType
@@ -13,9 +14,12 @@ CASES_PATH = ROOT / "tools" / "research" / "step4_phase45d_abstention_cases.json
 
 
 def load_harness() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("step4_phase45d_abstention_calibration", HARNESS_PATH)
+    spec = importlib.util.spec_from_file_location(
+        "step4_phase45d_abstention_calibration", HARNESS_PATH
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -109,10 +113,42 @@ def test_thresholds_come_from_observed_boundaries_not_magic_constants() -> None:
 def test_policy_selection_prioritizes_zero_false_release_then_recall() -> None:
     module = load_harness()
     cases = [
-        case(module, "p1", label="release", top1_correct=True, score=8, margin=5, dense=0.8),
-        case(module, "p2", label="release", top1_correct=True, score=7, margin=4, dense=0.7),
-        case(module, "a1", label="abstain", top1_correct=False, score=2, margin=1, dense=0.5),
-        case(module, "a2", label="abstain", top1_correct=False, score=-3, margin=2, dense=0.4),
+        case(
+            module,
+            "p1",
+            label="release",
+            top1_correct=True,
+            score=8,
+            margin=5,
+            dense=0.8,
+        ),
+        case(
+            module,
+            "p2",
+            label="release",
+            top1_correct=True,
+            score=7,
+            margin=4,
+            dense=0.7,
+        ),
+        case(
+            module,
+            "a1",
+            label="abstain",
+            top1_correct=False,
+            score=2,
+            margin=1,
+            dense=0.5,
+        ),
+        case(
+            module,
+            "a2",
+            label="abstain",
+            top1_correct=False,
+            score=-3,
+            margin=2,
+            dense=0.4,
+        ),
     ]
 
     selected, metrics, _ = module._select_policy(cases)
