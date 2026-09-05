@@ -7,11 +7,12 @@ from dataclasses import dataclass
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from jarvis.security import KeyProtectionError, KeyProtector, WindowsDpapiKeyProtector
-
-
-class IdentityCryptoError(RuntimeError):
-    pass
+from jarvis.security import (
+    KeyProtectionError as KeyProtectionError,
+    KeyProtector as KeyProtector,
+    SecurityError as IdentityCryptoError,
+    WindowsDpapiKeyProtector as WindowsDpapiKeyProtector,
+)
 
 
 class TemplateIntegrityError(IdentityCryptoError):
