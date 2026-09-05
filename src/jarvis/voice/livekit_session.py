@@ -114,7 +114,12 @@ class LiveKitConversationBridge:
         if not text:
             return
         interrupted = bool(item.interrupted and role is ConversationRole.ASSISTANT)
-        turn = self.conversation.accept_turn(role, text, interrupted=interrupted)
+        turn = self.conversation.accept_turn(
+            role,
+            text,
+            interrupted=interrupted,
+            external_item_id=item.id,
+        )
         self._seen_item_ids.add(item.id)
         if self._show_transcript:
             suffix = " [interrupted]" if turn.interrupted else ""
