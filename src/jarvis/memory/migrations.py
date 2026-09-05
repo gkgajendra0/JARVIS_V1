@@ -92,7 +92,11 @@ class MemoryMigrationRunner:
         *,
         clock: Callable[[], datetime] = _utc_now,
     ) -> None:
-        resolved = tuple(migrations) if migrations is not None else discover_memory_migrations()
+        resolved = (
+            tuple(migrations)
+            if migrations is not None
+            else discover_memory_migrations()
+        )
         _validate_catalog(resolved)
         self._migrations = resolved
         self._clock = clock
