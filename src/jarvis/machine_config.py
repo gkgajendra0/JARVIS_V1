@@ -27,6 +27,8 @@ _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 PERSISTABLE_SETTINGS = frozenset(
     {
         "JARVIS_LOG_LEVEL",
+        "JARVIS_AI_PROVIDER",
+        # Legacy migration alias accepted so existing machine profiles keep working.
         "JARVIS_REALTIME_PROVIDER",
         "JARVIS_REALTIME_MODEL",
         "JARVIS_REALTIME_VOICE",
@@ -46,6 +48,8 @@ PERSISTABLE_SETTINGS = frozenset(
         "JARVIS_FOLLOW_UP_TIMEOUT_SECONDS",
         "JARVIS_MAX_UTTERANCE_SECONDS",
         "JARVIS_MEMORY_ENABLED",
+        "JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED",
+        "JARVIS_MEMORY_CANDIDATE_EXTRACTION_MODEL",
         "JARVIS_VISION_ENABLED",
         "JARVIS_BLAZEFACE_MODEL_PATH",
         "JARVIS_SPEAKER_SHADOW_ENABLED",
