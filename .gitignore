@@ -9,6 +9,9 @@ dist/
 .env
 step3b11_lr_asd_bakeoff*.json
 
+# Local Step-4 research environments/results/artifacts
+/.step4-*
+
 # .NET build outputs
 **/bin/
 **/obj/
