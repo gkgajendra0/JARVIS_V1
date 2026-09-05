@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASE 4.0A COMPLETE — PHASE 4.1 COMPLETE — PHASE 4.2 COMPLETE — PHASE 4.3 COMPLETE — PHASE 4.4 NEXT**
+**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASE 4.0A COMPLETE — PHASE 4.1 COMPLETE — PHASE 4.2 COMPLETE — PHASE 4.3 COMPLETE — PHASE 4.4 ACTIVE**
 
 This file is the operational source of truth for current work. Detailed measured evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` describes architecture that actually exists and has passed acceptance.
 
@@ -84,9 +84,13 @@ Step 4 owns CAP-008 through CAP-013: live context, long-term personal memory, ep
 - provider-native structured output;
 - explicit Pydantic candidate contract;
 - replaceable OpenAI/Gemini extractor adapters;
+- exact accepted canonical USER turn as extraction source;
+- deterministic explicit-command/source/secret pre-provider gates;
+- process/session-local candidate quarantine;
 - model proposes candidate only;
 - deterministic JARVIS policy owns admission;
-- implicit admission remains OFF until measured acceptance.
+- extraction defaults OFF until configured;
+- implicit durable admission remains OFF until separately measured and accepted.
 
 ### Retrieval target for Phase 4.5
 
@@ -189,14 +193,57 @@ Records:
 
 ---
 
+## Phase 4.4 — ACTIVE
+
+Core structured extraction and candidate-quarantine boundaries are implemented behind a default-OFF rollout gate.
+
+Implemented properties include:
+
+- exact accepted canonical `ConversationTurn` observation after conversation acceptance;
+- no background `latest_user_turn` race in production integration;
+- USER-only extraction;
+- deterministic Phase-4.3 explicit-memory-command exclusion before provider calls;
+- deterministic obvious-secret rejection before provider calls;
+- provider-native OpenAI/Gemini structured-output adapters;
+- one production `MemoryExtractionProposal` Pydantic contract;
+- one production extraction system prompt shared by runtime and bake-off;
+- deterministic post-provider policy and secret defense in depth;
+- process/session-local `MemoryCandidateQuarantine` only;
+- cancellation and physical quarantine disposal on session close;
+- no `MemoryService` call, SQLCipher assertion write, FTS write, embedding write or automatic admission;
+- extraction provider/model must be explicitly configured; no guessed model default;
+- Step-3 audio/vision/authority path remains unchanged.
+
+The 24-case extraction harness has been realigned to the production contract. Non-user sources, explicit Phase-4.3 commands and locally detectable secrets are now tested as deterministic pre-provider gates instead of being sent to an LLM to decide source authority.
+
+The earlier Terra/Gemini provisional tie is retained as historical technology evidence only and is not directly comparable with the production-aligned harness.
+
+Current record:
+
+- `docs/research/STEP_4_PHASE_4_4_IMPLEMENTATION_DECISIONS.md`;
+- `docs/research/STEP_4_MEMORY_EXTRACTION_PROVISIONAL_TIE.md` (historical/provisional only).
+
+Remaining before Phase 4.4 can close:
+
+1. fully green integrated CI on the documented branch head;
+2. fair production-aligned provider/model bake-off with comparable evidence;
+3. provider/model selection from measured quality/safety/latency/cost evidence, or an explicitly justified tie disposition;
+4. narrow owner-PC production-path acceptance after that provider decision;
+5. prove candidate extraction creates no durable memory and normal wake/Pocket3/provider behavior remains stable;
+6. Phase-4.4 implementation/acceptance closure record.
+
+Phase 4.5 remains blocked.
+
+---
+
 ## Remaining approved implementation order
 
 1. Phase 4.0A — provenance + neutral security — **COMPLETE**.
 2. Phase 4.1 — canonical memory kernel — **COMPLETE**.
 3. Phase 4.2 — LiveContext + ContextAssembler — **COMPLETE**.
 4. Phase 4.3 — explicit remember/correct/forget/inspect — **COMPLETE**.
-5. Phase 4.4 — structured extraction/candidate quarantine — **NEXT**; implicit admission remains OFF until measured acceptance.
-6. Phase 4.5 — Qwen semantic retrieval + FTS/RRF/top-3 reranker + abstention calibration.
+5. Phase 4.4 — structured extraction/candidate quarantine — **ACTIVE**; implicit durable admission remains OFF.
+6. Phase 4.5 — Qwen semantic retrieval + FTS/RRF/top-3 reranker + abstention calibration — **BLOCKED BY 4.4**.
 7. Phase 4.6 — episodic/reflection learning for meaningful outcomes/decisions/incidents, not raw transcripts.
 8. Phase 4.7 — Capability Registry + CycloneDX + authoritative self-knowledge aggregation, no autonomous repair.
 9. Phase 4.8 — final hardening, multilingual/adversarial/privacy/security/backup tests, real use, reconciliation, ADR, protected-main merge.
@@ -214,6 +261,7 @@ Records:
 - `docs/research/STEP_4_PHASE_4_3_AUTOMATED_VALIDATION.md`;
 - `docs/research/STEP_4_PHASE_4_3_OWNER_PC_ACCEPTANCE.md`;
 - `docs/research/STEP_4_PHASE_4_3_IMPLEMENTATION_RESULT.md`;
+- `docs/research/STEP_4_PHASE_4_4_IMPLEMENTATION_DECISIONS.md`;
 - `docs/research/STEP_4_RETRIEVAL_TECHNOLOGY_DECISION.md`;
 - `docs/research/STEP_4_MEMORY_EXTRACTION_PROVISIONAL_TIE.md`;
 - `docs/research/STEP_4_SQLCIPHER_417_WINDOWS_RESULT.md`;
@@ -224,7 +272,6 @@ Records:
 ## Non-blocking deferred decisions
 
 - portable disaster recovery/export;
-- final extraction provider winner;
 - implicit durable auto-admission threshold;
 - semantic abstention threshold;
 - dedicated ANN/vector derivative if scale needs it;
@@ -237,6 +284,6 @@ Records:
 
 ## Immediate Next Action
 
-**BEGIN PHASE 4.4 RESEARCH-FIRST STRUCTURED EXTRACTION / CANDIDATE QUARANTINE.**
+**COMPLETE PHASE 4.4 PRODUCTION-ALIGNED EXTRACTION ACCEPTANCE.**
 
-Before implementation, refresh current structured-output/extraction technology and proven memory-candidate admission patterns on the web. Preserve the approved boundary: models may propose typed candidates, but implicit durable admission remains OFF and only deterministic JARVIS policy may later admit canonical memory.
+Keep the integrated branch green, then run the fair provider/model bake-off using the production schema/prompt and deterministic pre-provider gates. Select or explicitly retain a tie only from measured evidence. Only after that decision should candidate extraction be enabled for a narrow owner-PC production-path acceptance. Implicit durable admission remains OFF throughout Phase 4.4.
