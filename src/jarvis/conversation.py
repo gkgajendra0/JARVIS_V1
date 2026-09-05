@@ -70,6 +70,8 @@ class ConversationSession:
     """Own accepted turns and the product-level conversation lifecycle."""
 
     def __init__(self, *, session_id: str | None = None) -> None:
+        if session_id is not None and not isinstance(session_id, str):
+            raise TypeError("session_id must be a string when provided")
         resolved_session_id = _new_id() if session_id is None else session_id.strip()
         if not resolved_session_id:
             raise ValueError("session_id must not be empty")
