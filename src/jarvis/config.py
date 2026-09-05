@@ -107,6 +107,7 @@ class JarvisConfig:
     follow_up_timeout_seconds: float = 15.0
     max_utterance_seconds: float = 15.0
     live_context_recent_turns: int = 24
+    memory_enabled: bool = False
     vision_enabled: bool = False
     vision_head_model_path: str | None = None
     speaker_shadow_enabled: bool = False
@@ -252,6 +253,7 @@ class JarvisConfig:
             live_context_recent_turns=_configured_int(
                 "JARVIS_LIVE_CONTEXT_RECENT_TURNS", 24, machine
             ),
+            memory_enabled=_configured_bool("JARVIS_MEMORY_ENABLED", False, machine),
             vision_enabled=_configured_bool("JARVIS_VISION_ENABLED", False, machine),
             vision_head_model_path=_configured_optional_text(
                 "JARVIS_BLAZEFACE_MODEL_PATH", machine
