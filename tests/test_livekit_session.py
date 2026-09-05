@@ -81,7 +81,11 @@ def test_committed_items_write_once_and_preserve_repeated_text() -> None:
     livekit.emit("conversation_item_added", first)
     livekit.emit("conversation_item_added", second)
 
-    assert [turn.text for turn in bridge.conversation.turns] == ["repeat", "repeat"]
+    turns = bridge.conversation.turns
+    assert [turn.text for turn in turns] == ["repeat", "repeat"]
+    assert [turn.external_item_id for turn in turns] == ["one", "two"]
+    assert all(turn.turn_id != turn.external_item_id for turn in turns)
+    assert turns[0].turn_id != turns[1].turn_id
 
 
 def test_interrupted_assistant_item_is_marked_partial() -> None:
