@@ -142,7 +142,9 @@ async def test_create_historical_change_and_correction_have_distinct_semantics(
 
 
 @pytest.mark.asyncio
-async def test_retract_verify_and_expire_are_separate_operations(tmp_path: Path) -> None:
+async def test_retract_verify_and_expire_are_separate_operations(
+    tmp_path: Path,
+) -> None:
     worker = worker_for(tmp_path / "states.db")
     service = service_for(worker)
     try:
@@ -274,8 +276,12 @@ async def test_raw_source_evidence_text_is_rejected_and_rolled_back(
         counts = await worker.run(
             lambda connection: (
                 connection.execute("SELECT count(*) FROM memory_source").fetchone()[0],
-                connection.execute("SELECT count(*) FROM semantic_assertion").fetchone()[0],
-                connection.execute("SELECT count(*) FROM memory_operation").fetchone()[0],
+                connection.execute(
+                    "SELECT count(*) FROM semantic_assertion"
+                ).fetchone()[0],
+                connection.execute("SELECT count(*) FROM memory_operation").fetchone()[
+                    0
+                ],
             )
         )
         assert counts == (0, 0, 0)
@@ -334,8 +340,12 @@ async def test_concurrent_callers_are_serialized_through_lifecycle_writer(
         assert len({record.assertion_id for record in records}) == 20
         counts = await worker.run(
             lambda connection: (
-                connection.execute("SELECT count(*) FROM semantic_assertion").fetchone()[0],
-                connection.execute("SELECT count(*) FROM memory_operation").fetchone()[0],
+                connection.execute(
+                    "SELECT count(*) FROM semantic_assertion"
+                ).fetchone()[0],
+                connection.execute("SELECT count(*) FROM memory_operation").fetchone()[
+                    0
+                ],
                 connection.execute("SELECT count(*) FROM memory_source").fetchone()[0],
             )
         )
