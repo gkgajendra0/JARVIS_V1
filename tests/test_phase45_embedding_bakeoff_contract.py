@@ -4,6 +4,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HARNESS = ROOT / "tools" / "research" / "step4_phase45_embedding_bakeoff.py"
+CUDA_REQUIREMENTS = (
+    ROOT / "tools" / "research" / "requirements-step4-retrieval-windows-cuda.txt"
+)
 
 
 def _source() -> str:
@@ -42,3 +45,10 @@ def test_phase45_bakeoff_remains_research_only() -> None:
     assert "save_machine_settings" not in source
     assert "sqlite-vector" not in source
     assert "sqlite_vec" not in source
+
+
+def test_phase45_windows_research_environment_pins_cuda_torch() -> None:
+    requirements = CUDA_REQUIREMENTS.read_text(encoding="utf-8")
+    assert "https://download.pytorch.org/whl/cu130" in requirements
+    assert "torch==2.14.0+cu130" in requirements
+    assert "-r requirements-step4-retrieval.txt" in requirements
