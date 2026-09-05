@@ -131,7 +131,9 @@ class MemoryCandidatePolicy:
         }
     )
 
-    def evaluate(self, proposal: MemoryExtractionProposal) -> MemoryCandidatePolicyDecision:
+    def evaluate(
+        self, proposal: MemoryExtractionProposal
+    ) -> MemoryCandidatePolicyDecision:
         if not isinstance(proposal, MemoryExtractionProposal):
             raise TypeError("proposal must be a MemoryExtractionProposal")
         if proposal.sensitivity is MemoryExtractionSensitivity.SECRET:
@@ -159,7 +161,11 @@ class MemoryCandidatePolicy:
                 MemoryCandidateDisposition.DROP,
                 "candidate_type_not_quarantine_eligible",
             )
-        if proposal.subject is None or proposal.predicate is None or proposal.value is None:
+        if (
+            proposal.subject is None
+            or proposal.predicate is None
+            or proposal.value is None
+        ):
             return MemoryCandidatePolicyDecision(
                 MemoryCandidateDisposition.DROP,
                 "incomplete_semantic_candidate",
