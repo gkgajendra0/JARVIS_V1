@@ -16,15 +16,18 @@ from jarvis.memory.database import (
 
 class StubKeyProtector:
     protector_id = "stub-key-protector"
+    _MASK = 0xA5
 
     def seal(self, plaintext: bytes, *, purpose: str) -> bytes:
-        return b"sealed:" + purpose.encode("utf-8") + b":" + plaintext[::-1]
+        transformed = bytes(value ^ self._MASK for value in plaintext)
+        return b"sealed:" + purpose.encode("utf-8") + b":" + transformed
 
     def unseal(self, sealed: bytes, *, purpose: str) -> bytes:
         prefix = b"sealed:" + purpose.encode("utf-8") + b":"
         if not sealed.startswith(prefix):
             raise RuntimeError("wrong purpose")
-        return sealed[len(prefix) :][::-1]
+        transformed = sealed[len(prefix) :]
+        return bytes(value ^ self._MASK for value in transformed)
 
 
 class FakeCursor:
