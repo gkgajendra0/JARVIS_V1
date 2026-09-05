@@ -6,9 +6,9 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASE 4.0A COMPLETE — PHASE 4.1 CANONICAL MEMORY KERNEL ACTIVE**
+**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASE 4.0A COMPLETE — PHASE 4.1 COMPLETE — PHASE 4.2 COMPLETE — PHASE 4.3 EXPLICIT MEMORY OPERATIONS ACTIVE**
 
-This file is the operational source of truth for current work. Detailed evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` continues to describe only architecture that actually exists and has passed acceptance.
+This file is the operational source of truth for current work. Detailed measured evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` continues to describe only architecture that actually exists and has passed the normal acceptance lifecycle.
 
 Owner architecture approval was recorded on 2026-09-05 in `docs/research/STEP_4_ARCHITECTURE_APPROVAL.md`.
 
@@ -18,23 +18,7 @@ Owner architecture approval was recorded on 2026-09-05 in `docs/research/STEP_4_
 
 Step 3 is complete on protected `main` through PR #15 / merge commit `360a72c58402fbe357fa409437a4ce181921d837`.
 
-Accepted foundation:
-
-- deterministic T0–T3 graduated trust;
-- deterministic R0–R5 risk floors;
-- immutable proposal fingerprints and proposal-bound approvals;
-- fail-closed policy boundary and final execution revalidation;
-- privacy-aware audit/observability state;
-- Windows-session invalidation;
-- Windows Hello strong verification for consequential authority;
-- encrypted local OWNER profile;
-- accepted Pocket3 face identity + active/passive liveness evidence;
-- one production Pocket3 microphone owner through LiveKit MediaDevices/WebRTC AEC+NS+HPF+AGC;
-- LR-ASD active-speaker diagnostics on canonical user PCM + Vision timelines;
-- encrypted CAM++ OWNER voice enrollment;
-- asynchronous per-turn CAM++ speaker-shadow scoring that does not block normal conversation.
-
-Final Step-3 authority boundary:
+Accepted authority boundary remains unchanged:
 
 ```text
 face identity            = accepted evidence
@@ -45,11 +29,9 @@ T2 CORROBORATED_OWNER    = disabled
 Windows Hello            = strong verification path
 ```
 
-No speaker threshold or LR-ASD threshold is promoted. Identity/perception evidence does not directly grant consequential execution permission.
+Step 4 does not promote any shadow biometric threshold and does not expand execution authority.
 
 Closure evidence: `docs/research/STEP_3_CLOSURE_ACCEPTANCE.md`.
-
-Deferred identity hardening remains tracked separately and must not automatically interrupt Step 4.
 
 ---
 
@@ -66,95 +48,80 @@ Step 4 owns:
 - CAP-012 Reflection and Session Learning;
 - CAP-013 Emotional Interaction Context.
 
-Step 4 also lays the machine-readable self-knowledge foundation required by later diagnostics/self-improvement work, without implementing autonomous repair or self-modification now.
+It also lays the machine-readable self-knowledge foundation required by later diagnostics/self-improvement work without implementing autonomous repair or self-modification now.
 
 ---
 
-## Permanent Step-4 product constraints
+## Permanent Step-4 constraints
 
 - not every sentence becomes durable memory;
 - explicit current user input outranks passive inference, old memory, or stale preference;
-- durable memory carries provenance and enough timing/confidence metadata for correction/supersession;
+- durable memory carries provenance + time/freshness/verification metadata;
 - correction, historical change, retraction, and forgetting are distinct operations;
 - session context is separate from durable memory;
 - provider history/caches are not canonical JARVIS memory;
 - transient emotional interpretations stay transient by default;
-- secrets are never normal model context;
-- models do not write directly to persistent memory;
-- conversation/context/memory must not have duplicate authoritative owners;
-- providers/storage/retrieval components remain replaceable;
-- raw full transcripts/provider payloads must not be durably retained merely because they are available;
+- secrets are never normal model context or normal durable memory;
+- models do not write persistent memory directly;
+- `MemoryService` is the sole durable mutation facade;
+- `ContextAssembler` is the sole Step-4 model-context release owner;
+- retrieval ranks only already-eligible canonical records and never establishes truth;
+- raw full transcripts/provider payloads are not archived merely because available;
 - current runtime/config/repository truth outranks stale learned self-memory;
 - Step 4 grants no autonomous repair, code modification, deployment, or authority expansion.
 
 ---
 
-## Step-4 research disposition — COMPLETE
-
-The research-first technology gates are answered and the resulting architecture has owner approval.
+## Technology disposition — COMPLETE
 
 ### Canonical storage
 
-Selected direction:
-
 - SQLCipher 4.17.0 Community / SQLite relational canonical store;
+- SQLite baseline 3.53.3 in the accepted Windows build;
 - FTS5 derived lexical index;
 - JARVIS-owned bitemporal-style valid/system-time lifecycle;
 - no graph/vector/database service as canonical truth owner.
 
 ### Encryption / key protection
 
-Selected direction:
-
-- pinned reproducible JARVIS Windows build of SQLCipher 4.17.0 behind the maintained `sqlcipher3` DB-API binding;
+- pinned reproducible JARVIS Windows SQLCipher build;
 - random 32-byte database key;
-- Windows DPAPI user-scope + purpose binding;
+- Windows DPAPI user scope + purpose binding;
 - no plaintext key file;
-- same-user/same-machine recovery accepted for the first design;
-- portable disaster recovery explicitly deferred unless separately approved.
+- same-user/same-machine recovery for first design;
+- portable disaster recovery separately deferred.
 
-### Structured candidate extraction
-
-Selected architecture:
+### Extraction
 
 - provider-native structured output;
-- explicit Pydantic contract;
-- `MemoryCandidateExtractor` protocol;
-- JARVIS `MemoryPolicy` retains all durable-write authority.
-
-Provider result remains a **provisional quality tie on shared evidence** between OpenAI Terra and Gemini 3.8 Flash. Provider selection remains replaceable/configurable.
+- explicit Pydantic contract when Phase 4.4 begins;
+- replaceable OpenAI/Gemini extractor adapters;
+- model proposes candidate; deterministic JARVIS policy owns admission;
+- current provider quality result remains a provisional tie on shared evidence.
 
 ### Retrieval
-
-Selected local pipeline:
 
 ```text
 structured / temporal / authority / sensitivity eligibility
  -> exact deterministic lookup when possible
- -> SQLite FTS5 + Qwen3-Embedding-0.6B (JARVIS instruction, 256d)
+ -> SQLite FTS5 + Qwen3-Embedding-0.6B (256d)
  -> equal RRF (research k=60)
  -> top 3
  -> Qwen3-Reranker-0.6B BF16
  -> exact tie preserves RRF rank -> stable memory ID
- -> JARVIS ContextAssembler
+ -> ContextAssembler
 ```
 
-No vector database is selected. Embeddings remain derived/rebuildable. Broad automatic semantic context injection remains calibration-gated.
+No vector database is selected. Embeddings are derived/rebuildable. Broad automatic semantic injection remains calibration-gated.
 
 ### Self-knowledge
 
-Selected direction:
-
-- current runtime/configuration = current dynamic truth;
-- accepted repository/architecture/ADRs/policies/code/tests = declared truth;
-- small JARVIS Capability Registry = product capability semantics;
-- CycloneDX 1.7 + `cyclonedx-bom` = generated dependency inventory;
-- verified incident/episode memory = historical learned evidence;
+- current runtime/config = current dynamic truth;
+- accepted repo/architecture/ADRs/policies/code/tests = declared truth;
+- JARVIS Capability Registry = product capability semantics;
+- CycloneDX 1.7 = generated dependency inventory;
+- verified incident/episode memory = historical evidence;
 - learned observations never silently override declared/current truth.
-
-### Async DB boundary
-
-Normal `aiosqlite.connect()` is not selected because it opens the standard-library `sqlite3` driver rather than the selected SQLCipher DB-API. The approved architecture uses a small thread-affinity async adapter over the proven `sqlcipher3` connection: one serialized writer worker and initially one read worker, with short transactions and WAL.
 
 ---
 
@@ -168,7 +135,7 @@ LiveContext
     = current session/working context only
 
 MemoryService
-    = sole durable memory mutation/truth owner
+    = sole durable memory mutation/truth facade
 
 MemoryPolicy
     = deterministic admission + lifecycle authority
@@ -183,98 +150,115 @@ SelfKnowledgeProvider
     = authority-aware aggregation of current/declared/historical self-knowledge
 ```
 
-Approval record: `docs/research/STEP_4_ARCHITECTURE_APPROVAL.md`.
-
 ---
 
 ## Phase 4.0A — COMPLETE
 
-Delivered:
+Delivered stable JARVIS `session_id`, `turn_id`, aware UTC `accepted_at`, provider IDs as external metadata only, and the neutral `jarvis.security` DPAPI boundary while preserving identity behavior.
 
-- stable JARVIS-owned `session_id`;
-- stable JARVIS-owned `turn_id`;
-- timezone-aware UTC `accepted_at`;
-- LiveKit/provider item IDs retained only as `external_item_id` provenance;
-- neutral shared `jarvis.security` DPAPI boundary;
-- existing `jarvis.identity` compatibility preserved;
-- SQLCipher research probe moved to the neutral security primitive;
-- focused provenance and DPAPI compatibility tests.
-
-Validation record:
-
-`docs/research/STEP_4_PHASE_4_0A_VALIDATION.md`
-
-Final validation run `33947865564`:
-
-- Ruff: PASS;
-- pytest: PASS;
-- Windows Hello helper: PASS;
-- Windows DPAPI: PASS.
-
-Final diff reconciliation found only the approved provenance/security/test/documentation surface. No canonical memory database or LLM memory write was introduced.
+Validation: `docs/research/STEP_4_PHASE_4_0A_VALIDATION.md`.
+Final CI run `33947865564`: Ruff / pytest / Windows Hello / Windows DPAPI all PASS.
 
 ---
 
-## Phase 4.1 — ACTIVE
+## Phase 4.1 — COMPLETE
 
-Goal: build the deterministic encrypted canonical memory kernel before any model is allowed to propose or write memory.
+Delivered the deterministic encrypted canonical semantic-memory kernel:
 
-Approved implementation scope:
+- memory domain/provenance contracts;
+- SQLCipher 4.17 connection and DPAPI key lifecycle;
+- crash-safe key/database state handling;
+- one serialized writer + dedicated reader worker;
+- ordered checksum-validated SQL migrations;
+- canonical relational schema and safe current view;
+- temporal create/change/correct/retract/verify/expire lifecycle;
+- FTS5 synchronization/rebuild + core/FTS secure-delete controls;
+- physical forget with zero canonical + FTS hits;
+- deterministic exact current queries;
+- privacy-aware content-free forget operation metadata.
 
-- memory domain enums/value objects and provenance contracts;
-- `MemoryStore` protocol;
-- SQLCipher connection/key lifecycle;
-- thin thread-affinity database worker boundary;
-- ordered, auditable schema migrations;
-- relational canonical schema and safe current-state query/view;
-- bitemporal-style valid/system-time lifecycle fields;
-- deterministic semantic assertion creation/change/correction/retraction/verification/expiration;
-- FTS5 derived index with tested synchronization and secure-delete behavior;
-- explicit physical forget across canonical + derived representations;
-- deterministic exact current/history queries;
-- privacy-aware operation metadata without forgotten plaintext.
+Real Windows SQLCipher/DPAPI adapter validation passed on the crash-recovery implementation. Closure record:
 
-Phase 4.1 implementation decisions being applied from current research:
+`docs/research/STEP_4_PHASE_4_1_IMPLEMENTATION_RESULT.md`
 
-- SQLCipher key is set before the first database read, then validated with a real schema read;
-- one serialized writer follows SQLite's one-writer concurrency model; WAL permits concurrent readers;
-- application schema versioning uses ordered SQL migrations with JARVIS-owned version state rather than an ORM migration framework;
-- FTS5 is a derived external-content-style index synchronized by deterministic database triggers/rebuild logic;
-- FTS5 `secure-delete=1` and core SQLite/SQLCipher `PRAGMA secure_delete=ON` are both required for the forget path;
-- production code must not silently fall back from SQLCipher to plaintext SQLite;
-- the unverified research PyPI wheel is not promoted as the production packaging decision; the selected production target remains the pinned reproducible SQLCipher 4.17 Windows artifact.
+No model-driven memory write or semantic auto-injection was introduced.
 
-Not in Phase 4.1:
+---
 
-- LLM extraction;
-- candidate auto-admission;
-- semantic embedding/reranking;
-- provider context injection;
-- autonomous repair.
+## Phase 4.2 — COMPLETE
+
+Delivered JARVIS-owned transient context:
+
+- bounded accepted-turn tail;
+- monotonic TTL;
+- active goal/topic/entities/unresolved work/interaction state;
+- session disposal with no durable dump;
+- deterministic `ContextAssembler` precedence;
+- strict local context budget;
+- sensitivity release filtering;
+- immutable context packets with JARVIS provenance;
+- LiveKit ordinary-message translation boundary;
+- accepted turn enters LiveContext only after canonical conversation acceptance;
+- provider-native VAD/turn detection remains unchanged.
+
+Provider sync research refresh found that the current LiveKit Gemini 3.1 realtime adapter does not support mid-session `update_chat_ctx()` forwarding. Therefore automatic mid-session provider-history synchronization remains disabled/fail-closed for Gemini 3.1. OpenAI realtime has a supported update path, but no automatic provider mutation is enabled by Phase 4.2.
+
+Canonical Phase-4.2 closure is not blocked by an optional provider-sync bake-off because the risky feature remains disabled. A provider/model-specific real-voice bake-off is required before it can ever be enabled.
+
+Validation:
+
+- LiveContext/assembler/bridge/translation baseline run `33952348876`: PASS;
+- provider capability guard commit `0bf39e7775689d930b92f3e0276edb451ded0a01`, run `33957508425`: Ruff / pytest / Windows Hello / Windows DPAPI PASS.
+
+Closure record:
+
+`docs/research/STEP_4_PHASE_4_2_IMPLEMENTATION_RESULT.md`
+
+---
+
+## Phase 4.3 — ACTIVE
+
+Goal: deliver the first safe useful cross-session memory behavior through **explicit remember / correct / forget / inspect** operations.
+
+Implementation contract:
+
+`docs/research/STEP_4_PHASE_4_3_IMPLEMENTATION_DECISIONS.md`
+
+Initial scope:
+
+- add `MemoryService` as the sole voice-facing durable mutation facade;
+- exact structured personal memory keys only (`personal / owner / predicate`);
+- explicit TEXT remember/correct first;
+- exact inspect and exact forget;
+- fail closed on zero/ambiguous targets;
+- require the latest canonical USER turn to explicitly authorize each mutation;
+- deterministic English/Hindi/Hinglish intent guard;
+- conservative credential/secret rejection;
+- provenance from JARVIS session/turn IDs with no copied raw command text;
+- LiveKit function tools following the existing JARVIS tool pattern;
+- tools return success only after the durable operation succeeds;
+- no fuzzy semantic target selection;
+- no implicit auto-admission;
+- no provider-history mutation requirement;
+- no change to stabilized turn detection.
+
+Persistent memory is rollout-gated during implementation. OFF exposes no memory tools/database. ON requires the approved SQLCipher runtime; no plaintext fallback is allowed.
+
+**Phase 4.3 must pass automated validation and then real owner-PC cross-session voice acceptance before Phase 4.4 begins.**
 
 ---
 
 ## Remaining approved implementation order
 
-1. **Phase 4.0A — provenance + neutral security boundary** — COMPLETE.
-2. **Phase 4.1 — canonical memory kernel** — ACTIVE.
-3. **Phase 4.2 — LiveContext + ContextAssembler**
-   - session state, sensitivity/context-release policy, turn-scoped provider integration.
-4. **Phase 4.3 — explicit remember/correct/forget/inspect**
-   - first useful safe cross-session memory behavior; real human acceptance.
-5. **Phase 4.4 — structured extraction/candidate quarantine**
-   - OpenAI/Gemini adapters, Pydantic contracts, source-trust policy;
-   - implicit auto-admission remains OFF until measured precision acceptance.
-6. **Phase 4.5 — semantic retrieval**
-   - Qwen 256d derived embeddings, process-local exact NumPy index, FTS/RRF/top-3 reranker;
-   - realistic scale + abstention/irrelevant-injection calibration before broad automatic injection.
-7. **Phase 4.6 — episodic/reflection learning**
-   - meaningful outcomes/decisions/incidents, not raw transcript archive.
-8. **Phase 4.7 — self-knowledge foundation**
-   - production Capability Registry, CycloneDX adapter, authoritative-source aggregation, drift fingerprints;
-   - no autonomous repair.
-9. **Phase 4.8 — hardening + real acceptance**
-   - exact 4.17 owner-PC package check, backup/restore, privacy/security, multilingual/adversarial tests, real use, reconciliation, ADR, protected-main merge.
+1. Phase 4.0A — provenance + neutral security — **COMPLETE**.
+2. Phase 4.1 — canonical memory kernel — **COMPLETE**.
+3. Phase 4.2 — LiveContext + ContextAssembler — **COMPLETE**.
+4. Phase 4.3 — explicit remember/correct/forget/inspect — **ACTIVE**.
+5. Phase 4.4 — structured extraction/candidate quarantine; implicit admission remains OFF until measured acceptance.
+6. Phase 4.5 — Qwen semantic retrieval + FTS/RRF/top-3 reranker + abstention/irrelevant-injection calibration.
+7. Phase 4.6 — episodic/reflection learning for meaningful outcomes/decisions/incidents, not raw transcripts.
+8. Phase 4.7 — production self-knowledge foundation: Capability Registry + CycloneDX + authoritative aggregation, no autonomous repair.
+9. Phase 4.8 — final hardening, multilingual/adversarial/privacy/security/backup tests, real use, reconciliation, ADR, protected-main merge.
 
 ---
 
@@ -284,32 +268,33 @@ Not in Phase 4.1:
 - `docs/research/STEP_4_ARCHITECTURE_PROPOSAL.md`;
 - `docs/research/STEP_4_ARCHITECTURE_APPROVAL.md`;
 - `docs/research/STEP_4_PHASE_4_0A_VALIDATION.md`;
+- `docs/research/STEP_4_PHASE_4_1_IMPLEMENTATION_RESULT.md`;
+- `docs/research/STEP_4_PHASE_4_2_IMPLEMENTATION_DECISIONS.md`;
+- `docs/research/STEP_4_PHASE_4_2_IMPLEMENTATION_RESULT.md`;
+- `docs/research/STEP_4_PHASE_4_3_IMPLEMENTATION_DECISIONS.md`;
 - `docs/research/STEP_4_RETRIEVAL_TECHNOLOGY_DECISION.md`;
 - `docs/research/STEP_4_MEMORY_EXTRACTION_PROVISIONAL_TIE.md`;
 - `docs/research/STEP_4_SQLCIPHER_417_WINDOWS_RESULT.md`;
-- `docs/research/STEP_4_SELF_KNOWLEDGE_SBOM_WINDOWS_RESULT.md`;
-- `docs/research/STEP_4_TEMPORAL_FRESHNESS_PROVENANCE_REQUIREMENTS.md`;
-- `docs/research/STEP_4_SELF_KNOWLEDGE_CONTINUOUS_LEARNING_REQUIREMENTS.md`.
+- `docs/research/STEP_4_SELF_KNOWLEDGE_SBOM_WINDOWS_RESULT.md`.
 
 ---
 
 ## Non-blocking deferred decisions
 
-These do not reopen the selected architecture:
-
 - portable disaster recovery/export;
 - final extraction provider winner;
 - implicit durable auto-admission threshold;
 - semantic abstention threshold;
-- dedicated vector/ANN database if future scale proves it necessary;
+- dedicated ANN/vector derivative if future measured scale needs it;
 - persisted crash-resume LiveContext;
-- relationship/graph memory if a later use case proves measurable value;
+- relationship/graph memory if later use cases justify it;
+- automatic provider chat-history synchronization;
 - autonomous diagnosis/repair/self-improvement.
 
 ---
 
 ## Immediate Next Action
 
-**IMPLEMENT PHASE 4.1 CANONICAL MEMORY KERNEL TEST-FIRST.**
+**IMPLEMENT PHASE 4.3 EXPLICIT MEMORY OPERATIONS TEST-FIRST.**
 
-Start with domain/provenance contracts, migration/schema definition, and the fail-closed SQLCipher connection boundary. Do not add LLM memory writes, implicit durable admission, or semantic provider injection in this phase.
+Start with `MemoryService`, explicit intent/secret guards and canonical source construction; then add LiveKit memory tools and the optional fail-closed persistent runtime. Do not begin implicit extraction or semantic auto-retrieval before real owner acceptance of Phase 4.3.
