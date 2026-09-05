@@ -2,9 +2,9 @@
 
 ## Status
 
-**STEP 3 COMPLETE + MERGED. STEP 4 MEMORY/CONTEXT ARCHITECTURE IS APPROVED; PHASES 4.0A–4.3 ARE ACCEPTED AND PHASE 4.4 IS ACTIVE. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 REMAINS DISABLED.**
+**STEP 3 COMPLETE + MERGED. STEP 4 MEMORY/CONTEXT ARCHITECTURE IS APPROVED; PHASES 4.0A–4.4 ARE ACCEPTED. PHASE 4.5 SEMANTIC RETRIEVAL IS THE NEXT ACTIVE BOUNDARY. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 REMAINS DISABLED.**
 
-This file describes architecture that actually exists and has passed the normal acceptance lifecycle, plus clearly marked active Step-4 boundaries that are already implemented but not yet finally accepted. Detailed experiments/evidence belong in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; durable decisions belong in `docs/decisions/`.
+This file describes architecture that actually exists and has passed the normal acceptance lifecycle. Detailed experiments/evidence belong in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; durable decisions belong in `docs/decisions/`.
 
 ---
 
@@ -45,11 +45,13 @@ accepted USER turns
         |     -> MemoryLifecycleService
         |     -> SQLCipher canonical store + FTS5
         |
-        +-> Phase-4.4 candidate extraction [ACTIVE, default OFF]
+        +-> Phase-4.4 candidate extraction [ACCEPTED, opt-in]
         |     -> exact canonical USER turn
         |     -> deterministic pre-provider gates
-        |     -> active-provider structured-output model
+        |     -> Gemini 3.5 Flash-Lite structured proposal
+        |     -> deterministic JARVIS proposal policy
         |     -> typed session-local quarantine
+        |     -> physical disposal on session close
         |     X no durable admission
         |
         +-> ContextAssembler
@@ -63,7 +65,8 @@ Permanent rules:
 - `MemoryService` is the sole durable memory mutation facade;
 - `ContextAssembler` is the sole Step-4 model-context release owner;
 - production JARVIS has exactly one active cloud-AI provider/account at a time;
-- production subsystems may use capability-specific models inside that provider family but may not independently select a second cloud-AI provider.
+- production subsystems may use capability-specific models inside that provider family but may not independently select a second cloud-AI provider;
+- implicit memory candidates have no durable authority unless a later separately measured policy is explicitly approved.
 
 Decision: ADR-015.
 
@@ -82,15 +85,13 @@ JARVIS_AI_PROVIDER
        +-> future cloud reasoning/tool roles
 ```
 
-Current supported provider families are `gemini` and `openai`. The provider-to-secret mapping is owned centrally by `src/jarvis/ai_provider.py`; provider-specific SDKs remain confined to narrow voice/memory adapter modules.
+Current active provider is Gemini. Realtime conversation and structured extraction may use different Gemini model IDs because their capability surfaces differ. This does not create a second provider account.
 
-Different model IDs are allowed inside the active provider family because capability surfaces differ. This does **not** create a second provider account. Production never silently falls back to another cloud-AI provider when the active provider lacks a capability.
+Provider-specific SDKs remain confined to narrow adapters. `JARVIS_REALTIME_PROVIDER` is migration-only compatibility; new configuration uses `JARVIS_AI_PROVIDER`.
 
-`JARVIS_REALTIME_PROVIDER` is a migration-only alias for existing machine profiles. New configuration uses `JARVIS_AI_PROVIDER`.
+Production never silently falls back to another cloud-AI provider when the active provider lacks a capability.
 
-Research harnesses may compare providers, but research comparison is not a production dependency.
-
-Pinned model/checkpoint downloads, Git/GitHub traffic, Hugging Face/Google Storage/OpenVINO artifact retrieval, and local inference are not cloud-AI provider selection and are outside ADR-015.
+Local model/checkpoint downloads and local inference are outside ADR-015.
 
 ---
 
@@ -112,12 +113,15 @@ Accepted machine roles:
 - NVIDIA `24'TV` conversation output at 48 kHz;
 - local wake model path persisted;
 - one active cloud-AI provider persisted as `JARVIS_AI_PROVIDER`;
-- provider-specific model IDs may remain configured for reversible provider switching;
+- provider-specific model IDs explicitly configured where needed;
 - LR-ASD/CAM++ assets locally managed;
 - vision/speaker/active-speaker switches persisted;
-- persistent memory rollout controlled by `JARVIS_MEMORY_ENABLED` and defaults OFF.
+- persistent memory controlled by `JARVIS_MEMORY_ENABLED`;
+- candidate extraction controlled separately by `JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED` plus explicit model ID.
 
 API keys remain outside normal machine-profile state. Startup preflight checks only the credential required by the selected active provider.
+
+The accepted Phase-4.4 owner run also proved fail-closed hardware behavior: when Pocket3 was absent from Windows enumeration, startup stopped instead of falling back to a random microphone. After Pocket3 returned in Webcam mode, the stable selector resolved correctly and normal production startup resumed.
 
 ---
 
@@ -218,6 +222,9 @@ SQLCipher + SQLite
 
 FTS5
     = derived/rebuildable lexical index
+
+MemoryCandidateSessionRuntime
+    = non-durable semantic shadow only
 ```
 
 Provider history/caches are never canonical JARVIS memory.
@@ -263,7 +270,7 @@ Accepted storage/security properties:
 
 ---
 
-## Phase 4.3 explicit durable memory operations
+## Phase 4.3 explicit durable memory operations — ACCEPTED
 
 Normal voice sessions may expose four governed memory tools when persistent memory is enabled:
 
@@ -307,35 +314,61 @@ Real owner-PC acceptance proved remember, cross-process recall, correction, corr
 
 ---
 
-## Phase 4.4 active candidate-extraction boundary
+## Phase 4.4 candidate extraction / quarantine — ACCEPTED
 
-Phase 4.4 is implemented behind a default-OFF rollout gate but is not yet finally owner-accepted.
+Accepted boundary:
 
 ```text
 exact accepted canonical USER turn
  -> explicit-memory-control exclusion
  -> deterministic obvious-secret prefilter
  -> active-provider structured-output adapter
+ -> Gemini 3.5 Flash-Lite
  -> Pydantic MemoryExtractionProposal
  -> deterministic proposal policy
  -> session/process-local quarantine
- -> dispose on session close
+ -> physical disposal on session close
 ```
 
-Current invariants:
+Accepted invariants:
 
 - extraction runs off the conversation response path;
-- no raw/latest-turn race is allowed;
-- non-USER sources do not enter the provider extractor path;
+- exact accepted turn object is used; no asynchronous latest-turn race;
+- non-USER sources do not enter the personal-memory extractor path;
+- explicit Phase-4.3 memory operations remain on their governed path;
 - provider/model proposes semantic evidence only;
-- JARVIS owns session/turn provenance and authority metadata;
+- JARVIS owns provenance and authority metadata;
 - no confidence threshold grants truth;
 - no candidate writes `MemoryService`, SQLCipher, FTS, or embeddings;
 - no implicit durable admission exists;
-- candidate quarantine is physically discarded with the session;
-- extraction uses the same active cloud-AI provider selected for JARVIS production, although its capability-specific model ID may differ.
+- quarantine is physically discarded with the session;
+- ordinary personal facts do not invoke explicit `remember_memory` after model-facing routing hardening;
+- ordinary personal facts do not expose candidate/quarantine mechanics or ask for memory confirmation;
+- extraction uses the same active cloud-AI provider selected for JARVIS production.
 
-Final active-provider model validation and narrow owner-PC acceptance remain pending before Phase 4.4 can be marked complete.
+Measured Gemini 3.5 Flash-Lite corpus result:
+
+- 14/14 schema-valid;
+- 100% intent/type/durable core exact;
+- zero false durable proposals;
+- zero misses;
+- English/Hindi/Hinglish accepted;
+- p50 ~1.636 s, p95/max ~2.415 s.
+
+Real owner-PC production acceptance proved:
+
+- implicit fact -> `outcome=quarantined`, `durable_admission=False`;
+- session close -> `disposed_candidates=1`, `quarantine_disposed=True`;
+- fresh explicit memory query -> Phase-4.4 skipped, Phase-4.3 exact lookup miss;
+- no cross-session resurrection of the synthetic value;
+- wake/Pocket3/Gemini/vision/return-to-wake remained functional;
+- CAM++/LR-ASD/prototype/authority behavior remained unchanged.
+
+Evidence:
+
+- `docs/research/STEP_4_PHASE_4_4_GEMINI_MODEL_SELECTION.md`;
+- `docs/research/STEP_4_PHASE_4_4_OWNER_PC_ACCEPTANCE.md`;
+- `docs/research/STEP_4_PHASE_4_4_IMPLEMENTATION_RESULT.md`.
 
 ---
 
@@ -346,22 +379,24 @@ Final active-provider model validation and narrow owner-PC acceptance remain pen
 - bounded encrypted biometric templates exist only through explicit enrollment;
 - secrets/tokens are not normal logs/model context or durable memory;
 - successful memory mutations log bounded operation metadata rather than values;
+- candidate shadow logs bounded outcomes/reasons/counts rather than candidate values;
 - diagnostic model outputs cannot silently change authority;
 - failures and insufficient evidence remain explicit.
 
 ---
 
-## Not yet accepted architecture
+## Next unaccepted architecture
 
 The following remain future Step-4 work and are not current accepted production behavior:
 
-- Phase 4.4 final provider-local model selection and owner acceptance;
+- Phase 4.5 semantic embedding retrieval/reranking and automatic semantic context selection;
+- semantic abstention calibration;
 - implicit durable candidate admission;
-- semantic embedding retrieval/reranking and automatic semantic injection;
+- deterministic canonical subject/predicate normalization for any future implicit admission;
 - episodic/reflection learning;
 - production self-knowledge registry/aggregation;
 - portable memory disaster recovery/export;
 - automatic provider chat-history synchronization;
 - autonomous diagnosis/repair/self-modification.
 
-Phase 4.4 may propose typed candidates, but candidate extraction must not silently become canonical durable truth.
+Phase 4.5 must preserve all existing authority, sensitivity, lifecycle and provider boundaries. Retrieval may rank eligible canonical records; it may not establish or mutate truth.
