@@ -2,7 +2,13 @@
 
 ## Status
 
-**RESEARCH / OWNER-MACHINE SPIKE. NOT PRODUCTION APPROVAL.**
+**CORE OWNER-MACHINE SECURITY / FUNCTIONAL SPIKE: PASS. PACKAGING SELECTION STILL PENDING.**
+
+Measured result on the real JARVIS Windows machine is recorded in:
+
+- `docs/research/STEP_4_SQLCIPHER_DPAPI_WINDOWS_RESULT.md`
+
+The tested `sqlcipher3==0.6.2` CPython 3.11 Win64 wheel passed every core at-rest encryption, DPAPI, FTS5, WAL leakage, wrong-key, backup/restore, corruption and forget assertion. The optional `PRAGMA cipher_memory_security=ON` subprocess probe crashed with Windows `STATUS_STACK_OVERFLOW`, and the wheel bundles SQLCipher `4.12.0` while current upstream is newer. Therefore the SQLCipher + DPAPI design is technically accepted for continued Step-4 planning, but the exact production Windows package/build is not yet selected.
 
 This gate determines whether the selected SQLite/FTS5 memory foundation can be protected safely on the real JARVIS Windows machine without introducing an unnecessary database service or a custom cryptosystem.
 
