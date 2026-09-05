@@ -143,9 +143,7 @@ def build_production_voice_runtime(
         else None
     )
 
-    memory_runtime = (
-        build_default_memory_runtime() if config.memory_enabled else None
-    )
+    memory_runtime = build_default_memory_runtime() if config.memory_enabled else None
 
     if config.audio_output_wasapi_device is not None:
         LOGGER.info(
