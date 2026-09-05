@@ -208,7 +208,9 @@ def test_protected_key_without_database_retries_initialization(tmp_path: Path) -
     try:
         assert retried.execute("PRAGMA user_version").fetchone()[0] == 1
         assert (
-            retried.execute("SELECT count(*) FROM jarvis_schema_migration").fetchone()[0]
+            retried.execute("SELECT count(*) FROM jarvis_schema_migration").fetchone()[
+                0
+            ]
             == 1
         )
     finally:
