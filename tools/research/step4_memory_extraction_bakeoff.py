@@ -2,13 +2,17 @@
 
 The provider side of this harness intentionally exercises the same Pydantic
 ``MemoryExtractionProposal`` schema and the same system prompt used by the
-production Phase-4.4 extractor adapters. Only canonical direct-user cases are
-sent to a provider because production extraction is attached only to accepted
-USER turns.
+production Phase-4.4 extractor adapters. The corpus is partitioned through the
+same deterministic gates that run before production extraction:
 
-Non-user corpus entries remain valuable adversarial evidence, but they are
-validated as a deterministic pre-provider boundary rather than asking an LLM to
-decide whether assistant/web/email/file content is trustworthy.
+1. only canonical direct-user content is eligible;
+2. Phase-4.3 explicit memory controls are handled before extraction;
+3. locally recognizable credentials/secrets are rejected before extraction;
+4. only the remaining accepted USER utterances reach the provider.
+
+Non-user corpus entries remain adversarial evidence, but they are validated at
+the deterministic pre-provider boundary rather than asking an LLM to decide
+whether assistant/web/email/file content is trustworthy.
 
 This harness never writes canonical memory. API requests use ``store=False``.
 
@@ -41,6 +45,7 @@ import os
 import statistics
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +62,11 @@ from jarvis.memory.candidates import (  # noqa: E402
     MemoryExtractionProposal,
     MemoryExtractionSensitivity,
 )
+from jarvis.memory.explicit import (  # noqa: E402
+    MemorySecretRejectedError,
+    is_explicit_memory_control_text,
+    reject_prohibited_secret,
+)
 from jarvis.memory.extractors import MEMORY_EXTRACTION_SYSTEM_PROMPT  # noqa: E402
 
 DIRECT_USER_SOURCE = "direct_user"
@@ -72,6 +82,14 @@ class ProviderCall(BaseModel):
     error: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class CorpusPartition:
+    provider_cases: tuple[dict[str, Any], ...]
+    non_user_case_ids: tuple[str, ...]
+    explicit_control_case_ids: tuple[str, ...]
+    local_secret_case_ids: tuple[str, ...]
+
+
 def _load_cases(path: Path) -> list[dict[str, Any]]:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, list):
@@ -79,12 +97,11 @@ def _load_cases(path: Path) -> list[dict[str, Any]]:
     return value
 
 
-def _validate_corpus_contract(cases: list[dict[str, Any]]) -> dict[str, Any]:
+def _validate_corpus_taxonomy(cases: list[dict[str, Any]]) -> None:
     """Fail closed when the research corpus drifts from production taxonomy."""
 
     valid_intents = {item.value for item in MemoryExtractionIntent}
     valid_types = {item.value for item in MemoryCandidateType}
-    boundary_case_ids: list[str] = []
     problems: list[str] = []
 
     for case in cases:
@@ -104,11 +121,8 @@ def _validate_corpus_contract(cases: list[dict[str, Any]]) -> dict[str, Any]:
         if not isinstance(durable, bool):
             problems.append(f"{case_id}: durable_candidate must be boolean")
 
-        source_class = case.get("source_class")
-        if source_class == DIRECT_USER_SOURCE:
+        if case.get("source_class") == DIRECT_USER_SOURCE:
             continue
-
-        boundary_case_ids.append(case_id)
         if (
             intent != NON_USER_EXPECTED_INTENT
             or candidate_type != NON_USER_EXPECTED_TYPE
@@ -122,17 +136,43 @@ def _validate_corpus_contract(cases: list[dict[str, Any]]) -> dict[str, Any]:
     if problems:
         raise ValueError("; ".join(problems))
 
-    return {
-        "status": "PASS",
-        "rule": "only canonical USER turns may reach the production extractor",
-        "boundary_case_count": len(boundary_case_ids),
-        "boundary_case_ids": boundary_case_ids,
-        "provider_called_for_boundary_cases": False,
-    }
 
+def _partition_cases(cases: list[dict[str, Any]]) -> CorpusPartition:
+    """Mirror the deterministic gates before MemoryCandidateExtractor.extract()."""
 
-def _provider_cases(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [case for case in cases if case.get("source_class") == DIRECT_USER_SOURCE]
+    provider_cases: list[dict[str, Any]] = []
+    non_user: list[str] = []
+    explicit_controls: list[str] = []
+    local_secrets: list[str] = []
+
+    for case in cases:
+        case_id = str(case["id"])
+        if case.get("source_class") != DIRECT_USER_SOURCE:
+            non_user.append(case_id)
+            continue
+
+        text = str(case["input"])
+        if is_explicit_memory_control_text(text):
+            explicit_controls.append(case_id)
+            continue
+
+        try:
+            reject_prohibited_secret(
+                predicate="candidate_extraction",
+                value=text,
+            )
+        except MemorySecretRejectedError:
+            local_secrets.append(case_id)
+            continue
+
+        provider_cases.append(case)
+
+    return CorpusPartition(
+        provider_cases=tuple(provider_cases),
+        non_user_case_ids=tuple(non_user),
+        explicit_control_case_ids=tuple(explicit_controls),
+        local_secret_case_ids=tuple(local_secrets),
+    )
 
 
 def _extract_openai_parsed(response: Any) -> MemoryExtractionProposal:
@@ -342,21 +382,6 @@ def _score_provider(
     ]
     missed_durable = sum(not ext.durable_candidate for _, ext in expected_durable)
 
-    explicit_intents = {
-        MemoryExtractionIntent.REMEMBER.value,
-        MemoryExtractionIntent.CORRECTION.value,
-        MemoryExtractionIntent.FORGET.value,
-        MemoryExtractionIntent.RETRACTION.value,
-    }
-    explicit_ops = [
-        (case, ext)
-        for case, ext in valid_pairs
-        if case["expected"]["intent"] in explicit_intents
-    ]
-    explicit_op_hits = sum(
-        ext.intent.value == case["expected"]["intent"] for case, ext in explicit_ops
-    )
-
     secret = [
         (case, ext)
         for case, ext in valid_pairs
@@ -407,11 +432,6 @@ def _score_provider(
                 else None
             ),
             "missed_durable_candidates": missed_durable,
-            "explicit_operation_recall": (
-                round(explicit_op_hits / len(explicit_ops), 4)
-                if explicit_ops
-                else None
-            ),
             "secret_policy_accuracy": (
                 round(secret_policy_hits / len(secret), 4) if secret else None
             ),
@@ -448,7 +468,7 @@ def parse_args() -> argparse.Namespace:
         "--max-cases",
         type=int,
         default=None,
-        help="Optional direct-user smoke-test limit before the full provider corpus.",
+        help="Optional post-gate provider smoke-test limit.",
     )
     parser.add_argument(
         "--delay-ms",
@@ -467,10 +487,14 @@ def main() -> None:
         raise SystemExit(f"unsupported providers: {invalid}")
 
     all_cases = _load_cases(Path(args.cases))
-    boundary_result = _validate_corpus_contract(all_cases)
-    cases = _provider_cases(all_cases)
+    _validate_corpus_taxonomy(all_cases)
+    partition = _partition_cases(all_cases)
+    cases = list(partition.provider_cases)
     if args.max_cases is not None:
         cases = cases[: args.max_cases]
+
+    if not cases:
+        raise SystemExit("no cases remain after production pre-provider gates")
 
     results: dict[str, Any] = {}
 
@@ -523,11 +547,15 @@ def main() -> None:
         "purpose": "research-only; candidate proposal and quarantine, no durable admission",
         "corpus_case_count": len(all_cases),
         "provider_case_count": len(cases),
-        "provider_case_rule": "direct_user only; matches production accepted-USER boundary",
         "production_contract": "jarvis.memory.candidates.MemoryExtractionProposal",
         "production_prompt": "jarvis.memory.extractors.MEMORY_EXTRACTION_SYSTEM_PROMPT",
         "requests_store": False,
-        "deterministic_source_boundary": boundary_result,
+        "deterministic_pre_provider_gates": {
+            "non_user_source_case_ids": partition.non_user_case_ids,
+            "explicit_memory_control_case_ids": partition.explicit_control_case_ids,
+            "local_secret_rejection_case_ids": partition.local_secret_case_ids,
+            "provider_called_for_any_gated_case": False,
+        },
         "results": results,
     }
     print(json.dumps(output, indent=2, ensure_ascii=False))
