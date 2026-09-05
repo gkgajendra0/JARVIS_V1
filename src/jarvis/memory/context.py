@@ -161,7 +161,9 @@ class ContextAssembler:
         if snapshot.active_topic is not None:
             candidates.append(
                 (
-                    self._entry_item(ContextItemKind.ACTIVE_TOPIC, snapshot.active_topic),
+                    self._entry_item(
+                        ContextItemKind.ACTIVE_TOPIC, snapshot.active_topic
+                    ),
                     False,
                 )
             )
