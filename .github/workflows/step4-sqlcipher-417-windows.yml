@@ -1,0 +1,82 @@
+name: Step 4 SQLCipher 4.17 Windows research
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/step-4-memory-context
+    paths:
+      - ".github/workflows/step4-sqlcipher-417-windows.yml"
+      - "tools/research/step4_build_sqlcipher_417_windows.ps1"
+      - "tools/research/step4_sqlcipher_dpapi_bakeoff.py"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-verify:
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out JARVIS research branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+
+      - name: Configure MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+        with:
+          arch: amd64
+
+      - name: Build pinned SQLCipher 4.17.0 wheel
+        shell: pwsh
+        run: >-
+          ./tools/research/step4_build_sqlcipher_417_windows.ps1
+          -WorkDir .step4-sqlcipher417-build
+          -WheelDir .step4-sqlcipher417-wheelhouse
+
+      - name: Create isolated verification environment
+        shell: pwsh
+        run: |
+          python -m venv .step4-sqlcipher417-verify
+          $python = ".\.step4-sqlcipher417-verify\Scripts\python.exe"
+          & $python -m pip install --disable-pip-version-check --upgrade pip
+          $wheel = Get-ChildItem ".step4-sqlcipher417-wheelhouse\sqlcipher3-*.whl" | Select-Object -First 1
+          if (-not $wheel) { throw "Built SQLCipher wheel not found" }
+          & $python -m pip install $wheel.FullName "cryptography==50.0.1"
+
+      - name: Run full synthetic SQLCipher and DPAPI bake-off
+        shell: pwsh
+        run: |
+          $python = ".\.step4-sqlcipher417-verify\Scripts\python.exe"
+          & $python tools\research\step4_sqlcipher_dpapi_bakeoff.py --artifact-dir .step4-sqlcipher417-artifacts --output .step4-sqlcipher417-results.json
+          if ($LASTEXITCODE -ne 0) { throw "SQLCipher 4.17 bake-off process failed" }
+
+      - name: Enforce current-engine packaging gate
+        shell: pwsh
+        run: |
+          $python = ".\.step4-sqlcipher417-verify\Scripts\python.exe"
+          & $python -X utf8 -c "import json,pathlib; d=json.loads(pathlib.Path('.step4-sqlcipher417-results.json').read_text(encoding='utf-8')); p=d['package']; assert d['status']=='PASS', d['checks']; assert str(p['sqlcipher_version']).startswith('4.17.0'), p['sqlcipher_version']; assert p['sqlite_version']=='3.53.3', p['sqlite_version']; assert p['fts5_compiled'] is True; print('CURRENT_ENGINE_GATE=PASS'); print('SQLCIPHER=',p['sqlcipher_version']); print('SQLITE=',p['sqlite_version']); print('PROVIDER=',p['cipher_provider']); print('MEMORY_SECURITY=',d['enhanced_memory_security_probe'])"
+          Copy-Item .step4-sqlcipher417-results.json .step4-sqlcipher417-wheelhouse\runtime-verification.json
+
+      - name: Record wheel digest in job summary
+        shell: pwsh
+        run: |
+          $manifest = Get-Content .step4-sqlcipher417-wheelhouse\build-manifest.json -Raw | ConvertFrom-Json
+          Add-Content $env:GITHUB_STEP_SUMMARY "## Step 4 SQLCipher 4.17 Windows build"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- Wheel: ``$($manifest.wheel_file)``"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- SHA-256: ``$($manifest.wheel_sha256)``"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- SQLCipher source: ``$($manifest.sqlcipher_commit)``"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- sqlcipher3 wrapper: ``$($manifest.sqlcipher3_wrapper_commit)``"
+
+      - name: Upload research wheel and evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: step4-sqlcipher417-cp311-win-amd64
+          path: .step4-sqlcipher417-wheelhouse/
+          if-no-files-found: error
+          retention-days: 14
