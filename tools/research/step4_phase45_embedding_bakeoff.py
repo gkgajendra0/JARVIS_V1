@@ -98,12 +98,10 @@ class ProcessMemorySampler:
             )
 
 
-
 def _percentile(samples: list[float], fraction: float) -> float:
     ordered = sorted(samples)
     index = min(len(ordered) - 1, int(len(ordered) * fraction))
     return ordered[index]
-
 
 
 def _rank(
@@ -114,7 +112,6 @@ def _rank(
     scores = np.asarray(doc_embeddings @ query_embedding, dtype=np.float64)
     order = np.argsort(-scores)
     return [(docs[index].memory_id, float(scores[index])) for index in order]
-
 
 
 def _metrics_for_cases(
@@ -153,7 +150,6 @@ def _metrics_for_cases(
     }
 
 
-
 def _language_breakdown(
     rankings: dict[str, list[str]],
 ) -> dict[str, dict[str, float | int | None]]:
@@ -168,11 +164,9 @@ def _language_breakdown(
     return output
 
 
-
 def _sync_cuda() -> None:
     if torch.cuda.is_available():
         torch.cuda.synchronize()
-
 
 
 def _encode_documents(
@@ -192,7 +186,6 @@ def _encode_documents(
     )
 
 
-
 def _encode_query(
     model: SentenceTransformer,
     profile: ModelProfile,
@@ -209,14 +202,12 @@ def _encode_query(
     return np.asarray(model.encode_query([query], **kwargs)[0])
 
 
-
 def _prepare_device(requested: str) -> str | None:
     if requested == "auto":
         return None
     if requested == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA was requested but torch.cuda.is_available() is false")
     return requested
-
 
 
 def _model_runtime_metadata(model: SentenceTransformer) -> dict[str, object]:
@@ -228,7 +219,6 @@ def _model_runtime_metadata(model: SentenceTransformer) -> dict[str, object]:
         "native_embedding_dimension": model.get_sentence_embedding_dimension(),
         "benchmark_dimension": TRUNCATE_DIM,
     }
-
 
 
 def _benchmark_model(
@@ -427,7 +417,6 @@ def _benchmark_model(
     return result
 
 
-
 def _environment() -> dict[str, object]:
     import sentence_transformers
     import transformers
@@ -441,7 +430,6 @@ def _environment() -> dict[str, object]:
         "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
         "psutil": psutil.__version__,
     }
-
 
 
 def parse_args() -> argparse.Namespace:
@@ -462,7 +450,6 @@ def parse_args() -> argparse.Namespace:
         help="UTF-8 JSON result path",
     )
     return parser.parse_args()
-
 
 
 def main() -> None:
