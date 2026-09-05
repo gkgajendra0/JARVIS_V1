@@ -90,11 +90,13 @@ class ReleasePolicy:
     def releases(self, case: CalibrationCaseResult) -> bool:
         if case.rerank_score < self.score_threshold:
             return False
-        if self.margin_threshold is not None and case.rerank_margin < self.margin_threshold:
+        if (
+            self.margin_threshold is not None
+            and case.rerank_margin < self.margin_threshold
+        ):
             return False
         return not (
-            self.dense_threshold is not None
-            and case.dense_score < self.dense_threshold
+            self.dense_threshold is not None and case.dense_score < self.dense_threshold
         )
 
 
@@ -143,9 +145,13 @@ def _load_fixture(path: Path) -> dict[str, Any]:
             raise ValueError(f"query must not be empty for {case_id}")
         if label == "release":
             if not isinstance(expected, str) or expected not in all_memory_ids:
-                raise ValueError(f"release case {case_id} needs a known expected memory")
+                raise ValueError(
+                    f"release case {case_id} needs a known expected memory"
+                )
         elif expected is not None:
-            raise ValueError(f"abstain case {case_id} must have expected_memory_id=null")
+            raise ValueError(
+                f"abstain case {case_id} must have expected_memory_id=null"
+            )
         counts[(split, label)] += 1
 
     for split in sorted(ALLOWED_SPLITS):
@@ -265,7 +271,9 @@ async def _populate_database(
         [record.normalized_text for record in records_to_embed]
     )
     if len(document_vectors) != len(records_to_embed):
-        raise RuntimeError("embedding row count does not match Phase 4.5D fixture records")
+        raise RuntimeError(
+            "embedding row count does not match Phase 4.5D fixture records"
+        )
     for record, vector in zip(records_to_embed, document_vectors, strict=True):
         await embeddings.upsert(
             record.assertion_id,
@@ -392,7 +400,9 @@ def _select_policy(
     calibration_cases: list[CalibrationCaseResult],
 ) -> tuple[ReleasePolicy, dict[str, Any], list[dict[str, Any]]]:
     best: tuple[tuple[Any, ...], ReleasePolicy, dict[str, Any]] | None = None
-    best_by_metric: dict[tuple[str, int, int], tuple[ReleasePolicy, dict[str, Any]]] = {}
+    best_by_metric: dict[
+        tuple[str, int, int], tuple[ReleasePolicy, dict[str, Any]]
+    ] = {}
 
     for policy in _policy_candidates(calibration_cases):
         metrics = _evaluate_policy(policy, calibration_cases)
@@ -401,8 +411,16 @@ def _select_policy(
             -metrics["tp"],
             POLICY_COMPLEXITY[policy.family],
             -policy.score_threshold,
-            -(policy.margin_threshold if policy.margin_threshold is not None else -math.inf),
-            -(policy.dense_threshold if policy.dense_threshold is not None else -math.inf),
+            -(
+                policy.margin_threshold
+                if policy.margin_threshold is not None
+                else -math.inf
+            ),
+            -(
+                policy.dense_threshold
+                if policy.dense_threshold is not None
+                else -math.inf
+            ),
             policy.family,
         )
         if best is None or key < best[0]:
@@ -416,7 +434,9 @@ def _select_policy(
         incumbent_policy, _ = incumbent
         conservative_key = (
             policy.score_threshold,
-            policy.margin_threshold if policy.margin_threshold is not None else -math.inf,
+            policy.margin_threshold
+            if policy.margin_threshold is not None
+            else -math.inf,
             policy.dense_threshold if policy.dense_threshold is not None else -math.inf,
         )
         incumbent_key = (
@@ -525,20 +545,30 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
                 )
                 retrieval_ms = (time.perf_counter_ns() - started) / 1_000_000
                 if not first_stage:
-                    raise RuntimeError(f"first-stage retrieval returned no candidates for {item['case_id']}")
+                    raise RuntimeError(
+                        f"first-stage retrieval returned no candidates for {item['case_id']}"
+                    )
 
                 started = time.perf_counter_ns()
                 reranked = reranker.rerank(query, first_stage)
                 rerank_ms = (time.perf_counter_ns() - started) / 1_000_000
                 if not reranked:
-                    raise RuntimeError(f"reranker returned no candidates for {item['case_id']}")
+                    raise RuntimeError(
+                        f"reranker returned no candidates for {item['case_id']}"
+                    )
 
                 top = reranked[0]
-                second_score = reranked[1].rerank_score if len(reranked) > 1 else top.rerank_score
+                second_score = (
+                    reranked[1].rerank_score
+                    if len(reranked) > 1
+                    else top.rerank_score
+                )
                 top_assertion_id = top.candidate.assertion.assertion_id
                 top_memory_id = assertion_to_memory.get(top_assertion_id)
                 if top_memory_id is None:
-                    raise RuntimeError(f"unknown assertion returned by retrieval: {top_assertion_id}")
+                    raise RuntimeError(
+                        f"unknown assertion returned by retrieval: {top_assertion_id}"
+                    )
                 top3_memory_ids = [
                     assertion_to_memory[item_.candidate.assertion.assertion_id]
                     for item_ in reranked
@@ -558,7 +588,9 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
                         case_id=str(item["case_id"]),
                         split=str(item["split"]),
                         label=label,
-                        expected_memory_id=str(expected) if expected is not None else None,
+                        expected_memory_id=str(expected)
+                        if expected is not None
+                        else None,
                         language=str(item["language"]),
                         category=str(item["category"]),
                         top_memory_id=top_memory_id,
@@ -590,10 +622,13 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             "cases": len(cases),
             "release_labels": len(positives),
             "abstain_labels": len(abstains),
-            "positive_top1_correct": sum(case.positive_top1_correct for case in positives),
+            "positive_top1_correct": sum(
+                case.positive_top1_correct for case in positives
+            ),
             "positive_hit_at_3": sum(case.positive_hit_at_3 for case in positives),
             "positive_top1_accuracy": round(
-                sum(case.positive_top1_correct for case in positives) / len(positives), 6
+                sum(case.positive_top1_correct for case in positives) / len(positives),
+                6,
             ),
             "positive_recall_at_3": round(
                 sum(case.positive_hit_at_3 for case in positives) / len(positives), 6
@@ -605,7 +640,9 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
     query_times = [case.query_embedding_ms for case in results]
     retrieval_times = [case.retrieval_ms for case in results]
     rerank_times = [case.rerank_ms for case in results]
-    peak_cuda = int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None
+    peak_cuda = (
+        int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None
+    )
 
     validation_pass = validation_metrics["fp"] == 0
     status = "PASS" if validation_pass else "FAIL_VALIDATION_FALSE_RELEASE"
@@ -619,7 +656,9 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             "torch_version": str(torch.__version__),
             "cuda_runtime": str(torch.version.cuda),
             "cuda_available": bool(torch.cuda.is_available()),
-            "device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+            "device_name": torch.cuda.get_device_name(0)
+            if torch.cuda.is_available()
+            else None,
         },
         "corpus": {
             "documents": len(payload["documents"]),
@@ -628,7 +667,9 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             "validation": split_summary(validation),
         },
         "timing": {
-            "fixture_population_and_document_embedding_seconds": round(populate_seconds, 4),
+            "fixture_population_and_document_embedding_seconds": round(
+                populate_seconds, 4
+            ),
             "query_embedding_ms": {
                 "p50": _percentile(query_times, 0.50),
                 "p95": _percentile(query_times, 0.95),
