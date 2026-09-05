@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASE 4.0A COMPLETE — PHASE 4.1 COMPLETE — PHASE 4.2 COMPLETE — PHASE 4.3 EXPLICIT MEMORY OPERATIONS ACTIVE**
+**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASE 4.0A COMPLETE — PHASE 4.1 COMPLETE — PHASE 4.2 COMPLETE — PHASE 4.3 OWNER ACCEPTANCE PASS / FINAL CI CLOSURE PENDING**
 
 This file is the operational source of truth for current work. Detailed measured evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` continues to describe only architecture that actually exists and has passed the normal acceptance lifecycle.
 
@@ -177,9 +177,7 @@ Delivered the deterministic encrypted canonical semantic-memory kernel:
 - deterministic exact current queries;
 - privacy-aware content-free forget operation metadata.
 
-Real Windows SQLCipher/DPAPI adapter validation passed on the crash-recovery implementation. Closure record:
-
-`docs/research/STEP_4_PHASE_4_1_IMPLEMENTATION_RESULT.md`
+Real Windows SQLCipher/DPAPI adapter validation passed on the crash-recovery implementation. Closure record: `docs/research/STEP_4_PHASE_4_1_IMPLEMENTATION_RESULT.md`.
 
 No model-driven memory write or semantic auto-injection was introduced.
 
@@ -210,41 +208,47 @@ Validation:
 - LiveContext/assembler/bridge/translation baseline run `33952348876`: PASS;
 - provider capability guard commit `0bf39e7775689d930b92f3e0276edb451ded0a01`, run `33957508425`: Ruff / pytest / Windows Hello / Windows DPAPI PASS.
 
-Closure record:
-
-`docs/research/STEP_4_PHASE_4_2_IMPLEMENTATION_RESULT.md`
+Closure record: `docs/research/STEP_4_PHASE_4_2_IMPLEMENTATION_RESULT.md`.
 
 ---
 
-## Phase 4.3 — ACTIVE
+## Phase 4.3 — OWNER ACCEPTANCE PASS / FINAL CI CLOSURE PENDING
 
 Goal: deliver the first safe useful cross-session memory behavior through **explicit remember / correct / forget / inspect** operations.
 
-Implementation contract:
+Implementation contract: `docs/research/STEP_4_PHASE_4_3_IMPLEMENTATION_DECISIONS.md`.
 
-`docs/research/STEP_4_PHASE_4_3_IMPLEMENTATION_DECISIONS.md`
+Delivered:
 
-Initial scope:
-
-- add `MemoryService` as the sole voice-facing durable mutation facade;
-- exact structured personal memory keys only (`personal / owner / predicate`);
-- explicit TEXT remember/correct first;
-- exact inspect and exact forget;
-- fail closed on zero/ambiguous targets;
-- require the latest canonical USER turn to explicitly authorize each mutation;
+- `MemoryService` as the sole voice-facing durable mutation facade;
+- exact structured personal memory keys (`personal / owner / predicate`);
+- explicit TEXT remember/correct;
+- exact inspect and exact physical forget;
+- fail-closed zero/ambiguous targets;
+- latest canonical USER-turn authorization for each operation;
 - deterministic English/Hindi/Hinglish intent guard;
 - conservative credential/secret rejection;
+- predicate/value grounding against the latest canonical user utterance;
 - provenance from JARVIS session/turn IDs with no copied raw command text;
 - LiveKit function tools following the existing JARVIS tool pattern;
-- tools return success only after the durable operation succeeds;
+- non-interruptible durable mutations;
+- spoken-number canonical predicate normalization using pinned `number-parser==0.3.2`;
 - no fuzzy semantic target selection;
 - no implicit auto-admission;
 - no provider-history mutation requirement;
 - no change to stabilized turn detection.
 
-Persistent memory is rollout-gated during implementation. OFF exposes no memory tools/database. ON requires the approved SQLCipher runtime; no plaintext fallback is allowed.
+Persistent memory remains rollout-gated. OFF exposes no memory tools/database. ON requires the approved SQLCipher runtime with no plaintext fallback.
 
-**Phase 4.3 must pass automated validation and then real owner-PC cross-session voice acceptance before Phase 4.4 begins.**
+Automated validation: **PASS**.
+
+Real owner-PC acceptance: **PASS**, including remember -> cross-process recall -> correct -> corrected cross-process recall -> physical forget -> cross-process absence, implicit statement rejection with durable absence, synthetic credential-memory rejection, and normal wake/Pocket3/provider behavior.
+
+Owner evidence: `docs/research/STEP_4_PHASE_4_3_OWNER_PC_ACCEPTANCE.md`.
+
+Implementation result draft: `docs/research/STEP_4_PHASE_4_3_IMPLEMENTATION_RESULT.md`.
+
+**Phase 4.4 remains blocked until the post-acceptance closure commit passes pytest, Ruff, Windows DPAPI, and Windows Hello.**
 
 ---
 
@@ -253,7 +257,7 @@ Persistent memory is rollout-gated during implementation. OFF exposes no memory 
 1. Phase 4.0A — provenance + neutral security — **COMPLETE**.
 2. Phase 4.1 — canonical memory kernel — **COMPLETE**.
 3. Phase 4.2 — LiveContext + ContextAssembler — **COMPLETE**.
-4. Phase 4.3 — explicit remember/correct/forget/inspect — **ACTIVE**.
+4. Phase 4.3 — explicit remember/correct/forget/inspect — **OWNER ACCEPTANCE PASS; FINAL CI PENDING**.
 5. Phase 4.4 — structured extraction/candidate quarantine; implicit admission remains OFF until measured acceptance.
 6. Phase 4.5 — Qwen semantic retrieval + FTS/RRF/top-3 reranker + abstention/irrelevant-injection calibration.
 7. Phase 4.6 — episodic/reflection learning for meaningful outcomes/decisions/incidents, not raw transcripts.
@@ -272,6 +276,10 @@ Persistent memory is rollout-gated during implementation. OFF exposes no memory 
 - `docs/research/STEP_4_PHASE_4_2_IMPLEMENTATION_DECISIONS.md`;
 - `docs/research/STEP_4_PHASE_4_2_IMPLEMENTATION_RESULT.md`;
 - `docs/research/STEP_4_PHASE_4_3_IMPLEMENTATION_DECISIONS.md`;
+- `docs/research/STEP_4_PHASE_4_3_AUTOMATED_VALIDATION.md`;
+- `docs/research/STEP_4_PHASE_4_3_OWNER_PC_ACCEPTANCE.md`;
+- `docs/research/STEP_4_PHASE_4_3_OWNER_ACCEPTANCE_FAILURE_1.md`;
+- `docs/research/STEP_4_PHASE_4_3_IMPLEMENTATION_RESULT.md`;
 - `docs/research/STEP_4_RETRIEVAL_TECHNOLOGY_DECISION.md`;
 - `docs/research/STEP_4_MEMORY_EXTRACTION_PROVISIONAL_TIE.md`;
 - `docs/research/STEP_4_SQLCIPHER_417_WINDOWS_RESULT.md`;
@@ -295,6 +303,6 @@ Persistent memory is rollout-gated during implementation. OFF exposes no memory 
 
 ## Immediate Next Action
 
-**IMPLEMENT PHASE 4.3 EXPLICIT MEMORY OPERATIONS TEST-FIRST.**
+**RUN PHASE 4.3 POST-ACCEPTANCE CLOSURE CI.**
 
-Start with `MemoryService`, explicit intent/secret guards and canonical source construction; then add LiveKit memory tools and the optional fail-closed persistent runtime. Do not begin implicit extraction or semantic auto-retrieval before real owner acceptance of Phase 4.3.
+The owner-PC acceptance sequence is complete. Do not begin Phase 4.4 until the closure commit passes pytest, Ruff format/lint, Windows DPAPI, and Windows Hello. After that, mark Phase 4.3 COMPLETE and begin Phase 4.4 research-first structured extraction/candidate quarantine.
