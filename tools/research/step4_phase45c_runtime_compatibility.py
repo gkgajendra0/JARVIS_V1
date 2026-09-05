@@ -97,7 +97,9 @@ def _record(assertion_id: str, text: str) -> SemanticAssertionRecord:
     )
 
 
-def _candidate(assertion_id: str, text: str, rank: int, score: float) -> RetrievalCandidate:
+def _candidate(
+    assertion_id: str, text: str, rank: int, score: float
+) -> RetrievalCandidate:
     return RetrievalCandidate(
         assertion=_record(assertion_id, text),
         fused_rank=rank,
@@ -113,8 +115,7 @@ def main() -> None:
     import torch
 
     packages = {
-        name: _package_version(name)
-        for name in (*EXPECTED_VERSIONS, *VISION_PACKAGES)
+        name: _package_version(name) for name in (*EXPECTED_VERSIONS, *VISION_PACKAGES)
     }
     checks: dict[str, bool] = {}
     for package, expected in EXPECTED_VERSIONS.items():
@@ -125,7 +126,9 @@ def main() -> None:
         try:
             importlib.import_module(module_name)
             vision_imports[module_name] = "ok"
-        except Exception as exc:  # acceptance harness must report import incompatibility
+        except (
+            Exception
+        ) as exc:  # acceptance harness must report import incompatibility
             vision_imports[module_name] = f"{type(exc).__name__}: {exc}"
     checks["vision_imports"] = all(value == "ok" for value in vision_imports.values())
 
@@ -168,9 +171,7 @@ def main() -> None:
     checks["embedding_normalized"] = math.isclose(
         float(np.linalg.norm(query_vector)), 1.0, rel_tol=1e-5, abs_tol=1e-5
     ) and all(
-        math.isclose(
-            float(np.linalg.norm(vector)), 1.0, rel_tol=1e-5, abs_tol=1e-5
-        )
+        math.isclose(float(np.linalg.norm(vector)), 1.0, rel_tol=1e-5, abs_tol=1e-5)
         for vector in document_vectors
     )
     checks["dense_camera_top1"] = dense_ids[0] == "camera"
