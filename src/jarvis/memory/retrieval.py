@@ -376,6 +376,7 @@ class SemanticRetrievalService:
                   SELECT source_id
                   FROM memory_source
                   WHERE authority_class IN ({_in_clause(authorities)})
+                    AND sensitivity IN ({_in_clause(sensitivities)})
               )
             ORDER BY lexical_score ASC, current.assertion_id ASC
             LIMIT ?
@@ -384,6 +385,7 @@ class SemanticRetrievalService:
                 fts_query,
                 *sensitivities,
                 *authorities,
+                *sensitivities,
                 self._fts_window,
             ),
         ).fetchall()
@@ -414,6 +416,7 @@ class SemanticRetrievalService:
                       SELECT source_id
                       FROM memory_source
                       WHERE authority_class IN ({_in_clause(authorities)})
+                        AND sensitivity IN ({_in_clause(sensitivities)})
                   )
             ) AS current_rows
             JOIN semantic_assertion_embedding AS embedding
@@ -429,6 +432,7 @@ class SemanticRetrievalService:
             (
                 *sensitivities,
                 *authorities,
+                *sensitivities,
                 contract.model_id,
                 contract.model_revision,
                 contract.dimension,
@@ -479,12 +483,14 @@ class SemanticRetrievalService:
                   SELECT source_id
                   FROM memory_source
                   WHERE authority_class IN ({_in_clause(authorities)})
+                    AND sensitivity IN ({_in_clause(sensitivities)})
               )
             """,
             (
                 *assertion_ids,
                 *sensitivities,
                 *authorities,
+                *sensitivities,
             ),
         ).fetchall()
         records = [semantic_assertion_record_from_row(row) for row in rows]
