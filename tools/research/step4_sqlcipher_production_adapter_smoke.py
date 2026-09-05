@@ -38,7 +38,9 @@ def plaintext_sqlite_blocked(path: Path) -> bool:
 
 def marker_leaks(paths: list[Path]) -> list[str]:
     needle = MARKER.encode("utf-8")
-    return [path.name for path in paths if path.exists() and needle in path.read_bytes()]
+    return [
+        path.name for path in paths if path.exists() and needle in path.read_bytes()
+    ]
 
 
 def main() -> None:
