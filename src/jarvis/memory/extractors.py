@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from pydantic import ValidationError
+
+from jarvis.ai_provider import normalize_ai_provider, require_provider_api_key
 
 from .candidates import MemoryCandidateExtractor, MemoryExtractionProposal
 
@@ -120,17 +121,16 @@ def build_memory_candidate_extractor(
     provider: str,
     model: str,
 ) -> MemoryCandidateExtractor:
-    """Build the configured cloud extractor only when Phase 4.4 is explicitly enabled."""
+    """Build an adapter for the already-selected active production AI provider."""
 
-    normalized_provider = _require_non_empty(provider, name="provider").casefold()
+    normalized_provider = normalize_ai_provider(provider)
     normalized_model = _require_non_empty(model, name="model")
+    api_key = require_provider_api_key(
+        normalized_provider,
+        purpose="memory candidate extraction",
+    )
 
     if normalized_provider == "openai":
-        api_key = os.getenv("OPENAI_API_KEY", "").strip()
-        if not api_key:
-            raise RuntimeError(
-                "OPENAI_API_KEY is required when OpenAI memory candidate extraction is enabled"
-            )
         from openai import AsyncOpenAI
 
         return OpenAIMemoryCandidateExtractor(
@@ -139,11 +139,6 @@ def build_memory_candidate_extractor(
         )
 
     if normalized_provider == "gemini":
-        api_key = os.getenv("GOOGLE_API_KEY", "").strip()
-        if not api_key:
-            raise RuntimeError(
-                "GOOGLE_API_KEY is required when Gemini memory candidate extraction is enabled"
-            )
         from google import genai
 
         return GeminiMemoryCandidateExtractor(
@@ -151,4 +146,4 @@ def build_memory_candidate_extractor(
             model=normalized_model,
         )
 
-    raise ValueError(f"Unsupported memory candidate extraction provider: {provider!r}")
+    raise AssertionError(f"Unhandled AI provider: {normalized_provider}")
