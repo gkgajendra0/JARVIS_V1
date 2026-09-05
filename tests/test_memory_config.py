@@ -36,7 +36,9 @@ def test_invalid_memory_rollout_value_fails_truthfully(
         JarvisConfig.from_environment()
 
 
-def test_memory_rollout_setting_may_be_persisted_without_secrets(tmp_path: Path) -> None:
+def test_memory_rollout_setting_may_be_persisted_without_secrets(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "persisted-machine.json"
     save_machine_settings({"JARVIS_MEMORY_ENABLED": "true"}, path)
     assert load_machine_settings(path) == {"JARVIS_MEMORY_ENABLED": "true"}
