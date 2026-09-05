@@ -2,17 +2,24 @@
 
 ## Status
 
-**EVIDENCE IN PROGRESS — THESE RESULTS DO NOT APPROVE THE FINAL STEP-4 ARCHITECTURE.**
+**RESEARCH BAKE-OFFS COMPLETE FOR FINAL ARCHITECTURE APPROVAL.**
 
 This document records measured evidence for the Step-4 technology decision. Results distinguish between reference-environment measurements and measurements from the real JARVIS Windows machine.
 
 Research harnesses deliberately live under `tools/research`; no runtime memory under `src/jarvis` is implemented by these bake-offs.
 
+Final consolidation:
+
+- `docs/research/STEP_4_FINAL_TECHNOLOGY_DECISION.md`
+- `docs/research/STEP_4_ARCHITECTURE_PROPOSAL.md`
+
+---
+
 ## 1. SQLite temporal + FTS bake-off — COMPLETE
 
 ### Purpose
 
-Test whether plain SQLite can satisfy the important canonical-memory mechanics before adding a temporal database server, graph database, or vector database:
+Test whether SQLite can satisfy the important canonical-memory mechanics before adding a temporal database server, graph database, or vector database:
 
 - current fact lookup;
 - valid-time history;
@@ -67,24 +74,26 @@ Measured latency:
 
 ### SQLite disposition
 
-**KEEP SQLITE + FTS5 AS THE LEADING CANONICAL/LEXICAL FOUNDATION. DO NOT ADD XTDB/QDRANT/GRAPHITI/LANCEDB TO THE RUNTIME WITHOUT MEASURED NEED.**
+**KEEP SQLITE + FTS5 AS THE CANONICAL/LEXICAL FOUNDATION. DO NOT ADD XTDB/QDRANT/GRAPHITI/LANCEDB TO THE RUNTIME WITHOUT MEASURED NEED.**
 
 Reason:
 
-- the required bitemporal semantics were demonstrated on the real machine;
+- required bitemporal semantics were demonstrated on the real machine;
 - lookup/FTS latency is comfortably low at the tested scale;
 - secure-delete is available;
-- the tested forget path removed both canonical and FTS representations;
+- tested forget path removed canonical and FTS representations;
 - WAL matches the expected same-host, low-write-concurrency workload;
-- a heavier database would add operational, security, synchronization and self-diagnostic surface without demonstrated benefit.
+- a heavier database would add operational/security/synchronization surface without demonstrated benefit.
 
-Relevant detailed harness/result:
+Harness:
 
 - `tools/research/step4_memory_sqlite_bakeoff.py`
 
+---
+
 ## 2. Multilingual retrieval-quality bake-off — TECHNOLOGY SELECTION COMPLETE
 
-Detailed consolidated decision:
+Detailed decision:
 
 - `docs/research/STEP_4_RETRIEVAL_TECHNOLOGY_DECISION.md`
 
@@ -120,15 +129,13 @@ BGE was faster and stronger at rank 1, but Qwen used roughly 1 GB less GPU memor
 
 ### Qwen JARVIS-specific optimization
 
-Qwen supports instruction-aware retrieval and Matryoshka dimensions. A JARVIS-memory-specific query instruction plus 256-dimensional output measured:
+A JARVIS-memory-specific query instruction plus 256-dimensional output measured:
 
 - Recall@1: `0.8824`;
 - Recall@3: `1.0000`;
 - MRR: `0.9412`;
 - query p50: ~63 ms;
 - 256-dimensional vectors (4x smaller than 1024-d for derived vector storage/search).
-
-This configuration became the leading semantic retriever.
 
 ### First-stage hybrid fusion
 
@@ -140,18 +147,11 @@ Equal-weight Reciprocal Rank Fusion (RRF) over FTS5 + Qwen-256 measured:
 - end-to-end p50: ~61.6 ms;
 - p95: ~67.0 ms.
 
-A semantic-weight sweep (`1.0, 1.25, 1.5, 1.75, 2.0`) demonstrated that no single global static weight safely resolved every disagreement:
-
-- `1.0–1.75` retained one Hinglish research-rule rank-1 miss;
-- `2.0` fixed that case but lost two lexical rescues.
-
-Disposition: do not overfit a global fusion weight to the small corpus.
+A semantic-weight sweep demonstrated that no single global static weight safely resolved every disagreement, so the design does not overfit a static fusion weight to the small corpus.
 
 ### Second-stage reranking
 
-A mature retrieve/fuse/rerank pattern was then tested using `Qwen/Qwen3-Reranker-0.6B` over only the top fused candidates.
-
-Top-3 reranking measured:
+`Qwen/Qwen3-Reranker-0.6B` over the top 3 fused candidates measured:
 
 - candidate recall: `1.0000`;
 - Recall@1: `1.0000`;
@@ -166,20 +166,12 @@ Top-5 reranking regressed Recall@1 to `0.9412`, so the selected candidate window
 
 ### BF16 versus FP32 reranker precision
 
-A focused stability harness repeated each query in first-stage and reversed candidate order three times.
-
 | Precision | Recall@1 | Recall@3 | MRR | p50 | p95 | Peak CUDA | Exact top-score ties | Order/repeat instability |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | Default BF16 | 1.0000 | 1.0000 | 1.0000 | 68.33 ms | 76.00 ms | ~2.31 GiB | 2 | 0 |
 | Forced FP32 | 1.0000 | 1.0000 | 1.0000 | 62.40 ms | 67.88 ms | ~3.48 GiB | 0 | 0 |
 
-FP32 removed the two exact BF16 ties but cost about 1.17 GiB additional peak CUDA allocation. BF16 remained fully deterministic across repeats and reversed candidate order.
-
-Disposition:
-
-- keep the reranker at model-default BF16;
-- exact reranker-score ties preserve the first-stage RRF rank, then stable memory ID;
-- do not spend ~1.17 GiB additional GPU memory merely to remove deterministic numerical ties.
+BF16 remained fully deterministic across repeats/reversed candidate order. FP32 cost about 1.17 GiB additional peak CUDA allocation merely to remove deterministic exact-score ties.
 
 ### Selected retrieval technology
 
@@ -211,82 +203,239 @@ exact-score tie -> RRF rank -> stable ID
 JARVIS policy/context assembler
 ```
 
-### Retrieval boundaries / non-decisions
+### Boundaries
 
-**No dedicated vector database yet.** The research harness intentionally used exact cosine similarity to isolate model quality. Qdrant/LanceDB/sqlite-vec/another vector engine is added only if later corpus-scale measurements demonstrate need.
+- no dedicated vector database selected;
+- embeddings are derived/rebuildable;
+- no production reranker-score/abstention threshold has been invented;
+- broad automatic semantic prompt injection remains calibration-gated;
+- retrieval never overrides source authority, temporal state, sensitivity, correction, or forget.
 
-**No production reranker-score/abstention threshold yet.** The corpus has only three absent-answer probes, and valid positives can also produce negative reranker logits. `score > 0` is therefore not a valid rule. Confidence/abstention must be calibrated on a larger acceptance corpus with absent, ambiguous, stale, adversarial and multilingual cases.
+---
 
-**Retrieval never establishes truth.** FTS, embeddings, RRF and the reranker only order already-eligible candidates and cannot override JARVIS source authority, correction/forget operations, temporal validity, sensitivity or admission policy.
+## 3. Structured memory-candidate extraction — COMPLETE / PROVISIONAL PROVIDER TIE
 
-Detailed result records include:
+Detailed result:
 
-- `docs/research/STEP_4_RETRIEVAL_BAKEOFF_QWEN_WINDOWS.md`
-- `docs/research/STEP_4_RETRIEVAL_BAKEOFF_QWEN_GPU_WINDOWS.md`
-- `docs/research/STEP_4_RETRIEVAL_BAKEOFF_BGE_GPU_WINDOWS.md`
-- `docs/research/STEP_4_RETRIEVAL_QWEN_OPTIMIZATION_WINDOWS.md`
-- `docs/research/STEP_4_RETRIEVAL_HYBRID_RRF_WINDOWS.md`
-- `docs/research/STEP_4_RETRIEVAL_WEIGHTED_RRF_WINDOWS.md`
-- `docs/research/STEP_4_RETRIEVAL_QWEN_RERANKER_WINDOWS.md`
-- `docs/research/STEP_4_RETRIEVAL_RERANKER_PRECISION_WINDOWS.md`
+- `docs/research/STEP_4_MEMORY_EXTRACTION_PROVISIONAL_TIE.md`
 
-## 3. Structured memory-candidate extraction — pending
+### Fixed corpus
 
-Current research supports using provider-native structured outputs behind JARVIS-owned typed contracts rather than building an ad-hoc parser.
+The 24-case corpus covered:
 
-The next bake-off must compare OpenAI and Gemini on semantic correctness, not merely schema-valid JSON:
+- explicit remember;
+- direct facts;
+- weak preference/transient/style distinctions;
+- mood;
+- historical change;
+- correction;
+- forget;
+- retraction;
+- assistant/web/email poisoning;
+- quoted-memory traps;
+- uncertain future statements;
+- episode decisions;
+- self/incident observations;
+- secrets;
+- stale external-source conflicts;
+- English/Hindi/Hinglish.
 
-- correct candidate classification;
-- false durable-memory candidate rate;
-- missed explicit remember/correct/forget commands;
-- temporal meaning;
-- preservation of uncertainty;
-- refusal to treat assistant/external content as user truth;
-- English/Hindi/Hinglish behaviour;
-- latency and token/cost characteristics.
+### OpenAI Terra full run
 
-Current design direction remains:
+`gpt-5.6-terra` completed all 24 cases:
+
+- schema valid: `24/24`;
+- intent accuracy: `0.9167`;
+- candidate-type accuracy: `0.9167`;
+- durable flag accuracy: `1.0000`;
+- core exact: `0.8750`;
+- false durable writes: `0`;
+- missed durable candidates: `0`;
+- explicit-operation recall: `0.8750`;
+- untrusted-source handling: `1.0000`;
+- secret policy: `1.0000`;
+- p50 latency: ~2136.6 ms;
+- p95 latency: ~3389.3 ms.
+
+The three non-exact cases were taxonomy/lifecycle-label disagreements; they did not create unsafe durable writes on the corpus.
+
+### Gemini shared evidence
+
+`gemini-3.8-flash` successfully completed the first five shared/evaluable cases before free-tier quota blocked the remaining 19.
+
+On the same five shared cases:
+
+- Terra: `5/5` core-exact;
+- Gemini: `5/5` core-exact;
+- false durable writes: `0` for both;
+- missed durable candidates: `0` for both.
+
+### Disposition
+
+**PROVISIONAL QUALITY TIE ON SHARED EVIDENCE.**
+
+This is not a claim that Gemini passed the full 24-case suite. It means provider selection remains swappable and does not block the architecture.
+
+Selected extraction architecture:
 
 ```text
 accepted text
  -> MemoryCandidateExtractor protocol
-   -> OpenAI native structured-output adapter
-   -> Gemini native structured-output adapter
- -> Pydantic-validated candidate
+ -> provider-native structured output
+ -> explicit Pydantic validation
+ -> MemoryCandidate
  -> JARVIS MemoryPolicy
 ```
 
-Schema validity never implies factual truth.
+Provider output is proposal only. Schema validity never implies truth.
 
-## 4. Encryption / Windows packaging — pending owner-machine spike
+---
 
-SQLCipher remains the leading whole-database encryption family, but the Python/Windows packaging decision is not approved.
+## 4. SQLCipher + Windows DPAPI encryption/package gate — COMPLETE
 
-The Windows spike must compare a vetted/official build path, dependency provenance, DPAPI-wrapped random DB key handling, backup/recovery, wrong-key/corruption behaviour, FTS/vector leakage and reliable forgetting before any real personal memory is stored.
+Detailed current-engine result:
 
-## 5. Self-knowledge / SBOM — pending spike
+- `docs/research/STEP_4_SQLCIPHER_417_WINDOWS_RESULT.md`
 
-Use maintained `cyclonedx-bom` tooling rather than a deprecated GitHub Action for generated dependency inventory.
+### Selected current engine/build direction
 
-A JARVIS-specific capability registry is still necessary because an SBOM cannot express product semantics such as capabilities, authority boundaries, diagnostics, known limitations or runtime health.
+- SQLCipher `4.17.0 community`;
+- SQLite baseline `3.53.3`;
+- SQLCipher source commit `810db22f575ee7cf94ea96a3e91622b5fcece3dc`;
+- `sqlcipher3` wrapper commit `14fc263`;
+- Python 3.11 x64 Windows;
+- JARVIS package version `0.6.2+jarvis.sqlcipher4170`;
+- random 32-byte database key;
+- Windows DPAPI user-scope + purpose binding.
 
-The spike must verify generated CycloneDX inventory + capability-registry ownership and how declared architecture differs from learned operational observations.
+First substantive CI build produced:
 
-## 6. Remaining evidence required before “research complete”
+`sqlcipher3-0.6.2+jarvis.sqlcipher4170-cp311-cp311-win_amd64.whl`
 
-Research is complete only after all of the following are measured or explicitly dispositioned:
+SHA-256 for that exact artifact:
+
+`a2eb76cdb067df0d1354b29a8b2dca046b148482b11659e6c4df40c40031489b`.
+
+### Security/functional assertions — PASS
+
+The current-engine harness passed:
+
+- SQLCipher active;
+- DPAPI round trip;
+- wrong-purpose rejection;
+- raw key absent from sealed blob;
+- FTS5 English/Hindi;
+- canonical write/read;
+- memory temp store;
+- secure delete;
+- WAL;
+- cipher integrity;
+- no synthetic plaintext/key leakage in DB/WAL/SHM/key artifacts;
+- standard SQLite without key blocked;
+- wrong SQLCipher key blocked;
+- same-user/same-machine encrypted backup/restore;
+- deliberate ciphertext corruption detected;
+- forget removes canonical + FTS representations;
+- final leak scan clean;
+- enhanced `cipher_memory_security=ON` subprocess probe passed on 4.17.0.
+
+### Disposition
+
+**KEEP SQLCIPHER 4.17.0 + DPAPI.**
+
+Do not use the older published Windows wheel as the production default merely because installation is easier. Use the pinned/reproducible current-engine JARVIS build path and retain/hash-verify accepted artifacts.
+
+Portable disaster recovery remains explicitly deferred; the proven local key model is same-user/same-machine.
+
+---
+
+## 5. Self-knowledge / CycloneDX + Capability Registry — COMPLETE
+
+Detailed result:
+
+- `docs/research/STEP_4_SELF_KNOWLEDGE_SBOM_WINDOWS_RESULT.md`
+
+Successful Windows research run measured:
+
+- CycloneDX specification: `1.7`;
+- `cyclonedx-bom==7.3.1` tool path;
+- target-runtime SBOM components: `92`;
+- research capability declarations: `8`;
+- authoritative source fingerprints: `45`;
+- failed validation checks: `[]`.
+
+### Selected self-knowledge authority model
+
+```text
+current runtime/config
+    = current configured truth
+
+accepted repo architecture/ADR/policy/code/tests
+    = declared architecture truth
+
+JARVIS Capability Registry
+    = stable product capability semantics/references
+
+CycloneDX SBOM
+    = generated dependency evidence
+
+verified incident/episode memory
+    = learned historical evidence
+
+learned observation/inference
+    = lower-authority evidence only
+```
+
+### Disposition
+
+**KEEP CYCLONEDX 1.7 + MAINTAINED GENERATOR + JARVIS-OWNED CAPABILITY REGISTRY.**
+
+Do not build a custom dependency scanner/SBOM format or let an LLM-generated capability list become truth. Self-repair/self-modification remains outside Step 4.
+
+---
+
+## 6. Async encrypted DB access research — DISPOSITIONED
+
+Normal `aiosqlite.connect()` constructs a standard-library `sqlite3` connection and therefore is not selected for the SQLCipher production store.
+
+The final architecture uses a thin JARVIS thread-affinity async adapter over the proven synchronous `sqlcipher3` DB-API:
+
+- one serialized writer connection on a dedicated single worker;
+- initially one read/retrieval connection on its own worker;
+- short transactions;
+- WAL;
+- extraction/embedding/reranking outside DB transactions.
+
+The adapter owns scheduling/thread affinity only, not database semantics.
+
+No ORM or new async-SQLCipher framework is introduced without measured value.
+
+---
+
+## 7. Research closure checklist
 
 - [x] requirements and lifecycle research;
 - [x] memory-framework landscape research;
-- [x] first SQLite bitemporal correctness spike;
-- [x] first SQLite/FTS reference latency spike;
-- [x] rerun SQLite/FTS spike on the actual JARVIS Windows environment;
-- [x] multilingual retrieval-quality/model/fusion/reranker technology selection;
-- [ ] larger abstention/confidence calibration (acceptance/hardening gate; not blocking retrieval technology selection);
-- [ ] OpenAI/Gemini memory-candidate extraction bake-off;
-- [ ] SQLCipher/DPAPI Windows encryption/package spike;
-- [ ] CycloneDX SBOM + JARVIS capability-registry self-knowledge spike;
-- [ ] consolidate all measured results into the final Step-4 technology decision;
-- [ ] prepare final architecture proposal for human approval.
+- [x] SQLite bitemporal correctness spike;
+- [x] SQLite/FTS reference + real-machine latency spike;
+- [x] multilingual retrieval/model/fusion/reranker technology selection;
+- [x] OpenAI/Gemini memory-candidate extraction bake-off and provider tie disposition;
+- [x] SQLCipher/DPAPI Windows encryption architecture proof;
+- [x] current SQLCipher 4.17 reproducible Windows build/security gate;
+- [x] CycloneDX SBOM + JARVIS Capability Registry self-knowledge spike;
+- [x] async encrypted DB boundary disposition;
+- [x] consolidated final Step-4 technology decision;
+- [x] final architecture proposal prepared for human approval;
+- [ ] larger abstention/confidence calibration — implementation/acceptance gate, not technology-selection blocker;
+- [ ] implicit auto-admission precision threshold — implementation/acceptance gate, default remains OFF;
+- [ ] exact retained custom SQLCipher 4.17 artifact rerun on owner PC — implementation packaging acceptance;
+- [ ] human architecture approval;
+- [ ] production implementation;
+- [ ] real-human acceptance;
+- [ ] documentation reconciliation/ADR/protected-main merge.
 
-No production Step-4 memory implementation begins before the final technology decision and architecture approval.
+## Immediate disposition
+
+**STEP-4 TECHNOLOGY RESEARCH IS COMPLETE. THE NEXT LIFECYCLE GATE IS HUMAN APPROVAL OF `STEP_4_ARCHITECTURE_PROPOSAL.md`.**
+
+No production Step-4 memory implementation begins before that approval.
