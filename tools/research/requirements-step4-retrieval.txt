@@ -3,3 +3,4 @@
 # demonstrates a material retrieval-quality benefit.
 sentence-transformers==6.0.1
 transformers==5.16.1
+psutil==7.2.2
