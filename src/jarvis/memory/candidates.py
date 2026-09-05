@@ -300,7 +300,9 @@ class MemoryCandidateCoordinator:
     ) -> MemoryCandidateProcessingResult:
         """Compatibility wrapper; runtime integration uses the exact-turn API."""
 
-        return await self.consider_user_turn(conversation, latest_user_turn(conversation))
+        return await self.consider_user_turn(
+            conversation, latest_user_turn(conversation)
+        )
 
     async def consider_user_turn(
         self,
@@ -313,10 +315,15 @@ class MemoryCandidateCoordinator:
             raise TypeError("conversation must be a ConversationSession")
         if conversation.session_id != self._quarantine.session_id:
             raise ValueError("conversation does not own this candidate quarantine")
-        if not isinstance(turn, ConversationTurn) or turn.role is not ConversationRole.USER:
+        if (
+            not isinstance(turn, ConversationTurn)
+            or turn.role is not ConversationRole.USER
+        ):
             raise TypeError("turn must be a canonical USER ConversationTurn")
         if turn not in conversation.turns:
-            raise ValueError("candidate source turn does not belong to this conversation")
+            raise ValueError(
+                "candidate source turn does not belong to this conversation"
+            )
 
         if is_explicit_memory_control_text(turn.text):
             return MemoryCandidateProcessingResult(
