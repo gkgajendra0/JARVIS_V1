@@ -5,10 +5,8 @@ JARVIS V1 is a clean implementation of a personal, voice-first JARVIS assistant.
 The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARVIS
 V1 does not import it or depend on it at runtime.
 
-Steps 1, 2, and 2.5 are accepted. Step 2.5 established the vision sensor and active
-target-tracking foundation. Step 3 — Identity, Graduated Trust, Authority, and
-Observability Foundation — is next after the development-supervisor workflow is
-accepted.
+Steps 1, 2, 2.5, and 3 are accepted. Step 4 — Live Context and Personal Memory — is
+active. See `docs/CURRENT_PLAN.md` for the current implementation phase.
 
 ## Setup
 
@@ -19,12 +17,36 @@ winget install LiveKit.LiveKitCLI
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
-$env:OPENAI_API_KEY = "your-api-key"
 ```
 
-The API key must stay local. Do not commit `.env` or paste the key into source code.
-The application reads process environment variables directly; `.env.example` is a
-reference and `.env` is not loaded automatically.
+Production JARVIS uses **one active cloud-AI provider/account at a time**. Configure
+that provider once, then keep only its required API key available. For example, with
+Gemini:
+
+```powershell
+$env:JARVIS_AI_PROVIDER = "gemini"
+$env:GOOGLE_API_KEY = "your-google-ai-studio-key"
+```
+
+Or with OpenAI:
+
+```powershell
+$env:JARVIS_AI_PROVIDER = "openai"
+$env:OPENAI_API_KEY = "your-openai-api-key"
+```
+
+Different capability roles may use different model IDs within the selected provider
+family (for example realtime voice versus structured extraction), but production
+subsystems may not independently select a second cloud-AI provider. Research bake-offs
+may compare providers without changing this production rule.
+
+API keys must stay local. Do not commit `.env` or paste keys into source code. Normal
+machine settings are persisted by `jarvis-setup`; secrets remain in the Windows
+user/process environment. `.env.example` is a reference and `.env` is not loaded
+automatically.
+
+Existing installations that still contain `JARVIS_REALTIME_PROVIDER` remain readable
+for migration compatibility. New configuration must use `JARVIS_AI_PROVIDER`.
 
 ## Run the Step-0 baseline
 
@@ -38,40 +60,22 @@ python -m jarvis
 lk agent console src/jarvis/voice/entrypoint.py
 ```
 
-The local console uses the computer microphone and speakers. OpenAI remains the
-default provider. For cost-optimized development with Gemini Live, configure:
+The local console uses the computer microphone and speakers. Voice mode fails before
+session start if the active provider's API key is absent. JARVIS does not silently
+fall back between OpenAI and Gemini.
+
+## Run the production wake runtime
+
+Normal installed-machine startup is:
 
 ```powershell
-$env:JARVIS_REALTIME_PROVIDER = "gemini"
-$env:GOOGLE_API_KEY = "your-google-ai-studio-key"
-lk agent console src/jarvis/voice/entrypoint.py
-```
-
-Optional settings are documented in `.env.example`. Voice mode fails before session
-start if the selected provider's API key is absent. Provider selection is explicit;
-JARVIS does not silently fall back between OpenAI and Gemini.
-
-## Run the Step-2 wake runtime
-
-Step 2 uses one roomless local microphone/speaker runtime. It requires a trained
-LiveKit-compatible `JARVIS` ONNX classifier; no unverified model is committed.
-
-```powershell
-$env:JARVIS_WAKE_MODEL_PATH = "C:\\path\\to\\jarvis.onnx"
-$env:JARVIS_AUDIO_INPUT_DEVICE = "index:57"
-$env:JARVIS_AUDIO_OUTPUT_DEVICE = "index:45"
-$env:JARVIS_REALTIME_PROVIDER = "gemini"
-$env:GOOGLE_API_KEY = "your-google-ai-studio-key"
 jarvis-voice
 ```
 
-Use a unique device name or `index:<PortAudio index>` from the local
-`rtc.MediaDevices` enumeration. Indices shown by `lk agent console --list-devices` use
-a different enumeration and must not be copied into Step-2 configuration. Explicit
-indices are necessary when Windows exposes the same device name through multiple host
-APIs and may need to be rechecked after audio-driver or device changes.
-Idle audio remains local; the selected realtime provider starts only after an accepted
-wake detection. `lk agent console` remains available as a Step-1 diagnostic harness.
+Run `jarvis-setup` to persist the wake model, stable audio selectors, active cloud-AI
+provider, and other non-secret machine settings. Idle audio remains local; cloud
+realtime conversation begins only after an accepted wake detection. `lk agent console`
+remains available as a diagnostic harness.
 
 ## Run the development supervisor
 
@@ -112,9 +116,8 @@ ruff check .
 ruff format --check .
 ```
 
-Step 2 is accepted after automated validation and successful real Windows wake,
-conversation, idle, and re-wake use. Extended TV/endurance/device-failure trials were
-explicitly waived and remain documented as unverified residual risks.
+Hardware-dependent owner-PC acceptance is recorded under `docs/research/` rather than
+being inferred from CI.
 
 ## Documentation
 
