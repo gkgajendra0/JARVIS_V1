@@ -168,7 +168,7 @@ class ProviderCall(BaseModel):
 def _load_cases(path: Path) -> list[dict[str, Any]]:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, list):
-        raise ValueError("case corpus must be a JSON list")
+        raise TypeError("case corpus must be a JSON list")
     return value
 
 
@@ -217,7 +217,7 @@ def _call_openai(client: Any, model: str, case: dict[str, Any]) -> ProviderCall:
             if usage
             else None,
         )
-    except Exception as exc:  # research harness records failures instead of hiding them
+    except Exception as exc:  # noqa: BLE001 - provider SDK failures are benchmark evidence
         return ProviderCall(
             latency_ms=(time.perf_counter_ns() - started) / 1_000_000,
             error=f"{type(exc).__name__}: {exc}",
@@ -251,7 +251,7 @@ def _call_gemini(client: Any, model: str, case: dict[str, Any]) -> ProviderCall:
                 int(getattr(usage, "total_output_tokens", 0) or 0) if usage else None
             ),
         )
-    except Exception as exc:  # research harness records failures instead of hiding them
+    except Exception as exc:  # noqa: BLE001 - provider SDK failures are benchmark evidence
         return ProviderCall(
             latency_ms=(time.perf_counter_ns() - started) / 1_000_000,
             error=f"{type(exc).__name__}: {exc}",

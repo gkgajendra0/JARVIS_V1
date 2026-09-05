@@ -254,7 +254,7 @@ def main() -> None:
                 first_stage_rankings=first_stage_rankings,
                 doc_by_id=doc_by_id,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - one precision failure is recorded as PARTIAL
             output["status"] = "PARTIAL"
             output["configurations"][label] = {  # type: ignore[index]
                 "error_type": type(exc).__name__,

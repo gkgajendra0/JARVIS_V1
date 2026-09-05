@@ -90,7 +90,7 @@ def negative_wrong_key_open(path: Path) -> bool:
     try:
         key_connection(conn, wrong)
         conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
-    except Exception:
+    except Exception:  # noqa: BLE001 - any keyed-open failure proves the wrong key was blocked
         return True
     finally:
         conn.close()
@@ -265,8 +265,8 @@ def main() -> None:
     cipher_status = None
     try:
         cipher_status = scalar(conn, "PRAGMA cipher_status")
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 - cipher_status is optional across SQLCipher builds
+        cipher_status = None
 
     integrity_before = [row[0] for row in conn.execute("PRAGMA cipher_integrity_check")]
 
@@ -314,12 +314,12 @@ def main() -> None:
             if not corruption_detected:
                 try:
                     corrupted.execute("SELECT sum(length(body)) FROM memory").fetchone()
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - any DB failure is valid corruption detection evidence
                     corruption_detected = True
                     corruption_detail = type(exc).__name__
         finally:
             corrupted.close()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - open/integrity failure is valid corruption evidence
         corruption_detected = True
         corruption_detail = type(exc).__name__
 

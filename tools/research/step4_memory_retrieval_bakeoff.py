@@ -549,9 +549,7 @@ def main() -> None:
     for alias in requested:
         try:
             output["models"][alias] = run_model(MODELS[alias], device)  # type: ignore[index]
-        except (
-            Exception
-        ) as exc:  # report one model failure without hiding other evidence
+        except Exception as exc:  # noqa: BLE001 - one model failure must not erase other benchmark evidence
             output["status"] = "PARTIAL"
             output["models"][alias] = {  # type: ignore[index]
                 "model": MODELS[alias],
