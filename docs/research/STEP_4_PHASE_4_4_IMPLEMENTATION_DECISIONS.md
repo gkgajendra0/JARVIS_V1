@@ -10,7 +10,9 @@
 
 **ACTIVE CLOUD PROVIDER: GEMINI.**
 
-**FINAL EXTRACTION MODEL: NOT YET SELECTED.**
+**SELECTED EXTRACTION MODEL: `gemini-3.5-flash-lite`.**
+
+**NEXT GATE: NARROW OWNER-PC PRODUCTION-PATH ACCEPTANCE.**
 
 Date refreshed: 2026-09-05
 
@@ -63,13 +65,11 @@ Local ML and model-artifact downloads are outside this rule because they do not 
 
 ---
 
-## 3. Gemini extraction-model research refresh
+## 3. Gemini extraction-model selection
 
-### Primary candidate: `gemini-3.5-flash-lite`
+### Selected: `gemini-3.5-flash-lite`
 
-Google documents Gemini 3.5 Flash-Lite as stable GA, low-latency and cost-effective, optimized for high-throughput work, subagent tasks, document parsing and simple data extraction. Structured outputs are supported.
-
-That matches Phase 4.4's narrow classification/extraction job better than a long-horizon reasoning model.
+Google documents Gemini 3.5 Flash-Lite as a stable GA, low-latency and cost-effective model optimized for high-throughput/simple data-processing work. Structured outputs are supported.
 
 Current pricing snapshot:
 
@@ -77,31 +77,46 @@ Current pricing snapshot:
 - paid input: $0.30 / 1M tokens;
 - paid output including thinking tokens: $2.50 / 1M tokens.
 
-No shutdown date is currently announced.
+Owner-PC production-aligned evidence on 2026-09-05:
 
-Disposition: **TEST FIRST.**
+- 14/14 provider-eligible cases schema-valid;
+- 100% intent accuracy;
+- 100% candidate-type accuracy;
+- 100% durable-flag accuracy;
+- 100% core exact accuracy;
+- zero false durable proposals;
+- zero missed durable candidates;
+- English 10/10, Hindi 1/1, Hinglish 3/3 core exact;
+- p50 latency 1,635.857 ms;
+- p95/max latency 2,414.6174 ms;
+- 6,748 input + 1,293 output tokens across the 14 calls;
+- reviewed subject/predicate/value/temporal payloads were sufficient for non-authoritative quarantine evidence.
+
+At the current paid price snapshot, the full 14-call run costs approximately $0.00526 before any free-tier allowance.
+
+Disposition: **SELECT.**
+
+Full evidence record:
+
+- `docs/research/STEP_4_PHASE_4_4_GEMINI_MODEL_SELECTION.md`
 
 References:
 
 - https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
 - https://ai.google.dev/gemini-api/docs/pricing
-- https://ai.google.dev/gemini-api/docs/deprecations
+- https://ai.google.dev/gemini-api/docs/structured-output
 
-### Escalation candidate: `gemini-3.8-flash`
+### Escalation reserve: `gemini-3.8-flash`
 
-Google documents Gemini 3.8 Flash as its most intelligent stable Flash model, aimed at long-horizon software engineering, autonomous agents and complex enterprise workflows. Structured outputs are supported.
+Gemini 3.8 Flash remains a quality-ceiling escalation model only if later real-world acceptance exposes a material Flash-Lite extraction defect.
 
-It is retained as a quality ceiling only if Flash-Lite materially fails the fixed safety/correctness corpus.
+The staged bake-off explicitly stops when Flash-Lite satisfies the required safety/correctness bar. That stop condition was met, so 3.8 was not run merely to create a redundant comparison.
 
-Disposition: **ESCALATION ONLY.**
-
-Reference:
-
-- https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
+Disposition: **DO NOT RUN NOW.**
 
 ### Excluded new commitment: `gemini-3.1-flash-lite`
 
-Google lists an earliest shutdown date of May 7, 2027 and recommends `gemini-3.5-flash-lite` as the replacement.
+Google lists `gemini-3.5-flash-lite` as the replacement for 3.1 Flash-Lite.
 
 Disposition: **DO NOT START A NEW PHASE-4.4 PRODUCTION COMMITMENT ON 3.1 LITE.**
 
@@ -206,6 +221,8 @@ The extractor never authors JARVIS provenance or authority. JARVIS attaches cano
 
 Model confidence is evidence only. No confidence threshold is selected in Phase 4.4.
 
+The full payload review observed lexical variation such as `subject=I`, `subject=user`, `subject=we`, plus occasional verbose predicates/values. This is non-blocking in Phase 4.4 because the proposal is quarantine evidence only. Any future implicit durable-admission design must separately define deterministic canonical subject/predicate normalization before storage; provider wording must not silently establish canonical keys.
+
 ---
 
 ## 8. Quarantine semantics
@@ -258,15 +275,17 @@ Enabling requires all of:
 - canonical `JARVIS_AI_PROVIDER` configured through normal JARVIS provider policy;
 - explicit `JARVIS_MEMORY_CANDIDATE_EXTRACTION_MODEL`.
 
-There is **no independent extraction-provider setting** and no guessed default extraction model.
+There is **no independent extraction-provider setting**.
 
-Automatic durable admission remains a separate future policy decision and stays OFF even after an extraction model is selected.
+The accepted Gemini model value is now `gemini-3.5-flash-lite`; the config field remains explicit so a future whole-provider migration cannot silently inherit a stale model ID from the wrong provider family.
+
+Automatic durable admission remains a separate future policy decision and stays OFF.
 
 ---
 
 ## 11. Production-aligned bake-off
 
-The fixed research corpus is retained, but the harness mirrors actual production gates and reuses the production schema/prompt.
+The fixed research corpus mirrors actual production gates and reuses the production schema/prompt.
 
 `tools/research/step4_memory_extraction_bakeoff.py`:
 
@@ -283,22 +302,24 @@ The fixed research corpus is retained, but the harness mirrors actual production
 
 `tests/test_memory_extraction_research_contract.py` protects this alignment in CI.
 
+The first two-case Flash-Lite smoke exposed ambiguous intent semantics while preserving valid structure. Following Google structured-output guidance, the production prompt was clarified without changing the model, corpus or expected answers. The identical rerun passed 2/2, then the full provider-eligible corpus passed 14/14 core exact.
+
 ---
 
-## 12. Staged active-provider validation
+## 12. Staged active-provider validation — COMPLETE
 
-The old requirement for a comparable OpenAI-versus-Gemini production bake-off is superseded by ADR-015 and the user's one-provider requirement.
+The old requirement for a comparable OpenAI-versus-Gemini production bake-off is superseded by ADR-015 and the one-provider requirement.
 
-Current validation sequence:
+Completed sequence:
 
 1. test `gemini-3.5-flash-lite` on the production-aligned corpus;
 2. require zero schema/provider failures and zero false durable proposals on expected non-durable provider-eligible cases;
-3. human-review all core semantic mismatches, especially correction/retraction/uncertainty and Hindi/Hinglish cases;
-4. measure latency and tokens without inventing an arbitrary latency threshold beforehand;
-5. if Flash-Lite satisfies the safety/correctness bar, select it and stop;
-6. only if Lite materially fails, run the identical corpus on `gemini-3.8-flash` and compare.
+3. inspect semantic payloads, especially correction/retraction/uncertainty and Hindi/Hinglish cases;
+4. measure latency and tokens without inventing an arbitrary threshold;
+5. select Flash-Lite because it satisfies the safety/correctness bar;
+6. stop without spending quota on Gemini 3.8 Flash.
 
-This selection is intentionally "smallest sufficient model inside the active provider," not "strongest model available anywhere."
+Selection philosophy remains **smallest sufficient model inside the active provider**, not strongest model available anywhere.
 
 ---
 
@@ -329,6 +350,8 @@ Coverage protects:
 - semantic correction remaining provider-eligible;
 - single active cloud-provider/credential ownership through the repo-level architecture guard.
 
+Latest integrated pre-acceptance CI commit `c3c0dbee16af560f775cf71c1961bd9360f693a9`, Code Quality run `33968527219`: pytest / Ruff / Windows DPAPI / Windows Hello all PASS.
+
 ---
 
 ## 15. Remaining Phase-4.4 gates
@@ -337,13 +360,13 @@ Do not mark Phase 4.4 complete yet.
 
 Remaining work:
 
-1. keep the documented branch green in normal CI;
-2. run a 2-case owner-PC `gemini-3.5-flash-lite` smoke under the existing Google API project;
-3. if smoke succeeds, run the full production-aligned provider-eligible corpus on Flash-Lite;
-4. select Flash-Lite if the safety/correctness bar passes, otherwise escalate to Gemini 3.8 Flash using the identical corpus;
-5. run narrow owner-PC production-path acceptance with candidate extraction enabled only after the model choice is defensible;
-6. verify candidate quarantine works, no candidate becomes canonical SQLCipher memory, and normal wake/Pocket3/provider behavior remains unchanged;
-7. write Phase-4.4 implementation/acceptance closure;
+1. run narrow owner-PC production-path acceptance with `gemini-3.5-flash-lite` enabled under the existing Gemini provider/account;
+2. prove normal wake/Pocket3/Gemini conversation remains stable;
+3. prove accepted USER turns can create session-local quarantine candidates and transient/non-durable turns are dropped;
+4. prove explicit Phase-4.3 memory controls remain on their governed path;
+5. verify no implicit candidate becomes canonical SQLCipher memory;
+6. verify session close disposes quarantine and normal return-to-wake remains intact;
+7. write Phase-4.4 owner acceptance + implementation closure;
 8. only then begin Phase 4.5 semantic retrieval.
 
 Phase 4.5 remains blocked until these gates are complete.
