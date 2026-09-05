@@ -14,7 +14,6 @@ import itertools
 import json
 import math
 import sqlite3
-import statistics
 import tempfile
 import time
 from collections import Counter, defaultdict
@@ -23,8 +22,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
-import numpy as np
 
 from jarvis.memory.assertions import SemanticAssertionDraft, SemanticAssertionRecord
 from jarvis.memory.embeddings import SemanticEmbeddingStore
@@ -302,13 +299,15 @@ def _percentile(values: list[float], fraction: float) -> float | None:
 
 
 def _thresholds(values: Iterable[float]) -> tuple[float, ...]:
-    ordered = sorted(set(float(value) for value in values if math.isfinite(value)))
+    ordered = sorted({float(value) for value in values if math.isfinite(value)})
     if not ordered:
         raise ValueError("cannot derive thresholds from an empty score set")
     scale = max(1.0, max(abs(value) for value in ordered))
     epsilon = scale * 1e-6
     candidates = [ordered[0] - epsilon]
-    candidates.extend((left + right) / 2.0 for left, right in zip(ordered, ordered[1:]))
+    candidates.extend(
+        (left + right) / 2.0 for left, right in itertools.pairwise(ordered)
+    )
     candidates.append(ordered[-1] + epsilon)
     return tuple(candidates)
 
