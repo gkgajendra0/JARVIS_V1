@@ -80,7 +80,7 @@ def insert_assertion(
     return int(cursor.lastrowid)
 
 
-def test_initial_migration_creates_versioned_canonical_schema() -> None:
+def test_migrations_create_versioned_canonical_and_embedding_schema() -> None:
     conn = connection()
     runner = MemoryMigrationRunner(
         clock=lambda: datetime(2026, 9, 5, 5, 30, tzinfo=UTC)
@@ -88,17 +88,19 @@ def test_initial_migration_creates_versioned_canonical_schema() -> None:
 
     version = runner.apply(conn)
 
-    assert version == 1
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
+    assert version == 2
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
     ledger = conn.execute(
-        "SELECT version, name, length(sha256), applied_at FROM jarvis_schema_migration"
-    ).fetchone()
-    assert ledger == (
-        1,
-        "0001_initial.sql",
-        64,
-        "2026-09-05T05:30:00Z",
-    )
+        """
+        SELECT version, name, length(sha256), applied_at
+        FROM jarvis_schema_migration
+        ORDER BY version
+        """
+    ).fetchall()
+    assert ledger == [
+        (1, "0001_initial.sql", 64, "2026-09-05T05:30:00Z"),
+        (2, "0002_semantic_retrieval.sql", 64, "2026-09-05T05:30:00Z"),
+    ]
     tables = {
         row[0]
         for row in conn.execute(
@@ -110,6 +112,7 @@ def test_initial_migration_creates_versioned_canonical_schema() -> None:
         "semantic_assertion",
         "memory_operation",
         "semantic_assertion_fts",
+        "semantic_assertion_embedding",
         "current_semantic_assertion",
     } <= tables
 
@@ -118,12 +121,12 @@ def test_migration_is_idempotent_and_checksum_protected() -> None:
     conn = connection()
     migrations = discover_memory_migrations()
     runner = MemoryMigrationRunner(migrations)
-    assert runner.apply(conn) == 1
-    assert runner.apply(conn) == 1
+    assert runner.apply(conn) == 2
+    assert runner.apply(conn) == 2
 
     tampered = replace(migrations[0], sha256="0" * 64)
     with pytest.raises(MemoryMigrationIntegrityError, match="checksum"):
-        MemoryMigrationRunner((tampered,)).apply(conn)
+        MemoryMigrationRunner((tampered, migrations[1])).apply(conn)
 
 
 def test_newer_database_and_ledger_drift_fail_closed() -> None:
@@ -135,7 +138,7 @@ def test_newer_database_and_ledger_drift_fail_closed() -> None:
     with pytest.raises(MemorySchemaTooNewError):
         runner.apply(conn)
 
-    conn.execute("PRAGMA user_version = 1")
+    conn.execute("PRAGMA user_version = 2")
     conn.execute("DELETE FROM jarvis_schema_migration")
     with pytest.raises(MemoryMigrationIntegrityError, match="ledger count"):
         runner.apply(conn)
@@ -205,6 +208,89 @@ def test_fts_triggers_track_insert_update_delete_and_rebuild() -> None:
         ).fetchone()[0]
         == 0
     )
+
+
+def test_embedding_row_cascades_on_canonical_assertion_delete() -> None:
+    conn = connection()
+    MemoryMigrationRunner().apply(conn)
+    insert_source(conn)
+    insert_assertion(conn)
+    payload = bytes(256 * 4)
+
+    conn.execute(
+        """
+        INSERT INTO semantic_assertion_embedding (
+            assertion_id,
+            model_id,
+            model_revision,
+            dimension,
+            dtype,
+            byte_order,
+            normalized,
+            content_sha256,
+            embedding_blob,
+            created_at,
+            updated_at
+        ) VALUES (?, ?, ?, 256, 'float32', 'little', 1, ?, ?, ?, ?)
+        """,
+        (
+            "assertion-1",
+            "Qwen/Qwen3-Embedding-0.6B",
+            "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+            "a" * 64,
+            payload,
+            "2026-09-05T05:00:00Z",
+            "2026-09-05T05:00:00Z",
+        ),
+    )
+    assert (
+        conn.execute("SELECT count(*) FROM semantic_assertion_embedding").fetchone()[0]
+        == 1
+    )
+
+    conn.execute(
+        "DELETE FROM semantic_assertion WHERE assertion_id = ?", ("assertion-1",)
+    )
+
+    assert (
+        conn.execute("SELECT count(*) FROM semantic_assertion_embedding").fetchone()[0]
+        == 0
+    )
+
+
+def test_embedding_schema_rejects_wrong_blob_length() -> None:
+    conn = connection()
+    MemoryMigrationRunner().apply(conn)
+    insert_source(conn)
+    insert_assertion(conn)
+
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """
+            INSERT INTO semantic_assertion_embedding (
+                assertion_id,
+                model_id,
+                model_revision,
+                dimension,
+                dtype,
+                byte_order,
+                normalized,
+                content_sha256,
+                embedding_blob,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, 256, 'float32', 'little', 1, ?, ?, ?, ?)
+            """,
+            (
+                "assertion-1",
+                "Qwen/Qwen3-Embedding-0.6B",
+                "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+                "a" * 64,
+                bytes(4),
+                "2026-09-05T05:00:00Z",
+                "2026-09-05T05:00:00Z",
+            ),
+        )
 
 
 def test_fts_and_core_secure_delete_are_enabled() -> None:
