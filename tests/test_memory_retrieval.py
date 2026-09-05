@@ -206,7 +206,14 @@ async def test_retrieval_filters_current_authority_and_sensitivity_before_rankin
         assert local_only.assertion_id not in cloud_ids
         assert untrusted.assertion_id not in cloud_ids
         assert historical.assertion_id not in cloud_ids
-        assert replacement.assertion_id not in cloud_ids
+        assert replacement.assertion_id in cloud_ids
+        replacement_candidate = next(
+            candidate
+            for candidate in cloud
+            if candidate.assertion.assertion_id == replacement.assertion_id
+        )
+        assert replacement_candidate.lexical_rank is not None
+        assert replacement_candidate.dense_rank is None
 
         local = await retrieval.retrieve_first_stage(
             "camera sensor",
@@ -219,6 +226,7 @@ async def test_retrieval_filters_current_authority_and_sensitivity_before_rankin
         assert local_only.assertion_id in local_ids
         assert untrusted.assertion_id not in local_ids
         assert historical.assertion_id not in local_ids
+        assert replacement.assertion_id in local_ids
     finally:
         await worker.close()
 
