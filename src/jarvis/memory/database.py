@@ -11,7 +11,7 @@ from jarvis.security import KeyProtectionError, KeyProtector
 from .migration_runner import MemoryMigrationRunner
 
 _MEMORY_KEY_BYTES = 32
-_MEMORY_KEY_PURPOSE = "memory-sqlcipher-master-key:v1"
+_MEMORY_KEY_PURPOSE = "memory-sqlcipher-master-key-v1"
 _EXPECTED_SQLCIPHER_VERSION = "4.17.0 community"
 _EXPECTED_SQLITE_VERSION = "3.53.3"
 
@@ -55,10 +55,6 @@ class MemoryDatabaseKeyStore:
         if database_exists and not key_exists:
             raise MemoryDatabaseKeyError(
                 "memory database exists but its protected SQLCipher key is missing"
-            )
-        if key_exists and not database_exists:
-            raise MemoryDatabaseKeyError(
-                "protected SQLCipher key exists but the memory database is missing"
             )
         if key_exists:
             return self._unseal_existing(), False
@@ -201,8 +197,12 @@ class SqlCipherMemoryDatabaseFactory:
                     connection.close()
                 except Exception as cleanup_exc:  # noqa: BLE001 - DB-API types vary
                     cleanup_errors.append(cleanup_exc)
-            if key_created and not database_existed:
-                cleanup_errors.extend(self._discard_failed_new_database())
+            if not database_existed:
+                cleanup_errors.extend(
+                    self._discard_failed_database_initialization(
+                        discard_key=key_created,
+                    )
+                )
             if cleanup_errors:
                 raise MemoryDatabaseError(
                     "memory database open failed and cleanup was incomplete"
@@ -257,7 +257,11 @@ class SqlCipherMemoryDatabaseFactory:
         connection.execute("PRAGMA synchronous = FULL")
         connection.execute("PRAGMA busy_timeout = 5000")
 
-    def _discard_failed_new_database(self) -> list[Exception]:
+    def _discard_failed_database_initialization(
+        self,
+        *,
+        discard_key: bool,
+    ) -> list[Exception]:
         cleanup_errors: list[Exception] = []
         for path in (
             self._database_path,
@@ -268,8 +272,9 @@ class SqlCipherMemoryDatabaseFactory:
                 path.unlink(missing_ok=True)
             except OSError as exc:
                 cleanup_errors.append(exc)
-        try:
-            self._key_store.discard_new()
-        except MemoryDatabaseKeyError as exc:
-            cleanup_errors.append(exc)
+        if discard_key:
+            try:
+                self._key_store.discard_new()
+            except MemoryDatabaseKeyError as exc:
+                cleanup_errors.append(exc)
         return cleanup_errors
