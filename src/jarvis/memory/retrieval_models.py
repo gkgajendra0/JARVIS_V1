@@ -205,7 +205,7 @@ class Qwen3RetrievalReranker:
         *,
         device: str | None = "cuda",
         candidate_window: int = QWEN3_RERANKER_CANDIDATE_WINDOW,
-        instruction: str | None = None,
+        instruction: str | None = JARVIS_MEMORY_RERANK_INSTRUCTION,
         model_factory: Callable[..., Any] | None = None,
     ) -> None:
         if device is not None and not isinstance(device, str):
