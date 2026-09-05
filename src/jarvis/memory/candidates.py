@@ -14,10 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 
 from .explicit import (
-    ExplicitMemoryAction,
-    ExplicitMemoryAuthorizationError,
     MemorySecretRejectedError,
-    authorize_explicit_memory_action,
+    is_explicit_memory_control_text,
     latest_user_turn,
     reject_prohibited_secret,
 )
@@ -300,16 +298,27 @@ class MemoryCandidateCoordinator:
         self,
         conversation: ConversationSession,
     ) -> MemoryCandidateProcessingResult:
+        """Compatibility wrapper; runtime integration uses the exact-turn API."""
+
+        return await self.consider_user_turn(conversation, latest_user_turn(conversation))
+
+    async def consider_user_turn(
+        self,
+        conversation: ConversationSession,
+        turn: ConversationTurn,
+    ) -> MemoryCandidateProcessingResult:
+        """Consider exactly one already-accepted canonical USER turn."""
+
         if not isinstance(conversation, ConversationSession):
             raise TypeError("conversation must be a ConversationSession")
         if conversation.session_id != self._quarantine.session_id:
             raise ValueError("conversation does not own this candidate quarantine")
+        if not isinstance(turn, ConversationTurn) or turn.role is not ConversationRole.USER:
+            raise TypeError("turn must be a canonical USER ConversationTurn")
+        if turn not in conversation.turns:
+            raise ValueError("candidate source turn does not belong to this conversation")
 
-        turn = latest_user_turn(conversation)
-        if turn.role is not ConversationRole.USER:
-            raise RuntimeError("candidate extraction requires a canonical USER turn")
-
-        if _is_explicit_memory_control(conversation):
+        if is_explicit_memory_control_text(turn.text):
             return MemoryCandidateProcessingResult(
                 MemoryCandidateOutcome.SKIPPED_EXPLICIT_MEMORY_CONTROL,
                 "phase_4_3_explicit_memory_control",
@@ -378,16 +387,6 @@ class MemoryCandidateCoordinator:
             extractor_model=model_name,
             quarantined_at=quarantined_at,
         )
-
-
-def _is_explicit_memory_control(conversation: ConversationSession) -> bool:
-    for action in ExplicitMemoryAction:
-        try:
-            authorize_explicit_memory_action(conversation, action)
-        except ExplicitMemoryAuthorizationError:
-            continue
-        return True
-    return False
 
 
 def _aware_utc(value: datetime, *, name: str) -> datetime:
