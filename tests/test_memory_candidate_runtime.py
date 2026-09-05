@@ -98,7 +98,9 @@ async def test_runtime_ignores_assistant_turns() -> None:
 
 
 @pytest.mark.asyncio
-async def test_close_cancels_inflight_extraction_and_physically_drops_quarantine() -> None:
+async def test_close_cancels_inflight_extraction_and_physically_drops_quarantine() -> (
+    None
+):
     conversation = _conversation()
     turn = conversation.accept_turn(ConversationRole.USER, "My home city is Indore.")
     extractor = FakeExtractor(blocked=True)
