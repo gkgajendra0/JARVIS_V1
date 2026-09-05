@@ -191,10 +191,10 @@ class MemoryMigrationRunner:
         )
         try:
             connection.executescript(script)
-        except Exception as exc:  # noqa: BLE001 - sqlite/sqlcipher DB-API exception types differ
+        except Exception as exc:
             try:
                 connection.rollback()
-            except Exception as rollback_exc:  # noqa: BLE001 - preserve fail-closed state
+            except Exception as rollback_exc:
                 raise MemoryMigrationError(
                     f"migration {migration.name} failed and rollback also failed"
                 ) from rollback_exc
