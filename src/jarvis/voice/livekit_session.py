@@ -124,7 +124,9 @@ class LiveKitConversationBridge:
             external_item_id=item.id,
         )
         if not self.live_context.observe_turn(turn):
-            raise RuntimeError("canonical accepted turn was already present in LiveContext")
+            raise RuntimeError(
+                "canonical accepted turn was already present in LiveContext"
+            )
         self._seen_item_ids.add(item.id)
         if self._show_transcript:
             suffix = " [interrupted]" if turn.interrupted else ""
