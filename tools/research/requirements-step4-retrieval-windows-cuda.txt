@@ -1,0 +1,7 @@
+# Windows/CUDA overlay for the Step 4 semantic-retrieval research environment.
+# Install this file instead of the base retrieval requirements on the owner RTX
+# machine. The exact local-version pin prevents pip from silently selecting the
+# CPU-only PyPI torch wheel.
+--extra-index-url https://download.pytorch.org/whl/cu130
+-r requirements-step4-retrieval.txt
+torch==2.14.0+cu130
