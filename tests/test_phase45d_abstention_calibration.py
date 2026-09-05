@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from collections import Counter
 from pathlib import Path
@@ -98,6 +99,33 @@ def test_fixed_corpus_is_balanced_and_contains_safety_boundaries() -> None:
         "negation",
         "relation_mismatch",
     }.issubset(abstain_categories)
+
+
+def test_secret_fixture_stays_outside_canonical_memory(tmp_path: Path) -> None:
+    module = load_harness()
+    payload = module._load_fixture(CASES_PATH)
+    secret_documents = [
+        item for item in payload["documents"] if item["mode"] == "secret"
+    ]
+
+    assert [item["memory_id"] for item in secret_documents] == ["secret_placeholder"]
+    assert all(
+        module._is_seedable_fixture_mode(str(item["mode"])) is False
+        for item in secret_documents
+    )
+    with pytest.raises(
+        ValueError, match="secret-prohibited content cannot become semantic memory"
+    ):
+        module._draft("synthetic_secret", "placeholder", "secret")
+
+    mutated = json.loads(json.dumps(payload))
+    mutated["queries"][0]["expected_memory_id"] = "secret_placeholder"
+    mutated_path = tmp_path / "secret-release.json"
+    mutated_path.write_text(json.dumps(mutated), encoding="utf-8")
+    with pytest.raises(
+        ValueError, match="cannot target a secret-prohibited fixture"
+    ):
+        module._load_fixture(mutated_path)
 
 
 def test_thresholds_come_from_observed_boundaries_not_magic_constants() -> None:
