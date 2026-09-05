@@ -21,3 +21,13 @@ def test_voice_instructions_forbid_unobserved_scene_claims() -> None:
     assert "Never invent scene details" in normalized
     assert "clothing colour" in normalized
     assert "general object" in normalized
+
+
+def test_voice_instructions_forbid_implicit_remember_tool_calls() -> None:
+    normalized = " ".join(INSTRUCTIONS.split())
+    assert '"My home city is Sagar"' in normalized
+    assert '"My candidate test animal is falcon"' in normalized
+    assert "are NOT explicit remember requests" in normalized
+    assert "do not call `remember_memory` for them" in normalized
+    assert "Implicit facts are handled separately" in normalized
+    assert "candidate extraction path" in normalized
