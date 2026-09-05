@@ -34,9 +34,7 @@ _NEGATION_PATTERNS = (
         r"\b(?:do not|don't|dont|never)\b.{0,24}\b"
         r"(?:remember|save|note|forget|delete|remove)\b"
     ),
-    re.compile(
-        r"\b(?:mat|nahi|nahin)\b.{0,24}\b(?:yaad|bhool|save|delete|remove)\b"
-    ),
+    re.compile(r"\b(?:mat|nahi|nahin)\b.{0,24}\b(?:yaad|bhool|save|delete|remove)\b"),
     re.compile(r"(?:मत|नहीं).{0,24}(?:याद|भूल|सेव|डिलीट)"),
 )
 _REMEMBER_PATTERNS = (
