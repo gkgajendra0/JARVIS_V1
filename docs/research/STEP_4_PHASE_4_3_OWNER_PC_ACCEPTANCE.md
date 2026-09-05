@@ -6,6 +6,8 @@
 
 **DURABLE CROSS-PROCESS PERSISTENCE: PASS.**
 
+**CROSS-SESSION VOICE RECALL: PASS.**
+
 **CROSS-SESSION VOICE ACCEPTANCE: IN PROGRESS.**
 
 Date: 2026-09-05
@@ -123,17 +125,34 @@ This proves:
 - the first voice recall failure was lookup-key normalization only, not persistence loss;
 - no re-entry or repair write was needed to recover the stored value.
 
-## 7. Remaining mandatory Phase 4.3 acceptance
+## 7. Cross-session production voice recall after fix — PASS
+
+After a fresh production `jarvis-voice` process restart with persistent memory still enabled, the owner asked:
+
+`Jarvis, what do you remember about my phase four test city?`
+
+The runtime logged:
+
+`Explicit memory inspect hit | predicate=phase_4_test_city | sensitivity=standard | verification=unverified`
+
+JARVIS replied:
+
+`I remember that your Phase 4 Test City is Sagar.`
+
+This is the first complete production voice proof that a fact explicitly remembered in one voice process is recalled from the canonical encrypted store in a later process/session. No re-save occurred between the original write and this successful recall.
+
+Wake detection, provider conversation, integrated vision, speaker-shadow diagnostics, and return-to-sleep behavior remained usable during the successful recall run.
+
+## 8. Remaining mandatory Phase 4.3 acceptance
 
 Before Phase 4.3 may close, continue the real production voice path and prove at minimum:
 
-1. voice exact inspect now recalls `Sagar` after the normalization fix;
-2. explicit correction replaces the current belief;
-3. a later voice session returns the corrected value;
-4. explicit forget succeeds;
-5. a later voice session no longer returns the forgotten memory;
-6. no implicit ordinary statement is durably stored;
-7. no secret/credential request is accepted;
-8. normal wake/audio/provider behavior remains usable.
+1. explicit correction replaces the current belief;
+2. a later voice session returns the corrected value only;
+3. explicit forget succeeds;
+4. a later voice session no longer returns the forgotten memory;
+5. no implicit ordinary statement is durably stored;
+6. no secret/credential request is accepted;
+7. normal wake/audio/provider behavior remains usable.
 
 Phase 4.4 remains blocked until this owner cross-session voice acceptance passes.
