@@ -21,8 +21,6 @@ from jarvis.voice.livekit_session import (
     LiveKitConversationBridge,
     _create_realtime_model,
     create_voice_session,
-    require_google_api_key,
-    require_openai_api_key,
 )
 
 
@@ -212,8 +210,6 @@ def test_api_key_is_required_before_session_construction(
 ) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
-        require_openai_api_key()
-    with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
         create_voice_session(JarvisConfig())
 
 
@@ -223,9 +219,7 @@ def test_gemini_api_key_is_required_only_for_gemini(
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
 
     with pytest.raises(RuntimeError, match="GOOGLE_API_KEY"):
-        require_google_api_key()
-    with pytest.raises(RuntimeError, match="GOOGLE_API_KEY"):
-        _create_realtime_model(JarvisConfig(realtime_provider="gemini"))
+        _create_realtime_model(JarvisConfig(ai_provider="gemini"))
 
 
 def test_gemini_model_keeps_provider_native_activity_detection(
@@ -245,7 +239,7 @@ def test_gemini_model_keeps_provider_native_activity_detection(
 
     model = _create_realtime_model(
         JarvisConfig(
-            realtime_provider="gemini",
+            ai_provider="gemini",
             gemini_realtime_model="gemini-test",
             gemini_realtime_voice="Gacrux",
         )
@@ -280,6 +274,6 @@ def test_openai_model_uses_stricter_vad_threshold(
         "jarvis.voice.livekit_session.openai.realtime.RealtimeModel", fake_model
     )
 
-    _create_realtime_model(JarvisConfig(realtime_provider="openai"))
+    _create_realtime_model(JarvisConfig(ai_provider="openai"))
 
     assert captured["turn_detection"].threshold == 0.8
