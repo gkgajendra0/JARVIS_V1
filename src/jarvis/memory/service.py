@@ -1,0 +1,215 @@
+"""Sole public facade for explicit canonical semantic-memory operations."""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+
+from .assertions import SemanticAssertionDraft, SemanticAssertionRecord
+from .lifecycle import MemoryLifecycleService
+from .provenance import MemorySource
+from .query import CanonicalMemoryReader
+from .types import FreshnessClass, Sensitivity, ValueType
+
+_PERSONAL_SCOPE = "personal"
+_OWNER_SUBJECT = "owner"
+_NON_WORD = re.compile(r"[^\w]+", flags=re.UNICODE)
+
+
+class MemoryServiceError(RuntimeError):
+    pass
+
+
+class MemoryAlreadyExistsError(MemoryServiceError):
+    pass
+
+
+class MemoryNotFoundError(MemoryServiceError):
+    pass
+
+
+class MemoryAmbiguousError(MemoryServiceError):
+    pass
+
+
+def canonical_memory_predicate(value: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError("predicate must be a string")
+    normalized = _NON_WORD.sub("_", value.strip().casefold()).strip("_")
+    if not normalized:
+        raise ValueError("predicate must contain letters or digits")
+    if len(normalized) > 96:
+        raise ValueError("predicate must not exceed 96 characters")
+    return normalized
+
+
+def _text_value(value: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError("memory value must be a string")
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("memory value must not be empty")
+    return normalized
+
+
+def _normalized_text(predicate: str, value: str) -> str:
+    human_key = predicate.replace("_", " ")
+    return f"{human_key}: {value}"
+
+
+@dataclass(frozen=True, slots=True)
+class ExplicitMemoryResult:
+    predicate: str
+    record: SemanticAssertionRecord
+
+
+class MemoryService:
+    """Own explicit high-level memory semantics above lifecycle/query primitives."""
+
+    def __init__(
+        self,
+        lifecycle: MemoryLifecycleService,
+        reader: CanonicalMemoryReader,
+    ) -> None:
+        self._lifecycle = lifecycle
+        self._reader = reader
+
+    async def remember_text(
+        self,
+        *,
+        predicate: str,
+        value: str,
+        source: MemorySource,
+        sensitivity: Sensitivity = Sensitivity.STANDARD,
+        freshness_class: FreshnessClass = FreshnessClass.CHANGEABLE,
+    ) -> ExplicitMemoryResult:
+        key = canonical_memory_predicate(predicate)
+        text = _text_value(value)
+        self._validate_write_policy(source, sensitivity, freshness_class)
+        existing = await self._reader.find_current_exact(
+            subject_scope=_PERSONAL_SCOPE,
+            subject=_OWNER_SUBJECT,
+            predicate=key,
+        )
+        if existing:
+            raise MemoryAlreadyExistsError(
+                f"current memory already exists for predicate {key!r}; use correction"
+            )
+        record = await self._lifecycle.create(
+            self._draft(
+                predicate=key,
+                value=text,
+                sensitivity=sensitivity,
+                freshness_class=freshness_class,
+            ),
+            source,
+            reason_code="explicit_owner_remember",
+        )
+        return ExplicitMemoryResult(predicate=key, record=record)
+
+    async def correct_text(
+        self,
+        *,
+        predicate: str,
+        value: str,
+        source: MemorySource,
+        sensitivity: Sensitivity | None = None,
+        freshness_class: FreshnessClass | None = None,
+    ) -> ExplicitMemoryResult:
+        key = canonical_memory_predicate(predicate)
+        text = _text_value(value)
+        current = await self._require_one_current(key)
+        resolved_sensitivity = sensitivity or current.sensitivity
+        resolved_freshness = freshness_class or current.freshness_class
+        self._validate_write_policy(source, resolved_sensitivity, resolved_freshness)
+        record = await self._lifecycle.correct(
+            current.assertion_id,
+            self._draft(
+                predicate=key,
+                value=text,
+                sensitivity=resolved_sensitivity,
+                freshness_class=resolved_freshness,
+            ),
+            source,
+            reason_code="explicit_owner_correction",
+        )
+        return ExplicitMemoryResult(predicate=key, record=record)
+
+    async def forget_exact(
+        self,
+        *,
+        predicate: str,
+        source: MemorySource,
+    ) -> str:
+        key = canonical_memory_predicate(predicate)
+        current = await self._require_one_current(key)
+        forgotten = await self._lifecycle.forget(
+            current.assertion_id,
+            source,
+            reason_code="explicit_owner_request",
+        )
+        if not forgotten:
+            raise MemoryNotFoundError(f"memory disappeared before forget for {key!r}")
+        after = await self._reader.find_current_exact(
+            subject_scope=_PERSONAL_SCOPE,
+            subject=_OWNER_SUBJECT,
+            predicate=key,
+        )
+        if after:
+            raise MemoryServiceError(
+                f"forget verification still found current memory for predicate {key!r}"
+            )
+        return key
+
+    async def inspect_exact(self, *, predicate: str) -> ExplicitMemoryResult:
+        key = canonical_memory_predicate(predicate)
+        record = await self._require_one_current(key)
+        return ExplicitMemoryResult(predicate=key, record=record)
+
+    async def _require_one_current(self, predicate: str) -> SemanticAssertionRecord:
+        matches = await self._reader.find_current_exact(
+            subject_scope=_PERSONAL_SCOPE,
+            subject=_OWNER_SUBJECT,
+            predicate=predicate,
+        )
+        if not matches:
+            raise MemoryNotFoundError(f"no current memory for predicate {predicate!r}")
+        if len(matches) != 1:
+            raise MemoryAmbiguousError(
+                f"multiple current memories exist for predicate {predicate!r}"
+            )
+        return matches[0]
+
+    @staticmethod
+    def _draft(
+        *,
+        predicate: str,
+        value: str,
+        sensitivity: Sensitivity,
+        freshness_class: FreshnessClass,
+    ) -> SemanticAssertionDraft:
+        return SemanticAssertionDraft(
+            subject_scope=_PERSONAL_SCOPE,
+            subject=_OWNER_SUBJECT,
+            predicate=predicate,
+            value_type=ValueType.TEXT,
+            value=value,
+            normalized_text=_normalized_text(predicate, value),
+            freshness_class=freshness_class,
+            sensitivity=sensitivity,
+        )
+
+    @staticmethod
+    def _validate_write_policy(
+        source: MemorySource,
+        sensitivity: Sensitivity,
+        freshness_class: FreshnessClass,
+    ) -> None:
+        if not isinstance(source, MemorySource):
+            raise TypeError("source must be a MemorySource")
+        if not isinstance(sensitivity, Sensitivity):
+            raise TypeError("sensitivity must be a Sensitivity")
+        if sensitivity is Sensitivity.SECRET_PROHIBITED:
+            raise ValueError("secret-prohibited content cannot be remembered")
+        if not isinstance(freshness_class, FreshnessClass):
+            raise TypeError("freshness_class must be a FreshnessClass")
