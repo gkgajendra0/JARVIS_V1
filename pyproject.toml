@@ -50,6 +50,10 @@ vision = [
     "onnxruntime==1.29.0",
     "duvc-ctl==2.1.0; platform_system == 'Windows'",
 ]
+retrieval = [
+    "sentence-transformers==6.0.1",
+    "transformers==5.16.1",
+]
 speaker = ["sherpa-onnx==1.13.6"]
 active-speaker = [
     "python_speech_features==0.6",
