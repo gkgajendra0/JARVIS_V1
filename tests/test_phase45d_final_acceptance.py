@@ -138,7 +138,14 @@ def test_wrong_top1_release_is_counted_as_false_release() -> None:
     values = [
         result(harness, "good", label="release", correct=True, score=8.0, margin=8.0),
         result(harness, "wrong", label="release", correct=False, score=9.0, margin=9.0),
-        result(harness, "absent", label="abstain", correct=False, score=-3.0, margin=1.0),
+        result(
+            harness,
+            "absent",
+            label="abstain",
+            correct=False,
+            score=-3.0,
+            margin=1.0,
+        ),
     ]
 
     metrics = harness._policy_metrics(values, (6.0, 4.0))
@@ -161,8 +168,8 @@ def test_acceptance_fails_closed_on_false_release_or_language_starvation() -> No
                     label="release",
                     language=language,
                     correct=True,
-                    score=8.0,
-                    margin=8.0,
+                    score=1.0 if language == "hi" else 8.0,
+                    margin=1.0 if language == "hi" else 8.0,
                 ),
                 result(
                     harness,
