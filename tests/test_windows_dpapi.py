@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-import jarvis.identity as identity
+from jarvis import identity
 from jarvis.security import KeyProtectionError, WindowsDpapiKeyProtector
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows DPAPI only")
