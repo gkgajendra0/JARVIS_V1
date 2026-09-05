@@ -2,9 +2,9 @@
 
 ## Status
 
-**STEP 3 COMPLETE + MERGED. STEP 4 MEMORY/CONTEXT ARCHITECTURE IS APPROVED AND PHASES 4.0A–4.3 ARE ACCEPTED. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 REMAINS DISABLED.**
+**STEP 3 COMPLETE + MERGED. STEP 4 MEMORY/CONTEXT ARCHITECTURE IS APPROVED; PHASES 4.0A–4.3 ARE ACCEPTED AND PHASE 4.4 IS ACTIVE. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 REMAINS DISABLED.**
 
-This file describes architecture that actually exists and has passed the normal acceptance lifecycle. Detailed experiments/evidence belong in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; durable decisions belong in `docs/decisions/`.
+This file describes architecture that actually exists and has passed the normal acceptance lifecycle, plus clearly marked active Step-4 boundaries that are already implemented but not yet finally accepted. Detailed experiments/evidence belong in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; durable decisions belong in `docs/decisions/`.
 
 ---
 
@@ -12,6 +12,10 @@ This file describes architecture that actually exists and has passed the normal 
 
 ```text
                                JARVIS V1
+                                   |
+                 one active cloud-AI provider/account
+                    (Gemini OR OpenAI, never both
+                      as production dependencies)
                                    |
           +------------------------+------------------------+
           |                        |                        |
@@ -23,7 +27,7 @@ LiveKit MediaDevices        OpenCV camera            deterministic trust
 AEC + NS + HPF + AGC             |                        |
           |                 RF-DETR + OC-SORT          proposal/risk/policy
           |                        |                        |
-realtime provider           head/face/liveness       approvals / Windows Hello
+active-provider realtime    head/face/liveness       approvals / Windows Hello
           |                        |                        |
 NVIDIA 48 kHz -> TV          OWNER context                 |
           |                        |                        |
@@ -36,10 +40,17 @@ accepted USER turns
         +-> LiveContext (RAM/session/TTL)
         |
         +-> explicit MemoryAgentTools
-              -> deterministic authorization/grounding/secret policy
-              -> MemoryService
-              -> MemoryLifecycleService
-              -> SQLCipher canonical store + FTS5
+        |     -> deterministic authorization/grounding/secret policy
+        |     -> MemoryService
+        |     -> MemoryLifecycleService
+        |     -> SQLCipher canonical store + FTS5
+        |
+        +-> Phase-4.4 candidate extraction [ACTIVE, default OFF]
+        |     -> exact canonical USER turn
+        |     -> deterministic pre-provider gates
+        |     -> active-provider structured-output model
+        |     -> typed session-local quarantine
+        |     X no durable admission
         |
         +-> ContextAssembler
               -> bounded evidence-rich provider context
@@ -50,7 +61,36 @@ Permanent rules:
 - identity/perception evidence is not execution permission;
 - provider/model output does not establish canonical personal truth;
 - `MemoryService` is the sole durable memory mutation facade;
-- `ContextAssembler` is the sole Step-4 model-context release owner.
+- `ContextAssembler` is the sole Step-4 model-context release owner;
+- production JARVIS has exactly one active cloud-AI provider/account at a time;
+- production subsystems may use capability-specific models inside that provider family but may not independently select a second cloud-AI provider.
+
+Decision: ADR-015.
+
+---
+
+## Cloud-AI provider ownership
+
+Production cloud intelligence is selected once through `JARVIS_AI_PROVIDER`.
+
+```text
+JARVIS_AI_PROVIDER
+       |
+       +-> realtime conversation
+       +-> scripted cloud TTS
+       +-> structured memory-candidate extraction
+       +-> future cloud reasoning/tool roles
+```
+
+Current supported provider families are `gemini` and `openai`. The provider-to-secret mapping is owned centrally by `src/jarvis/ai_provider.py`; provider-specific SDKs remain confined to narrow voice/memory adapter modules.
+
+Different model IDs are allowed inside the active provider family because capability surfaces differ. This does **not** create a second provider account. Production never silently falls back to another cloud-AI provider when the active provider lacks a capability.
+
+`JARVIS_REALTIME_PROVIDER` is a migration-only alias for existing machine profiles. New configuration uses `JARVIS_AI_PROVIDER`.
+
+Research harnesses may compare providers, but research comparison is not a production dependency.
+
+Pinned model/checkpoint downloads, Git/GitHub traffic, Hugging Face/Google Storage/OpenVINO artifact retrieval, and local inference are not cloud-AI provider selection and are outside ADR-015.
 
 ---
 
@@ -61,7 +101,7 @@ Normal startup remains machine-profile driven:
 ```text
 %LOCALAPPDATA%\JARVIS\machine.json
         +
-Windows environment for provider secrets
+Windows environment for the active provider secret
         -> startup preflight
         -> jarvis-voice
 ```
@@ -71,12 +111,13 @@ Accepted machine roles:
 - Pocket3 microphone selected by stable Windows WASAPI identity;
 - NVIDIA `24'TV` conversation output at 48 kHz;
 - local wake model path persisted;
-- realtime provider boundary retained;
+- one active cloud-AI provider persisted as `JARVIS_AI_PROVIDER`;
+- provider-specific model IDs may remain configured for reversible provider switching;
 - LR-ASD/CAM++ assets locally managed;
 - vision/speaker/active-speaker switches persisted;
 - persistent memory rollout controlled by `JARVIS_MEMORY_ENABLED` and defaults OFF.
 
-API keys remain outside normal machine-profile state.
+API keys remain outside normal machine-profile state. Startup preflight checks only the credential required by the selected active provider.
 
 ---
 
@@ -266,6 +307,38 @@ Real owner-PC acceptance proved remember, cross-process recall, correction, corr
 
 ---
 
+## Phase 4.4 active candidate-extraction boundary
+
+Phase 4.4 is implemented behind a default-OFF rollout gate but is not yet finally owner-accepted.
+
+```text
+exact accepted canonical USER turn
+ -> explicit-memory-control exclusion
+ -> deterministic obvious-secret prefilter
+ -> active-provider structured-output adapter
+ -> Pydantic MemoryExtractionProposal
+ -> deterministic proposal policy
+ -> session/process-local quarantine
+ -> dispose on session close
+```
+
+Current invariants:
+
+- extraction runs off the conversation response path;
+- no raw/latest-turn race is allowed;
+- non-USER sources do not enter the provider extractor path;
+- provider/model proposes semantic evidence only;
+- JARVIS owns session/turn provenance and authority metadata;
+- no confidence threshold grants truth;
+- no candidate writes `MemoryService`, SQLCipher, FTS, or embeddings;
+- no implicit durable admission exists;
+- candidate quarantine is physically discarded with the session;
+- extraction uses the same active cloud-AI provider selected for JARVIS production, although its capability-specific model ID may differ.
+
+Final active-provider model validation and narrow owner-PC acceptance remain pending before Phase 4.4 can be marked complete.
+
+---
+
 ## Privacy / observability boundary
 
 - raw biometric audio/video is memory-only by default;
@@ -280,9 +353,9 @@ Real owner-PC acceptance proved remember, cross-process recall, correction, corr
 
 ## Not yet accepted architecture
 
-The following remain future Step-4 work and are not current production behavior:
+The following remain future Step-4 work and are not current accepted production behavior:
 
-- Phase 4.4 structured extraction/candidate quarantine;
+- Phase 4.4 final provider-local model selection and owner acceptance;
 - implicit durable candidate admission;
 - semantic embedding retrieval/reranking and automatic semantic injection;
 - episodic/reflection learning;
