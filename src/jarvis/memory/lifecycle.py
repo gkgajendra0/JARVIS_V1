@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 import uuid
 from collections.abc import Callable
@@ -9,40 +8,15 @@ from typing import Any, TypeVar
 
 from .assertions import SemanticAssertionDraft, SemanticAssertionRecord
 from .provenance import MemorySource
-from .types import (
-    AssertionState,
-    MemoryOperationType,
-    Sensitivity,
-    ValueType,
-    VerificationState,
+from .storage_rows import (
+    SEMANTIC_ASSERTION_COLUMNS_SQL,
+    semantic_assertion_record_from_row,
 )
+from .types import AssertionState, MemoryOperationType, VerificationState
 from .worker import SerialConnectionWorker
 
 T = TypeVar("T")
 _REASON_CODE = re.compile(r"^[a-z0-9][a-z0-9_.:-]{0,63}$")
-_ASSERTION_COLUMNS = """
-    assertion_id,
-    subject_scope,
-    subject,
-    predicate,
-    value_type,
-    value_json,
-    normalized_text,
-    source_id,
-    valid_from,
-    valid_to,
-    system_from,
-    system_to,
-    last_verified_at,
-    state,
-    supersedes_id,
-    verification_state,
-    confidence,
-    freshness_class,
-    sensitivity,
-    created_at,
-    updated_at
-"""
 
 
 class MemoryLifecycleError(RuntimeError):
@@ -83,12 +57,6 @@ def _db_time(value: datetime | None) -> str | None:
     return _utc(value, name="timestamp").isoformat().replace("+00:00", "Z")
 
 
-def _parse_time(value: str | None) -> datetime | None:
-    if value is None:
-        return None
-    return datetime.fromisoformat(value).astimezone(UTC)
-
-
 def _reason_code(value: str | None) -> str | None:
     if value is None:
         return None
@@ -98,32 +66,6 @@ def _reason_code(value: str | None) -> str | None:
     if not _REASON_CODE.fullmatch(normalized):
         raise ValueError("reason_code must be a 1-64 character lowercase semantic code")
     return normalized
-
-
-def _record(row: tuple[Any, ...]) -> SemanticAssertionRecord:
-    return SemanticAssertionRecord(
-        assertion_id=str(row[0]),
-        subject_scope=str(row[1]),
-        subject=str(row[2]),
-        predicate=str(row[3]),
-        value_type=ValueType(str(row[4])),
-        value=json.loads(str(row[5])),
-        normalized_text=str(row[6]),
-        source_id=str(row[7]),
-        valid_from=_parse_time(row[8]),
-        valid_to=_parse_time(row[9]),
-        system_from=_parse_time(str(row[10])),  # type: ignore[arg-type]
-        system_to=_parse_time(row[11]),
-        last_verified_at=_parse_time(row[12]),
-        state=AssertionState(str(row[13])),
-        supersedes_id=None if row[14] is None else str(row[14]),
-        verification_state=VerificationState(str(row[15])),
-        confidence=None if row[16] is None else float(row[16]),
-        freshness_class=row[17],  # type: ignore[arg-type]
-        sensitivity=Sensitivity(str(row[18])),
-        created_at=_parse_time(str(row[19])),  # type: ignore[arg-type]
-        updated_at=_parse_time(str(row[20])),  # type: ignore[arg-type]
-    )
 
 
 class MemoryLifecycleService:
@@ -756,10 +698,11 @@ class MemoryLifecycleService:
         assertion_id: str,
     ) -> SemanticAssertionRecord | None:
         row = connection.execute(
-            f"SELECT {_ASSERTION_COLUMNS} FROM semantic_assertion WHERE assertion_id = ?",
+            f"SELECT {SEMANTIC_ASSERTION_COLUMNS_SQL} "
+            "FROM semantic_assertion WHERE assertion_id = ?",
             (assertion_id,),
         ).fetchone()
-        return None if row is None else _record(tuple(row))
+        return None if row is None else semantic_assertion_record_from_row(row)
 
     def _get_current_sync(
         self,
@@ -767,10 +710,11 @@ class MemoryLifecycleService:
         assertion_id: str,
     ) -> SemanticAssertionRecord | None:
         row = connection.execute(
-            f"SELECT {_ASSERTION_COLUMNS} FROM current_semantic_assertion WHERE assertion_id = ?",
+            f"SELECT {SEMANTIC_ASSERTION_COLUMNS_SQL} "
+            "FROM current_semantic_assertion WHERE assertion_id = ?",
             (assertion_id,),
         ).fetchone()
-        return None if row is None else _record(tuple(row))
+        return None if row is None else semantic_assertion_record_from_row(row)
 
     def _require_record(
         self, connection: Any, assertion_id: str
