@@ -183,10 +183,14 @@ def _unsupported_query(fact: CurrentFact, language: str, variant: str) -> str:
         return f"{fact.relation_hi} के लिए {fact.value} का सुझाव किसने दिया था?"
     if language == "hinglish":
         if variant == "reason":
-            return f"{fact.value} ko {fact.relation_hinglish} kyun choose kiya gaya tha?"
+            return (
+                f"{fact.value} ko {fact.relation_hinglish} kyun choose kiya gaya tha?"
+            )
         if variant == "time":
             return f"{fact.value} ko {fact.relation_hinglish} pehli baar kab choose kiya tha?"
-        return f"{fact.relation_hinglish} ke liye {fact.value} kisne recommend kiya tha?"
+        return (
+            f"{fact.relation_hinglish} ke liye {fact.value} kisne recommend kiya tha?"
+        )
     if variant == "reason":
         return f"Why was {fact.value} chosen as the {fact.relation_en}?"
     if variant == "time":
