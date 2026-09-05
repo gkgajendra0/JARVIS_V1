@@ -69,7 +69,9 @@ class MemoryDatabaseKeyStore:
         try:
             sealed = self._protector.seal(raw_key, purpose=_MEMORY_KEY_PURPOSE)
         except KeyProtectionError as exc:
-            raise MemoryDatabaseKeyError("memory database key could not be protected") from exc
+            raise MemoryDatabaseKeyError(
+                "memory database key could not be protected"
+            ) from exc
         self._write_new(sealed)
         return raw_key, True
 
@@ -85,11 +87,15 @@ class MemoryDatabaseKeyStore:
         try:
             sealed = self._path.read_bytes()
         except OSError as exc:
-            raise MemoryDatabaseKeyError("protected memory key could not be read") from exc
+            raise MemoryDatabaseKeyError(
+                "protected memory key could not be read"
+            ) from exc
         try:
             raw_key = self._protector.unseal(sealed, purpose=_MEMORY_KEY_PURPOSE)
         except KeyProtectionError as exc:
-            raise MemoryDatabaseKeyError("protected memory key could not be unsealed") from exc
+            raise MemoryDatabaseKeyError(
+                "protected memory key could not be unsealed"
+            ) from exc
         if len(raw_key) != _MEMORY_KEY_BYTES:
             raise MemoryDatabaseKeyError("unsealed memory database key is not 32 bytes")
         return raw_key
@@ -106,7 +112,9 @@ class MemoryDatabaseKeyStore:
                 "protected memory key appeared concurrently during creation"
             ) from exc
         except OSError as exc:
-            raise MemoryDatabaseKeyError("protected memory key could not be created") from exc
+            raise MemoryDatabaseKeyError(
+                "protected memory key could not be created"
+            ) from exc
         try:
             with os.fdopen(descriptor, "wb") as handle:
                 handle.write(sealed)
@@ -222,8 +230,7 @@ class SqlCipherMemoryDatabaseFactory:
             )
         if str(cipher_version or "").strip() != _EXPECTED_SQLCIPHER_VERSION:
             raise MemoryDatabaseEncryptionError(
-                "unsupported SQLCipher engine for canonical memory: "
-                f"{cipher_version!r}"
+                f"unsupported SQLCipher engine for canonical memory: {cipher_version!r}"
             )
         if str(sqlite_version or "").strip() != _EXPECTED_SQLITE_VERSION:
             raise MemoryDatabaseEncryptionError(
@@ -239,7 +246,9 @@ class SqlCipherMemoryDatabaseFactory:
         connection.execute("PRAGMA secure_delete = ON")
         journal_mode = _scalar(connection, "PRAGMA journal_mode = WAL")
         if str(journal_mode or "").casefold() != "wal":
-            raise MemoryDatabaseEncryptionError("canonical memory could not enter WAL mode")
+            raise MemoryDatabaseEncryptionError(
+                "canonical memory could not enter WAL mode"
+            )
         connection.execute("PRAGMA synchronous = FULL")
         connection.execute("PRAGMA busy_timeout = 5000")
 
