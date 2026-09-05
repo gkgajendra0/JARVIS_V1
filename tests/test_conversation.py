@@ -1,5 +1,5 @@
-from datetime import UTC, datetime
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 
@@ -38,6 +38,8 @@ def test_session_id_is_stable_and_can_be_supplied_by_jarvis_boundary() -> None:
 
     with pytest.raises(ValueError):
         ConversationSession(session_id="   ")
+    with pytest.raises(TypeError):
+        ConversationSession(session_id=123)  # type: ignore[arg-type]
 
 
 def test_session_lifecycle_distinguishes_close_and_failure() -> None:
@@ -84,11 +86,12 @@ def test_turn_rejects_empty_text_and_invalid_role() -> None:
 
 
 def test_turn_requires_aware_timestamp_and_normalizes_to_utc() -> None:
+    naive = datetime(2026, 9, 5, 5, 0, tzinfo=UTC).replace(tzinfo=None)
     with pytest.raises(ValueError):
         ConversationTurn(
             ConversationRole.USER,
             "hello",
-            accepted_at=datetime(2026, 9, 5, 5, 0),
+            accepted_at=naive,
         )
 
     offset = datetime.fromisoformat("2026-09-05T10:30:00+05:30")
