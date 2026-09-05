@@ -2,50 +2,37 @@
 
 ## Status
 
-**RESEARCH REFRESH: COMPLETE.**
+**RESEARCH: COMPLETE.**
 
-**IMPLEMENTATION: ACTIVE — CORE BOUNDARY + PRODUCTION-ALIGNED BAKE-OFF HARNESS BUILT.**
+**IMPLEMENTATION: COMPLETE.**
 
-**IMPLICIT DURABLE ADMISSION: OFF.**
+**OWNER-PC PRODUCTION ACCEPTANCE: PASS.**
 
 **ACTIVE CLOUD PROVIDER: GEMINI.**
 
 **SELECTED EXTRACTION MODEL: `gemini-3.5-flash-lite`.**
 
-**NEXT GATE: NARROW OWNER-PC PRODUCTION-PATH ACCEPTANCE.**
+**IMPLICIT DURABLE ADMISSION: OFF.**
 
-Date refreshed: 2026-09-05
+Date finalized: 2026-09-05
 
-Phase 4.4 introduces typed memory-candidate extraction without granting a model durable-memory authority. The extractor may propose structured candidate evidence; JARVIS remains the only authority that may later decide whether a candidate may enter canonical memory.
+Phase 4.4 introduces typed memory-candidate extraction without granting a model durable-memory authority. The extractor proposes structured evidence only; JARVIS remains the sole authority over canonical memory.
 
 ---
 
 ## 1. Research-first technology decision
 
-Current provider-native structured output support was re-checked before production integration.
+Provider-native structured output was selected over a custom JSON-repair framework. Gemini structured output through the Google GenAI SDK / Interactions API is wrapped by a narrow JARVIS adapter using the production Pydantic contract.
 
-### Provider-native structured output
+Mature memory frameworks including LangMem, Trustcall, Mem0 and Letta were reviewed as prior art but were not adopted as canonical memory owners because JARVIS already owns SQLCipher storage, provenance, temporal lifecycle, physical forget, context release and authority policy.
 
-Gemini supports schema-constrained JSON output through the current Google GenAI SDK and Interactions API. JARVIS therefore uses a thin provider adapter plus the production Pydantic schema instead of building a JSON-repair framework.
+Disposition: **provider-native structured output + JARVIS-owned schema/policy/lifecycle boundaries.**
 
 Primary references:
 
 - https://ai.google.dev/gemini-api/docs/structured-output
 - https://ai.google.dev/gemini-api/docs/interactions
 - https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
-
-OpenAI structured-output support remains implemented behind the provider abstraction for future whole-provider switching, but it is not a Phase-4.4 production dependency while Gemini is the active JARVIS provider.
-
-### Mature memory-framework review
-
-LangMem, Trustcall, Mem0 and Letta remain useful prior art but are not adopted as JARVIS canonical memory owners:
-
-- LangMem would pull lifecycle ownership toward LangChain/LangGraph;
-- Trustcall is update/patch oriented while JARVIS extraction may not patch canonical truth;
-- Mem0 duplicates the accepted SQLCipher/FTS5/lifecycle ownership, though its separation of extraction from update/delete is useful evidence;
-- Letta would widen runtime/state ownership beyond this phase.
-
-Disposition: **use provider-native structured output + JARVIS-owned Pydantic/policy/lifecycle boundaries.**
 
 ---
 
@@ -57,27 +44,17 @@ ADR-015 governs production cloud intelligence:
 
 The canonical selector is `JARVIS_AI_PROVIDER` / `JarvisConfig.ai_provider`.
 
-Phase 4.4 does not own an independent provider selector. When Gemini is active, memory extraction must use Gemini and the same Google API project/key used by JARVIS's other Gemini cloud workloads. If JARVIS is intentionally switched wholesale to OpenAI in the future, the extractor may use the existing OpenAI adapter under that same active-provider policy.
+Phase 4.4 has no independent provider selector. With Gemini active, memory extraction uses Gemini under the same Google provider/account boundary. A future whole-provider switch to OpenAI may use the existing OpenAI adapter, but production must not mix cloud-AI providers for separate subsystems.
 
-Different model IDs inside one provider are allowed when capabilities differ. For example, the realtime Live model and a structured-output extraction model need not be the same model ID.
-
-Local ML and model-artifact downloads are outside this rule because they do not create a second metered cloud-intelligence provider.
+Different model IDs inside one provider remain allowed when capability surfaces differ.
 
 ---
 
-## 3. Gemini extraction-model selection
+## 3. Selected Gemini extraction model
 
-### Selected: `gemini-3.5-flash-lite`
+### `gemini-3.5-flash-lite` — SELECTED
 
-Google documents Gemini 3.5 Flash-Lite as a stable GA, low-latency and cost-effective model optimized for high-throughput/simple data-processing work. Structured outputs are supported.
-
-Current pricing snapshot:
-
-- Free Tier: free of charge within applicable quota;
-- paid input: $0.30 / 1M tokens;
-- paid output including thinking tokens: $2.50 / 1M tokens.
-
-Owner-PC production-aligned evidence on 2026-09-05:
+Measured owner-PC production-aligned corpus evidence:
 
 - 14/14 provider-eligible cases schema-valid;
 - 100% intent accuracy;
@@ -89,43 +66,23 @@ Owner-PC production-aligned evidence on 2026-09-05:
 - English 10/10, Hindi 1/1, Hinglish 3/3 core exact;
 - p50 latency 1,635.857 ms;
 - p95/max latency 2,414.6174 ms;
-- 6,748 input + 1,293 output tokens across the 14 calls;
-- reviewed subject/predicate/value/temporal payloads were sufficient for non-authoritative quarantine evidence.
+- 6,748 input + 1,293 output tokens across 14 calls;
+- human payload review found the extracted semantic content sufficient for non-authoritative quarantine evidence.
 
-At the current paid price snapshot, the full 14-call run costs approximately $0.00526 before any free-tier allowance.
+The first two-case smoke exposed ambiguous provider-facing intent semantics while preserving valid structure. The production prompt taxonomy was clarified without changing model, corpus or expected answers. The identical smoke rerun passed 2/2, followed by the clean 14/14 full run.
 
-Disposition: **SELECT.**
+`gemini-3.8-flash` was retained as the staged quality-ceiling escalation but was not run because Flash-Lite satisfied the required stop condition.
 
-Full evidence record:
+Full evidence:
 
 - `docs/research/STEP_4_PHASE_4_4_GEMINI_MODEL_SELECTION.md`
 
-References:
-
-- https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
-- https://ai.google.dev/gemini-api/docs/pricing
-- https://ai.google.dev/gemini-api/docs/structured-output
-
-### Escalation reserve: `gemini-3.8-flash`
-
-Gemini 3.8 Flash remains a quality-ceiling escalation model only if later real-world acceptance exposes a material Flash-Lite extraction defect.
-
-The staged bake-off explicitly stops when Flash-Lite satisfies the required safety/correctness bar. That stop condition was met, so 3.8 was not run merely to create a redundant comparison.
-
-Disposition: **DO NOT RUN NOW.**
-
-### Excluded new commitment: `gemini-3.1-flash-lite`
-
-Google lists `gemini-3.5-flash-lite` as the replacement for 3.1 Flash-Lite.
-
-Disposition: **DO NOT START A NEW PHASE-4.4 PRODUCTION COMMITMENT ON 3.1 LITE.**
-
 ---
 
-## 4. Implemented production boundary
+## 4. Accepted production boundary
 
 ```text
-LiveKit committed conversation item
+LiveKit committed USER item
         |
         v
 JARVIS canonical ConversationSession acceptance
@@ -133,38 +90,39 @@ JARVIS canonical ConversationSession acceptance
         v
 exact accepted ConversationTurn observer
         |
-        +-> USER role / owning-session verification
+        +-> owning-session / USER verification
         +-> explicit Phase-4.3 memory-control exclusion
-        +-> deterministic obvious-secret prefilter BEFORE provider
+        +-> deterministic obvious-secret prefilter
         |
         v
-MemoryCandidateExtractor protocol
+MemoryCandidateExtractor
         |
         v
-active-provider native structured output
+active-provider structured output
         |
         v
 Pydantic MemoryExtractionProposal
         |
         +-> deterministic JARVIS proposal policy
-        +-> deterministic secret defense in depth
+        +-> secret defense in depth
         |
         v
 session/process-local MemoryCandidateQuarantine
         |
         X  NO MemoryService call
-        X  NO canonical SQLCipher assertion write
-        X  NO FTS/embedding write
-        X  NO automatic admission
+        X  NO SQLCipher canonical assertion write
+        X  NO FTS write
+        X  NO embedding write
+        X  NO automatic durable admission
 ```
 
-Extraction is background evidence collection and does not block the conversational response path.
+Extraction remains background evidence collection and does not block the conversational response path.
 
 ---
 
-## 5. Exact-turn race prevention
+## 5. Exact-turn and source authority
 
-Production extraction receives the exact already-canonical `ConversationTurn`; it never performs an asynchronous later lookup of "latest user turn".
+Production extraction receives the exact already-canonical `ConversationTurn`; it never performs an asynchronous lookup for a later "latest user turn".
 
 The coordinator verifies that the turn:
 
@@ -172,32 +130,28 @@ The coordinator verifies that the turn:
 - belongs to the owning `ConversationSession`;
 - belongs to the same session as the quarantine.
 
-The LiveKit bridge publishes the same accepted turn object only after canonical conversation acceptance. Observer failure cannot reject or rewrite canonical conversation truth.
+Non-USER sources such as assistant output, web content, email content and document content do not enter this personal-memory extraction path merely because they appear elsewhere in context.
+
+Provider output never authors canonical provenance or authority. JARVIS attaches `session_id`, `turn_id`, `accepted_at`, source class, authority class and extractor identity from runtime truth.
 
 ---
 
 ## 6. Deterministic pre-provider gates
 
-The provider does not decide source authority.
-
 Ordering is:
 
 1. canonical USER turn accepted;
-2. explicit Phase-4.3 memory controls are excluded and remain owned by the explicit governed tool path;
+2. explicit Phase-4.3 memory controls are excluded and remain owned by the governed explicit tool path;
 3. locally recognizable credential/secret material is rejected;
 4. only the remaining turn is sent for semantic extraction.
 
-Assistant output, web content, email content, file/document content and other non-USER sources do not enter the provider extraction path merely because they are present somewhere in context.
-
-A semantic statement such as `Correction: I live ...` remains eligible for Phase-4.4 classification; a deterministic tool command such as `Correct my ... memory to ...` remains Phase-4.3-owned.
+The provider does not decide source authority.
 
 ---
 
-## 7. Single production proposal contract
+## 7. Production proposal contract
 
-`jarvis.memory.candidates.MemoryExtractionProposal` is the canonical provider schema.
-
-It contains:
+`jarvis.memory.candidates.MemoryExtractionProposal` remains the canonical provider schema with:
 
 - intent;
 - candidate type;
@@ -209,19 +163,13 @@ It contains:
 - sensitivity;
 - confidence.
 
-The contract deliberately contains no provider rationale/free-form chain-of-thought field.
+No rationale or free-form chain-of-thought field exists.
 
-The canonical system instruction is:
+The canonical extraction instruction is `jarvis.memory.extractors.MEMORY_EXTRACTION_SYSTEM_PROMPT`; production adapters and the research harness consume the same contract.
 
-- `jarvis.memory.extractors.MEMORY_EXTRACTION_SYSTEM_PROMPT`
+Model confidence is evidence only. Phase 4.4 selects no confidence threshold for durable truth.
 
-Production adapters and the research harness consume the same schema and prompt.
-
-The extractor never authors JARVIS provenance or authority. JARVIS attaches canonical `session_id`, `turn_id`, `accepted_at`, source/authority class and extractor model identity from runtime truth.
-
-Model confidence is evidence only. No confidence threshold is selected in Phase 4.4.
-
-The full payload review observed lexical variation such as `subject=I`, `subject=user`, `subject=we`, plus occasional verbose predicates/values. This is non-blocking in Phase 4.4 because the proposal is quarantine evidence only. Any future implicit durable-admission design must separately define deterministic canonical subject/predicate normalization before storage; provider wording must not silently establish canonical keys.
+Payload review observed harmless lexical variation such as `I` / `user` / `we` and occasionally verbose predicates. Provider wording must never silently become canonical keys. Deterministic canonical subject/predicate normalization remains deferred until a future implicit durable-admission design actually needs it.
 
 ---
 
@@ -229,109 +177,95 @@ The full payload review observed lexical variation such as `subject=I`, `subject
 
 The accepted quarantine is session/process-local only.
 
-Implemented properties:
+Properties:
 
 - USER turns only;
-- background extraction off the response path;
+- background extraction;
 - task ownership by the session runtime;
-- close cancels in-flight extraction;
-- close clears/disposes quarantine;
+- session close cancels in-flight extraction;
+- session close physically disposes all candidate records;
 - raw turn text is not duplicated into quarantine;
-- logs contain bounded outcome/reason metadata rather than personal candidate values;
-- records carry JARVIS-owned turn/session provenance;
+- logs expose bounded outcome/reason/count metadata rather than personal candidate values;
 - no candidate becomes canonical memory merely because a model labels it durable.
 
 A durable candidate table remains deferred until a measured requirement, explicit retention policy and physical-forget integration are approved together.
 
 ---
 
-## 9. Initial deterministic quarantine policy
+## 9. Deterministic quarantine policy
 
-A proposal may enter temporary quarantine only when all of the following hold:
+A proposal may enter temporary quarantine only when all required structural and policy conditions hold, including:
 
-- source is the exact canonical accepted USER turn;
-- turn is not an explicit Phase-4.3 memory-control turn;
+- exact canonical accepted USER source;
+- not an explicit Phase-4.3 memory-control turn;
 - local secret prefilter passes;
-- structured output passes Pydantic validation;
+- Pydantic validation succeeds;
 - proposal is not secret;
-- proposal declares `durable_candidate=true`;
-- proposal intent/type is structurally eligible for durable/change/correction/retraction/meaningful-decision/incident evidence;
+- proposal marks `durable_candidate=true`;
+- intent/type is eligible for durable/change/correction/retraction/meaningful-decision/incident evidence;
 - subject, predicate and value are present.
 
-Weak preferences, session instructions, transient interaction state, uncertain future statements, deletion requests, secret proposals and `none` are rejected from quarantine.
+Weak preferences, session instructions, transient interaction state, uncertain future statements, deletion requests, secrets and `none` are rejected from quarantine.
 
 There is deliberately no confidence cutoff because quarantine grants no truth authority.
 
 ---
 
-## 10. Rollout gate
+## 10. Rollout/configuration boundary
 
-Candidate extraction remains default OFF.
+Extraction remains opt-in configuration rather than a guessed model default.
 
-Enabling requires all of:
+Enabling requires:
 
 - `JARVIS_MEMORY_ENABLED=true`;
 - `JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED=true`;
-- canonical `JARVIS_AI_PROVIDER` configured through normal JARVIS provider policy;
+- canonical `JARVIS_AI_PROVIDER`;
 - explicit `JARVIS_MEMORY_CANDIDATE_EXTRACTION_MODEL`.
 
-There is **no independent extraction-provider setting**.
+Accepted Gemini model value: `gemini-3.5-flash-lite`.
 
-The accepted Gemini model value is now `gemini-3.5-flash-lite`; the config field remains explicit so a future whole-provider migration cannot silently inherit a stale model ID from the wrong provider family.
-
-Automatic durable admission remains a separate future policy decision and stays OFF.
+Automatic durable admission remains OFF even when extraction is enabled.
 
 ---
 
 ## 11. Production-aligned bake-off
 
-The fixed research corpus mirrors actual production gates and reuses the production schema/prompt.
+`tools/research/step4_memory_extraction_bakeoff.py` reuses the production schema/prompt and mirrors deterministic pre-provider gates. It records schema validity, core classification accuracy, false-durable proposals, misses, language breakdown, latency and token usage and never writes canonical memory.
 
-`tools/research/step4_memory_extraction_bakeoff.py`:
+`tests/test_memory_extraction_research_contract.py` protects this alignment.
 
-- imports `MemoryExtractionProposal` and the production system prompt;
-- validates corpus taxonomy against production enums;
-- mirrors deterministic pre-provider gates;
-- does not send non-user sources to the provider;
-- does not send explicit Phase-4.3 command cases to the provider;
-- does not send locally detected secret cases to the provider;
-- sends only remaining eligible direct-user cases;
-- uses `store=False`;
-- records schema validity, core classification accuracy, false-durable proposals, misses, language breakdown, latency and token usage;
-- never writes canonical memory.
-
-`tests/test_memory_extraction_research_contract.py` protects this alignment in CI.
-
-The first two-case Flash-Lite smoke exposed ambiguous intent semantics while preserving valid structure. Following Google structured-output guidance, the production prompt was clarified without changing the model, corpus or expected answers. The identical rerun passed 2/2, then the full provider-eligible corpus passed 14/14 core exact.
+The staged active-provider validation is complete and follows the "smallest sufficient model inside the active provider" rule.
 
 ---
 
-## 12. Staged active-provider validation — COMPLETE
+## 12. Owner-PC production acceptance — PASS
 
-The old requirement for a comparable OpenAI-versus-Gemini production bake-off is superseded by ADR-015 and the one-provider requirement.
+The accepted final run proved:
 
-Completed sequence:
+- Pocket3 stable WASAPI microphone preflight and NVIDIA TV output remained intact;
+- wake detection -> Gemini realtime -> return-to-wake remained functional;
+- ordinary declarative personal fact did not use `remember_memory` after model-facing routing hardening;
+- ordinary declarative fact did not trigger a memory-confirmation question after final conversational hardening;
+- Flash-Lite extraction returned successfully;
+- the ordinary fact produced `outcome=quarantined` with `durable_admission=False`;
+- session close logged `disposed_candidates=1`, `cancelled_tasks=0`, `quarantine_disposed=True`;
+- a fresh-session explicit memory query was skipped by Phase 4.4 and routed to the governed Phase-4.3 exact lookup;
+- canonical lookup returned no current memory for the synthetic predicate;
+- JARVIS did not recall the synthetic value across sessions;
+- CAM++ and LR-ASD stayed diagnostic/shadow only;
+- prototype admission and authority behavior remained unchanged.
 
-1. test `gemini-3.5-flash-lite` on the production-aligned corpus;
-2. require zero schema/provider failures and zero false durable proposals on expected non-durable provider-eligible cases;
-3. inspect semantic payloads, especially correction/retraction/uncertainty and Hindi/Hinglish cases;
-4. measure latency and tokens without inventing an arbitrary threshold;
-5. select Flash-Lite because it satisfies the safety/correctness bar;
-6. stop without spending quota on Gemini 3.8 Flash.
+During acceptance an early realtime model attempt to call `remember_memory` for an implicit fact was blocked by the deterministic Phase-4.3 authorization guard. Research-first prompt/tool-description hardening removed that unnecessary call. A second refinement removed the conversational "should I remember that?" question for ordinary declarative facts. Neither change weakened deterministic memory authority.
 
-Selection philosophy remains **smallest sufficient model inside the active provider**, not strongest model available anywhere.
+The fresh-session explicit memory query later offered to remember the missing fact only after exact memory inspection had returned no record. No mutation occurred. This is an explicit-memory-query UX follow-up, not implicit candidate leakage, and is non-blocking for Phase 4.4.
+
+Owner acceptance record:
+
+- `docs/research/STEP_4_PHASE_4_4_OWNER_PC_ACCEPTANCE.md`
 
 ---
 
-## 13. Historical bake-off disposition
-
-Older Terra-versus-Gemini extraction results remain historical technology evidence only. They predate both the final production-aligned schema/prompt and the single-active-provider rule.
-
-They do not create an OpenAI dependency, do not require a second API account and do not select the Phase-4.4 production model.
-
----
-
-## 14. Automated validation present
+## 13. Automated validation
 
 Coverage protects:
 
@@ -343,45 +277,48 @@ Coverage protects:
 - default-OFF configuration;
 - explicit extraction-model requirement;
 - active-provider adapter boundary;
-- production schema/prompt reuse by the research harness;
+- production schema/prompt reuse;
 - non-user pre-provider gating;
 - explicit-memory-command pre-provider gating;
-- local non-explicit secret rejection;
-- semantic correction remaining provider-eligible;
-- single active cloud-provider/credential ownership through the repo-level architecture guard.
+- local secret rejection;
+- semantic correction provider eligibility;
+- single active cloud-provider architecture;
+- invisible ordinary-fact routing for explicit memory tools.
 
-Latest integrated pre-acceptance CI commit `c3c0dbee16af560f775cf71c1961bd9360f693a9`, Code Quality run `33968527219`: pytest / Ruff / Windows DPAPI / Windows Hello all PASS.
-
----
-
-## 15. Remaining Phase-4.4 gates
-
-Do not mark Phase 4.4 complete yet.
-
-Remaining work:
-
-1. run narrow owner-PC production-path acceptance with `gemini-3.5-flash-lite` enabled under the existing Gemini provider/account;
-2. prove normal wake/Pocket3/Gemini conversation remains stable;
-3. prove accepted USER turns can create session-local quarantine candidates and transient/non-durable turns are dropped;
-4. prove explicit Phase-4.3 memory controls remain on their governed path;
-5. verify no implicit candidate becomes canonical SQLCipher memory;
-6. verify session close disposes quarantine and normal return-to-wake remains intact;
-7. write Phase-4.4 owner acceptance + implementation closure;
-8. only then begin Phase 4.5 semantic retrieval.
-
-Phase 4.5 remains blocked until these gates are complete.
+Final closure CI is recorded separately after the closure/documentation commits.
 
 ---
 
-## 16. Non-goals
+## 14. Phase 4.4 conclusion
+
+**COMPLETE.**
+
+Phase 4.4 successfully establishes a typed semantic-candidate shadow that can observe ordinary accepted USER turns without turning model output into personal truth.
+
+Permanent Phase-4.4 invariants:
+
+- models propose; JARVIS owns authority;
+- implicit durable admission remains OFF;
+- candidate quarantine is non-durable and physically disposed;
+- `MemoryService` remains the sole durable mutation facade;
+- provider history is not canonical memory;
+- secrets and source authority remain deterministic local policy concerns;
+- Step-3 audio/vision/authority architecture is unchanged.
+
+Phase 4.5 semantic retrieval is now unblocked.
+
+---
+
+## 15. Non-goals / deferred work
 
 Phase 4.4 does not:
 
 - auto-admit implicit candidates;
-- write candidates into canonical SQLCipher storage;
-- modify existing assertions;
+- write candidate proposals into canonical SQLCipher storage;
+- modify current assertions;
 - perform semantic retrieval;
 - generate embeddings;
+- select semantic abstention thresholds;
 - mutate provider history;
 - change VAD/turn detection;
 - change Step-3 biometric/authority behavior;
