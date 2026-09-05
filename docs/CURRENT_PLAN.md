@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASES 4.0A–4.4 COMPLETE — PHASE 4.5 ACTIVE / RETRIEVAL STACK SELECTED / PRODUCTION IMPLEMENTATION ACTIVE**
+**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASES 4.0A–4.4 COMPLETE — PHASE 4.5 ACTIVE / 4.5A–4.5B COMPLETE / 4.5C OWNER-PC COMPATIBILITY NEXT**
 
 This file is the operational source of truth for current work. Detailed measured evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` describes architecture that actually exists and has passed acceptance.
 
@@ -145,41 +145,74 @@ query/context need
  -> active Gemini session
 ```
 
-#### Phase 4.5A — encrypted derived-vector lifecycle — ACTIVE
+#### Phase 4.5A — encrypted derived-vector lifecycle — COMPLETE
 
-Implement:
+Implemented and validated:
 
-- SQLCipher migration for derived semantic vectors;
+- SQLCipher schema v2 for derived semantic vectors;
 - canonical assertion FK with `ON DELETE CASCADE`;
 - explicit model ID + immutable revision + dimension + dtype/byte-order + content fingerprint metadata;
 - little-endian float32 vector BLOB representation;
-- deterministic stale-vector detection/rebuild semantics;
-- tests proving physical forget atomically removes derived vectors.
+- deterministic stale-vector detection semantics;
+- automated proof that canonical physical `forget()` removes the derived vector.
 
-#### Phase 4.5B — lexical + dense + RRF retrieval core — NEXT
+Result record:
 
-Implement:
+- `docs/research/STEP_4_PHASE_4_5A_IMPLEMENTATION_RESULT.md`.
+
+#### Phase 4.5B — lexical + dense + RRF retrieval core — COMPLETE
+
+Implemented and validated:
 
 - current eligible assertion selection before ranking;
-- safe FTS5 lexical retrieval;
-- exact dense cosine over encrypted/rebuildable stored vectors;
+- assertion + provenance-source authority/sensitivity filtering;
+- safe locally constructed FTS5 MATCH grammar;
+- exact dense cosine over encrypted/rebuildable current vectors;
+- stale vector exclusion by model/revision/content contract;
 - equal-weight RRF (`k=60`, lexical window `10`);
 - deterministic first-stage ordering;
 - no ANN dependency.
 
-#### Phase 4.5C — Qwen local model adapters — NEXT
+GitHub Actions run `33983727641` passed Ruff, full pytest, Windows DPAPI, and Windows Hello.
 
-Implement lazy local adapters behind narrow protocols:
+Result record:
 
-- `Qwen/Qwen3-Embedding-0.6B`, 256d, normalized query/document encoding;
-- immutable model-revision pin;
-- `Qwen/Qwen3-Reranker-0.6B`, top 3, BF16;
+- `docs/research/STEP_4_PHASE_4_5B_IMPLEMENTATION_RESULT.md`.
+
+#### Phase 4.5C — Qwen local model adapters — ACTIVE / OWNER-PC COMPATIBILITY NEXT
+
+Implemented production adapter contract:
+
+- lazy `Qwen/Qwen3-Embedding-0.6B` adapter;
+- immutable embedding revision `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`;
+- 256d normalized query/document encoding;
+- exact measured JARVIS query instruction;
+- lazy top-3 `Qwen/Qwen3-Reranker-0.6B` adapter;
+- immutable reranker revision `e61197ed45024b0ed8a2d74b80b4d909f1255473`;
 - deterministic exact-score tie handling;
-- no model import/load in ordinary unit-test paths unless explicitly requested.
+- `trust_remote_code=False`;
+- no model import/load in ordinary unit-test/startup paths;
+- fake-backed automated adapter tests;
+- isolated optional `retrieval` dependency extra using the measured Sentence Transformers `6.0.1` + Transformers `5.16.1` versions;
+- retrieval extra does **not** own or change the production Torch pin.
 
-Do **not** silently change the accepted Step-3 Torch/CUDA production dependency set. Reconcile the local retrieval dependency path with existing vision/identity GPU constraints through measured owner-machine compatibility before final production enablement.
+Owner-machine compatibility gate:
 
-#### Phase 4.5D — abstention calibration — BLOCKED ON 4.5A–C
+- preserve accepted `torch==2.13.0` / `torchvision==0.28.0` vision stack;
+- verify existing vision imports in the same process;
+- run real CUDA embedding + top-3 reranking with both Qwen models resident;
+- record combined CUDA memory;
+- do not wire retrieval into production voice until this gate passes.
+
+Harness:
+
+- `tools/research/step4_phase45c_runtime_compatibility.py`.
+
+Status record:
+
+- `docs/research/STEP_4_PHASE_4_5C_IMPLEMENTATION_STATUS.md`.
+
+#### Phase 4.5D — abstention calibration — BLOCKED ON 4.5C
 
 Expand the acceptance corpus with many more:
 
@@ -232,6 +265,6 @@ No absolute embedding/reranker cutoff is approved before this measurement.
 
 ## Immediate Next Action
 
-**IMPLEMENT PHASE 4.5A — ENCRYPTED DERIVED-VECTOR LIFECYCLE.**
+**RUN PHASE 4.5C OWNER-MACHINE GPU/DEPENDENCY COMPATIBILITY ACCEPTANCE.**
 
-Add the migration/store contract first, with physical-forget cascade and rebuild/version tests. Do not wire semantic retrieval into production conversation until the derived-vector lifecycle is correct and CI-clean. Then proceed to 4.5B lexical+dense+RRF core.
+Pull the final Phase-4.5C head into the accepted Windows `.venv`, install only the isolated `retrieval` extra, prove the Torch release remains `2.13.0`, and run `tools/research/step4_phase45c_runtime_compatibility.py` with the existing vision stack present. Do not begin Phase 4.5D or production voice integration until that compatibility result passes and is recorded.
