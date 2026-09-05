@@ -103,11 +103,14 @@ def test_provider_sdk_imports_stay_inside_approved_adapter_boundaries() -> None:
                     )
             for module in modules:
                 if (
-                    module == "openai"
-                    or module.startswith("openai.")
-                    or module == "google.genai"
-                    or module.startswith("google.genai.")
-                    or module in {"livekit.plugins.google", "livekit.plugins.openai"}
+                    module
+                    in {
+                        "openai",
+                        "google.genai",
+                        "livekit.plugins.google",
+                        "livekit.plugins.openai",
+                    }
+                    or module.startswith(("openai.", "google.genai."))
                 ) and relative not in allowed:
                     violations.append((relative, module))
 
