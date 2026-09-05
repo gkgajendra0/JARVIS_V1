@@ -8,11 +8,24 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from jarvis.security import (
-    KeyProtectionError as KeyProtectionError,
-    KeyProtector as KeyProtector,
-    SecurityError as IdentityCryptoError,
-    WindowsDpapiKeyProtector as WindowsDpapiKeyProtector,
+    KeyProtectionError,
+    KeyProtector,
+    SecurityError,
+    WindowsDpapiKeyProtector,
 )
+
+IdentityCryptoError = SecurityError
+
+__all__ = [
+    "EncryptedPayload",
+    "EnvelopeCipher",
+    "IdentityCryptoError",
+    "KeyProtectionError",
+    "KeyProtector",
+    "TemplateIntegrityError",
+    "WindowsDpapiKeyProtector",
+    "canonical_aad",
+]
 
 
 class TemplateIntegrityError(IdentityCryptoError):
