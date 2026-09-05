@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASES 4.0A–4.4 COMPLETE — PHASE 4.5 ACTIVE / RESEARCH REFRESH COMPLETE / LOCAL EMBEDDING BAKE-OFF NEXT**
+**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASES 4.0A–4.4 COMPLETE — PHASE 4.5 ACTIVE / RETRIEVAL STACK SELECTED / PRODUCTION IMPLEMENTATION ACTIVE**
 
 This file is the operational source of truth for current work. Detailed measured evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` describes architecture that actually exists and has passed acceptance.
 
@@ -35,47 +35,72 @@ This file is the operational source of truth for current work. Detailed measured
 
 ---
 
-## Technology disposition already accepted
+## Accepted Step-4 technology
 
-### Canonical memory
+### Canonical memory + security
 
-- SQLCipher 4.17.0 Community / SQLite canonical relational store;
-- accepted SQLite baseline 3.53.3;
-- FTS5 derived lexical index;
-- JARVIS-owned temporal lifecycle;
+- SQLCipher 4.17.0 Community / SQLite 3.53.3 canonical relational store;
+- FTS5 derived lexical index with secure-delete behavior;
+- JARVIS-owned bitemporal/current lifecycle;
+- random 32-byte SQLCipher key protected by Windows DPAPI user scope + purpose binding;
 - no graph/vector service as canonical truth owner.
 
-### Encryption/key protection
-
-- pinned reproducible Windows SQLCipher build;
-- random 32-byte database key;
-- Windows DPAPI user scope + purpose binding;
-- no plaintext key file.
-
-### Cloud-AI provider boundary
+### Active cloud-AI provider
 
 ADR-015 establishes one canonical production provider through `JARVIS_AI_PROVIDER` / `JarvisConfig.ai_provider`.
 
 Current active provider: **Gemini**.
 
-Voice, scripted cloud TTS, memory extraction and future cloud-reasoning/tool workloads remain inside the selected provider family/account.
+Voice, scripted cloud TTS, structured memory extraction and future cloud-reasoning/tool workloads remain inside the selected provider family/account.
 
-### Phase 4.4 selected extraction model
+### Phase 4.4 structured extraction
 
-**`gemini-3.5-flash-lite`**
+Selected model: **`gemini-3.5-flash-lite`**.
 
-Accepted measured evidence:
+Owner-PC production acceptance proved session-local candidate quarantine, physical disposal on session close, no implicit durable write, no cross-session resurrection, and stable Step-3 audio/vision behavior.
 
-- 14/14 provider-eligible cases schema-valid;
-- 100% intent/type/durable core exact accuracy;
-- zero false durable proposals;
-- zero missed durable candidates;
-- English 10/10, Hindi 1/1, Hinglish 3/3;
-- p50 ~1.636 s, p95/max ~2.415 s;
-- 6,748 input + 1,293 output tokens across the full 14-call run;
-- owner-PC production path accepted with no cross-session durable resurrection.
+### Phase 4.5 local retrieval stack — SELECTED
 
-`gemini-3.8-flash` was not run because the staged escalation condition was not met.
+The 2026 incumbent/challenger bake-off is complete on the actual JARVIS RTX 5060 Ti.
+
+**Selected embedding:** `Qwen/Qwen3-Embedding-0.6B`
+
+Production retrieval contract:
+
+- JARVIS memory-specific query instruction;
+- normalized embeddings;
+- 256-dimensional Matryoshka output;
+- model-native BF16 path where supported;
+- exact local cosine initially;
+- SQLite FTS5 lexical rank;
+- equal-weight RRF, measured contract `k=60`, lexical window `10`;
+- top-3 `Qwen/Qwen3-Reranker-0.6B` at model-default BF16;
+- exact reranker-score tie -> preserve first-stage fused rank -> stable memory ID;
+- no dedicated ANN/vector extension until scale evidence requires one;
+- no absolute embedding/reranker threshold until a larger abstention corpus is measured.
+
+Measured Qwen owner-machine evidence:
+
+- dense Recall@1 `0.8824`, Recall@3 `1.0000`, MRR `0.9412`;
+- FTS5 + Qwen RRF Recall@1 `0.9412`, Recall@3 `1.0000`, MRR `0.9608`;
+- hybrid p50 `63.2179 ms`, p95 `68.7911 ms`;
+- peak CUDA allocation `1,292,429,824` bytes;
+- top-3 Qwen reranker previously measured Recall@1/Recall@3/MRR `1.0000` on the same fixed retrieval corpus;
+- BF16 reranker precision follow-up showed zero repeat/order instability.
+
+Rejected challenger: **`google/embeddinggemma-300m`**.
+
+Reason:
+
+- dense overall Recall@1 tied Qwen at `0.8824`;
+- actual hybrid Recall@1 regressed to `0.7647`;
+- Hindi fixed case failed at rank 1 and Hinglish hybrid Recall@1 fell to `0.7143`;
+- hybrid p50/p95 were slower (`84.0370 / 96.7016 ms`);
+- measured peak CUDA and process RSS were higher despite the smaller parameter count.
+
+Selection record:
+
+- `docs/research/STEP_4_PHASE_4_5_EMBEDDING_SELECTION.md`.
 
 ---
 
@@ -91,140 +116,90 @@ Encrypted canonical memory kernel, temporal lifecycle, FTS5 synchronization/rebu
 
 ### Phase 4.2 — COMPLETE
 
-Bounded LiveContext + deterministic ContextAssembler accepted. Provider history remains non-canonical.
+Bounded `LiveContext` + deterministic `ContextAssembler` accepted. Provider history remains non-canonical.
 
 ### Phase 4.3 — COMPLETE
 
 Governed explicit `remember / inspect / correct / forget` accepted through the normal production voice path.
 
-Owner-PC acceptance proved remember -> cross-process recall -> correction -> corrected cross-process recall -> physical forget -> absence, plus implicit-write and credential rejection.
-
 ### Phase 4.4 — COMPLETE
 
-Structured extraction + session-local candidate quarantine accepted.
+Structured extraction + session-local candidate quarantine accepted. Implicit auto-admission remains disabled.
 
-Permanent accepted behavior:
+### Phase 4.5 — ACTIVE
 
-```text
-accepted canonical USER turn
- -> deterministic source / explicit-control / secret gates
- -> active-provider structured extraction
- -> typed proposal
- -> deterministic JARVIS policy
- -> session-local quarantine
- -> physical disposal on session close
- X  no MemoryService durable mutation
- X  no SQLCipher/FTS/embedding write
- X  no automatic durable admission
-```
+Goal: production semantic retrieval over **eligible canonical memory**, without giving retrieval any truth or mutation authority.
 
-Owner-PC acceptance proved:
-
-- ordinary fact -> Flash-Lite proposal -> `outcome=quarantined`;
-- `durable_admission=False`;
-- no explicit remember tool call for ordinary facts after routing hardening;
-- ordinary implicit memory handling remains invisible to conversation;
-- session close -> `disposed_candidates=1`, `quarantine_disposed=True`;
-- fresh explicit memory query -> Phase-4.3 exact lookup miss;
-- no durable resurrection of the synthetic value;
-- wake/Pocket3/Gemini/vision/return-to-wake stable;
-- CAM++/LR-ASD/prototype/authority behavior unchanged.
-
-Closure records:
-
-- `docs/research/STEP_4_PHASE_4_4_GEMINI_MODEL_SELECTION.md`;
-- `docs/research/STEP_4_PHASE_4_4_OWNER_PC_ACCEPTANCE.md`;
-- `docs/research/STEP_4_PHASE_4_4_IMPLEMENTATION_RESULT.md`.
-
----
-
-## Phase 4.5 — ACTIVE
-
-### Goal
-
-Add semantic retrieval over **eligible canonical memory** without letting retrieval establish, modify, resurrect, or override truth.
-
-The accepted direction remains:
+Target pipeline:
 
 ```text
-structured / temporal / authority / sensitivity eligibility
- -> exact lookup when possible
- -> SQLite FTS5 + local dense embeddings
- -> rank fusion
- -> small candidate set
- -> local reranker only if measured benefit remains
- -> abstention / release policy
+query/context need
+ -> deterministic exact current lookup when possible
+ -> canonical eligibility (state/time/authority/sensitivity)
+ -> FTS5 lexical rank + Qwen3-Embedding-0.6B dense rank
+ -> equal-weight RRF
+ -> top 3 eligible candidates
+ -> Qwen3-Reranker-0.6B BF16
+ -> measured abstention/release policy
  -> ContextAssembler
+ -> active Gemini session
 ```
 
-### Research refresh result
+#### Phase 4.5A — encrypted derived-vector lifecycle — ACTIVE
 
-Current 2026 research has been refreshed before implementation.
+Implement:
 
-Measured incumbent:
+- SQLCipher migration for derived semantic vectors;
+- canonical assertion FK with `ON DELETE CASCADE`;
+- explicit model ID + immutable revision + dimension + dtype/byte-order + content fingerprint metadata;
+- little-endian float32 vector BLOB representation;
+- deterministic stale-vector detection/rebuild semantics;
+- tests proving physical forget atomically removes derived vectors.
 
-- `Qwen/Qwen3-Embedding-0.6B`;
-- 256d Matryoshka;
-- JARVIS retrieval instruction;
-- existing owner-machine Recall@3 = 1.0000;
-- existing RRF Recall@1 = 0.9412;
-- existing top-3 Qwen reranker result = 1.0000 Recall@1/MRR.
+#### Phase 4.5B — lexical + dense + RRF retrieval core — NEXT
 
-Only new challenger worth a fresh bake-off:
+Implement:
 
-- `google/embeddinggemma-300m`;
-- ~308M parameters;
-- 100+ languages;
-- on-device/private design;
-- Matryoshka embeddings;
-- materially smaller model than the incumbent;
-- official Sentence Transformers path.
+- current eligible assertion selection before ranking;
+- safe FTS5 lexical retrieval;
+- exact dense cosine over encrypted/rebuildable stored vectors;
+- equal-weight RRF (`k=60`, lexical window `10`);
+- deterministic first-stage ordering;
+- no ANN dependency.
 
-Current mature inference boundary:
+#### Phase 4.5C — Qwen local model adapters — NEXT
 
-- Sentence Transformers 6.0.x family;
-- native Qwen embedding integration;
-- native current CrossEncoder support for Qwen3 rerankers.
+Implement lazy local adapters behind narrow protocols:
 
-Vector extension decision:
+- `Qwen/Qwen3-Embedding-0.6B`, 256d, normalized query/document encoding;
+- immutable model-revision pin;
+- `Qwen/Qwen3-Reranker-0.6B`, top 3, BF16;
+- deterministic exact-score tie handling;
+- no model import/load in ordinary unit-test paths unless explicitly requested.
 
-- `sqlite-vec` remains pre-v1 -> not selected;
-- `sqliteai/sqlite-vector` reached 1.0 and is the preferred future extension candidate if scale proves a need;
-- initial Phase-4.5 base path remains exact local cosine over derived embeddings because no current JARVIS measurement requires ANN/native vector indexing.
+Do **not** silently change the accepted Step-3 Torch/CUDA production dependency set. Reconcile the local retrieval dependency path with existing vision/identity GPU constraints through measured owner-machine compatibility before final production enablement.
 
-Research record:
+#### Phase 4.5D — abstention calibration — BLOCKED ON 4.5A–C
 
-- `docs/research/STEP_4_PHASE_4_5_RESEARCH_REFRESH.md`.
+Expand the acceptance corpus with many more:
 
-### Phase 4.5 mandatory invariants
+- absent-answer queries;
+- ambiguous/near-miss queries;
+- stale/superseded/history cases;
+- corrected and forgotten memories;
+- sensitivity boundaries;
+- adversarial/poisoned content;
+- English/Hindi/Hinglish paraphrases.
 
-- only canonical eligible memory may be retrieved;
-- current/valid records outrank expired/superseded history;
-- sensitivity/release eligibility is applied before provider context release;
-- retrieval ranks evidence only and never establishes truth;
-- embeddings/reranker outputs are derived/rebuildable artifacts;
-- physical forget must remove or make unretrievable every derived representation;
-- no vector service becomes canonical truth owner;
-- exact lookup remains preferred when a deterministic exact key exists;
-- no provider history/cache becomes memory;
-- no cloud-AI second provider may be introduced for retrieval;
-- local retrieval must not alter Step-3 audio/vision/authority behavior;
-- abstention thresholds must be measured, not guessed.
+No absolute embedding/reranker cutoff is approved before this measurement.
 
-### Phase 4.5 evidence sequence
+#### Phase 4.5E — ContextAssembler integration + owner acceptance — BLOCKED ON 4.5D
 
-1. build a **research-only** fixed-corpus local bake-off using current stable Sentence Transformers;
-2. compare exactly two embedding candidates: Qwen3-Embedding-0.6B incumbent vs EmbeddingGemma 300M challenger;
-3. keep deterministic eligibility, FTS5 and RRF identical between candidates;
-4. measure Recall@1, Recall@3, MRR, multilingual breakdown, no-answer behavior, encode p50/p95, model-load time, GPU/process memory and hybrid latency;
-5. select EmbeddingGemma only if it materially reduces resources while meeting the required JARVIS retrieval quality; otherwise keep Qwen;
-6. add Qwen3-Reranker-0.6B only if first-stage ordering errors remain and the reranker materially fixes them;
-7. benchmark exact-vector scan at realistic memory scale before considering `sqlite-vector`;
-8. define derived embedding storage/rebuild/physical-forget semantics;
-9. implement production retrieval only after the bake-off selection is documented;
-10. expand corpus for no-answer/stale/corrected/forgotten/sensitive/adversarial cases and calibrate abstention from data;
-11. integrate retrieval only through `ContextAssembler`;
-12. run automated + owner-PC acceptance and write Phase-4.5 closure.
+- release only accepted retrieval evidence through `ContextAssembler`;
+- preserve bounded context budgets and evidence metadata;
+- never release `LOCAL_ONLY` or `SECRET_PROHIBITED` content to cloud context;
+- run automated + owner-PC GPU/voice acceptance;
+- record closure before starting Phase 4.6.
 
 ---
 
@@ -257,6 +232,6 @@ Research record:
 
 ## Immediate Next Action
 
-**BUILD THE PHASE-4.5 RESEARCH-ONLY LOCAL EMBEDDING BAKE-OFF HARNESS.**
+**IMPLEMENT PHASE 4.5A — ENCRYPTED DERIVED-VECTOR LIFECYCLE.**
 
-Do not modify production retrieval yet. Reuse the existing fixed JARVIS multilingual corpus and deterministic eligibility/FTS/RRF logic. Compare only Qwen3-Embedding-0.6B against EmbeddingGemma 300M under the current stable Sentence Transformers runtime, then select from measured owner-machine quality/resource data. Reranker and vector-extension decisions remain conditional on measured need.
+Add the migration/store contract first, with physical-forget cascade and rebuild/version tests. Do not wire semantic retrieval into production conversation until the derived-vector lifecycle is correct and CI-clean. Then proceed to 4.5B lexical+dense+RRF core.
