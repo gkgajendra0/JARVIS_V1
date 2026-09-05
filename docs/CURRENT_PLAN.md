@@ -57,6 +57,9 @@ Step 4 owns CAP-008 through CAP-013: live context, long-term personal memory, ep
 - retrieval ranks eligible canonical records and never establishes truth;
 - raw full transcripts/provider payloads are not archived merely because available;
 - current runtime/config/repository truth outranks learned self-memory;
+- **one active cloud-AI provider/account owns production cloud intelligence at a time; subsystems do not independently select paid providers**;
+- different model IDs inside the active provider are allowed only when capability/efficiency requires them;
+- local ML/model artifacts are not cloud-provider subscriptions and remain separate;
 - Step 4 grants no autonomous repair, code modification, deployment, or authority expansion.
 
 ---
@@ -79,18 +82,34 @@ Step 4 owns CAP-008 through CAP-013: live context, long-term personal memory, ep
 - no plaintext key file;
 - portable disaster recovery deferred.
 
+### Cloud-AI provider boundary
+
+ADR-015 establishes one canonical production cloud provider through `JARVIS_AI_PROVIDER` / `JarvisConfig.ai_provider`.
+
+Current active provider: **Gemini**.
+
+Voice, scripted cloud TTS, memory extraction and future cloud-reasoning/tool workloads must remain in the selected provider family/account. An independent memory-extraction provider is not permitted.
+
 ### Extraction target for Phase 4.4
 
 - provider-native structured output;
 - explicit Pydantic candidate contract;
-- replaceable OpenAI/Gemini extractor adapters;
+- provider-swappable adapter boundary for a future whole-provider migration;
 - exact accepted canonical USER turn as extraction source;
 - deterministic explicit-command/source/secret pre-provider gates;
 - process/session-local candidate quarantine;
 - model proposes candidate only;
 - deterministic JARVIS policy owns admission;
 - extraction defaults OFF until configured;
+- extraction model must be explicit;
 - implicit durable admission remains OFF until separately measured and accepted.
+
+Current Gemini model-selection strategy:
+
+1. test `gemini-3.5-flash-lite` first because Google positions it for high-throughput, low-cost simple data extraction;
+2. select it if the fixed safety/correctness corpus passes;
+3. only if it materially fails, run the identical corpus on `gemini-3.8-flash` as the quality-ceiling escalation;
+4. do not introduce OpenAI or another provider merely for memory extraction.
 
 ### Retrieval target for Phase 4.5
 
@@ -204,33 +223,39 @@ Implemented properties include:
 - USER-only extraction;
 - deterministic Phase-4.3 explicit-memory-command exclusion before provider calls;
 - deterministic obvious-secret rejection before provider calls;
-- provider-native OpenAI/Gemini structured-output adapters;
+- provider-native structured-output adapters behind the single active-provider policy;
 - one production `MemoryExtractionProposal` Pydantic contract;
 - one production extraction system prompt shared by runtime and bake-off;
 - deterministic post-provider policy and secret defense in depth;
 - process/session-local `MemoryCandidateQuarantine` only;
 - cancellation and physical quarantine disposal on session close;
 - no `MemoryService` call, SQLCipher assertion write, FTS write, embedding write or automatic admission;
-- extraction provider/model must be explicitly configured; no guessed model default;
+- extraction model must be explicitly configured; no guessed model default;
+- no independent extraction-provider setting;
 - Step-3 audio/vision/authority path remains unchanged.
 
-The 24-case extraction harness has been realigned to the production contract. Non-user sources, explicit Phase-4.3 commands and locally detectable secrets are now tested as deterministic pre-provider gates instead of being sent to an LLM to decide source authority.
+The fixed extraction harness has been realigned to production. Non-user sources, explicit Phase-4.3 commands and locally detectable secrets are tested as deterministic pre-provider gates instead of being sent to an LLM to decide source authority.
 
-The earlier Terra/Gemini provisional tie is retained as historical technology evidence only and is not directly comparable with the production-aligned harness.
+The earlier Terra/Gemini provisional tie is retained as historical technology evidence only. It does not create an OpenAI production dependency.
 
-Current record:
+Current records:
 
 - `docs/research/STEP_4_PHASE_4_4_IMPLEMENTATION_DECISIONS.md`;
+- `docs/research/STEP_4_MEMORY_EXTRACTION_BAKEOFF_PLAN.md`;
 - `docs/research/STEP_4_MEMORY_EXTRACTION_PROVISIONAL_TIE.md` (historical/provisional only).
+
+Latest pre-selection documented branch CI run `33967397439`: pytest / Ruff / Windows DPAPI / Windows Hello all PASS.
 
 Remaining before Phase 4.4 can close:
 
-1. fully green integrated CI on the documented branch head;
-2. fair production-aligned provider/model bake-off with comparable evidence;
-3. provider/model selection from measured quality/safety/latency/cost evidence, or an explicitly justified tie disposition;
-4. narrow owner-PC production-path acceptance after that provider decision;
-5. prove candidate extraction creates no durable memory and normal wake/Pocket3/provider behavior remains stable;
-6. Phase-4.4 implementation/acceptance closure record.
+1. run a 2-case owner-PC `gemini-3.5-flash-lite` smoke using the existing Google API project;
+2. if smoke succeeds, run the full production-aligned provider-eligible corpus on Flash-Lite;
+3. require safety/correctness first, including zero schema/provider failures and zero false durable proposals on expected non-durable provider-eligible cases;
+4. inspect every core semantic mismatch and English/Hindi/Hinglish breakdown;
+5. select Flash-Lite if sufficient; only if it materially fails, escalate to `gemini-3.8-flash` using the identical corpus;
+6. run narrow owner-PC production-path acceptance after the model decision;
+7. prove candidate extraction creates no durable memory and normal wake/Pocket3/Gemini behavior remains stable;
+8. write Phase-4.4 implementation/acceptance closure.
 
 Phase 4.5 remains blocked.
 
@@ -262,8 +287,8 @@ Phase 4.5 remains blocked.
 - `docs/research/STEP_4_PHASE_4_3_OWNER_PC_ACCEPTANCE.md`;
 - `docs/research/STEP_4_PHASE_4_3_IMPLEMENTATION_RESULT.md`;
 - `docs/research/STEP_4_PHASE_4_4_IMPLEMENTATION_DECISIONS.md`;
+- `docs/research/STEP_4_MEMORY_EXTRACTION_BAKEOFF_PLAN.md`;
 - `docs/research/STEP_4_RETRIEVAL_TECHNOLOGY_DECISION.md`;
-- `docs/research/STEP_4_MEMORY_EXTRACTION_PROVISIONAL_TIE.md`;
 - `docs/research/STEP_4_SQLCIPHER_417_WINDOWS_RESULT.md`;
 - `docs/research/STEP_4_SELF_KNOWLEDGE_SBOM_WINDOWS_RESULT.md`.
 
@@ -284,6 +309,6 @@ Phase 4.5 remains blocked.
 
 ## Immediate Next Action
 
-**COMPLETE PHASE 4.4 PRODUCTION-ALIGNED EXTRACTION ACCEPTANCE.**
+**RUN THE PHASE-4.4 GEMINI 3.5 FLASH-LITE TWO-CASE SMOKE.**
 
-Keep the integrated branch green, then run the fair provider/model bake-off using the production schema/prompt and deterministic pre-provider gates. Select or explicitly retain a tie only from measured evidence. Only after that decision should candidate extraction be enabled for a narrow owner-PC production-path acceptance. Implicit durable admission remains OFF throughout Phase 4.4.
+Use the production schema/prompt and deterministic pre-provider gates under the owner's existing Google API project. If the model/API/schema smoke succeeds, proceed to the full fixed corpus. Do not run Gemini 3.8 Flash unless Flash-Lite materially fails the safety/correctness gate. Implicit durable admission remains OFF throughout Phase 4.4.
