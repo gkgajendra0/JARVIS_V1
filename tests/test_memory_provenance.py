@@ -38,7 +38,7 @@ def test_source_normalizes_identifiers_timestamps_and_hash() -> None:
 
 
 def test_source_requires_aware_provenance_timestamps() -> None:
-    naive = datetime(2026, 9, 5, 5, 0)
+    naive = datetime(2026, 9, 5, 5, 0)  # noqa: DTZ001 - deliberately invalid fixture
     with pytest.raises(ValueError, match="timezone-aware"):
         source(observed_at=naive)
     with pytest.raises(ValueError, match="timezone-aware"):
