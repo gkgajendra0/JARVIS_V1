@@ -4,7 +4,7 @@ Date: 2026-09-05
 
 ## Status
 
-**CUDA ENVIRONMENT FIXED. QWEN MEASURED. EMBEDDINGGEMMA ACCESS PENDING.**
+**CUDA ENVIRONMENT FIXED. QWEN MEASURED. EMBEDDINGGEMMA RUN COMPLETED; RESULT INGESTION PENDING.**
 
 ## Initial owner-PC observation
 
@@ -99,18 +99,47 @@ memory:
 
 This is valid model evidence and must not be rerun merely because the challenger failed to load.
 
-## EmbeddingGemma blocker
+## EmbeddingGemma access resolution
 
-`google/embeddinggemma-300m` returned `GatedRepoError` / HTTP 401 before model execution. The Hugging Face model repository requires the individual user to review and accept Google's Gemma usage license and then authenticate the local Hugging Face client.
+The owner created/logged into Hugging Face account `gkgajendra0`, accepted the EmbeddingGemma gated-model terms, and authenticated the existing research environment through Hugging Face browser OAuth.
 
-This is an access-control blocker, not model-quality evidence.
+Local authentication verification returned:
+
+```text
+HF user: gkgajendra0
+```
+
+CUDA was reconfirmed immediately before the challenger run:
+
+```text
+Torch: 2.14.0+cu130
+CUDA: True
+GPU: NVIDIA GeForce RTX 5060 Ti
+```
+
+The harness then ran **only** `embeddinggemma`, downloaded and loaded `google/embeddinggemma-300m`, and completed successfully:
+
+```text
+Wrote UTF-8 result: .step4-phase45-embeddinggemma-only.json
+STATUS: PASS
+```
+
+The Windows Hugging Face symlink-cache warning is non-blocking; it affects disk-cache efficiency only and did not stop model loading or benchmark completion.
+
+A later PowerShell `else` command failed because `else` was entered as a separate statement after the preceding `if` block. That happened only during result-printing after the JSON had already been written and does not invalidate the benchmark.
+
+## Current evidence boundary
+
+- Qwen measurement: valid and preserved.
+- EmbeddingGemma execution: valid and completed.
+- Final model selection: **not yet made** because the generated EmbeddingGemma JSON still needs case-level ingestion and comparison against the preserved Qwen JSON.
 
 ## Next measured step
 
-1. the owner accepts EmbeddingGemma's usage terms in the Hugging Face browser UI;
-2. authenticate the existing `.step4-retrieval-venv` with `hf auth login`;
-3. run **only** the missing `embeddinggemma` profile into a separate JSON result;
-4. preserve the already-valid Qwen JSON unchanged;
-5. compare case-level quality, multilingual performance, latency, RSS, and CUDA memory before selecting the production embedding model.
+1. ingest `.step4-phase45-embedding-bakeoff.json` containing the preserved Qwen result;
+2. ingest `.step4-phase45-embeddinggemma-only.json` containing the completed challenger result;
+3. compare case-level quality, multilingual performance, latency, absent-query behavior, RSS, and CUDA memory;
+4. select the production embedding model only from those measured results;
+5. then begin the Phase-4.5 production semantic-retrieval implementation.
 
-Do not rerun Qwen unless the fixed corpus, benchmark contract, or machine environment materially changes.
+Do not rerun either model unless the fixed corpus, benchmark contract, or machine environment materially changes.
