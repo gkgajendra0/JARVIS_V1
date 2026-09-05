@@ -17,6 +17,13 @@ from .retrieval import RetrievalCandidate
 QWEN3_RERANKER_MODEL_ID = "Qwen/Qwen3-Reranker-0.6B"
 QWEN3_RERANKER_REVISION = "e61197ed45024b0ed8a2d74b80b4d909f1255473"
 QWEN3_RERANKER_CANDIDATE_WINDOW = 3
+JARVIS_MEMORY_RERANK_INSTRUCTION = (
+    "Judge whether the memory Document directly and sufficiently answers the JARVIS "
+    "memory Query using only facts stated in the Document. Answer yes only when the "
+    "Document supports the specific fact or relation requested; answer no when it is "
+    "merely related, missing the requested detail, contradictory, negated, or otherwise "
+    "does not answer the Query."
+)
 
 
 class LocalRetrievalModelError(RuntimeError):
@@ -198,6 +205,7 @@ class Qwen3RetrievalReranker:
         *,
         device: str | None = "cuda",
         candidate_window: int = QWEN3_RERANKER_CANDIDATE_WINDOW,
+        instruction: str | None = None,
         model_factory: Callable[..., Any] | None = None,
     ) -> None:
         if device is not None and not isinstance(device, str):
@@ -208,6 +216,11 @@ class Qwen3RetrievalReranker:
             raise ValueError("candidate_window must be positive")
         self._device = device
         self._candidate_window = candidate_window
+        self._instruction = (
+            _text(instruction, name="reranker instruction")
+            if instruction is not None
+            else None
+        )
         self._model_factory = model_factory
         self._model: Any | None = None
         self._lock = threading.RLock()
@@ -219,6 +232,10 @@ class Qwen3RetrievalReranker:
     @property
     def candidate_window(self) -> int:
         return self._candidate_window
+
+    @property
+    def instruction(self) -> str | None:
+        return self._instruction
 
     def rerank(
         self,
@@ -272,10 +289,13 @@ class Qwen3RetrievalReranker:
         if self._model is not None:
             return self._model
         factory = self._model_factory or _cross_encoder_factory()
-        self._model = factory(
-            QWEN3_RERANKER_MODEL_ID,
-            revision=QWEN3_RERANKER_REVISION,
-            device=self._device,
-            trust_remote_code=False,
-        )
+        kwargs: dict[str, Any] = {
+            "revision": QWEN3_RERANKER_REVISION,
+            "device": self._device,
+            "trust_remote_code": False,
+        }
+        if self._instruction is not None:
+            kwargs["prompts"] = {"jarvis_memory": self._instruction}
+            kwargs["default_prompt_name"] = "jarvis_memory"
+        self._model = factory(QWEN3_RERANKER_MODEL_ID, **kwargs)
         return self._model
