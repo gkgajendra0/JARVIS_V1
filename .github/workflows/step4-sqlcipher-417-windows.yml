@@ -79,4 +79,5 @@ jobs:
           name: step4-sqlcipher417-cp311-win-amd64
           path: .step4-sqlcipher417-wheelhouse/
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 14
