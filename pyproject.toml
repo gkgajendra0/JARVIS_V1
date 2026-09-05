@@ -70,6 +70,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "jarvis.identity" = ["manifests/*.json"]
+"jarvis.memory" = ["migrations/*.sql"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
