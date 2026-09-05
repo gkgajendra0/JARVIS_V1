@@ -559,9 +559,7 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
 
                 top = reranked[0]
                 second_score = (
-                    reranked[1].rerank_score
-                    if len(reranked) > 1
-                    else top.rerank_score
+                    reranked[1].rerank_score if len(reranked) > 1 else top.rerank_score
                 )
                 top_assertion_id = top.candidate.assertion.assertion_id
                 top_memory_id = assertion_to_memory.get(top_assertion_id)
