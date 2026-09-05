@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import unicodedata
 
 from livekit.agents import RunContext, function_tool
@@ -23,8 +24,11 @@ from jarvis.memory.service import (
     MemoryNotFoundError,
     MemoryService,
     MemoryServiceError,
+    normalize_memory_surface,
 )
 from jarvis.memory.types import Sensitivity
+
+LOGGER = logging.getLogger(__name__)
 
 
 class MemoryToolGroundingError(ValueError):
@@ -45,7 +49,7 @@ _EXPECTED_MEMORY_ERRORS = (
 
 
 def _semantic_text(value: str) -> str:
-    normalized = unicodedata.normalize("NFKC", value).casefold()
+    normalized = normalize_memory_surface(value)
     characters = [
         character if unicodedata.category(character)[0] in {"L", "M", "N"} else " "
         for character in normalized
@@ -123,6 +127,13 @@ class MemoryAgentTools:
             source=source,
             sensitivity=resolved_sensitivity,
         )
+        LOGGER.info(
+            "Explicit memory remember committed | predicate=%s | memory_id=%s | "
+            "sensitivity=%s",
+            result.predicate,
+            result.record.assertion_id,
+            result.record.sensitivity.value,
+        )
         return {
             "ok": True,
             "operation": "remember",
@@ -155,6 +166,13 @@ class MemoryAgentTools:
             value=value,
             source=source,
         )
+        LOGGER.info(
+            "Explicit memory correction committed | predicate=%s | memory_id=%s | "
+            "sensitivity=%s",
+            result.predicate,
+            result.record.assertion_id,
+            result.record.sensitivity.value,
+        )
         return {
             "ok": True,
             "operation": "correct",
@@ -179,6 +197,10 @@ class MemoryAgentTools:
             predicate=predicate,
             source=source,
         )
+        LOGGER.info(
+            "Explicit memory forget committed | predicate=%s",
+            forgotten_predicate,
+        )
         return {
             "ok": True,
             "operation": "forget",
@@ -194,6 +216,11 @@ class MemoryAgentTools:
         result = await self._service.inspect_exact(predicate=predicate)
         record = result.record
         if record.sensitivity is Sensitivity.LOCAL_ONLY:
+            LOGGER.info(
+                "Explicit memory inspect blocked from provider release | predicate=%s | "
+                "sensitivity=local_only",
+                result.predicate,
+            )
             return {
                 "ok": False,
                 "operation": "inspect",
@@ -203,6 +230,13 @@ class MemoryAgentTools:
                     "configured realtime provider."
                 ),
             }
+        LOGGER.info(
+            "Explicit memory inspect hit | predicate=%s | sensitivity=%s | "
+            "verification=%s",
+            result.predicate,
+            record.sensitivity.value,
+            record.verification_state.value,
+        )
         return {
             "ok": True,
             "operation": "inspect",
