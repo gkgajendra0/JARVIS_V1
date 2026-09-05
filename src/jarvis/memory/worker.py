@@ -59,7 +59,9 @@ class SerialConnectionWorker:
         if self._closed:
             raise MemoryWorkerClosedError("memory connection worker is closed")
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(self._executor, self._run_on_worker, operation)
+        return await loop.run_in_executor(
+            self._executor, self._run_on_worker, operation
+        )
 
     async def close(self) -> None:
         async with self._state_lock:
@@ -87,6 +89,8 @@ class SerialConnectionWorker:
         if self._connection is None:
             return
         if threading.get_ident() != self._owner_thread_id:
-            raise MemoryWorkerError("memory database connection closed off owner thread")
+            raise MemoryWorkerError(
+                "memory database connection closed off owner thread"
+            )
         self._connection.close()
         self._connection = None
