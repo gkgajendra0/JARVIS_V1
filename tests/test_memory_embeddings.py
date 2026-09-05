@@ -10,10 +10,10 @@ import pytest
 
 from jarvis.memory.assertions import SemanticAssertionDraft
 from jarvis.memory.embeddings import (
+    QWEN3_EMBEDDING_CONTRACT,
     EmbeddingContract,
     EmbeddingContractError,
     EmbeddingDataError,
-    QWEN3_EMBEDDING_CONTRACT,
     SemanticEmbeddingStore,
     deserialize_embedding,
     embedding_content_sha256,
