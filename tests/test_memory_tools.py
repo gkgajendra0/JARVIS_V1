@@ -17,7 +17,7 @@ from jarvis.memory.migration_runner import MemoryMigrationRunner
 from jarvis.memory.query import CanonicalMemoryReader
 from jarvis.memory.service import MemoryService
 from jarvis.memory.worker import SerialConnectionWorker
-from jarvis.voice.memory_tools import MemoryAgentTools
+from jarvis.voice.memory_tools import MemoryAgentTools, MemoryToolGroundingError
 
 BASE = datetime(2026, 9, 5, 10, 30, tzinfo=UTC)
 
@@ -121,6 +121,50 @@ async def test_voice_tool_mutation_refuses_implicit_or_assistant_only_authority(
         )
         with pytest.raises(ExplicitMemoryAuthorizationError):
             await tools.remember(predicate="home city", value="Sagar")
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_model_tool_arguments_must_be_grounded_in_latest_user_utterance(
+    tmp_path: Path,
+) -> None:
+    service, writer, reader = _service(tmp_path / "grounding.db")
+    conversation = _conversation("Remember that my home city is Sagar.")
+    tools = MemoryAgentTools(service, conversation)
+    try:
+        with pytest.raises(MemoryToolGroundingError, match="predicate"):
+            await tools.remember(predicate="favorite colour", value="Sagar")
+        with pytest.raises(MemoryToolGroundingError, match="value"):
+            await tools.remember(predicate="home city", value="Indore")
+
+        count = await reader.run(
+            lambda connection: connection.execute(
+                "SELECT count(*) FROM semantic_assertion"
+            ).fetchone()[0]
+        )
+        assert count == 0
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_exact_inspect_target_must_be_named_in_latest_user_utterance(
+    tmp_path: Path,
+) -> None:
+    service, writer, reader = _service(tmp_path / "inspect-grounding.db")
+    conversation = _conversation("Remember that my home city is Sagar.")
+    tools = MemoryAgentTools(service, conversation)
+    try:
+        await tools.remember(predicate="home city", value="Sagar")
+        conversation.accept_turn(
+            ConversationRole.USER,
+            "What do you remember about my home city?",
+        )
+        with pytest.raises(MemoryToolGroundingError, match="predicate"):
+            await tools.inspect(predicate="favorite colour")
     finally:
         await reader.close()
         await writer.close()
