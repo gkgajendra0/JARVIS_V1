@@ -44,195 +44,94 @@ class CurrentFact:
         )
 
 
-CURRENT_FACTS = (
-    CurrentFact("editor", "preferred_editor", "preferred code editor", "पसंदीदा कोड एडिटर", "preferred code editor", "Visual Studio Code"),
-    CurrentFact("shell", "preferred_shell", "preferred command shell", "पसंदीदा कमांड शेल", "preferred command shell", "PowerShell"),
-    CurrentFact("notes", "preferred_notes_format", "preferred notes format", "पसंदीदा नोट्स फ़ॉर्मेट", "preferred notes format", "Markdown"),
-    CurrentFact("backup_day", "backup_weekday", "weekly backup day", "साप्ताहिक बैकअप दिन", "weekly backup day", "Sunday"),
-    CurrentFact("report_tz", "report_timezone", "reporting timezone", "रिपोर्टिंग टाइमज़ोन", "reporting timezone", "UTC"),
-    CurrentFact("dashboard_theme", "dashboard_theme", "dashboard theme", "डैशबोर्ड थीम", "dashboard theme", "dark"),
-    CurrentFact("artifact_format", "build_artifact_format", "build artifact format", "बिल्ड आर्टिफैक्ट फ़ॉर्मेट", "build artifact format", "wheel"),
-    CurrentFact("test_runner", "test_runner", "test runner", "टेस्ट रनर", "test runner", "pytest"),
-    CurrentFact("formatter", "code_formatter", "code formatter", "कोड फ़ॉर्मेटर", "code formatter", "Ruff"),
-    CurrentFact("export_format", "data_export_format", "data export format", "डेटा एक्सपोर्ट फ़ॉर्मेट", "data export format", "Parquet"),
-    CurrentFact("compression", "archive_compression", "archive compression", "आर्काइव कम्प्रेशन", "archive compression", "zstd"),
-    CurrentFact("cache_name", "local_cache_name", "local cache name", "लोकल कैश नाम", "local cache name", "cache-v2"),
-    CurrentFact("notify_channel", "notification_channel", "notification channel", "नोटिफिकेशन चैनल", "notification channel", "desktop"),
-    CurrentFact("seat", "travel_seat_preference", "travel seat preference", "यात्रा सीट पसंद", "travel seat preference", "aisle"),
-    CurrentFact("drink", "morning_drink", "morning drink", "सुबह का पेय", "morning drink", "green tea"),
-    CurrentFact("workout_day", "weekly_workout_day", "weekly workout day", "साप्ताहिक वर्कआउट दिन", "weekly workout day", "Saturday"),
-    CurrentFact("hike_time", "hike_start_time", "hike start time", "हाइक शुरू करने का समय", "hike start time", "06:00"),
-    CurrentFact("camera_mode", "camera_recording_mode", "camera recording mode", "कैमरा रिकॉर्डिंग मोड", "camera recording mode", "4K 30fps"),
-    CurrentFact("map_style", "preferred_map_style", "preferred map style", "पसंदीदा मैप स्टाइल", "preferred map style", "terrain"),
-    CurrentFact("music_volume", "music_volume", "music volume", "म्यूज़िक वॉल्यूम", "music volume", "35 percent"),
-    CurrentFact("reminder_lead", "reminder_lead_time", "reminder lead time", "रिमाइंडर लीड टाइम", "reminder lead time", "15 minutes"),
-    CurrentFact("codename", "project_codename", "project codename", "प्रोजेक्ट कोडनेम", "project codename", "Atlas"),
-    CurrentFact("release_channel", "release_channel", "release channel", "रिलीज़ चैनल", "release channel", "beta"),
-    CurrentFact("log_retention", "log_retention", "log retention period", "लॉग रिटेंशन अवधि", "log retention period", "14 days"),
-    CurrentFact("sync_interval", "sync_interval", "sync interval", "सिंक अंतराल", "sync interval", "30 minutes"),
-    CurrentFact("default_language", "default_language", "default language", "डिफ़ॉल्ट भाषा", "default language", "English"),
-    CurrentFact("secondary_language", "secondary_language", "secondary language", "दूसरी भाषा", "secondary language", "Hindi"),
-    CurrentFact("unit_system", "unit_system", "unit system", "इकाई प्रणाली", "unit system", "metric"),
-    CurrentFact("date_format", "date_format", "date format", "तारीख़ फ़ॉर्मेट", "date format", "DD-MM-YYYY"),
-    CurrentFact("temperature_unit", "temperature_unit", "temperature unit", "तापमान इकाई", "temperature unit", "Celsius"),
-    CurrentFact("distance_unit", "distance_unit", "distance unit", "दूरी इकाई", "distance unit", "kilometers"),
-    CurrentFact("currency", "currency_display", "currency display", "मुद्रा प्रदर्शन", "currency display", "INR"),
+_CURRENT_FACT_ROWS = """
+editor|preferred_editor|preferred code editor|पसंदीदा कोड एडिटर|preferred code editor|Visual Studio Code
+shell|preferred_shell|preferred command shell|पसंदीदा कमांड शेल|preferred command shell|PowerShell
+notes|preferred_notes_format|preferred notes format|पसंदीदा नोट्स फ़ॉर्मेट|preferred notes format|Markdown
+backup_day|backup_weekday|weekly backup day|साप्ताहिक बैकअप दिन|weekly backup day|Sunday
+report_tz|report_timezone|reporting timezone|रिपोर्टिंग टाइमज़ोन|reporting timezone|UTC
+dashboard_theme|dashboard_theme|dashboard theme|डैशबोर्ड थीम|dashboard theme|dark
+artifact_format|build_artifact_format|build artifact format|बिल्ड आर्टिफैक्ट फ़ॉर्मेट|build artifact format|wheel
+test_runner|test_runner|test runner|टेस्ट रनर|test runner|pytest
+formatter|code_formatter|code formatter|कोड फ़ॉर्मेटर|code formatter|Ruff
+export_format|data_export_format|data export format|डेटा एक्सपोर्ट फ़ॉर्मेट|data export format|Parquet
+compression|archive_compression|archive compression|आर्काइव कम्प्रेशन|archive compression|zstd
+cache_name|local_cache_name|local cache name|लोकल कैश नाम|local cache name|cache-v2
+notify_channel|notification_channel|notification channel|नोटिफिकेशन चैनल|notification channel|desktop
+seat|travel_seat_preference|travel seat preference|यात्रा सीट पसंद|travel seat preference|aisle
+drink|morning_drink|morning drink|सुबह का पेय|morning drink|green tea
+workout_day|weekly_workout_day|weekly workout day|साप्ताहिक वर्कआउट दिन|weekly workout day|Saturday
+hike_time|hike_start_time|hike start time|हाइक शुरू करने का समय|hike start time|06:00
+camera_mode|camera_recording_mode|camera recording mode|कैमरा रिकॉर्डिंग मोड|camera recording mode|4K 30fps
+map_style|preferred_map_style|preferred map style|पसंदीदा मैप स्टाइल|preferred map style|terrain
+music_volume|music_volume|music volume|म्यूज़िक वॉल्यूम|music volume|35 percent
+reminder_lead|reminder_lead_time|reminder lead time|रिमाइंडर लीड टाइम|reminder lead time|15 minutes
+codename|project_codename|project codename|प्रोजेक्ट कोडनेम|project codename|Atlas
+release_channel|release_channel|release channel|रिलीज़ चैनल|release channel|beta
+log_retention|log_retention|log retention period|लॉग रिटेंशन अवधि|log retention period|14 days
+sync_interval|sync_interval|sync interval|सिंक अंतराल|sync interval|30 minutes
+default_language|default_language|default language|डिफ़ॉल्ट भाषा|default language|English
+secondary_language|secondary_language|secondary language|दूसरी भाषा|secondary language|Hindi
+unit_system|unit_system|unit system|इकाई प्रणाली|unit system|metric
+date_format|date_format|date format|तारीख़ फ़ॉर्मेट|date format|DD-MM-YYYY
+temperature_unit|temperature_unit|temperature unit|तापमान इकाई|temperature unit|Celsius
+distance_unit|distance_unit|distance unit|दूरी इकाई|distance unit|kilometers
+currency|currency_display|currency display|मुद्रा प्रदर्शन|currency display|INR
+""".strip()
+
+CURRENT_FACTS = tuple(
+    CurrentFact(*line.split("|", 5)) for line in _CURRENT_FACT_ROWS.splitlines()
 )
 
+_BOUNDARY_ROWS = """
+old_sync_mode|synthetic_sync_mode|historical_transition|Synthetic acceptance history: the previous sync mode was manual.|previous sync mode|पिछला सिंक मोड|previous sync mode|current_sync_mode|Synthetic acceptance current state: the sync mode is automatic.
+old_panel_layout|synthetic_panel_layout|historical_transition|Synthetic acceptance history: the previous panel layout was compact.|previous panel layout|पिछला पैनल लेआउट|previous panel layout|current_panel_layout|Synthetic acceptance current state: the panel layout is spacious.
+old_refresh_rate|synthetic_refresh_rate|historical_transition|Synthetic acceptance history: the previous refresh interval was 60 minutes.|previous refresh interval|पिछला रिफ्रेश अंतराल|previous refresh interval|current_refresh_rate|Synthetic acceptance current state: the refresh interval is 20 minutes.
+old_summary_style|synthetic_summary_style|historical_transition|Synthetic acceptance history: the previous summary style was verbose.|previous summary style|पिछली समरी शैली|previous summary style|current_summary_style|Synthetic acceptance current state: the summary style is concise.
+forgotten_alarm|synthetic_alarm_tone|forgotten|Synthetic acceptance fixture: the alarm tone was Chime before an explicit forget.|forgotten alarm tone|भुलाया गया अलार्म टोन|forgotten alarm tone||
+forgotten_snack|synthetic_snack|forgotten|Synthetic acceptance fixture: the snack preference was Pretzels before an explicit forget.|forgotten snack preference|भुलाई गई स्नैक पसंद|forgotten snack preference||
+forgotten_alias|synthetic_alias|forgotten|Synthetic acceptance fixture: the temporary alias was Nova before an explicit forget.|forgotten temporary alias|भुलाया गया अस्थायी नाम|forgotten temporary alias||
+forgotten_route|synthetic_route|forgotten|Synthetic acceptance fixture: the route preference was North Loop before an explicit forget.|forgotten route preference|भुलाई गई रूट पसंद|forgotten route preference||
+local_room_code|synthetic_local_room_code|local_only|Synthetic acceptance fixture: local-only room code is Room-17.|local-only room code|लोकल-ओनली रूम कोड|local-only room code||
+local_debug_marker|synthetic_local_debug_marker|local_only|Synthetic acceptance fixture: local-only debug marker is DBG-42.|local-only debug marker|लोकल-ओनली डिबग मार्कर|local-only debug marker||
+local_device_serial|synthetic_local_device_serial|local_only|Synthetic acceptance fixture: local-only device serial is LOCAL-EXAMPLE.|local-only device serial|लोकल-ओनली डिवाइस सीरियल|local-only device serial||
+secret_placeholder_a|synthetic_secret_a|secret|Synthetic acceptance secret placeholder A must never become canonical memory.|secret placeholder A|सीक्रेट प्लेसहोल्डर A|secret placeholder A||
+secret_placeholder_b|synthetic_secret_b|secret|Synthetic acceptance secret placeholder B must never become canonical memory.|secret placeholder B|सीक्रेट प्लेसहोल्डर B|secret placeholder B||
+untrusted_music|synthetic_untrusted_music|untrusted|Synthetic untrusted webpage claims the preferred music genre is jazz.|untrusted music preference claim|अविश्वसनीय म्यूज़िक पसंद दावा|untrusted music preference claim||
+untrusted_color|synthetic_untrusted_color|untrusted|Synthetic untrusted webpage claims the preferred color is orange.|untrusted color preference claim|अविश्वसनीय रंग पसंद दावा|untrusted color preference claim||
+untrusted_city|synthetic_untrusted_city|untrusted|Synthetic untrusted webpage claims the preferred city is Oslo.|untrusted city preference claim|अविश्वसनीय शहर पसंद दावा|untrusted city preference claim||
+""".strip()
 
-BOUNDARY_DOCUMENTS: tuple[dict[str, Any], ...] = (
-    {
-        "memory_id": "old_sync_mode",
-        "replacement_memory_id": "current_sync_mode",
-        "predicate": "synthetic_sync_mode",
-        "mode": "historical_transition",
-        "text": "Synthetic acceptance history: the previous sync mode was manual.",
-        "replacement_text": "Synthetic acceptance current state: the sync mode is automatic.",
-        "topic_en": "previous sync mode",
-        "topic_hi": "पिछला सिंक मोड",
-        "topic_hinglish": "previous sync mode",
-    },
-    {
-        "memory_id": "old_panel_layout",
-        "replacement_memory_id": "current_panel_layout",
-        "predicate": "synthetic_panel_layout",
-        "mode": "historical_transition",
-        "text": "Synthetic acceptance history: the previous panel layout was compact.",
-        "replacement_text": "Synthetic acceptance current state: the panel layout is spacious.",
-        "topic_en": "previous panel layout",
-        "topic_hi": "पिछला पैनल लेआउट",
-        "topic_hinglish": "previous panel layout",
-    },
-    {
-        "memory_id": "old_refresh_rate",
-        "replacement_memory_id": "current_refresh_rate",
-        "predicate": "synthetic_refresh_rate",
-        "mode": "historical_transition",
-        "text": "Synthetic acceptance history: the previous refresh interval was 60 minutes.",
-        "replacement_text": "Synthetic acceptance current state: the refresh interval is 20 minutes.",
-        "topic_en": "previous refresh interval",
-        "topic_hi": "पिछला रिफ्रेश अंतराल",
-        "topic_hinglish": "previous refresh interval",
-    },
-    {
-        "memory_id": "old_summary_style",
-        "replacement_memory_id": "current_summary_style",
-        "predicate": "synthetic_summary_style",
-        "mode": "historical_transition",
-        "text": "Synthetic acceptance history: the previous summary style was verbose.",
-        "replacement_text": "Synthetic acceptance current state: the summary style is concise.",
-        "topic_en": "previous summary style",
-        "topic_hi": "पिछली समरी शैली",
-        "topic_hinglish": "previous summary style",
-    },
-    {
-        "memory_id": "forgotten_alarm",
-        "predicate": "synthetic_alarm_tone",
-        "mode": "forgotten",
-        "text": "Synthetic acceptance fixture: the alarm tone was Chime before an explicit forget.",
-        "topic_en": "forgotten alarm tone",
-        "topic_hi": "भुलाया गया अलार्म टोन",
-        "topic_hinglish": "forgotten alarm tone",
-    },
-    {
-        "memory_id": "forgotten_snack",
-        "predicate": "synthetic_snack",
-        "mode": "forgotten",
-        "text": "Synthetic acceptance fixture: the snack preference was Pretzels before an explicit forget.",
-        "topic_en": "forgotten snack preference",
-        "topic_hi": "भुलाई गई स्नैक पसंद",
-        "topic_hinglish": "forgotten snack preference",
-    },
-    {
-        "memory_id": "forgotten_alias",
-        "predicate": "synthetic_alias",
-        "mode": "forgotten",
-        "text": "Synthetic acceptance fixture: the temporary alias was Nova before an explicit forget.",
-        "topic_en": "forgotten temporary alias",
-        "topic_hi": "भुलाया गया अस्थायी नाम",
-        "topic_hinglish": "forgotten temporary alias",
-    },
-    {
-        "memory_id": "forgotten_route",
-        "predicate": "synthetic_route",
-        "mode": "forgotten",
-        "text": "Synthetic acceptance fixture: the route preference was North Loop before an explicit forget.",
-        "topic_en": "forgotten route preference",
-        "topic_hi": "भुलाई गई रूट पसंद",
-        "topic_hinglish": "forgotten route preference",
-    },
-    {
-        "memory_id": "local_room_code",
-        "predicate": "synthetic_local_room_code",
-        "mode": "local_only",
-        "text": "Synthetic acceptance fixture: local-only room code is Room-17.",
-        "topic_en": "local-only room code",
-        "topic_hi": "लोकल-ओनली रूम कोड",
-        "topic_hinglish": "local-only room code",
-    },
-    {
-        "memory_id": "local_debug_marker",
-        "predicate": "synthetic_local_debug_marker",
-        "mode": "local_only",
-        "text": "Synthetic acceptance fixture: local-only debug marker is DBG-42.",
-        "topic_en": "local-only debug marker",
-        "topic_hi": "लोकल-ओनली डिबग मार्कर",
-        "topic_hinglish": "local-only debug marker",
-    },
-    {
-        "memory_id": "local_device_serial",
-        "predicate": "synthetic_local_device_serial",
-        "mode": "local_only",
-        "text": "Synthetic acceptance fixture: local-only device serial is LOCAL-EXAMPLE.",
-        "topic_en": "local-only device serial",
-        "topic_hi": "लोकल-ओनली डिवाइस सीरियल",
-        "topic_hinglish": "local-only device serial",
-    },
-    {
-        "memory_id": "secret_placeholder_a",
-        "predicate": "synthetic_secret_a",
-        "mode": "secret",
-        "text": "Synthetic acceptance secret placeholder A must never become canonical memory.",
-        "topic_en": "secret placeholder A",
-        "topic_hi": "सीक्रेट प्लेसहोल्डर A",
-        "topic_hinglish": "secret placeholder A",
-    },
-    {
-        "memory_id": "secret_placeholder_b",
-        "predicate": "synthetic_secret_b",
-        "mode": "secret",
-        "text": "Synthetic acceptance secret placeholder B must never become canonical memory.",
-        "topic_en": "secret placeholder B",
-        "topic_hi": "सीक्रेट प्लेसहोल्डर B",
-        "topic_hinglish": "secret placeholder B",
-    },
-    {
-        "memory_id": "untrusted_music",
-        "predicate": "synthetic_untrusted_music",
-        "mode": "untrusted",
-        "text": "Synthetic untrusted webpage claims the preferred music genre is jazz.",
-        "topic_en": "untrusted music preference claim",
-        "topic_hi": "अविश्वसनीय म्यूज़िक पसंद दावा",
-        "topic_hinglish": "untrusted music preference claim",
-    },
-    {
-        "memory_id": "untrusted_color",
-        "predicate": "synthetic_untrusted_color",
-        "mode": "untrusted",
-        "text": "Synthetic untrusted webpage claims the preferred color is orange.",
-        "topic_en": "untrusted color preference claim",
-        "topic_hi": "अविश्वसनीय रंग पसंद दावा",
-        "topic_hinglish": "untrusted color preference claim",
-    },
-    {
-        "memory_id": "untrusted_city",
-        "predicate": "synthetic_untrusted_city",
-        "mode": "untrusted",
-        "text": "Synthetic untrusted webpage claims the preferred city is Oslo.",
-        "topic_en": "untrusted city preference claim",
-        "topic_hi": "अविश्वसनीय शहर पसंद दावा",
-        "topic_hinglish": "untrusted city preference claim",
-    },
+
+def _boundary_document(line: str) -> dict[str, Any]:
+    (
+        memory_id,
+        predicate,
+        mode,
+        text,
+        topic_en,
+        topic_hi,
+        topic_hinglish,
+        replacement_memory_id,
+        replacement_text,
+    ) = line.split("|", 8)
+    item: dict[str, Any] = {
+        "memory_id": memory_id,
+        "predicate": predicate,
+        "mode": mode,
+        "text": text,
+        "topic_en": topic_en,
+        "topic_hi": topic_hi,
+        "topic_hinglish": topic_hinglish,
+    }
+    if replacement_memory_id:
+        item["replacement_memory_id"] = replacement_memory_id
+        item["replacement_text"] = replacement_text
+    return item
+
+
+BOUNDARY_DOCUMENTS = tuple(
+    _boundary_document(line) for line in _BOUNDARY_ROWS.splitlines()
 )
 
 
@@ -440,7 +339,9 @@ def build_payload() -> dict[str, Any]:
         "val_a": FINAL_VALIDATION_ABSTAIN,
     }
     if counters != expected_counts:
-        raise RuntimeError(f"final corpus count mismatch: {counters} != {expected_counts}")
+        raise RuntimeError(
+            f"final corpus count mismatch: {counters} != {expected_counts}"
+        )
 
     return {
         "schema_version": FINAL_CORPUS_SCHEMA_VERSION,
@@ -452,5 +353,7 @@ def build_payload() -> dict[str, Any]:
 
 def payload_sha256(payload: dict[str, Any] | None = None) -> str:
     material = payload if payload is not None else build_payload()
-    canonical = json.dumps(material, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    canonical = json.dumps(
+        material, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
