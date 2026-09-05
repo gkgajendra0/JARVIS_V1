@@ -13,6 +13,11 @@ from .candidates import (
     MemoryExtractionSensitivity,
     QuarantinedMemoryCandidate,
 )
+from .extractors import (
+    GeminiMemoryCandidateExtractor,
+    MemoryCandidateExtractionError,
+    OpenAIMemoryCandidateExtractor,
+)
 from .provenance import MemorySource
 from .types import (
     AssertionState,
@@ -29,8 +34,10 @@ __all__ = [
     "AssertionState",
     "AuthorityClass",
     "FreshnessClass",
+    "GeminiMemoryCandidateExtractor",
     "MemoryCandidateCoordinator",
     "MemoryCandidateDisposition",
+    "MemoryCandidateExtractionError",
     "MemoryCandidateExtractor",
     "MemoryCandidateOutcome",
     "MemoryCandidatePolicy",
@@ -42,6 +49,7 @@ __all__ = [
     "MemoryOperationType",
     "MemorySource",
     "MemorySourceClass",
+    "OpenAIMemoryCandidateExtractor",
     "QuarantinedMemoryCandidate",
     "Sensitivity",
     "ValueType",
