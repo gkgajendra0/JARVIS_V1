@@ -122,9 +122,7 @@ def test_secret_fixture_stays_outside_canonical_memory(tmp_path: Path) -> None:
     mutated["queries"][0]["expected_memory_id"] = "secret_placeholder"
     mutated_path = tmp_path / "secret-release.json"
     mutated_path.write_text(json.dumps(mutated), encoding="utf-8")
-    with pytest.raises(
-        ValueError, match="cannot target a secret-prohibited fixture"
-    ):
+    with pytest.raises(ValueError, match="cannot target a secret-prohibited fixture"):
         module._load_fixture(mutated_path)
 
 
