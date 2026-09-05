@@ -97,6 +97,37 @@ def test_committed_items_write_once_and_preserve_repeated_text() -> None:
     assert bridge.live_context.recent_turns == turns
 
 
+def test_accepted_turn_observer_receives_exact_canonical_turn() -> None:
+    livekit, bridge = active_bridge()
+    observed = []
+    bridge.add_accepted_turn_observer(observed.append)
+
+    livekit.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(item=message("one", "user", "canonical text")),
+    )
+
+    assert len(observed) == 1
+    assert observed[0] is bridge.conversation.turns[0]
+    assert observed[0] is bridge.live_context.recent_turns[0]
+
+
+def test_observer_failure_cannot_reject_a_canonical_turn() -> None:
+    livekit, bridge = active_bridge()
+
+    def fail_observer(_turn) -> None:
+        raise RuntimeError("controlled observer failure")
+
+    bridge.add_accepted_turn_observer(fail_observer)
+
+    livekit.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(item=message("one", "user", "still accepted")),
+    )
+
+    assert [turn.text for turn in bridge.conversation.turns] == ["still accepted"]
+
+
 def test_live_context_updates_only_after_canonical_acceptance_succeeds() -> None:
     livekit = FakeAgentSession()
     conversation = RejectingConversation()
@@ -161,6 +192,8 @@ def test_terminal_error_fails_and_close_preserves_failure() -> None:
 
 def test_close_without_error_closes_session_and_disposes_live_context() -> None:
     livekit, bridge = active_bridge()
+    closed: list[bool] = []
+    bridge.add_close_observer(lambda: closed.append(True))
     livekit.emit(
         "conversation_item_added",
         ConversationItemAddedEvent(item=message("one", "user", "temporary context")),
@@ -171,6 +204,7 @@ def test_close_without_error_closes_session_and_disposes_live_context() -> None:
 
     assert bridge.conversation.status is ConversationStatus.CLOSED
     assert bridge.live_context.recent_turns == ()
+    assert closed == [True]
 
 
 def test_api_key_is_required_before_session_construction(
