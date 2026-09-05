@@ -1,8 +1,9 @@
 from pathlib import Path
 
+from tools.research import step4_memory_extraction_bakeoff as bakeoff
+
 from jarvis.memory.candidates import MemoryExtractionProposal
 from jarvis.memory.extractors import MEMORY_EXTRACTION_SYSTEM_PROMPT
-from tools.research import step4_memory_extraction_bakeoff as bakeoff
 
 
 CASES_PATH = (
