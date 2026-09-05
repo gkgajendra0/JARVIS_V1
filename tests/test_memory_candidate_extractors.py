@@ -15,6 +15,7 @@ from jarvis.memory.extractors import (
     GeminiMemoryCandidateExtractor,
     MemoryCandidateExtractionError,
     OpenAIMemoryCandidateExtractor,
+    build_memory_candidate_extractor,
 )
 
 
@@ -134,3 +135,20 @@ def test_provider_adapters_reject_missing_client_capabilities() -> None:
         OpenAIMemoryCandidateExtractor(client=object(), model="gpt-test")
     with pytest.raises(TypeError, match="aio.interactions.create"):
         GeminiMemoryCandidateExtractor(client=object(), model="gemini-test")
+
+
+def test_extractor_factory_requires_provider_key_only_when_enabled_path_is_built(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
+        build_memory_candidate_extractor(provider="openai", model="gpt-test")
+    with pytest.raises(RuntimeError, match="GOOGLE_API_KEY"):
+        build_memory_candidate_extractor(provider="gemini", model="gemini-test")
+
+
+def test_extractor_factory_rejects_unknown_provider() -> None:
+    with pytest.raises(ValueError, match="Unsupported"):
+        build_memory_candidate_extractor(provider="unknown", model="model-x")
