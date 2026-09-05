@@ -246,14 +246,10 @@ def _call_gemini(client: Any, model: str, case: dict[str, Any]) -> ProviderCall:
             extraction=extraction,
             latency_ms=elapsed,
             input_tokens=(
-                int(getattr(usage, "total_input_tokens", 0) or 0)
-                if usage
-                else None
+                int(getattr(usage, "total_input_tokens", 0) or 0) if usage else None
             ),
             output_tokens=(
-                int(getattr(usage, "total_output_tokens", 0) or 0)
-                if usage
-                else None
+                int(getattr(usage, "total_output_tokens", 0) or 0) if usage else None
             ),
         )
     except Exception as exc:  # noqa: BLE001 - provider failures are bake-off evidence
@@ -351,9 +347,7 @@ def _score_provider(
 
     case_count = len(cases)
     valid_count = len(valid_pairs)
-    intent_matches = count(
-        lambda c, e: e.intent.value == c["expected"]["intent"]
-    )
+    intent_matches = count(lambda c, e: e.intent.value == c["expected"]["intent"])
     type_matches = count(
         lambda c, e: e.candidate_type.value == c["expected"]["candidate_type"]
     )
