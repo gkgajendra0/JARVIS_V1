@@ -17,6 +17,7 @@ dependencies = [
     "opencv-python==5.0.0.93",
     "opencv-contrib-python==5.0.0.93",
     "cryptography==50.0.1",
+    "number-parser==0.3.2",
 ]
 
 [project.scripts]
