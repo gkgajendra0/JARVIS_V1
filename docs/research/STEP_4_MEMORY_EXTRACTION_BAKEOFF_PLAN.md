@@ -2,63 +2,83 @@
 
 ## Status
 
-**RESEARCH PLAN — NOT FINAL STEP-4 ARCHITECTURE APPROVAL AND NOT AUTHORIZATION TO WRITE PRODUCTION MEMORY.**
+**ACTIVE PHASE-4.4 RESEARCH PLAN — NOT AUTHORIZATION TO WRITE PRODUCTION MEMORY.**
 
-This plan follows the completed retrieval technology selection and compares mature provider-native structured-output APIs before implementing any runtime `MemoryCandidateExtractor`.
+Date refreshed: 2026-09-05
 
-## Current provider research (2026-09-04)
+This plan validates the Phase-4.4 `MemoryCandidateExtractor` against the production contract while obeying ADR-015: JARVIS has one active cloud-AI provider/account at a time. The active provider is currently Gemini, so this phase does not require or compare an OpenAI account.
 
-### OpenAI
+Implicit durable admission remains OFF. The model may only propose a temporary candidate for JARVIS-owned quarantine.
 
-Current OpenAI API documentation recommends JSON-Schema Structured Outputs over legacy JSON mode. The official Python SDK supports Pydantic parsing through `client.responses.parse(..., text_format=...)`.
+## Current Gemini research refresh
 
-Quality-first initial model:
+### Primary candidate — Gemini 3.5 Flash-Lite
 
-- `gpt-5.6-terra`
-- positioned by OpenAI as the balance of intelligence and cost;
-- pricing snapshot: $2 / 1M input tokens and $12 / 1M output tokens.
+Google documents `gemini-3.5-flash-lite` as a stable GA, low-latency and cost-effective model optimized for high-throughput work, subagent tasks, document parsing and simple data extraction. Structured outputs are supported.
 
-A later cost-down comparison may test `gpt-5.6-luna` ($0.20 / 1M input, $1.20 / 1M output) only if the quality-first run demonstrates that the task can safely be down-tiered.
+This is the closest fit to Phase 4.4 because the job is narrow schema-constrained classification/extraction, not long-horizon reasoning.
 
-References:
+Current pricing snapshot:
 
-- https://platform.openai.com/docs/models
-- https://github.com/openai/openai-python/blob/main/examples/responses/structured_outputs.py
+- Free Tier: free of charge within applicable quota;
+- paid input: $0.30 / 1M tokens;
+- paid output, including thinking tokens: $2.50 / 1M tokens.
 
-### Gemini
+Google's deprecation page lists no shutdown date for `gemini-3.5-flash-lite`.
 
-Google's current Gemini API Structured Outputs support JSON Schema and Pydantic-generated schemas. The current Interactions API accepts `system_instruction`, `response_format`, `store=False`, and returns token usage.
+Primary references:
 
-Google released `gemini-3.8-flash` as GA in September 2026; it supports Structured Outputs and is the current most intelligent stable Flash model.
-
-Quality-first initial model:
-
-- `gemini-3.8-flash`
-- introductory pricing through 2026-12-31: $0.75 / 1M input tokens and $3.75 / 1M output tokens.
-
-A later cost-down comparison may test `gemini-3.5-flash-lite` ($0.30 / 1M input, $2.50 / 1M output) only if quality evidence supports doing so.
-
-References:
-
-- https://ai.google.dev/gemini-api/docs/structured-output
-- https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
+- https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
 - https://ai.google.dev/gemini-api/docs/pricing
-- https://ai.google.dev/gemini-api/docs/text-generation
+- https://ai.google.dev/gemini-api/docs/deprecations
+- https://ai.google.dev/gemini-api/docs/changelog
 
-## Why quality-first models are tested first
+**Disposition: TEST FIRST.**
 
-Memory admission errors have asymmetric cost:
+### Escalation candidate — Gemini 3.8 Flash
 
-- a missed low-confidence candidate is recoverable later;
-- a false durable write can poison long-term personal context, persist across sessions, and bias future answers.
+Google documents `gemini-3.8-flash` as its most intelligent stable Flash model, aimed at long-horizon software engineering, autonomous agents and complex enterprise workflows. Structured outputs are supported.
 
-Therefore the first bake-off uses stable quality-oriented models. Cost-down variants are evaluated only after the semantic/safety bar is demonstrated.
+That makes it a useful quality ceiling, but it is broader than the normal Phase-4.4 extraction requirement. It should consume quota only if Flash-Lite fails the fixed safety/correctness gate.
 
-## Shared provider-independent contract
+Primary references:
 
-Both providers receive the same Pydantic `MemoryExtraction` schema and the same policy instruction.
+- https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
+- https://ai.google.dev/gemini-api/docs/latest-model
+- https://ai.google.dev/gemini-api/docs/pricing
 
-Core output fields include:
+**Disposition: ESCALATION ONLY.**
+
+### Models not selected for this new commitment
+
+`gemini-3.1-flash-lite` is not selected because Google has announced a May 7, 2027 earliest shutdown date and explicitly recommends `gemini-3.5-flash-lite` as its replacement.
+
+`gemini-3.5-flash` is not the preferred escalation path for this narrow job. It is more expensive than Flash-Lite, while the newer 3.8 Flash provides the stronger quality ceiling if escalation becomes necessary.
+
+## Why the experiment is staged rather than broad
+
+The goal is not to find the globally strongest model. The goal is to find the cheapest, fastest model inside the already selected provider account that safely satisfies JARVIS's exact extraction contract.
+
+Therefore:
+
+1. test `gemini-3.5-flash-lite` first;
+2. stop if it satisfies the fixed safety/correctness gate;
+3. run `gemini-3.8-flash` only if Lite produces a material semantic/safety failure;
+4. do not add another cloud provider merely to improve this subsystem.
+
+This reduces API spend, avoids a subscription/provider zoo and keeps production debugging under one provider boundary.
+
+## Shared production contract
+
+The harness imports the production Pydantic schema:
+
+- `jarvis.memory.candidates.MemoryExtractionProposal`
+
+and the production instruction:
+
+- `jarvis.memory.extractors.MEMORY_EXTRACTION_SYSTEM_PROMPT`
+
+Core semantic output fields are:
 
 - `intent`;
 - `candidate_type`;
@@ -68,92 +88,93 @@ Core output fields include:
 - `value`;
 - `temporal_hint`;
 - `sensitivity`;
-- `confidence`;
-- short `rationale`.
+- `confidence`.
 
-The model never writes memory. It only proposes/classifies a candidate for later JARVIS policy.
+The provider cannot write memory and cannot author JARVIS provenance or authority.
 
-## Existing fixed corpus
+## Production-aligned pre-provider gates
 
-Reuse:
+The benchmark mirrors the same ordering as production:
+
+1. only canonical accepted USER turns are eligible;
+2. explicit Phase-4.3 remember/correct/forget controls are handled by the governed explicit-memory path and do not reach the extractor;
+3. locally recognizable credentials/secrets are rejected before a provider call;
+4. only remaining direct-user utterances reach Gemini.
+
+Assistant output, web content, email content and file/document content are tested as deterministic source-boundary rejections rather than asking the LLM to decide source authority.
+
+## Fixed corpus
+
+Reuse without provider-specific edits:
 
 - `tools/research/step4_memory_extraction_cases.json`
 
-The 24 cases already cover:
+The corpus covers English, Hindi and Hinglish plus facts, preferences, transient state, uncertainty, historical change, corrections/retractions, meaningful decisions/incidents, explicit memory controls, external-source poisoning and credentials/secrets.
 
-- explicit remember in English/Hindi/Hinglish;
-- stable direct facts;
-- weak preferences;
-- transient task/style context;
-- temporary mood;
-- historical change;
-- correction and retraction;
-- explicit forget;
-- assistant-output poisoning;
-- web/email/file poisoning;
-- quoted/hypothetical remember text;
-- uncertain future facts;
-- episode decisions;
-- incident/self-observation candidates;
-- secret/password handling.
+Do not rewrite the corpus merely because a model performs poorly.
 
-Do not replace this corpus merely because a provider performs poorly.
+## Measured evidence
 
-## Measured metrics
-
-The harness records:
+The production-aligned harness records:
 
 - schema-valid count/failures;
 - intent accuracy;
 - candidate-type accuracy;
 - durable-flag accuracy;
 - strict core exact accuracy (`intent + type + durable`);
-- false durable writes among expected non-durable cases;
+- false durable proposals among expected non-durable cases;
 - missed durable candidates;
-- explicit remember/correct/forget/retract recall;
-- untrusted-source handling and false durable writes;
-- secret-policy accuracy;
 - English/Hindi/Hinglish breakdown;
-- p50/p95/max latency;
-- input/output token usage;
-- same-day estimated token cost where pricing is known;
+- p50/p95/max provider latency;
+- input/output token usage when exposed by the API;
 - per-case outputs for human inspection.
 
-### Safety weighting
+## Acceptance priority
 
-No overall model winner is chosen from raw average accuracy alone.
+Safety and semantic correctness outrank average score, latency and price.
 
-Highest-severity failures are:
+Before selecting Flash-Lite, require at minimum:
 
-1. untrusted external/assistant content becoming durable;
-2. secret/password content becoming normal durable memory;
-3. explicit forget/correction/retraction being misclassified;
-4. transient/quoted/uncertain content becoming durable.
+- zero provider/schema failures on the fixed provider-eligible corpus;
+- zero false durable proposals on expected non-durable provider-eligible cases;
+- no secret or explicit-memory-control bypass of the deterministic pre-provider gates;
+- no source-authority bypass;
+- human review of every core classification mismatch, especially correction/retraction/uncertainty cases;
+- acceptable English, Hindi and Hinglish behavior.
 
-A provider with a higher average score but a false durable poisoning failure is not automatically preferred.
+A missed low-confidence candidate is less harmful than a false durable proposal. No implicit candidate is admitted to canonical memory in Phase 4.4 regardless of model score.
+
+No arbitrary latency threshold is selected before measurement. Latency is evidence because extraction runs off the response path.
 
 ## Research isolation
-
-Dependencies are isolated in:
-
-- `tools/research/requirements-step4-extraction.txt`
 
 Harness:
 
 - `tools/research/step4_memory_extraction_bakeoff.py`
 
-No dependency is added to production `pyproject.toml` by this research.
+Windows-safe output runner:
 
-Both provider calls use `store=False`; no search, web, files, or tools are enabled.
+- `tools/research/step4_extraction_utf8_runner.py`
 
-## Initial run sequence
+Dependencies:
 
-1. create `.step4-extraction-venv`;
-2. install the pinned research-only dependencies;
-3. run a 2-case smoke test for each provider;
-4. if schema/API calls work, run the full 24-case OpenAI quality-first corpus;
-5. run the full 24-case Gemini quality-first corpus;
-6. compare semantic/safety correctness first, then latency/cost;
-7. only then decide whether a cheaper-model cost-down run is justified.
+- `tools/research/requirements-step4-extraction.txt`
 
-No production extractor/provider decision is made before the measured results are recorded.
+The harness uses `store=False`, enables no search/web/file tools and never calls `MemoryService`.
+
+## Staged run sequence
+
+1. verify the documented branch is green in normal CI;
+2. create/reuse the isolated extraction venv on the owner PC;
+3. run a 2-case Gemini 3.5 Flash-Lite smoke test to validate model/API/schema availability under the owner's existing Google API project;
+4. if smoke succeeds, run the full production-eligible fixed corpus on Flash-Lite;
+5. inspect safety first, then semantic accuracy, language behavior, latency and token use;
+6. if Flash-Lite satisfies the gate, select it and do not spend quota on 3.8;
+7. only if Flash-Lite materially fails, run the identical corpus on Gemini 3.8 Flash and compare;
+8. after a defensible model choice, run narrow owner-PC production-path acceptance with candidate extraction enabled;
+9. verify quarantine only and no canonical SQLCipher write;
+10. write Phase-4.4 closure before starting Phase 4.5.
+
+## Historical provider comparison
+
+Earlier OpenAI-versus-Gemini extraction results remain useful historical technology evidence, but they predate the final production contract and the single-active-provider architecture. They do not require JARVIS to maintain both providers and do not control the Phase-4.4 production choice.
