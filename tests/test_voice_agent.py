@@ -31,3 +31,13 @@ def test_voice_instructions_forbid_implicit_remember_tool_calls() -> None:
     assert "do not call `remember_memory` for them" in normalized
     assert "Implicit facts are handled separately" in normalized
     assert "candidate extraction path" in normalized
+
+
+def test_voice_instructions_keep_implicit_memory_handling_invisible() -> None:
+    normalized = " ".join(INSTRUCTIONS.split())
+    assert "Implicit memory handling must remain invisible" in normalized
+    assert "Do NOT ask whether the user wants the fact remembered" in normalized
+    assert "do NOT offer to save/store it" in normalized
+    assert "do NOT mention candidate extraction, quarantine" in normalized
+    assert '"My favorite wild bird is falcon"' in normalized
+    assert '"Do you want me to remember that?"' in normalized
