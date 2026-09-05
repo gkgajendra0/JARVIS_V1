@@ -1,0 +1,234 @@
+{
+  "schema_version": "step4-research-v1",
+  "status": "research-only",
+  "purpose": "Demonstrate a JARVIS-owned declarative capability registry without making it production architecture.",
+  "source_authority": [
+    "current_runtime_or_configuration",
+    "accepted_repository_architecture_and_adr",
+    "declared_capability_registry",
+    "generated_dependency_inventory",
+    "verified_operational_observation",
+    "model_inference"
+  ],
+  "capabilities": [
+    {
+      "id": "startup.preflight",
+      "lifecycle": "accepted",
+      "purpose": "Load and validate the machine-owned startup configuration before production services start.",
+      "implementation_paths": [
+        "src/jarvis/preflight.py",
+        "src/jarvis/machine_config.py"
+      ],
+      "source_refs": [
+        "docs/CURRENT_ARCHITECTURE.md",
+        "docs/decisions/ADR-012_MACHINE_CONFIGURATION_AND_STARTUP_PREFLIGHT.md"
+      ],
+      "runtime_packages": [],
+      "optional_dependency_groups": [],
+      "depends_on": [],
+      "health_checks": [
+        {"kind": "test", "ref": "tests/test_preflight.py"},
+        {"kind": "test", "ref": "tests/test_machine_config.py"},
+        {"kind": "entrypoint", "ref": "jarvis-setup"}
+      ],
+      "authority_effect": "none",
+      "known_limitations": [
+        "Current configuration truth must be read from the authoritative machine/runtime source; this registry must not cache secret values."
+      ]
+    },
+    {
+      "id": "voice.conversation",
+      "lifecycle": "accepted",
+      "purpose": "Run the canonical full-duplex voice conversation path using LiveKit MediaDevices and a replaceable realtime provider.",
+      "implementation_paths": [
+        "src/jarvis/voice/production_runtime.py",
+        "src/jarvis/voice/livekit_session.py",
+        "src/jarvis/voice/media_devices_audio.py"
+      ],
+      "source_refs": [
+        "docs/CURRENT_ARCHITECTURE.md",
+        "docs/decisions/ADR-001_STEP_1_VOICE_STACK.md",
+        "docs/decisions/ADR-011_LIVEKIT_MEDIADEVICES_48K_FULL_DUPLEX.md"
+      ],
+      "runtime_packages": [
+        "livekit",
+        "livekit-agents",
+        "sounddevice",
+        "numpy"
+      ],
+      "optional_dependency_groups": [],
+      "depends_on": ["startup.preflight"],
+      "health_checks": [
+        {"kind": "test", "ref": "tests/test_voice_runtime.py"},
+        {"kind": "test", "ref": "tests/test_livekit_session.py"},
+        {"kind": "test", "ref": "tests/test_media_devices_audio.py"},
+        {"kind": "entrypoint", "ref": "jarvis-voice"}
+      ],
+      "authority_effect": "none",
+      "known_limitations": [
+        "The realtime provider is replaceable and provider state is not canonical JARVIS conversation memory."
+      ]
+    },
+    {
+      "id": "voice.wake_detect",
+      "lifecycle": "accepted",
+      "purpose": "Detect the local wake phrase on the accepted voice path.",
+      "implementation_paths": [
+        "src/jarvis/voice/wakeword.py"
+      ],
+      "source_refs": [
+        "docs/CURRENT_ARCHITECTURE.md",
+        "docs/decisions/ADR-002_STEP_2_WAKE_AUDIO_RUNTIME.md"
+      ],
+      "runtime_packages": [
+        "livekit-wakeword",
+        "numpy"
+      ],
+      "optional_dependency_groups": [],
+      "depends_on": ["voice.conversation"],
+      "health_checks": [
+        {"kind": "test", "ref": "tests/test_wakeword.py"}
+      ],
+      "authority_effect": "none",
+      "known_limitations": [
+        "Wake detection establishes activation context only; it does not establish owner identity or permission."
+      ]
+    },
+    {
+      "id": "vision.track_person",
+      "lifecycle": "accepted",
+      "purpose": "Detect and persistently track people from the Pocket3 vision stream.",
+      "implementation_paths": [
+        "src/jarvis/vision/service.py",
+        "src/jarvis/vision/tracker.py",
+        "src/jarvis/vision/camera.py"
+      ],
+      "source_refs": [
+        "docs/CURRENT_ARCHITECTURE.md",
+        "docs/decisions/ADR-003_STEP_2_5_VISION_FOUNDATION.md",
+        "docs/decisions/ADR-004_STEP_2_5_HEAD_FIRST_TRACKING.md"
+      ],
+      "runtime_packages": [
+        "numpy",
+        "opencv-python",
+        "opencv-contrib-python"
+      ],
+      "optional_dependency_groups": ["vision"],
+      "depends_on": ["startup.preflight"],
+      "health_checks": [
+        {"kind": "test", "ref": "tests/test_vision_service.py"},
+        {"kind": "test", "ref": "tests/test_vision_ocsort_adapter.py"},
+        {"kind": "entrypoint", "ref": "jarvis-vision-follow"}
+      ],
+      "authority_effect": "none",
+      "known_limitations": [
+        "Perception output is evidence/context only and cannot grant execution authority."
+      ]
+    },
+    {
+      "id": "identity.owner_visual_evidence",
+      "lifecycle": "accepted",
+      "purpose": "Produce freshness/session/track-bound OWNER visual evidence from identity and liveness signals.",
+      "implementation_paths": [
+        "src/jarvis/identity/owner_context.py",
+        "src/jarvis/identity/owner_evidence.py"
+      ],
+      "source_refs": [
+        "docs/CURRENT_ARCHITECTURE.md",
+        "docs/decisions/ADR-006_STEP_3_IDENTITY_TRUST_AUTHORITY_GOVERNANCE.md"
+      ],
+      "runtime_packages": [
+        "numpy",
+        "opencv-python",
+        "opencv-contrib-python",
+        "cryptography"
+      ],
+      "optional_dependency_groups": ["vision"],
+      "depends_on": ["vision.track_person"],
+      "health_checks": [
+        {"kind": "test", "ref": "tests/test_owner_context.py"},
+        {"kind": "test", "ref": "tests/test_owner_evidence.py"}
+      ],
+      "authority_effect": "evidence",
+      "known_limitations": [
+        "OWNER visual evidence remains evidence; identity or liveness alone never grants permission."
+      ]
+    },
+    {
+      "id": "authority.governed_execution",
+      "lifecycle": "accepted",
+      "purpose": "Apply deterministic risk, fail-closed policy, approval and one-time permit controls before consequential execution.",
+      "implementation_paths": [
+        "src/jarvis/authority/service.py",
+        "src/jarvis/authority/policy.py",
+        "src/jarvis/authority/permit.py"
+      ],
+      "source_refs": [
+        "docs/CURRENT_ARCHITECTURE.md",
+        "docs/decisions/ADR-006_STEP_3_IDENTITY_TRUST_AUTHORITY_GOVERNANCE.md",
+        "policies/step3_authority.rego"
+      ],
+      "runtime_packages": [],
+      "optional_dependency_groups": [],
+      "depends_on": ["startup.preflight"],
+      "health_checks": [
+        {"kind": "test", "ref": "tests/test_authority_foundation.py"},
+        {"kind": "test", "ref": "tests/test_authority_security_edges.py"}
+      ],
+      "authority_effect": "governed_execution",
+      "known_limitations": [
+        "T2 corroborated-owner trust remains disabled; consequential authority still requires the accepted policy and approval path."
+      ]
+    },
+    {
+      "id": "identity.speaker_shadow",
+      "lifecycle": "shadow",
+      "purpose": "Observe CAM++ OWNER-speaker similarity as diagnostic evidence without promoting a speaker threshold to authority.",
+      "implementation_paths": [
+        "src/jarvis/identity/speaker_shadow.py",
+        "src/jarvis/identity/speaker_identity.py"
+      ],
+      "source_refs": [
+        "docs/CURRENT_ARCHITECTURE.md",
+        "docs/decisions/ADR-014_AUDIO_FIRST_SPEAKER_SHADOW.md"
+      ],
+      "runtime_packages": ["numpy"],
+      "optional_dependency_groups": ["speaker"],
+      "depends_on": ["voice.conversation"],
+      "health_checks": [
+        {"kind": "test", "ref": "tests/test_speaker_shadow.py"}
+      ],
+      "authority_effect": "evidence",
+      "known_limitations": [
+        "No production OWNER speaker threshold is selected and speaker classification is not authority."
+      ]
+    },
+    {
+      "id": "identity.active_speaker_shadow",
+      "lifecycle": "shadow",
+      "purpose": "Observe LR-ASD audio-visual active-speaker evidence on canonical audio and the current OWNER visual track.",
+      "implementation_paths": [
+        "src/jarvis/identity/active_speaker.py",
+        "src/jarvis/voice/canonical_active_speaker_runtime.py"
+      ],
+      "source_refs": [
+        "docs/CURRENT_ARCHITECTURE.md",
+        "docs/decisions/ADR-013_SINGLE_OWNER_POCKET3_AUDIO_FOR_ACTIVE_SPEAKER.md"
+      ],
+      "runtime_packages": ["numpy"],
+      "optional_dependency_groups": ["active-speaker"],
+      "depends_on": [
+        "voice.conversation",
+        "vision.track_person",
+        "identity.owner_visual_evidence"
+      ],
+      "health_checks": [
+        {"kind": "test", "ref": "tests/test_active_speaker.py"}
+      ],
+      "authority_effect": "evidence",
+      "known_limitations": [
+        "No deployment threshold is selected and active-speaker evidence does not prove OWNER is the only speaker in mixed audio."
+      ]
+    }
+  ]
+}

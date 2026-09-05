@@ -1,0 +1,106 @@
+name: Step 4 self-knowledge SBOM research
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/step-4-memory-context
+    paths:
+      - ".github/workflows/step4-self-knowledge-sbom.yml"
+      - "tools/research/requirements-step4-self-knowledge.txt"
+      - "tools/research/step4_capability_registry_fixture.json"
+      - "tools/research/step4_self_knowledge_probe.py"
+      - "pyproject.toml"
+      - "docs/CURRENT_ARCHITECTURE.md"
+      - "docs/decisions/**"
+      - "policies/**"
+      - "src/jarvis/**"
+      - "tests/**"
+
+permissions:
+  contents: read
+
+jobs:
+  generate-and-verify:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out JARVIS research branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+
+      - name: Build isolated target JARVIS environment
+        shell: pwsh
+        run: |
+          python -m venv .step4-self-knowledge-target
+          $targetPython = ".\.step4-self-knowledge-target\Scripts\python.exe"
+          & $targetPython -m pip install --disable-pip-version-check --upgrade pip
+          & $targetPython -m pip install .
+          & $targetPython -m pip check
+          if ($LASTEXITCODE -ne 0) { throw "Target JARVIS environment failed pip check" }
+
+      - name: Build isolated CycloneDX tool environment
+        shell: pwsh
+        run: |
+          python -m venv .step4-self-knowledge-tool
+          $toolPython = ".\.step4-self-knowledge-tool\Scripts\python.exe"
+          & $toolPython -m pip install --disable-pip-version-check --upgrade pip
+          & $toolPython -m pip install -r tools\research\requirements-step4-self-knowledge.txt
+          & $toolPython -m cyclonedx_py --version
+          if ($LASTEXITCODE -ne 0) { throw "CycloneDX tool environment setup failed" }
+
+      - name: Generate reproducible CycloneDX 1.7 target-environment SBOM
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .step4-self-knowledge | Out-Null
+          $toolPython = ".\.step4-self-knowledge-tool\Scripts\python.exe"
+          $targetPython = (Resolve-Path ".\.step4-self-knowledge-target\Scripts\python.exe").Path
+          & $toolPython -m cyclonedx_py environment `
+            --spec-version 1.7 `
+            --output-format JSON `
+            --output-reproducible `
+            --pyproject pyproject.toml `
+            --mc-type application `
+            --output-file .step4-self-knowledge\sbom.cdx.json `
+            $targetPython
+          if ($LASTEXITCODE -ne 0) { throw "CycloneDX SBOM generation failed" }
+
+      - name: Validate and join SBOM with JARVIS capability registry
+        shell: pwsh
+        run: |
+          python -X utf8 tools\research\step4_self_knowledge_probe.py `
+            --sbom .step4-self-knowledge\sbom.cdx.json `
+            --registry tools\research\step4_capability_registry_fixture.json `
+            --repo-root . `
+            --output .step4-self-knowledge\self-knowledge-snapshot.json `
+            --git-sha $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw "Self-knowledge validation failed" }
+
+      - name: Enforce research gate
+        shell: pwsh
+        run: |
+          python -X utf8 -c "import json,pathlib; p=pathlib.Path('.step4-self-knowledge/self-knowledge-snapshot.json'); d=json.loads(p.read_text(encoding='utf-8')); assert d['status']=='PASS', d['errors']; assert d['sbom']['spec_version']=='1.7'; assert d['registry']['status']=='research-only'; print('SELF_KNOWLEDGE_GATE=PASS'); print('SBOM_COMPONENTS=',d['sbom']['component_count']); print('CAPABILITIES=',d['registry']['capability_count']); print('FAILED_CHECKS=',[k for k,v in d['checks'].items() if not v])"
+
+      - name: Record research summary
+        shell: pwsh
+        run: |
+          $snapshot = Get-Content .step4-self-knowledge\self-knowledge-snapshot.json -Raw | ConvertFrom-Json
+          Add-Content $env:GITHUB_STEP_SUMMARY "## Step 4 self-knowledge / SBOM spike"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- Status: **$($snapshot.status)**"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- CycloneDX: ``$($snapshot.sbom.spec_version)``"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- Installed SBOM components: ``$($snapshot.sbom.component_count)``"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- Capability declarations: ``$($snapshot.registry.capability_count)``"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- Authoritative source fingerprints: ``$($snapshot.authoritative_source_fingerprints.Count)``"
+
+      - name: Upload research evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: step4-self-knowledge-sbom
+          path: .step4-self-knowledge/
+          if-no-files-found: error
+          retention-days: 14
