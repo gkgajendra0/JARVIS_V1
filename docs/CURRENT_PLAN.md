@@ -6,9 +6,11 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 TECHNOLOGY RESEARCH COMPLETE — FINAL ARCHITECTURE PROPOSAL READY — HUMAN APPROVAL REQUIRED BEFORE IMPLEMENTATION**
+**STEP 3 COMPLETE + MERGED — STEP 4 RESEARCH/TECHNOLOGY/ARCHITECTURE APPROVED — PHASE 4.0A IMPLEMENTATION ACTIVE**
 
-This file is the operational source of truth for current work. Detailed evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` continues to describe only architecture that actually exists and has been accepted.
+This file is the operational source of truth for current work. Detailed evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` continues to describe only architecture that actually exists and has passed acceptance.
+
+Owner architecture approval was recorded on 2026-09-05 in `docs/research/STEP_4_ARCHITECTURE_APPROVAL.md`.
 
 ---
 
@@ -87,9 +89,9 @@ Step 4 also lays the machine-readable self-knowledge foundation required by late
 
 ---
 
-## Step-4 research disposition — COMPLETE FOR ARCHITECTURE APPROVAL
+## Step-4 research disposition — COMPLETE
 
-The research-first technology gates are sufficiently answered.
+The research-first technology gates are sufficiently answered and the resulting architecture has owner approval.
 
 ### Canonical storage
 
@@ -122,7 +124,7 @@ Selected architecture:
 - `MemoryCandidateExtractor` protocol;
 - JARVIS `MemoryPolicy` retains all durable-write authority.
 
-Provider result remains a **provisional quality tie on shared evidence** between OpenAI Terra and Gemini 3.8 Flash. Provider selection therefore remains replaceable/configurable and does not block architecture approval.
+Provider result remains a **provisional quality tie on shared evidence** between OpenAI Terra and Gemini 3.8 Flash. Provider selection therefore remains replaceable/configurable and does not block implementation.
 
 ### Retrieval
 
@@ -156,32 +158,11 @@ The Windows self-knowledge spike passed with 92 SBOM components, 8 research capa
 
 ### Async DB boundary
 
-Normal `aiosqlite.connect()` is not selected because it opens the standard-library `sqlite3` driver rather than the selected SQLCipher DB-API. The proposal uses a small thread-affinity async adapter over the proven `sqlcipher3` connection: one serialized writer worker and initially one read worker, with short transactions and WAL.
+Normal `aiosqlite.connect()` is not selected because it opens the standard-library `sqlite3` driver rather than the selected SQLCipher DB-API. The approved architecture uses a small thread-affinity async adapter over the proven `sqlcipher3` connection: one serialized writer worker and initially one read worker, with short transactions and WAL.
 
 ---
 
-## Human-review documents
-
-Final research technology decision:
-
-- `docs/research/STEP_4_FINAL_TECHNOLOGY_DECISION.md`
-
-Final architecture proposal:
-
-- `docs/research/STEP_4_ARCHITECTURE_PROPOSAL.md`
-
-Important supporting evidence:
-
-- `docs/research/STEP_4_RETRIEVAL_TECHNOLOGY_DECISION.md`;
-- `docs/research/STEP_4_MEMORY_EXTRACTION_PROVISIONAL_TIE.md`;
-- `docs/research/STEP_4_SQLCIPHER_417_WINDOWS_RESULT.md`;
-- `docs/research/STEP_4_SELF_KNOWLEDGE_SBOM_WINDOWS_RESULT.md`;
-- `docs/research/STEP_4_TEMPORAL_FRESHNESS_PROVENANCE_REQUIREMENTS.md`;
-- `docs/research/STEP_4_SELF_KNOWLEDGE_CONTINUOUS_LEARNING_REQUIREMENTS.md`.
-
----
-
-## Proposed ownership model awaiting approval
+## Approved ownership model
 
 ```text
 ConversationSession
@@ -206,13 +187,45 @@ SelfKnowledgeProvider
     = authority-aware aggregation of current/declared/historical self-knowledge
 ```
 
+Approval record: `docs/research/STEP_4_ARCHITECTURE_APPROVAL.md`.
+
 ---
 
-## Proposed implementation order after approval
+## Phase 4.0A — ACTIVE
 
-1. **Phase 4.0A — provenance + neutral security boundary**
-   - stable JARVIS `session_id`, `turn_id`, `accepted_at`;
-   - move/generalize proven DPAPI primitive behind `jarvis.security` without identity regression.
+Scope:
+
+- stable JARVIS-owned `session_id`;
+- stable JARVIS-owned `turn_id`;
+- timezone-aware UTC `accepted_at` on accepted turns;
+- provider/LiveKit item IDs retained only as optional external provenance;
+- neutral shared `jarvis.security` boundary for the already-proven Windows DPAPI key protector;
+- preserve existing `jarvis.identity` compatibility and behavior;
+- update the Step-4 SQLCipher security probe to consume the neutral security boundary;
+- all existing Step-1/2/3 automated quality gates must remain green.
+
+Implementation branch:
+
+`implementation/step-4-memory-context`
+
+Implemented so far on the branch:
+
+- `ConversationSession` now owns stable session provenance;
+- `ConversationTurn` now owns stable turn provenance and aware UTC acceptance time;
+- LiveKit provider IDs are stored only as `external_item_id` diagnostic metadata;
+- DPAPI/key-protection primitive has moved behind `jarvis.security` with compatibility exports retained through `jarvis.identity`;
+- focused provenance and Windows DPAPI compatibility tests added;
+- research SQLCipher/DPAPI probe updated to the neutral module.
+
+**Phase 4.0A remains ACTIVE until the final branch quality run is green and the implementation diff is reconciled.**
+
+No canonical memory database, LLM memory write, or automatic durable learning is part of 4.0A.
+
+---
+
+## Remaining approved implementation order
+
+1. **Phase 4.0A — provenance + neutral security boundary** — ACTIVE.
 2. **Phase 4.1 — canonical memory kernel**
    - SQLCipher store, migrations, temporal schema, provenance, lifecycle, FTS, explicit forget;
    - no LLM auto-write.
@@ -236,6 +249,20 @@ SelfKnowledgeProvider
 
 ---
 
+## Key Step-4 documents
+
+- `docs/research/STEP_4_FINAL_TECHNOLOGY_DECISION.md`;
+- `docs/research/STEP_4_ARCHITECTURE_PROPOSAL.md`;
+- `docs/research/STEP_4_ARCHITECTURE_APPROVAL.md`;
+- `docs/research/STEP_4_RETRIEVAL_TECHNOLOGY_DECISION.md`;
+- `docs/research/STEP_4_MEMORY_EXTRACTION_PROVISIONAL_TIE.md`;
+- `docs/research/STEP_4_SQLCIPHER_417_WINDOWS_RESULT.md`;
+- `docs/research/STEP_4_SELF_KNOWLEDGE_SBOM_WINDOWS_RESULT.md`;
+- `docs/research/STEP_4_TEMPORAL_FRESHNESS_PROVENANCE_REQUIREMENTS.md`;
+- `docs/research/STEP_4_SELF_KNOWLEDGE_CONTINUOUS_LEARNING_REQUIREMENTS.md`.
+
+---
+
 ## Non-blocking deferred decisions
 
 These do not reopen the selected architecture:
@@ -253,6 +280,6 @@ These do not reopen the selected architecture:
 
 ## Immediate Next Action
 
-**HUMAN REVIEW / APPROVAL OF `STEP_4_ARCHITECTURE_PROPOSAL.md`.**
+**COMPLETE PHASE 4.0A AUTOMATED VALIDATION AND DIFF RECONCILIATION.**
 
-No production Step-4 memory implementation begins until the owner explicitly approves the architecture. On approval, start Phase 4.0A on a dedicated implementation branch with provenance IDs and the neutral security boundary—not automatic LLM memory writing.
+Do not start Phase 4.1 until Phase 4.0A is green and its provenance/security compatibility boundary is confirmed. Do not implement automatic LLM memory writing as part of this gate.
