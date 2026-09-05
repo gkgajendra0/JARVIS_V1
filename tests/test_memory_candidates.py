@@ -115,6 +115,65 @@ async def test_direct_fact_is_quarantined_with_jarvis_owned_provenance() -> None
 
 
 @pytest.mark.asyncio
+async def test_exact_turn_api_cannot_race_to_a_later_user_turn() -> None:
+    conversation = ConversationSession(session_id="session-1")
+    conversation.start()
+    first = conversation.accept_turn(ConversationRole.USER, "My home city is Indore.")
+    conversation.accept_turn(ConversationRole.USER, "My bike is a BMW 310 GS.")
+    extractor = FakeExtractor(_proposal())
+    quarantine = MemoryCandidateQuarantine(session_id=conversation.session_id)
+    coordinator = MemoryCandidateCoordinator(
+        extractor=extractor,
+        quarantine=quarantine,
+        id_factory=lambda: "candidate-1",
+    )
+
+    result = await coordinator.consider_user_turn(conversation, first)
+
+    assert result.outcome is MemoryCandidateOutcome.QUARANTINED
+    assert extractor.calls == ["My home city is Indore."]
+    assert result.candidate is not None
+    assert result.candidate.source_turn_id == first.turn_id
+
+
+@pytest.mark.asyncio
+async def test_exact_explicit_control_is_skipped_even_after_a_later_turn() -> None:
+    conversation = ConversationSession(session_id="session-1")
+    conversation.start()
+    explicit = conversation.accept_turn(
+        ConversationRole.USER,
+        "Remember that my home city is Indore.",
+    )
+    conversation.accept_turn(ConversationRole.USER, "The weather is warm today.")
+    extractor = FakeExtractor(_proposal())
+    quarantine = MemoryCandidateQuarantine(session_id=conversation.session_id)
+    coordinator = MemoryCandidateCoordinator(extractor=extractor, quarantine=quarantine)
+
+    result = await coordinator.consider_user_turn(conversation, explicit)
+
+    assert result.outcome is MemoryCandidateOutcome.SKIPPED_EXPLICIT_MEMORY_CONTROL
+    assert extractor.calls == []
+    assert quarantine.snapshot() == ()
+
+
+@pytest.mark.asyncio
+async def test_exact_turn_must_belong_to_the_owning_conversation() -> None:
+    conversation = _conversation("My home city is Indore.")
+    other = ConversationSession(session_id=conversation.session_id)
+    other.start()
+    rogue_turn = other.accept_turn(ConversationRole.USER, "My home city is Sagar.")
+    extractor = FakeExtractor(_proposal())
+    quarantine = MemoryCandidateQuarantine(session_id=conversation.session_id)
+    coordinator = MemoryCandidateCoordinator(extractor=extractor, quarantine=quarantine)
+
+    with pytest.raises(ValueError, match="does not belong"):
+        await coordinator.consider_user_turn(conversation, rogue_turn)
+
+    assert extractor.calls == []
+    assert quarantine.snapshot() == ()
+
+
+@pytest.mark.asyncio
 async def test_explicit_memory_control_is_not_sent_to_implicit_extractor() -> None:
     conversation = _conversation("Remember that my home city is Indore.")
     extractor = FakeExtractor(_proposal())
