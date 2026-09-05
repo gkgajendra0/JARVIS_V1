@@ -19,6 +19,15 @@ def test_research_bakeoff_reuses_production_schema_and_prompt() -> None:
     assert "rationale" not in MemoryExtractionProposal.model_fields
 
 
+def test_production_prompt_defines_post_gate_candidate_intent() -> None:
+    prompt = MEMORY_EXTRACTION_SYSTEM_PROMPT.casefold()
+
+    assert "explicit phase-4.3" in prompt
+    assert "intent=candidate" in prompt
+    assert "do not use remember merely because" in prompt
+    assert '"i live in sagar."' in prompt
+
+
 def test_research_sdk_pins_match_direct_production_dependencies() -> None:
     production_text = PYPROJECT_PATH.read_text(encoding="utf-8")
     research_requirements = {
