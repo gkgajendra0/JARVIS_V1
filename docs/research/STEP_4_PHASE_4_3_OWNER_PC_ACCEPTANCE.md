@@ -8,11 +8,15 @@
 
 **CROSS-SESSION VOICE RECALL: PASS.**
 
+**EXPLICIT VOICE CORRECTION: PASS.**
+
+**CROSS-SESSION CORRECTED-VALUE RECALL: PASS.**
+
 **CROSS-SESSION VOICE ACCEPTANCE: IN PROGRESS.**
 
 Date: 2026-09-05
 
-This record captures the real JARVIS Windows owner-machine acceptance evidence for the first production persistent-memory rollout. It does not mark Phase 4.3 complete until the cross-session voice remember/inspect/correct/forget sequence passes.
+This record captures the real JARVIS Windows owner-machine acceptance evidence for the first production persistent-memory rollout. It does not mark Phase 4.3 complete until the cross-session voice remember/inspect/correct/forget sequence and the remaining safety checks pass.
 
 ## 1. Retained SQLCipher package integrity — PASS
 
@@ -143,16 +147,34 @@ This is the first complete production voice proof that a fact explicitly remembe
 
 Wake detection, provider conversation, integrated vision, speaker-shadow diagnostics, and return-to-sleep behavior remained usable during the successful recall run.
 
-## 8. Remaining mandatory Phase 4.3 acceptance
+## 8. Explicit production voice correction — PASS
+
+In a later production voice process, the owner said:
+
+`Jarvis, correct my phase 4 test city memory to Indore.`
+
+The runtime logged a committed correction for canonical predicate `phase_4_test_city`, and JARVIS confirmed that the Phase 4 test city was now set to `Indore`.
+
+This proves the explicit correction operation reached the canonical durable lifecycle rather than merely changing transient conversation state.
+
+## 9. Cross-session corrected-value recall — PASS
+
+After another full production process restart, the owner asked for the same memory again and JARVIS answered `Indore`.
+
+The owner reported this run as passing. The pasted console output encountered a separate transcript/paste handling error after the fact, but the human-observed acceptance result was clear: the later process returned the corrected current value `Indore`, not the superseded value `Sagar`.
+
+This satisfies the Phase 4.3 correction persistence requirement.
+
+For the remaining owner acceptance runs, startup greetings are disabled using the existing `JARVIS_STARTUP_GREETING=false` configuration so test repetitions do not consume unnecessary provider/audio budget.
+
+## 10. Remaining mandatory Phase 4.3 acceptance
 
 Before Phase 4.3 may close, continue the real production voice path and prove at minimum:
 
-1. explicit correction replaces the current belief;
-2. a later voice session returns the corrected value only;
-3. explicit forget succeeds;
-4. a later voice session no longer returns the forgotten memory;
-5. no implicit ordinary statement is durably stored;
-6. no secret/credential request is accepted;
-7. normal wake/audio/provider behavior remains usable.
+1. explicit forget succeeds;
+2. a later voice session no longer returns the forgotten memory;
+3. no implicit ordinary statement is durably stored;
+4. no secret/credential request is accepted;
+5. normal wake/audio/provider behavior remains usable.
 
 Phase 4.4 remains blocked until this owner cross-session voice acceptance passes.
