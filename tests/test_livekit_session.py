@@ -15,6 +15,7 @@ from livekit.agents.llm import ChatMessage
 
 from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationSession, ConversationStatus
+from jarvis.memory.live_context import LiveContext
 from jarvis.voice.agent import INSTRUCTIONS
 from jarvis.voice.livekit_session import (
     LiveKitConversationBridge,
@@ -35,6 +36,12 @@ class FakeAgentSession:
 
     def emit(self, event: str, value: Any) -> None:
         self.handlers[event](value)
+
+
+class RejectingConversation(ConversationSession):
+    def accept_turn(self, *args: Any, **kwargs: Any):
+        del args, kwargs
+        raise RuntimeError("controlled canonical rejection")
 
 
 @dataclass
@@ -67,6 +74,7 @@ def active_bridge() -> tuple[FakeAgentSession, LiveKitConversationBridge]:
     bridge = LiveKitConversationBridge(
         livekit,  # type: ignore[arg-type]
         conversation,
+        LiveContext(max_recent_turns=8),
         show_transcript=False,
     )
     return livekit, bridge
@@ -86,6 +94,28 @@ def test_committed_items_write_once_and_preserve_repeated_text() -> None:
     assert [turn.external_item_id for turn in turns] == ["one", "two"]
     assert all(turn.turn_id != turn.external_item_id for turn in turns)
     assert turns[0].turn_id != turns[1].turn_id
+    assert bridge.live_context.recent_turns == turns
+
+
+def test_live_context_updates_only_after_canonical_acceptance_succeeds() -> None:
+    livekit = FakeAgentSession()
+    conversation = RejectingConversation()
+    conversation.start()
+    live_context = LiveContext(max_recent_turns=4)
+    LiveKitConversationBridge(
+        livekit,  # type: ignore[arg-type]
+        conversation,
+        live_context,
+        show_transcript=False,
+    )
+    event = ConversationItemAddedEvent(item=message("rejected", "user", "do not add"))
+
+    with pytest.raises(RuntimeError, match="controlled canonical rejection"):
+        livekit.emit("conversation_item_added", event)
+    with pytest.raises(RuntimeError, match="controlled canonical rejection"):
+        livekit.emit("conversation_item_added", event)
+
+    assert live_context.recent_turns == ()
 
 
 def test_interrupted_assistant_item_is_marked_partial() -> None:
@@ -97,6 +127,7 @@ def test_interrupted_assistant_item_is_marked_partial() -> None:
     livekit.emit("conversation_item_added", event)
 
     assert bridge.conversation.turns[0].interrupted is True
+    assert bridge.live_context.recent_turns[0].interrupted is True
 
 
 def test_empty_and_unsupported_items_do_not_write_turns() -> None:
@@ -111,6 +142,7 @@ def test_empty_and_unsupported_items_do_not_write_turns() -> None:
     )
 
     assert bridge.conversation.turns == ()
+    assert bridge.live_context.recent_turns == ()
 
 
 def test_recoverable_error_keeps_session_active() -> None:
@@ -124,12 +156,21 @@ def test_terminal_error_fails_and_close_preserves_failure() -> None:
     livekit.emit("error", ErrorEvent(error=FakeError(False), source=object()))
     livekit.emit("close", CloseEvent(reason=CloseReason.ERROR))
     assert bridge.conversation.status is ConversationStatus.FAILED
+    assert bridge.live_context.recent_turns == ()
 
 
-def test_close_without_error_closes_session() -> None:
+def test_close_without_error_closes_session_and_disposes_live_context() -> None:
     livekit, bridge = active_bridge()
+    livekit.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(item=message("one", "user", "temporary context")),
+    )
+    assert len(bridge.live_context.recent_turns) == 1
+
     livekit.emit("close", CloseEvent(reason=CloseReason.USER_INITIATED))
+
     assert bridge.conversation.status is ConversationStatus.CLOSED
+    assert bridge.live_context.recent_turns == ()
 
 
 def test_api_key_is_required_before_session_construction(
