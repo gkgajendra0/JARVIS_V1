@@ -12,8 +12,8 @@ SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from jarvis.memory.database import SqlCipherMemoryDatabaseFactory  # noqa: E402
-from jarvis.security import WindowsDpapiKeyProtector  # noqa: E402
+from jarvis.memory.database import SqlCipherMemoryDatabaseFactory
+from jarvis.security import WindowsDpapiKeyProtector
 
 MARKER = "JARVIS_PRODUCTION_ADAPTER_MARKER_HINDI_स्मृति"
 
