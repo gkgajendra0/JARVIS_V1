@@ -85,7 +85,9 @@ class FakeEmbeddingModel:
 
     def encode_document(self, texts: list[str], **kwargs: Any) -> np.ndarray:
         self.document_calls.append((texts, kwargs))
-        return np.asarray([vector(index, float(index + 2)) for index in range(len(texts))])
+        return np.asarray(
+            [vector(index, float(index + 2)) for index in range(len(texts))]
+        )
 
 
 class FakeRerankerModel:
@@ -98,7 +100,9 @@ class FakeRerankerModel:
         return np.asarray(self._scores, dtype=np.float64)
 
 
-def test_embedding_adapter_is_lazy_revision_pinned_and_matches_measured_contract() -> None:
+def test_embedding_adapter_is_lazy_revision_pinned_and_matches_measured_contract() -> (
+    None
+):
     created: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
     model = FakeEmbeddingModel()
 
@@ -132,7 +136,9 @@ def test_embedding_adapter_is_lazy_revision_pinned_and_matches_measured_contract
     assert encode_kwargs["truncate_dim"] == QWEN3_EMBEDDING_CONTRACT.dimension
 
 
-def test_embedding_adapter_documents_are_normalized_and_empty_batch_stays_lazy() -> None:
+def test_embedding_adapter_documents_are_normalized_and_empty_batch_stays_lazy() -> (
+    None
+):
     model = FakeEmbeddingModel()
     calls = 0
 
@@ -149,9 +155,7 @@ def test_embedding_adapter_documents_are_normalized_and_empty_batch_stays_lazy()
 
     assert calls == 1
     assert len(documents) == 2
-    assert all(
-        np.linalg.norm(document) == pytest.approx(1.0) for document in documents
-    )
+    assert all(np.linalg.norm(document) == pytest.approx(1.0) for document in documents)
     texts, encode_kwargs = model.document_calls[0]
     assert texts == ["alpha", "beta"]
     assert "prompt" not in encode_kwargs
