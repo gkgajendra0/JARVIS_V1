@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE / OWNER RTX ABSTENTION CALIBRATION NEXT**
+**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE / V1 POLICY REJECTED / RERANKER-INSTRUCTION DEVELOPMENT NEXT**
 
 This file is the operational source of truth for current work. Detailed measured evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` describes architecture that actually exists and has passed acceptance.
 
@@ -80,7 +80,8 @@ Owner-PC production acceptance proved session-local candidate quarantine, physic
 - immutable revision `e61197ed45024b0ed8a2d74b80b4d909f1255473`;
 - top 3 candidates;
 - model-default BF16 path;
-- exact reranker-score tie -> first-stage fused rank -> stable assertion ID.
+- exact reranker-score tie -> first-stage fused rank -> stable assertion ID;
+- final task instruction is **not frozen yet**: Phase 4.5D is comparing the current generic default with one pre-registered JARVIS-memory-specific instruction before final calibration.
 
 Owner-machine model-selection evidence:
 
@@ -150,8 +151,8 @@ query/context need
  -> FTS5 lexical rank + Qwen3-Embedding-0.6B dense rank
  -> equal-weight RRF
  -> top 3 eligible candidates
- -> Qwen3-Reranker-0.6B BF16
- -> measured abstention/release policy
+ -> Qwen3-Reranker-0.6B BF16 + frozen memory-specific instruction
+ -> statistically controlled abstention/release policy
  -> ContextAssembler
  -> active Gemini session
 ```
@@ -196,7 +197,7 @@ Implemented and owner-accepted:
 
 - lazy revision-pinned Qwen embedder and reranker adapters;
 - 256d normalized query/document encoding;
-- exact measured JARVIS query instruction;
+- exact measured JARVIS embedding-query instruction;
 - top-3 reranker;
 - deterministic ties;
 - `trust_remote_code=False`;
@@ -211,41 +212,70 @@ Result:
 
 #### Phase 4.5D — abstention calibration — ACTIVE
 
-Research and implementation are ready for measured owner-machine calibration.
+##### V1 measurement — COMPLETE / NOT ACCEPTED
 
-Research decision:
+The first successful 64-case owner measurement completed on the accepted RTX environment.
 
-- Qwen reranker scores are decision/logit scores, not universal probabilities;
-- do not guess an absolute score/cosine cutoff;
-- use fixed labeled calibration and held-out validation splits;
-- derive threshold candidates only from calibration observations/midpoints;
-- minimize false releases first, then maximize correct release recall, then prefer simpler policy;
-- freeze policy before validation;
-- any validation false release is blocking and must not be tuned away using validation labels.
+V1 selected a `score_margin` policy with:
 
-Fixed corpus:
+- score threshold `8.96875`;
+- margin threshold `9.15625`.
 
-- 64 queries total;
-- calibration: 16 release + 16 abstain;
-- validation: 16 release + 16 abstain;
-- English/Hindi/Hinglish;
-- absent, near-miss, ambiguous, historical, forgotten, local-only, secret, untrusted, adversarial lexical, negation, and relation-mismatch boundaries.
+Held-out V1 result:
 
-Harness:
+- observed false releases `0`;
+- correct releases `3`;
+- positive release recall `0.1875`;
+- English recall `0.166667`;
+- Hindi recall `0.0`;
+- Hinglish recall `0.333333`.
 
-- `tools/research/step4_phase45d_abstention_calibration.py`;
-- uses the real production lifecycle, embedding store, eligibility, FTS5+dense+RRF retrieval service, Qwen embedder, and Qwen reranker against a temporary synthetic/project-style database;
-- does not read owner production memory;
-- does not auto-write a production threshold.
+This policy is too conservative for production and is rejected.
+
+The V1 64-case corpus is now fully **retired from final acceptance** because all labels/results have been exposed. It may be used only for development diagnostics.
+
+Owner record:
+
+- `docs/research/STEP_4_PHASE_4_5D_OWNER_MEASUREMENT_V1.md`.
+
+##### Active 4.5D development — reranker instruction bake-off
+
+Research found that Qwen3-Reranker is instruction-aware and recommends task-specific English instructions. The current JARVIS adapter still uses the generic model-default web-search instruction.
+
+Next measured experiment keeps model/revision/precision/top-3 window/embedding/first-stage retrieval unchanged and compares only:
+
+1. current Qwen default reranker instruction;
+2. one pre-registered JARVIS-memory-specific English instruction.
+
+The retired V1 corpus is used as the development set for this comparison.
+
+Selection will consider:
+
+- positive top-1 accuracy and hit@3;
+- English/Hindi/Hinglish ranking quality;
+- safe-vs-unsafe score separation;
+- risk-coverage / AURC behavior;
+- no threshold acceptance from this retired corpus.
+
+After the instruction is frozen, build a **fresh** final corpus.
+
+##### Final 4.5D risk-control method — research decision
+
+Do not promote the V1 custom selector into final production acceptance.
+
+Use MAPIE binary risk control / Learn-Then-Test on the fresh corpus to control a pre-registered release-precision target at a pre-registered confidence level. MAPIE is research/calibration-only; production inference receives only a frozen versioned rule if final acceptance passes.
+
+A statistically infeasible threshold is a valid result and must not be tuned away using final validation labels.
 
 Research/status records:
 
 - `docs/research/STEP_4_PHASE_4_5D_ABSTENTION_RESEARCH.md`;
-- `docs/research/STEP_4_PHASE_4_5D_IMPLEMENTATION_STATUS.md`.
+- `docs/research/STEP_4_PHASE_4_5D_IMPLEMENTATION_STATUS.md`;
+- `docs/research/STEP_4_PHASE_4_5D_OWNER_MEASUREMENT_V1.md`.
 
 #### Phase 4.5E — ContextAssembler integration + owner acceptance — BLOCKED ON 4.5D
 
-After an abstention/release policy is measured and accepted:
+After an abstention/release policy is measured and accepted on fresh validation:
 
 - release only accepted retrieval evidence through `ContextAssembler`;
 - preserve bounded context budgets and evidence metadata;
@@ -265,7 +295,7 @@ After an abstention/release policy is measured and accepted:
 6. Phase 4.5A — derived-vector lifecycle — **COMPLETE**.
 7. Phase 4.5B — lexical+dense+RRF core — **COMPLETE**.
 8. Phase 4.5C — local Qwen adapters + GPU compatibility — **COMPLETE**.
-9. Phase 4.5D — abstention calibration — **ACTIVE**.
+9. Phase 4.5D — instruction selection + fresh statistically controlled abstention calibration — **ACTIVE**.
 10. Phase 4.5E — ContextAssembler integration + owner acceptance — **BLOCKED ON 4.5D**.
 11. Phase 4.6 — episodic/reflection learning for meaningful outcomes/decisions/incidents, not raw transcripts.
 12. Phase 4.7 — Capability Registry + CycloneDX + authoritative self-knowledge aggregation, no autonomous repair.
@@ -289,8 +319,8 @@ After an abstention/release policy is measured and accepted:
 
 ## Immediate Next Action
 
-**RUN THE FIXED PHASE 4.5D OWNER RTX ABSTENTION CALIBRATION ONCE.**
+**IMPLEMENT AND MEASURE THE PHASE 4.5D RERANKER-INSTRUCTION BAKE-OFF ON THE RETIRED V1 DEVELOPMENT CORPUS.**
 
-Use the accepted Windows `.venv` and existing cached Qwen models. Generate `.step4-phase45d-abstention-calibration.json`, then review calibration + held-out validation evidence before accepting any production release/abstain policy.
+Add opt-in custom-instruction support to the revision-pinned Qwen reranker without changing current default behavior. Compare the generic default against exactly one pre-registered JARVIS-memory-specific English instruction using the retired V1 corpus. Freeze the winner before designing the fresh final risk-control corpus.
 
-Do not rerun Phase 4.5C. Do not tune a policy against held-out validation merely to make the result pass. Do not begin Phase 4.5E until Phase 4.5D is formally accepted.
+Do not rerun Phase 4.5C. Do not accept the V1 `8.96875 / 9.15625` policy. Do not tune a final policy against the exposed V1 validation labels. Do not begin Phase 4.5E until a fresh Phase 4.5D calibration/validation gate is formally accepted.
