@@ -19,6 +19,7 @@ from livekit.agents.llm import ChatMessage
 from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationSession, ConversationStatus
 from jarvis.identity.speaker_turn import InMemorySpeakerTurnCapture
+from jarvis.memory.live_context import LiveContext
 from jarvis.voice.audio import LocalAudioOutput
 from jarvis.voice.livekit_session import LiveKitConversationBridge
 from jarvis.voice.runtime import (
@@ -87,6 +88,18 @@ class FakeScriptedSpeech:
         self.closed = True
 
 
+def _bridge(
+    session: FakeSession,
+    conversation: ConversationSession,
+) -> LiveKitConversationBridge:
+    return LiveKitConversationBridge(
+        session,  # type: ignore[arg-type]
+        conversation,
+        LiveContext(max_recent_turns=8),
+        show_transcript=False,
+    )
+
+
 def runtime_with_session(
     *,
     initial_timeout: float = 1,
@@ -100,11 +113,7 @@ def runtime_with_session(
 ]:
     session = FakeSession(start_error=start_error)
     conversation = ConversationSession()
-    bridge = LiveKitConversationBridge(
-        session,  # type: ignore[arg-type]
-        conversation,
-        show_transcript=False,
-    )
+    bridge = _bridge(session, conversation)
     audio = FakeAudio()
     scripted_speech = FakeScriptedSpeech()
     config = JarvisConfig(initial_request_timeout_seconds=initial_timeout)
@@ -196,11 +205,7 @@ async def test_provider_start_failure_marks_conversation_failed_and_cleans_up() 
 async def test_speaker_shadow_submits_only_after_committed_user_item() -> None:
     session = FakeSession()
     conversation = ConversationSession()
-    bridge = LiveKitConversationBridge(
-        session,  # type: ignore[arg-type]
-        conversation,
-        show_transcript=False,
-    )
+    bridge = _bridge(session, conversation)
     audio = FakeAudio()
     config = JarvisConfig(
         speaker_shadow_enabled=True,
@@ -259,11 +264,7 @@ async def test_speaker_shadow_submits_only_after_committed_user_item() -> None:
 async def test_active_speaker_shadow_uses_separate_paired_audio_window() -> None:
     session = FakeSession()
     conversation = ConversationSession()
-    bridge = LiveKitConversationBridge(
-        session,  # type: ignore[arg-type]
-        conversation,
-        show_transcript=False,
-    )
+    bridge = _bridge(session, conversation)
     audio = FakeAudio()
     config = JarvisConfig(
         speaker_shadow_enabled=True,
