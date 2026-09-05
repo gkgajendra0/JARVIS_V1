@@ -156,38 +156,55 @@ def test_fts_triggers_track_insert_update_delete_and_rebuild() -> None:
         "UPDATE semantic_assertion SET normalized_text = ? WHERE assertion_id = ?",
         ("cityjimny setup", "assertion-1"),
     )
-    assert conn.execute(
-        "SELECT count(*) FROM semantic_assertion_fts WHERE semantic_assertion_fts MATCH ?",
-        ("mountainjimny",),
-    ).fetchone()[0] == 0
-    assert conn.execute(
-        "SELECT count(*) FROM semantic_assertion_fts WHERE semantic_assertion_fts MATCH ?",
-        ("cityjimny",),
-    ).fetchone()[0] == 1
+    assert (
+        conn.execute(
+            "SELECT count(*) FROM semantic_assertion_fts WHERE semantic_assertion_fts MATCH ?",
+            ("mountainjimny",),
+        ).fetchone()[0]
+        == 0
+    )
+    assert (
+        conn.execute(
+            "SELECT count(*) FROM semantic_assertion_fts WHERE semantic_assertion_fts MATCH ?",
+            ("cityjimny",),
+        ).fetchone()[0]
+        == 1
+    )
 
     conn.execute(
         "INSERT INTO semantic_assertion_fts(semantic_assertion_fts, rowid, normalized_text) "
         "VALUES('delete', ?, ?)",
         (rowid, "cityjimny setup"),
     )
-    assert conn.execute(
-        "SELECT count(*) FROM semantic_assertion_fts WHERE semantic_assertion_fts MATCH ?",
-        ("cityjimny",),
-    ).fetchone()[0] == 0
+    assert (
+        conn.execute(
+            "SELECT count(*) FROM semantic_assertion_fts WHERE semantic_assertion_fts MATCH ?",
+            ("cityjimny",),
+        ).fetchone()[0]
+        == 0
+    )
 
     conn.execute(
         "INSERT INTO semantic_assertion_fts(semantic_assertion_fts) VALUES('rebuild')"
     )
-    assert conn.execute(
-        "SELECT count(*) FROM semantic_assertion_fts WHERE semantic_assertion_fts MATCH ?",
-        ("cityjimny",),
-    ).fetchone()[0] == 1
+    assert (
+        conn.execute(
+            "SELECT count(*) FROM semantic_assertion_fts WHERE semantic_assertion_fts MATCH ?",
+            ("cityjimny",),
+        ).fetchone()[0]
+        == 1
+    )
 
-    conn.execute("DELETE FROM semantic_assertion WHERE assertion_id = ?", ("assertion-1",))
-    assert conn.execute(
-        "SELECT count(*) FROM semantic_assertion_fts WHERE semantic_assertion_fts MATCH ?",
-        ("cityjimny",),
-    ).fetchone()[0] == 0
+    conn.execute(
+        "DELETE FROM semantic_assertion WHERE assertion_id = ?", ("assertion-1",)
+    )
+    assert (
+        conn.execute(
+            "SELECT count(*) FROM semantic_assertion_fts WHERE semantic_assertion_fts MATCH ?",
+            ("cityjimny",),
+        ).fetchone()[0]
+        == 0
+    )
 
 
 def test_fts_and_core_secure_delete_are_enabled() -> None:
@@ -207,7 +224,10 @@ def test_current_view_excludes_closed_lifecycle_states() -> None:
     insert_source(conn)
     insert_assertion(conn)
 
-    assert conn.execute("SELECT count(*) FROM current_semantic_assertion").fetchone()[0] == 1
+    assert (
+        conn.execute("SELECT count(*) FROM current_semantic_assertion").fetchone()[0]
+        == 1
+    )
 
     conn.execute(
         """
@@ -219,4 +239,7 @@ def test_current_view_excludes_closed_lifecycle_states() -> None:
         WHERE assertion_id = 'assertion-1'
         """
     )
-    assert conn.execute("SELECT count(*) FROM current_semantic_assertion").fetchone()[0] == 0
+    assert (
+        conn.execute("SELECT count(*) FROM current_semantic_assertion").fetchone()[0]
+        == 0
+    )
