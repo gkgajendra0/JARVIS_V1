@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from .candidates import MemoryCandidateExtractor, MemoryExtractionProposal
 
-_EXTRACTION_SYSTEM_PROMPT = """You extract one structured JARVIS memory proposal from exactly one accepted USER utterance.
+MEMORY_EXTRACTION_SYSTEM_PROMPT = """You extract one structured JARVIS memory proposal from exactly one accepted USER utterance.
 
 You only propose evidence. You never establish canonical truth, mutate memory, or decide authority.
 
@@ -58,7 +58,7 @@ class OpenAIMemoryCandidateExtractor:
         response = await self._client.responses.parse(
             model=self._model,
             input=[
-                {"role": "system", "content": _EXTRACTION_SYSTEM_PROMPT},
+                {"role": "system", "content": MEMORY_EXTRACTION_SYSTEM_PROMPT},
                 {"role": "user", "content": source_text},
             ],
             text_format=MemoryExtractionProposal,
@@ -94,7 +94,7 @@ class GeminiMemoryCandidateExtractor:
         response = await self._client.aio.interactions.create(
             model=self._model,
             input=source_text,
-            system_instruction=_EXTRACTION_SYSTEM_PROMPT,
+            system_instruction=MEMORY_EXTRACTION_SYSTEM_PROMPT,
             response_format={
                 "type": "text",
                 "mime_type": "application/json",
