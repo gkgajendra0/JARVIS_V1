@@ -34,6 +34,10 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
         "JARVIS_AUDIO_OUTPUT_WASAPI_DEVICE",
         " {0.0.0.00000000}.{render-endpoint} ",
     )
+    monkeypatch.setenv("JARVIS_MEMORY_ENABLED", "true")
+    monkeypatch.setenv("JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED", "true")
+    monkeypatch.setenv("JARVIS_MEMORY_CANDIDATE_EXTRACTION_PROVIDER", " OPENAI ")
+    monkeypatch.setenv("JARVIS_MEMORY_CANDIDATE_EXTRACTION_MODEL", " extractor-x ")
     monkeypatch.setenv("JARVIS_VISION_ENABLED", "true")
     monkeypatch.setenv("JARVIS_BLAZEFACE_MODEL_PATH", " C:\\models\\blazeface.tflite ")
     monkeypatch.setenv("JARVIS_SPEAKER_SHADOW_ENABLED", "true")
@@ -52,9 +56,54 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.audio_pre_roll_seconds == 0.8
     assert config.live_context_recent_turns == 7
     assert config.audio_output_wasapi_device == "{0.0.0.00000000}.{render-endpoint}"
+    assert config.memory_enabled is True
+    assert config.memory_candidate_extraction_enabled is True
+    assert config.memory_candidate_extraction_provider == "openai"
+    assert config.memory_candidate_extraction_model == "extractor-x"
     assert config.vision_enabled is True
     assert config.vision_head_model_path == "C:\\models\\blazeface.tflite"
     assert config.speaker_shadow_enabled is True
+
+
+def test_memory_candidate_extraction_is_default_off() -> None:
+    config = JarvisConfig()
+
+    assert config.memory_candidate_extraction_enabled is False
+    assert config.memory_candidate_extraction_provider is None
+    assert config.memory_candidate_extraction_model is None
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {
+            "memory_enabled": False,
+            "memory_candidate_extraction_enabled": True,
+            "memory_candidate_extraction_provider": "openai",
+            "memory_candidate_extraction_model": "model-x",
+        },
+        {
+            "memory_enabled": True,
+            "memory_candidate_extraction_enabled": True,
+            "memory_candidate_extraction_provider": None,
+            "memory_candidate_extraction_model": "model-x",
+        },
+        {
+            "memory_enabled": True,
+            "memory_candidate_extraction_enabled": True,
+            "memory_candidate_extraction_provider": "openai",
+            "memory_candidate_extraction_model": None,
+        },
+    ],
+)
+def test_memory_candidate_extraction_requires_explicit_configuration(kwargs: dict) -> None:
+    with pytest.raises(ValueError, match="CANDIDATE_EXTRACTION"):
+        JarvisConfig(**kwargs)
+
+
+def test_invalid_memory_candidate_provider_fails_truthfully() -> None:
+    with pytest.raises(ValueError, match="CANDIDATE_EXTRACTION_PROVIDER"):
+        JarvisConfig(memory_candidate_extraction_provider="unknown")
 
 
 def test_invalid_boolean_setting_fails_truthfully(
