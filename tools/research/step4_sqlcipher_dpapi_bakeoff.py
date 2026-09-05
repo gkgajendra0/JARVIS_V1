@@ -273,9 +273,7 @@ def main() -> None:
     wal_path = Path(str(db_path) + "-wal")
     shm_path = Path(str(db_path) + "-shm")
     needles = {label: text.encode("utf-8") for label, text in MARKERS.items()}
-    needles.update(
-        {"raw_key": raw_key, "raw_key_hex": raw_key.hex().encode("ascii")}
-    )
+    needles.update({"raw_key": raw_key, "raw_key_hex": raw_key.hex().encode("ascii")})
     live_leaks = scan_files([db_path, wal_path, shm_path, sealed_key_path], needles)
 
     conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -332,9 +330,7 @@ def main() -> None:
     forgetting.execute("DELETE FROM memory WHERE id = 2")
     forgetting.commit()
     forgetting.execute("VACUUM")
-    forgotten_canonical = scalar(
-        forgetting, "SELECT count(*) FROM memory WHERE id = 2"
-    )
+    forgotten_canonical = scalar(forgetting, "SELECT count(*) FROM memory WHERE id = 2")
     forgotten_fts = scalar(
         forgetting,
         "SELECT count(*) FROM memory_fts WHERE memory_fts MATCH 'एन्क्रिप्शन'",

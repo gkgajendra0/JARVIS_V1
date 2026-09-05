@@ -366,7 +366,9 @@ def run_fts() -> dict[str, object]:
         "metrics": _positive_metrics(rankings),
         "query_latency_ms": {
             "p50": round(statistics.median(samples_ms), 4),
-            "p95": round(samples_ms[min(len(samples_ms) - 1, int(len(samples_ms) * 0.95))], 4),
+            "p95": round(
+                samples_ms[min(len(samples_ms) - 1, int(len(samples_ms) * 0.95))], 4
+            ),
             "max": round(max(samples_ms), 4),
         },
         "cases": cases,
@@ -549,7 +551,9 @@ def main() -> None:
     for alias in requested:
         try:
             output["models"][alias] = run_model(MODELS[alias], device)  # type: ignore[index]
-        except Exception as exc:  # report one model failure without hiding other evidence
+        except (
+            Exception
+        ) as exc:  # report one model failure without hiding other evidence
             output["status"] = "PARTIAL"
             output["models"][alias] = {  # type: ignore[index]
                 "model": MODELS[alias],

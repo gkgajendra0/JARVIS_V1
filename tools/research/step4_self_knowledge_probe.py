@@ -39,7 +39,9 @@ def sha256_file(path: Path) -> str:
 
 def repo_file(repo_root: Path, raw: str) -> Path:
     if not raw or "\\" in raw:
-        raise ValueError(f"repository reference must use a non-empty POSIX path: {raw!r}")
+        raise ValueError(
+            f"repository reference must use a non-empty POSIX path: {raw!r}"
+        )
     candidate = (repo_root / raw).resolve()
     if not candidate.is_relative_to(repo_root):
         raise ValueError(f"repository reference escapes repo root: {raw}")
@@ -125,12 +127,15 @@ def main() -> None:
             errors.append(detail)
 
     record("sbom_format", sbom.get("bomFormat") == "CycloneDX", "SBOM is not CycloneDX")
-    record("sbom_spec_17", sbom.get("specVersion") == "1.7", "SBOM specVersion is not 1.7")
+    record(
+        "sbom_spec_17", sbom.get("specVersion") == "1.7", "SBOM specVersion is not 1.7"
+    )
 
     metadata_component = sbom.get("metadata", {}).get("component", {}) or {}
     record(
         "sbom_root_name",
-        normalize_package(str(metadata_component.get("name", ""))) == normalize_package(project_name),
+        normalize_package(str(metadata_component.get("name", "")))
+        == normalize_package(project_name),
         f"SBOM metadata component name does not match {project_name}",
     )
     record(
@@ -145,9 +150,14 @@ def main() -> None:
         name = normalize_package(str(component.get("name", "")))
         if not name:
             continue
-        component_versions.setdefault(name, set()).add(str(component.get("version", "")))
+        component_versions.setdefault(name, set()).add(
+            str(component.get("version", ""))
+        )
 
-    dependency_edges = sum(len(item.get("dependsOn", []) or []) for item in (sbom.get("dependencies", []) or []))
+    dependency_edges = sum(
+        len(item.get("dependsOn", []) or [])
+        for item in (sbom.get("dependencies", []) or [])
+    )
 
     record(
         "registry_research_only",
@@ -164,7 +174,8 @@ def main() -> None:
     record(
         "registry_no_executable_or_secret_fields",
         not forbidden,
-        "Registry contains forbidden executable/secret-bearing fields: " + ", ".join(forbidden),
+        "Registry contains forbidden executable/secret-bearing fields: "
+        + ", ".join(forbidden),
     )
 
     raw_capabilities = registry.get("capabilities", [])
@@ -182,23 +193,43 @@ def main() -> None:
             duplicate_ids.append(capability_id)
         capabilities[capability_id] = capability
 
-    record("capability_ids_unique", not duplicate_ids, f"Duplicate capability IDs: {duplicate_ids}")
-    invalid_ids = [capability_id for capability_id in capabilities if not CAPABILITY_ID.fullmatch(capability_id)]
-    record("capability_ids_stable", not invalid_ids, f"Invalid capability IDs: {invalid_ids}")
+    record(
+        "capability_ids_unique",
+        not duplicate_ids,
+        f"Duplicate capability IDs: {duplicate_ids}",
+    )
+    invalid_ids = [
+        capability_id
+        for capability_id in capabilities
+        if not CAPABILITY_ID.fullmatch(capability_id)
+    ]
+    record(
+        "capability_ids_stable",
+        not invalid_ids,
+        f"Invalid capability IDs: {invalid_ids}",
+    )
 
     bad_lifecycle = [
         capability_id
         for capability_id, capability in capabilities.items()
         if capability.get("lifecycle") not in ALLOWED_LIFECYCLES
     ]
-    record("capability_lifecycle_valid", not bad_lifecycle, f"Invalid capability lifecycle: {bad_lifecycle}")
+    record(
+        "capability_lifecycle_valid",
+        not bad_lifecycle,
+        f"Invalid capability lifecycle: {bad_lifecycle}",
+    )
 
     bad_authority = [
         capability_id
         for capability_id, capability in capabilities.items()
         if capability.get("authority_effect") not in ALLOWED_AUTHORITY_EFFECTS
     ]
-    record("capability_authority_effect_valid", not bad_authority, f"Invalid authority effect: {bad_authority}")
+    record(
+        "capability_authority_effect_valid",
+        not bad_authority,
+        f"Invalid authority effect: {bad_authority}",
+    )
 
     unknown_dependencies: list[str] = []
     self_dependencies: list[str] = []
@@ -208,13 +239,25 @@ def main() -> None:
                 self_dependencies.append(capability_id)
             elif dependency not in capabilities:
                 unknown_dependencies.append(f"{capability_id}->{dependency}")
-    record("capability_dependencies_known", not unknown_dependencies, f"Unknown capability dependencies: {unknown_dependencies}")
-    record("capability_no_self_dependency", not self_dependencies, f"Self dependencies: {self_dependencies}")
+    record(
+        "capability_dependencies_known",
+        not unknown_dependencies,
+        f"Unknown capability dependencies: {unknown_dependencies}",
+    )
+    record(
+        "capability_no_self_dependency",
+        not self_dependencies,
+        f"Self dependencies: {self_dependencies}",
+    )
 
     cycle = None
     if not unknown_dependencies and not self_dependencies:
         cycle = dependency_cycle(capabilities)
-    record("capability_dependency_graph_acyclic", cycle is None, f"Capability dependency cycle: {cycle}")
+    record(
+        "capability_dependency_graph_acyclic",
+        cycle is None,
+        f"Capability dependency cycle: {cycle}",
+    )
 
     evidence_paths: set[str] = {"pyproject.toml", "docs/CURRENT_ARCHITECTURE.md"}
     missing_or_invalid_paths: list[str] = []
@@ -268,7 +311,9 @@ def main() -> None:
                     resolved_health.append({"kind": "test", "ref": ref})
             else:
                 if ref not in scripts:
-                    invalid_health_checks.append(f"{capability_id}: unknown entrypoint {ref}")
+                    invalid_health_checks.append(
+                        f"{capability_id}: unknown entrypoint {ref}"
+                    )
                 else:
                     resolved_health.append({"kind": "entrypoint", "ref": ref})
 
@@ -288,10 +333,26 @@ def main() -> None:
             }
         )
 
-    record("capability_repo_refs_exist", not missing_or_invalid_paths, "Invalid repository references: " + "; ".join(missing_or_invalid_paths))
-    record("capability_runtime_packages_in_sbom", not missing_runtime_packages, "Runtime packages absent from SBOM: " + ", ".join(missing_runtime_packages))
-    record("capability_optional_groups_declared", not unknown_optional_groups, "Unknown optional dependency groups: " + ", ".join(unknown_optional_groups))
-    record("capability_health_refs_valid", not invalid_health_checks, "Invalid health references: " + "; ".join(invalid_health_checks))
+    record(
+        "capability_repo_refs_exist",
+        not missing_or_invalid_paths,
+        "Invalid repository references: " + "; ".join(missing_or_invalid_paths),
+    )
+    record(
+        "capability_runtime_packages_in_sbom",
+        not missing_runtime_packages,
+        "Runtime packages absent from SBOM: " + ", ".join(missing_runtime_packages),
+    )
+    record(
+        "capability_optional_groups_declared",
+        not unknown_optional_groups,
+        "Unknown optional dependency groups: " + ", ".join(unknown_optional_groups),
+    )
+    record(
+        "capability_health_refs_valid",
+        not invalid_health_checks,
+        "Invalid health references: " + "; ".join(invalid_health_checks),
+    )
 
     fingerprints: list[dict[str, str]] = []
     for ref in sorted(evidence_paths):
@@ -301,7 +362,9 @@ def main() -> None:
     registry_repo_path: str | None = None
     if registry_path.is_relative_to(repo_root):
         registry_repo_path = registry_path.relative_to(repo_root).as_posix()
-        fingerprints.append({"path": registry_repo_path, "sha256": sha256_file(registry_path)})
+        fingerprints.append(
+            {"path": registry_repo_path, "sha256": sha256_file(registry_path)}
+        )
 
     status = "PASS" if all(checks.values()) else "FAIL"
     result = {
@@ -327,7 +390,9 @@ def main() -> None:
             "capability_count": len(capabilities),
         },
         "capabilities": sorted(resolved_capabilities, key=lambda item: item["id"]),
-        "authoritative_source_fingerprints": sorted(fingerprints, key=lambda item: item["path"]),
+        "authoritative_source_fingerprints": sorted(
+            fingerprints, key=lambda item: item["path"]
+        ),
         "checks": checks,
         "errors": errors,
         "boundaries": [
@@ -335,12 +400,14 @@ def main() -> None:
             "The capability registry is declarative and contains references, not arbitrary executable instructions.",
             "Current runtime/configuration values remain owned by their authoritative runtime/configuration sources and are not copied into this snapshot.",
             "Learned operational observations must remain provenance-rich and cannot silently overwrite declared architecture or current runtime truth.",
-            "No autonomous repair, self-modification, authority expansion, or deployment is implemented by this spike."
+            "No autonomous repair, self-modification, authority expansion, or deployment is implemented by this spike.",
         ],
     }
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    output_path.write_text(
+        json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
 
     print(f"SELF_KNOWLEDGE_STATUS={status}")
     print(f"CYCLONEDX_SPEC={sbom.get('specVersion')}")

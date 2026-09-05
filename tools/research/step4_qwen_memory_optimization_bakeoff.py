@@ -192,7 +192,9 @@ def main() -> None:
         "device": str(next(model.parameters()).device),
         "load_seconds": round(load_seconds, 4),
         "peak_cuda_bytes": (
-            int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None
+            int(torch.cuda.max_memory_allocated())
+            if torch.cuda.is_available()
+            else None
         ),
         "jarvis_memory_prompt": JARVIS_MEMORY_PROMPT,
         "configurations": results,

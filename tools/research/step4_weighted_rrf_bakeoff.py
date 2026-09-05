@@ -109,17 +109,23 @@ def main():
         fts_latencies.append((time.perf_counter_ns() - fts_started) / 1_000_000)
 
         dense_started = time.perf_counter_ns()
-        query_embedding = np.asarray(model.encode_query([case.query], **query_kwargs)[0])
+        query_embedding = np.asarray(
+            model.encode_query([case.query], **query_kwargs)[0]
+        )
         query_latencies.append((time.perf_counter_ns() - dense_started) / 1_000_000)
 
         if case.scope == "all":
             docs, doc_embeddings = all_docs, all_embeddings
         else:
             docs, doc_embeddings = current_docs, current_embeddings
-        dense_ids = [mid for mid, _ in _dense_rank(query_embedding, doc_embeddings, docs)]
+        dense_ids = [
+            mid for mid, _ in _dense_rank(query_embedding, doc_embeddings, docs)
+        ]
         prepared[case.case_id] = (case, fts_ids, dense_ids)
 
-    dense_rankings = {case_id: dense_ids for case_id, (_, _, dense_ids) in prepared.items()}
+    dense_rankings = {
+        case_id: dense_ids for case_id, (_, _, dense_ids) in prepared.items()
+    }
     fts_rankings = {case_id: fts_ids for case_id, (_, fts_ids, _) in prepared.items()}
 
     sweeps = {}
@@ -163,7 +169,9 @@ def main():
         "semantic_weights_tested": list(SEMANTIC_WEIGHTS),
         "load_seconds": round(load_seconds, 4),
         "corpus_encode_seconds": round(corpus_encode_seconds, 4),
-        "peak_cuda_bytes": int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None,
+        "peak_cuda_bytes": int(torch.cuda.max_memory_allocated())
+        if torch.cuda.is_available()
+        else None,
         "baselines": {
             "fts5": base._positive_metrics(fts_rankings),
             "qwen_jarvis_256": base._positive_metrics(dense_rankings),

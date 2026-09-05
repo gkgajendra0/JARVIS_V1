@@ -69,7 +69,11 @@ def main() -> None:
     args = parser.parse_args()
 
     candidate_windows = sorted(
-        {int(value.strip()) for value in args.candidate_windows.split(",") if value.strip()}
+        {
+            int(value.strip())
+            for value in args.candidate_windows.split(",")
+            if value.strip()
+        }
     )
     if not candidate_windows or any(value < 1 for value in candidate_windows):
         raise SystemExit("candidate windows must be positive integers")
@@ -158,7 +162,9 @@ def main() -> None:
                 if case.expected_memory_id in candidate_ids:
                     candidate_recall_hits += 1
 
-            pairs = [(case.query, doc_by_id[memory_id].text) for memory_id in candidate_ids]
+            pairs = [
+                (case.query, doc_by_id[memory_id].text) for memory_id in candidate_ids
+            ]
             rerank_started = time.perf_counter_ns()
             raw_scores = reranker.predict(pairs, show_progress_bar=False)
             rerank_elapsed = (time.perf_counter_ns() - rerank_started) / 1_000_000
@@ -237,7 +243,9 @@ def main() -> None:
         },
         "corpus_encode_seconds": round(corpus_encode_seconds, 4),
         "peak_cuda_bytes_combined": (
-            int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None
+            int(torch.cuda.max_memory_allocated())
+            if torch.cuda.is_available()
+            else None
         ),
         "configurations": configurations,
         "first_stage_cases": first_stage_cases,

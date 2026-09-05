@@ -53,7 +53,9 @@ def _dense_rank(query_embedding: np.ndarray, doc_embeddings: np.ndarray, docs):
 def _stable_rank(candidate_ids: list[str], score_by_id: dict[str, float]) -> list[str]:
     """Rank by score; exact ties retain first-stage candidate order explicitly."""
     first_stage_rank = {memory_id: rank for rank, memory_id in enumerate(candidate_ids)}
-    return sorted(candidate_ids, key=lambda mid: (-score_by_id[mid], first_stage_rank[mid]))
+    return sorted(
+        candidate_ids, key=lambda mid: (-score_by_id[mid], first_stage_rank[mid])
+    )
 
 
 def _build_first_stage(embedder: SentenceTransformer):
@@ -79,7 +81,9 @@ def _build_first_stage(embedder: SentenceTransformer):
     rankings: dict[str, list[str]] = {}
     for case in base.QUERIES:
         fts_ids = [memory_id for memory_id, _ in base._fts_rank(case)[:FTS_WINDOW]]
-        query_embedding = np.asarray(embedder.encode_query([case.query], **query_kwargs)[0])
+        query_embedding = np.asarray(
+            embedder.encode_query([case.query], **query_kwargs)[0]
+        )
         if case.scope == "all":
             docs, doc_embeddings = all_docs, all_embeddings
         else:
@@ -147,7 +151,8 @@ def _run_precision(
                 observed_rankings.append(_stable_rank(candidate_ids, score_by_id))
 
         median_scores = {
-            mid: float(statistics.median(values)) for mid, values in score_samples.items()
+            mid: float(statistics.median(values))
+            for mid, values in score_samples.items()
         }
         final_ranking = _stable_rank(candidate_ids, median_scores)
         rankings[case.case_id] = final_ranking
@@ -166,7 +171,9 @@ def _run_precision(
         cases[case.case_id] = {
             "expected": case.expected_memory_id,
             "candidate_ids": candidate_ids,
-            "median_scores": {mid: round(score, 8) for mid, score in median_scores.items()},
+            "median_scores": {
+                mid: round(score, 8) for mid, score in median_scores.items()
+            },
             "score_ranges": {
                 mid: {
                     "min": round(min(values), 8),
@@ -176,7 +183,9 @@ def _run_precision(
                 for mid, values in score_samples.items()
             },
             "top_ties": top_ties,
-            "observed_unique_rankings": [list(item) for item in sorted(unique_rankings)],
+            "observed_unique_rankings": [
+                list(item) for item in sorted(unique_rankings)
+            ],
             "final_ranking": final_ranking,
             "hit_at_1": case.expected_memory_id is not None
             and final_ranking[0] == case.expected_memory_id,

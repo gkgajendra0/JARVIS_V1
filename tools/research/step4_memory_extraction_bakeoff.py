@@ -85,7 +85,9 @@ Sensitivity = Literal["normal", "sensitive", "secret"]
 
 class MemoryExtraction(BaseModel):
     intent: Intent = Field(description="Semantic memory operation/candidate class.")
-    candidate_type: CandidateType = Field(description="Type of extracted memory candidate.")
+    candidate_type: CandidateType = Field(
+        description="Type of extracted memory candidate."
+    )
     durable_candidate: bool = Field(
         description="Whether this input may proceed to JARVIS durable-memory policy review."
     )
@@ -212,7 +214,9 @@ def _call_openai(client: Any, model: str, case: dict[str, Any]) -> ProviderCall:
             extraction=extraction,
             latency_ms=elapsed,
             input_tokens=int(getattr(usage, "input_tokens", 0) or 0) if usage else None,
-            output_tokens=int(getattr(usage, "output_tokens", 0) or 0) if usage else None,
+            output_tokens=int(getattr(usage, "output_tokens", 0) or 0)
+            if usage
+            else None,
         )
     except Exception as exc:  # research harness records failures instead of hiding them
         return ProviderCall(
@@ -326,7 +330,9 @@ def _score_provider(
 
         hint_checks = {
             "subject": _hint_match(extraction.subject, expected.get("subject")),
-            "predicate": _hint_match(extraction.predicate, expected.get("predicate_hint")),
+            "predicate": _hint_match(
+                extraction.predicate, expected.get("predicate_hint")
+            ),
             "value": _hint_match(extraction.value, expected.get("value_hint")),
         }
 
@@ -352,7 +358,9 @@ def _score_provider(
     valid_count = len(valid_pairs)
     schema_failures = len(cases) - valid_count
     intent_matches = count(lambda c, e: e.intent == c["expected"]["intent"])
-    type_matches = count(lambda c, e: e.candidate_type == c["expected"]["candidate_type"])
+    type_matches = count(
+        lambda c, e: e.candidate_type == c["expected"]["candidate_type"]
+    )
     durable_matches = count(
         lambda c, e: e.durable_candidate == c["expected"]["durable_candidate"]
     )
@@ -455,7 +463,9 @@ def _score_provider(
             "explicit_operation_recall": round(explicit_op_hits / len(explicit_ops), 4)
             if explicit_ops
             else None,
-            "untrusted_intent_accuracy": round(untrusted_intent_hits / len(untrusted), 4)
+            "untrusted_intent_accuracy": round(
+                untrusted_intent_hits / len(untrusted), 4
+            )
             if untrusted
             else None,
             "untrusted_false_durable_writes": untrusted_false_durable,
