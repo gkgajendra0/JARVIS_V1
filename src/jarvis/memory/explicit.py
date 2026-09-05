@@ -100,12 +100,54 @@ _SECRET_VALUE_PATTERNS = (
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
 )
+_ACTION_PATTERNS = {
+    ExplicitMemoryAction.REMEMBER: _REMEMBER_PATTERNS,
+    ExplicitMemoryAction.CORRECT: _CORRECT_PATTERNS,
+    ExplicitMemoryAction.FORGET: _FORGET_PATTERNS,
+    ExplicitMemoryAction.INSPECT: _INSPECT_PATTERNS,
+}
 
 
 def _normalized(text: str) -> str:
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     return _WHITESPACE.sub(" ", text.strip().casefold())
+
+
+def _authorize_explicit_memory_text(text: str, action: ExplicitMemoryAction) -> None:
+    if not isinstance(action, ExplicitMemoryAction):
+        raise TypeError("action must be an ExplicitMemoryAction")
+    normalized = _normalized(text)
+
+    if action is not ExplicitMemoryAction.INSPECT and any(
+        pattern.search(normalized) for pattern in _NEGATION_PATTERNS
+    ):
+        raise ExplicitMemoryAuthorizationError(
+            f"user turn negates explicit {action.value} authorization"
+        )
+
+    if action is ExplicitMemoryAction.REMEMBER and any(
+        pattern.search(normalized) for pattern in _REMEMBER_QUESTION_PATTERNS
+    ):
+        raise ExplicitMemoryAuthorizationError(
+            "user turn asks about memory rather than authorizing a write"
+        )
+    if not any(pattern.search(normalized) for pattern in _ACTION_PATTERNS[action]):
+        raise ExplicitMemoryAuthorizationError(
+            f"user turn does not explicitly authorize {action.value}"
+        )
+
+
+def is_explicit_memory_control_text(text: str) -> bool:
+    """Return whether this exact utterance is a Phase-4.3 memory-control turn."""
+
+    for action in ExplicitMemoryAction:
+        try:
+            _authorize_explicit_memory_text(text, action)
+        except ExplicitMemoryAuthorizationError:
+            continue
+        return True
+    return False
 
 
 def latest_user_turn(conversation: ConversationSession) -> ConversationTurn:
@@ -121,35 +163,8 @@ def authorize_explicit_memory_action(
     conversation: ConversationSession,
     action: ExplicitMemoryAction,
 ) -> ConversationTurn:
-    if not isinstance(action, ExplicitMemoryAction):
-        raise TypeError("action must be an ExplicitMemoryAction")
     turn = latest_user_turn(conversation)
-    text = _normalized(turn.text)
-
-    if action is not ExplicitMemoryAction.INSPECT and any(
-        pattern.search(text) for pattern in _NEGATION_PATTERNS
-    ):
-        raise ExplicitMemoryAuthorizationError(
-            f"latest user turn negates explicit {action.value} authorization"
-        )
-
-    patterns = {
-        ExplicitMemoryAction.REMEMBER: _REMEMBER_PATTERNS,
-        ExplicitMemoryAction.CORRECT: _CORRECT_PATTERNS,
-        ExplicitMemoryAction.FORGET: _FORGET_PATTERNS,
-        ExplicitMemoryAction.INSPECT: _INSPECT_PATTERNS,
-    }[action]
-
-    if action is ExplicitMemoryAction.REMEMBER and any(
-        pattern.search(text) for pattern in _REMEMBER_QUESTION_PATTERNS
-    ):
-        raise ExplicitMemoryAuthorizationError(
-            "latest user turn asks about memory rather than authorizing a write"
-        )
-    if not any(pattern.search(text) for pattern in patterns):
-        raise ExplicitMemoryAuthorizationError(
-            f"latest user turn does not explicitly authorize {action.value}"
-        )
+    _authorize_explicit_memory_text(turn.text, action)
     return turn
 
 
