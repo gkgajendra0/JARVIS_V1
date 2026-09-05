@@ -47,6 +47,20 @@ def _configured_float(
     return parsed
 
 
+def _configured_int(
+    name: str,
+    default: int,
+    machine_settings: Mapping[str, str],
+) -> int:
+    value = configured_text(name, machine_settings)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise ValueError(f"Unsupported {name}: {value!r}") from exc
+
+
 def _configured_optional_text(
     name: str,
     machine_settings: Mapping[str, str],
@@ -92,6 +106,7 @@ class JarvisConfig:
     initial_request_timeout_seconds: float = 8.0
     follow_up_timeout_seconds: float = 15.0
     max_utterance_seconds: float = 15.0
+    live_context_recent_turns: int = 24
     vision_enabled: bool = False
     vision_head_model_path: str | None = None
     speaker_shadow_enabled: bool = False
@@ -156,6 +171,12 @@ class JarvisConfig:
             value = getattr(self, name)
             if not math.isfinite(value) or value <= 0:
                 raise ValueError(f"{name} must be a positive finite number")
+        if isinstance(self.live_context_recent_turns, bool) or not isinstance(
+            self.live_context_recent_turns, int
+        ):
+            raise TypeError("live_context_recent_turns must be an integer")
+        if self.live_context_recent_turns <= 0:
+            raise ValueError("live_context_recent_turns must be greater than zero")
         if not math.isfinite(self.audio_pre_roll_seconds):
             raise ValueError("audio_pre_roll_seconds must be finite")
         if not 0 <= self.audio_pre_roll_seconds <= self.audio_ring_buffer_seconds:
@@ -227,6 +248,9 @@ class JarvisConfig:
             ),
             max_utterance_seconds=_configured_float(
                 "JARVIS_MAX_UTTERANCE_SECONDS", 15.0, machine
+            ),
+            live_context_recent_turns=_configured_int(
+                "JARVIS_LIVE_CONTEXT_RECENT_TURNS", 24, machine
             ),
             vision_enabled=_configured_bool("JARVIS_VISION_ENABLED", False, machine),
             vision_head_model_path=_configured_optional_text(
