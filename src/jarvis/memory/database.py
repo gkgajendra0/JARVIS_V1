@@ -194,14 +194,19 @@ class SqlCipherMemoryDatabaseFactory:
             self._configure_connection(connection)
             self._migration_runner.apply(connection)
             return connection
-        except Exception:
+        except Exception as exc:
+            cleanup_errors: list[Exception] = []
             if connection is not None:
                 try:
                     connection.close()
-                except Exception:
-                    pass
+                except Exception as cleanup_exc:  # noqa: BLE001 - DB-API types vary
+                    cleanup_errors.append(cleanup_exc)
             if key_created and not database_existed:
-                self._discard_failed_new_database()
+                cleanup_errors.extend(self._discard_failed_new_database())
+            if cleanup_errors:
+                raise MemoryDatabaseError(
+                    "memory database open failed and cleanup was incomplete"
+                ) from exc
             raise
         finally:
             del raw_key
@@ -252,7 +257,7 @@ class SqlCipherMemoryDatabaseFactory:
         connection.execute("PRAGMA synchronous = FULL")
         connection.execute("PRAGMA busy_timeout = 5000")
 
-    def _discard_failed_new_database(self) -> None:
+    def _discard_failed_new_database(self) -> list[Exception]:
         cleanup_errors: list[Exception] = []
         for path in (
             self._database_path,
@@ -267,7 +272,4 @@ class SqlCipherMemoryDatabaseFactory:
             self._key_store.discard_new()
         except MemoryDatabaseKeyError as exc:
             cleanup_errors.append(exc)
-        if cleanup_errors:
-            raise MemoryDatabaseError(
-                "failed to clean up an unsuccessful new memory database"
-            ) from cleanup_errors[0]
+        return cleanup_errors
