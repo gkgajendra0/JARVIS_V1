@@ -12,6 +12,8 @@ dependencies = [
     "livekit==1.1.15",
     "livekit-agents[google,openai]==1.7.1",
     "livekit-wakeword==0.2.1",
+    "openai==2.54.0",
+    "google-genai==2.22.0",
     "sounddevice>=0.5,<1",
     "numpy>=2,<3",
     "opencv-python==5.0.0.93",
