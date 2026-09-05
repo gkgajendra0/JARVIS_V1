@@ -86,7 +86,7 @@ def _db_time(value: datetime | None) -> str | None:
 def _parse_time(value: str | None) -> datetime | None:
     if value is None:
         return None
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
+    return datetime.fromisoformat(value).astimezone(UTC)
 
 
 def _reason_code(value: str | None) -> str | None:
@@ -820,6 +820,6 @@ class MemoryLifecycleService:
             result = mutation()
             connection.commit()
             return result
-        except Exception:  # noqa: BLE001 - sqlite/sqlcipher DB-API exception types differ
+        except Exception:
             connection.rollback()
             raise
