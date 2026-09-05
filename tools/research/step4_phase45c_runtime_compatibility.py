@@ -126,9 +126,8 @@ def main() -> None:
         try:
             importlib.import_module(module_name)
             vision_imports[module_name] = "ok"
-        except (
-            Exception
-        ) as exc:  # acceptance harness must report import incompatibility
+        except Exception as exc:  # noqa: BLE001
+            # Acceptance harness must report any import incompatibility.
             vision_imports[module_name] = f"{type(exc).__name__}: {exc}"
     checks["vision_imports"] = all(value == "ok" for value in vision_imports.values())
 
