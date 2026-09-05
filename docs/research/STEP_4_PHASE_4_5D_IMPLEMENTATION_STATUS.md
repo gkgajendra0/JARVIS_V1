@@ -1,72 +1,125 @@
 # Step 4 — Phase 4.5D Abstention Calibration Implementation Status
 
-Date: 2026-09-05
+Date: 2026-09-06
 
 ## Status
 
-**IMPLEMENTED — OWNER RTX CALIBRATION RUN PENDING.**
+**ACTIVE — V1 OWNER MEASUREMENT COMPLETE / PRODUCTION POLICY REJECTED / RERANKER-INSTRUCTION DEVELOPMENT NEXT.**
 
-Phase 4.5D now has a research-backed, research-only calibration harness. It does not set or write a production threshold automatically.
+Phase 4.5D has produced one valid owner-RTX measurement. The 64-case V1 corpus is now retired from final acceptance use because its held-out labels have been exposed and reviewed.
 
-## Research basis
+The measured V1 policy had zero observed false releases but only `0.1875` held-out positive release recall and `0.0` Hindi positive release recall. It is therefore not acceptable for production memory release.
 
-The current Qwen reranker emits raw decision/logit-difference scores rather than calibrated probabilities. A monotonic sigmoid can change the numeric range but does not justify an arbitrary universal cutoff.
+Owner evidence:
 
-The accepted method is therefore:
+- `docs/research/STEP_4_PHASE_4_5D_OWNER_MEASUREMENT_V1.md`.
 
-1. label queries as `release` or `abstain`;
-2. split them into calibration and held-out validation sets before model execution;
-3. generate candidate thresholds only from observed calibration scores/midpoints;
-4. compare transparent score/margin/dense rule families;
-5. choose lexicographically by minimum false releases, then maximum correct releases, then simpler rule;
-6. freeze the selected rule;
-7. evaluate it unchanged on held-out validation;
-8. treat any validation false release as blocking rather than tuning on validation.
+## V1 measurement interpretation
 
-Research record:
+The V1 harness status string was `PASS`, but that status meant only:
 
-- `docs/research/STEP_4_PHASE_4_5D_ABSTENTION_RESEARCH.md`.
+- the calibration-only frozen policy produced zero observed false releases on the 32-case held-out validation split.
 
-## Fixed corpus
+It did not mean production acceptance. The documented gate also required useful positive release recall and multilingual/category review.
 
-Added:
+Measured V1 selected policy:
 
-- `tools/research/step4_phase45d_abstention_cases.json`.
+- family: `score_margin`;
+- score threshold: `8.96875`;
+- margin threshold: `9.15625`.
+
+Held-out result:
+
+- `tp=3`;
+- `fp=0`;
+- reported precision `1.0`;
+- positive release recall `0.1875`;
+- English recall `0.166667`;
+- Hindi recall `0.0`;
+- Hinglish recall `0.333333`.
+
+This is safe-looking in the observed sample but far too conservative to ship.
+
+## Security-boundary correction discovered before V1
+
+The first attempted V1 run failed before measurement because the fixture tried to instantiate `SECRET_PROHIBITED` canonical semantic memory. The canonical constructor correctly rejected that impossible state.
+
+The harness was corrected without weakening production security:
+
+- `mode=secret` remains a corpus marker;
+- secret fixtures are excluded before canonical semantic-memory creation;
+- release-labeled cases cannot target secret fixtures;
+- output records which secret fixture IDs were excluded.
+
+The successful owner run proved:
+
+- corpus document markers: `23`;
+- canonical seed documents: `22`;
+- excluded secret fixture: `secret_placeholder`.
+
+## Why threshold tweaking is not the next action
+
+The Qwen reranker emits a true-vs-false raw logit-difference relevance score. A sigmoid can remap the numeric range but does not create a statistical field guarantee or improve score ordering.
+
+The V1 result also exposed a finite-sample issue: only three held-out cases were released. Observing `3/3` correct releases is not enough evidence to claim production-level precision.
+
+Therefore Phase 4.5D will not loosen V1 thresholds or tune against the exposed validation labels.
+
+## Research-first update after V1
+
+Two mature capabilities now define the next path.
+
+### 1. Qwen reranker instruction awareness
+
+`Qwen/Qwen3-Reranker-0.6B` is instruction-aware. Qwen recommends task-specific English instructions and reports typical downstream gains relative to its generic default web-search instruction.
+
+The current JARVIS production adapter still instantiates the reranker without a custom prompt/instruction, so it uses the model's generic default.
+
+Before adding another model, Phase 4.5D will compare:
+
+- current default Qwen reranker instruction;
+- exactly one pre-registered JARVIS-memory-specific English instruction.
+
+This comparison uses the **retired V1 corpus only as a development set**. It cannot re-establish held-out acceptance.
+
+Selection criteria will emphasize:
+
+- positive top-1 ranking accuracy;
+- positive hit@3;
+- English/Hindi/Hinglish ranking quality;
+- score separation between safe-to-release and unsafe top-1 results;
+- risk-coverage / AURC behavior;
+- zero changes to model ID, revision, precision, candidate window, embedding model, or first-stage retrieval.
+
+After this experiment, the better instruction is frozen before constructing a new acceptance corpus.
+
+### 2. Mature risk-control library instead of custom final threshold selection
+
+For the fresh final corpus, Phase 4.5D will use MAPIE's binary risk-control / Learn-Then-Test machinery rather than promoting the V1 custom selector into production acceptance.
+
+MAPIE is designed to calibrate decision thresholds against a pre-declared metric such as precision with a requested confidence level, and it can correctly return that no candidate threshold is statistically feasible.
+
+MAPIE remains a **research/calibration dependency only**. Production runtime will receive only a frozen, versioned policy if final acceptance passes; production JARVIS does not need MAPIE at inference time.
+
+## Retired V1 corpus
+
+Files:
+
+- `tools/research/step4_phase45d_abstention_cases.json`;
+- `tools/research/step4_phase45d_abstention_calibration.py`.
 
 The corpus contains 64 fixed queries:
 
-- calibration: 16 release + 16 abstain;
-- validation: 16 release + 16 abstain.
+- former calibration: 16 release + 16 abstain;
+- former validation: 16 release + 16 abstain;
+- English/Hindi/Hinglish;
+- absent, near-miss, ambiguous, historical, forgotten, local-only, secret, untrusted, adversarial lexical, negation, and relation-mismatch boundaries.
 
-Languages:
+From this point forward the entire V1 corpus is development-only because all labels/results have been exposed.
 
-- English;
-- Hindi;
-- Hinglish.
+## Existing production-path harness properties
 
-Abstention boundaries include:
-
-- absent facts;
-- near misses;
-- ambiguous questions;
-- historical/current-state boundaries;
-- forgotten facts;
-- `LOCAL_ONLY` evidence;
-- `SECRET_PROHIBITED` evidence;
-- untrusted/poison-style evidence;
-- adversarial lexical overlap;
-- negation;
-- relation mismatch.
-
-The fixtures are synthetic/project-style and contain no real secret values.
-
-## Calibration harness
-
-Added:
-
-- `tools/research/step4_phase45d_abstention_calibration.py`.
-
-It uses the actual production retrieval path against a temporary migrated SQLite database:
+The V1 harness uses the actual production retrieval path against a temporary migrated SQLite database:
 
 - `MemoryLifecycleService`;
 - `SemanticEmbeddingStore`;
@@ -75,87 +128,28 @@ It uses the actual production retrieval path against a temporary migrated SQLite
 - revision-pinned `Qwen3EmbeddingEncoder`;
 - revision-pinned top-3 `Qwen3RetrievalReranker`.
 
-Fixture setup deliberately exercises:
-
-- current records;
-- historical transition/replacement;
-- physical forget after derived embedding creation;
-- local-only filtering;
-- secret-prohibited filtering;
-- untrusted-source filtering.
-
-The owner's production memory database is not read or modified.
-
-## Candidate release-policy families
-
-The harness compares:
-
-1. reranker top-1 score only;
-2. reranker score + top-1/top-2 margin;
-3. reranker score + winning dense score;
-4. reranker score + margin + dense score.
-
-Threshold candidates come only from calibration-set observed values and their midpoints.
-
-No learned Platt/isotonic/temperature calibrator has been added because the current hand-curated dataset is too small to justify another learned component.
-
-## Required output
-
-Default artifact:
-
-- `.step4-phase45d-abstention-calibration.json`.
-
-It records:
-
-- corpus counts;
-- positive top-1 and top-3 retrieval quality;
-- calibration frontier;
-- selected calibration-only policy;
-- held-out validation confusion counts;
-- validation false-release IDs;
-- positive release recall;
-- language/category breakdowns;
-- per-case reranker score, margin and dense score;
-- first-stage rank metadata;
-- timing;
-- CUDA peak memory.
-
-Harness status is `PASS` only when the frozen policy produces zero validation false releases. A `PASS` is necessary but not by itself sufficient for production acceptance; positive release recall and multilingual/category failures must also be reviewed before freezing a runtime policy.
-
-## Automated guards
-
-Added:
-
-- `tests/test_phase45d_abstention_calibration.py`.
-
-The tests prove:
-
-- 64 fixed cases and 16/16 release/abstain balance per split;
-- English/Hindi/Hinglish coverage;
-- required safety fixture modes/categories;
-- candidate thresholds are derived from observed boundaries rather than magic constants;
-- policy selection prioritizes zero false release, then recall;
-- a high-scoring but wrong top-1 positive is counted as unsafe false release rather than hidden as a ranking success.
-
-A dynamic test-loader defect was found in CI and corrected using Python's documented manual-import sequence: register the module in `sys.modules` before `exec_module()`.
-
-After that correction, full pytest passed. Ruff cleanup then removed only style/lint issues; no calibration logic was changed.
+It never reads the owner's production memory database and never auto-writes a production policy.
 
 ## Authority/security boundaries
 
-Phase 4.5D:
+Phase 4.5D continues to enforce:
 
-- does not create production canonical memory;
-- does not mutate production truth;
-- does not auto-write a threshold;
-- does not use a cloud provider;
-- does not introduce another cloud subscription;
-- does not bypass retrieval eligibility;
-- does not enable implicit durable admission;
-- does not grant self-repair/code-modification authority.
+- no production canonical-memory mutation from research harnesses;
+- no `SECRET_PROHIBITED` canonical memory;
+- no cloud provider for local retrieval scoring/calibration;
+- no second cloud subscription;
+- no retrieval eligibility bypass;
+- no implicit durable admission;
+- no self-repair/code-modification authority;
+- no tuning against a final held-out corpus after labels are exposed.
 
 ## Next gate
 
-Run the fixed harness once on the accepted owner RTX 5060 Ti environment.
+1. Add opt-in task instruction support to the Qwen reranker adapter without changing the current default behavior.
+2. Run a research-only default-vs-JARVIS-instruction bake-off on the retired V1 corpus.
+3. Freeze the winning instruction.
+4. Pre-register the final risk/coverage target and MAPIE Learn-Then-Test method.
+5. Build a fresh multilingual acceptance corpus.
+6. Perform one final calibration/validation run.
 
-Then review the emitted calibration and held-out validation evidence. Do not rerun or tune against validation merely to improve the result.
+Phase 4.5E remains blocked until the fresh Phase 4.5D acceptance passes.
