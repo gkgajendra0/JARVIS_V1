@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import math
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -93,12 +92,10 @@ class StoredEmbedding:
     updated_at: datetime
 
 
-
 def embedding_content_sha256(normalized_text: str) -> str:
     if not isinstance(normalized_text, str):
         raise TypeError("normalized_text must be a string")
     return hashlib.sha256(normalized_text.encode("utf-8")).hexdigest()
-
 
 
 def serialize_embedding(
@@ -126,7 +123,6 @@ def serialize_embedding(
     return payload
 
 
-
 def deserialize_embedding(
     payload: bytes | bytearray | memoryview,
     *,
@@ -145,10 +141,8 @@ def deserialize_embedding(
     return vector
 
 
-
 def _now() -> datetime:
     return datetime.now(UTC)
-
 
 
 def _timestamp(value: datetime) -> str:
@@ -159,7 +153,6 @@ def _timestamp(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-
 def _parse_timestamp(value: str) -> datetime:
     text = str(value).strip()
     if text.endswith("Z"):
@@ -168,7 +161,6 @@ def _parse_timestamp(value: str) -> datetime:
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise EmbeddingDataError("stored embedding timestamp is not timezone-aware")
     return parsed.astimezone(UTC)
-
 
 
 def _assertion_id(value: str) -> str:
@@ -376,7 +368,7 @@ class SemanticEmbeddingStore:
             and int(row[2]) == contract.dimension
             and str(row[3]) == contract.dtype
             and str(row[4]) == contract.byte_order
-            and bool(row[5]) is contract.normalized
+            and bool(row[5]) == contract.normalized
             and str(row[6]).casefold() == content_sha256
             and int(row[7]) == contract.expected_bytes
         )
