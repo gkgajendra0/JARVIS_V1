@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 import threading
 from pathlib import Path
@@ -68,13 +69,16 @@ async def test_worker_serializes_concurrent_async_callers(tmp_path: Path) -> Non
         connection.commit()
         return value
 
-    import asyncio
-
     values = await asyncio.gather(*(worker.run(insert_next) for _ in range(20)))
     assert sorted(values) == list(range(1, 21))
-    assert await worker.run(
-        lambda connection: connection.execute("SELECT count(*) FROM events").fetchone()[0]
-    ) == 20
+    assert (
+        await worker.run(
+            lambda connection: connection.execute(
+                "SELECT count(*) FROM events"
+            ).fetchone()[0]
+        )
+        == 20
+    )
 
     await worker.close()
 
@@ -90,4 +94,6 @@ async def test_closed_worker_rejects_new_operations() -> None:
     await worker.close()
 
     with pytest.raises(MemoryWorkerClosedError):
-        await worker.run(lambda connection: connection.execute("SELECT 1").fetchone()[0])
+        await worker.run(
+            lambda connection: connection.execute("SELECT 1").fetchone()[0]
+        )
