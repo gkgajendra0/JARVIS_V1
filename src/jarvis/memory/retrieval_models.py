@@ -84,7 +84,9 @@ def _unit_vector(value: Any, contract: EmbeddingContract) -> np.ndarray:
         raise LocalRetrievalOutputError("embedding output norm must be positive")
     normalized = np.asarray(vector / norm, dtype=np.float32)
     if not np.all(np.isfinite(normalized)):
-        raise LocalRetrievalOutputError("normalized embedding contains non-finite values")
+        raise LocalRetrievalOutputError(
+            "normalized embedding contains non-finite values"
+        )
     return normalized
 
 
@@ -234,9 +236,7 @@ class Qwen3RetrievalReranker:
         if not all(isinstance(candidate, RetrievalCandidate) for candidate in window):
             raise TypeError("candidates must contain only RetrievalCandidate values")
 
-        pairs = [
-            (query, candidate.assertion.normalized_text) for candidate in window
-        ]
+        pairs = [(query, candidate.assertion.normalized_text) for candidate in window]
         with self._lock:
             model = self._require_model()
             raw_scores = model.predict(pairs, show_progress_bar=False)
