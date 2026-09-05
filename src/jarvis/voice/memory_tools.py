@@ -47,9 +47,7 @@ _EXPECTED_MEMORY_ERRORS = (
 def _semantic_text(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value).casefold()
     characters = [
-        character
-        if unicodedata.category(character)[0] in {"L", "M", "N"}
-        else " "
+        character if unicodedata.category(character)[0] in {"L", "M", "N"} else " "
         for character in normalized
     ]
     return " ".join("".join(characters).split())
