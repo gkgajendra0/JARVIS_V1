@@ -30,6 +30,7 @@ from jarvis.identity.speaker_shadow import (
 )
 from jarvis.identity.speech_region import LiveKitSileroSpeechRegionDetector
 from jarvis.logging_config import configure_logging
+from jarvis.memory.runtime import build_default_memory_runtime
 from jarvis.preflight import StartupPreflightError, require_startup_preflight
 from jarvis.vision.service import build_default_vision_service
 from jarvis.voice.canonical_active_speaker_runtime import (
@@ -142,6 +143,10 @@ def build_production_voice_runtime(
         else None
     )
 
+    memory_runtime = (
+        build_default_memory_runtime() if config.memory_enabled else None
+    )
+
     if config.audio_output_wasapi_device is not None:
         LOGGER.info(
             "JARVIS_AUDIO_OUTPUT_WASAPI_DEVICE is historical only; production uses "
@@ -157,6 +162,7 @@ def build_production_voice_runtime(
         active_speaker_provider=active_speaker_provider,
         speech_region_detector=speech_region_detector,
         speaker_shadow_observer=speaker_shadow_observer,
+        memory_runtime=memory_runtime,
     )
 
 
