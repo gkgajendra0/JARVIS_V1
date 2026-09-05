@@ -19,7 +19,7 @@ def _isolate_machine_config(
 
 
 def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("JARVIS_REALTIME_PROVIDER", " GEMINI ")
+    monkeypatch.setenv("JARVIS_AI_PROVIDER", " GEMINI ")
     monkeypatch.setenv("JARVIS_REALTIME_MODEL", " model-x ")
     monkeypatch.setenv("JARVIS_REALTIME_VOICE", " voice-y ")
     monkeypatch.setenv("JARVIS_GEMINI_REALTIME_MODEL", " gemini-x ")
@@ -36,7 +36,6 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     )
     monkeypatch.setenv("JARVIS_MEMORY_ENABLED", "true")
     monkeypatch.setenv("JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED", "true")
-    monkeypatch.setenv("JARVIS_MEMORY_CANDIDATE_EXTRACTION_PROVIDER", " OPENAI ")
     monkeypatch.setenv("JARVIS_MEMORY_CANDIDATE_EXTRACTION_MODEL", " extractor-x ")
     monkeypatch.setenv("JARVIS_VISION_ENABLED", "true")
     monkeypatch.setenv("JARVIS_BLAZEFACE_MODEL_PATH", " C:\\models\\blazeface.tflite ")
@@ -44,6 +43,7 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
 
     config = JarvisConfig.from_environment()
 
+    assert config.ai_provider == "gemini"
     assert config.realtime_provider == "gemini"
     assert config.realtime_model == "model-x"
     assert config.realtime_voice == "voice-y"
@@ -58,7 +58,6 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.audio_output_wasapi_device == "{0.0.0.00000000}.{render-endpoint}"
     assert config.memory_enabled is True
     assert config.memory_candidate_extraction_enabled is True
-    assert config.memory_candidate_extraction_provider == "openai"
     assert config.memory_candidate_extraction_model == "extractor-x"
     assert config.vision_enabled is True
     assert config.vision_head_model_path == "C:\\models\\blazeface.tflite"
@@ -69,8 +68,8 @@ def test_memory_candidate_extraction_is_default_off() -> None:
     config = JarvisConfig()
 
     assert config.memory_candidate_extraction_enabled is False
-    assert config.memory_candidate_extraction_provider is None
     assert config.memory_candidate_extraction_model is None
+    assert not hasattr(config, "memory_candidate_extraction_provider")
 
 
 @pytest.mark.parametrize(
@@ -79,19 +78,11 @@ def test_memory_candidate_extraction_is_default_off() -> None:
         {
             "memory_enabled": False,
             "memory_candidate_extraction_enabled": True,
-            "memory_candidate_extraction_provider": "openai",
             "memory_candidate_extraction_model": "model-x",
         },
         {
             "memory_enabled": True,
             "memory_candidate_extraction_enabled": True,
-            "memory_candidate_extraction_provider": None,
-            "memory_candidate_extraction_model": "model-x",
-        },
-        {
-            "memory_enabled": True,
-            "memory_candidate_extraction_enabled": True,
-            "memory_candidate_extraction_provider": "openai",
             "memory_candidate_extraction_model": None,
         },
     ],
@@ -103,9 +94,9 @@ def test_memory_candidate_extraction_requires_explicit_configuration(
         JarvisConfig(**kwargs)
 
 
-def test_invalid_memory_candidate_provider_fails_truthfully() -> None:
-    with pytest.raises(ValueError, match="CANDIDATE_EXTRACTION_PROVIDER"):
-        JarvisConfig(memory_candidate_extraction_provider="unknown")
+def test_invalid_ai_provider_fails_truthfully() -> None:
+    with pytest.raises(ValueError, match="JARVIS_AI_PROVIDER"):
+        JarvisConfig(ai_provider="unknown")
 
 
 def test_invalid_boolean_setting_fails_truthfully(
@@ -142,11 +133,6 @@ def test_invalid_speaker_shadow_boolean_setting_fails_truthfully(
 
     with pytest.raises(ValueError, match="JARVIS_SPEAKER_SHADOW_ENABLED"):
         JarvisConfig.from_environment()
-
-
-def test_invalid_realtime_provider_fails_truthfully() -> None:
-    with pytest.raises(ValueError, match="JARVIS_REALTIME_PROVIDER"):
-        JarvisConfig(realtime_provider="unknown")
 
 
 def test_invalid_wake_buffer_and_live_context_settings_fail_truthfully() -> None:
