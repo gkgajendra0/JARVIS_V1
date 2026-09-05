@@ -7,7 +7,6 @@ import json
 import os
 import shutil
 import sqlite3 as stdlib_sqlite
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -132,7 +131,9 @@ def main() -> None:
         raise SystemExit("This bake-off must run on the Windows owner machine")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output", type=Path, default=Path(".step4-sqlcipher-results.json"))
+    parser.add_argument(
+        "--output", type=Path, default=Path(".step4-sqlcipher-results.json")
+    )
     args = parser.parse_args()
 
     output_path = args.output.resolve()
@@ -297,7 +298,8 @@ def main() -> None:
         "dpapi_roundtrip": dpapi_roundtrip,
         "dpapi_wrong_purpose_rejected": wrong_purpose_rejected,
         "sealed_blob_excludes_raw_key": raw_key not in sealed_key,
-        "sealed_blob_excludes_raw_key_hex": raw_key.hex().encode("ascii") not in sealed_key,
+        "sealed_blob_excludes_raw_key_hex": raw_key.hex().encode("ascii")
+        not in sealed_key,
         "sqlcipher_version_reported": bool(package["sqlcipher_version"]),
         "cipher_provider_reported": bool(package["cipher_provider"]),
         "fts5_compiled": any("ENABLE_FTS5" in option for option in compile_options),
