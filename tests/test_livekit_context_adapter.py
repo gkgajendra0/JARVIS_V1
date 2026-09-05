@@ -71,7 +71,9 @@ def test_livekit_translation_uses_ordinary_messages_and_chronological_turns() ->
     assert messages[1].extra["jarvis_source_ref"] == "runtime:vision"
 
 
-def test_translation_does_not_mutate_packet_or_create_provider_ids_from_jarvis_ids() -> None:
+def test_translation_does_not_mutate_packet_or_create_provider_ids_from_jarvis_ids() -> (
+    None
+):
     live = LiveContext(max_recent_turns=1)
     current = _turn("canonical-turn", ConversationRole.USER, "hello")
     live.observe_turn(current)
