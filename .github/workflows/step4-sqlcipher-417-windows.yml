@@ -1,14 +1,20 @@
-name: Step 4 SQLCipher 4.17 Windows research
+name: Step 4 SQLCipher 4.17 Windows verification
 
 on:
   workflow_dispatch:
   push:
     branches:
       - research/step-4-memory-context
+      - implementation/step-4-memory-context
     paths:
       - ".github/workflows/step4-sqlcipher-417-windows.yml"
       - "tools/research/step4_build_sqlcipher_417_windows.ps1"
       - "tools/research/step4_sqlcipher_dpapi_bakeoff.py"
+      - "tools/research/step4_sqlcipher_production_adapter_smoke.py"
+      - "src/jarvis/memory/database.py"
+      - "src/jarvis/memory/migration_runner.py"
+      - "src/jarvis/memory/migrations/**"
+      - "src/jarvis/security/**"
 
 permissions:
   contents: read
@@ -19,7 +25,7 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - name: Check out JARVIS research branch
+      - name: Check out JARVIS branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Set up Python 3.11
@@ -63,17 +69,27 @@ jobs:
           & $python -X utf8 -c "import json,pathlib; d=json.loads(pathlib.Path('.step4-sqlcipher417-results.json').read_text(encoding='utf-8')); p=d['package']; assert d['status']=='PASS', d['checks']; assert str(p['sqlcipher_version']).startswith('4.17.0'), p['sqlcipher_version']; assert p['sqlite_version']=='3.53.3', p['sqlite_version']; assert p['fts5_compiled'] is True; print('CURRENT_ENGINE_GATE=PASS'); print('SQLCIPHER=',p['sqlcipher_version']); print('SQLITE=',p['sqlite_version']); print('PROVIDER=',p['cipher_provider']); print('MEMORY_SECURITY=',d['enhanced_memory_security_probe'])"
           Copy-Item .step4-sqlcipher417-results.json .step4-sqlcipher417-wheelhouse\runtime-verification.json
 
+      - name: Run production memory adapter smoke
+        shell: pwsh
+        run: |
+          $python = ".\.step4-sqlcipher417-verify\Scripts\python.exe"
+          & $python -X utf8 tools\research\step4_sqlcipher_production_adapter_smoke.py --artifact-dir .step4-sqlcipher-production-adapter --output .step4-sqlcipher-production-adapter.json
+          if ($LASTEXITCODE -ne 0) { throw "Production SQLCipher memory adapter smoke failed" }
+          Copy-Item .step4-sqlcipher-production-adapter.json .step4-sqlcipher417-wheelhouse\production-adapter-verification.json
+
       - name: Record wheel digest in job summary
         shell: pwsh
         run: |
           $manifest = Get-Content .step4-sqlcipher417-wheelhouse\build-manifest.json -Raw | ConvertFrom-Json
-          Add-Content $env:GITHUB_STEP_SUMMARY "## Step 4 SQLCipher 4.17 Windows build"
+          $adapter = Get-Content .step4-sqlcipher417-wheelhouse\production-adapter-verification.json -Raw | ConvertFrom-Json
+          Add-Content $env:GITHUB_STEP_SUMMARY "## Step 4 SQLCipher 4.17 Windows verification"
           Add-Content $env:GITHUB_STEP_SUMMARY "- Wheel: ``$($manifest.wheel_file)``"
           Add-Content $env:GITHUB_STEP_SUMMARY "- SHA-256: ``$($manifest.wheel_sha256)``"
           Add-Content $env:GITHUB_STEP_SUMMARY "- SQLCipher source: ``$($manifest.sqlcipher_commit)``"
           Add-Content $env:GITHUB_STEP_SUMMARY "- sqlcipher3 wrapper: ``$($manifest.sqlcipher3_wrapper_commit)``"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- Production adapter: ``$($adapter.status)``"
 
-      - name: Upload research wheel and evidence
+      - name: Upload SQLCipher wheel and verification evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: step4-sqlcipher417-cp311-win-amd64
