@@ -96,9 +96,7 @@ def _reason_code(value: str | None) -> str | None:
         raise TypeError("reason_code must be a string when provided")
     normalized = value.strip().casefold()
     if not _REASON_CODE.fullmatch(normalized):
-        raise ValueError(
-            "reason_code must be a 1-64 character lowercase semantic code"
-        )
+        raise ValueError("reason_code must be a 1-64 character lowercase semantic code")
     return normalized
 
 
@@ -502,7 +500,9 @@ class MemoryLifecycleService:
             self._ensure_source(connection, source)
             existing = self._require_record(connection, assertion_id)
             if existing.state is AssertionState.RETRACTED:
-                raise MemoryAssertionStateError("retracted assertion cannot be verified")
+                raise MemoryAssertionStateError(
+                    "retracted assertion cannot be verified"
+                )
             connection.execute(
                 """
                 UPDATE semantic_assertion
@@ -772,19 +772,27 @@ class MemoryLifecycleService:
         ).fetchone()
         return None if row is None else _record(tuple(row))
 
-    def _require_record(self, connection: Any, assertion_id: str) -> SemanticAssertionRecord:
+    def _require_record(
+        self, connection: Any, assertion_id: str
+    ) -> SemanticAssertionRecord:
         record = self._get_sync(connection, assertion_id)
         if record is None:
-            raise MemoryAssertionNotFound(f"memory assertion {assertion_id!r} does not exist")
+            raise MemoryAssertionNotFound(
+                f"memory assertion {assertion_id!r} does not exist"
+            )
         return record
 
-    def _require_current(self, connection: Any, assertion_id: str) -> SemanticAssertionRecord:
+    def _require_current(
+        self, connection: Any, assertion_id: str
+    ) -> SemanticAssertionRecord:
         current = self._get_current_sync(connection, assertion_id)
         if current is not None:
             return current
         existing = self._get_sync(connection, assertion_id)
         if existing is None:
-            raise MemoryAssertionNotFound(f"memory assertion {assertion_id!r} does not exist")
+            raise MemoryAssertionNotFound(
+                f"memory assertion {assertion_id!r} does not exist"
+            )
         raise MemoryAssertionStateError(
             f"memory assertion {assertion_id!r} is not current/active"
         )
