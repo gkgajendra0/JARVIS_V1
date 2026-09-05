@@ -150,16 +150,16 @@ def build_production_voice_runtime(
 
     candidate_extractor = None
     if config.memory_candidate_extraction_enabled:
-        assert config.memory_candidate_extraction_provider is not None
         assert config.memory_candidate_extraction_model is not None
         candidate_extractor = build_memory_candidate_extractor(
-            provider=config.memory_candidate_extraction_provider,
+            provider=config.ai_provider,
             model=config.memory_candidate_extraction_model,
         )
         LOGGER.info(
             "Phase-4.4 memory candidate extraction shadow is configured: "
-            "provider=%s model=%s quarantine=session_local durable_admission=False",
-            config.memory_candidate_extraction_provider,
+            "active_provider=%s model=%s quarantine=session_local "
+            "durable_admission=False",
+            config.ai_provider,
             config.memory_candidate_extraction_model,
         )
 
