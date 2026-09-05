@@ -6,9 +6,9 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 ACTIVE — REQUIREMENTS RECOVERY + CURRENT-TECHNOLOGY RESEARCH NEXT**
+**STEP 3 COMPLETE + MERGED — STEP 4 TECHNOLOGY RESEARCH COMPLETE — FINAL ARCHITECTURE PROPOSAL READY — HUMAN APPROVAL REQUIRED BEFORE IMPLEMENTATION**
 
-This file is the operational source of truth for current work. Detailed evidence belongs in `docs/research/`; significant architecture decisions belong in `docs/decisions/`.
+This file is the operational source of truth for current work. Detailed evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` continues to describe only architecture that actually exists and has been accepted.
 
 ---
 
@@ -47,15 +47,7 @@ No speaker threshold or LR-ASD threshold is promoted. Identity/perception eviden
 
 Closure evidence: `docs/research/STEP_3_CLOSURE_ACCEPTANCE.md`.
 
-Deferred identity hardening is tracked in GitHub Issue #14 and must not automatically interrupt Step 4:
-
-- overlap / concurrent-speaker and speaker-change detection;
-- replay/synthetic/cloned-voice countermeasures;
-- direct non-OWNER CAM++ distributions and any future threshold;
-- E/F with a real second visible person;
-- short-turn same-speaker continuity;
-- fixed monitor-relative attention/gaze;
-- any future T2 composition or biometric authority promotion.
+Deferred identity hardening remains tracked separately and must not automatically interrupt Step 4.
 
 ---
 
@@ -72,102 +64,195 @@ Step 4 owns:
 - CAP-012 Reflection and Session Learning;
 - CAP-013 Emotional Interaction Context.
 
-No memory database/provider/framework has been selected yet. Research comes before implementation.
+Step 4 also lays the machine-readable self-knowledge foundation required by later diagnostics/self-improvement work, without implementing autonomous repair or self-modification now.
 
 ---
 
-## Product behavior Step 4 must deliver
-
-### Live context
-
-JARVIS should understand the current working situation without forcing every turn into durable storage:
-
-- current goal/task;
-- active project/topic;
-- recent relevant decisions/results;
-- unresolved issues/pending next steps;
-- current-session corrections and constraints.
-
-Live context may expire with the session/task unless deliberately promoted to durable memory.
-
-### Durable semantic memory
-
-JARVIS should retain genuinely useful long-lived facts such as approved preferences, personal/project facts, stable rules, and explicit corrections.
-
-Durable facts require enough metadata to support:
-
-- provenance;
-- time/freshness;
-- confidence/verification state;
-- correction;
-- supersession;
-- deletion/forgetting.
-
-### Episodic memory
-
-JARVIS may retain meaningful events/milestones/outcomes where later recall is useful, without logging every conversation as an episode.
-
-Examples of the category include completed project milestones, meaningful failures/fixes, significant decisions, and explicit user-requested memories.
-
-### Reflection / memory candidates
-
-Models may help identify candidate memories after conversations or important events, but model output is a **proposal**, not durable-memory authority.
-
-JARVIS-owned policy decides whether a candidate is stored, ignored, merged, superseded, or requires explicit confirmation.
-
-### Emotional interaction context
-
-Transient signals may help JARVIS respond naturally during the current interaction, but inferred mood/emotion must not become a permanent identity label by default.
-
----
-
-## Hard requirements inherited from PRODUCT.md
+## Permanent Step-4 product constraints
 
 - not every sentence becomes durable memory;
 - explicit current user input outranks passive inference, old memory, or stale preference;
 - durable memory carries provenance and enough timing/confidence metadata for correction/supersession;
-- correction and forgetting are first-class;
+- correction, historical change, retraction, and forgetting are distinct operations;
 - session context is separate from durable memory;
-- provider history/caches are not automatically canonical JARVIS memory;
+- provider history/caches are not canonical JARVIS memory;
 - transient emotional interpretations stay transient by default;
 - secrets are never normal model context;
 - models do not write directly to persistent memory;
 - conversation/context/memory must not have duplicate authoritative owners;
 - providers/storage/retrieval components remain replaceable;
-- raw full transcripts/provider payloads must not be durably retained merely because they are available.
+- raw full transcripts/provider payloads must not be durably retained merely because they are available;
+- current runtime/config/repository truth outranks stale learned self-memory;
+- Step 4 grants no autonomous repair, code modification, deployment, or authority expansion.
 
 ---
 
-## Step 4 research questions
+## Step-4 research disposition — COMPLETE FOR ARCHITECTURE APPROVAL
 
-Before selecting architecture or code, answer these with current 2026 evidence:
+The research-first technology gates are sufficiently answered.
 
-1. What mature memory/context frameworks or patterns are actually suitable for a local-first personal assistant in 2026?
-2. Which responsibilities should JARVIS own directly versus delegate to commodity storage/retrieval infrastructure?
-3. What is the best boundary between live working context, semantic memory, episodic memory, and reflection?
-4. What storage model best supports provenance, temporal validity, correction, supersession, and deletion?
-5. Where are embeddings useful, and where would exact structured lookup be safer/better?
-6. How should retrieval avoid flooding the realtime model with irrelevant memory?
-7. How should memory candidates be extracted without allowing the LLM to self-author durable truth?
-8. How should explicit user corrections immediately supersede older facts?
-9. Which memory data should remain strictly local, and what—if anything—may be sent to cloud models for reasoning?
-10. How do we migrate/learn from old JARVIS memory work without recreating its duplicate context/memory owners?
-11. What current tools/frameworks materially outperform custom implementation for extraction, retrieval, graph/temporal memory, or lifecycle management?
-12. How do we test memory quality: precision of recall, false memories, stale recall, correction, deletion, privacy, latency, and token cost?
+### Canonical storage
+
+Selected direction:
+
+- SQLCipher 4.17.0 Community / SQLite relational canonical store;
+- FTS5 derived lexical index;
+- JARVIS-owned bitemporal-style valid/system-time lifecycle;
+- no graph/vector/database service as canonical truth owner.
+
+Real-machine SQLite/FTS testing demonstrated the required temporal behavior, multilingual lexical lookup, secure-delete availability, and explicit-forget cleanup at 30,000 synthetic records.
+
+### Encryption / key protection
+
+Selected direction:
+
+- pinned reproducible JARVIS Windows build of SQLCipher 4.17.0 behind the maintained `sqlcipher3` DB-API binding;
+- random 32-byte database key;
+- Windows DPAPI user-scope + purpose binding;
+- no plaintext key file;
+- same-user/same-machine recovery accepted for the first design;
+- portable disaster recovery explicitly deferred unless separately approved.
+
+### Structured candidate extraction
+
+Selected architecture:
+
+- provider-native structured output;
+- explicit Pydantic contract;
+- `MemoryCandidateExtractor` protocol;
+- JARVIS `MemoryPolicy` retains all durable-write authority.
+
+Provider result remains a **provisional quality tie on shared evidence** between OpenAI Terra and Gemini 3.8 Flash. Provider selection therefore remains replaceable/configurable and does not block architecture approval.
+
+### Retrieval
+
+Selected local pipeline:
+
+```text
+structured / temporal / authority / sensitivity eligibility
+ -> exact deterministic lookup when possible
+ -> SQLite FTS5 + Qwen3-Embedding-0.6B (JARVIS instruction, 256d)
+ -> equal RRF (research k=60)
+ -> top 3
+ -> Qwen3-Reranker-0.6B BF16
+ -> exact tie preserves RRF rank -> stable memory ID
+ -> JARVIS ContextAssembler
+```
+
+No vector database is selected. Embeddings remain derived/rebuildable. Broad automatic semantic context injection remains calibration-gated because no production abstention threshold has been invented.
+
+### Self-knowledge
+
+Selected direction:
+
+- current runtime/configuration = current dynamic truth;
+- accepted repository/architecture/ADRs/policies/code/tests = declared truth;
+- small JARVIS Capability Registry = product capability semantics;
+- CycloneDX 1.7 + `cyclonedx-bom` = generated dependency inventory;
+- verified incident/episode memory = historical learned evidence;
+- learned observations never silently override declared/current truth.
+
+The Windows self-knowledge spike passed with 92 SBOM components, 8 research capability declarations, 45 authoritative source fingerprints, and zero failed validation checks.
+
+### Async DB boundary
+
+Normal `aiosqlite.connect()` is not selected because it opens the standard-library `sqlite3` driver rather than the selected SQLCipher DB-API. The proposal uses a small thread-affinity async adapter over the proven `sqlcipher3` connection: one serialized writer worker and initially one read worker, with short transactions and WAL.
 
 ---
 
-## Immediate Step-4 work order
+## Human-review documents
 
-1. Read the Step-4 capability requirements in `PRODUCT.md`.
-2. Inspect relevant mappings/lessons in `LEGACY_REQUIREMENTS_MAP.md` and only the necessary old-JARVIS memory/context implementation evidence.
-3. Research current 2026 memory/context technology and serious alternatives.
-4. Produce a requirements + technology comparison document.
-5. Select the smallest suitable architecture with one authoritative JARVIS memory owner and replaceable provider boundaries.
-6. Define privacy/data-lifecycle rules and acceptance tests.
-7. Present the architecture for human approval.
-8. Only then implement Step 4.
+Final research technology decision:
+
+- `docs/research/STEP_4_FINAL_TECHNOLOGY_DECISION.md`
+
+Final architecture proposal:
+
+- `docs/research/STEP_4_ARCHITECTURE_PROPOSAL.md`
+
+Important supporting evidence:
+
+- `docs/research/STEP_4_RETRIEVAL_TECHNOLOGY_DECISION.md`;
+- `docs/research/STEP_4_MEMORY_EXTRACTION_PROVISIONAL_TIE.md`;
+- `docs/research/STEP_4_SQLCIPHER_417_WINDOWS_RESULT.md`;
+- `docs/research/STEP_4_SELF_KNOWLEDGE_SBOM_WINDOWS_RESULT.md`;
+- `docs/research/STEP_4_TEMPORAL_FRESHNESS_PROVENANCE_REQUIREMENTS.md`;
+- `docs/research/STEP_4_SELF_KNOWLEDGE_CONTINUOUS_LEARNING_REQUIREMENTS.md`.
+
+---
+
+## Proposed ownership model awaiting approval
+
+```text
+ConversationSession
+    = canonical accepted conversation truth
+
+LiveContext
+    = current session/working context only
+
+MemoryService
+    = sole durable memory mutation/truth owner
+
+MemoryPolicy
+    = deterministic admission + lifecycle authority
+
+MemoryRetriever
+    = ranking only; never truth authority
+
+ContextAssembler
+    = sole Step-4 model-context release owner
+
+SelfKnowledgeProvider
+    = authority-aware aggregation of current/declared/historical self-knowledge
+```
+
+---
+
+## Proposed implementation order after approval
+
+1. **Phase 4.0A — provenance + neutral security boundary**
+   - stable JARVIS `session_id`, `turn_id`, `accepted_at`;
+   - move/generalize proven DPAPI primitive behind `jarvis.security` without identity regression.
+2. **Phase 4.1 — canonical memory kernel**
+   - SQLCipher store, migrations, temporal schema, provenance, lifecycle, FTS, explicit forget;
+   - no LLM auto-write.
+3. **Phase 4.2 — LiveContext + ContextAssembler**
+   - session state, sensitivity/context-release policy, turn-scoped provider integration.
+4. **Phase 4.3 — explicit remember/correct/forget/inspect**
+   - first useful safe cross-session memory behavior; real human acceptance.
+5. **Phase 4.4 — structured extraction/candidate quarantine**
+   - OpenAI/Gemini adapters, Pydantic contracts, source-trust policy;
+   - implicit auto-admission remains OFF until measured precision acceptance.
+6. **Phase 4.5 — semantic retrieval**
+   - Qwen 256d derived embeddings, process-local exact NumPy index, FTS/RRF/top-3 reranker;
+   - realistic scale + abstention/irrelevant-injection calibration before broad automatic injection.
+7. **Phase 4.6 — episodic/reflection learning**
+   - meaningful outcomes/decisions/incidents, not raw transcript archive.
+8. **Phase 4.7 — self-knowledge foundation**
+   - production Capability Registry, CycloneDX adapter, authoritative-source aggregation, drift fingerprints;
+   - no autonomous repair.
+9. **Phase 4.8 — hardening + real acceptance**
+   - exact 4.17 owner-PC package check, backup/restore, privacy/security, multilingual/adversarial tests, real use, reconciliation, ADR, protected-main merge.
+
+---
+
+## Non-blocking deferred decisions
+
+These do not reopen the selected architecture:
+
+- portable disaster recovery/export;
+- final extraction provider winner;
+- implicit durable auto-admission threshold;
+- semantic abstention threshold;
+- dedicated vector/ANN database if future scale proves it necessary;
+- persisted crash-resume LiveContext;
+- relationship/graph memory if a later use case proves measurable value;
+- autonomous diagnosis/repair/self-improvement.
+
+---
 
 ## Immediate Next Action
 
-**Begin Step-4 requirements recovery and current-technology research. Do not implement a memory provider/database until the research and architecture decision are complete.**
+**HUMAN REVIEW / APPROVAL OF `STEP_4_ARCHITECTURE_PROPOSAL.md`.**
+
+No production Step-4 memory implementation begins until the owner explicitly approves the architecture. On approval, start Phase 4.0A on a dedicated implementation branch with provenance IDs and the neutral security boundary—not automatic LLM memory writing.
