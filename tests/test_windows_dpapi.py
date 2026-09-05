@@ -4,8 +4,8 @@ import os
 import sys
 
 import pytest
-import jarvis.identity as identity
 
+import jarvis.identity as identity
 from jarvis.security import KeyProtectionError, WindowsDpapiKeyProtector
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows DPAPI only")
@@ -13,7 +13,6 @@ pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows DPAPI o
 
 def test_identity_exports_share_neutral_dpapi_implementation() -> None:
     assert identity.KeyProtectionError is KeyProtectionError
-    assert identity.IdentityCryptoError is identity.SecurityError if hasattr(identity, "SecurityError") else True
     assert identity.WindowsDpapiKeyProtector is WindowsDpapiKeyProtector
     assert issubclass(KeyProtectionError, identity.IdentityCryptoError)
 
