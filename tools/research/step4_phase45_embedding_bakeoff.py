@@ -19,6 +19,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Self
 
 import numpy as np
 import psutil
@@ -71,7 +72,7 @@ class ProcessMemorySampler:
         self.baseline_rss_bytes = int(self._process.memory_info().rss)
         self.peak_rss_bytes = self.baseline_rss_bytes
 
-    def __enter__(self) -> ProcessMemorySampler:
+    def __enter__(self) -> Self:
         self._thread = threading.Thread(
             target=self._sample,
             name="phase45-rss-sampler",
