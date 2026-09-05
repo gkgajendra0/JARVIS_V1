@@ -24,7 +24,11 @@ import step4_phase45d_abstention_calibration as baseline
 
 from jarvis.memory.embeddings import SemanticEmbeddingStore
 from jarvis.memory.lifecycle import MemoryLifecycleService
-from jarvis.memory.retrieval import RetrievalEligibility, RetrievalCandidate, SemanticRetrievalService
+from jarvis.memory.retrieval import (
+    RetrievalCandidate,
+    RetrievalEligibility,
+    SemanticRetrievalService,
+)
 from jarvis.memory.retrieval_models import (
     JARVIS_MEMORY_RERANK_INSTRUCTION,
     Qwen3EmbeddingEncoder,
@@ -116,7 +120,9 @@ def _risk_coverage(cases: list[DevCase]) -> dict[str, Any]:
 
 def _score_distribution(cases: list[DevCase]) -> dict[str, Any]:
     safe_scores = sorted(case.rerank_score for case in cases if case.safe_to_release)
-    unsafe_scores = sorted(case.rerank_score for case in cases if not case.safe_to_release)
+    unsafe_scores = sorted(
+        case.rerank_score for case in cases if not case.safe_to_release
+    )
     if not safe_scores or not unsafe_scores:
         return {}
 
@@ -148,7 +154,9 @@ def _language_breakdown(cases: list[DevCase]) -> dict[str, Any]:
         output[language] = {
             "cases": len(values),
             "release_labels": len(positives),
-            "positive_top1_correct": sum(case.positive_top1_correct for case in positives),
+            "positive_top1_correct": sum(
+                case.positive_top1_correct for case in positives
+            ),
             "positive_top1_accuracy": round(
                 sum(case.positive_top1_correct for case in positives) / len(positives)
                 if positives
@@ -188,15 +196,23 @@ def _summary(cases: list[DevCase]) -> dict[str, Any]:
     }
 
 
-def _custom_has_language_regression(default: dict[str, Any], custom: dict[str, Any]) -> bool:
+def _custom_has_language_regression(
+    default: dict[str, Any], custom: dict[str, Any]
+) -> bool:
     default_languages = default["language_breakdown"]
     custom_languages = custom["language_breakdown"]
     for language in ("en", "hi", "hinglish"):
-        if custom_languages[language]["positive_top1_accuracy"] < default_languages[language][
-            "positive_top1_accuracy"
-        ]:
+        if (
+            custom_languages[language]["positive_top1_accuracy"]
+            < default_languages[language]["positive_top1_accuracy"]
+        ):
             return True
     return False
+
+
+def _auc_for_order(summary: dict[str, Any]) -> float:
+    value = summary["score_auroc_safe_vs_unsafe"]
+    return float(value) if value is not None else -math.inf
 
 
 def _recommend(default: dict[str, Any], custom: dict[str, Any]) -> dict[str, Any]:
@@ -209,21 +225,24 @@ def _recommend(default: dict[str, Any], custom: dict[str, Any]) -> dict[str, Any
     default_key = (
         -default["positive_top1_accuracy"],
         default["risk_coverage"]["aurc"],
-        -(default["score_auroc_safe_vs_unsafe"] or -math.inf),
+        -_auc_for_order(default),
         -default["risk_coverage"]["zero_error_positive_release_recall"],
         0,
     )
     custom_key = (
         -custom["positive_top1_accuracy"],
         custom["risk_coverage"]["aurc"],
-        -(custom["score_auroc_safe_vs_unsafe"] or -math.inf),
+        -_auc_for_order(custom),
         -custom["risk_coverage"]["zero_error_positive_release_recall"],
         1,
     )
     if custom_key < default_key:
         return {
             "mode": "jarvis_memory",
-            "reason": "better_pre_registered_development_metric_order_without_language_regression",
+            "reason": (
+                "better_pre_registered_development_metric_order_without_"
+                "language_regression"
+            ),
         }
     return {
         "mode": "default",
@@ -266,13 +285,18 @@ def _score_mode(
         reranked = reranker.rerank(row.query, row.candidates)
         rerank_ms = (time.perf_counter_ns() - started) / 1_000_000
         if not reranked:
-            raise RuntimeError(f"reranker returned no candidates for {row.item['case_id']}")
+            raise RuntimeError(
+                f"reranker returned no candidates for {row.item['case_id']}"
+            )
 
         top = reranked[0]
-        second_score = reranked[1].rerank_score if len(reranked) > 1 else top.rerank_score
+        second_score = (
+            reranked[1].rerank_score if len(reranked) > 1 else top.rerank_score
+        )
         top_memory_id = assertion_to_memory[top.candidate.assertion.assertion_id]
         top3_memory_ids = [
-            assertion_to_memory[item.candidate.assertion.assertion_id] for item in reranked
+            assertion_to_memory[item.candidate.assertion.assertion_id]
+            for item in reranked
         ]
         expected = row.item.get("expected_memory_id")
         label = str(row.item["label"])
@@ -348,11 +372,16 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
     default_summary = _summary(default_cases)
     custom_summary = _summary(custom_cases)
     recommendation = _recommend(default_summary, custom_summary)
-    peak_cuda = int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None
+    peak_cuda = (
+        int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None
+    )
 
     return {
         "status": "PASS",
-        "purpose": "development-only reranker instruction comparison on retired Phase 4.5D V1 corpus",
+        "purpose": (
+            "development-only reranker instruction comparison on retired "
+            "Phase 4.5D V1 corpus"
+        ),
         "final_acceptance_eligible": False,
         "fixture": fixture_path.name,
         "environment": {
@@ -360,7 +389,9 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             "torch_version": str(torch.__version__),
             "cuda_runtime": str(torch.version.cuda),
             "cuda_available": bool(torch.cuda.is_available()),
-            "device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+            "device_name": torch.cuda.get_device_name(0)
+            if torch.cuda.is_available()
+            else None,
             "peak_cuda_bytes": peak_cuda,
         },
         "instructions": {
