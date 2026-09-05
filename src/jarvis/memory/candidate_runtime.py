@@ -95,6 +95,14 @@ class MemoryCandidateSessionRuntime:
         if self._closed:
             return
         self._closed = True
+        disposed_candidates = len(self._quarantine.snapshot())
+        cancelled_tasks = len(self._tasks)
         for task in tuple(self._tasks):
             task.cancel()
         self._quarantine.dispose()
+        LOGGER.info(
+            "Memory candidate shadow session closed | disposed_candidates=%s | "
+            "cancelled_tasks=%s | quarantine_disposed=True | durable_admission=False",
+            disposed_candidates,
+            cancelled_tasks,
+        )
