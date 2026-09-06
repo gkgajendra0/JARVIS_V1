@@ -55,9 +55,7 @@ class GuardedMemoryQueryCoordinator:
             logger.error("Memory answer-type guard returned an invalid decision type")
             return self._abstain("answer_type_guard_invalid_decision")
         if not guard_decision.allow:
-            return self._abstain(
-                f"answer_type_veto_{guard_decision.answer_type.value}"
-            )
+            return self._abstain(f"answer_type_veto_{guard_decision.answer_type.value}")
 
         return await self._coordinator.resolve(
             query_text,
