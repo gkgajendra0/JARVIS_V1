@@ -74,9 +74,7 @@ def _feature_row(case: dict[str, Any], feature_set: FeatureSet) -> list[float]:
         "reciprocal_lexical_rank": 0.0
         if lexical_rank is None
         else 1.0 / float(lexical_rank),
-        "reciprocal_dense_rank": 0.0
-        if dense_rank is None
-        else 1.0 / float(dense_rank),
+        "reciprocal_dense_rank": 0.0 if dense_rank is None else 1.0 / float(dense_rank),
     }
     return [values[name] for name in feature_set.feature_names]
 
@@ -139,7 +137,9 @@ def _best_empirical_operating_point(
             "target_empirical_precision": TARGET_EMPIRICAL_PRECISION,
             "best": None,
         }
-    best = max(valid, key=lambda item: (item["recall"], item["precision"], item["threshold"]))
+    best = max(
+        valid, key=lambda item: (item["recall"], item["precision"], item["threshold"])
+    )
     return {
         "found": True,
         "target_empirical_precision": TARGET_EMPIRICAL_PRECISION,
