@@ -339,6 +339,27 @@ class SemanticRetrievalService:
             lambda connection: self._eligible_facet_catalog_sync(connection, policy)
         )
 
+    async def retrieve_exact_current_facet(
+        self,
+        facet: MemoryFacetKey,
+        *,
+        eligibility: RetrievalEligibility | None = None,
+    ) -> tuple[SemanticAssertionRecord, ...]:
+        """Return all already-eligible current assertions for one exact facet."""
+
+        if not isinstance(facet, MemoryFacetKey):
+            raise TypeError("facet must be a MemoryFacetKey")
+        policy = eligibility or RetrievalEligibility.local()
+        if not isinstance(policy, RetrievalEligibility):
+            raise TypeError("eligibility must be RetrievalEligibility")
+        return await self._worker.run(
+            lambda connection: self._retrieve_exact_current_facet_sync(
+                connection,
+                facet,
+                policy,
+            )
+        )
+
     async def retrieve_first_stage(
         self,
         query_text: str,
@@ -403,6 +424,43 @@ class SemanticRetrievalService:
         return MemoryFacetCatalog(
             tuple(MemoryFacetKey(str(row[0]), str(row[1]), str(row[2])) for row in rows)
         )
+
+    def _retrieve_exact_current_facet_sync(
+        self,
+        connection: Any,
+        facet: MemoryFacetKey,
+        eligibility: RetrievalEligibility,
+    ) -> tuple[SemanticAssertionRecord, ...]:
+        authorities = _enum_values(eligibility.authorities)
+        sensitivities = _enum_values(eligibility.sensitivities)
+        if not authorities or not sensitivities:
+            return ()
+        rows = connection.execute(
+            f"""
+            SELECT {SEMANTIC_ASSERTION_COLUMNS_SQL}
+            FROM current_semantic_assertion
+            WHERE subject_scope = ?
+              AND subject = ?
+              AND predicate = ?
+              AND sensitivity IN ({_in_clause(sensitivities)})
+              AND source_id IN (
+                  SELECT source_id
+                  FROM memory_source
+                  WHERE authority_class IN ({_in_clause(authorities)})
+                    AND sensitivity IN ({_in_clause(sensitivities)})
+              )
+            ORDER BY assertion_id ASC
+            """,
+            (
+                facet.subject_scope,
+                facet.subject,
+                facet.predicate,
+                *sensitivities,
+                *authorities,
+                *sensitivities,
+            ),
+        ).fetchall()
+        return tuple(semantic_assertion_record_from_row(row) for row in rows)
 
     def _retrieve_sync(
         self,
