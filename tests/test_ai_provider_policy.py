@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from dataclasses import fields
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from jarvis.ai_provider import (
     credential_environment_name,
     require_provider_api_key,
 )
+from jarvis.config import JarvisConfig
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = ROOT / "src" / "jarvis"
@@ -58,6 +60,14 @@ def test_canonical_provider_wins_over_legacy_alias_inside_machine_profile(
         )
         == "openai"
     )
+
+
+def test_jarvis_config_has_exactly_one_active_ai_provider_field() -> None:
+    """Protect the one-switch brain contract across all production subsystems."""
+
+    provider_fields = [field.name for field in fields(JarvisConfig) if field.name.endswith("provider")]
+
+    assert provider_fields == ["ai_provider"]
 
 
 def test_production_source_has_one_provider_selector_and_one_credential_owner() -> None:
