@@ -6,6 +6,11 @@ measured without the old retrieval harness's owner/owner flattening. It sends ex
 one query per Gemini request, injects only eligible facet keys, and passes every
 proposal through production grounding, query policy, and evidence-gate code.
 
+The old V2 ``relation_mismatch`` rows are preserved for provenance but are evaluated
+as resolvable relation-comparison lookups here: the new architecture can select the
+relation actually requested by the user instead of being forced to judge an already
+retrieved wrong-relation document.
+
 The result is development evidence only. It cannot authorize Phase 4.5E or serve as
 fresh V3 acceptance evidence.
 """
@@ -20,7 +25,7 @@ import re
 import sqlite3
 import tempfile
 import time
-from collections import Counter, defaultdict
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -44,7 +49,7 @@ from jarvis.memory.query_interpreters import build_memory_query_interpreter
 from jarvis.memory.query_plan import (
     MemoryFacetCatalog,
     MemoryFacetKey,
-    MemoryQueryIntent,
+    MemoryQueryPlanDisposition,
     MemoryQueryPolicy,
     MemoryQueryProposal,
 )
@@ -67,18 +72,28 @@ OUTPUT_DEFAULT = Path(
 NOW = __import__("datetime").datetime(2026, 9, 6, 16, 30, tzinfo=__import__("datetime").UTC)
 TARGET_DOMAINS = ("project", "travel", "workspace")
 TARGET_LANGUAGES = tuple(v2_cases.LANGUAGES)
-TARGET_ABSTAIN_CATEGORIES = tuple(v2_cases.ABSTAIN_CATEGORIES)
+RELATION_COMPARISON_CATEGORY = "relation_mismatch"
+TARGET_TRUE_ABSTAIN_CATEGORIES = tuple(
+    category
+    for category in v2_cases.ABSTAIN_CATEGORIES
+    if category != RELATION_COMPARISON_CATEGORY
+)
 SECURITY_BOUNDARY_CATEGORIES = frozenset(v2_cases.SECURITY_BOUNDARY_CATEGORIES)
-EXPECTED_POSITIVE_CASES = len(TARGET_DOMAINS) * len(TARGET_LANGUAGES)
-EXPECTED_ABSTAIN_CASES = len(TARGET_ABSTAIN_CATEGORIES) * len(TARGET_LANGUAGES)
-EXPECTED_CASES = EXPECTED_POSITIVE_CASES + EXPECTED_ABSTAIN_CASES
+EXPECTED_DIRECT_POSITIVE_CASES = len(TARGET_DOMAINS) * len(TARGET_LANGUAGES)
+EXPECTED_RELATION_COMPARISON_CASES = len(TARGET_LANGUAGES)
+EXPECTED_TARGET_RELEASE_CASES = (
+    EXPECTED_DIRECT_POSITIVE_CASES + EXPECTED_RELATION_COMPARISON_CASES
+)
+EXPECTED_TRUE_ABSTAIN_CASES = len(TARGET_TRUE_ABSTAIN_CATEGORIES) * len(TARGET_LANGUAGES)
+EXPECTED_CASES = EXPECTED_TARGET_RELEASE_CASES + EXPECTED_TRUE_ABSTAIN_CASES
 EXPECTED_CLOUD_FACETS = len(v2_cases.CURRENT_FACTS) + 75
 
 
 @dataclass(frozen=True, slots=True)
 class PlannerCaseResult:
     case_id: str
-    label: str
+    source_v2_label: str
+    target_label: str
     language: str
     category: str
     expected_memory_id: str | None
@@ -229,6 +244,55 @@ def _fact_by_memory_id() -> dict[str, v2_cases.CurrentFact]:
     return {fact.memory_id: fact for fact in v2_cases.CURRENT_FACTS}
 
 
+def _relation_comparison_target_memory_id(case: dict[str, Any]) -> str:
+    """Resolve the canonical relation actually requested by an exposed V2 query."""
+
+    query = str(case["query"])
+    language = str(case["language"])
+    source_matches = [
+        fact
+        for fact in v2_cases.CURRENT_FACTS
+        if fact.split == "validation"
+        and v2_cases._current_abstain_query(
+            fact,
+            RELATION_COMPARISON_CATEGORY,
+            language,
+        )
+        == query
+    ]
+    if len(source_matches) != 1:
+        raise RuntimeError(
+            "relation-comparison query must map to exactly one frozen V2 source fact"
+        )
+    source_fact = source_matches[0]
+    requested_relation_index = (source_fact.relation_index + 1) % len(v2_cases.RELATIONS)
+    targets = [
+        fact
+        for fact in v2_cases.CURRENT_FACTS
+        if fact.domain == source_fact.domain
+        and fact.profile == source_fact.profile
+        and fact.relation_index == requested_relation_index
+    ]
+    if len(targets) != 1:
+        raise RuntimeError(
+            "relation-comparison query must map to exactly one requested V2 facet"
+        )
+    return targets[0].memory_id
+
+
+def _diagnostic_case(
+    source: dict[str, Any],
+    *,
+    target_label: str,
+    expected_memory_id: str | None,
+) -> dict[str, Any]:
+    item = dict(source)
+    item["source_v2_label"] = str(source["label"])
+    item["target_label"] = target_label
+    item["diagnostic_expected_memory_id"] = expected_memory_id
+    return item
+
+
 def select_diagnostic_cases(payload: dict[str, Any]) -> list[dict[str, Any]]:
     queries = payload.get("queries")
     if not isinstance(queries, list):
@@ -254,9 +318,16 @@ def select_diagnostic_cases(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 raise RuntimeError(
                     f"missing validation release cell for {domain}/{language}"
                 )
-            selected.append(min(matches, key=lambda item: str(item["case_id"])))
+            chosen = min(matches, key=lambda item: str(item["case_id"]))
+            selected.append(
+                _diagnostic_case(
+                    chosen,
+                    target_label="release",
+                    expected_memory_id=str(chosen["expected_memory_id"]),
+                )
+            )
 
-    for category in TARGET_ABSTAIN_CATEGORIES:
+    for category in v2_cases.ABSTAIN_CATEGORIES:
         for language in TARGET_LANGUAGES:
             matches = [
                 item
@@ -270,20 +341,41 @@ def select_diagnostic_cases(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 raise RuntimeError(
                     f"missing validation abstain cell for {category}/{language}"
                 )
-            selected.append(min(matches, key=lambda item: str(item["case_id"])))
+            chosen = min(matches, key=lambda item: str(item["case_id"]))
+            if category == RELATION_COMPARISON_CATEGORY:
+                selected.append(
+                    _diagnostic_case(
+                        chosen,
+                        target_label="release",
+                        expected_memory_id=_relation_comparison_target_memory_id(chosen),
+                    )
+                )
+            else:
+                selected.append(
+                    _diagnostic_case(
+                        chosen,
+                        target_label="abstain",
+                        expected_memory_id=None,
+                    )
+                )
 
     case_ids = [str(item["case_id"]) for item in selected]
     if len(selected) != EXPECTED_CASES or len(case_ids) != len(set(case_ids)):
         raise RuntimeError(
             f"planner diagnostic must select exactly {EXPECTED_CASES} unique cases"
         )
-    release_count = sum(item["label"] == "release" for item in selected)
-    abstain_count = sum(item["label"] == "abstain" for item in selected)
-    if (release_count, abstain_count) != (
-        EXPECTED_POSITIVE_CASES,
-        EXPECTED_ABSTAIN_CASES,
+
+    source_release_count = sum(item["source_v2_label"] == "release" for item in selected)
+    source_abstain_count = sum(item["source_v2_label"] == "abstain" for item in selected)
+    target_release_count = sum(item["target_label"] == "release" for item in selected)
+    target_abstain_count = sum(item["target_label"] == "abstain" for item in selected)
+    if (source_release_count, source_abstain_count) != (9, 36):
+        raise RuntimeError("planner diagnostic source V2 label counts changed")
+    if (target_release_count, target_abstain_count) != (
+        EXPECTED_TARGET_RELEASE_CASES,
+        EXPECTED_TRUE_ABSTAIN_CASES,
     ):
-        raise RuntimeError("planner diagnostic selection label counts changed")
+        raise RuntimeError("planner diagnostic target label counts changed")
     return selected
 
 
@@ -419,12 +511,12 @@ def _proposal_facet(proposal: MemoryQueryProposal) -> MemoryFacetKey | None:
 
 
 def _expected_facet(case: dict[str, Any]) -> MemoryFacetKey | None:
-    expected = case.get("expected_memory_id")
+    expected = case.get("diagnostic_expected_memory_id")
     if expected is None:
         return None
     fact = _fact_by_memory_id().get(str(expected))
     if fact is None:
-        raise RuntimeError(f"unknown positive expected memory id: {expected}")
+        raise RuntimeError(f"unknown diagnostic expected memory id: {expected}")
     return MemoryFacetKey("v2_profile", fact.profile, fact.predicate)
 
 
@@ -478,12 +570,13 @@ async def _evaluate_case(
     expected_facet = _expected_facet(case)
     return PlannerCaseResult(
         case_id=str(case["case_id"]),
-        label=str(case["label"]),
+        source_v2_label=str(case["source_v2_label"]),
+        target_label=str(case["target_label"]),
         language=str(case["language"]),
         category=str(case["category"]),
         expected_memory_id=(
-            str(case["expected_memory_id"])
-            if case.get("expected_memory_id") is not None
+            str(case["diagnostic_expected_memory_id"])
+            if case.get("diagnostic_expected_memory_id") is not None
             else None
         ),
         proposed_intent=proposal.intent.value,
@@ -524,23 +617,41 @@ def _percentile(values: list[float], fraction: float) -> float | None:
     return round(ordered[index], 6)
 
 
+def _is_exact_target_release(result: PlannerCaseResult) -> bool:
+    return (
+        result.target_label == "release"
+        and result.final_disposition == MemoryEvidenceDisposition.RELEASE.value
+        and result.released_memory_id == result.expected_memory_id
+    )
+
+
 def summarize(results: list[PlannerCaseResult]) -> dict[str, Any]:
-    positive_total = sum(result.label == "release" for result in results)
-    abstain_total = sum(result.label == "abstain" for result in results)
+    target_release_total = sum(result.target_label == "release" for result in results)
+    target_abstain_total = sum(result.target_label == "abstain" for result in results)
     released = [
         result
         for result in results
         if result.final_disposition == MemoryEvidenceDisposition.RELEASE.value
     ]
-    true_releases = [
-        result
-        for result in released
-        if result.label == "release"
-        and result.released_memory_id == result.expected_memory_id
-    ]
+    true_releases = [result for result in released if _is_exact_target_release(result)]
     false_releases = [result for result in released if result not in true_releases]
-    positive_exact_recall = (
-        len(true_releases) / positive_total if positive_total else 0.0
+    direct_targets = [
+        result
+        for result in results
+        if result.source_v2_label == "release" and result.target_label == "release"
+    ]
+    relation_targets = [
+        result
+        for result in results
+        if result.category == RELATION_COMPARISON_CATEGORY
+        and result.target_label == "release"
+    ]
+    direct_exact = [result for result in direct_targets if _is_exact_target_release(result)]
+    relation_exact = [
+        result for result in relation_targets if _is_exact_target_release(result)
+    ]
+    target_recall = (
+        len(true_releases) / target_release_total if target_release_total else 0.0
     )
     precision = len(true_releases) / len(released) if released else 1.0
 
@@ -549,18 +660,13 @@ def summarize(results: list[PlannerCaseResult]) -> dict[str, Any]:
         positives = [
             result
             for result in results
-            if result.language == language and result.label == "release"
+            if result.language == language and result.target_label == "release"
         ]
-        exact = [
-            result
-            for result in positives
-            if result.final_disposition == MemoryEvidenceDisposition.RELEASE.value
-            and result.released_memory_id == result.expected_memory_id
-        ]
+        exact = [result for result in positives if _is_exact_target_release(result)]
         by_language[language] = {
-            "positive_cases": len(positives),
+            "target_release_cases": len(positives),
             "exact_releases": len(exact),
-            "positive_exact_release_recall": round(
+            "target_release_recall": round(
                 len(exact) / len(positives) if positives else 0.0,
                 6,
             ),
@@ -587,54 +693,82 @@ def summarize(results: list[PlannerCaseResult]) -> dict[str, Any]:
     query_policy_reasons = Counter(
         result.query_policy_reason
         for result in results
-        if result.query_policy_disposition != "allow_current_fact"
+        if result.query_policy_disposition
+        != MemoryQueryPlanDisposition.ALLOW_CURRENT_FACT.value
     )
     security_release_ids = [
         result.case_id
         for result in released
         if result.category in SECURITY_BOUNDARY_CATEGORIES
     ]
-    wrong_positive_release_ids = [
+    wrong_target_release_ids = [
         result.case_id
         for result in released
-        if result.label == "release"
+        if result.target_label == "release"
         and result.released_memory_id != result.expected_memory_id
     ]
-    positive_facet_misses = [
+    target_facet_misses = [
         result.case_id
         for result in results
-        if result.label == "release" and result.proposed_facet_matches_expected is not True
+        if result.target_label == "release"
+        and result.proposed_facet_matches_expected is not True
     ]
+    false_release_by_category = dict(
+        sorted(Counter(result.category for result in false_releases).items())
+    )
+    false_release_by_language = dict(
+        sorted(Counter(result.language for result in false_releases).items())
+    )
     request_seconds = [result.request_seconds for result in results]
 
     continuation_checks = {
         "zero_false_releases": not false_releases,
         "zero_security_boundary_releases": not security_release_ids,
-        "positive_exact_release_at_least_8_of_9": len(true_releases) >= 8,
-        "each_language_at_least_2_of_3": all(
-            metrics["exact_releases"] >= 2 for metrics in by_language.values()
+        "direct_exact_release_at_least_8_of_9": len(direct_exact) >= 8,
+        "relation_comparison_exact_release_3_of_3": (
+            len(relation_exact) == EXPECTED_RELATION_COMPARISON_CASES
+        ),
+        "each_language_at_least_3_of_4": all(
+            metrics["exact_releases"] >= 3 for metrics in by_language.values()
         ),
         "every_release_is_exact_expected_memory": not false_releases,
-        "planner_context_contains_only_user_query_and_facet_keys": True,
+        "jarvis_injects_no_canonical_memory_values": True,
         "qwen_invoked": False,
     }
+
+    true_abstains = sum(
+        result.target_label == "abstain"
+        and result.final_disposition != MemoryEvidenceDisposition.RELEASE.value
+        for result in results
+    )
     return {
         "cases": len(results),
-        "release_labels": positive_total,
-        "abstain_labels": abstain_total,
+        "source_v2_release_labels": sum(
+            result.source_v2_label == "release" for result in results
+        ),
+        "source_v2_abstain_labels": sum(
+            result.source_v2_label == "abstain" for result in results
+        ),
+        "target_release_cases": target_release_total,
+        "target_abstain_cases": target_abstain_total,
+        "direct_target_release_cases": len(direct_targets),
+        "relation_comparison_target_release_cases": len(relation_targets),
         "released_cases": len(released),
         "tp_exact_release": len(true_releases),
-        "false_releases": len(false_releases),
-        "nonreleased_positive_cases": positive_total - len(true_releases),
-        "nonreleased_abstain_cases": abstain_total
-        - sum(result.label == "abstain" for result in false_releases),
+        "fp_or_wrong_release": len(false_releases),
+        "fn_target_release": target_release_total - len(true_releases),
+        "tn_target_abstain": true_abstains,
         "precision": round(precision, 6),
-        "positive_exact_release_recall": round(positive_exact_recall, 6),
+        "target_release_recall": round(target_recall, 6),
+        "direct_exact_releases": len(direct_exact),
+        "relation_comparison_exact_releases": len(relation_exact),
         "by_language": by_language,
         "false_release_case_ids": [result.case_id for result in false_releases],
-        "wrong_positive_release_case_ids": wrong_positive_release_ids,
+        "false_releases_by_category": false_release_by_category,
+        "false_releases_by_language": false_release_by_language,
+        "wrong_target_release_case_ids": wrong_target_release_ids,
         "security_boundary_release_case_ids": security_release_ids,
-        "positive_proposed_facet_miss_case_ids": positive_facet_misses,
+        "target_proposed_facet_miss_case_ids": target_facet_misses,
         "intents_by_category": intents_by_category,
         "grounding_abstain_reasons": dict(sorted(grounding_reasons.items())),
         "query_policy_abstain_reasons": dict(sorted(query_policy_reasons.items())),
@@ -651,7 +785,8 @@ def summarize(results: list[PlannerCaseResult]) -> dict[str, Any]:
 def _public_case(result: PlannerCaseResult) -> dict[str, Any]:
     return {
         "case_id": result.case_id,
-        "label": result.label,
+        "source_v2_label": result.source_v2_label,
+        "target_label": result.target_label,
         "language": result.language,
         "category": result.category,
         "expected_memory_id": result.expected_memory_id,
@@ -750,8 +885,10 @@ async def _run(*, gemini_rpm: float) -> dict[str, Any]:
             "rpm_cap": gemini_rpm,
             "structured_output": True,
             "store": False,
+            "diagnostic_provider_pin_is_not_production_selector": True,
         },
         "architecture": {
+            "production_provider_selector": "JARVIS_AI_PROVIDER",
             "interpreter_has_release_authority": False,
             "planner_context_fields": ["user_query", "eligible_facets"],
             "canonical_memory_values_injected_by_jarvis": False,
@@ -764,12 +901,17 @@ async def _run(*, gemini_rpm: float) -> dict[str, Any]:
             "v2_schema_version": v2_cases.V2_CORPUS_SCHEMA_VERSION,
             "v2_sha256": v2_cases.payload_sha256(payload),
             "selection_rule": (
-                "lexicographically first validation case in each frozen positive "
-                "domain/language cell and abstain category/language cell"
+                "lexicographically first validation case in each frozen direct-positive "
+                "domain/language cell and V2 abstain category/language cell; old "
+                "relation_mismatch cells are re-targeted pre-run to the relation actually asked"
             ),
             "cases": EXPECTED_CASES,
-            "positive_cases": EXPECTED_POSITIVE_CASES,
-            "abstain_cases": EXPECTED_ABSTAIN_CASES,
+            "source_v2_release_labels": 9,
+            "source_v2_abstain_labels": 36,
+            "target_release_cases": EXPECTED_TARGET_RELEASE_CASES,
+            "target_abstain_cases": EXPECTED_TRUE_ABSTAIN_CASES,
+            "direct_target_release_cases": EXPECTED_DIRECT_POSITIVE_CASES,
+            "relation_comparison_target_release_cases": EXPECTED_RELATION_COMPARISON_CASES,
             "query_text_persisted": False,
             "canonical_memory_value_persisted": False,
         },
