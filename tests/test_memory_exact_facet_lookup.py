@@ -80,7 +80,9 @@ def _draft(
 
 
 @pytest.mark.asyncio
-async def test_exact_lookup_needs_no_embedding_or_semantic_ranking(tmp_path: Path) -> None:
+async def test_exact_lookup_needs_no_embedding_or_semantic_ranking(
+    tmp_path: Path,
+) -> None:
     worker = _worker(tmp_path / "exact.db")
     lifecycle = MemoryLifecycleService(
         worker,
@@ -135,7 +137,9 @@ async def test_exact_lookup_returns_all_conflicting_current_rows_for_fail_closed
 
 
 @pytest.mark.asyncio
-async def test_exact_cloud_lookup_preserves_security_and_current_state(tmp_path: Path) -> None:
+async def test_exact_cloud_lookup_preserves_security_and_current_state(
+    tmp_path: Path,
+) -> None:
     worker = _worker(tmp_path / "security.db")
     lifecycle = MemoryLifecycleService(
         worker,
