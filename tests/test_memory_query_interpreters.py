@@ -167,11 +167,27 @@ async def test_gemini_interpreter_uses_json_schema_without_storage() -> None:
     payload = json.loads(call["input"])
     assert payload["user_query"] == "Aquila archive destination?"
     assert set(payload) == {"user_query", "eligible_facets"}
-    assert "release authority" in call["system_instruction"]
+    assert "decide whether any memory may be released" in call["system_instruction"]
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("output", (None, "", '{"intent":"exact_fact"}'))
+async def test_schema_valid_but_incomplete_exact_proposal_is_returned_for_policy_abstain() -> None:
+    incomplete = MemoryQueryProposal(intent=MemoryQueryIntent.EXACT_FACT)
+    client = FakeGeminiClient(incomplete.model_dump_json())
+    interpreter = GeminiMemoryQueryInterpreter(client=client, model="gemini-test")
+
+    result = await interpreter.interpret(
+        text="Aquila archive destination?",
+        catalog=_catalog(),
+    )
+
+    assert result == incomplete
+    assert result.subject is None
+    assert result.predicate is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("output", (None, "", "not-json", '{"intent":"not-an-intent"}'))
 async def test_gemini_interpreter_fails_closed_on_missing_or_invalid_output(
     output: Any,
 ) -> None:
