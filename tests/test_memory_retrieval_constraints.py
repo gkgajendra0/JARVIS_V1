@@ -290,19 +290,16 @@ async def test_cloud_facet_catalog_exposes_only_already_eligible_current_facets(
             eligibility=RetrievalEligibility.cloud_context()
         )
 
-        assert MemoryFacetKey(
-            "profile", "Aquila", visible.predicate
-        ) in cloud.facets
-        assert MemoryFacetKey(
-            "profile", "Aquila", local_only.predicate
-        ) not in cloud.facets
-        assert MemoryFacetKey(
-            "profile", "Aquila", untrusted.predicate
-        ) not in cloud.facets
+        assert MemoryFacetKey("profile", "Aquila", visible.predicate) in cloud.facets
+        assert (
+            MemoryFacetKey("profile", "Aquila", local_only.predicate)
+            not in cloud.facets
+        )
+        assert (
+            MemoryFacetKey("profile", "Aquila", untrusted.predicate) not in cloud.facets
+        )
         assert MemoryFacetKey("profile", "Aquila", "old_timezone") not in cloud.facets
-        assert MemoryFacetKey(
-            "profile", "Aquila", "current_timezone"
-        ) in cloud.facets
+        assert MemoryFacetKey("profile", "Aquila", "current_timezone") in cloud.facets
     finally:
         await worker.close()
 

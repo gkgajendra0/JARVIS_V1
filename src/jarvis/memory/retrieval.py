@@ -359,7 +359,9 @@ class SemanticRetrievalService:
         policy = eligibility or RetrievalEligibility.local()
         if not isinstance(policy, RetrievalEligibility):
             raise TypeError("eligibility must be RetrievalEligibility")
-        if constraints is not None and not isinstance(constraints, RetrievalConstraints):
+        if constraints is not None and not isinstance(
+            constraints, RetrievalConstraints
+        ):
             raise TypeError("constraints must be RetrievalConstraints when provided")
         vector = _query_vector(query_vector, self._contract)
         fts_query = build_fts5_query(query_text)
