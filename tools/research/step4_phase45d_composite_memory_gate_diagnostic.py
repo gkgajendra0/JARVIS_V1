@@ -47,7 +47,9 @@ def _load_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _case_map(payload: dict[str, Any], *, expected_count: int, name: str) -> dict[str, dict[str, Any]]:
+def _case_map(
+    payload: dict[str, Any], *, expected_count: int, name: str
+) -> dict[str, dict[str, Any]]:
     raw = payload.get("cases")
     if not isinstance(raw, list):
         raise TypeError(f"{name} cases must be a list")
@@ -71,9 +73,13 @@ def validate_inputs(
     zero_shot: dict[str, Any],
 ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
     if planner.get("status") != PLANNER_STATUS:
-        raise RuntimeError("planner artifact status does not match the frozen diagnostic")
+        raise RuntimeError(
+            "planner artifact status does not match the frozen diagnostic"
+        )
     if zero_shot.get("status") != ZERO_SHOT_STATUS:
-        raise RuntimeError("zero-shot artifact status does not match the frozen diagnostic")
+        raise RuntimeError(
+            "zero-shot artifact status does not match the frozen diagnostic"
+        )
     if planner.get("acceptance_evidence") is not False:
         raise RuntimeError("planner artifact must be development-only")
     if zero_shot.get("acceptance_evidence") is not False:
@@ -93,7 +99,9 @@ def validate_inputs(
     if len(semantic_ids) != EXPECTED_SEMANTIC_CASES:
         raise RuntimeError("planner semantic-current case count changed")
     if semantic_ids != set(zero_cases):
-        raise RuntimeError("zero-shot case IDs must exactly match planner semantic-current IDs")
+        raise RuntimeError(
+            "zero-shot case IDs must exactly match planner semantic-current IDs"
+        )
 
     for case_id in semantic_ids:
         planner_row = planner_cases[case_id]
@@ -194,9 +202,7 @@ def summarize(results: list[CompositeCase]) -> dict[str, Any]:
     ]
 
     direct_targets = [
-        row
-        for row in target_releases
-        if row.category in {"direct", "cross_lingual"}
+        row for row in target_releases if row.category in {"direct", "cross_lingual"}
     ]
     relation_targets = [
         row for row in target_releases if row.category == "relation_mismatch"
@@ -231,7 +237,8 @@ def summarize(results: list[CompositeCase]) -> dict[str, Any]:
         "every_composite_release_is_exact_expected_memory": all(
             row.exact_expected_release for row in composite_release_rows
         ),
-        "composite_is_veto_only": len(composite_release_rows) <= len(planner_release_rows)
+        "composite_is_veto_only": len(composite_release_rows)
+        <= len(planner_release_rows)
         and all(row.planner_release for row in composite_release_rows),
         "zero_new_model_or_api_calls": True,
     }
@@ -254,7 +261,9 @@ def summarize(results: list[CompositeCase]) -> dict[str, Any]:
         "by_language": by_language,
         "false_release_case_ids": [row.case_id for row in false_releases],
         "wrong_target_release_case_ids": [row.case_id for row in wrong_target_releases],
-        "security_boundary_release_case_ids": [row.case_id for row in security_releases],
+        "security_boundary_release_case_ids": [
+            row.case_id for row in security_releases
+        ],
         "vetoed_planner_release_case_ids": [row.case_id for row in vetoed_planner_rows],
         "vetoed_planner_releases_by_category": dict(
             sorted(Counter(row.category for row in vetoed_planner_rows).items())
