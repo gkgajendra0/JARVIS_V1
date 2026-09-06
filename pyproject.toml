@@ -55,6 +55,7 @@ retrieval = [
     "transformers==5.16.1",
 ]
 phase45d-verifier = ["gliclass==0.1.20"]
+phase45d-acceptance = ["scipy>=1.14,<2"]
 speaker = ["sherpa-onnx==1.13.6"]
 active-speaker = [
     "python_speech_features==0.6",
