@@ -13,6 +13,7 @@ from .embeddings import (
     deserialize_embedding,
     embedding_content_sha256,
 )
+from .query_plan import MemoryFacetCatalog, MemoryFacetKey
 from .storage_rows import (
     SEMANTIC_ASSERTION_COLUMNS_SQL,
     semantic_assertion_record_from_row,
@@ -134,6 +135,37 @@ class RetrievalEligibility:
 
 
 @dataclass(frozen=True, slots=True)
+class RetrievalConstraints:
+    """Exact canonical metadata constraints applied before lexical/dense ranking."""
+
+    subject_scope: str | None = None
+    subject: str | None = None
+    predicate: str | None = None
+
+    def __post_init__(self) -> None:
+        for name in ("subject_scope", "subject", "predicate"):
+            value = getattr(self, name)
+            if value is None:
+                continue
+            if not isinstance(value, str):
+                raise TypeError(f"{name} must be a string when provided")
+            normalized = value.strip()
+            if not normalized:
+                raise ValueError(f"{name} must not be empty when provided")
+            object.__setattr__(self, name, normalized)
+
+    @classmethod
+    def for_facet(cls, facet: MemoryFacetKey) -> RetrievalConstraints:
+        if not isinstance(facet, MemoryFacetKey):
+            raise TypeError("facet must be a MemoryFacetKey")
+        return cls(
+            subject_scope=facet.subject_scope,
+            subject=facet.subject,
+            predicate=facet.predicate,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class FusedRank:
     assertion_id: str
     fused_score: float
@@ -250,8 +282,29 @@ def _in_clause(values: tuple[str, ...]) -> str:
     return ", ".join("?" for _ in values)
 
 
+def _constraint_sql(
+    constraints: RetrievalConstraints | None,
+    *,
+    alias: str | None = None,
+) -> tuple[str, tuple[str, ...]]:
+    if constraints is None:
+        return "", ()
+    if not isinstance(constraints, RetrievalConstraints):
+        raise TypeError("constraints must be RetrievalConstraints when provided")
+    prefix = f"{alias}." if alias else ""
+    clauses: list[str] = []
+    parameters: list[str] = []
+    for column in ("subject_scope", "subject", "predicate"):
+        value = getattr(constraints, column)
+        if value is None:
+            continue
+        clauses.append(f"AND {prefix}{column} = ?")
+        parameters.append(value)
+    return "\n              ".join(clauses), tuple(parameters)
+
+
 class SemanticRetrievalService:
-    """First-stage eligible-current lexical+dense retrieval with deterministic RRF."""
+    """Eligible-current lexical+dense retrieval with optional exact metadata narrowing."""
 
     def __init__(
         self,
@@ -274,12 +327,25 @@ class SemanticRetrievalService:
         self._fts_window = fts_window
         self._rank_constant = rank_constant
 
+    async def eligible_facet_catalog(
+        self,
+        *,
+        eligibility: RetrievalEligibility | None = None,
+    ) -> MemoryFacetCatalog:
+        policy = eligibility or RetrievalEligibility.local()
+        if not isinstance(policy, RetrievalEligibility):
+            raise TypeError("eligibility must be RetrievalEligibility")
+        return await self._worker.run(
+            lambda connection: self._eligible_facet_catalog_sync(connection, policy)
+        )
+
     async def retrieve_first_stage(
         self,
         query_text: str,
         query_vector: np.ndarray | list[float] | tuple[float, ...],
         *,
         eligibility: RetrievalEligibility | None = None,
+        constraints: RetrievalConstraints | None = None,
         limit: int = 3,
     ) -> tuple[RetrievalCandidate, ...]:
         if not isinstance(query_text, str):
@@ -293,6 +359,8 @@ class SemanticRetrievalService:
         policy = eligibility or RetrievalEligibility.local()
         if not isinstance(policy, RetrievalEligibility):
             raise TypeError("eligibility must be RetrievalEligibility")
+        if constraints is not None and not isinstance(constraints, RetrievalConstraints):
+            raise TypeError("constraints must be RetrievalConstraints when provided")
         vector = _query_vector(query_vector, self._contract)
         fts_query = build_fts5_query(query_text)
         return await self._worker.run(
@@ -301,8 +369,37 @@ class SemanticRetrievalService:
                 fts_query=fts_query,
                 query_vector=vector,
                 eligibility=policy,
+                constraints=constraints,
                 limit=limit,
             )
+        )
+
+    def _eligible_facet_catalog_sync(
+        self,
+        connection: Any,
+        eligibility: RetrievalEligibility,
+    ) -> MemoryFacetCatalog:
+        authorities = _enum_values(eligibility.authorities)
+        sensitivities = _enum_values(eligibility.sensitivities)
+        if not authorities or not sensitivities:
+            return MemoryFacetCatalog(())
+        rows = connection.execute(
+            f"""
+            SELECT DISTINCT subject_scope, subject, predicate
+            FROM current_semantic_assertion
+            WHERE sensitivity IN ({_in_clause(sensitivities)})
+              AND source_id IN (
+                  SELECT source_id
+                  FROM memory_source
+                  WHERE authority_class IN ({_in_clause(authorities)})
+                    AND sensitivity IN ({_in_clause(sensitivities)})
+              )
+            ORDER BY subject_scope ASC, subject ASC, predicate ASC
+            """,
+            (*sensitivities, *authorities, *sensitivities),
+        ).fetchall()
+        return MemoryFacetCatalog(
+            tuple(MemoryFacetKey(str(row[0]), str(row[1]), str(row[2])) for row in rows)
         )
 
     def _retrieve_sync(
@@ -312,10 +409,21 @@ class SemanticRetrievalService:
         fts_query: str,
         query_vector: np.ndarray,
         eligibility: RetrievalEligibility,
+        constraints: RetrievalConstraints | None,
         limit: int,
     ) -> tuple[RetrievalCandidate, ...]:
-        lexical = self._lexical_rank_sync(connection, fts_query, eligibility)
-        dense = self._dense_rank_sync(connection, query_vector, eligibility)
+        lexical = self._lexical_rank_sync(
+            connection,
+            fts_query,
+            eligibility,
+            constraints,
+        )
+        dense = self._dense_rank_sync(
+            connection,
+            query_vector,
+            eligibility,
+            constraints,
+        )
         lexical_ids = [assertion_id for assertion_id, _ in lexical]
         dense_ids = [assertion_id for assertion_id, _ in dense]
         fused = reciprocal_rank_fuse(
@@ -331,6 +439,7 @@ class SemanticRetrievalService:
             connection,
             [item.assertion_id for item in selected],
             eligibility,
+            constraints,
         )
         lexical_scores = dict(lexical)
         dense_scores = dict(dense)
@@ -357,11 +466,16 @@ class SemanticRetrievalService:
         connection: Any,
         fts_query: str,
         eligibility: RetrievalEligibility,
+        constraints: RetrievalConstraints | None,
     ) -> list[tuple[str, float]]:
         authorities = _enum_values(eligibility.authorities)
         sensitivities = _enum_values(eligibility.sensitivities)
         if not authorities or not sensitivities:
             return []
+        constraint_sql, constraint_params = _constraint_sql(
+            constraints,
+            alias="current",
+        )
         rows = connection.execute(
             f"""
             SELECT
@@ -372,6 +486,7 @@ class SemanticRetrievalService:
               ON current.assertion_rowid = semantic_assertion_fts.rowid
             WHERE semantic_assertion_fts MATCH ?
               AND current.sensitivity IN ({_in_clause(sensitivities)})
+              {constraint_sql}
               AND current.source_id IN (
                   SELECT source_id
                   FROM memory_source
@@ -384,6 +499,7 @@ class SemanticRetrievalService:
             (
                 fts_query,
                 *sensitivities,
+                *constraint_params,
                 *authorities,
                 *sensitivities,
                 self._fts_window,
@@ -396,11 +512,13 @@ class SemanticRetrievalService:
         connection: Any,
         query_vector: np.ndarray,
         eligibility: RetrievalEligibility,
+        constraints: RetrievalConstraints | None,
     ) -> list[tuple[str, float]]:
         authorities = _enum_values(eligibility.authorities)
         sensitivities = _enum_values(eligibility.sensitivities)
         if not authorities or not sensitivities:
             return []
+        constraint_sql, constraint_params = _constraint_sql(constraints)
         contract = self._contract
         rows = connection.execute(
             f"""
@@ -412,6 +530,7 @@ class SemanticRetrievalService:
                 SELECT {SEMANTIC_ASSERTION_COLUMNS_SQL}
                 FROM current_semantic_assertion
                 WHERE sensitivity IN ({_in_clause(sensitivities)})
+                  {constraint_sql}
                   AND source_id IN (
                       SELECT source_id
                       FROM memory_source
@@ -431,6 +550,7 @@ class SemanticRetrievalService:
             """,
             (
                 *sensitivities,
+                *constraint_params,
                 *authorities,
                 *sensitivities,
                 contract.model_id,
@@ -466,6 +586,7 @@ class SemanticRetrievalService:
         connection: Any,
         assertion_ids: list[str],
         eligibility: RetrievalEligibility,
+        constraints: RetrievalConstraints | None,
     ) -> dict[str, SemanticAssertionRecord]:
         if not assertion_ids:
             return {}
@@ -473,12 +594,14 @@ class SemanticRetrievalService:
         sensitivities = _enum_values(eligibility.sensitivities)
         if not authorities or not sensitivities:
             return {}
+        constraint_sql, constraint_params = _constraint_sql(constraints)
         rows = connection.execute(
             f"""
             SELECT {SEMANTIC_ASSERTION_COLUMNS_SQL}
             FROM current_semantic_assertion
             WHERE assertion_id IN ({_in_clause(tuple(assertion_ids))})
               AND sensitivity IN ({_in_clause(sensitivities)})
+              {constraint_sql}
               AND source_id IN (
                   SELECT source_id
                   FROM memory_source
@@ -489,6 +612,7 @@ class SemanticRetrievalService:
             (
                 *assertion_ids,
                 *sensitivities,
+                *constraint_params,
                 *authorities,
                 *sensitivities,
             ),
