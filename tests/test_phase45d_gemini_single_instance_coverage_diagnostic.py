@@ -123,10 +123,7 @@ def test_selection_covers_one_positive_and_every_ordinary_cell() -> None:
     positives = [item for item in selected if item["label"] == "release"]
     assert {item["language"] for item in positives} == set(module.TARGET_LANGUAGES)
     abstains = [item for item in selected if item["label"] == "abstain"]
-    assert {
-        (item["category"], item["language"])
-        for item in abstains
-    } == {
+    assert {(item["category"], item["language"]) for item in abstains} == {
         (category, language)
         for category in module.ORDINARY_ABSTAIN_CATEGORIES
         for language in module.TARGET_LANGUAGES

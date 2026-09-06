@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — TOP-10 QWEN DEVELOPMENT RETRIEVAL PASSED — QA + GLICLASS REJECTED — GEMINI BATCH-120 RESULT HAS A PRODUCTION-SHAPE CONFOUND — SINGLE-INSTANCE BOUNDARY DIAGNOSTIC NEXT — PHASE 4.5E BLOCKED**
+**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — TOP-10 QWEN DEVELOPMENT RETRIEVAL PASSED — QA + GLICLASS REJECTED — GEMINI SINGLE-INSTANCE BOUNDARY 15/15 PASSED — 24-CASE PRODUCTION-SHAPE COVERAGE DIAGNOSTIC NEXT — PHASE 4.5E BLOCKED**
 
 This file is the operational source of truth. Detailed measurements belong in `docs/research/`; only fresh accepted architecture belongs in ADRs / `docs/CURRENT_ARCHITECTURE.md`.
 
@@ -242,15 +242,17 @@ This development result isolates the V2 ranking problem:
 
 ---
 
-## Active 4.5D development direction — GEMINI SINGLE-INSTANCE BOUNDARY DIAGNOSTIC
+## Active 4.5D development direction — GEMINI SINGLE-INSTANCE COVERAGE DIAGNOSTIC
 
 V2 is fully exposed and may be used only for development architecture selection. **Do not create V3 yet.**
 
-### Task-matched QA verifier — REJECTED
+### Rejected development verifiers
 
-The multilingual SQuAD2 answerability approach was evaluated after the top-10 retrieval diagnosis. It did not clear the frozen development transfer floors and is not the selected final verifier. Preserve its method/result as development evidence; do not tune V2 validation until it passes.
+- mMARCO generic relevance verifier: rejected as final semantic-sufficiency verifier after V2 transfer failure;
+- multilingual SQuAD2 answerability verifier: rejected after failing frozen development transfer floors;
+- GLiClass multilingual zero-shot classifier: no calibration threshold reached the frozen `0.95` precision target.
 
-### GLiClass vs Gemini semantic-judge bake-off — COMPLETED / DEVELOPMENT-ONLY
+### Gemini batch-120 semantic-judge bake-off — NOT PRODUCTION-EQUIVALENT
 
 Durable result:
 
@@ -260,72 +262,66 @@ Owner-run exact SHA:
 
 `cdbc89a51728c8134e5182980b6885f2d2ccfa91`
 
-The same exposed V2 corpus was rerun with Qwen candidate depth 10. Positive ranking reproduced perfectly:
+Qwen candidate depth 10 reproduced positive ranking perfectly: `900/900` Top-1 across exposed V2 positives.
 
-- overall `900/900` Top-1;
-- calibration `600/600` Top-1;
-- validation `300/300` Top-1.
+Under the quota-compatible 120-case Gemini request shape, validation produced `300 TP / 125 FP`, precision `0.705882`, recall `1.0`. All 125 false releases were exactly the five boundary groups: `25 historical + 25 forgotten + 25 local_only + 25 secret + 25 untrusted`; the other 175 ordinary semantic abstentions had zero false releases.
 
-GLiClass:
+### Gemini single-instance boundary diagnostic — COMPLETE / PASSED
 
-- no empirical calibration margin threshold reached the frozen `0.95` precision target;
-- selected threshold `null`;
-- validation release recall `0`;
-- rejected for the current semantic-sufficiency role.
+Durable result:
 
-Gemini 3.5 Flash-Lite under the quota-compatible **120-case-per-request** development shape:
+- `docs/research/STEP_4_PHASE_4_5D_GEMINI_SINGLE_INSTANCE_BOUNDARY_RESULT.md`.
 
-- validation TP `300`;
-- validation FP `125`;
-- validation precision `0.705882`;
-- validation positive release recall `1.0`;
-- every false release was in exactly five deterministic boundary groups: `25 historical + 25 forgotten + 25 local_only + 25 secret + 25 untrusted`;
-- the remaining `175` ordinary semantic validation abstentions therefore had zero false releases.
+Owner-run exact SHA:
 
-The original bake-off correctly reports `PROMISING: []`: the batch-120 policy fails the frozen precision/security gates and cannot be frozen for V3.
+`e645fe8ab469d962bc2bcc23f11db8da650d9279`
 
-### Why Gemini is not rejected yet
+The frozen 15-case diagnostic selected one already-exposed validation case for every boundary category/language cell and changed only Gemini request shape from 120 cases/request to one case/request.
 
-Production JARVIS will ask the semantic verifier to judge **one live query/document pair at a time**, not 120 indepent cases in one generation.
+Exact result:
 
-Research refreshed after the owner result:
+- prior batch-120 RELEASE: `15/15`;
+- single-instance RELEASE: `0/15`;
+- single-instance ABSTAIN: `15/15`;
+- RELEASE→ABSTAIN flips: `15/15`;
+- all five boundary categories passed `3/3`;
+- EN, HI and Hinglish each passed `5/5`;
+- `batching_confound_observed = true`.
 
-- ACL 2026 reports multi-instance LLM degradation beginning around `20–100` instances and larger collapse at higher instance counts, with instance count exerting a stronger effect than context length in that study;
-- Google structured-output documentation supports schema-constrained classification but explicitly warns that syntactically valid structured output does not guarantee semantically correct values.
+Therefore the batch-120 boundary failures are not valid production-equivalent evidence. Request shape materially changes Gemini behavior on this task.
 
-Therefore the completed 120-instance Gemini result has a material external-validity confound relative to the intended single-instance production role. This does **not** prove batching caused the boundary failures. It just means Gemini must receive one bounded production-shape diagnostic before rejection or V3 design.
+Research alignment:
 
-### Frozen next diagnostic
+- ACL 2026 reports multi-instance LLM degradation beginning around 20–100 instances and larger collapse at higher instance counts;
+- Google structured-output guidance guarantees syntax, not semantic correctness, and requires application validation;
+- MAPIE now documents LLM-as-a-judge risk control with abstention and held-out statistical control.
+
+### Frozen next diagnostic — 24 additional single-instance cells
 
 Harness:
 
-- `tools/research/step4_phase45d_gemini_single_instance_boundary_diagnostic.py`.
+- `tools/research/step4_phase45d_gemini_single_instance_coverage_diagnostic.py`.
 
 Output:
 
-- `.step4-phase45d-v2-gemini-single-instance-boundary-diagnostic-v1.json`.
+- `.step4-phase45d-v2-gemini-single-instance-coverage-diagnostic-v1.json`.
 
-The diagnostic uses exactly 15 already-exposed V2 validation cases:
+The diagnostic does **not** rerun the 15 boundary calls. It requires the completed boundary artifact, then uses 24 additional already-exposed V2 validation cases:
 
-- `historical`, `forgotten`, `local_only`, `secret`, `untrusted`;
-- each in EN, HI and Hinglish;
-- lexicographically first case in every fixed category/language cell;
-- every selected source case must have been RELEASE in the batch-120 artifact;
-- same canonical lifecycle + `RetrievalEligibility.cloud_context()` + Qwen 256d + top-10 + frozen Qwen reranker;
-- selected Top-1 memory ID must reproduce the source artifact;
-- Gemini receives exactly one query/document pair per request;
-- same Gemini model and semantic-sufficiency instruction;
-- no GLiClass;
-- no threshold fitting;
-- development-only, not acceptance.
+- one previously-correct positive per language = `3`;
+- `absent`, `near_miss`, `ambiguous`, `adversarial_lexical`, `negation`, `relation_mismatch`, `unsupported_source` × EN/HI/Hinglish = `21` ordinary abstains;
+- total new Gemini calls = `24`;
+- exactly one query/document pair per Gemini request;
+- same canonical eligibility, Qwen 256d, top-10 retrieval and frozen Qwen reranker;
+- selected Top-1 memory must reproduce the prior source artifact;
+- no GLiClass, no threshold fitting and no validation-driven tuning.
 
-Interpretation is frozen before the owner run:
+Frozen interpretation:
 
-- any RELEASE→ABSTAIN flip proves request-shape sensitivity and prevents treating batch-120 decisions as production-equivalent evidence;
-- zero single-instance releases across all 15 targeted cells supports continuing Gemini as a development candidate but does not itself authorize V3;
-- any remaining single-instance RELEASE is a genuine targeted boundary miss and triggers architecture review, with multilingual NLI/grounding the next research-first fallback.
+- all 24 preserve the previously-correct decision + the completed 15/15 boundary result => `39/39` production-shape development cells correct and Gemini is selected for **fresh V3 design**;
+- any single regression blocks V3 and triggers architecture review before multilingual NLI/grounding fallback.
 
-Do not rerun the full 1,800-case Gemini bake-off merely to change batch size.
+Selection for V3 design is not final acceptance. A future V3 must still be completely fresh and statistically controlled.
 
 ---
 
@@ -381,7 +377,7 @@ Do **not** wire semantic retrieval into `ContextAssembler` / Gemini conversation
 6. 4.5A — COMPLETE.
 7. 4.5B — COMPLETE.
 8. 4.5C — COMPLETE.
-9. **4.5D — ACTIVE: top-10 retrieval complete; QA/GLiClass rejected; Gemini single-instance boundary diagnostic next.**
+9. **4.5D — ACTIVE: top-10 retrieval complete; boundary single-instance 15/15 passed; 24-case coverage diagnostic next.**
 10. **4.5E — BLOCKED.**
 11. 4.6 — NOT STARTED.
 12. 4.7 — NOT STARTED.
@@ -405,7 +401,7 @@ Do not:
 - rescue the rejected score+margin family;
 - rescue the rejected V2 logistic gate through threshold tuning;
 - treat mMARCO as the accepted final verifier;
-- jump to BGE or multilingual NLI before resolving the frozen Gemini single-instance production-shape diagnostic;
+- jump to BGE or multilingual NLI before resolving the frozen 24-case Gemini single-instance coverage diagnostic;
 - generate V3 before development architecture selection is complete;
 - rerun Qwen vs EmbeddingGemma selection;
 - rerun 4.5C owner compatibility unless contracts change;
@@ -418,8 +414,8 @@ Do not:
 
 ## Immediate Next Action
 
-**PASS THE 15-CASE GEMINI SINGLE-INSTANCE BOUNDARY DIAGNOSTIC THROUGH CI ON A CLEAN EXACT SHA, THEN RUN IT ONCE ON THE OWNER RTX.**
+**PASS THE 24-CASE GEMINI SINGLE-INSTANCE COVERAGE DIAGNOSTIC THROUGH CI ON A CLEAN EXACT SHA, THEN RUN IT ONCE ON THE OWNER RTX.**
 
-Use the existing completed `.step4-phase45d-v2-semantic-judge-bakeoff-v1.json` as the source artifact. Do not overwrite or rerun that full bake-off. Interpret the single-instance result using the preregistered rules above before deciding whether Gemini remains a development candidate or whether multilingual NLI/grounding research is required.
+Use the existing completed batch-120 semantic-judge artifact and the completed 15-case boundary artifact as immutable development inputs. Do not overwrite or rerun either one. If all 24 additional cells preserve their previously-correct decisions, freeze Gemini single-instance as the development semantic judge and design a completely fresh V3 acceptance with statistical precision control. Any regression blocks V3 and returns Phase 4.5D to architecture research.
 
-V3 remains unauthorized. Phase 4.5E remains blocked.
+V3 remains unauthorized until this diagnostic passes. Phase 4.5E remains blocked.

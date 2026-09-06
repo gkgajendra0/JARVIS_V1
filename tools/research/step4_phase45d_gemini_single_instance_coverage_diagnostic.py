@@ -67,7 +67,9 @@ def _load_boundary_artifact(path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise RuntimeError("single-instance boundary artifact is not valid JSON") from exc
+        raise RuntimeError(
+            "single-instance boundary artifact is not valid JSON"
+        ) from exc
     if not isinstance(payload, dict):
         raise TypeError("single-instance boundary artifact must be a JSON object")
     if payload.get("status") != (
@@ -176,7 +178,9 @@ async def _retrieve_selected_pairs(
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
 
-    with tempfile.TemporaryDirectory(prefix="jarvis-phase45d-gemini-coverage-") as temp_dir:
+    with tempfile.TemporaryDirectory(
+        prefix="jarvis-phase45d-gemini-coverage-"
+    ) as temp_dir:
         worker = answerability.baseline._connection_worker(
             Path(temp_dir) / "single-instance-coverage.db"
         )
