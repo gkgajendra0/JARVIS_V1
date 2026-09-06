@@ -43,9 +43,10 @@ class MemoryQueryProposal(BaseModel):
     subject_scope: str | None = Field(default=None, min_length=1, max_length=160)
     subject: str | None = Field(default=None, min_length=1, max_length=160)
     predicate: str | None = Field(default=None, min_length=1, max_length=160)
+    subject_reference: str | None = Field(default=None, min_length=1, max_length=240)
+    requested_relation: str | None = Field(default=None, min_length=1, max_length=240)
     temporal_scope: MemoryTemporalScope = MemoryTemporalScope.UNSPECIFIED
     as_of_text: str | None = Field(default=None, min_length=1, max_length=240)
-    requested_relation: str | None = Field(default=None, min_length=1, max_length=240)
 
 
 @dataclass(frozen=True, slots=True, order=True)
