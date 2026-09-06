@@ -51,7 +51,9 @@ def test_select_cases_is_frozen_30_case_semantic_current_set() -> None:
     cases = module.select_cases()
     assert len(cases) == 30
     assert len({str(item["case_id"]) for item in cases}) == 30
-    assert not any(str(item["category"]) in module.SECURITY_CATEGORIES for item in cases)
+    assert not any(
+        str(item["category"]) in module.SECURITY_CATEGORIES for item in cases
+    )
 
     expected_types = Counter(module._expected_answer_type(item) for item in cases)
     assert expected_types == Counter(
@@ -74,7 +76,9 @@ def test_build_pairs_creates_seven_hypotheses_per_query() -> None:
     assert len(pairs) == 30 * 7
     counts = Counter(case_id for case_id, _, _ in pairs)
     assert set(counts.values()) == {7}
-    assert all(hypothesis.startswith("This question asks for ") for _, _, hypothesis in pairs)
+    assert all(
+        hypothesis.startswith("This question asks for ") for _, _, hypothesis in pairs
+    )
 
 
 def test_perfect_answer_type_scores_pass_all_continuation_gates() -> None:
