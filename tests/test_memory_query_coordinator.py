@@ -123,7 +123,9 @@ def _exact(
 
 
 @pytest.mark.asyncio
-async def test_grounded_exact_query_releases_unique_current_fact(tmp_path: Path) -> None:
+async def test_grounded_exact_query_releases_unique_current_fact(
+    tmp_path: Path,
+) -> None:
     worker = _worker(tmp_path / "release.db")
     lifecycle = MemoryLifecycleService(
         worker,
@@ -158,7 +160,9 @@ async def test_grounded_exact_query_releases_unique_current_fact(tmp_path: Path)
 
 
 @pytest.mark.asyncio
-async def test_existing_wrong_predicate_conflicts_with_grounded_relation(tmp_path: Path) -> None:
+async def test_existing_wrong_predicate_conflicts_with_grounded_relation(
+    tmp_path: Path,
+) -> None:
     worker = _worker(tmp_path / "wrong-predicate.db")
     lifecycle = MemoryLifecycleService(
         worker,
@@ -205,7 +209,9 @@ async def test_existing_wrong_predicate_conflicts_with_grounded_relation(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_existing_wrong_subject_conflicts_with_grounded_subject(tmp_path: Path) -> None:
+async def test_existing_wrong_subject_conflicts_with_grounded_subject(
+    tmp_path: Path,
+) -> None:
     worker = _worker(tmp_path / "wrong-subject.db")
     lifecycle = MemoryLifecycleService(
         worker,
@@ -235,13 +241,17 @@ async def test_existing_wrong_subject_conflicts_with_grounded_subject(tmp_path: 
         decision = await coordinator.resolve("Aquila archive destination kya hai?")
 
         assert decision.disposition is MemoryEvidenceDisposition.ABSTAIN
-        assert decision.reason_code == "subject_reference_conflicts_with_selected_subject"
+        assert (
+            decision.reason_code == "subject_reference_conflicts_with_selected_subject"
+        )
     finally:
         await worker.close()
 
 
 @pytest.mark.asyncio
-async def test_ungrounded_relation_reference_abstains_before_release(tmp_path: Path) -> None:
+async def test_ungrounded_relation_reference_abstains_before_release(
+    tmp_path: Path,
+) -> None:
     worker = _worker(tmp_path / "ungrounded.db")
     lifecycle = MemoryLifecycleService(
         worker,
@@ -250,9 +260,7 @@ async def test_ungrounded_relation_reference_abstains_before_release(tmp_path: P
         operation_id_factory=_ids("operation"),
     )
     retrieval = SemanticRetrievalService(worker)
-    interpreter = StaticInterpreter(
-        _exact(relation_reference="signin method")
-    )
+    interpreter = StaticInterpreter(_exact(relation_reference="signin method"))
     coordinator = MemoryQueryCoordinator(interpreter=interpreter, retrieval=retrieval)
     try:
         await lifecycle.create(
@@ -284,9 +292,7 @@ async def test_cross_lingual_grounded_relation_can_map_to_canonical_predicate(
         operation_id_factory=_ids("operation"),
     )
     retrieval = SemanticRetrievalService(worker)
-    interpreter = StaticInterpreter(
-        _exact(relation_reference="संग्रह स्थान")
-    )
+    interpreter = StaticInterpreter(_exact(relation_reference="संग्रह स्थान"))
     coordinator = MemoryQueryCoordinator(interpreter=interpreter, retrieval=retrieval)
     try:
         await lifecycle.create(
@@ -308,7 +314,9 @@ async def test_cross_lingual_grounded_relation_can_map_to_canonical_predicate(
 
 
 @pytest.mark.asyncio
-async def test_cloud_interpreter_only_receives_cloud_eligible_facets(tmp_path: Path) -> None:
+async def test_cloud_interpreter_only_receives_cloud_eligible_facets(
+    tmp_path: Path,
+) -> None:
     worker = _worker(tmp_path / "catalog.db")
     lifecycle = MemoryLifecycleService(
         worker,
@@ -345,18 +353,21 @@ async def test_cloud_interpreter_only_receives_cloud_eligible_facets(tmp_path: P
 
         assert len(interpreter.catalogs) == 1
         catalog = interpreter.catalogs[0]
-        assert MemoryFacetKey(
-            "profile", "Aquila", "archive_destination"
-        ) in catalog.facets
-        assert MemoryFacetKey(
-            "profile", "Aquila", "local_operator_note"
-        ) not in catalog.facets
+        assert (
+            MemoryFacetKey("profile", "Aquila", "archive_destination") in catalog.facets
+        )
+        assert (
+            MemoryFacetKey("profile", "Aquila", "local_operator_note")
+            not in catalog.facets
+        )
     finally:
         await worker.close()
 
 
 @pytest.mark.asyncio
-async def test_qualified_query_keeps_fail_closed_query_policy_reason(tmp_path: Path) -> None:
+async def test_qualified_query_keeps_fail_closed_query_policy_reason(
+    tmp_path: Path,
+) -> None:
     worker = _worker(tmp_path / "qualified.db")
     lifecycle = MemoryLifecycleService(
         worker,
