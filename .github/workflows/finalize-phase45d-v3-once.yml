@@ -1,0 +1,234 @@
+name: Finalize Phase 4.5D V3 Once
+
+on:
+  push:
+    branches:
+      - implementation/step-4-memory-context
+    paths:
+      - .github/workflows/finalize-phase45d-v3-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: implementation/step-4-memory-context
+          fetch-depth: 0
+
+      - name: Format freeze hash and synchronize plan
+        shell: bash
+        run: |
+          python -m pip install "ruff==0.16.5"
+          ruff format \
+            tools/research/step4_phase45d_final_v3_cases.py \
+            tools/research/step4_phase45d_final_v3_acceptance.py \
+            tests/test_phase45d_final_v3_cases.py \
+            tests/test_phase45d_final_v3_acceptance.py
+          ruff check --fix \
+            tools/research/step4_phase45d_final_v3_cases.py \
+            tools/research/step4_phase45d_final_v3_acceptance.py \
+            tests/test_phase45d_final_v3_cases.py \
+            tests/test_phase45d_final_v3_acceptance.py
+          ruff format \
+            tools/research/step4_phase45d_final_v3_cases.py \
+            tools/research/step4_phase45d_final_v3_acceptance.py \
+            tests/test_phase45d_final_v3_cases.py \
+            tests/test_phase45d_final_v3_acceptance.py
+          PYTHONPATH=tools/research python - <<'PY'
+          from pathlib import Path
+          import re
+          import step4_phase45d_final_v3_cases as cases
+
+          digest = cases.payload_sha256()
+          assert len(digest) == 64
+          print(f"V3_PAYLOAD_SHA256={digest}")
+
+          acceptance_path = Path("tools/research/step4_phase45d_final_v3_acceptance.py")
+          acceptance = acceptance_path.read_text(encoding="utf-8")
+          placeholder = 'EXPECTED_V3_PAYLOAD_SHA256 = "__FREEZE_AFTER_CORPUS_CI__"'
+          assert placeholder in acceptance
+          acceptance = acceptance.replace(
+              placeholder,
+              f'EXPECTED_V3_PAYLOAD_SHA256 = "{digest}"',
+              1,
+          )
+          acceptance_path.write_text(acceptance, encoding="utf-8")
+
+          test_path = Path("tests/test_phase45d_final_v3_cases.py")
+          test_text = test_path.read_text(encoding="utf-8")
+          needle = "    assert first == second\n"
+          assert needle in test_text
+          test_text = test_text.replace(
+              needle,
+              needle + f'    assert first == "{digest}"\n',
+              1,
+          )
+          test_path.write_text(test_text, encoding="utf-8")
+
+          method_path = Path("docs/research/STEP_4_PHASE_4_5D_FINAL_V3_METHOD.md")
+          method = method_path.read_text(encoding="utf-8")
+          needle = (
+              "Any payload-hash change creates a new V3 version and invalidates prior evidence."
+          )
+          assert needle in method
+          method = method.replace(
+              needle,
+              needle + f"\n\nFrozen V3 payload SHA-256:\n\n`{digest}`",
+              1,
+          )
+          method_path.write_text(method, encoding="utf-8")
+
+          plan_path = Path("docs/CURRENT_PLAN.md")
+          plan = plan_path.read_text(encoding="utf-8")
+          old_stage = (
+              "**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — "
+              "PHASE 4.5D ACTIVE — TOP-10 QWEN DEVELOPMENT RETRIEVAL PASSED — "
+              "QA + GLICLASS REJECTED — GEMINI SINGLE-INSTANCE BOUNDARY 15/15 PASSED — "
+              "24-CASE PRODUCTION-SHAPE COVERAGE DIAGNOSTIC NEXT — PHASE 4.5E BLOCKED**"
+          )
+          new_stage = (
+              "**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — "
+              "PHASE 4.5D ACTIVE — TOP-10 QWEN DEVELOPMENT RETRIEVAL PASSED — "
+              "QA + GLICLASS REJECTED — GEMINI SINGLE-INSTANCE 39/39 DEVELOPMENT CELLS PASSED — "
+              "FRESH V3 METHOD/CORPUS/HARNESS FROZEN — OWNER V3 ACCEPTANCE NEXT — "
+              "PHASE 4.5E BLOCKED**"
+          )
+          assert old_stage in plan
+          plan = plan.replace(old_stage, new_stage, 1)
+
+          pattern = re.compile(
+              r"## Active 4\.5D development direction — GEMINI SINGLE-INSTANCE COVERAGE DIAGNOSTIC\n"
+              r".*?\n---\n\n## Phase 4\.5E — BLOCKED",
+              re.S,
+          )
+          replacement = f'''## Active 4.5D direction — FRESH V3 ACCEPTANCE
+
+Development architecture selection is complete. V2 remains exposed/retired and is no longer eligible for acceptance evidence.
+
+### Production-shaped development selection — COMPLETE
+
+Durable development results:
+
+- `docs/research/STEP_4_PHASE_4_5D_GEMINI_SINGLE_INSTANCE_BOUNDARY_RESULT.md`;
+- `docs/research/STEP_4_PHASE_4_5D_GEMINI_SINGLE_INSTANCE_COVERAGE_RESULT.md`.
+
+The single-instance boundary diagnostic passed `15/15`; the additional coverage diagnostic preserved `24/24`; combined production-shaped development coverage is `39/39` with zero regressions across EN, HI and Hinglish.
+
+Selected V3 architecture:
+
+```text
+canonical eligibility/security authority
+→ eligible FTS5 + Qwen3-Embedding-0.6B 256d exact cosine
+→ equal RRF
+→ top 10
+→ Qwen3-Reranker-0.6B
+→ eligible Top-1
+→ gemini-3.5-flash-lite
+→ one query/document pair per Interactions API request
+→ structured RELEASE / ABSTAIN
+```
+
+### Final V3 method — FROZEN
+
+Method:
+
+- `docs/research/STEP_4_PHASE_4_5D_FINAL_V3_METHOD.md`.
+
+Fresh corpus:
+
+- `tools/research/step4_phase45d_final_v3_cases.py`;
+- `720` cases total;
+- calibration `180 release + 180 abstain`;
+- validation `180 release + 180 abstain`;
+- each split has `60` positive EN + `60` positive HI + `60` positive Hinglish;
+- each of 12 abstain families has exactly `5` cases per language per split;
+- calibration and validation use disjoint synthetic profile/fixture identities;
+- exact V2 query overlap is prohibited;
+- frozen payload SHA-256: `{digest}`.
+
+Acceptance harness:
+
+- `tools/research/step4_phase45d_final_v3_acceptance.py`;
+- calibration runs first;
+- validation Gemini calls are blocked unless all calibration hard gates pass;
+- fixed hard Gemini policy: no threshold tuning and no fabricated confidence score;
+- exact one-sided Clopper-Pearson lower precision bound via SciPy;
+- target precision `0.95`, confidence `0.95`;
+- at least `59` calibration releases are required;
+- calibration and validation recall/ranking/security gates remain frozen;
+- validation requires zero false releases;
+- output refuses overwrite.
+
+V3 may now be run once on the owner RTX only after the exact cleaned implementation SHA is fully green in CI.
+
+V3 is still synthetic acceptance and does not prove permanent exchangeability with future owner traffic. Later shadow-labelled monitoring remains required.
+
+---
+
+## Phase 4.5E — BLOCKED'''
+          plan, count = pattern.subn(replacement, plan, count=1)
+          assert count == 1
+
+          old_order = (
+              "9. **4.5D — ACTIVE: top-10 retrieval complete; boundary single-instance "
+              "15/15 passed; 24-case coverage diagnostic next.**"
+          )
+          new_order = (
+              "9. **4.5D — ACTIVE: development architecture selected 39/39; fresh V3 "
+              "method/corpus/harness frozen; owner V3 acceptance next.**"
+          )
+          assert old_order in plan
+          plan = plan.replace(old_order, new_order, 1)
+
+          plan = plan.replace(
+              "- jump to BGE or multilingual NLI before resolving the frozen 24-case Gemini single-instance coverage diagnostic;",
+              "- reopen rejected verifier/model search unless fresh V3 evidence fails the frozen selected architecture;",
+              1,
+          )
+
+          immediate = re.compile(r"## Immediate Next Action\n.*\Z", re.S)
+          plan, count = immediate.subn(
+              f'''## Immediate Next Action
+
+**PASS THE FROZEN FRESH V3 CORPUS/HARNESS THROUGH CI ON A CLEAN EXACT SHA, THEN RUN V3 ONCE ON THE OWNER RTX.**
+
+The owner run must use payload SHA `{digest}`, the Interactions API, one query/document pair per Gemini request, Qwen candidate window 10, and the exact statistical gates in `STEP_4_PHASE_4_5D_FINAL_V3_METHOD.md`.
+
+If calibration fails, validation must remain unexecuted and V3 is retired. If validation executes, it is exposed once and cannot be used to retune/re-run V3. Phase 4.5E remains blocked until a passing V3 result is durably recorded and closed on a green exact SHA.
+''',
+              plan,
+              count=1,
+          )
+          assert count == 1
+          plan_path.write_text(plan, encoding="utf-8")
+          PY
+          ruff format \
+            tools/research/step4_phase45d_final_v3_cases.py \
+            tools/research/step4_phase45d_final_v3_acceptance.py \
+            tests/test_phase45d_final_v3_cases.py \
+            tests/test_phase45d_final_v3_acceptance.py
+          ruff check \
+            tools/research/step4_phase45d_final_v3_cases.py \
+            tools/research/step4_phase45d_final_v3_acceptance.py \
+            tests/test_phase45d_final_v3_cases.py \
+            tests/test_phase45d_final_v3_acceptance.py
+
+      - name: Commit finalized V3 files
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            docs/CURRENT_PLAN.md \
+            docs/research/STEP_4_PHASE_4_5D_FINAL_V3_METHOD.md \
+            tools/research/step4_phase45d_final_v3_cases.py \
+            tools/research/step4_phase45d_final_v3_acceptance.py \
+            tests/test_phase45d_final_v3_cases.py \
+            tests/test_phase45d_final_v3_acceptance.py
+          git commit -m "Finalize fresh Phase 4.5D V3 acceptance"
+          git push origin HEAD:implementation/step-4-memory-context
