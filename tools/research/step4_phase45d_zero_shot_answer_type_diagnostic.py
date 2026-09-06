@@ -84,9 +84,13 @@ class AnswerTypeCase:
 def select_cases() -> list[dict[str, Any]]:
     payload = v2_cases.build_payload()
     selected = planner_diag.select_diagnostic_cases(payload)
-    semantic = [item for item in selected if str(item["category"]) not in SECURITY_CATEGORIES]
+    semantic = [
+        item for item in selected if str(item["category"]) not in SECURITY_CATEGORIES
+    ]
     if len(semantic) != EXPECTED_CASES:
-        raise RuntimeError(f"expected {EXPECTED_CASES} semantic cases, got {len(semantic)}")
+        raise RuntimeError(
+            f"expected {EXPECTED_CASES} semantic cases, got {len(semantic)}"
+        )
     case_ids = [str(item["case_id"]) for item in semantic]
     if len(case_ids) != len(set(case_ids)):
         raise RuntimeError("zero-shot diagnostic case IDs must be unique")
@@ -293,7 +297,9 @@ def summarize(results: list[AnswerTypeCase]) -> dict[str, Any]:
     continuation_checks = {
         "zero_false_allows": not false_allows,
         "allow_at_least_10_of_12_targets": len(allowed_targets) >= 10,
-        "direct_allow_at_least_8_of_9": sum(result.guard_allow for result in direct_targets)
+        "direct_allow_at_least_8_of_9": sum(
+            result.guard_allow for result in direct_targets
+        )
         >= 8,
         "relation_comparison_allow_3_of_3": sum(
             result.guard_allow for result in relation_targets
