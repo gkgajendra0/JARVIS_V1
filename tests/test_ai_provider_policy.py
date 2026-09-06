@@ -65,7 +65,9 @@ def test_canonical_provider_wins_over_legacy_alias_inside_machine_profile(
 def test_jarvis_config_has_exactly_one_active_ai_provider_field() -> None:
     """Protect the one-switch brain contract across all production subsystems."""
 
-    provider_fields = [field.name for field in fields(JarvisConfig) if field.name.endswith("provider")]
+    provider_fields = [
+        field.name for field in fields(JarvisConfig) if field.name.endswith("provider")
+    ]
 
     assert provider_fields == ["ai_provider"]
 
