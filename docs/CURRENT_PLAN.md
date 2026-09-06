@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — V1/V2 RELEASE-CONFIDENCE ARCHITECTURES REJECTED — TOP-10 QWEN RETRIEVAL DEVELOPMENT RESULT PASSED — TASK-MATCHED ANSWERABILITY VERIFIER BAKE-OFF NEXT — PHASE 4.5E BLOCKED**
+**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — TOP-10 QWEN DEVELOPMENT RETRIEVAL PASSED — QA + GLICLASS REJECTED — GEMINI BATCH-120 RESULT HAS A PRODUCTION-SHAPE CONFOUND — SINGLE-INSTANCE BOUNDARY DIAGNOSTIC NEXT — PHASE 4.5E BLOCKED**
 
 This file is the operational source of truth. Detailed measurements belong in `docs/research/`; only fresh accepted architecture belongs in ADRs / `docs/CURRENT_ARCHITECTURE.md`.
 
@@ -242,89 +242,90 @@ This development result isolates the V2 ranking problem:
 
 ---
 
-## Active 4.5D development direction — ANSWERABILITY VERIFIER
+## Active 4.5D development direction — GEMINI SINGLE-INSTANCE BOUNDARY DIAGNOSTIC
 
-V2 is fully exposed and may now be used only for development architecture selection. **Do not create V3 yet.**
+V2 is fully exposed and may be used only for development architecture selection. **Do not create V3 yet.**
 
-### Research conclusion
+### Task-matched QA verifier — REJECTED
 
-The remaining blocker is not retrieval ranking; it is deciding whether the selected memory **actually contains enough information to answer the question**.
+The multilingual SQuAD2 answerability approach was evaluated after the top-10 retrieval diagnosis. It did not clear the frozen development transfer floors and is not the selected final verifier. Preserve its method/result as development evidence; do not tune V2 validation until it passes.
 
-Generic relevance rerankers are not the best first tool for this boundary. Research selected a task-matched multilingual extractive-QA model trained with explicit SQuAD2 no-answer examples:
+### GLiClass vs Gemini semantic-judge bake-off — COMPLETED / DEVELOPMENT-ONLY
 
-`deepset/xlm-roberta-base-squad2-distilled`
+Durable result:
 
-Immutable revision:
+- `docs/research/STEP_4_PHASE_4_5D_SEMANTIC_JUDGE_BAKEOFF_RESULT.md`.
 
-`c1bbfe57bc3335c37960a48c5628ba26d7e9e3b7`
+Owner-run exact SHA:
 
-Why it is selected first:
+`cdbc89a51728c8134e5182980b6885f2d2ccfa91`
 
-- accepts question + candidate context directly;
-- SQuAD2 explicitly trains answerable versus unanswerable context/question pairs;
-- provides a direct null-vs-best-answer-span signal rather than generic topical relevance;
-- multilingual XLM-R architecture;
-- approximately 0.3B parameters;
-- MIT license;
-- fits the local-model / owner-GPU constraints without changing Torch/Torchvision.
+The same exposed V2 corpus was rerun with Qwen candidate depth 10. Positive ranking reproduced perfectly:
 
-Durable method:
+- overall `900/900` Top-1;
+- calibration `600/600` Top-1;
+- validation `300/300` Top-1.
 
-- `docs/research/STEP_4_PHASE_4_5D_ANSWERABILITY_VERIFIER_METHOD.md`.
+GLiClass:
 
-Development pipeline under test:
+- no empirical calibration margin threshold reached the frozen `0.95` precision target;
+- selected threshold `null`;
+- validation release recall `0`;
+- rejected for the current semantic-sufficiency role.
 
-```text
-canonical eligibility
- -> FTS5 lexical + Qwen dense
- -> equal-weight RRF
- -> top 10
- -> Qwen3-Reranker-0.6B + frozen JARVIS instruction
- -> selected Top-1 memory
- -> multilingual SQuAD2 answerability verifier
- -> best-span score vs CLS/null score
- -> answerability margin
-```
+Gemini 3.5 Flash-Lite under the quota-compatible **120-case-per-request** development shape:
 
-Answerability margin:
+- validation TP `300`;
+- validation FP `125`;
+- validation precision `0.705882`;
+- validation positive release recall `1.0`;
+- every false release was in exactly five deterministic boundary groups: `25 historical + 25 forgotten + 25 local_only + 25 secret + 25 untrusted`;
+- the remaining `175` ordinary semantic validation abstentions therefore had zero false releases.
 
-```text
-null_score = start_logit[CLS] + end_logit[CLS]
-best_span_score = best legal context span start_logit + end_logit
-answerability_margin = best_span_score - null_score
-```
+The original bake-off correctly reports `PROMISING: []`: the batch-120 policy fails the frozen precision/security gates and cannot be frozen for V3.
 
-The extracted span is diagnostic evidence only. It does not establish or mutate canonical truth.
+### Why Gemini is not rejected yet
 
-### Development bake-off rules
+Production JARVIS will ask the semantic verifier to judge **one live query/document pair at a time**, not 120 indepent cases in one generation.
+
+Research refreshed after the owner result:
+
+- ACL 2026 reports multi-instance LLM degradation beginning around `20–100` instances and larger collapse at higher instance counts, with instance count exerting a stronger effect than context length in that study;
+- Google structured-output documentation supports schema-constrained classification but explicitly warns that syntactically valid structured output does not guarantee semantically correct values.
+
+Therefore the completed 120-instance Gemini result has a material external-validity confound relative to the intended single-instance production role. This does **not** prove batching caused the boundary failures. It just means Gemini must receive one bounded production-shape diagnostic before rejection or V3 design.
+
+### Frozen next diagnostic
 
 Harness:
 
-- `tools/research/step4_phase45d_answerability_verifier_bakeoff.py`.
+- `tools/research/step4_phase45d_gemini_single_instance_boundary_diagnostic.py`.
 
 Output:
 
-- `.step4-phase45d-v2-answerability-verifier-bakeoff-v1.json`.
+- `.step4-phase45d-v2-gemini-single-instance-boundary-diagnostic-v1.json`.
 
-The harness:
+The diagnostic uses exactly 15 already-exposed V2 validation cases:
 
-- reruns all 1,800 exposed V2 queries with Qwen candidate window 10;
-- scores only the selected Top-1 memory with the immutable QA model;
-- chooses an empirical answerability threshold on the exposed V2 calibration partition at precision >= `0.95`, maximizing recall;
-- applies that unchanged threshold to the different V2 validation wording;
-- reports ROC-AUC/AP, safe/unsafe score distributions, validation precision/recall, EN/HI/Hinglish recall, false-release categories, boundary releases, latency and peak CUDA;
-- is development-only and cannot close 4.5D.
+- `historical`, `forgotten`, `local_only`, `secret`, `untrusted`;
+- each in EN, HI and Hinglish;
+- lexicographically first case in every fixed category/language cell;
+- every selected source case must have been RELEASE in the batch-120 artifact;
+- same canonical lifecycle + `RetrievalEligibility.cloud_context()` + Qwen 256d + top-10 + frozen Qwen reranker;
+- selected Top-1 memory ID must reproduce the source artifact;
+- Gemini receives exactly one query/document pair per request;
+- same Gemini model and semantic-sufficiency instruction;
+- no GLiClass;
+- no threshold fitting;
+- development-only, not acceptance.
 
-Development selection floors before authorizing a fresh V3 design:
+Interpretation is frozen before the owner run:
 
-1. validation precision >= `0.95`;
-2. validation positive release recall >= `0.40`;
-3. EN recall >= `0.25`;
-4. HI recall >= `0.25`;
-5. Hinglish recall >= `0.25`;
-6. zero released historical / forgotten / local-only / secret / untrusted boundary cases.
+- any RELEASE→ABSTAIN flip proves request-shape sensitivity and prevents treating batch-120 decisions as production-equivalent evidence;
+- zero single-instance releases across all 15 targeted cells supports continuing Gemini as a development candidate but does not itself authorize V3;
+- any remaining single-instance RELEASE is a genuine targeted boundary miss and triggers architecture review, with multilingual NLI/grounding the next research-first fallback.
 
-If the QA answerability verifier fails this transfer test, **do not create V3**. Research the next task-matched fallback, with multilingual NLI/grounding preferred before another generic relevance scorer. `BAAI/bge-reranker-v2-m3` remains a useful generic-relevance control, not the automatic next architecture.
+Do not rerun the full 1,800-case Gemini bake-off merely to change batch size.
 
 ---
 
@@ -380,7 +381,7 @@ Do **not** wire semantic retrieval into `ContextAssembler` / Gemini conversation
 6. 4.5A — COMPLETE.
 7. 4.5B — COMPLETE.
 8. 4.5C — COMPLETE.
-9. **4.5D — ACTIVE: top-10 retrieval diagnosis complete; task-matched multilingual answerability verifier development bake-off next.**
+9. **4.5D — ACTIVE: top-10 retrieval complete; QA/GLiClass rejected; Gemini single-instance boundary diagnostic next.**
 10. **4.5E — BLOCKED.**
 11. 4.6 — NOT STARTED.
 12. 4.7 — NOT STARTED.
@@ -404,7 +405,7 @@ Do not:
 - rescue the rejected score+margin family;
 - rescue the rejected V2 logistic gate through threshold tuning;
 - treat mMARCO as the accepted final verifier;
-- jump directly to BGE without first evaluating the selected task-matched answerability verifier;
+- jump to BGE or multilingual NLI before resolving the frozen Gemini single-instance production-shape diagnostic;
 - generate V3 before development architecture selection is complete;
 - rerun Qwen vs EmbeddingGemma selection;
 - rerun 4.5C owner compatibility unless contracts change;
@@ -417,8 +418,8 @@ Do not:
 
 ## Immediate Next Action
 
-**PASS THE ANSWERABILITY VERIFIER DEVELOPMENT HARNESS THROUGH CI ON A CLEAN EXACT SHA, THEN RUN IT ONCE ON THE OWNER RTX.**
+**PASS THE 15-CASE GEMINI SINGLE-INSTANCE BOUNDARY DIAGNOSTIC THROUGH CI ON A CLEAN EXACT SHA, THEN RUN IT ONCE ON THE OWNER RTX.**
 
-If the task-matched QA verifier transfers across the exposed V2 calibration/validation wording shift and clears every development selection floor, freeze that architecture and design a completely fresh V3 acceptance. If it fails, preserve the evidence and research the multilingual NLI/grounding fallback before creating V3.
+Use the existing completed `.step4-phase45d-v2-semantic-judge-bakeoff-v1.json` as the source artifact. Do not overwrite or rerun that full bake-off. Interpret the single-instance result using the preregistered rules above before deciding whether Gemini remains a development candidate or whether multilingual NLI/grounding research is required.
 
-Phase 4.5E remains blocked.
+V3 remains unauthorized. Phase 4.5E remains blocked.
