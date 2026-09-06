@@ -6,9 +6,9 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — V1 SCORE/MARGIN FAMILY REJECTED — INDEPENDENT VERIFIER SELECTED — FINAL V2 LEARNED-CONFIDENCE ACCEPTANCE IMPLEMENTED / CI + OWNER RUN NEXT — PHASE 4.5E BLOCKED**
+**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — V1 AND V2 RELEASE-CONFIDENCE ARCHITECTURES REJECTED — RETRIEVAL-DEPTH + SEMANTIC-VERIFIER DEVELOPMENT DIAGNOSIS NEXT — PHASE 4.5E BLOCKED**
 
-This file is the operational source of truth for current work. Detailed measured evidence belongs in `docs/research/`; accepted architecture belongs in ADRs and `docs/CURRENT_ARCHITECTURE.md` only after acceptance.
+This file is the operational source of truth. Detailed measured evidence belongs in `docs/research/`; accepted architecture belongs in ADRs / `docs/CURRENT_ARCHITECTURE.md` only after acceptance.
 
 ---
 
@@ -16,357 +16,307 @@ This file is the operational source of truth for current work. Detailed measured
 
 - not every sentence becomes durable memory;
 - explicit current owner input outranks passive inference, old memory, or stale preference;
-- durable memory carries provenance + time/freshness/verification metadata;
+- durable memory carries provenance + freshness/verification metadata;
 - correction, historical change, retraction, and forgetting are distinct;
 - session context is separate from durable memory;
 - provider history/caches are not canonical memory;
-- transient emotional interpretations stay transient by default;
 - secrets are never normal durable memory/model context;
 - models do not write persistent memory directly;
 - `MemoryService` is the sole durable mutation facade;
 - `ContextAssembler` is the sole Step-4 model-context release owner;
-- retrieval ranks eligible canonical records and never establishes truth;
-- canonical eligibility/security filtering occurs before ranking and remains independent of learned confidence;
-- raw full transcripts/provider payloads are not archived merely because available;
+- retrieval ranks already-eligible canonical records and never establishes truth;
+- canonical eligibility/security filtering occurs before ranking and is independent of learned confidence;
 - current runtime/config/repository truth outranks learned self-memory;
-- one active cloud-AI provider/account owns production cloud intelligence at a time;
-- current production cloud provider is Gemini through `JARVIS_AI_PROVIDER=gemini`;
-- local models do not create a second cloud-provider dependency;
-- Step 4 grants no autonomous repair, code modification, deployment, or authority expansion.
+- production cloud intelligence remains under the one-provider contract (`JARVIS_AI_PROVIDER=gemini`);
+- Step 4 grants no autonomous repair, deployment, or authority expansion.
 
 ---
 
-## Accepted Step-4 technology
+## Accepted Step-4 foundation
 
 ### Canonical memory + security
 
 - SQLCipher 4.17.0 Community / SQLite 3.53.3 canonical relational store;
-- FTS5 derived lexical index with secure-delete behavior;
-- JARVIS-owned bitemporal/current lifecycle;
-- random 32-byte SQLCipher key protected by Windows DPAPI user scope + purpose binding;
+- FTS5 derived lexical index;
+- JARVIS-owned temporal/current lifecycle;
+- random SQLCipher key protected by Windows DPAPI user scope + purpose binding;
 - no graph/vector service as canonical truth owner.
-
-### Active cloud-AI provider
-
-ADR-015 establishes one canonical production provider through `JARVIS_AI_PROVIDER` / `JarvisConfig.ai_provider`.
-
-Current active provider: **Gemini**.
-
-Voice, scripted cloud TTS, structured memory extraction and future cloud-reasoning/tool workloads remain inside that provider family/account.
 
 ### Phase 4.4 structured extraction
 
 Selected model: **`gemini-3.5-flash-lite`**.
 
-Owner acceptance proved session-local candidate quarantine, physical disposal on session close, no implicit durable write, no cross-session resurrection, and stable Step-3 audio/vision behavior.
+Owner acceptance proved session-local candidate quarantine, disposal on session close, no implicit durable write, no cross-session resurrection, and preserved Step-3 audio/vision behavior.
 
-### Phase 4.5 retrieval stack
+### Phase 4.5 model family accepted through 4.5C
 
 **Embedding:** `Qwen/Qwen3-Embedding-0.6B`
 
-- immutable revision `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`;
-- normalized 256-dimensional output;
-- exact frozen JARVIS memory retrieval instruction;
-- local exact cosine initially.
+- revision `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`;
+- current canonical embedding contract: normalized 256d;
+- frozen JARVIS retrieval instruction;
+- exact local cosine.
 
 **First stage:**
 
 - eligible-current SQLite FTS5 lexical rank;
 - exact Qwen dense rank;
-- equal-weight RRF, `k=60`, lexical window `10`;
+- equal-weight RRF, `k=60`;
+- lexical window `10`;
 - no ANN/vector extension until scale evidence requires it.
 
 **Reranker:** `Qwen/Qwen3-Reranker-0.6B`
 
-- immutable revision `e61197ed45024b0ed8a2d74b80b4d909f1255473`;
-- top 3 candidates;
+- revision `e61197ed45024b0ed8a2d74b80b4d909f1255473`;
+- frozen JARVIS memory instruction;
 - BF16 owner path;
-- deterministic tie handling;
-- frozen JARVIS memory-specific instruction:
+- deterministic tie handling.
+
+Frozen instruction:
 
 > Judge whether the memory Document directly and sufficiently answers the JARVIS memory Query using only facts stated in the Document. Answer yes only when the Document supports the specific fact or relation requested; answer no when it is merely related, missing the requested detail, contradictory, negated, or otherwise does not answer the Query.
 
-Owner selection evidence:
+Owner selection evidence before 4.5D:
 
 - Qwen hybrid Recall@1 `0.9412`, Recall@3 `1.0000`, MRR `0.9608` on the model-selection corpus;
-- EmbeddingGemma rejected after real hybrid regression;
-- owner RTX compatibility preserved Torch `2.13.0+cu132`, Torchvision `0.28.0+cu132`, Step-3 vision imports, and simultaneous Qwen embedding+reranker operation;
+- EmbeddingGemma rejected after hybrid regression;
+- accepted owner Torch `2.13.0+cu132`, Torchvision `0.28.0+cu132`;
+- simultaneous Qwen embedding/reranker operation passed on RTX 5060 Ti 8GB;
 - combined Qwen peak CUDA allocation approximately `2.46 GB`.
 
-Do not rerun embedding selection or Phase 4.5C compatibility unless those frozen contracts change.
+Do not rerun the old embedding bake-off or Phase 4.5C compatibility unless model/dependency contracts materially change.
 
 ---
 
 ## Phase status
 
-### Phase 4.0A — COMPLETE
+### 4.0A — COMPLETE
 
 Stable conversation provenance and neutral DPAPI security boundary accepted.
 
-### Phase 4.1 — COMPLETE
+### 4.1 — COMPLETE
 
 Encrypted canonical memory kernel, temporal lifecycle, FTS5 synchronization/rebuild, secure physical forget and exact current queries accepted.
 
-### Phase 4.2 — COMPLETE
+### 4.2 — COMPLETE
 
 Bounded `LiveContext` + deterministic `ContextAssembler` accepted. Provider history remains non-canonical.
 
-### Phase 4.3 — COMPLETE
+### 4.3 — COMPLETE
 
 Governed explicit `remember / inspect / correct / forget` accepted through the production voice path. Do not repeat owner acceptance.
 
-### Phase 4.4 — COMPLETE
+### 4.4 — COMPLETE
 
 Structured extraction + session-local candidate quarantine accepted. Implicit auto-admission remains disabled. Do not repeat owner acceptance.
 
-### Phase 4.5A — COMPLETE
+### 4.5A — COMPLETE
 
-Encrypted derived-vector lifecycle accepted:
+Encrypted derived-vector lifecycle accepted with canonical FK/cascade lineage, immutable model metadata, stale-vector failure and secure derived-vector deletion.
 
-- SQLCipher-derived vectors;
-- canonical FK / `ON DELETE CASCADE`;
-- immutable model/revision/dimension/dtype/byte-order/fingerprint lineage;
-- stale vectors fail closed;
-- canonical forget physically removes derived vectors.
+### 4.5B — COMPLETE
 
-### Phase 4.5B — COMPLETE
+Production lexical+dense+RRF retrieval core accepted with eligibility before ranking, safe FTS grammar, exact cosine, deterministic ordering and no vector DB at current scale.
 
-Production lexical + dense + RRF retrieval core accepted:
-
-- eligibility before ranking;
-- safe FTS5 MATCH construction;
-- exact dense cosine;
-- stale-vector exclusion;
-- equal RRF;
-- deterministic ordering;
-- no vector DB required at current measured scale.
-
-### Phase 4.5C — COMPLETE
+### 4.5C — COMPLETE
 
 Lazy revision-pinned Qwen embedding/reranker adapters and owner RTX coexistence accepted. Normal CI does not load GPU models.
 
-### Phase 4.5D — ACTIVE
+### 4.5D — ACTIVE
 
-Goal: decide whether an **already-eligible canonical memory** may be released as query evidence. The confidence gate has no mutation or truth authority.
+Goal: decide whether an **already-eligible canonical memory** may be released as query evidence. This gate has no mutation or truth authority.
 
-#### 4.5D V1 raw reranker threshold — REJECTED
+#### V1 raw score/margin — REJECTED
 
-The first 64-case calibration/validation experiment achieved zero false releases but only approximately `18.75%` held-out positive recall and `0%` Hindi positive recall. The corpus is exposed/retired and development-only.
+The first 64-case experiment produced zero false releases but only about `18.75%` held-out positive recall and `0%` Hindi recall. Exposed/retired.
 
-#### Frozen reranker instruction bake-off — COMPLETE
-
-On retired development data, the JARVIS-specific reranker instruction improved confidence quality without ranking/language regression and became the production default.
-
-#### Fresh 320-case acceptance V1 — EXPOSED / RETIRED / NOT ACCEPTED
+#### Fresh 320-case V1 — REJECTED / RETIRED
 
 Retrieval itself was strong:
 
-- validation positive top-1 `63/64 = 98.44%`;
-- validation Recall@3 `64/64 = 100%`.
+- validation Top-1 `63/64 = 98.44%`;
+- Recall@3 `64/64 = 100%`.
 
-The blocker was release confidence, not retrieval ranking.
+The 30-policy `reranker_score AND margin` family failed MAPIE/Holm. Corrected SFST diagnosis showed `0/30` policies valid even as individual alpha-0.05 tests. Best calibration rule produced `18 TP / 1 FP`, precision `0.947368`, recall `0.1875`.
 
-The original 30-policy `reranker_score AND margin` MAPIE/Holm procedure found zero valid policies. Corrected SFST diagnosis showed **0/30 policies were valid even as individual 0.05 tests**. Best calibration rule (`score=6`, `margin=12`) produced `18 TP / 1 FP`, precision `0.947368`, recall `0.1875`.
+Therefore the rectangular score+margin family is permanently rejected.
 
-Therefore the two-feature rectangular rule family is permanently rejected. Do not rescue it through different multiple-testing correction, more tuning, or reuse of the exposed corpus.
+#### Learned seven-feature diagnostic — INSUFFICIENT
 
-#### Existing-evidence learned diagnostic — COMPLETE / INSUFFICIENT
+Retired 320-case five-fold OOF `StandardScaler + LogisticRegression`:
 
-Development-only five-fold stratified OOF `StandardScaler + LogisticRegression` result:
+- ROC-AUC `0.892574`;
+- AP `0.885079`;
+- best recall at empirical precision >= 0.95: `0.295597`.
 
-- score+margin: ROC-AUC `0.887769`, AP `0.876022`, best recall `0.207547` at empirical precision >= `0.95`;
-- full seven retrieval features: ROC-AUC `0.892574`, AP `0.885079`, best recall `0.295597` at empirical precision >= `0.95`.
+Below the frozen `0.40` development recall floor.
 
-Seven existing signals improve discrimination but fail the frozen `0.40` development recall floor.
+#### mMARCO independent verifier — PROMISING ON OLD DEVELOPMENT, REJECTED AS FINAL V2 VERIFIER
 
-#### Independent verifier — SELECTED DEVELOPMENT SIGNAL
-
-Selected lightweight verifier:
+Model:
 
 `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`
 
-- immutable revision `1427fd652930e4ba29e8149678df786c240d8825`;
-- Apache-2.0;
-- multilingual mMARCO query/passage CrossEncoder;
-- Hindi represented in source training data;
-- `trust_remote_code=False`;
-- owner run scoring approximately `1.6153 ms/pair` after model load/cache;
-- peak verifier CUDA allocation approximately `531 MB`.
+Revision:
 
-Owner development-only result on the exposed 320 cases:
+`1427fd652930e4ba29e8149678df786c240d8825`
 
-- independent verifier alone: recall `0.415094` at empirical precision `0.956522`;
-- full retrieval evidence + verifier: ROC-AUC `0.895972`, AP `0.910776`;
-- combined best development point: `87 TP / 4 FP`, precision `0.956044`, positive recall `0.547170`;
-- EN recall `0.462963`;
-- HI recall `0.769231`;
-- Hinglish recall `0.396226`.
+On the retired 320 cases it improved the combined development point to:
 
-This clears the pre-registered development recall floors and is the strongest architecture tested so far. It is **promising, not accepted**. `BAAI/bge-reranker-v2-m3` remains deferred.
+- `87 TP / 4 FP`;
+- precision `0.956044`;
+- recall `0.547170`;
+- EN `0.462963`;
+- HI `0.769231`;
+- Hinglish `0.396226`.
+
+This justified a fresh V2 acceptance experiment but did not itself establish acceptance.
+
+#### Final V2 acceptance — **FAIL_ACCEPTANCE / RETIRED**
+
+Owner run SHA:
+
+`7d9bc60bb37953ba1d6b45c7b46a136b1397203f`
+
+Exact SHA passed Ruff, pytest, Windows DPAPI and Windows Hello CI.
+
+Owner V2 evidence:
+
+- `.step4-phase45d-final-v2-acceptance.json`;
+- SHA-256 `bb718e2a7df71ea8b05b90e45b3aa0718643c1cf94323a03ae47a7a33d97bf0a`;
+- run once only; do not overwrite/rerun for acceptance.
 
 Durable result:
 
-- `docs/research/STEP_4_PHASE_4_5D_INDEPENDENT_VERIFIER_RESULT.md`.
+- `docs/research/STEP_4_PHASE_4_5D_FINAL_V2_RESULT.md`.
 
-#### Final V2 confidence architecture — FROZEN / IMPLEMENTED
+V2 corpus:
 
-Candidate pipeline under acceptance:
-
-```text
-canonical eligibility
- -> FTS5 lexical + Qwen dense
- -> equal-weight RRF
- -> top 3
- -> Qwen reranker + frozen JARVIS instruction
- -> returned top candidate
- -> mMARCO independent verifier
- -> frozen StandardScaler + low-capacity LogisticRegression confidence probability
- -> MAPIE split-fixed-sequence precision control
- -> release / abstain
-```
-
-Frozen eight features:
-
-1. reranker score;
-2. reranker margin;
-3. dense cosine;
-4. fused RRF score;
-5. lexical-hit indicator;
-6. reciprocal lexical rank;
-7. reciprocal dense rank;
-8. independent verifier score.
-
-Excluded from the learned gate:
-
-- language;
-- category/case ID;
-- expected-memory ID;
-- validation-only metadata.
-
-Frozen estimator:
-
-```text
-StandardScaler
- -> LogisticRegression(
-      solver="lbfgs",
-      max_iter=2000,
-      random_state=45
-    )
-```
-
-Training/order-learning separation:
-
-- exposed retired 320 cases may fit this already-selected low-capacity model;
-- Qwen retrieval is **not rerun** on retired cases;
-- the frozen verifier may rescore retired query/top-document pairs only to reconstruct its selected eighth feature;
-- the retired development set learns MAPIE SFST hypothesis order with `binary=True`;
-- new V2 calibration is statistically independent from order learning;
-- V2 validation labels never influence fitting, feature selection, threshold ordering or threshold calibration.
-
-MAPIE research controller:
-
-- version `1.5.0`;
-- risk `precision` / PPV;
-- target precision `0.95`;
-- confidence `0.95`;
-- FWER `split_fixed_sequence`;
-- best valid threshold selected by recall;
-- no valid threshold = fail closed.
-
-Why SFST: precision is non-monotonic in the threshold; MAPIE's split fixed-sequence method learns a candidate order on independent data and tests that fixed sequence on calibration data without the old unordered 30-way Holm burden.
-
-Method record:
-
-- `docs/research/STEP_4_PHASE_4_5D_FINAL_V2_METHOD.md`.
-
-#### Fresh V2 corpus — FROZEN / IMPLEMENTED
-
-New deterministic synthetic corpus:
-
-- total `1,800` queries;
+- 1,800 total queries;
 - calibration `600 release + 600 abstain`;
 - validation `300 release + 300 abstain`;
-- validation release queries: exactly `100 EN + 100 HI + 100 Hinglish`;
-- no exact-query reuse from retired 64-case or 320-case corpora;
-- fixed abstain categories:
-  - absent;
-  - near miss;
-  - ambiguous;
-  - adversarial lexical overlap;
-  - negation;
-  - relation mismatch;
-  - unsupported source/detail;
-  - historical;
-  - forgotten;
-  - local-only;
-  - secret;
-  - untrusted;
-- deterministic payload SHA-256;
-- duplicate case/query text fails closed;
-- no real credentials/secrets.
+- validation positives exactly 100 EN + 100 HI + 100 Hinglish;
+- validation labels were not used to tune V2.
 
-Sample-size rationale:
+V2 ranking:
 
-At precision target `0.95` and one-sided alpha `0.05`, exact-binomial scale intuition requires approximately:
+Calibration:
 
-- 59 released examples for zero observed errors;
-- 93 for one error;
-- 124 for two;
-- 153 for three;
-- 181 for four;
-- 208 for five;
-- 234 for six.
+- Top-1 `533/600 = 0.888333`;
+- Recall@3 `533/600 = 0.888333`.
 
-These counts are explanatory only; MAPIE remains the acceptance controller. With `600` positive calibration cases, the `0.40` recall floor corresponds to `240` true-positive releases, intentionally correcting the old 96-positive underpowered design.
+Validation:
 
-Generator:
+- Top-1 `266/300 = 0.886667`;
+- Recall@3 `266/300 = 0.886667`.
 
-- `tools/research/step4_phase45d_final_v2_cases.py`.
+Validation language ranking:
 
-One-shot harness:
+- EN `97/100 = 0.97`;
+- HI `73/100 = 0.73`;
+- Hinglish `96/100 = 0.96`.
 
-- `tools/research/step4_phase45d_final_v2_acceptance.py`.
+Critical interpretation: Top-1 and Recall@3 are exactly identical in both splits. Whenever the correct memory entered the three-candidate set, Qwen reranked it to #1. Every ranking miss is therefore a first-stage/candidate-window miss, not a reranker ordering miss inside the available three.
 
-New evidence file:
+Validation Hindi relation-level weak points:
 
-- `.step4-phase45d-final-v2-acceptance.json`.
+- region `0/10`;
+- sync `3/10`;
+- shell `5/10`;
+- editor `7/10`;
+- most other Hindi relations `9/10` or `10/10`.
 
-The harness refuses to overwrite an existing V2 evidence file.
+V2 confidence:
 
-#### Frozen V2 validation gates
+- MAPIE valid thresholds: `0`;
+- no preregistered probability threshold from `0.50` to `0.999` achieved empirical precision `0.95` on calibration;
+- at threshold `0.999`: `76 TP / 29 FP`, precision `0.723810`, positive recall `0.126667`;
+- best empirical precision among preregistered thresholds was only about `0.736`.
 
-V2 passes only if all are true:
+The frozen logistic model learned a negative reranker-margin coefficient (`-2.1205555`), which made small-margin ambiguous/relation-mismatch cases pathologically high-confidence on V2. At probability >= `0.999`, the 29 calibration false positives were dominated by relation mismatch (19), ambiguous (9) and near miss (1).
 
-1. MAPIE finds a statistically valid threshold at precision target `0.95`, confidence `0.95`;
-2. validation positive top-1 retrieval accuracy >= `0.85`;
-3. validation positive Recall@3 >= `0.90`;
-4. observed validation false releases = `0`;
-5. overall positive release recall >= `0.40`;
-6. English positive release recall >= `0.25`;
-7. Hindi positive release recall >= `0.25`;
-8. Hinglish positive release recall >= `0.25`;
-9. zero released historical/forgotten/local-only/secret/untrusted boundary query;
-10. no validation-driven retuning.
+Therefore V2 failure is **not** merely MAPIE power/sample-size failure. The frozen confidence architecture itself did not transfer.
 
-A V2 failure rejects this frozen architecture. It does not authorize editing the system and rerunning the same V2 validation corpus.
+mMARCO is also no longer the selected final verifier. It is an IR passage-ranking model; V2 demonstrated that retrieval relevance is not equivalent to JARVIS's stricter semantic-sufficiency requirement.
 
-Synthetic acceptance cannot prove future owner traffic is exchangeable. Later operational shadow-labelled risk/drift monitoring remains mandatory before making strong real-world statistical claims.
+---
 
-### Phase 4.5E — BLOCKED BY OWNER UNTIL 4.5D COMPLETE
+## Active 4.5D development direction after V2
 
-Do **not** integrate semantic retrieval into `ContextAssembler` / Gemini conversation yet.
+V2 is now exposed and may be used only as retired development evidence. **Do not create V3 yet.**
 
-4.5E may begin only after 4.5D has:
+### 1. Retrieval-depth diagnostic — NEXT
 
-- frozen model/features/protocol;
-- fresh powered calibration;
-- untouched validation;
-- all precision/recall/language/security gates passed;
-- durable owner evidence;
-- docs synchronized;
-- exact owner-run SHA green in CI.
+Research evidence from the standard retrieve→rerank architecture says the efficient retriever should build a substantially wider shortlist before CrossEncoder reranking. The current hard top-3 cut is now directly contradicted by V2 evidence.
 
-### Phases 4.6–4.8 — NOT STARTED
+Keep Qwen 0.6B + 256d unchanged first and measure positive first-stage recall at candidate depths:
+
+- 3;
+- 5;
+- 10;
+- 20;
+- 50;
+- 100 when practical.
+
+Then measure Qwen reranked Top-1 for the useful wider depths, broken down by EN/HI/Hinglish and relation.
+
+This is a development bake-off on exposed V2, **not acceptance**.
+
+### 2. Embedding dimension only if retrieval depth is insufficient
+
+Qwen3-Embedding-0.6B supports Matryoshka dimensions through 1024.
+
+If wider 256d retrieval does not provide adequate recall, compare 256 vs 512 vs 1024 on retired development data. Do not alter the canonical 256d contract before evidence supports it.
+
+### 3. Semantic verifier/confidence redesign
+
+The old mMARCO + frozen logistic gate is rejected.
+
+Now that fresh V2 failed, a BGE bake-off is justified. Start with mature Apache-2.0 multilingual candidates rather than custom training:
+
+- `BAAI/bge-reranker-v2-m3` as the primary independent multilingual candidate;
+- retain Qwen reranker as the accepted ranking baseline;
+- add another verifier only if it provides materially distinct evidence and acceptable licensing/runtime characteristics.
+
+`mixedbread-ai/mxbai-rerank-base-v2` is a possible Apache-2.0 multilingual development comparator if BGE evidence is insufficient.
+
+Do not treat raw relevance score as semantic truth. Any final gate must distinguish exact/direct answerability from related-but-insufficient documents, especially relation mismatch, ambiguity, near miss and unsupported detail.
+
+Any learned confidence estimator must be trained on exposed development data only, and probability calibration/risk calibration must remain statistically separated from model fitting.
+
+### 4. Fresh V3 only after architecture selection
+
+After development evidence selects and freezes a materially better architecture:
+
+- generate completely new calibration/validation data;
+- ensure broader query paraphrase/template diversity before the split;
+- freeze model revisions/features/protocol first;
+- fit only on retired development data;
+- use fresh calibration for risk control;
+- expose fresh validation only once;
+- validation may reject but never tune the system.
+
+Frozen acceptance principles remain:
+
+- precision target `0.95`;
+- confidence `0.95`;
+- overall positive release recall >= `0.40`;
+- each EN/HI/Hinglish positive release recall >= `0.25`;
+- strong retrieval ranking gates;
+- zero security-boundary release;
+- no validation-driven retuning;
+- synthetic acceptance does not establish exchangeability with future owner traffic;
+- later shadow-labelled operational monitoring remains required.
+
+---
+
+## Phase 4.5E — BLOCKED
+
+Do **not** wire semantic retrieval into `ContextAssembler` / Gemini conversation.
+
+4.5E may begin only after 4.5D has a fresh accepted architecture, durable owner evidence, synchronized docs and a green exact owner-run SHA.
+
+### Later phases — NOT STARTED
 
 - 4.6 episodic/reflection memory;
 - 4.7 JARVIS self-knowledge;
@@ -384,7 +334,7 @@ Do **not** integrate semantic retrieval into `ContextAssembler` / Gemini convers
 6. 4.5A — COMPLETE.
 7. 4.5B — COMPLETE.
 8. 4.5C — COMPLETE.
-9. **4.5D — ACTIVE: V2 confidence acceptance implemented; exact SHA must pass CI, then one owner RTX V2 run.**
+9. **4.5D — ACTIVE: V2 rejected; retrieval-depth and semantic-verifier development bake-off next.**
 10. **4.5E — BLOCKED.**
 11. 4.6 — NOT STARTED.
 12. 4.7 — NOT STARTED.
@@ -396,28 +346,28 @@ Do **not** integrate semantic retrieval into `ContextAssembler` / Gemini convers
 
 Do not:
 
-- start Phase 4.5E;
-- wire semantic retrieval into Gemini conversation;
-- lower the `0.95` precision or `0.95` confidence targets to obtain a pass;
-- lower the `0.40` overall or `0.25` language recall floors to obtain a pass;
-- reuse either exposed 4.5D corpus for acceptance;
-- rerun the Qwen/EmbeddingGemma embedding bake-off;
-- rerun Phase 4.5C owner compatibility;
-- revisit the rejected score+margin family or spend more effort on Holm/SFST for that family;
-- benchmark BGE unless the lightweight V2 architecture genuinely fails fresh acceptance and new research justifies it;
+- rerun or overwrite V2 acceptance evidence;
+- reuse V2 as acceptance evidence;
+- start 4.5E;
+- wire retrieval into Gemini conversation;
+- lower `0.95` precision or `0.95` confidence to obtain a pass;
+- lower overall `0.40` or language `0.25` recall floors;
+- rescue the rejected score+margin family;
+- rescue the rejected V2 logistic threshold by threshold tuning;
+- treat mMARCO as the accepted final verifier;
+- rerun Qwen vs EmbeddingGemma selection;
+- rerun 4.5C owner compatibility unless contracts change;
 - change Qwen revisions or Torch/Torchvision casually;
-- disturb Step-3 audio/vision architecture;
-- weaken forgotten/local-only/secret/untrusted eligibility filters;
+- disturb accepted Step-3 audio/vision architecture;
+- weaken historical/forgotten/local-only/secret/untrusted eligibility filters;
 - let learned confidence create, modify, resurrect or establish canonical truth.
 
 ---
 
 ## Immediate Next Action
 
-**WAIT FOR THE EXACT CURRENT V2 IMPLEMENTATION SHA TO PASS CI; THEN RUN THE NEW V2 OWNER RTX ACCEPTANCE ONCE.**
+**IMPLEMENT A DEVELOPMENT-ONLY V2 RETRIEVAL-DEPTH DIAGNOSTIC ON THE CURRENT 256D QWEN STACK, PASS CI, THEN RUN IT ON THE OWNER RTX.**
 
-The owner run must use the accepted Windows `.venv`, current Torch/Torchvision stack, the existing retired `.step4-phase45d-final-acceptance.json` only as development input, and the new V2 harness.
+Only if wider retrieval depth is insufficient should the next diagnostic alter embedding dimension.
 
-A `PASS` or `FAIL_ACCEPTANCE` V2 artifact is valid evidence. Do not overwrite or rerun it to chase a pass.
-
-Do not begin Phase 4.5E afterward unless Phase 4.5D actually passes and closure documentation/CI are complete.
+In parallel, prepare the research harness for a stricter multilingual semantic-verifier bake-off beginning with BGE reranker v2-m3. Do not generate fresh V3 acceptance data until these development questions are resolved.
