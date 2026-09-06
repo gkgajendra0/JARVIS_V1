@@ -51,7 +51,9 @@ This provider pin is acceptance of the current adapter behavior, not a second pr
 
 ## Fresh corpus
 
-The corpus must be committed and hash-frozen before the owner run.
+The committed frozen corpus SHA-256 is:
+
+`69666a37d436828b1d65827852f9e43d524253608209275205c41a36f8accadf`
 
 Exactly **255 fresh queries**:
 
@@ -78,7 +80,7 @@ Exactly 5 fresh queries per category per language for each of these 11 categorie
 10. secret-prohibited
 11. untrusted
 
-All case IDs, subject names, predicate names, values and query texts must be fresh. The generator must fail if any normalized query text exactly overlaps retired V2 or V3 corpora.
+All case IDs, subject names, predicate names, values and query texts must be fresh. The generator fails if any normalized query text exactly overlaps retired V2 or V3 corpora.
 
 No real secrets are used.
 
