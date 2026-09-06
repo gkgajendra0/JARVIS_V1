@@ -71,7 +71,9 @@ def test_depth_contract_is_development_only_and_wider_than_v2() -> None:
         ".step4-phase45d-v2-retrieval-depth-diagnostic-v1.json"
     )
 
-    positives = [item for item in cases.build_payload()["queries"] if item["label"] == "release"]
+    positives = [
+        item for item in cases.build_payload()["queries"] if item["label"] == "release"
+    ]
     assert len(positives) == 900
 
 
@@ -131,7 +133,12 @@ def test_public_case_omits_query_and_timing_payload() -> None:
         diagnostic,
         case_id="case",
         expected_rank=4,
-        top_by_depth={3: "wrong", 5: "memory_expected", 10: "memory_expected", 20: "memory_expected"},
+        top_by_depth={
+            3: "wrong",
+            5: "memory_expected",
+            10: "memory_expected",
+            20: "memory_expected",
+        },
     )
 
     public = diagnostic._public_case(row)
