@@ -166,7 +166,9 @@ def policy_hypothesis(*, subject: str, predicate: str) -> str:
         raise ValueError("predicate must be non-empty")
     relation = _relation_by_predicate().get(predicate.strip())
     if relation is None:
-        raise RuntimeError(f"selected predicate is not a frozen V2 current fact: {predicate}")
+        raise RuntimeError(
+            f"selected predicate is not a frozen V2 current fact: {predicate}"
+        )
     return POLICY_HYPOTHESIS_TEMPLATE.format(
         relation=relation,
         subject=subject.strip(),
@@ -219,7 +221,9 @@ def _score_pairs(
         trust_remote_code=False,
         use_safetensors=True,
     )
-    label2id = {str(key).casefold(): int(value) for key, value in model.config.label2id.items()}
+    label2id = {
+        str(key).casefold(): int(value) for key, value in model.config.label2id.items()
+    }
     expected = {"entailment": 0, "neutral": 1, "contradiction": 2}
     if label2id != expected:
         raise RuntimeError(f"unexpected pinned NLI label mapping: {label2id!r}")
@@ -327,9 +331,7 @@ def summarize(results: list[NliGuardCase]) -> dict[str, Any]:
             "retention": round(retained / len(rows), 6),
         }
 
-    guarded_precision = (
-        len(retained_correct) / len(guarded) if guarded else 1.0
-    )
+    guarded_precision = len(retained_correct) / len(guarded) if guarded else 1.0
     correct_retention = len(retained_correct) / len(source_correct)
     continuation_checks = {
         "zero_surviving_false_releases": not surviving_false,
@@ -471,7 +473,9 @@ def main() -> None:
     source_path = Path(args.source)
     output_path = Path(args.output)
     if not source_path.exists():
-        raise RuntimeError(f"required planner diagnostic artifact is missing: {source_path}")
+        raise RuntimeError(
+            f"required planner diagnostic artifact is missing: {source_path}"
+        )
     if output_path.exists():
         raise RuntimeError(
             f"refusing to overwrite existing development diagnostic: {output_path}"
