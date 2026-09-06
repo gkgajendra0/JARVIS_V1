@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
 import step4_phase45d_feature_gate_diagnostic as feature_gate
 import step4_phase45d_final_cases as final_cases
 
