@@ -19,6 +19,7 @@ from jarvis.memory.query_plan import (
 )
 from jarvis.memory.retrieval import RetrievalEligibility, SemanticRetrievalService
 from jarvis.memory.types import (
+    AuthorityClass,
     FreshnessClass,
     MemorySourceClass,
     Sensitivity,
@@ -55,7 +56,7 @@ def _source(
         source_class=MemorySourceClass.OWNER_EXPLICIT,
         canonical_ref=f"evidence-gate:{source_id}",
         observed_at=BASE,
-        authority_class="owner_explicit",
+        authority_class=AuthorityClass.OWNER_EXPLICIT,
         sensitivity=sensitivity,
         created_at=BASE,
     )
