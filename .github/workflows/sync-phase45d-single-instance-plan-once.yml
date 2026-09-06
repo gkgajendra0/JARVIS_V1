@@ -1,0 +1,167 @@
+name: Sync Phase 4.5D Single Instance Plan Once
+
+on:
+  push:
+    branches:
+      - implementation/step-4-memory-context
+    paths:
+      - .github/workflows/sync-phase45d-single-instance-plan-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: implementation/step-4-memory-context
+          fetch-depth: 0
+
+      - name: Synchronize current Phase 4.5D plan
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("docs/CURRENT_PLAN.md")
+          text = path.read_text(encoding="utf-8")
+
+          old_stage = "**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — V1/V2 RELEASE-CONFIDENCE ARCHITECTURES REJECTED — TOP-10 QWEN RETRIEVAL DEVELOPMENT RESULT PASSED — TASK-MATCHED ANSWERABILITY VERIFIER BAKE-OFF NEXT — PHASE 4.5E BLOCKED**"
+          new_stage = "**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — TOP-10 QWEN DEVELOPMENT RETRIEVAL PASSED — QA + GLICLASS REJECTED — GEMINI BATCH-120 RESULT HAS A PRODUCTION-SHAPE CONFOUND — SINGLE-INSTANCE BOUNDARY DIAGNOSTIC NEXT — PHASE 4.5E BLOCKED**"
+          assert old_stage in text
+          text = text.replace(old_stage, new_stage, 1)
+
+          pattern = re.compile(
+              r"## Active 4\.5D development direction — ANSWERABILITY VERIFIER\n.*?\n---\n\n## Fresh V3 boundary",
+              re.S,
+          )
+          replacement = '''## Active 4.5D development direction — GEMINI SINGLE-INSTANCE BOUNDARY DIAGNOSTIC
+
+V2 is fully exposed and may be used only for development architecture selection. **Do not create V3 yet.**
+
+### Task-matched QA verifier — REJECTED
+
+The multilingual SQuAD2 answerability approach was evaluated after the top-10 retrieval diagnosis. It did not clear the frozen development transfer floors and is not the selected final verifier. Preserve its method/result as development evidence; do not tune V2 validation until it passes.
+
+### GLiClass vs Gemini semantic-judge bake-off — COMPLETED / DEVELOPMENT-ONLY
+
+Durable result:
+
+- `docs/research/STEP_4_PHASE_4_5D_SEMANTIC_JUDGE_BAKEOFF_RESULT.md`.
+
+Owner-run exact SHA:
+
+`cdbc89a51728c8134e5182980b6885f2d2ccfa91`
+
+The same exposed V2 corpus was rerun with Qwen candidate depth 10. Positive ranking reproduced perfectly:
+
+- overall `900/900` Top-1;
+- calibration `600/600` Top-1;
+- validation `300/300` Top-1.
+
+GLiClass:
+
+- no empirical calibration margin threshold reached the frozen `0.95` precision target;
+- selected threshold `null`;
+- validation release recall `0`;
+- rejected for the current semantic-sufficiency role.
+
+Gemini 3.5 Flash-Lite under the quota-compatible **120-case-per-request** development shape:
+
+- validation TP `300`;
+- validation FP `125`;
+- validation precision `0.705882`;
+- validation positive release recall `1.0`;
+- every false release was in exactly five deterministic boundary groups: `25 historical + 25 forgotten + 25 local_only + 25 secret + 25 untrusted`;
+- the remaining `175` ordinary semantic validation abstentions therefore had zero false releases.
+
+The original bake-off correctly reports `PROMISING: []`: the batch-120 policy fails the frozen precision/security gates and cannot be frozen for V3.
+
+### Why Gemini is not rejected yet
+
+Production JARVIS will ask the semantic verifier to judge **one live query/document pair at a time**, not 120 independent cases in one generation.
+
+Research refreshed after the owner result:
+
+- ACL 2026 reports multi-instance LLM degradation beginning around `20–100` instances and larger collapse at higher instance counts, with instance count exerting a stronger effect than context length in that study;
+- Google structured-output documentation supports schema-constrained classification but explicitly warns that syntactically valid structured output does not guarantee semantically correct values.
+
+Therefore the completed 120-instance Gemini result has a material external-validity confound relative to the intended single-instance production role. This does **not** prove batching caused the boundary failures. It just means Gemini must receive one bounded production-shape diagnostic before rejection or V3 design.
+
+### Frozen next diagnostic
+
+Harness:
+
+- `tools/research/step4_phase45d_gemini_single_instance_boundary_diagnostic.py`.
+
+Output:
+
+- `.step4-phase45d-v2-gemini-single-instance-boundary-diagnostic-v1.json`.
+
+The diagnostic uses exactly 15 already-exposed V2 validation cases:
+
+- `historical`, `forgotten`, `local_only`, `secret`, `untrusted`;
+- each in EN, HI and Hinglish;
+- lexicographically first case in every fixed category/language cell;
+- every selected source case must have been RELEASE in the batch-120 artifact;
+- same canonical lifecycle + `RetrievalEligibility.cloud_context()` + Qwen 256d + top-10 + frozen Qwen reranker;
+- selected Top-1 memory ID must reproduce the source artifact;
+- Gemini receives exactly one query/document pair per request;
+- same Gemini model and semantic-sufficiency instruction;
+- no GLiClass;
+- no threshold fitting;
+- development-only, not acceptance.
+
+Interpretation is frozen before the owner run:
+
+- any RELEASE→ABSTAIN flip proves request-shape sensitivity and prevents treating batch-120 decisions as production-equivalent evidence;
+- zero single-instance releases across all 15 targeted cells supports continuing Gemini as a development candidate but does not itself authorize V3;
+- any remaining single-instance RELEASE is a genuine targeted boundary miss and triggers architecture review, with multilingual NLI/grounding the next research-first fallback.
+
+Do not rerun the full 1,800-case Gemini bake-off merely to change batch size.
+
+---
+
+## Fresh V3 boundary'''
+          text, count = pattern.subn(replacement, text, count=1)
+          assert count == 1
+
+          old_order = "9. **4.5D — ACTIVE: top-10 retrieval diagnosis complete; task-matched multilingual answerability verifier development bake-off next.**"
+          new_order = "9. **4.5D — ACTIVE: top-10 retrieval complete; QA/GLiClass rejected; Gemini single-instance boundary diagnostic next.**"
+          assert old_order in text
+          text = text.replace(old_order, new_order, 1)
+
+          old_bge = "- jump directly to BGE without first evaluating the selected task-matched answerability verifier;"
+          new_bge = "- jump to BGE or multilingual NLI before resolving the frozen Gemini single-instance production-shape diagnostic;"
+          assert old_bge in text
+          text = text.replace(old_bge, new_bge, 1)
+
+          immediate_pattern = re.compile(
+              r"## Immediate Next Action\n\n\*\*PASS THE ANSWERABILITY VERIFIER DEVELOPMENT HARNESS THROUGH CI ON A CLEAN EXACT SHA, THEN RUN IT ONCE ON THE OWNER RTX\.\*\*\n\nIf the task-matched QA verifier.*?\n\nPhase 4\.5E remains blocked\.",
+              re.S,
+          )
+          immediate = '''## Immediate Next Action
+
+**PASS THE 15-CASE GEMINI SINGLE-INSTANCE BOUNDARY DIAGNOSTIC THROUGH CI ON A CLEAN EXACT SHA, THEN RUN IT ONCE ON THE OWNER RTX.**
+
+Use the existing completed `.step4-phase45d-v2-semantic-judge-bakeoff-v1.json` as the source artifact. Do not overwrite or rerun that full bake-off. Interpret the single-instance result using the preregistered rules above before deciding whether Gemini remains a development candidate or whether multilingual NLI/grounding research is required.
+
+V3 remains unauthorized. Phase 4.5E remains blocked.'''
+          text, count = immediate_pattern.subn(immediate, text, count=1)
+          assert count == 1
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit synchronized plan
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/CURRENT_PLAN.md
+          git commit -m "Sync Phase 4.5D single-instance diagnostic plan"
+          git push origin HEAD:implementation/step-4-memory-context
