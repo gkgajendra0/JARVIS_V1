@@ -34,6 +34,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import base64
           import re
 
           path = Path("docs/CURRENT_PLAN.md")
@@ -44,95 +45,13 @@ jobs:
           assert old_stage in text
           text = text.replace(old_stage, new_stage, 1)
 
+          section_b64 = "IyMgQWN0aXZlIDQuNUQgZGV2ZWxvcG1lbnQgZGlyZWN0aW9uIOKAlCBHRU1JTkkgU0lOR0xFLUlOU1RBTkNFIENPVkVSQUdFIERJQUdOT1NUSUMKClYyIGlzIGZ1bGx5IGV4cG9zZWQgYW5kIG1heSBiZSB1c2VkIG9ubHkgZm9yIGRldmVsb3BtZW50IGFyY2hpdGVjdHVyZSBzZWxlY3Rpb24uICoqRG8gbm90IGNyZWF0ZSBWMyB5ZXQuKioKCiMjIyBSZWplY3RlZCBkZXZlbG9wbWVudCB2ZXJpZmllcnMKCi0gbU1BUkNPIGdlbmVyaWMgcmVsZXZhbmNlIHZlcmlmaWVyOiByZWplY3RlZCBhcyBmaW5hbCBzZW1hbnRpYy1zdWZmaWNpZW5jeSB2ZXJpZmllciBhZnRlciBWMiB0cmFuc2ZlciBmYWlsdXJlOwotIG11bHRpbGluZ3VhbCBTUXVBRDIgYW5zd2VyYWJpbGl0eSB2ZXJpZmllcjogcmVqZWN0ZWQgYWZ0ZXIgZmFpbGluZyBmcm96ZW4gZGV2ZWxvcG1lbnQgdHJhbnNmZXIgZmxvb3JzOwotIEdMaUNsYXNzIG11bHRpbGluZ3VhbCB6ZXJvLXNob3QgY2xhc3NpZmllcjogbm8gY2FsaWJyYXRpb24gdGhyZXNob2xkIHJlYWNoZWQgdGhlIGZyb3plbiBgMC45NWAgcHJlY2lzaW9uIHRhcmdldC4KCiMjIyBHZW1pbmkgYmF0Y2gtMTIwIHNlbWFudGljLWp1ZGdlIGJha2Utb2ZmIOKAlCBOT1QgUFJPRFVDVElPTi1FUVVJVkFMRU5UCgpEdXJhYmxlIHJlc3VsdDoKCi0gYGRvY3MvcmVzZWFyY2gvU1RFUF80X1BIQVNFXzRfNURfU0VNQU5USUNfSlVER0VfQkFLRU9GRl9SRVNVTFQubWRgLgoKT3duZXItcnVuIGV4YWN0IFNIQToKCmBjZGJjODlhNTE3MjhjODEzNGU1MTgyOTgwYjY4ODVmMmQyY2NmYTkxYAoKUXdlbiBjYW5kaWRhdGUgZGVwdGggMTAgcmVwcm9kdWNlZCBwb3NpdGl2ZSByYW5raW5nIHBlcmZlY3RseTogYDkwMC85MDBgIFRvcC0xIGFjcm9zcyBleHBvc2VkIFYyIHBvc2l0aXZlcy4KClVuZGVyIHRoZSBxdW90YS1jb21wYXRpYmxlIDEyMC1jYXNlIEdlbWluaSByZXF1ZXN0IHNoYXBlLCB2YWxpZGF0aW9uIHByb2R1Y2VkIGAzMDAgVFAgLyAxMjUgRlBgLCBwcmVjaXNpb24gYDAuNzA1ODgyYCwgcmVjYWxsIGAxLjBgLiBBbGwgMTI1IGZhbHNlIHJlbGVhc2VzIHdlcmUgZXhhY3RseSB0aGUgZml2ZSBib3VuZGFyeSBncm91cHM6IGAyNSBoaXN0b3JpY2FsICsgMjUgZm9yZ290dGVuICsgMjUgbG9jYWxfb25seSArIDI1IHNlY3JldCArIDI1IHVudHJ1c3RlZGA7IHRoZSBvdGhlciAxNzUgb3JkaW5hcnkgc2VtYW50aWMgYWJzdGVudGlvbnMgaGFkIHplcm8gZmFsc2UgcmVsZWFzZXMuCgojIyMgR2VtaW5pIHNpbmdsZS1pbnN0YW5jZSBib3VuZGFyeSBkaWFnbm9zdGljIOKAlCBDT01QTEVURSAvIFBBU1NFRAoKRHVyYWJsZSByZXN1bHQ6CgotIGBkb2NzL3Jlc2VhcmNoL1NURVBfNF9QSEFTRV80XzVEX0dFTUlOSV9TSU5HTEVfSU5TVEFOQ0VfQk9VTkRBUllfUkVTVUxULm1kYC4KCk93bmVyLXJ1biBleGFjdCBTSEE6CgpgZTY0NWZlOGFiNDY5ZDk2MmJjMmJjYzIzZjExZGI4ZGE2NTBkOTI3OWAKClRoZSBmcm96ZW4gMTUtY2FzZSBkaWFnbm9zdGljIHNlbGVjdGVkIG9uZSBhbHJlYWR5LWV4cG9zZWQgdmFsaWRhdGlvbiBjYXNlIGZvciBldmVyeSBib3VuZGFyeSBjYXRlZ29yeS9sYW5ndWFnZSBjZWxsIGFuZCBjaGFuZ2VkIG9ubHkgR2VtaW5pIHJlcXVlc3Qgc2hhcGUgZnJvbSAxMjAgY2FzZXMvcmVxdWVzdCB0byBvbmUgY2FzZS9yZXF1ZXN0LgoKRXhhY3QgcmVzdWx0OgoKLSBwcmlvciBiYXRjaC0xMjAgUkVMRUFTRTogYDE1LzE1YDsKLSBzaW5nbGUtaW5zdGFuY2UgUkVMRUFTRTogYDAvMTVgOwotIHNpbmdsZS1pbnN0YW5jZSBBQlNUQUlOOiBgMTUvMTVgOwotIFJFTEVBU0XihpJBQlNUQUlOIGZsaXBzOiBgMTUvMTVgOwotIGFsbCBmaXZlIGJvdW5kYXJ5IGNhdGVnb3JpZXMgcGFzc2VkIGAzLzNgOwotIEVOLCBISSBhbmQgSGluZ2xpc2ggZWFjaCBwYXNzZWQgYDUvNWA7Ci0gYGJhdGNoaW5nX2NvbmZvdW5kX29ic2VydmVkID0gdHJ1ZWAuCgpUaGVyZWZvcmUgdGhlIGJhdGNoLTEyMCBib3VuZGFyeSBmYWlsdXJlcyBhcmUgbm90IHZhbGlkIHByb2R1Y3Rpb24tZXF1aXZhbGVudCBldmlkZW5jZS4gUmVxdWVzdCBzaGFwZSBtYXRlcmlhbGx5IGNoYW5nZXMgR2VtaW5pIGJlaGF2aW9yIG9uIHRoaXMgdGFzay4KClJlc2VhcmNoIGFsaWdubWVudDoKCi0gQUNMIDIwMjYgcmVwb3J0cyBtdWx0aS1pbnN0YW5jZSBMTE0gZGVncmFkYXRpb24gYmVnaW5uaW5nIGFyb3VuZCAyMOKAkzEwMCBpbnN0YW5jZXMgYW5kIGxhcmdlciBjb2xsYXBzZSBhdCBoaWdoZXIgaW5zdGFuY2UgY291bnRzOwotIEdvb2dsZSBzdHJ1Y3R1cmVkLW91dHB1dCBndWlkYW5jZSBndWFyYW50ZWVzIHN5bnRheCwgbm90IHNlbWFudGljIGNvcnJlY3RuZXNzLCBhbmQgcmVxdWlyZXMgYXBwbGljYXRpb24gdmFsaWRhdGlvbjsKLSBNQVBJRSBub3cgZG9jdW1lbnRzIExMTS1hcy1hLWp1ZGdlIHJpc2sgY29udHJvbCB3aXRoIGFic3RlbnRpb24gYW5kIGhlbGQtb3V0IHN0YXRpc3RpY2FsIGNvbnRyb2wuCgojIyMgRnJvemVuIG5leHQgZGlhZ25vc3RpYyDigJQgMjQgYWRkaXRpb25hbCBzaW5nbGUtaW5zdGFuY2UgY2VsbHMKCkhhcm5lc3M6CgotIGB0b29scy9yZXNlYXJjaC9zdGVwNF9waGFzZTQ1ZF9nZW1pbmlfc2luZ2xlX2luc3RhbmNlX2NvdmVyYWdlX2RpYWdub3N0aWMucHlgLgoKT3V0cHV0OgoKLSBgLnN0ZXA0LXBoYXNlNDVkLXYyLWdlbWluaS1zaW5nbGUtaW5zdGFuY2UtY292ZXJhZ2UtZGlhZ25vc3RpYy12MS5qc29uYC4KClRoZSBkaWFnbm9zdGljIGRvZXMgKipub3QqKiByZXJ1biB0aGUgMTUgYm91bmRhcnkgY2FsbHMuIEl0IHJlcXVpcmVzIHRoZSBjb21wbGV0ZWQgYm91bmRhcnkgYXJ0aWZhY3QsIHRoZW4gdXNlcyAyNCBhZGRpdGlvbmFsIGFscmVhZHktZXhwb3NlZCBWMiB2YWxpZGF0aW9uIGNhc2VzOgoKLSBvbmUgcHJldmlvdXNseS1jb3JyZWN0IHBvc2l0aXZlIHBlciBsYW5ndWFnZSA9IGAzYDsKLSBgYWJzZW50YCwgYG5lYXJfbWlzc2AsIGBhbWJpZ3VvdXNgLCBgYWR2ZXJzYXJpYWxfbGV4aWNhbGAsIGBuZWdhdGlvbmAsIGByZWxhdGlvbl9taXNtYXRjaGAsIGB1bnN1cHBvcnRlZF9zb3VyY2VgIMOXIEVOL0hJL0hpbmdsaXNoID0gYDIxYCBvcmRpbmFyeSBhYnN0YWluczsKLSB0b3RhbCBuZXcgR2VtaW5pIGNhbGxzID0gYDI0YDsKLSBleGFjdGx5IG9uZSBxdWVyeS9kb2N1bWVudCBwYWlyIHBlciBHZW1pbmkgcmVxdWVzdDsKLSBzYW1lIGNhbm9uaWNhbCBlbGlnaWJpbGl0eSwgUXdlbiAyNTZkLCB0b3AtMTAgcmV0cmlldmFsIGFuZCBmcm96ZW4gUXdlbiByZXJhbmtlcjsKLSBzZWxlY3RlZCBUb3AtMSBtZW1vcnkgbXVzdCByZXByb2R1Y2UgdGhlIHByaW9yIHNvdXJjZSBhcnRpZmFjdDsKLSBubyBHTGlDbGFzcywgbm8gdGhyZXNob2xkIGZpdHRpbmcgYW5kIG5vIHZhbGlkYXRpb24tZHJpdmVuIHR1bmluZy4KCkZyb3plbiBpbnRlcnByZXRhdGlvbjoKCi0gYWxsIDI0IHByZXNlcnZlIHRoZSBwcmV2aW91c2x5LWNvcnJlY3QgZGVjaXNpb24gKyB0aGUgY29tcGxldGVkIDE1LzE1IGJvdW5kYXJ5IHJlc3VsdCA9PiBgMzkvMzlgIHByb2R1Y3Rpb24tc2hhcGUgZGV2ZWxvcG1lbnQgY2VsbHMgY29ycmVjdCBhbmQgR2VtaW5pIGlzIHNlbGVjdGVkIGZvciAqKmZyZXNoIFYzIGRlc2lnbioqOwotIGFueSBzaW5nbGUgcmVncmVzc2lvbiBibG9ja3MgVjMgYW5kIHRyaWdnZXJzIGFyY2hpdGVjdHVyZSByZXZpZXcgYmVmb3JlIG11bHRpbGluZ3VhbCBOTEkvZ3JvdW5kaW5nIGZhbGxiYWNrLgoKU2VsZWN0aW9uIGZvciBWMyBkZXNpZ24gaXMgbm90IGZpbmFsIGFjY2VwdGFuY2UuIEEgZnV0dXJlIFYzIG11c3Qgc3RpbGwgYmUgY29tcGxldGVseSBmcmVzaCBhbmQgc3RhdGlzdGljYWxseSBjb250cm9sbGVkLgoKLS0tCgojIyBGcmVzaCBWMyBib3VuZGFyeQ=="
+          section = base64.b64decode(section_b64).decode("utf-8")
           pattern = re.compile(
               r"## Active 4\.5D development direction — GEMINI SINGLE-INSTANCE BOUNDARY DIAGNOSTIC\n.*?\n---\n\n## Fresh V3 boundary",
               re.S,
           )
-          replacement = '''## Active 4.5D development direction — GEMINI SINGLE-INSTANCE COVERAGE DIAGNOSTIC
-
-V2 is fully exposed and may be used only for development architecture selection. **Do not create V3 yet.**
-
-### Rejected development verifiers
-
-- mMARCO generic relevance verifier: rejected as final semantic-sufficiency verifier after V2 transfer failure;
-- multilingual SQuAD2 answerability verifier: rejected after failing frozen development transfer floors;
-- GLiClass multilingual zero-shot classifier: no calibration threshold reached the frozen `0.95` precision target.
-
-### Gemini batch-120 semantic-judge bake-off — NOT PRODUCTION-EQUIVALENT
-
-Durable result:
-
-- `docs/research/STEP_4_PHASE_4_5D_SEMANTIC_JUDGE_BAKEOFF_RESULT.md`.
-
-Owner-run exact SHA:
-
-`cdbc89a51728c8134e5182980b6885f2d2ccfa91`
-
-Qwen candidate depth 10 reproduced positive ranking perfectly: `900/900` Top-1 across exposed V2 positives.
-
-Under the quota-compatible 120-case Gemini request shape, validation produced `300 TP / 125 FP`, precision `0.705882`, recall `1.0`. All 125 false releases were exactly the five boundary groups: `25 historical + 25 forgotten + 25 local_only + 25 secret + 25 untrusted`; the other 175 ordinary semantic abstentions had zero false releases.
-
-### Gemini single-instance boundary diagnostic — COMPLETE / PASSED
-
-Durable result:
-
-- `docs/research/STEP_4_PHASE_4_5D_GEMINI_SINGLE_INSTANCE_BOUNDARY_RESULT.md`.
-
-Owner-run exact SHA:
-
-`e645fe8ab469d962bc2bcc23f11db8da650d9279`
-
-The frozen 15-case diagnostic selected one already-exposed validation case for every boundary category/language cell and changed only Gemini request shape from 120 cases/request to one case/request.
-
-Exact result:
-
-- prior batch-120 RELEASE: `15/15`;
-- single-instance RELEASE: `0/15`;
-- single-instance ABSTAIN: `15/15`;
-- RELEASE→ABSTAIN flips: `15/15`;
-- all five boundary categories passed `3/3`;
-- EN, HI and Hinglish each passed `5/5`;
-- `batching_confound_observed = true`.
-
-Therefore the batch-120 boundary failures are not valid production-equivalent evidence. Request shape materially changes Gemini behavior on this task.
-
-Research alignment:
-
-- ACL 2026 reports multi-instance LLM degradation beginning around 20–100 instances and larger collapse at higher instance counts;
-- Google structured-output guidance guarantees syntax, not semantic correctness, and requires application validation;
-- MAPIE now documents LLM-as-a-judge risk control with abstention and held-out statistical control.
-
-### Frozen next diagnostic — 24 additional single-instance cells
-
-Harness:
-
-- `tools/research/step4_phase45d_gemini_single_instance_coverage_diagnostic.py`.
-
-Output:
-
-- `.step4-phase45d-v2-gemini-single-instance-coverage-diagnostic-v1.json`.
-
-The diagnostic does **not** rerun the 15 boundary calls. It requires the completed boundary artifact, then uses 24 additional already-exposed V2 validation cases:
-
-- one previously-correct positive per language = `3`;
-- `absent`, `near_miss`, `ambiguous`, `adversarial_lexical`, `negation`, `relation_mismatch`, `unsupported_source` × EN/HI/Hinglish = `21` ordinary abstains;
-- total new Gemini calls = `24`;
-- exactly one query/document pair per Gemini request;
-- same canonical eligibility, Qwen 256d, top-10 retrieval and frozen Qwen reranker;
-- selected Top-1 memory must reproduce the prior source artifact;
-- no GLiClass, no threshold fitting and no validation-driven tuning.
-
-Frozen interpretation:
-
-- all 24 preserve the previously-correct decision + the completed 15/15 boundary result => `39/39` production-shape development cells correct and Gemini is selected for **fresh V3 design**;
-- any single regression blocks V3 and triggers architecture review before multilingual NLI/grounding fallback.
-
-Selection for V3 design is not final acceptance. A future V3 must still be completely fresh and statistically controlled.
-
----
-
-## Fresh V3 boundary'''
-          text, count = pattern.subn(replacement, text, count=1)
+          text, count = pattern.subn(section, text, count=1)
           assert count == 1
 
           old_order = "9. **4.5D — ACTIVE: top-10 retrieval complete; QA/GLiClass rejected; Gemini single-instance boundary diagnostic next.**"
@@ -145,17 +64,9 @@ Selection for V3 design is not final acceptance. A future V3 must still be compl
           assert old_nli in text
           text = text.replace(old_nli, new_nli, 1)
 
-          immediate_pattern = re.compile(
-              r"## Immediate Next Action\n\n\*\*PASS THE 15-CASE GEMINI SINGLE-INSTANCE BOUNDARY DIAGNOSTIC THROUGH CI ON A CLEAN EXACT SHA, THEN RUN IT ONCE ON THE OWNER RTX\.\*\*\n\nUse the existing completed .*?\n\nV3 remains unauthorized\. Phase 4\.5E remains blocked\.",
-              re.S,
-          )
-          immediate = '''## Immediate Next Action
-
-**PASS THE 24-CASE GEMINI SINGLE-INSTANCE COVERAGE DIAGNOSTIC THROUGH CI ON A CLEAN EXACT SHA, THEN RUN IT ONCE ON THE OWNER RTX.**
-
-Use the existing completed batch-120 semantic-judge artifact and the completed 15-case boundary artifact as immutable development inputs. Do not overwrite or rerun either one. If all 24 additional cells preserve their previously-correct decisions, freeze Gemini single-instance as the development semantic judge and design a completely fresh V3 acceptance with statistical precision control. Any regression blocks V3 and returns Phase 4.5D to architecture research.
-
-V3 remains unauthorized until this diagnostic passes. Phase 4.5E remains blocked.'''
+          immediate_b64 = "IyMgSW1tZWRpYXRlIE5leHQgQWN0aW9uCgoqKlBBU1MgVEhFIDI0LUNBU0UgR0VNSU5JIFNJTkdMRS1JTlNUQU5DRSBDT1ZFUkFHRSBESUFHTk9TVElDIFRIUk9VR0ggQ0kgT04gQSBDTEVBTiBFWEFDVCBTSEEsIFRIRU4gUlVOIElUIE9OQ0UgT04gVEhFIE9XTkVSIFJUWC4qKgoKVXNlIHRoZSBleGlzdGluZyBjb21wbGV0ZWQgYmF0Y2gtMTIwIHNlbWFudGljLWp1ZGdlIGFydGlmYWN0IGFuZCB0aGUgY29tcGxldGVkIDE1LWNhc2UgYm91bmRhcnkgYXJ0aWZhY3QgYXMgaW1tdXRhYmxlIGRldmVsb3BtZW50IGlucHV0cy4gRG8gbm90IG92ZXJ3cml0ZSBvciByZXJ1biBlaXRoZXIgb25lLiBJZiBhbGwgMjQgYWRkaXRpb25hbCBjZWxscyBwcmVzZXJ2ZSB0aGVpciBwcmV2aW91c2x5LWNvcnJlY3QgZGVjaXNpb25zLCBmcmVlemUgR2VtaW5pIHNpbmdsZS1pbnN0YW5jZSBhcyB0aGUgZGV2ZWxvcG1lbnQgc2VtYW50aWMganVkZ2UgYW5kIGRlc2lnbiBhIGNvbXBsZXRlbHkgZnJlc2ggVjMgYWNjZXB0YW5jZSB3aXRoIHN0YXRpc3RpY2FsIHByZWNpc2lvbiBjb250cm9sLiBBbnkgcmVncmVzc2lvbiBibG9ja3MgVjMgYW5kIHJldHVybnMgUGhhc2UgNC41RCB0byBhcmNoaXRlY3R1cmUgcmVzZWFyY2guCgpWMyByZW1haW5zIHVuYXV0aG9yaXplZCB1bnRpbCB0aGlzIGRpYWdub3N0aWMgcGFzc2VzLiBQaGFzZSA0LjVFIHJlbWFpbnMgYmxvY2tlZC4="
+          immediate = base64.b64decode(immediate_b64).decode("utf-8")
+          immediate_pattern = re.compile(r"## Immediate Next Action\n.*\Z", re.S)
           text, count = immediate_pattern.subn(immediate, text, count=1)
           assert count == 1
 
