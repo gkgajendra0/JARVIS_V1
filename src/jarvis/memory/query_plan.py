@@ -13,6 +13,8 @@ class MemoryQueryIntent(StrEnum):
     """Semantic shape proposed for one memory lookup request."""
 
     EXACT_FACT = "exact_fact"
+    QUALIFIED_FACT = "qualified_fact"
+    EXTERNAL_SOURCE_FACT = "external_source_fact"
     BROAD_RECALL = "broad_recall"
     AMBIGUOUS = "ambiguous"
     UNSUPPORTED = "unsupported"
@@ -168,6 +170,10 @@ class MemoryQueryPolicy:
             return self._abstain("unsupported_query")
         if proposal.intent is MemoryQueryIntent.BROAD_RECALL:
             return self._abstain("broad_recall_not_auto_release_eligible")
+        if proposal.intent is MemoryQueryIntent.QUALIFIED_FACT:
+            return self._abstain("qualified_relation_requires_separate_path")
+        if proposal.intent is MemoryQueryIntent.EXTERNAL_SOURCE_FACT:
+            return self._abstain("external_source_query_not_canonical_memory")
         if proposal.intent is not MemoryQueryIntent.EXACT_FACT:
             return self._abstain("unknown_query_intent")
 
