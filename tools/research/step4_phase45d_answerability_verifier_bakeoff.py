@@ -18,9 +18,10 @@ import math
 import tempfile
 import time
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import numpy as np
 import step4_phase45d_abstention_calibration as baseline
