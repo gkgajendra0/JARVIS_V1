@@ -4,7 +4,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 RESEARCH = ROOT / "tools" / "research"
 SCRIPT = RESEARCH / "step4_phase45d_zero_shot_answer_type_diagnostic.py"
