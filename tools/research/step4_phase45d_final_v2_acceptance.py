@@ -155,7 +155,9 @@ def _fit_confidence_model(
 ) -> tuple[Any, np.ndarray, np.ndarray, dict[str, Any]]:
     cases = list(retired_artifact["cases"])
     if len(cases) != 320 or verifier_scores.shape != (320,):
-        raise RuntimeError("confidence fit requires exactly 320 retired development rows")
+        raise RuntimeError(
+            "confidence fit requires exactly 320 retired development rows"
+        )
     base = verifier_dev._base_matrix(cases)
     X = np.column_stack((base, verifier_scores))
     y = verifier_dev._labels(cases)
@@ -179,7 +181,9 @@ def _fit_confidence_model(
             "max_iter": int(logistic.max_iter),
             "random_state": int(logistic.random_state),
             "classes": [int(value) for value in logistic.classes_.tolist()],
-            "coef": [[float(value) for value in row] for row in logistic.coef_.tolist()],
+            "coef": [
+                [float(value) for value in row] for row in logistic.coef_.tolist()
+            ],
             "intercept": [float(value) for value in logistic.intercept_.tolist()],
         },
     }
@@ -191,7 +195,9 @@ def _load_verifier(device: str) -> tuple[Any, dict[str, Any]]:
         import torch
         from sentence_transformers import CrossEncoder
     except ImportError as exc:  # pragma: no cover - owner research environment only
-        raise RuntimeError("Sentence Transformers retrieval dependencies are required") from exc
+        raise RuntimeError(
+            "Sentence Transformers retrieval dependencies are required"
+        ) from exc
     if device == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA requested but torch.cuda.is_available() is false")
     if torch.cuda.is_available():
@@ -215,7 +221,9 @@ def _load_verifier(device: str) -> tuple[Any, dict[str, Any]]:
         "torch_version": str(torch.__version__),
         "cuda_runtime": str(torch.version.cuda),
         "cuda_available": bool(torch.cuda.is_available()),
-        "device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        "device_name": torch.cuda.get_device_name(0)
+        if torch.cuda.is_available()
+        else None,
     }
 
 
@@ -259,9 +267,7 @@ def _calibrate(
         binary=True,
     )
     learned = np.asarray(controller._learned_fixed_sequence, dtype=np.float64)
-    controller.calibrate(
-        calibration_probabilities.reshape(-1, 1), calibration_labels
-    )
+    controller.calibrate(calibration_probabilities.reshape(-1, 1), calibration_labels)
     best = _threshold(controller.best_predict_param)
     valid_raw = np.asarray(controller.valid_predict_params, dtype=np.float64)
     valid = [] if valid_raw.size == 0 else valid_raw.reshape(-1).tolist()
@@ -360,12 +366,15 @@ def _breakdown(
     }
 
 
-def _acceptance(validation: list[V2CaseResult], threshold: float | None) -> dict[str, Any]:
+def _acceptance(
+    validation: list[V2CaseResult], threshold: float | None
+) -> dict[str, Any]:
     ranking = _ranking(validation)
     policy = _metrics(validation, threshold)
     languages = _breakdown(validation, threshold, "language")
     language_recall = {
-        key: value["policy"]["positive_release_recall"] for key, value in languages.items()
+        key: value["policy"]["positive_release_recall"]
+        for key, value in languages.items()
     }
     checks = {
         "mapie_found_valid_threshold": threshold is not None,
@@ -446,12 +455,20 @@ async def _retrieve_v2(device: str) -> tuple[list[dict[str, Any]], dict[str, Any
                 reranked = reranker.rerank(query, first_stage)
                 rerank_ms = (time.perf_counter_ns() - tick) / 1_000_000
                 if not reranked:
-                    raise RuntimeError(f"reranker returned nothing for {item['case_id']}")
+                    raise RuntimeError(
+                        f"reranker returned nothing for {item['case_id']}"
+                    )
                 top = reranked[0]
-                second = reranked[1].rerank_score if len(reranked) > 1 else top.rerank_score
-                top_memory_id = assertion_to_memory.get(top.candidate.assertion.assertion_id)
+                second = (
+                    reranked[1].rerank_score if len(reranked) > 1 else top.rerank_score
+                )
+                top_memory_id = assertion_to_memory.get(
+                    top.candidate.assertion.assertion_id
+                )
                 if top_memory_id is None:
-                    raise RuntimeError(f"unknown returned assertion for {item['case_id']}")
+                    raise RuntimeError(
+                        f"unknown returned assertion for {item['case_id']}"
+                    )
                 top3_ids = [
                     assertion_to_memory[value.candidate.assertion.assertion_id]
                     for value in reranked
@@ -466,14 +483,18 @@ async def _retrieve_v2(device: str) -> tuple[list[dict[str, Any]], dict[str, Any
                         "case_id": str(item["case_id"]),
                         "split": str(item["split"]),
                         "label": label,
-                        "expected_memory_id": str(expected) if expected is not None else None,
+                        "expected_memory_id": str(expected)
+                        if expected is not None
+                        else None,
                         "language": str(item["language"]),
                         "category": str(item["category"]),
                         "query": query,
                         "top_memory_id": top_memory_id,
                         "top_document": top.candidate.assertion.normalized_text,
-                        "positive_top1_correct": label == "release" and top_memory_id == expected,
-                        "positive_hit_at_3": label == "release" and expected in top3_ids,
+                        "positive_top1_correct": label == "release"
+                        and top_memory_id == expected,
+                        "positive_hit_at_3": label == "release"
+                        and expected in top3_ids,
                         "rerank_score": float(top.rerank_score),
                         "rerank_margin": float(top.rerank_score - second),
                         "dense_score": float(dense_score),
@@ -489,13 +510,19 @@ async def _retrieve_v2(device: str) -> tuple[list[dict[str, Any]], dict[str, Any
             await worker.close()
     return rows, {
         "fixture_population_and_document_embedding_seconds": round(populate_seconds, 4),
-        "query_embedding_p50_ms": _percentile([row["query_embedding_ms"] for row in rows], 0.50),
-        "query_embedding_p95_ms": _percentile([row["query_embedding_ms"] for row in rows], 0.95),
+        "query_embedding_p50_ms": _percentile(
+            [row["query_embedding_ms"] for row in rows], 0.50
+        ),
+        "query_embedding_p95_ms": _percentile(
+            [row["query_embedding_ms"] for row in rows], 0.95
+        ),
         "retrieval_p50_ms": _percentile([row["retrieval_ms"] for row in rows], 0.50),
         "retrieval_p95_ms": _percentile([row["retrieval_ms"] for row in rows], 0.95),
         "rerank_p50_ms": _percentile([row["rerank_ms"] for row in rows], 0.50),
         "rerank_p95_ms": _percentile([row["rerank_ms"] for row in rows], 0.95),
-        "qwen_peak_cuda_bytes": int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None,
+        "qwen_peak_cuda_bytes": int(torch.cuda.max_memory_allocated())
+        if torch.cuda.is_available()
+        else None,
     }
 
 
@@ -504,11 +531,17 @@ def _materialize(
 ) -> list[V2CaseResult]:
     if verifier_scores.shape != (len(rows),):
         raise RuntimeError("V2 verifier score count mismatch")
-    base = np.asarray([_retrieval_row_from_mapping(row) for row in rows], dtype=np.float64)
+    base = np.asarray(
+        [_retrieval_row_from_mapping(row) for row in rows], dtype=np.float64
+    )
     X = np.column_stack((base, verifier_scores))
-    probabilities = np.asarray(confidence_model.predict_proba(X)[:, 1], dtype=np.float64)
+    probabilities = np.asarray(
+        confidence_model.predict_proba(X)[:, 1], dtype=np.float64
+    )
     output: list[V2CaseResult] = []
-    for row, verifier_score, probability in zip(rows, verifier_scores, probabilities, strict=True):
+    for row, verifier_score, probability in zip(
+        rows, verifier_scores, probabilities, strict=True
+    ):
         values = dict(row)
         values.pop("query")
         values["independent_verifier_score"] = float(verifier_score)
@@ -534,8 +567,8 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
         verifier,
         [(record["query"], record["document"]) for record in retired_pairs],
     )
-    confidence_model, dev_probabilities, dev_labels, frozen_model = _fit_confidence_model(
-        retired, retired_scores
+    confidence_model, dev_probabilities, dev_labels, frozen_model = (
+        _fit_confidence_model(retired, retired_scores)
     )
 
     rows, qwen_timing = await _retrieve_v2(args.device)
@@ -636,7 +669,9 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--retired-development", default=str(RETIRED_DEVELOPMENT_DEFAULT))
+    parser.add_argument(
+        "--retired-development", default=str(RETIRED_DEVELOPMENT_DEFAULT)
+    )
     parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
     parser.add_argument("--output", default=str(OUTPUT_DEFAULT))
     return parser.parse_args()

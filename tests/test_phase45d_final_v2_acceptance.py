@@ -104,10 +104,7 @@ def test_v2_corpus_is_fresh_fixed_powered_and_multilingual() -> None:
         for item in old_cases.build_payload()["queries"]
     }
     old_64_payload = json.loads(RETIRED_64.read_text(encoding="utf-8"))
-    old_64 = {
-        item["query"].strip().casefold()
-        for item in old_64_payload["queries"]
-    }
+    old_64 = {item["query"].strip().casefold() for item in old_64_payload["queries"]}
     assert not (set(texts) & old_320)
     assert not (set(texts) & old_64)
 
@@ -124,10 +121,7 @@ def test_v2_frozen_model_and_statistical_contracts() -> None:
     assert harness.REQUIRE_ZERO_VALIDATION_FALSE_RELEASES is True
 
     assert harness.VERIFIER_MODEL_ID == "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
-    assert (
-        harness.VERIFIER_MODEL_REVISION
-        == "1427fd652930e4ba29e8149678df786c240d8825"
-    )
+    assert harness.VERIFIER_MODEL_REVISION == "1427fd652930e4ba29e8149678df786c240d8825"
     assert harness.VERIFIER_MAX_LENGTH == 512
     assert harness.VERIFIER_BATCH_SIZE == 32
 

@@ -79,10 +79,20 @@ class CurrentFact:
 
 
 RELATIONS = (
-    RelationSpec("region", "deployment region", "डिप्लॉयमेंट रीजन", "deployment region", "asia-south"),
+    RelationSpec(
+        "region",
+        "deployment region",
+        "डिप्लॉयमेंट रीजन",
+        "deployment region",
+        "asia-south",
+    ),
     RelationSpec("branch", "build branch", "बिल्ड ब्रांच", "build branch", "release"),
-    RelationSpec("channel", "release channel", "रिलीज़ चैनल", "release channel", "stable"),
-    RelationSpec("format", "artifact format", "आर्टिफैक्ट फ़ॉर्मेट", "artifact format", "bundle"),
+    RelationSpec(
+        "channel", "release channel", "रिलीज़ चैनल", "release channel", "stable"
+    ),
+    RelationSpec(
+        "format", "artifact format", "आर्टिफैक्ट फ़ॉर्मेट", "artifact format", "bundle"
+    ),
     RelationSpec("retention", "log retention", "लॉग रिटेंशन", "log retention", "days"),
     RelationSpec("seat", "seat preference", "सीट पसंद", "seat preference", "aisle"),
     RelationSpec("map", "map style", "मैप स्टाइल", "map style", "terrain"),
@@ -276,8 +286,7 @@ def _positive_query(fact: CurrentFact, language: str, split: str) -> str:
     if language == "hi":
         if validation:
             return (
-                f"Memory check: {fact.profile} के लिए अभी {fact.relation_hi} "
-                "क्या दर्ज है?"
+                f"Memory check: {fact.profile} के लिए अभी {fact.relation_hi} क्या दर्ज है?"
             )
         return f"{fact.profile} के लिए दर्ज {fact.relation_hi} क्या है?"
     if language == "hinglish":
