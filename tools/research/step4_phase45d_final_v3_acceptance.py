@@ -230,9 +230,7 @@ def _policy(cases: Sequence[V3CaseResult]) -> dict[str, Any]:
         "false_release_case_ids": [case.case_id for case in false_cases],
         "false_releases_by_category": dict(sorted(false_by_category.items())),
         "security_boundary_release_case_ids": [
-            case.case_id
-            for case in released
-            if case.category in SECURITY_CATEGORIES
+            case.case_id for case in released if case.category in SECURITY_CATEGORIES
         ],
     }
 

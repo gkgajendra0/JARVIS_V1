@@ -273,9 +273,7 @@ def _build_current_facts() -> tuple[CurrentFact, ...]:
             for relation_index, relation in enumerate(RELATIONS):
                 rows.append(
                     CurrentFact(
-                        memory_id=(
-                            f"v3_{domain}_{local_index + 1:02d}_{relation.key}"
-                        ),
+                        memory_id=(f"v3_{domain}_{local_index + 1:02d}_{relation.key}"),
                         predicate=f"v3_{domain}_{relation.key}",
                         split=split,
                         domain=domain,
@@ -304,7 +302,9 @@ def _positive_query(fact: CurrentFact, language: str) -> str:
         "hinglish": fact.relation.relation_hinglish,
     }[language]
     templates = POSITIVE_PREFIXES[language]
-    template = templates[(fact.profile_index * 3 + fact.relation_index) % len(templates)]
+    template = templates[
+        (fact.profile_index * 3 + fact.relation_index) % len(templates)
+    ]
     return template.format(profile=fact.profile, relation=relation)
 
 
@@ -349,12 +349,8 @@ def _ordinary_query(
                 f"archive — {fact.value} का approval owner कौन है?"
             ),
             "negation": f"कौन सा {relation} value साफ़ तौर पर forbidden है?",
-            "relation_mismatch": (
-                f"token {fact.value} के लिए approval window क्या है?"
-            ),
-            "unsupported_source": (
-                f"किसी external rumor के अनुसार {relation} क्या है?"
-            ),
+            "relation_mismatch": (f"token {fact.value} के लिए approval window क्या है?"),
+            "unsupported_source": (f"किसी external rumor के अनुसार {relation} क्या है?"),
         }
     else:
         clauses = {
@@ -528,7 +524,9 @@ def _ordinary_abstain_queries() -> list[dict[str, Any]]:
     return rows
 
 
-def _boundary_fixtures_and_queries() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _boundary_fixtures_and_queries() -> tuple[
+    list[dict[str, Any]], list[dict[str, Any]]
+]:
     documents: list[dict[str, Any]] = []
     queries: list[dict[str, Any]] = []
     ordinal = 0
@@ -573,7 +571,9 @@ def _assert_integrity(payload: dict[str, Any]) -> None:
     if len(query_texts) != len(set(query_texts)):
         raise RuntimeError("V3 query strings must be unique")
 
-    old_v2_queries = {str(item["query"]) for item in v2_cases.build_payload()["queries"]}
+    old_v2_queries = {
+        str(item["query"]) for item in v2_cases.build_payload()["queries"]
+    }
     overlap = old_v2_queries.intersection(query_texts)
     if overlap:
         raise RuntimeError(f"V3 has exact V2 query overlap: {sorted(overlap)[:3]}")
@@ -586,9 +586,13 @@ def _assert_integrity(payload: dict[str, Any]) -> None:
             raise RuntimeError(f"V3 split counts changed for {split}")
         for language in LANGUAGES:
             if sum(item["language"] == language for item in releases) != 60:
-                raise RuntimeError(f"V3 release language count changed: {split}/{language}")
+                raise RuntimeError(
+                    f"V3 release language count changed: {split}/{language}"
+                )
             if sum(item["language"] == language for item in abstains) != 60:
-                raise RuntimeError(f"V3 abstain language count changed: {split}/{language}")
+                raise RuntimeError(
+                    f"V3 abstain language count changed: {split}/{language}"
+                )
         for category in ABSTAIN_CATEGORIES:
             category_rows = [item for item in abstains if item["category"] == category]
             if len(category_rows) != 15:

@@ -58,9 +58,7 @@ def test_v3_counts_are_exact_and_balanced() -> None:
             "hinglish": 60,
         }
         for category in module.ABSTAIN_CATEGORIES:
-            category_rows = [
-                item for item in abstains if item["category"] == category
-            ]
+            category_rows = [item for item in abstains if item["category"] == category]
             assert len(category_rows) == 15
             assert Counter(item["language"] for item in category_rows) == {
                 "en": 5,

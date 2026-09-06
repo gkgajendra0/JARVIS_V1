@@ -101,12 +101,8 @@ def test_v3_contract_is_fixed_single_instance_and_fail_closed() -> None:
 def test_exact_precision_control_needs_59_perfect_releases() -> None:
     module = _module()
 
-    perfect_58 = module._precision_control(
-        {"tp": 58, "fp": 0, "released_cases": 58}
-    )
-    perfect_59 = module._precision_control(
-        {"tp": 59, "fp": 0, "released_cases": 59}
-    )
+    perfect_58 = module._precision_control({"tp": 58, "fp": 0, "released_cases": 58})
+    perfect_59 = module._precision_control({"tp": 59, "fp": 0, "released_cases": 59})
 
     assert perfect_58["minimum_releases_met"] is False
     assert perfect_58["passes"] is False
@@ -118,16 +114,12 @@ def test_exact_precision_control_needs_59_perfect_releases() -> None:
 def test_exact_precision_control_rejects_insufficient_lower_bound() -> None:
     module = _module()
 
-    result = module._precision_control(
-        {"tp": 92, "fp": 1, "released_cases": 93}
-    )
+    result = module._precision_control({"tp": 92, "fp": 1, "released_cases": 93})
     assert result["minimum_releases_met"] is True
     assert result["lower_bound"] >= 0.95
     assert result["passes"] is True
 
-    failing = module._precision_control(
-        {"tp": 91, "fp": 1, "released_cases": 92}
-    )
+    failing = module._precision_control({"tp": 91, "fp": 1, "released_cases": 92})
     assert failing["lower_bound"] < 0.95
     assert failing["passes"] is False
 
