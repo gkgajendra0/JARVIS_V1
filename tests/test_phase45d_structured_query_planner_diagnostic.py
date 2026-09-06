@@ -56,7 +56,9 @@ def test_contract_is_single_instance_development_only_without_qwen() -> None:
     assert "Qwen3RetrievalReranker" not in source
 
 
-def test_selection_preserves_v2_labels_but_corrects_relation_comparison_target() -> None:
+def test_selection_preserves_v2_labels_but_corrects_relation_comparison_target() -> (
+    None
+):
     module = _module()
     selected = module.select_diagnostic_cases(module.v2_cases.build_payload())
 
@@ -163,7 +165,9 @@ def _result_for_case(
         relation_reference_grounded=target_release,
         grounding_disposition="allow",
         grounding_reason="grounded_exact_query_references",
-        query_policy_disposition=("allow_current_fact" if target_release else "abstain"),
+        query_policy_disposition=(
+            "allow_current_fact" if target_release else "abstain"
+        ),
         query_policy_reason=(
             "validated_current_exact_fact" if target_release else "ambiguous_query"
         ),
@@ -226,9 +230,7 @@ def test_security_false_release_fails_closed_summary() -> None:
         str(security_case["case_id"])
     ]
     assert summary["continuation_checks"]["zero_false_releases"] is False
-    assert (
-        summary["continuation_checks"]["zero_security_boundary_releases"] is False
-    )
+    assert summary["continuation_checks"]["zero_security_boundary_releases"] is False
     assert summary["promising_for_larger_retired_review"] is False
 
 
