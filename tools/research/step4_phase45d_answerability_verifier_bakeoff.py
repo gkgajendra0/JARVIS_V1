@@ -144,7 +144,9 @@ def _best_answerability_evidence(
     end = np.asarray(end_logits, dtype=np.float64).reshape(-1)
     mask = np.asarray(context_mask, dtype=bool).reshape(-1)
     if start.shape != end.shape or start.shape != mask.shape:
-        raise ValueError("QA logits and context mask must have matching one-dimensional shapes")
+        raise ValueError(
+            "QA logits and context mask must have matching one-dimensional shapes"
+        )
     if len(offsets) != start.shape[0]:
         raise ValueError("QA offset count must match logit count")
     if cls_index < 0 or cls_index >= start.shape[0]:
@@ -204,7 +206,9 @@ def _roc_auc(scores: Sequence[float], labels: Sequence[bool]) -> float:
     values = np.asarray(scores, dtype=np.float64)
     targets = np.asarray(labels, dtype=bool)
     if values.shape != targets.shape or values.ndim != 1:
-        raise ValueError("ROC-AUC scores and labels must be aligned one-dimensional arrays")
+        raise ValueError(
+            "ROC-AUC scores and labels must be aligned one-dimensional arrays"
+        )
     positives = int(targets.sum())
     negatives = int((~targets).sum())
     if positives == 0 or negatives == 0:
@@ -222,9 +226,9 @@ def _roc_auc(scores: Sequence[float], labels: Sequence[bool]) -> float:
         cursor = end
 
     positive_rank_sum = float(ranks[targets].sum())
-    auc = (
-        positive_rank_sum - positives * (positives + 1) / 2.0
-    ) / (positives * negatives)
+    auc = (positive_rank_sum - positives * (positives + 1) / 2.0) / (
+        positives * negatives
+    )
     return round(float(auc), 6)
 
 
@@ -404,13 +408,19 @@ async def _retrieve_pairs(device: str) -> tuple[list[RetrievalPair], dict[str, A
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
 
-    with tempfile.TemporaryDirectory(prefix="jarvis-phase45d-answerability-") as temp_dir:
+    with tempfile.TemporaryDirectory(
+        prefix="jarvis-phase45d-answerability-"
+    ) as temp_dir:
         worker = baseline._connection_worker(Path(temp_dir) / "answerability.db")
         lifecycle = MemoryLifecycleService(
             worker,
             clock=lambda: baseline.NOW,
-            assertion_id_factory=baseline._id_factory("phase45d-answerability-assertion"),
-            operation_id_factory=baseline._id_factory("phase45d-answerability-operation"),
+            assertion_id_factory=baseline._id_factory(
+                "phase45d-answerability-assertion"
+            ),
+            operation_id_factory=baseline._id_factory(
+                "phase45d-answerability-operation"
+            ),
         )
         embeddings = SemanticEmbeddingStore(worker, clock=lambda: baseline.NOW)
         retrieval = SemanticRetrievalService(worker)
@@ -420,7 +430,9 @@ async def _retrieve_pairs(device: str) -> tuple[list[RetrievalPair], dict[str, A
             candidate_window=QWEN_CANDIDATE_WINDOW,
         )
         if reranker.instruction != JARVIS_MEMORY_RERANK_INSTRUCTION:
-            raise RuntimeError("answerability bake-off must use frozen reranker instruction")
+            raise RuntimeError(
+                "answerability bake-off must use frozen reranker instruction"
+            )
 
         pairs: list[RetrievalPair] = []
         query_embedding_ms: list[float] = []
@@ -457,10 +469,14 @@ async def _retrieve_pairs(device: str) -> tuple[list[RetrievalPair], dict[str, A
                 reranked = reranker.rerank(query, first_stage)
                 rerank_ms.append((time.perf_counter_ns() - tick) / 1_000_000)
                 if not reranked:
-                    raise RuntimeError(f"reranker returned nothing for {item['case_id']}")
+                    raise RuntimeError(
+                        f"reranker returned nothing for {item['case_id']}"
+                    )
 
                 top = reranked[0]
-                top_memory_id = assertion_to_memory.get(top.candidate.assertion.assertion_id)
+                top_memory_id = assertion_to_memory.get(
+                    top.candidate.assertion.assertion_id
+                )
                 if top_memory_id is None:
                     raise RuntimeError(f"unknown top assertion for {item['case_id']}")
                 expected = item.get("expected_memory_id")
@@ -477,7 +493,9 @@ async def _retrieve_pairs(device: str) -> tuple[list[RetrievalPair], dict[str, A
                         case_id=str(item["case_id"]),
                         split=str(item["split"]),
                         label=str(item["label"]),
-                        expected_memory_id=(str(expected) if expected is not None else None),
+                        expected_memory_id=(
+                            str(expected) if expected is not None else None
+                        ),
                         language=str(item["language"]),
                         category=str(item["category"]),
                         query=query,
@@ -492,7 +510,9 @@ async def _retrieve_pairs(device: str) -> tuple[list[RetrievalPair], dict[str, A
             await worker.close()
 
         qwen_peak_cuda_bytes = (
-            int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None
+            int(torch.cuda.max_memory_allocated())
+            if torch.cuda.is_available()
+            else None
         )
 
     timing = {
@@ -513,7 +533,9 @@ def _load_qa(device: str) -> tuple[Any, Any, dict[str, Any]]:
         import torch
         from transformers import AutoModelForQuestionAnswering, AutoTokenizer
     except ImportError as exc:  # pragma: no cover
-        raise RuntimeError("answerability bake-off requires Torch and Transformers") from exc
+        raise RuntimeError(
+            "answerability bake-off requires Torch and Transformers"
+        ) from exc
 
     if device == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA requested but torch.cuda.is_available() is false")
@@ -538,19 +560,25 @@ def _load_qa(device: str) -> tuple[Any, Any, dict[str, Any]]:
     load_seconds = time.perf_counter() - started
     if tokenizer.cls_token_id is None:
         raise RuntimeError("QA tokenizer does not expose a CLS token")
-    return tokenizer, model, {
-        "model_id": QA_MODEL_ID,
-        "revision": QA_MODEL_REVISION,
-        "license": "MIT",
-        "device": device,
-        "model_load_seconds": round(load_seconds, 4),
-        "max_sequence_length": QA_MAX_SEQUENCE_LENGTH,
-        "max_answer_length": QA_MAX_ANSWER_LENGTH,
-        "n_best": QA_N_BEST,
-        "torch_version": torch.__version__,
-        "cuda_available": torch.cuda.is_available(),
-        "device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
-    }
+    return (
+        tokenizer,
+        model,
+        {
+            "model_id": QA_MODEL_ID,
+            "revision": QA_MODEL_REVISION,
+            "license": "MIT",
+            "device": device,
+            "model_load_seconds": round(load_seconds, 4),
+            "max_sequence_length": QA_MAX_SEQUENCE_LENGTH,
+            "max_answer_length": QA_MAX_ANSWER_LENGTH,
+            "n_best": QA_N_BEST,
+            "torch_version": torch.__version__,
+            "cuda_available": torch.cuda.is_available(),
+            "device_name": torch.cuda.get_device_name(0)
+            if torch.cuda.is_available()
+            else None,
+        },
+    )
 
 
 def _score_qa_pairs(
@@ -640,7 +668,9 @@ def _score_qa_pairs(
         "batch_p50_ms": _percentile([value * 1000.0 for value in batch_times], 0.50),
         "batch_p95_ms": _percentile([value * 1000.0 for value in batch_times], 0.95),
         "peak_cuda_bytes": (
-            int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None
+            int(torch.cuda.max_memory_allocated())
+            if torch.cuda.is_available()
+            else None
         ),
     }
     return output, timing
@@ -652,7 +682,9 @@ def _ranking_summary(cases: Sequence[AnswerabilityCase]) -> dict[str, Any]:
     return {
         "release_labels": len(positives),
         "positive_top1_correct": correct,
-        "positive_top1_accuracy": round(correct / len(positives), 6) if positives else 0.0,
+        "positive_top1_accuracy": round(correct / len(positives), 6)
+        if positives
+        else 0.0,
     }
 
 
@@ -668,8 +700,7 @@ def _development_selection(
             policy["positive_release_recall"] >= MIN_VALIDATION_RELEASE_RECALL
         ),
         "validation_language_release_recall": all(
-            metrics["positive_release_recall"]
-            >= MIN_VALIDATION_LANGUAGE_RELEASE_RECALL
+            metrics["positive_release_recall"] >= MIN_VALIDATION_LANGUAGE_RELEASE_RECALL
             for metrics in languages.values()
         ),
         "validation_zero_security_boundary_releases": not policy[
@@ -712,7 +743,9 @@ async def _run(device: str, batch_size: int) -> dict[str, Any]:
         raise RuntimeError("V2 split sizes changed unexpectedly")
 
     calibration_choice = _select_empirical_threshold(calibration)
-    threshold = calibration_choice["threshold"] if calibration_choice is not None else None
+    threshold = (
+        calibration_choice["threshold"] if calibration_choice is not None else None
+    )
     calibration_policy = _policy_metrics(calibration, threshold)
     validation_policy = _policy_metrics(validation, threshold)
     validation_languages = _language_metrics(validation, threshold)

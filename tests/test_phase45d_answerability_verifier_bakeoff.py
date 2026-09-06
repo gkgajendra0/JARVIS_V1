@@ -71,9 +71,7 @@ def test_frozen_answerability_contract_is_task_matched_and_development_only() ->
 
     assert module.QWEN_CANDIDATE_WINDOW == 10
     assert module.QA_MODEL_ID == "deepset/xlm-roberta-base-squad2-distilled"
-    assert module.QA_MODEL_REVISION == (
-        "c1bbfe57bc3335c37960a48c5628ba26d7e9e3b7"
-    )
+    assert module.QA_MODEL_REVISION == ("c1bbfe57bc3335c37960a48c5628ba26d7e9e3b7")
     assert module.QA_MAX_SEQUENCE_LENGTH == 384
     assert module.QA_MAX_ANSWER_LENGTH == 30
     assert module.QA_N_BEST == 20
