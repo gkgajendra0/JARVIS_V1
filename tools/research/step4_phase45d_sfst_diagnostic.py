@@ -34,7 +34,9 @@ def _controller_cls() -> type[Any]:
     try:
         from mapie.risk_control import BinaryClassificationController
     except ImportError as exc:  # pragma: no cover - owner research environment only
-        raise RuntimeError("MAPIE is required for the Phase 4.5D SFST diagnostic") from exc
+        raise RuntimeError(
+            "MAPIE is required for the Phase 4.5D SFST diagnostic"
+        ) from exc
     return BinaryClassificationController
 
 
@@ -88,7 +90,9 @@ def _metrics(
     else:
         released = _release_predict(_features(cases), *params).astype(bool)
     safe = _safe_labels(cases).astype(bool)
-    release_labels = np.asarray([case["label"] == "release" for case in cases], dtype=bool)
+    release_labels = np.asarray(
+        [case["label"] == "release" for case in cases], dtype=bool
+    )
     tp = int(np.sum(released & safe))
     fp = int(np.sum(released & ~safe))
     precision = tp / (tp + fp) if tp + fp else 1.0
@@ -132,7 +136,9 @@ def zero_error_power_summary(safe_calibration_cases: int) -> dict[str, Any]:
 def _load_evidence(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("final_acceptance_eligible") is not True:
-        raise RuntimeError("input is not the Phase 4.5D final-acceptance evidence artifact")
+        raise RuntimeError(
+            "input is not the Phase 4.5D final-acceptance evidence artifact"
+        )
     cases = payload.get("cases")
     if not isinstance(cases, list) or len(cases) != 320:
         raise RuntimeError("expected the frozen 320-case Phase 4.5D evidence artifact")
