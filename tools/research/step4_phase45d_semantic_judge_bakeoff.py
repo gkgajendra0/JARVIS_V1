@@ -17,7 +17,6 @@ import argparse
 import asyncio
 import gc
 import json
-import math
 import time
 from collections import Counter, defaultdict
 from collections.abc import Callable, Sequence
@@ -138,7 +137,9 @@ def _roc_auc(scores: Sequence[float], labels: Sequence[bool]) -> float:
     values = np.asarray(scores, dtype=np.float64)
     targets = np.asarray(labels, dtype=np.bool_)
     if values.shape != targets.shape or values.ndim != 1:
-        raise ValueError("ROC-AUC scores and labels must be aligned one-dimensional arrays")
+        raise ValueError(
+            "ROC-AUC scores and labels must be aligned one-dimensional arrays"
+        )
     positives = int(targets.sum())
     negatives = int((~targets).sum())
     if positives == 0 or negatives == 0:
@@ -184,7 +185,9 @@ def _ranking_summary(pairs: Sequence[answerability.RetrievalPair]) -> dict[str, 
     return {
         "release_labels": len(positives),
         "positive_top1_correct": correct,
-        "positive_top1_accuracy": round(correct / len(positives), 6) if positives else 0.0,
+        "positive_top1_accuracy": round(correct / len(positives), 6)
+        if positives
+        else 0.0,
     }
 
 
@@ -293,8 +296,7 @@ def _development_checks(
             >= MIN_VALIDATION_RELEASE_RECALL
         ),
         "validation_language_release_recall": all(
-            metrics["positive_release_recall"]
-            >= MIN_VALIDATION_LANGUAGE_RELEASE_RECALL
+            metrics["positive_release_recall"] >= MIN_VALIDATION_LANGUAGE_RELEASE_RECALL
             for metrics in validation_languages.values()
         ),
         "validation_zero_security_boundary_releases": not validation_policy[
@@ -337,7 +339,9 @@ def _load_gliclass(device: str) -> tuple[Any, dict[str, Any]]:
             f"expected gliclass {GLICLASS_PACKAGE_VERSION}, got {installed_version!r}"
         )
     if device == "cuda" and not torch.cuda.is_available():
-        raise RuntimeError("CUDA semantic judge bake-off requested but CUDA is unavailable")
+        raise RuntimeError(
+            "CUDA semantic judge bake-off requested but CUDA is unavailable"
+        )
 
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
@@ -368,7 +372,9 @@ def _load_gliclass(device: str) -> tuple[Any, dict[str, Any]]:
         "model_load_seconds": round(load_seconds, 4),
         "torch_version": torch.__version__,
         "cuda_available": torch.cuda.is_available(),
-        "device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        "device_name": torch.cuda.get_device_name(0)
+        if torch.cuda.is_available()
+        else None,
     }
     return pipeline, metadata
 
@@ -416,7 +422,9 @@ def _score_gliclass(
         "scoring_seconds": round(elapsed, 4),
         "milliseconds_per_case": round(elapsed * 1000.0 / len(pairs), 4),
         "peak_cuda_bytes": (
-            int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None
+            int(torch.cuda.max_memory_allocated())
+            if torch.cuda.is_available()
+            else None
         ),
     }
     return evidence, timing
@@ -460,7 +468,10 @@ def _extract_usage(response: Any) -> dict[str, int]:
 def _batched(
     pairs: Sequence[answerability.RetrievalPair], batch_size: int
 ) -> list[list[answerability.RetrievalPair]]:
-    return [list(pairs[index : index + batch_size]) for index in range(0, len(pairs), batch_size)]
+    return [
+        list(pairs[index : index + batch_size])
+        for index in range(0, len(pairs), batch_size)
+    ]
 
 
 async def _call_gemini_batch(
@@ -503,7 +514,9 @@ async def _call_gemini_batch(
                 try:
                     parsed = GeminiJudgeBatch.model_validate_json(output_text)
                 except ValidationError as exc:
-                    raise RuntimeError("Gemini returned invalid semantic-judge JSON") from exc
+                    raise RuntimeError(
+                        "Gemini returned invalid semantic-judge JSON"
+                    ) from exc
 
                 expected_indexes = set(range(len(batch)))
                 actual_indexes = [item.index for item in parsed.results]
@@ -519,7 +532,7 @@ async def _call_gemini_batch(
                     elapsed_seconds=elapsed,
                     usage=_extract_usage(response),
                 )
-            except Exception as exc:  # noqa: BLE001 - API retry boundary is deliberate
+            except Exception as exc:
                 last_error = exc
                 message = str(exc).upper()
                 retryable = any(
@@ -546,10 +559,7 @@ async def _score_gemini(
     semaphore = asyncio.Semaphore(concurrency)
     started = time.perf_counter()
     results = await asyncio.gather(
-        *[
-            _call_gemini_batch(client, batch, semaphore=semaphore)
-            for batch in batches
-        ]
+        *[_call_gemini_batch(client, batch, semaphore=semaphore) for batch in batches]
     )
     elapsed = time.perf_counter() - started
 
@@ -683,9 +693,7 @@ async def _run(
         )
 
     promising = [
-        name
-        for name, result in selections.items()
-        if result["promising_for_v3_design"]
+        name for name, result in selections.items() if result["promising_for_v3_design"]
     ]
 
     return {
