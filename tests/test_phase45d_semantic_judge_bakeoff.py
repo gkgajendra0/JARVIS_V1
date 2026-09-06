@@ -105,6 +105,9 @@ def test_semantic_judge_contract_is_pinned_and_development_only() -> None:
         "c09fb5ca4cb7957044168e6bf8bcefa2e14b8dfb"
     )
     assert module.GEMINI_MODEL_ID == "gemini-3.5-flash-lite"
+    assert module.DEFAULT_GEMINI_BATCH_SIZE == 120
+    assert module.DEFAULT_GEMINI_CONCURRENCY == 4
+    assert module.DEFAULT_GEMINI_RPM == 12.0
     assert module.answerability.QWEN_CANDIDATE_WINDOW == 10
     assert module.TARGET_PRECISION == 0.95
     assert module.MIN_VALIDATION_RELEASE_RECALL == 0.40
@@ -114,6 +117,15 @@ def test_semantic_judge_contract_is_pinned_and_development_only() -> None:
     )
     assert "temporal scope" in module.GLICLASS_RELEASE_LABEL
     assert "historical state" in module.GEMINI_SYSTEM_PROMPT
+
+
+def test_retry_after_parser_handles_google_quota_hint() -> None:
+    module = _module()
+
+    assert module._retry_after_seconds(
+        "Please retry in 20.574368464s."
+    ) == pytest.approx(20.574368464)
+    assert module._retry_after_seconds("429 without retry hint") is None
 
 
 def test_gliclass_margin_is_release_minus_abstain() -> None:

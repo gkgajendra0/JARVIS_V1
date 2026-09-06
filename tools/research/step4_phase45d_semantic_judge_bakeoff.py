@@ -17,6 +17,7 @@ import argparse
 import asyncio
 import gc
 import json
+import re
 import time
 from collections import Counter, defaultdict
 from collections.abc import Callable, Sequence
@@ -48,6 +49,9 @@ GLICLASS_TASK_PROMPT = (
 )
 
 GEMINI_MODEL_ID = "gemini-3.5-flash-lite"
+DEFAULT_GEMINI_BATCH_SIZE = 120
+DEFAULT_GEMINI_CONCURRENCY = 4
+DEFAULT_GEMINI_RPM = 12.0
 GEMINI_SYSTEM_PROMPT = """You are the semantic sufficiency verifier for JARVIS memory retrieval.
 
 Classify EACH supplied case independently.
@@ -117,6 +121,32 @@ class GeminiBatchResult:
     judgments: list[GeminiJudgeItem]
     elapsed_seconds: float
     usage: dict[str, int]
+
+
+class GeminiRequestPacer:
+    def __init__(self, rpm: float) -> None:
+        if rpm <= 0:
+            raise ValueError("Gemini RPM must be positive")
+        self.interval_seconds = 60.0 / rpm
+        self._lock = asyncio.Lock()
+        self._next_start = 0.0
+
+    async def wait(self) -> None:
+        async with self._lock:
+            now = time.monotonic()
+            delay = max(0.0, self._next_start - now)
+            if delay:
+                await asyncio.sleep(delay)
+            self._next_start = time.monotonic() + self.interval_seconds
+
+
+def _retry_after_seconds(message: str) -> float | None:
+    match = re.search(
+        r"retry in\s+([0-9]+(?:\.[0-9]+)?)s",
+        message,
+        flags=re.IGNORECASE,
+    )
+    return float(match.group(1)) if match else None
 
 
 def _quantiles(values: Sequence[float]) -> dict[str, float | None]:
@@ -479,6 +509,7 @@ async def _call_gemini_batch(
     batch: Sequence[answerability.RetrievalPair],
     *,
     semaphore: asyncio.Semaphore,
+    pacer: GeminiRequestPacer,
 ) -> GeminiBatchResult:
     input_payload = {
         "cases": [
@@ -494,6 +525,7 @@ async def _call_gemini_batch(
     async with semaphore:
         last_error: Exception | None = None
         for attempt in range(5):
+            await pacer.wait()
             started = time.perf_counter()
             try:
                 response = await client.aio.interactions.create(
@@ -534,14 +566,21 @@ async def _call_gemini_batch(
                 )
             except Exception as exc:
                 last_error = exc
-                message = str(exc).upper()
+                raw_message = str(exc)
+                message = raw_message.upper()
                 retryable = any(
                     marker in message
                     for marker in ("429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE")
                 )
                 if not retryable or attempt == 4:
                     raise
-                await asyncio.sleep(2**attempt)
+                retry_after = _retry_after_seconds(raw_message)
+                retry_delay = max(
+                    float(2**attempt),
+                    pacer.interval_seconds,
+                    (retry_after + 1.0) if retry_after is not None else 0.0,
+                )
+                await asyncio.sleep(retry_delay)
         raise AssertionError(f"unreachable Gemini retry state: {last_error}")
 
 
@@ -550,6 +589,7 @@ async def _score_gemini(
     *,
     batch_size: int,
     concurrency: int,
+    rpm: float,
 ) -> tuple[list[GeminiJudgeItem], dict[str, Any]]:
     from google import genai
 
@@ -557,9 +597,18 @@ async def _score_gemini(
     client = genai.Client(api_key=api_key)
     batches = _batched(pairs, batch_size)
     semaphore = asyncio.Semaphore(concurrency)
+    pacer = GeminiRequestPacer(rpm)
     started = time.perf_counter()
     results = await asyncio.gather(
-        *[_call_gemini_batch(client, batch, semaphore=semaphore) for batch in batches]
+        *[
+            _call_gemini_batch(
+                client,
+                batch,
+                semaphore=semaphore,
+                pacer=pacer,
+            )
+            for batch in batches
+        ]
     )
     elapsed = time.perf_counter() - started
 
@@ -579,6 +628,8 @@ async def _score_gemini(
         "cases": len(pairs),
         "batch_size": batch_size,
         "concurrency": concurrency,
+        "rpm_cap": rpm,
+        "minimum_request_start_interval_seconds": round(pacer.interval_seconds, 4),
         "wall_seconds": round(elapsed, 4),
         "mean_request_seconds": round(sum(request_seconds) / len(request_seconds), 4),
         "usage": dict(usage_totals),
@@ -611,6 +662,7 @@ async def _run(
     device: str,
     gemini_batch_size: int,
     gemini_concurrency: int,
+    gemini_rpm: float,
 ) -> dict[str, Any]:
     try:
         import torch
@@ -634,6 +686,7 @@ async def _run(
         pairs,
         batch_size=gemini_batch_size,
         concurrency=gemini_concurrency,
+        rpm=gemini_rpm,
     )
 
     cases = [
@@ -780,8 +833,17 @@ async def _run(
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
-    parser.add_argument("--gemini-batch-size", type=int, default=8)
-    parser.add_argument("--gemini-concurrency", type=int, default=4)
+    parser.add_argument(
+        "--gemini-batch-size",
+        type=int,
+        default=DEFAULT_GEMINI_BATCH_SIZE,
+    )
+    parser.add_argument(
+        "--gemini-concurrency",
+        type=int,
+        default=DEFAULT_GEMINI_CONCURRENCY,
+    )
+    parser.add_argument("--gemini-rpm", type=float, default=DEFAULT_GEMINI_RPM)
     parser.add_argument("--output", default=str(OUTPUT_DEFAULT))
     return parser.parse_args()
 
@@ -792,6 +854,8 @@ def main() -> None:
         raise ValueError("Gemini batch size must be positive")
     if args.gemini_concurrency <= 0:
         raise ValueError("Gemini concurrency must be positive")
+    if args.gemini_rpm <= 0:
+        raise ValueError("Gemini RPM must be positive")
     output_path = Path(args.output)
     if output_path.exists():
         raise RuntimeError(
@@ -803,6 +867,7 @@ def main() -> None:
             args.device,
             args.gemini_batch_size,
             args.gemini_concurrency,
+            args.gemini_rpm,
         )
     )
     output_path.write_text(
