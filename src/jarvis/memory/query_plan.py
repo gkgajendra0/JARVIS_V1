@@ -98,7 +98,9 @@ class MemoryQueryPlan:
         if not isinstance(self.facet, MemoryFacetKey):
             raise TypeError("facet must be a MemoryFacetKey")
         if self.temporal_scope is not MemoryTemporalScope.CURRENT:
-            raise ValueError("validated current-fact plan must use current temporal scope")
+            raise ValueError(
+                "validated current-fact plan must use current temporal scope"
+            )
         if self.requested_relation is not None:
             if not isinstance(self.requested_relation, str):
                 raise TypeError("requested_relation must be a string when provided")
