@@ -16,8 +16,9 @@ import math
 import tempfile
 import time
 from collections import Counter
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import step4_phase45d_abstention_calibration as baseline
 import step4_phase45d_final_v3_acceptance as v3_acceptance
@@ -80,32 +81,41 @@ def _load_v3_source(path: Path) -> dict[str, Any]:
     if payload.get("validation_executed") is not False:
         raise RuntimeError("V3 validation must remain unexecuted for this diagnostic")
     if payload.get("git_sha") != EXPECTED_V3_OWNER_SHA:
-        raise RuntimeError("source artifact owner SHA does not match frozen V3 execution")
+        raise RuntimeError(
+            "source artifact owner SHA does not match frozen V3 execution"
+        )
     corpus = payload.get("corpus")
     if not isinstance(corpus, dict):
-        raise RuntimeError("source artifact has no corpus metadata")
+        raise TypeError("source artifact has no corpus metadata")
     if corpus.get("sha256") != v3_acceptance.EXPECTED_V3_PAYLOAD_SHA256:
         raise RuntimeError("source artifact corpus SHA does not match frozen V3")
     acceptance = payload.get("acceptance")
-    if not isinstance(acceptance, dict) or acceptance.get("calibration_pass") is not False:
+    if (
+        not isinstance(acceptance, dict)
+        or acceptance.get("calibration_pass") is not False
+    ):
         raise RuntimeError("source artifact does not preserve V3 calibration failure")
     if acceptance.get("validation_executed") is not False:
         raise RuntimeError("source artifact unexpectedly exposed V3 validation")
     cases = payload.get("cases")
     if not isinstance(cases, list) or len(cases) != 360:
-        raise RuntimeError("retired V3 source must contain exactly 360 calibration cases")
+        raise RuntimeError(
+            "retired V3 source must contain exactly 360 calibration cases"
+        )
     if any(case.get("split") != "calibration" for case in cases):
         raise RuntimeError("retired V3 source contains non-calibration cases")
     calibration = payload.get("calibration")
     if not isinstance(calibration, dict):
-        raise RuntimeError("source artifact has no calibration section")
+        raise TypeError("source artifact has no calibration section")
     source_acceptance = calibration.get("acceptance")
     if not isinstance(source_acceptance, dict):
-        raise RuntimeError("source artifact has no calibration acceptance result")
+        raise TypeError("source artifact has no calibration acceptance result")
     policy = source_acceptance.get("policy")
     if not isinstance(policy, dict):
-        raise RuntimeError("source artifact has no calibration policy")
-    false_ids = frozenset(str(value) for value in policy.get("false_release_case_ids", []))
+        raise TypeError("source artifact has no calibration policy")
+    false_ids = frozenset(
+        str(value) for value in policy.get("false_release_case_ids", [])
+    )
     if false_ids != EXPECTED_V3_FALSE_RELEASE_IDS:
         raise RuntimeError("retired V3 false-release set does not match owner result")
     return payload
@@ -205,7 +215,9 @@ async def _score_gemini38(
 ) -> tuple[list[semantic.GeminiJudgeItem], dict[str, Any]]:
     from google import genai
 
-    api_key = require_provider_api_key("gemini", purpose="Gemini 3.8 memory judge diagnostic")
+    api_key = require_provider_api_key(
+        "gemini", purpose="Gemini 3.8 memory judge diagnostic"
+    )
     client = genai.Client(api_key=api_key)
     pacer = semantic.GeminiRequestPacer(rpm)
     judgments: list[semantic.GeminiJudgeItem] = []
@@ -263,7 +275,9 @@ def _materialize(
                 rerank_score=case.rerank_score,
                 rerank_margin=case.rerank_margin,
                 gemini_called=judgment is not None,
-                gemini_decision=judgment.decision if judgment is not None else "abstain",
+                gemini_decision=judgment.decision
+                if judgment is not None
+                else "abstain",
                 gemini_failure_mode=(
                     judgment.failure_mode
                     if judgment is not None
@@ -289,7 +303,8 @@ def _comparison(
     old_false = {
         case_id
         for case_id, case in prior_by_id.items()
-        if case.get("gemini_decision") == "release" and not bool(case.get("safe_to_release"))
+        if case.get("gemini_decision") == "release"
+        and not bool(case.get("safe_to_release"))
     }
     new_false = {
         case.case_id for case in current if case.released and not case.safe_to_release
@@ -297,7 +312,8 @@ def _comparison(
     old_safe_releases = {
         case_id
         for case_id, case in prior_by_id.items()
-        if case.get("gemini_decision") == "release" and bool(case.get("safe_to_release"))
+        if case.get("gemini_decision") == "release"
+        and bool(case.get("safe_to_release"))
     }
     new_safe_releases = {
         case.case_id for case in current if case.released and case.safe_to_release
@@ -312,7 +328,9 @@ def _comparison(
     }
 
 
-def _selection(acceptance: dict[str, Any], *, retrieval_reproduced: bool) -> dict[str, Any]:
+def _selection(
+    acceptance: dict[str, Any], *, retrieval_reproduced: bool
+) -> dict[str, Any]:
     checks = {
         "retrieval_reproduced": retrieval_reproduced,
         "exact_precision_lower_bound": bool(
@@ -381,7 +399,11 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             )
             _assert_retrieval_reproduction(retrieved, source)
 
-            pairs = [case.gemini_pair() for case in retrieved if case.gemini_pair() is not None]
+            pairs = [
+                case.gemini_pair()
+                for case in retrieved
+                if case.gemini_pair() is not None
+            ]
             typed_pairs = [pair for pair in pairs if pair is not None]
             judgments, gemini_timing = await _score_gemini38(
                 typed_pairs,

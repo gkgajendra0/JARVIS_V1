@@ -9,7 +9,9 @@ PLAN = Path("docs/CURRENT_PLAN.md")
 def main() -> None:
     text = PLAN.read_text(encoding="utf-8")
 
-    stage_pattern = re.compile(r"\*\*STEP 3 COMPLETE \+ MERGED .*? PHASE 4\.5E BLOCKED\*\*")
+    stage_pattern = re.compile(
+        r"\*\*STEP 3 COMPLETE \+ MERGED .*? PHASE 4\.5E BLOCKED\*\*"
+    )
     stage = (
         "**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — "
         "PHASE 4.5D ACTIVE — FRESH V3 FAIL_CALIBRATION / RETIRED — V3 VALIDATION "

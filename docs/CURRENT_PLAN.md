@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — QWEN TOP-10 + GEMINI SINGLE-INSTANCE DEVELOPMENT ARCHITECTURE SELECTED 39/39 — FRESH V3 METHOD/CORPUS/HARNESS FROZEN — OWNER V3 ACCEPTANCE NEXT — PHASE 4.5E BLOCKED**
+**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — FRESH V3 FAIL_CALIBRATION / RETIRED — V3 VALIDATION UNEXPOSED — GEMINI 3.8 FLASH CALIBRATION DIAGNOSTIC NEXT — PHASE 4.5E BLOCKED**
 
 This file is the operational source of truth. Detailed measurements belong in `docs/research/`; only fresh accepted architecture belongs in ADRs / `docs/CURRENT_ARCHITECTURE.md`.
 
@@ -242,74 +242,72 @@ This development result isolates the V2 ranking problem:
 
 ---
 
-## Active 4.5D direction — FRESH V3 ACCEPTANCE
+## Active 4.5D direction — POST-V3 GEMINI 3.8 CALIBRATION DIAGNOSTIC
 
-Development architecture selection is complete. V2 remains exposed and retired and cannot be reused as acceptance evidence.
+Fresh V3 has been executed once and is **FAIL_CALIBRATION / RETIRED**. Do not rerun it, overwrite it, or execute its untouched validation half.
 
-### Selected production-shaped architecture
+Durable result:
 
-The two preregistered single-instance diagnostics passed exactly:
+- `docs/research/STEP_4_PHASE_4_5D_FINAL_V3_RESULT.md`.
 
-- boundary cells: `15/15` correct;
-- additional positive/ordinary-semantic cells: `24/24` preserved;
-- combined production-shaped development coverage: `39/39`, zero regressions;
-- EN, HI and Hinglish all represented.
+Frozen owner-run V3 evidence:
 
-Selected V3 pipeline:
+- implementation SHA `783a5b49cdf31a957c403066f1ea421c007354a4`;
+- corpus SHA-256 `baac40840bc260a01f4fc630570e4578dbdf8dc9f36c8b3192c6bb6471191195`;
+- calibration `170 TP / 14 FP`, empirical precision `0.923913`;
+- one-sided 95% Clopper-Pearson lower precision bound `0.883609731`;
+- positive Recall@10 and reranked Top-1 both `170/180 = 0.944444`;
+- EN positive release recall `1.0`, HI `0.833333`, Hinglish `1.0`;
+- false releases: `5 positive retrieval misses + 3 near_miss + 1 ambiguous + 1 unsupported_source + 4 historical`;
+- security-boundary leaks: four `historical` cases;
+- **validation was not executed**.
+
+The failure is not marginal. With `170` true releases, at most `3` false releases would satisfy the frozen exact 95% precision-confidence gate; V3 produced `14`.
+
+### Failure diagnosis
+
+The ten positive Top-10 misses were all Hindi and concentrated in two predicates:
+
+- five `archive_destination` misses; Gemini 3.5 Flash-Lite incorrectly RELEASED all five wrong Top-1 documents;
+- five `signin_method` misses; Gemini correctly abstained on all five.
+
+Whenever the expected positive memory entered Top-10, the frozen Qwen reranker placed it Top-1. This keeps the ranking problem localized to first-stage multilingual candidate starvation rather than reranker ordering.
+
+The remaining semantic false releases were concentrated in scope-sensitive cases: Hinglish near-miss/ambiguity, one English unsupported-source query, and Hindi/Hinglish historical queries.
+
+### Research-first next candidate — Gemini 3.8 Flash
+
+Google released stable GA `gemini-3.8-flash` on September 2, 2026 and positions it as its most intelligent Flash model for complex workflows with higher factual rigor. It supports the same Interactions API and structured outputs plus configurable thinking. This is a materially stronger current production model than the failed Flash-Lite judge, so it is the next mature technology to test before adding custom semantic logic.
+
+Frozen development method:
+
+- `docs/research/STEP_4_PHASE_4_5D_GEMINI38_CALIBRATION_DIAGNOSTIC_METHOD.md`.
+
+Harness:
+
+- `tools/research/step4_phase45d_gemini38_calibration_diagnostic.py`.
+
+The diagnostic uses **only the already exposed V3 calibration split** and changes one semantic variable:
 
 ```text
-canonical eligibility/security authority
-→ eligible FTS5 + Qwen3-Embedding-0.6B 256d exact cosine
-→ equal-weight RRF, k=60
-→ top 10
-→ Qwen3-Reranker-0.6B with frozen instruction
-→ eligible Top-1
-→ gemini-3.5-flash-lite
-→ exactly one query/document pair per Interactions API request
-→ structured RELEASE / ABSTAIN
+same V3 calibration only
+same canonical eligibility/security
+same Qwen3 256d FTS5 + exact cosine + equal RRF
+same Top-10 candidate window
+same Qwen3 reranker + frozen instruction
+same one-query/document Interactions request shape
+same semantic sufficiency prompt + structured schema + store=False
+
+Gemini 3.5 Flash-Lite
+        ↓ only changed semantic variable
+Gemini 3.8 Flash, thinking_level=medium
 ```
 
-Durable development evidence:
+Before any Gemini 3.8 scoring is accepted as comparable evidence, the harness must reproduce every one of the 360 V3 calibration Top-1 IDs and positive Recall@10/Top-1 flags from the retired owner artifact.
 
-- `docs/research/STEP_4_PHASE_4_5D_GEMINI_SINGLE_INSTANCE_BOUNDARY_RESULT.md`;
-- `docs/research/STEP_4_PHASE_4_5D_GEMINI_SINGLE_INSTANCE_COVERAGE_RESULT.md`.
+Development selection for a fresh V4 design requires the existing exact precision, recall, language and zero-security-release gates. Even a perfect diagnostic is development evidence only; V4 would need a completely fresh acceptance corpus. The untouched V3 validation split must not be reused as V4 acceptance evidence.
 
-### Fresh V3 — METHOD/CORPUS/HARNESS FROZEN, NOT YET RUN
-
-Frozen method:
-
-- `docs/research/STEP_4_PHASE_4_5D_FINAL_V3_METHOD.md`.
-
-Fresh corpus:
-
-- `tools/research/step4_phase45d_final_v3_cases.py`;
-- `720` cases total;
-- calibration: `180 release + 180 abstain`;
-- validation: `180 release + 180 abstain`;
-- positive cases per split: `60 EN + 60 HI + 60 Hinglish`;
-- every one of the 12 abstain families: `5 EN + 5 HI + 5 Hinglish` per split;
-- calibration/validation synthetic profile identities are disjoint;
-- exact V2 query reuse is prohibited;
-- no real secrets;
-- frozen payload SHA-256: `baac40840bc260a01f4fc630570e4578dbdf8dc9f36c8b3192c6bb6471191195`.
-
-Acceptance harness:
-
-- `tools/research/step4_phase45d_final_v3_acceptance.py`;
-- Qwen candidate window `10`;
-- Gemini Interactions API only;
-- one query/document pair per request;
-- fixed hard RELEASE/ABSTAIN policy, no fitted Gemini threshold and no fabricated confidence score;
-- fresh calibration first;
-- exact one-sided Clopper-Pearson precision lower bound via SciPy;
-- precision target `0.95`, confidence `0.95`;
-- at least `59` calibration releases required;
-- validation API calls are blocked unless every calibration hard gate passes;
-- validation requires zero false releases;
-- output refuses overwrite;
-- validation is never used for retuning.
-
-The V3 owner run is now authorized once the frozen implementation reaches a clean exact SHA with all CI jobs green. This is still synthetic acceptance; later shadow-labelled operational monitoring remains required.
+If Gemini 3.8 fails this diagnostic, stop model-hopping and research/implement the structure-aware fallback: parse memory queries into canonical subject/relation/temporal/source constraints, apply deterministic metadata filtering before semantic release, and evaluate multilingual NLI only as a task-matched secondary verifier if needed.
 
 ---
 
@@ -337,7 +335,7 @@ Do **not** wire semantic retrieval into `ContextAssembler` / Gemini conversation
 6. 4.5A — COMPLETE.
 7. 4.5B — COMPLETE.
 8. 4.5C — COMPLETE.
-9. **4.5D — ACTIVE: development architecture selected 39/39; fresh V3 method/corpus/harness frozen; owner V3 acceptance next.**
+9. **4.5D — ACTIVE: V3 FAIL_CALIBRATION / RETIRED with validation unexposed; Gemini 3.8 calibration-only diagnostic next.**
 10. **4.5E — BLOCKED.**
 11. 4.6 — NOT STARTED.
 12. 4.7 — NOT STARTED.
@@ -362,7 +360,10 @@ Do not:
 - rescue the rejected V2 logistic gate through threshold tuning;
 - treat mMARCO as the accepted final verifier;
 - reopen rejected verifier/model search unless fresh V3 evidence fails the frozen selected architecture;
-- alter the frozen V3 corpus, prompt, API shape, model revisions or gates after owner acceptance begins;
+- rerun or overwrite the failed V3 acceptance artifact;
+- execute the untouched V3 validation half after calibration failure;
+- retune the V3 prompt/model/corpus/gates and claim it is still fresh V3 evidence;
+- use the untouched V3 validation split as V4 acceptance evidence;
 - rerun Qwen vs EmbeddingGemma selection;
 - rerun 4.5C owner compatibility unless contracts change;
 - change Qwen revisions or Torch/Torchvision casually;
@@ -374,8 +375,10 @@ Do not:
 
 ## Immediate Next Action
 
-**PASS THE FROZEN FRESH V3 CORPUS/HARNESS THROUGH CI ON A CLEAN EXACT SHA, THEN RUN V3 ONCE ON THE OWNER RTX.**
+**PASS THE GEMINI 3.8 CALIBRATION-ONLY DIAGNOSTIC THROUGH CI ON A CLEAN EXACT SHA, THEN RUN IT ONCE AGAINST THE RETIRED OWNER V3 CALIBRATION ARTIFACT.**
 
-The owner run must use payload SHA `baac40840bc260a01f4fc630570e4578dbdf8dc9f36c8b3192c6bb6471191195`, Qwen candidate window `10`, the Gemini Interactions API with exactly one query/document pair per request, and the exact statistical gates in `STEP_4_PHASE_4_5D_FINAL_V3_METHOD.md`.
+The diagnostic must use `.step4-phase45d-final-v3-acceptance.json` only as exposed development input, prove V3 validation was never executed, reproduce all 360 calibration retrieval decisions, and never access the V3 validation split.
 
-If calibration fails, validation must remain unexecuted and this V3 is retired. If validation executes, it is exposed once and cannot be used to retune or rerun V3 as fresh evidence. Phase 4.5E remains blocked until a passing V3 result is durably recorded and closed on a green exact SHA.
+If `gemini-3.8-flash` with medium thinking satisfies the frozen exact precision/recall/language/security development gates, freeze it only for **fresh V4 design**. If it fails, move to the researched structure-aware query-planning/metadata-filter architecture rather than prompt-tuning or generic relevance-model cycling.
+
+Phase 4.5E remains blocked.
