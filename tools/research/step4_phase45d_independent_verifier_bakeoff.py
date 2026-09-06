@@ -35,7 +35,9 @@ MIN_LANGUAGE_RECALL = 0.25
 def _load_artifact(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("final_acceptance_eligible") is not True:
-        raise RuntimeError("input is not the retired Phase 4.5D final-acceptance artifact")
+        raise RuntimeError(
+            "input is not the retired Phase 4.5D final-acceptance artifact"
+        )
     cases = payload.get("cases")
     if not isinstance(cases, list) or len(cases) != 320:
         raise RuntimeError("expected exactly 320 retired Phase 4.5D cases")
@@ -69,7 +71,9 @@ def _pair_records(artifact: dict[str, Any]) -> list[dict[str, Any]]:
         case_id = str(case["case_id"])
         query_item = queries.get(case_id)
         if query_item is None:
-            raise RuntimeError(f"case id missing from frozen corpus generator: {case_id}")
+            raise RuntimeError(
+                f"case id missing from frozen corpus generator: {case_id}"
+            )
         if str(query_item["label"]) != str(case["label"]):
             raise RuntimeError(f"label drift for {case_id}")
         if str(query_item["language"]) != str(case["language"]):
@@ -96,11 +100,15 @@ def _resolve_model_revision() -> str:
     try:
         from huggingface_hub import model_info
     except ImportError as exc:  # pragma: no cover - owner research environment only
-        raise RuntimeError("huggingface_hub is required for verifier revision pinning") from exc
+        raise RuntimeError(
+            "huggingface_hub is required for verifier revision pinning"
+        ) from exc
     info = model_info(MODEL_ID, revision=MODEL_REVISION_HINT)
     revision = getattr(info, "sha", None)
     if not isinstance(revision, str) or len(revision) != 40:
-        raise RuntimeError("could not resolve verifier model to a full immutable commit SHA")
+        raise RuntimeError(
+            "could not resolve verifier model to a full immutable commit SHA"
+        )
     return revision
 
 
@@ -160,7 +168,9 @@ def _score_pairs(
             torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
         ),
         "peak_cuda_bytes": (
-            int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None
+            int(torch.cuda.max_memory_allocated())
+            if torch.cuda.is_available()
+            else None
         ),
         "model_load_seconds": round(load_seconds, 4),
         "score_seconds": round(score_seconds, 4),
@@ -175,10 +185,7 @@ def _labels(cases: list[dict[str, Any]]) -> np.ndarray:
 
 def _base_matrix(cases: list[dict[str, Any]]) -> np.ndarray:
     return np.asarray(
-        [
-            feature_gate._feature_row(case, feature_gate.FULL_EVIDENCE)
-            for case in cases
-        ],
+        [feature_gate._feature_row(case, feature_gate.FULL_EVIDENCE) for case in cases],
         dtype=np.float64,
     )
 
@@ -193,7 +200,9 @@ def _oof_evaluate(
         from sklearn.metrics import average_precision_score, roc_auc_score
         from sklearn.model_selection import StratifiedKFold, cross_val_predict
     except ImportError as exc:  # pragma: no cover - owner research environment only
-        raise RuntimeError("scikit-learn is required for verifier confidence analysis") from exc
+        raise RuntimeError(
+            "scikit-learn is required for verifier confidence analysis"
+        ) from exc
 
     cv = StratifiedKFold(
         n_splits=feature_gate.N_SPLITS,
@@ -217,9 +226,7 @@ def _oof_evaluate(
             "training_row_scores_used": False,
         },
         "roc_auc": round(float(roc_auc_score(y, probabilities)), 6),
-        "average_precision": round(
-            float(average_precision_score(y, probabilities)), 6
-        ),
+        "average_precision": round(float(average_precision_score(y, probabilities)), 6),
         "empirical_operating_point": feature_gate._best_empirical_operating_point(
             probabilities, y
         ),
@@ -231,7 +238,9 @@ def _raw_score_metrics(scores: np.ndarray, y: np.ndarray) -> dict[str, Any]:
     try:
         from sklearn.metrics import average_precision_score, roc_auc_score
     except ImportError as exc:  # pragma: no cover - owner research environment only
-        raise RuntimeError("scikit-learn is required for verifier score analysis") from exc
+        raise RuntimeError(
+            "scikit-learn is required for verifier score analysis"
+        ) from exc
     return {
         "roc_auc": round(float(roc_auc_score(y, scores)), 6),
         "average_precision": round(float(average_precision_score(y, scores)), 6),
@@ -261,7 +270,9 @@ def _language_breakdown(
 
     result: dict[str, Any] = {}
     for language, indices in sorted(grouped.items()):
-        positives = [index for index in indices if bool(cases[index]["safe_to_release"])]
+        positives = [
+            index for index in indices if bool(cases[index]["safe_to_release"])
+        ]
         released_positive = [
             index for index in positives if float(probabilities[index]) >= threshold
         ]
@@ -304,7 +315,11 @@ def _recommendation(
         float(details["positive_release_recall"]) >= MIN_LANGUAGE_RECALL
         for details in languages.values()
     )
-    if improved and float(best["recall"]) >= MIN_DEVELOPMENT_RECALL and language_floor_met:
+    if (
+        improved
+        and float(best["recall"]) >= MIN_DEVELOPMENT_RECALL
+        and language_floor_met
+    ):
         return {
             "decision": "independent_signal_promising",
             "reason": "combined_oof_signal_clears_pre_registered_development_gates",
