@@ -10,7 +10,9 @@ SCRIPT = ROOT / "tools" / "research" / "step4_phase45d_sfst_diagnostic.py"
 
 
 def _load() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("step4_phase45d_sfst_diagnostic", SCRIPT)
+    spec = importlib.util.spec_from_file_location(
+        "step4_phase45d_sfst_diagnostic", SCRIPT
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
