@@ -164,7 +164,9 @@ async def _run(device: str) -> dict[str, Any]:
         torch.cuda.reset_peak_memory_stats()
 
     payload = v2_cases.build_payload()
-    positive_queries = [item for item in payload["queries"] if item["label"] == "release"]
+    positive_queries = [
+        item for item in payload["queries"] if item["label"] == "release"
+    ]
     if len(positive_queries) != 900:
         raise RuntimeError("V2 positive-query count changed unexpectedly")
 
@@ -184,7 +186,9 @@ async def _run(device: str) -> dict[str, Any]:
             candidate_window=max(RERANK_DEPTHS),
         )
         if reranker.instruction != JARVIS_MEMORY_RERANK_INSTRUCTION:
-            raise RuntimeError("diagnostic must use the frozen JARVIS reranker instruction")
+            raise RuntimeError(
+                "diagnostic must use the frozen JARVIS reranker instruction"
+            )
 
         rows: list[PositiveDiagnostic] = []
         try:
@@ -218,7 +222,9 @@ async def _run(device: str) -> dict[str, Any]:
 
                 expected_rank: int | None = None
                 for candidate in first_stage:
-                    memory_id = assertion_to_memory.get(candidate.assertion.assertion_id)
+                    memory_id = assertion_to_memory.get(
+                        candidate.assertion.assertion_id
+                    )
                     if memory_id == expected:
                         expected_rank = candidate.fused_rank
                         break
@@ -285,14 +291,12 @@ async def _run(device: str) -> dict[str, Any]:
         "retrieval_top100_p95_ms": _percentile(
             [row.retrieval_ms for row in rows], 0.95
         ),
-        "rerank_top20_p50_ms": _percentile(
-            [row.rerank_top20_ms for row in rows], 0.50
-        ),
-        "rerank_top20_p95_ms": _percentile(
-            [row.rerank_top20_ms for row in rows], 0.95
-        ),
+        "rerank_top20_p50_ms": _percentile([row.rerank_top20_ms for row in rows], 0.50),
+        "rerank_top20_p95_ms": _percentile([row.rerank_top20_ms for row in rows], 0.95),
         "qwen_peak_cuda_bytes": (
-            int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None
+            int(torch.cuda.max_memory_allocated())
+            if torch.cuda.is_available()
+            else None
         ),
     }
 
