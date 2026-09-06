@@ -171,7 +171,9 @@ async def test_gemini_interpreter_uses_json_schema_without_storage() -> None:
 
 
 @pytest.mark.asyncio
-async def test_schema_valid_but_incomplete_exact_proposal_is_returned_for_policy_abstain() -> None:
+async def test_schema_valid_but_incomplete_exact_proposal_is_returned_for_policy_abstain() -> (
+    None
+):
     incomplete = MemoryQueryProposal(intent=MemoryQueryIntent.EXACT_FACT)
     client = FakeGeminiClient(incomplete.model_dump_json())
     interpreter = GeminiMemoryQueryInterpreter(client=client, model="gemini-test")
