@@ -27,6 +27,7 @@ import tempfile
 import time
 from collections import Counter
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -66,10 +67,8 @@ from jarvis.memory.worker import SerialConnectionWorker
 GEMINI_MODEL_ID = "gemini-3.5-flash-lite"
 DEFAULT_GEMINI_RPM = 12.0
 GEMINI_MAX_ATTEMPTS = 5
-OUTPUT_DEFAULT = Path(
-    ".step4-phase45d-v2-structured-query-planner-diagnostic-v1.json"
-)
-NOW = __import__("datetime").datetime(2026, 9, 6, 16, 30, tzinfo=__import__("datetime").UTC)
+OUTPUT_DEFAULT = Path(".step4-phase45d-v2-structured-query-planner-diagnostic-v1.json")
+NOW = datetime(2026, 9, 6, 16, 30, tzinfo=UTC)
 TARGET_DOMAINS = ("project", "travel", "workspace")
 TARGET_LANGUAGES = tuple(v2_cases.LANGUAGES)
 RELATION_COMPARISON_CATEGORY = "relation_mismatch"
@@ -84,7 +83,9 @@ EXPECTED_RELATION_COMPARISON_CASES = len(TARGET_LANGUAGES)
 EXPECTED_TARGET_RELEASE_CASES = (
     EXPECTED_DIRECT_POSITIVE_CASES + EXPECTED_RELATION_COMPARISON_CASES
 )
-EXPECTED_TRUE_ABSTAIN_CASES = len(TARGET_TRUE_ABSTAIN_CATEGORIES) * len(TARGET_LANGUAGES)
+EXPECTED_TRUE_ABSTAIN_CASES = len(TARGET_TRUE_ABSTAIN_CATEGORIES) * len(
+    TARGET_LANGUAGES
+)
 EXPECTED_CASES = EXPECTED_TARGET_RELEASE_CASES + EXPECTED_TRUE_ABSTAIN_CASES
 EXPECTED_CLOUD_FACETS = len(v2_cases.CURRENT_FACTS) + 75
 
@@ -265,7 +266,9 @@ def _relation_comparison_target_memory_id(case: dict[str, Any]) -> str:
             "relation-comparison query must map to exactly one frozen V2 source fact"
         )
     source_fact = source_matches[0]
-    requested_relation_index = (source_fact.relation_index + 1) % len(v2_cases.RELATIONS)
+    requested_relation_index = (source_fact.relation_index + 1) % len(
+        v2_cases.RELATIONS
+    )
     targets = [
         fact
         for fact in v2_cases.CURRENT_FACTS
@@ -347,7 +350,9 @@ def select_diagnostic_cases(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     _diagnostic_case(
                         chosen,
                         target_label="release",
-                        expected_memory_id=_relation_comparison_target_memory_id(chosen),
+                        expected_memory_id=_relation_comparison_target_memory_id(
+                            chosen
+                        ),
                     )
                 )
             else:
@@ -365,8 +370,12 @@ def select_diagnostic_cases(payload: dict[str, Any]) -> list[dict[str, Any]]:
             f"planner diagnostic must select exactly {EXPECTED_CASES} unique cases"
         )
 
-    source_release_count = sum(item["source_v2_label"] == "release" for item in selected)
-    source_abstain_count = sum(item["source_v2_label"] == "abstain" for item in selected)
+    source_release_count = sum(
+        item["source_v2_label"] == "release" for item in selected
+    )
+    source_abstain_count = sum(
+        item["source_v2_label"] == "abstain" for item in selected
+    )
     target_release_count = sum(item["target_label"] == "release" for item in selected)
     target_abstain_count = sum(item["target_label"] == "abstain" for item in selected)
     if (source_release_count, source_abstain_count) != (9, 36):
@@ -409,9 +418,7 @@ async def populate_structured_v2(
         if mode == "secret":
             continue
         sensitivity = (
-            Sensitivity.LOCAL_ONLY
-            if mode == "local_only"
-            else Sensitivity.STANDARD
+            Sensitivity.LOCAL_ONLY if mode == "local_only" else Sensitivity.STANDARD
         )
         record = await lifecycle.create(
             _draft(
@@ -646,7 +653,9 @@ def summarize(results: list[PlannerCaseResult]) -> dict[str, Any]:
         if result.category == RELATION_COMPARISON_CATEGORY
         and result.target_label == "release"
     ]
-    direct_exact = [result for result in direct_targets if _is_exact_target_release(result)]
+    direct_exact = [
+        result for result in direct_targets if _is_exact_target_release(result)
+    ]
     relation_exact = [
         result for result in relation_targets if _is_exact_target_release(result)
     ]
@@ -687,8 +696,7 @@ def summarize(results: list[PlannerCaseResult]) -> dict[str, Any]:
     grounding_reasons = Counter(
         result.grounding_reason
         for result in results
-        if result.grounding_disposition
-        == MemoryQueryGroundingDisposition.ABSTAIN.value
+        if result.grounding_disposition == MemoryQueryGroundingDisposition.ABSTAIN.value
     )
     query_policy_reasons = Counter(
         result.query_policy_reason
@@ -733,7 +741,7 @@ def summarize(results: list[PlannerCaseResult]) -> dict[str, Any]:
         ),
         "every_release_is_exact_expected_memory": not false_releases,
         "jarvis_injects_no_canonical_memory_values": True,
-        "qwen_invoked": False,
+        "no_qwen_invocation": True,
     }
 
     true_abstains = sum(
@@ -816,7 +824,9 @@ async def _run(*, gemini_rpm: float) -> dict[str, Any]:
     payload = v2_cases.build_payload()
     selected = select_diagnostic_cases(payload)
 
-    with tempfile.TemporaryDirectory(prefix="jarvis-phase45d-query-planner-") as temp_dir:
+    with tempfile.TemporaryDirectory(
+        prefix="jarvis-phase45d-query-planner-"
+    ) as temp_dir:
         worker = _connection_worker(Path(temp_dir) / "planner.db")
         lifecycle = MemoryLifecycleService(
             worker,
