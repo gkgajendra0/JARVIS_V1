@@ -117,9 +117,10 @@ class MemoryQueryGroundingPolicy:
             catalog,
             attribute="subject",
         )
-        if subject_key in subjects_by_key and proposal.subject not in subjects_by_key[
-            subject_key
-        ]:
+        if (
+            subject_key in subjects_by_key
+            and proposal.subject not in subjects_by_key[subject_key]
+        ):
             return self._abstain("subject_reference_conflicts_with_selected_subject")
 
         relation_key = semantic_surface_key(proposal.requested_relation)
@@ -131,9 +132,7 @@ class MemoryQueryGroundingPolicy:
             relation_key in predicates_by_key
             and proposal.predicate not in predicates_by_key[relation_key]
         ):
-            return self._abstain(
-                "relation_reference_conflicts_with_selected_predicate"
-            )
+            return self._abstain("relation_reference_conflicts_with_selected_predicate")
 
         return self._allow("grounded_exact_query_references")
 
