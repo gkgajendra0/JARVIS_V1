@@ -32,7 +32,7 @@ USER query
   -> zero or multiple rows: ABSTAIN
 ```
 
-The interpreter has no release authority and receives no memory values.
+The interpreter has no release authority. JARVIS does not inject canonical memory values into planner context; the only value-like text the interpreter may see is text already present in the user's own query.
 
 ## Research basis
 
@@ -77,7 +77,7 @@ The request contains exactly:
 }
 ```
 
-It must not contain canonical memory values, normalized assertion text, source IDs, provenance payloads, labels, case IDs, categories, split names, or expected memory IDs.
+JARVIS must not add canonical assertion values, normalized assertion text, source IDs, provenance payloads, labels, case IDs, categories, split names, or expected memory IDs to that request. A retired V2 query may itself contain one of its synthetic values; that remains user-query text and is not planner context injected from canonical memory.
 
 ## Frozen JARVIS authority path
 
@@ -196,7 +196,7 @@ Expected final disposition for all 36: **ABSTAIN**.
 
 ## What is measured
 
-Per case, persist only diagnostic metadata, never query text or memory value:
+Per case, persist only diagnostic metadata, never query text or canonical memory value:
 
 - case ID
 - label
@@ -249,7 +249,7 @@ This is architecture-development evidence, not statistical acceptance. The archi
 3. at least **8/9** positive exact-current cases release the expected memory;
 4. each language releases at least **2/3** of its three positive cells;
 5. every released case is the exact expected canonical memory ID;
-6. no memory value enters an interpreter request;
+6. JARVIS injects **no canonical memory value fields or assertion text** into interpreter context beyond value-like text already present in the user's query;
 7. no Qwen model is invoked by the exact-fact diagnostic path.
 
 Failure does not authorize lowering these gates. It identifies the next architecture problem to research.
