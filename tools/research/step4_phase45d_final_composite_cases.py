@@ -33,9 +33,7 @@ SECURITY_CATEGORIES = (
 ABSTAIN_CATEGORIES = ORDINARY_ABSTAIN_CATEGORIES + SECURITY_CATEGORIES
 CASES_PER_ABSTAIN_CATEGORY_LANGUAGE = 5
 ABSTAIN_CASES = (
-    len(ABSTAIN_CATEGORIES)
-    * len(LANGUAGES)
-    * CASES_PER_ABSTAIN_CATEGORY_LANGUAGE
+    len(ABSTAIN_CATEGORIES) * len(LANGUAGES) * CASES_PER_ABSTAIN_CATEGORY_LANGUAGE
 )
 TOTAL_CASES = RELEASE_CASES + ABSTAIN_CASES
 
@@ -446,7 +444,9 @@ def build_payload() -> dict[str, Any]:
             f"fresh abstain count changed: {abstain_counter} != {ABSTAIN_CASES}"
         )
     if len(queries) != TOTAL_CASES:
-        raise RuntimeError(f"fresh total count changed: {len(queries)} != {TOTAL_CASES}")
+        raise RuntimeError(
+            f"fresh total count changed: {len(queries)} != {TOTAL_CASES}"
+        )
 
     case_ids = [str(item["case_id"]) for item in queries]
     normalized = [str(item["query"]).strip().casefold() for item in queries]

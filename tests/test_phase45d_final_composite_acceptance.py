@@ -113,7 +113,9 @@ def test_perfect_frozen_outcome_passes_all_acceptance_gates() -> None:
 
 def test_one_false_release_fails_acceptance() -> None:
     results = _perfect_results()
-    first_abstain = next(index for index, row in enumerate(results) if row.label == "abstain")
+    first_abstain = next(
+        index for index, row in enumerate(results) if row.label == "abstain"
+    )
     row = results[first_abstain]
     results[first_abstain] = harness.AcceptanceCaseResult(
         case_id=row.case_id,
@@ -136,4 +138,6 @@ def test_one_false_release_fails_acceptance() -> None:
     assert summary["acceptance_passed"] is False
     assert summary["false_release_cases"] == 1
     assert summary["continuation_checks"]["zero_false_releases"] is False
-    assert summary["continuation_checks"]["precision_lower_bound_at_least_0_95"] is False
+    assert (
+        summary["continuation_checks"]["precision_lower_bound_at_least_0_95"] is False
+    )

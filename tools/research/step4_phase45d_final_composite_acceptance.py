@@ -43,7 +43,9 @@ from jarvis.memory.types import (
 )
 from jarvis.memory.worker import SerialConnectionWorker
 
-FROZEN_CORPUS_SHA256 = "69666a37d436828b1d65827852f9e43d524253608209275205c41a36f8accadf"
+FROZEN_CORPUS_SHA256 = (
+    "69666a37d436828b1d65827852f9e43d524253608209275205c41a36f8accadf"
+)
 GEMINI_MODEL_ID = "gemini-3.5-flash-lite"
 DEFAULT_GEMINI_RPM = 12.0
 GEMINI_MAX_ATTEMPTS = 5
@@ -357,7 +359,9 @@ def _is_exact_release(result: AcceptanceCaseResult) -> bool:
     )
 
 
-def _summarize(results: list[AcceptanceCaseResult], *, provider_calls: int) -> dict[str, Any]:
+def _summarize(
+    results: list[AcceptanceCaseResult], *, provider_calls: int
+) -> dict[str, Any]:
     if len(results) != cases.TOTAL_CASES:
         raise RuntimeError("final acceptance result count changed")
     target_releases = [row for row in results if row.label == "release"]
@@ -376,12 +380,12 @@ def _summarize(results: list[AcceptanceCaseResult], *, provider_calls: int) -> d
         and not _is_exact_release(row)
     ]
     security_releases = [
-        row
-        for row in all_releases
-        if row.category in SECURITY_CATEGORIES
+        row for row in all_releases if row.category in SECURITY_CATEGORIES
     ]
 
-    direct_targets = [row for row in target_releases if row.category == "direct_current"]
+    direct_targets = [
+        row for row in target_releases if row.category == "direct_current"
+    ]
     comparison_targets = [
         row for row in target_releases if row.category == "current_value_comparison"
     ]
@@ -390,9 +394,7 @@ def _summarize(results: list[AcceptanceCaseResult], *, provider_calls: int) -> d
 
     by_language: dict[str, dict[str, int | float]] = {}
     for language in cases.LANGUAGES:
-        language_targets = [
-            row for row in target_releases if row.language == language
-        ]
+        language_targets = [row for row in target_releases if row.language == language]
         language_exact = [row for row in language_targets if _is_exact_release(row)]
         if len(language_targets) != 30:
             raise RuntimeError(f"expected 30 release targets for {language}")
@@ -452,9 +454,7 @@ def _summarize(results: list[AcceptanceCaseResult], *, provider_calls: int) -> d
         "comparison_release_recall": round(comparison_recall, 6),
         "by_language": by_language,
         "false_release_case_ids": [row.case_id for row in false_releases],
-        "wrong_target_release_case_ids": [
-            row.case_id for row in wrong_target_releases
-        ],
+        "wrong_target_release_case_ids": [row.case_id for row in wrong_target_releases],
         "security_boundary_release_case_ids": [
             row.case_id for row in security_releases
         ],
@@ -656,7 +656,9 @@ def main() -> None:
         raise ValueError("Gemini RPM must be positive")
     output_path = Path(args.output)
     if output_path.exists():
-        raise RuntimeError(f"refusing to overwrite fresh acceptance evidence: {output_path}")
+        raise RuntimeError(
+            f"refusing to overwrite fresh acceptance evidence: {output_path}"
+        )
 
     result = asyncio.run(
         _run(
