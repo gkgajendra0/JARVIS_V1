@@ -4,6 +4,7 @@ import importlib.util
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "tools" / "research" / "step4_phase45d_sfst_diagnostic.py"
@@ -78,3 +79,22 @@ def test_metrics_counts_wrong_release_as_false_positive() -> None:
     assert metrics["precision"] == 0.5
     assert metrics["positive_release_recall"] == 0.5
     assert metrics["false_release_case_ids"] == ["wrong"]
+
+
+def test_sfst_order_learning_marks_precision_loss_as_binary() -> None:
+    module = _load()
+
+    class FakeController:
+        def __init__(self) -> None:
+            self.kwargs: dict[str, Any] | None = None
+
+        def learn_fixed_sequence_order(self, **kwargs: Any) -> None:
+            self.kwargs = kwargs
+
+    controller = FakeController()
+    module._learn_sfst_order(controller, [[1.0, 2.0]], [1])
+
+    assert controller.kwargs is not None
+    assert controller.kwargs["binary"] is True
+    assert controller.kwargs["X_learn"] == [[1.0, 2.0]]
+    assert controller.kwargs["y_learn"] == [1]
