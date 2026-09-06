@@ -134,5 +134,6 @@ def test_v3_payload_hash_is_deterministic() -> None:
     second = module.payload_sha256(module.build_payload())
 
     assert first == second
+    assert first == "baac40840bc260a01f4fc630570e4578dbdf8dc9f36c8b3192c6bb6471191195"
     assert len(first) == 64
     assert all(character in "0123456789abcdef" for character in first)

@@ -245,6 +245,10 @@ The corpus generator must emit a deterministic payload SHA-256 covering all acce
 
 Any payload-hash change creates a new V3 version and invalidates prior evidence.
 
+Frozen V3 payload SHA-256:
+
+`baac40840bc260a01f4fc630570e4578dbdf8dc9f36c8b3192c6bb6471191195`
+
 ## 6. Frozen execution order
 
 V3 is a single owner acceptance program with a fail-closed two-stage execution.
