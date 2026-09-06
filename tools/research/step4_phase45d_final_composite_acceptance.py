@@ -20,7 +20,11 @@ import step4_phase45d_final_composite_cases as cases
 
 from jarvis.memory.answer_type_guard import (
     MODEL_ID as ANSWER_TYPE_MODEL_ID,
+)
+from jarvis.memory.answer_type_guard import (
     MODEL_REVISION as ANSWER_TYPE_MODEL_REVISION,
+)
+from jarvis.memory.answer_type_guard import (
     LocalZeroShotMemoryAnswerTypeGuard,
     MemoryAnswerTypeDecision,
 )
