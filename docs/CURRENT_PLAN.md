@@ -6,9 +6,9 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 ARCHITECTURE APPROVED — PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE / V1 POLICY REJECTED / JARVIS RERANKER INSTRUCTION FROZEN / FRESH FINAL OWNER RTX ACCEPTANCE NEXT**
+**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — V1 SCORE/MARGIN FAMILY REJECTED — INDEPENDENT VERIFIER SELECTED — FINAL V2 LEARNED-CONFIDENCE ACCEPTANCE IMPLEMENTED / CI + OWNER RUN NEXT — PHASE 4.5E BLOCKED**
 
-This file is the operational source of truth for current work. Detailed measured evidence belongs in `docs/research/`; significant accepted architecture decisions belong in `docs/decisions/`; `docs/CURRENT_ARCHITECTURE.md` describes architecture that actually exists and has passed acceptance.
+This file is the operational source of truth for current work. Detailed measured evidence belongs in `docs/research/`; accepted architecture belongs in ADRs and `docs/CURRENT_ARCHITECTURE.md` only after acceptance.
 
 ---
 
@@ -26,11 +26,12 @@ This file is the operational source of truth for current work. Detailed measured
 - `MemoryService` is the sole durable mutation facade;
 - `ContextAssembler` is the sole Step-4 model-context release owner;
 - retrieval ranks eligible canonical records and never establishes truth;
+- canonical eligibility/security filtering occurs before ranking and remains independent of learned confidence;
 - raw full transcripts/provider payloads are not archived merely because available;
 - current runtime/config/repository truth outranks learned self-memory;
 - one active cloud-AI provider/account owns production cloud intelligence at a time;
-- different model IDs inside the active provider are allowed when capability/efficiency requires them;
-- local ML/model artifacts are not cloud-provider subscriptions;
+- current production cloud provider is Gemini through `JARVIS_AI_PROVIDER=gemini`;
+- local models do not create a second cloud-provider dependency;
 - Step 4 grants no autonomous repair, code modification, deployment, or authority expansion.
 
 ---
@@ -51,21 +52,21 @@ ADR-015 establishes one canonical production provider through `JARVIS_AI_PROVIDE
 
 Current active provider: **Gemini**.
 
-Voice, scripted cloud TTS, structured memory extraction and future cloud-reasoning/tool workloads remain inside the selected provider family/account.
+Voice, scripted cloud TTS, structured memory extraction and future cloud-reasoning/tool workloads remain inside that provider family/account.
 
 ### Phase 4.4 structured extraction
 
 Selected model: **`gemini-3.5-flash-lite`**.
 
-Owner-PC production acceptance proved session-local candidate quarantine, physical disposal on session close, no implicit durable write, no cross-session resurrection, and stable Step-3 audio/vision behavior.
+Owner acceptance proved session-local candidate quarantine, physical disposal on session close, no implicit durable write, no cross-session resurrection, and stable Step-3 audio/vision behavior.
 
-### Phase 4.5 local retrieval stack — SELECTED
+### Phase 4.5 retrieval stack
 
 **Embedding:** `Qwen/Qwen3-Embedding-0.6B`
 
 - immutable revision `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`;
-- exact JARVIS memory retrieval instruction;
-- normalized 256-dimensional Matryoshka output;
+- normalized 256-dimensional output;
+- exact frozen JARVIS memory retrieval instruction;
 - local exact cosine initially.
 
 **First stage:**
@@ -73,58 +74,26 @@ Owner-PC production acceptance proved session-local candidate quarantine, physic
 - eligible-current SQLite FTS5 lexical rank;
 - exact Qwen dense rank;
 - equal-weight RRF, `k=60`, lexical window `10`;
-- no ANN/vector extension until scale evidence requires one.
+- no ANN/vector extension until scale evidence requires it.
 
 **Reranker:** `Qwen/Qwen3-Reranker-0.6B`
 
 - immutable revision `e61197ed45024b0ed8a2d74b80b4d909f1255473`;
 - top 3 candidates;
-- model-default BF16 path;
-- exact reranker-score tie -> first-stage fused rank -> stable assertion ID;
-- **JARVIS memory-specific instruction frozen as production default** after measured development bake-off;
-- generic Qwen instruction remains available only through explicit `instruction=None` for research reproduction.
+- BF16 owner path;
+- deterministic tie handling;
+- frozen JARVIS memory-specific instruction:
 
-Owner-machine model-selection evidence:
+> Judge whether the memory Document directly and sufficiently answers the JARVIS memory Query using only facts stated in the Document. Answer yes only when the Document supports the specific fact or relation requested; answer no when it is merely related, missing the requested detail, contradictory, negated, or otherwise does not answer the Query.
 
-- Qwen hybrid Recall@1 `0.9412`, Recall@3 `1.0000`, MRR `0.9608`;
-- hybrid p50 `63.2179 ms`, p95 `68.7911 ms`;
-- earlier reranker follow-up reached Recall@1/Recall@3/MRR `1.0000` on the fixed selection corpus;
-- EmbeddingGemma was rejected because the actual multilingual hybrid path regressed and measured latency/RAM/VRAM did not improve.
+Owner selection evidence:
 
-Reranker-instruction development evidence:
+- Qwen hybrid Recall@1 `0.9412`, Recall@3 `1.0000`, MRR `0.9608` on the model-selection corpus;
+- EmbeddingGemma rejected after real hybrid regression;
+- owner RTX compatibility preserved Torch `2.13.0+cu132`, Torchvision `0.28.0+cu132`, Step-3 vision imports, and simultaneous Qwen embedding+reranker operation;
+- combined Qwen peak CUDA allocation approximately `2.46 GB`.
 
-- ranking quality unchanged at positive top-1 `0.90625` and Recall@3 `0.90625`;
-- score AUROC improved `0.918719 -> 0.936453`;
-- margin AUROC improved `0.768966 -> 0.795074`;
-- AURC improved `0.267634 -> 0.242616`;
-- zero-error positive-release recall improved `0.03125 -> 0.1875`;
-- no English/Hindi/Hinglish top-1 regression;
-- no material latency penalty.
-
-Selection records:
-
-- `docs/research/STEP_4_PHASE_4_5_EMBEDDING_SELECTION.md`;
-- `docs/research/STEP_4_PHASE_4_5D_RERANKER_INSTRUCTION_SELECTION.md`.
-
-### Phase 4.5C accepted production GPU compatibility
-
-Owner-machine acceptance preserved the existing Step-3 stack exactly:
-
-- Torch `2.13.0+cu132` before and after retrieval dependency install;
-- Torchvision `0.28.0+cu132` before and after;
-- Sentence Transformers `6.0.1`;
-- Transformers `5.16.1`;
-- `pip check` clean;
-- `torchvision`, `rfdetr`, `trackers`, `mediapipe`, and `cv2` all import in the same process;
-- real Qwen embedding + reranker both run together on the RTX 5060 Ti;
-- camera memory ranks top-1 through dense and reranker checks;
-- combined Qwen peak CUDA allocation `2,462,774,784` bytes.
-
-No compatibility rerun is required unless model/dependency/Torch revisions change.
-
-Result record:
-
-- `docs/research/STEP_4_PHASE_4_5C_IMPLEMENTATION_STATUS.md`.
+Do not rerun embedding selection or Phase 4.5C compatibility unless those frozen contracts change.
 
 ---
 
@@ -144,240 +113,311 @@ Bounded `LiveContext` + deterministic `ContextAssembler` accepted. Provider hist
 
 ### Phase 4.3 — COMPLETE
 
-Governed explicit `remember / inspect / correct / forget` accepted through the normal production voice path.
+Governed explicit `remember / inspect / correct / forget` accepted through the production voice path. Do not repeat owner acceptance.
 
 ### Phase 4.4 — COMPLETE
 
-Structured extraction + session-local candidate quarantine accepted. Implicit auto-admission remains disabled.
+Structured extraction + session-local candidate quarantine accepted. Implicit auto-admission remains disabled. Do not repeat owner acceptance.
 
-### Phase 4.5 — ACTIVE
+### Phase 4.5A — COMPLETE
 
-Goal: production semantic retrieval over **eligible canonical memory**, without giving retrieval any truth or mutation authority.
+Encrypted derived-vector lifecycle accepted:
 
-Target pipeline:
+- SQLCipher-derived vectors;
+- canonical FK / `ON DELETE CASCADE`;
+- immutable model/revision/dimension/dtype/byte-order/fingerprint lineage;
+- stale vectors fail closed;
+- canonical forget physically removes derived vectors.
 
-```text
-query/context need
- -> deterministic exact current lookup when possible
- -> canonical eligibility (state/time/authority/sensitivity)
- -> FTS5 lexical rank + Qwen3-Embedding-0.6B dense rank
- -> equal-weight RRF
- -> top 3 eligible candidates
- -> Qwen3-Reranker-0.6B BF16 + frozen JARVIS memory instruction
- -> statistically controlled abstention/release policy
- -> ContextAssembler
- -> active Gemini session
-```
+### Phase 4.5B — COMPLETE
 
-#### Phase 4.5A — encrypted derived-vector lifecycle — COMPLETE
+Production lexical + dense + RRF retrieval core accepted:
 
-Implemented and validated:
-
-- SQLCipher schema v2 derived semantic vectors;
-- canonical assertion FK with `ON DELETE CASCADE`;
-- model/revision/dimension/dtype/byte-order/content-fingerprint lineage;
-- little-endian float32 vector BLOB representation;
-- deterministic stale-vector detection;
-- canonical physical forget -> zero derived vector rows.
-
-Result:
-
-- `docs/research/STEP_4_PHASE_4_5A_IMPLEMENTATION_RESULT.md`.
-
-#### Phase 4.5B — lexical + dense + RRF retrieval core — COMPLETE
-
-Implemented and validated:
-
-- current eligible assertion selection before ranking;
-- assertion + provenance authority/sensitivity filtering;
+- eligibility before ranking;
 - safe FTS5 MATCH construction;
-- exact dense cosine over encrypted/rebuildable vectors;
-- stale vector exclusion;
-- equal-weight RRF (`k=60`, lexical window `10`);
-- deterministic first-stage ordering;
-- no ANN dependency.
+- exact dense cosine;
+- stale-vector exclusion;
+- equal RRF;
+- deterministic ordering;
+- no vector DB required at current measured scale.
 
-GitHub Actions run `33983727641` passed Ruff, full pytest, Windows DPAPI, and Windows Hello.
+### Phase 4.5C — COMPLETE
 
-Result:
+Lazy revision-pinned Qwen embedding/reranker adapters and owner RTX coexistence accepted. Normal CI does not load GPU models.
 
-- `docs/research/STEP_4_PHASE_4_5B_IMPLEMENTATION_RESULT.md`.
+### Phase 4.5D — ACTIVE
 
-#### Phase 4.5C — Qwen local model adapters — COMPLETE
+Goal: decide whether an **already-eligible canonical memory** may be released as query evidence. The confidence gate has no mutation or truth authority.
 
-Implemented and owner-accepted:
+#### 4.5D V1 raw reranker threshold — REJECTED
 
-- lazy revision-pinned Qwen embedder and reranker adapters;
-- 256d normalized query/document encoding;
-- exact measured JARVIS embedding-query instruction;
-- top-3 reranker;
-- deterministic ties;
+The first 64-case calibration/validation experiment achieved zero false releases but only approximately `18.75%` held-out positive recall and `0%` Hindi positive recall. The corpus is exposed/retired and development-only.
+
+#### Frozen reranker instruction bake-off — COMPLETE
+
+On retired development data, the JARVIS-specific reranker instruction improved confidence quality without ranking/language regression and became the production default.
+
+#### Fresh 320-case acceptance V1 — EXPOSED / RETIRED / NOT ACCEPTED
+
+Retrieval itself was strong:
+
+- validation positive top-1 `63/64 = 98.44%`;
+- validation Recall@3 `64/64 = 100%`.
+
+The blocker was release confidence, not retrieval ranking.
+
+The original 30-policy `reranker_score AND margin` MAPIE/Holm procedure found zero valid policies. Corrected SFST diagnosis showed **0/30 policies were valid even as individual 0.05 tests**. Best calibration rule (`score=6`, `margin=12`) produced `18 TP / 1 FP`, precision `0.947368`, recall `0.1875`.
+
+Therefore the two-feature rectangular rule family is permanently rejected. Do not rescue it through different multiple-testing correction, more tuning, or reuse of the exposed corpus.
+
+#### Existing-evidence learned diagnostic — COMPLETE / INSUFFICIENT
+
+Development-only five-fold stratified OOF `StandardScaler + LogisticRegression` result:
+
+- score+margin: ROC-AUC `0.887769`, AP `0.876022`, best recall `0.207547` at empirical precision >= `0.95`;
+- full seven retrieval features: ROC-AUC `0.892574`, AP `0.885079`, best recall `0.295597` at empirical precision >= `0.95`.
+
+Seven existing signals improve discrimination but fail the frozen `0.40` development recall floor.
+
+#### Independent verifier — SELECTED DEVELOPMENT SIGNAL
+
+Selected lightweight verifier:
+
+`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`
+
+- immutable revision `1427fd652930e4ba29e8149678df786c240d8825`;
+- Apache-2.0;
+- multilingual mMARCO query/passage CrossEncoder;
+- Hindi represented in source training data;
 - `trust_remote_code=False`;
-- no model import/load in ordinary unit-test/startup paths;
-- isolated optional `retrieval` dependency extra;
-- retrieval extra does not own/change Torch;
-- owner RTX compatibility PASS with the accepted Step-3 vision environment.
+- owner run scoring approximately `1.6153 ms/pair` after model load/cache;
+- peak verifier CUDA allocation approximately `531 MB`.
 
-Result:
+Owner development-only result on the exposed 320 cases:
 
-- `docs/research/STEP_4_PHASE_4_5C_IMPLEMENTATION_STATUS.md`.
+- independent verifier alone: recall `0.415094` at empirical precision `0.956522`;
+- full retrieval evidence + verifier: ROC-AUC `0.895972`, AP `0.910776`;
+- combined best development point: `87 TP / 4 FP`, precision `0.956044`, positive recall `0.547170`;
+- EN recall `0.462963`;
+- HI recall `0.769231`;
+- Hinglish recall `0.396226`.
 
-#### Phase 4.5D — abstention calibration — ACTIVE
+This clears the pre-registered development recall floors and is the strongest architecture tested so far. It is **promising, not accepted**. `BAAI/bge-reranker-v2-m3` remains deferred.
 
-##### V1 measurement — COMPLETE / NOT ACCEPTED
+Durable result:
 
-The first successful 64-case owner measurement completed on the accepted RTX environment.
+- `docs/research/STEP_4_PHASE_4_5D_INDEPENDENT_VERIFIER_RESULT.md`.
 
-V1 selected a `score_margin` policy with:
+#### Final V2 confidence architecture — FROZEN / IMPLEMENTED
 
-- score threshold `8.96875`;
-- margin threshold `9.15625`.
-
-Held-out V1 result:
-
-- observed false releases `0`;
-- correct releases `3`;
-- positive release recall `0.1875`;
-- English recall `0.166667`;
-- Hindi recall `0.0`;
-- Hinglish recall `0.333333`.
-
-This policy is too conservative for production and is rejected.
-
-The V1 64-case corpus is now fully **retired from final acceptance** because all labels/results have been exposed. It may be used only for development diagnostics.
-
-Owner record:
-
-- `docs/research/STEP_4_PHASE_4_5D_OWNER_MEASUREMENT_V1.md`.
-
-##### Reranker instruction selection — COMPLETE
-
-The retired V1 corpus was used exactly once as a development set to compare the generic Qwen reranker instruction with one pre-registered JARVIS-memory instruction.
-
-The JARVIS instruction won the pre-registered metric order without any language-ranking regression and is now the production default.
-
-Result:
-
-- `docs/research/STEP_4_PHASE_4_5D_RERANKER_INSTRUCTION_SELECTION.md`.
-
-##### Final 4.5D risk-control method — IMPLEMENTED / OWNER RUN NEXT
-
-Do not promote the V1 custom selector into final production acceptance.
-
-Final calibration uses MAPIE `1.5.0` binary risk control / Learn-Then-Test on a fresh corpus. MAPIE is research/calibration-only; production inference receives only a frozen versioned rule if final acceptance passes.
-
-The formal MAPIE distributional guarantee depends on assumptions such as exchangeability. The synthetic JARVIS benchmark cannot prove exchangeability with future owner traffic, so the repository does not claim a real-world 95% traffic guarantee from this test. Post-deployment shadow-labelled risk/drift review remains required.
-
-Fresh corpus:
-
-- `320` new queries;
-- calibration `96 release + 96 abstain`;
-- validation `64 release + 64 abstain`;
-- English/Hindi/Hinglish in both splits;
-- no exact query reuse from retired V1;
-- synthetic current facts plus historical/forgotten/local-only/secret/untrusted and unsupported-relation boundaries;
-- deterministic payload SHA-256 emitted in the result artifact.
-
-Pre-registered rule family:
+Candidate pipeline under acceptance:
 
 ```text
-release = reranker_score >= score_threshold
-          AND top1_minus_top2_margin >= margin_threshold
+canonical eligibility
+ -> FTS5 lexical + Qwen dense
+ -> equal-weight RRF
+ -> top 3
+ -> Qwen reranker + frozen JARVIS instruction
+ -> returned top candidate
+ -> mMARCO independent verifier
+ -> frozen StandardScaler + low-capacity LogisticRegression confidence probability
+ -> MAPIE split-fixed-sequence precision control
+ -> release / abstain
 ```
 
-Pre-registered grid:
+Frozen eight features:
 
-- score: `-2, 0, 2, 4, 6, 8`;
-- margin: `0, 4, 8, 12, 16`;
-- `30` total policies.
+1. reranker score;
+2. reranker margin;
+3. dense cosine;
+4. fused RRF score;
+5. lexical-hit indicator;
+6. reciprocal lexical rank;
+7. reciprocal dense rank;
+8. independent verifier score.
 
-MAPIE calibration:
+Excluded from the learned gate:
 
-- controlled metric: precision;
+- language;
+- category/case ID;
+- expected-memory ID;
+- validation-only metadata.
+
+Frozen estimator:
+
+```text
+StandardScaler
+ -> LogisticRegression(
+      solver="lbfgs",
+      max_iter=2000,
+      random_state=45
+    )
+```
+
+Training/order-learning separation:
+
+- exposed retired 320 cases may fit this already-selected low-capacity model;
+- Qwen retrieval is **not rerun** on retired cases;
+- the frozen verifier may rescore retired query/top-document pairs only to reconstruct its selected eighth feature;
+- the retired development set learns MAPIE SFST hypothesis order with `binary=True`;
+- new V2 calibration is statistically independent from order learning;
+- V2 validation labels never influence fitting, feature selection, threshold ordering or threshold calibration.
+
+MAPIE research controller:
+
+- version `1.5.0`;
+- risk `precision` / PPV;
 - target precision `0.95`;
-- confidence level `0.95`;
-- secondary objective: recall;
-- FWER: `bonferroni_holm`;
-- no valid MAPIE parameter is a legitimate fail-closed result.
+- confidence `0.95`;
+- FWER `split_fixed_sequence`;
+- best valid threshold selected by recall;
+- no valid threshold = fail closed.
 
-Frozen held-out acceptance gates:
+Why SFST: precision is non-monotonic in the threshold; MAPIE's split fixed-sequence method learns a candidate order on independent data and tests that fixed sequence on calibration data without the old unordered 30-way Holm burden.
 
-1. MAPIE finds a valid policy;
-2. positive top-1 retrieval accuracy >= `0.85`;
-3. positive Recall@3 >= `0.90`;
-4. observed false releases = `0`;
-5. positive release recall >= `0.40`;
-6. every language positive release recall >= `0.25`.
+Method record:
 
-Harness:
+- `docs/research/STEP_4_PHASE_4_5D_FINAL_V2_METHOD.md`.
 
-- `tools/research/step4_phase45d_final_acceptance.py`.
+#### Fresh V2 corpus — FROZEN / IMPLEMENTED
 
-Corpus generator:
+New deterministic synthetic corpus:
 
-- `tools/research/step4_phase45d_final_cases.py`.
+- total `1,800` queries;
+- calibration `600 release + 600 abstain`;
+- validation `300 release + 300 abstain`;
+- validation release queries: exactly `100 EN + 100 HI + 100 Hinglish`;
+- no exact-query reuse from retired 64-case or 320-case corpora;
+- fixed abstain categories:
+  - absent;
+  - near miss;
+  - ambiguous;
+  - adversarial lexical overlap;
+  - negation;
+  - relation mismatch;
+  - unsupported source/detail;
+  - historical;
+  - forgotten;
+  - local-only;
+  - secret;
+  - untrusted;
+- deterministic payload SHA-256;
+- duplicate case/query text fails closed;
+- no real credentials/secrets.
 
-Research-only dependency:
+Sample-size rationale:
 
-- `tools/research/requirements-step4-risk-control.txt`.
+At precision target `0.95` and one-sided alpha `0.05`, exact-binomial scale intuition requires approximately:
 
-Method/status records:
+- 59 released examples for zero observed errors;
+- 93 for one error;
+- 124 for two;
+- 153 for three;
+- 181 for four;
+- 208 for five;
+- 234 for six.
 
-- `docs/research/STEP_4_PHASE_4_5D_FINAL_ACCEPTANCE_METHOD.md`;
-- `docs/research/STEP_4_PHASE_4_5D_IMPLEMENTATION_STATUS.md`.
+These counts are explanatory only; MAPIE remains the acceptance controller. With `600` positive calibration cases, the `0.40` recall floor corresponds to `240` true-positive releases, intentionally correcting the old 96-positive underpowered design.
 
-Once the owner result JSON exists, do not rerun it to chase a pass or tune thresholds/floors against held-out failures.
+Generator:
 
-#### Phase 4.5E — ContextAssembler integration + owner acceptance — BLOCKED ON 4.5D
+- `tools/research/step4_phase45d_final_v2_cases.py`.
 
-After an abstention/release policy is measured and accepted on fresh validation:
+One-shot harness:
 
-- release only accepted retrieval evidence through `ContextAssembler`;
-- preserve bounded context budgets and evidence metadata;
-- never release `LOCAL_ONLY` or `SECRET_PROHIBITED` content to cloud context;
-- run automated + owner-PC GPU/voice acceptance;
-- record closure before starting Phase 4.6.
+- `tools/research/step4_phase45d_final_v2_acceptance.py`.
+
+New evidence file:
+
+- `.step4-phase45d-final-v2-acceptance.json`.
+
+The harness refuses to overwrite an existing V2 evidence file.
+
+#### Frozen V2 validation gates
+
+V2 passes only if all are true:
+
+1. MAPIE finds a statistically valid threshold at precision target `0.95`, confidence `0.95`;
+2. validation positive top-1 retrieval accuracy >= `0.85`;
+3. validation positive Recall@3 >= `0.90`;
+4. observed validation false releases = `0`;
+5. overall positive release recall >= `0.40`;
+6. English positive release recall >= `0.25`;
+7. Hindi positive release recall >= `0.25`;
+8. Hinglish positive release recall >= `0.25`;
+9. zero released historical/forgotten/local-only/secret/untrusted boundary query;
+10. no validation-driven retuning.
+
+A V2 failure rejects this frozen architecture. It does not authorize editing the system and rerunning the same V2 validation corpus.
+
+Synthetic acceptance cannot prove future owner traffic is exchangeable. Later operational shadow-labelled risk/drift monitoring remains mandatory before making strong real-world statistical claims.
+
+### Phase 4.5E — BLOCKED BY OWNER UNTIL 4.5D COMPLETE
+
+Do **not** integrate semantic retrieval into `ContextAssembler` / Gemini conversation yet.
+
+4.5E may begin only after 4.5D has:
+
+- frozen model/features/protocol;
+- fresh powered calibration;
+- untouched validation;
+- all precision/recall/language/security gates passed;
+- durable owner evidence;
+- docs synchronized;
+- exact owner-run SHA green in CI.
+
+### Phases 4.6–4.8 — NOT STARTED
+
+- 4.6 episodic/reflection memory;
+- 4.7 JARVIS self-knowledge;
+- 4.8 hardening/final Step-4 acceptance.
 
 ---
 
-## Remaining approved implementation order
+## Remaining implementation order
 
-1. Phase 4.0A — provenance + neutral security — **COMPLETE**.
-2. Phase 4.1 — canonical memory kernel — **COMPLETE**.
-3. Phase 4.2 — LiveContext + ContextAssembler — **COMPLETE**.
-4. Phase 4.3 — explicit remember/correct/forget/inspect — **COMPLETE**.
-5. Phase 4.4 — structured extraction/candidate quarantine — **COMPLETE**.
-6. Phase 4.5A — derived-vector lifecycle — **COMPLETE**.
-7. Phase 4.5B — lexical+dense+RRF core — **COMPLETE**.
-8. Phase 4.5C — local Qwen adapters + GPU compatibility — **COMPLETE**.
-9. Phase 4.5D — fresh statistically controlled abstention calibration — **ACTIVE / FINAL OWNER RUN NEXT**.
-10. Phase 4.5E — ContextAssembler integration + owner acceptance — **BLOCKED ON 4.5D**.
-11. Phase 4.6 — episodic/reflection learning for meaningful outcomes/decisions/incidents, not raw transcripts.
-12. Phase 4.7 — Capability Registry + CycloneDX + authoritative self-knowledge aggregation, no autonomous repair.
-13. Phase 4.8 — final hardening, multilingual/adversarial/privacy/security/backup tests, real use, reconciliation, ADR, protected-main merge.
+1. 4.0A — COMPLETE.
+2. 4.1 — COMPLETE.
+3. 4.2 — COMPLETE.
+4. 4.3 — COMPLETE.
+5. 4.4 — COMPLETE.
+6. 4.5A — COMPLETE.
+7. 4.5B — COMPLETE.
+8. 4.5C — COMPLETE.
+9. **4.5D — ACTIVE: V2 confidence acceptance implemented; exact SHA must pass CI, then one owner RTX V2 run.**
+10. **4.5E — BLOCKED.**
+11. 4.6 — NOT STARTED.
+12. 4.7 — NOT STARTED.
+13. 4.8 — NOT STARTED.
 
 ---
 
-## Non-blocking deferred decisions
+## Do not repeat / do not do next
 
-- portable disaster recovery/export;
-- implicit durable auto-admission threshold;
-- deterministic canonical subject/predicate normalization for future implicit admission;
-- dedicated ANN/vector derivative if memory scale later requires it;
-- persisted crash-resume LiveContext;
-- relationship/graph memory;
-- automatic provider chat-history synchronization;
-- learned probability calibrator for semantic release, until enough independent real labelled data exists;
-- autonomous diagnosis/repair/self-improvement.
+Do not:
+
+- start Phase 4.5E;
+- wire semantic retrieval into Gemini conversation;
+- lower the `0.95` precision or `0.95` confidence targets to obtain a pass;
+- lower the `0.40` overall or `0.25` language recall floors to obtain a pass;
+- reuse either exposed 4.5D corpus for acceptance;
+- rerun the Qwen/EmbeddingGemma embedding bake-off;
+- rerun Phase 4.5C owner compatibility;
+- revisit the rejected score+margin family or spend more effort on Holm/SFST for that family;
+- benchmark BGE unless the lightweight V2 architecture genuinely fails fresh acceptance and new research justifies it;
+- change Qwen revisions or Torch/Torchvision casually;
+- disturb Step-3 audio/vision architecture;
+- weaken forgotten/local-only/secret/untrusted eligibility filters;
+- let learned confidence create, modify, resurrect or establish canonical truth.
 
 ---
 
 ## Immediate Next Action
 
-**RUN THE FRESH PHASE 4.5D FINAL OWNER RTX ACCEPTANCE ONCE, AFTER THE EXACT OWNER-RUN SHA IS FULLY GREEN IN CI.**
+**WAIT FOR THE EXACT CURRENT V2 IMPLEMENTATION SHA TO PASS CI; THEN RUN THE NEW V2 OWNER RTX ACCEPTANCE ONCE.**
 
-Use the accepted Windows `.venv`, install only the pinned MAPIE research dependency without changing the accepted Torch/Torchvision stack, and run `tools/research/step4_phase45d_final_acceptance.py` once.
+The owner run must use the accepted Windows `.venv`, current Torch/Torchvision stack, the existing retired `.step4-phase45d-final-acceptance.json` only as development input, and the new V2 harness.
 
-A `PASS` or `FAIL_ACCEPTANCE` result JSON is both valid evidence. Once a result JSON exists, do not rerun the fresh corpus merely to improve the outcome.
+A `PASS` or `FAIL_ACCEPTANCE` V2 artifact is valid evidence. Do not overwrite or rerun it to chase a pass.
 
-Do not rerun Phase 4.5C. Do not accept the V1 `8.96875 / 9.15625` policy. Do not tune final thresholds or acceptance floors against exposed held-out labels. Do not begin Phase 4.5E until fresh Phase 4.5D acceptance is formally passed.
+Do not begin Phase 4.5E afterward unless Phase 4.5D actually passes and closure documentation/CI are complete.
