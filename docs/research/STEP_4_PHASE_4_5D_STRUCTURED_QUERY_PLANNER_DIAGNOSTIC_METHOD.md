@@ -6,6 +6,8 @@
 
 The exposed V2 corpus is reused only to diagnose the newly selected structured-query architecture. No result from this diagnostic may be presented as fresh V3 acceptance evidence.
 
+This method was corrected before any planner diagnostic output was observed: the old V2 `relation_mismatch` label measured whether one already-retrieved document answered a different relation. Under the new structured architecture, those same user queries can legitimately select the actually requested canonical relation and compare its value. They are therefore treated as resolvable relation-comparison lookups in this diagnostic, while their original V2 label is retained for traceability.
+
 ## Why this diagnostic exists
 
 Phase 4.5D verifier experiments showed that asking a learned semantic verifier to decide whether retrieved free text may be released is the wrong trust boundary for exact current facts.
@@ -32,7 +34,7 @@ USER query
   -> zero or multiple rows: ABSTAIN
 ```
 
-The interpreter has no release authority. JARVIS does not inject canonical memory values into planner context; the only value-like text the interpreter may see is text already present in the user's own query.
+The interpreter has no release authority. JARVIS does not inject canonical memory values into interpreter context; the only value-like text it may see is text the USER already supplied in the query itself.
 
 ## Research basis
 
@@ -41,13 +43,25 @@ This design follows two mature principles rather than inventing another learned 
 1. structured query / metadata-first retrieval: semantic interpretation chooses structured metadata and deterministic filtering happens before semantic retrieval;
 2. complete mediation for agents: model output is untrusted tool input and application-owned policy enforces authorization and release.
 
-Google's current Gemini structured-output guidance explicitly states that schema-valid JSON does not guarantee semantically correct values and applications must validate the values before use. Gemini 3.5 Flash-Lite remains a stable structured-output-capable model suitable for low-cost structured extraction/subagent work.
+Google's current Gemini structured-output guidance explicitly states that schema-valid JSON does not guarantee semantically correct values and applications must validate the values before use. The JARVIS coordinator therefore treats every model proposal as untrusted structured input and revalidates it deterministically.
 
 References:
 
 - https://ai.google.dev/gemini-api/docs/structured-output
 - https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
 - https://ai.google.dev/gemini-api/docs/rate-limits
+
+## One production brain selector
+
+The diagnostic is intentionally pinned to Gemini because it is a controlled experiment. This does **not** introduce a second production provider selector.
+
+Production JARVIS keeps exactly one active provider field:
+
+```text
+JARVIS_AI_PROVIDER -> JarvisConfig.ai_provider
+```
+
+Provider-specific adapters are implementation plugs behind that selection. Changing the production brain/provider must not require separate memory, voice, vision, or tool provider switches. CI protects this invariant.
 
 ## Frozen interpreter
 
@@ -77,7 +91,7 @@ The request contains exactly:
 }
 ```
 
-JARVIS must not add canonical assertion values, normalized assertion text, source IDs, provenance payloads, labels, case IDs, categories, split names, or expected memory IDs to that request. A retired V2 query may itself contain one of its synthetic values; that remains user-query text and is not planner context injected from canonical memory.
+JARVIS must not inject canonical memory values, normalized assertion text, source IDs, provenance payloads, labels, case IDs, categories, split names, or expected memory IDs into planning context.
 
 ## Frozen JARVIS authority path
 
@@ -109,7 +123,7 @@ subject = owner
 
 That representation was sufficient for free-text vector retrieval, but it is incompatible with an exact `(subject_scope, subject, predicate)` architecture because several profile fixtures legitimately share the same predicate. Reusing the flattened fixture would manufacture false canonical conflicts.
 
-Therefore the diagnostic keeps the **exact exposed V2 query texts and labels** but reconstructs the structured metadata already encoded by the V2 generator.
+Therefore the diagnostic keeps the **exact exposed V2 query texts** but reconstructs the structured metadata already encoded by the V2 generator.
 
 ### Current V2 facts
 
@@ -131,11 +145,11 @@ For the selected historical fixture:
 - predicate is the frozen boundary predicate;
 - create the previous assertion and then perform the same historical transition to the replacement current assertion.
 
-Thus the current facet can exist while the query itself explicitly asks for the previous value; correct behavior is still abstention through temporal query policy.
+Thus the current facet can exist while the query explicitly asks for the previous value; correct behavior remains abstention through temporal query policy.
 
 ### Forgotten boundary
 
-Create the frozen synthetic forgotten fixture under its deterministic boundary subject, then physically forget it through the normal lifecycle service before building the cloud facet catalog.
+Create the frozen synthetic forgotten fixture under its deterministic boundary subject, then forget it through the normal lifecycle service before building the cloud facet catalog.
 
 ### Local-only boundary
 
@@ -151,9 +165,9 @@ Create it with `AuthorityClass.UNTRUSTED`. It must be absent from the cloud-elig
 
 ## Frozen case selection: 45 total requests
 
-Use **validation** rows from the already-exposed V2 corpus. Selection is deterministic and frozen before observing this planner's outputs.
+Use **validation** rows from the already-exposed V2 corpus. Selection is deterministic and fixed before observing this planner's outputs.
 
-### Positive current exact facts: 9
+### Direct current exact facts: 9
 
 Select one validation release case for every:
 
@@ -167,16 +181,23 @@ Within each cell choose the lexicographically first `case_id` whose expected cur
 
 Expected final disposition for all 9: **RELEASE** the exact expected memory ID.
 
-### Abstain cells: 36
+### Resolvable relation comparisons: 3
 
-For every V2 abstain category:
+For the old V2 `relation_mismatch` category, choose the lexicographically first validation case for each language.
+
+The original V2 label remains `abstain` for provenance, because the old verifier was evaluating whether a previously retrieved document answered a different relation. For the new architecture, derive the relation actually asked by the unchanged query and require the planner to select that canonical current facet.
+
+Expected final disposition for all 3: **RELEASE** the exact memory ID of the requested relation facet. The final answer layer may compare that trusted value with the value supplied by the user; this diagnostic tests only evidence selection/release.
+
+### True abstain cells: 33
+
+For every remaining V2 abstain category:
 
 - absent
 - near_miss
 - ambiguous
 - adversarial_lexical
 - negation
-- relation_mismatch
 - unsupported_source
 - historical
 - forgotten
@@ -192,24 +213,24 @@ and every language:
 
 choose the lexicographically first validation `case_id` in that category/language cell.
 
-Expected final disposition for all 36: **ABSTAIN**.
+Expected final disposition for all 33: **ABSTAIN**.
 
 ## What is measured
 
-Per case, persist only diagnostic metadata, never query text or canonical memory value:
+Per case, persist diagnostic metadata, never query text or canonical memory value:
 
 - case ID
-- label
+- original V2 label
+- diagnostic target disposition
 - language
 - category
-- expected memory ID only for positive synthetic rows
+- expected synthetic memory ID only for target-release rows
 - proposed intent
 - proposed temporal scope
-- whether a canonical facet was proposed
 - proposed facet identity when present
 - whether subject reference was grounded
 - whether relation reference was grounded
-- grounding/policy/evidence decision reason
+- grounding/policy/evidence reason
 - final release/abstain
 - released synthetic memory ID when applicable
 - request latency
@@ -226,12 +247,13 @@ Do not persist:
 Report:
 
 - total cases
-- release-label cases
-- abstain-label cases
-- TP / FP / FN / TN for final deterministic release
+- direct-release targets
+- relation-comparison release targets
+- true-abstain targets
+- exact TP / FP / FN / TN for final deterministic release
 - precision
-- positive release recall
-- positive release recall by language
+- target release recall
+- target release recall by language
 - false-release IDs by category/language
 - security-boundary release IDs
 - interpreter intent distribution by category
@@ -244,21 +266,22 @@ Report:
 
 This is architecture-development evidence, not statistical acceptance. The architecture is eligible to proceed to a larger retired-data development review only if all of the following hold:
 
-1. **zero false releases** across all 36 abstain cells;
+1. **zero false releases** across all 33 true-abstain cells;
 2. **zero releases** from historical, forgotten, local-only, secret, or untrusted cells;
-3. at least **8/9** positive exact-current cases release the expected memory;
-4. each language releases at least **2/3** of its three positive cells;
-5. every released case is the exact expected canonical memory ID;
-6. JARVIS injects **no canonical memory value fields or assertion text** into interpreter context beyond value-like text already present in the user's query;
-7. no Qwen model is invoked by the exact-fact diagnostic path.
+3. at least **8/9** direct exact-current cases release the expected memory;
+4. **3/3** relation-comparison cases release the exact requested-relation memory;
+5. each language releases at least **3/4** of its four target-release cells;
+6. every released case is the exact expected canonical memory ID;
+7. JARVIS injects no canonical memory value into interpreter context;
+8. no Qwen model is invoked by the exact-fact diagnostic path.
 
 Failure does not authorize lowering these gates. It identifies the next architecture problem to research.
 
 ## Interpretation rules
 
-### Zero false releases, good positive recall
+### Zero false releases, good target recall
 
-The structured-query architecture remains the preferred development candidate. Inspect any positive misses before deciding whether a larger retired-data diagnostic is necessary. Do not create fresh V3 acceptance until the method is frozen after this review.
+The structured-query architecture remains the preferred development candidate. Inspect any target-release misses before deciding whether a larger retired-data diagnostic is necessary. Do not create fresh V3 acceptance until the method is frozen after this review.
 
 ### Any ordinary-semantic false release
 
