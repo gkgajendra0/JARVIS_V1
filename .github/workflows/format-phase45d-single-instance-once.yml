@@ -23,10 +23,29 @@ jobs:
       - name: Format and lint scoped files
         shell: bash
         run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("tools/research/step4_phase45d_gemini_single_instance_boundary_diagnostic.py")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace(
+              'raise RuntimeError("semantic-judge source artifact must be a JSON object")',
+              'raise TypeError("semantic-judge source artifact must be a JSON object")',
+          )
+          text = text.replace(
+              'raise RuntimeError("semantic-judge source artifact has no model metadata")',
+              'raise TypeError("semantic-judge source artifact has no model metadata")',
+          )
+          text = text.replace(
+              'raise RuntimeError("source artifact cases are missing")',
+              'raise TypeError("source artifact cases are missing")',
+          )
+          path.write_text(text, encoding="utf-8")
+          PY
           python -m pip install "ruff==0.16.5"
           ruff format tools/research/step4_phase45d_gemini_single_instance_boundary_diagnostic.py tests/test_phase45d_gemini_single_instance_boundary_diagnostic.py
           ruff check --fix tools/research/step4_phase45d_gemini_single_instance_boundary_diagnostic.py tests/test_phase45d_gemini_single_instance_boundary_diagnostic.py
           ruff format tools/research/step4_phase45d_gemini_single_instance_boundary_diagnostic.py tests/test_phase45d_gemini_single_instance_boundary_diagnostic.py
+          ruff check tools/research/step4_phase45d_gemini_single_instance_boundary_diagnostic.py tests/test_phase45d_gemini_single_instance_boundary_diagnostic.py
 
       - name: Commit scoped formatter result
         shell: bash
