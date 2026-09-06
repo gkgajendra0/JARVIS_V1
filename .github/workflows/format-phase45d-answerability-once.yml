@@ -1,0 +1,50 @@
+name: Format Phase 4.5D Answerability Once
+
+on:
+  push:
+    branches:
+      - implementation/step-4-memory-context
+    paths:
+      - .github/workflows/format-phase45d-answerability-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: implementation/step-4-memory-context
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pinned Ruff
+        run: python -m pip install "ruff==0.16.5"
+
+      - name: Format scoped answerability files
+        run: |
+          ruff format \
+            tools/research/step4_phase45d_answerability_verifier_bakeoff.py \
+            tests/test_phase45d_answerability_verifier_bakeoff.py
+
+      - name: Commit formatting if needed
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No formatting changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            tools/research/step4_phase45d_answerability_verifier_bakeoff.py \
+            tests/test_phase45d_answerability_verifier_bakeoff.py
+          git commit -m "Format Phase 4.5D answerability bakeoff"
+          git push origin HEAD:implementation/step-4-memory-context
