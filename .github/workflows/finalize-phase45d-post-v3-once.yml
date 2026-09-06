@@ -1,0 +1,41 @@
+name: Finalize Phase 4.5D Post-V3 Once
+
+on:
+  push:
+    branches:
+      - implementation/step-4-memory-context
+    paths:
+      - .github/workflows/finalize-phase45d-post-v3-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: implementation/step-4-memory-context
+          fetch-depth: 0
+
+      - name: Synchronize plan and format diagnostic
+        shell: bash
+        run: |
+          python tools/research/_phase45d_post_v3_sync_once.py
+          python -m pip install "ruff==0.16.5"
+          ruff format tools/research/step4_phase45d_gemini38_calibration_diagnostic.py tests/test_phase45d_gemini38_calibration_diagnostic.py tools/research/_phase45d_post_v3_sync_once.py
+          ruff check --fix tools/research/step4_phase45d_gemini38_calibration_diagnostic.py tests/test_phase45d_gemini38_calibration_diagnostic.py tools/research/_phase45d_post_v3_sync_once.py
+          ruff format tools/research/step4_phase45d_gemini38_calibration_diagnostic.py tests/test_phase45d_gemini38_calibration_diagnostic.py tools/research/_phase45d_post_v3_sync_once.py
+          ruff check tools/research/step4_phase45d_gemini38_calibration_diagnostic.py tests/test_phase45d_gemini38_calibration_diagnostic.py tools/research/_phase45d_post_v3_sync_once.py
+
+      - name: Commit synchronized post-V3 state
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/CURRENT_PLAN.md tools/research/step4_phase45d_gemini38_calibration_diagnostic.py tests/test_phase45d_gemini38_calibration_diagnostic.py tools/research/_phase45d_post_v3_sync_once.py
+          git commit -m "Synchronize Phase 4.5D after V3 failure"
+          git push origin HEAD:implementation/step-4-memory-context
