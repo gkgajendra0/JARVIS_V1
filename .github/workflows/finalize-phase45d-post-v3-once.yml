@@ -25,9 +25,13 @@ jobs:
         shell: bash
         run: |
           python tools/research/_phase45d_post_v3_sync_once.py
+          sed -i 's/raise RuntimeError("source artifact has no corpus metadata")/raise TypeError("source artifact has no corpus metadata")/' tools/research/step4_phase45d_gemini38_calibration_diagnostic.py
+          sed -i 's/raise RuntimeError("source artifact has no calibration section")/raise TypeError("source artifact has no calibration section")/' tools/research/step4_phase45d_gemini38_calibration_diagnostic.py
+          sed -i 's/raise RuntimeError("source artifact has no calibration acceptance result")/raise TypeError("source artifact has no calibration acceptance result")/' tools/research/step4_phase45d_gemini38_calibration_diagnostic.py
+          sed -i 's/raise RuntimeError("source artifact has no calibration policy")/raise TypeError("source artifact has no calibration policy")/' tools/research/step4_phase45d_gemini38_calibration_diagnostic.py
           python -m pip install "ruff==0.16.5"
           ruff format tools/research/step4_phase45d_gemini38_calibration_diagnostic.py tests/test_phase45d_gemini38_calibration_diagnostic.py tools/research/_phase45d_post_v3_sync_once.py
-          ruff check --fix --unsafe-fixes tools/research/step4_phase45d_gemini38_calibration_diagnostic.py tests/test_phase45d_gemini38_calibration_diagnostic.py tools/research/_phase45d_post_v3_sync_once.py
+          ruff check --fix tools/research/step4_phase45d_gemini38_calibration_diagnostic.py tests/test_phase45d_gemini38_calibration_diagnostic.py tools/research/_phase45d_post_v3_sync_once.py
           ruff format tools/research/step4_phase45d_gemini38_calibration_diagnostic.py tests/test_phase45d_gemini38_calibration_diagnostic.py tools/research/_phase45d_post_v3_sync_once.py
           ruff check tools/research/step4_phase45d_gemini38_calibration_diagnostic.py tests/test_phase45d_gemini38_calibration_diagnostic.py tools/research/_phase45d_post_v3_sync_once.py
 
