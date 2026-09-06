@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 RESEARCH = ROOT / "tools" / "research"
 
@@ -237,7 +239,7 @@ def test_public_case_does_not_persist_query_or_memory_document() -> None:
     assert public["case_id"] == "p1"
     assert "query" not in public
     assert "top_document" not in public
-    assert public["gliclass_margin"] == 0.4
+    assert public["gliclass_margin"] == pytest.approx(0.4)
     assert public["gemini_decision"] == "release"
 
 
