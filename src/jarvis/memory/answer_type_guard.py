@@ -203,7 +203,8 @@ class LocalZeroShotMemoryAnswerTypeGuard:
             use_safetensors=True,
         )
         label2id = {
-            str(key).casefold(): int(value) for key, value in model.config.label2id.items()
+            str(key).casefold(): int(value)
+            for key, value in model.config.label2id.items()
         }
         expected_labels = {"entailment": 0, "neutral": 1, "contradiction": 2}
         if label2id != expected_labels:
