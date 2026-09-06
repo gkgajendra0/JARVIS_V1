@@ -88,9 +88,7 @@ async def test_current_value_allow_reaches_deterministic_core() -> None:
 @pytest.mark.asyncio
 async def test_comparison_allow_reaches_deterministic_core() -> None:
     core = FakeCoordinator(_abstain("core_policy_decision"))
-    guard = StaticGuard(
-        _guard_decision(MemoryAnswerType.CURRENT_VALUE_COMPARISON)
-    )
+    guard = StaticGuard(_guard_decision(MemoryAnswerType.CURRENT_VALUE_COMPARISON))
     coordinator = GuardedMemoryQueryCoordinator(
         coordinator=core,
         answer_type_guard=guard,
