@@ -28,17 +28,20 @@ jobs:
       - name: Install pinned Ruff
         run: python -m pip install "ruff==0.16.5"
 
-      - name: Format scoped answerability files
+      - name: Apply scoped Ruff fixes and formatting
         run: |
+          ruff check --fix \
+            tools/research/step4_phase45d_answerability_verifier_bakeoff.py \
+            tests/test_phase45d_answerability_verifier_bakeoff.py
           ruff format \
             tools/research/step4_phase45d_answerability_verifier_bakeoff.py \
             tests/test_phase45d_answerability_verifier_bakeoff.py
 
-      - name: Commit formatting if needed
+      - name: Commit fixes if needed
         shell: bash
         run: |
           if git diff --quiet; then
-            echo "No formatting changes needed."
+            echo "No Ruff changes needed."
             exit 0
           fi
           git config user.name "github-actions[bot]"
@@ -46,5 +49,5 @@ jobs:
           git add \
             tools/research/step4_phase45d_answerability_verifier_bakeoff.py \
             tests/test_phase45d_answerability_verifier_bakeoff.py
-          git commit -m "Format Phase 4.5D answerability bakeoff"
+          git commit -m "Fix Phase 4.5D answerability Ruff findings"
           git push origin HEAD:implementation/step-4-memory-context
