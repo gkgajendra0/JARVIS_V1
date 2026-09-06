@@ -188,9 +188,7 @@ def test_inference_pair_reconstructs_query_transiently() -> None:
     module = _module()
     payload = module.v2_cases.build_payload()
     real_case = next(
-        item
-        for item in payload["queries"]
-        if item["case_id"] == "v2_val_p0001"
+        item for item in payload["queries"] if item["case_id"] == "v2_val_p0001"
     )
     fact = next(
         fact
@@ -223,7 +221,11 @@ def test_clean_guard_summary_passes_frozen_continuation_gates() -> None:
     module = _module()
     results = []
     counter = 0
-    for language, allowed, total in (("en", 3, 4), ("hi", 2, 3), ("hinglish", 3, 3)):
+    for language, allowed, total in (
+        ("en", 3, 4),
+        ("hi", 2, 3),
+        ("hinglish", 3, 3),
+    ):
         for index in range(total):
             counter += 1
             results.append(
