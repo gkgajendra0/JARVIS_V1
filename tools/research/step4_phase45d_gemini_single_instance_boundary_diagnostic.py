@@ -56,27 +56,36 @@ def _load_source_artifact(path: Path) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         raise RuntimeError("semantic-judge source artifact is not valid JSON") from exc
     if not isinstance(payload, dict):
-        raise RuntimeError("semantic-judge source artifact must be a JSON object")
+        raise TypeError("semantic-judge source artifact must be a JSON object")
     if payload.get("status") != "DEVELOPMENT_SEMANTIC_JUDGE_BAKEOFF_COMPLETE":
-        raise RuntimeError("semantic-judge source artifact did not complete successfully")
+        raise RuntimeError(
+            "semantic-judge source artifact did not complete successfully"
+        )
     if payload.get("acceptance_evidence") is not False:
         raise RuntimeError("source artifact must remain development-only evidence")
     models = payload.get("models")
     if not isinstance(models, dict):
-        raise RuntimeError("semantic-judge source artifact has no model metadata")
+        raise TypeError("semantic-judge source artifact has no model metadata")
     gemini = models.get("gemini")
-    if not isinstance(gemini, dict) or gemini.get("model_id") != semantic.GEMINI_MODEL_ID:
-        raise RuntimeError("source artifact Gemini model does not match frozen diagnostic")
+    if (
+        not isinstance(gemini, dict)
+        or gemini.get("model_id") != semantic.GEMINI_MODEL_ID
+    ):
+        raise RuntimeError(
+            "source artifact Gemini model does not match frozen diagnostic"
+        )
     cases = payload.get("cases")
     if not isinstance(cases, list) or len(cases) != 1800:
-        raise RuntimeError("semantic-judge source artifact must contain all 1,800 V2 cases")
+        raise RuntimeError(
+            "semantic-judge source artifact must contain all 1,800 V2 cases"
+        )
     return payload
 
 
 def _select_boundary_cases(source: dict[str, Any]) -> list[dict[str, Any]]:
     cases = source.get("cases")
     if not isinstance(cases, list):
-        raise RuntimeError("source artifact cases are missing")
+        raise TypeError("source artifact cases are missing")
 
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for raw in cases:
@@ -105,7 +114,9 @@ def _select_boundary_cases(source: dict[str, Any]) -> list[dict[str, Any]]:
 
     case_ids = [str(item.get("case_id")) for item in selected]
     if len(selected) != EXPECTED_CASE_COUNT or len(case_ids) != len(set(case_ids)):
-        raise RuntimeError("single-instance diagnostic selection is not exactly 15 unique cases")
+        raise RuntimeError(
+            "single-instance diagnostic selection is not exactly 15 unique cases"
+        )
     return selected
 
 
@@ -125,13 +136,17 @@ async def _retrieve_selected_pairs(
     for case_id in selected_ids:
         item = query_by_id.get(case_id)
         if item is None:
-            raise RuntimeError(f"selected case is absent from frozen V2 corpus: {case_id}")
+            raise RuntimeError(
+                f"selected case is absent from frozen V2 corpus: {case_id}"
+            )
         selected_queries.append(item)
 
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
 
-    with tempfile.TemporaryDirectory(prefix="jarvis-phase45d-gemini-single-") as temp_dir:
+    with tempfile.TemporaryDirectory(
+        prefix="jarvis-phase45d-gemini-single-"
+    ) as temp_dir:
         worker = answerability.baseline._connection_worker(
             Path(temp_dir) / "single-instance-boundary.db"
         )
@@ -156,7 +171,9 @@ async def _retrieve_selected_pairs(
             candidate_window=answerability.QWEN_CANDIDATE_WINDOW,
         )
         if reranker.instruction != JARVIS_MEMORY_RERANK_INSTRUCTION:
-            raise RuntimeError("diagnostic must use the frozen JARVIS reranker instruction")
+            raise RuntimeError(
+                "diagnostic must use the frozen JARVIS reranker instruction"
+            )
 
         query_embedding_ms: list[float] = []
         retrieval_ms: list[float] = []
@@ -197,10 +214,14 @@ async def _retrieve_selected_pairs(
                 reranked = reranker.rerank(query, first_stage)
                 rerank_ms.append((time.perf_counter_ns() - tick) / 1_000_000)
                 if not reranked:
-                    raise RuntimeError(f"reranker returned nothing for {item['case_id']}")
+                    raise RuntimeError(
+                        f"reranker returned nothing for {item['case_id']}"
+                    )
 
                 top = reranked[0]
-                top_memory_id = assertion_to_memory.get(top.candidate.assertion.assertion_id)
+                top_memory_id = assertion_to_memory.get(
+                    top.candidate.assertion.assertion_id
+                )
                 if top_memory_id is None:
                     raise RuntimeError(f"unknown top assertion for {item['case_id']}")
                 if top_memory_id != source_case.get("top_memory_id"):
@@ -233,7 +254,9 @@ async def _retrieve_selected_pairs(
             await worker.close()
 
         peak_cuda_bytes = (
-            int(torch.cuda.max_memory_allocated()) if torch.cuda.is_available() else None
+            int(torch.cuda.max_memory_allocated())
+            if torch.cuda.is_available()
+            else None
         )
 
     def _timing(values: list[float]) -> dict[str, float]:
@@ -414,7 +437,9 @@ def main() -> None:
     source_path = Path(args.source)
     output_path = Path(args.output)
     if output_path.exists():
-        raise RuntimeError(f"refusing to overwrite existing diagnostic evidence: {output_path}")
+        raise RuntimeError(
+            f"refusing to overwrite existing diagnostic evidence: {output_path}"
+        )
 
     result = asyncio.run(
         _run(
