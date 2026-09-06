@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — FRESH V3 FAIL_CALIBRATION / RETIRED — V3 VALIDATION UNEXPOSED — GEMINI 3.8 FLASH CALIBRATION DIAGNOSTIC NEXT — PHASE 4.5E BLOCKED**
+**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — PROVIDER-INDEPENDENT COMPOSITE GATE SELECTED — FRESH FINAL ACCEPTANCE FROZEN — PHASE 4.5E BLOCKED**
 
 This file is the operational source of truth. Detailed measurements belong in `docs/research/`; only fresh accepted architecture belongs in ADRs / `docs/CURRENT_ARCHITECTURE.md`.
 
@@ -242,74 +242,108 @@ This development result isolates the V2 ranking problem:
 
 ---
 
-## Active 4.5D direction — POST-V3 GEMINI 3.8 CALIBRATION DIAGNOSTIC
+## Active 4.5D direction — PROVIDER-INDEPENDENT COMPOSITE GATE SELECTED / FRESH ACCEPTANCE NEXT
 
-Fresh V3 has been executed once and is **FAIL_CALIBRATION / RETIRED**. Do not rerun it, overwrite it, or execute its untouched validation half.
+Fresh V3 is **FAIL_CALIBRATION / RETIRED** and its validation half remains unexposed. The later Gemini 3.8 diagnostic attempt ended in provider quota/transport failure and produced no model-quality evidence. Do not treat that quota event as a model rejection.
+
+After V3, Phase 4.5D was redesigned so canonical memory release does not depend on whichever conversational brain provider is active.
+
+### Provider-independent exact-fact architecture — SELECTED DEVELOPMENT CANDIDATE
+
+Production-shaped contract:
+
+```text
+JARVIS_AI_PROVIDER-selected BrainProvider adapter
+→ structured MemoryQueryProposal (proposal only; no truth/release authority)
+→ local multilingual answer-type veto
+→ deterministic JARVIS grounding + canonical facet validation
+→ deterministic lifecycle / authority / sensitivity eligibility
+→ unique exact current-facet lookup
+→ TrustedMemoryEvidence or ABSTAIN
+```
+
+Key invariants:
+
+- `JARVIS_AI_PROVIDER` remains the single production provider selector;
+- provider adapters are compatibility drivers, not independent memory authorities;
+- the planner receives only the user utterance plus already-eligible `(subject_scope, subject, predicate)` keys, never JARVIS-injected canonical values;
+- exact validated current-fact lookup is indexed canonical SQLite lookup and does not require Qwen embedding/reranking;
+- zero matching current rows → abstain;
+- more than one matching current row → conflict/abstain;
+- local semantic guard is veto-only and cannot create truth, select another memory, resurrect forgotten/history, or override security;
+- provider or local-guard failures fail closed.
+
+### Development evidence — COMPLETE
+
+Structured planner diagnostic on retired V2:
+
+- 45 cases;
+- 12 target releases / 33 target abstains;
+- 10 exact releases;
+- 6 ordinary-semantic false releases;
+- zero security-boundary releases.
+
+Standalone NLI-as-answerability was rejected after blocking all 10 correct releases as well as all six false releases.
+
+Standalone multilingual zero-shot answer-type classification retained all 12 legitimate release targets but had two `absent` false allows, so it was rejected as a standalone release authority and retained only as an independent veto.
+
+Frozen composite AND-gate diagnostic on the same exposed 45 rows:
+
+- exact releases `10/12 = 0.833333`;
+- direct exact releases `8/9`;
+- relation-comparison exact releases `2/3`;
+- English `4/4`, Hindi `3/4`, Hinglish `3/4`;
+- **false releases `0`**;
+- wrong-target releases `0`;
+- security-boundary releases `0`;
+- all frozen continuation checks passed;
+- `promising_for_fresh_acceptance_design = true`.
 
 Durable result:
 
-- `docs/research/STEP_4_PHASE_4_5D_FINAL_V3_RESULT.md`.
+- `docs/research/STEP_4_PHASE_4_5D_COMPOSITE_MEMORY_GATE_DIAGNOSTIC_RESULT.md`.
 
-Frozen owner-run V3 evidence:
+The selected local veto is:
 
-- implementation SHA `783a5b49cdf31a957c403066f1ea421c007354a4`;
-- corpus SHA-256 `baac40840bc260a01f4fc630570e4578dbdf8dc9f36c8b3192c6bb6471191195`;
-- calibration `170 TP / 14 FP`, empirical precision `0.923913`;
-- one-sided 95% Clopper-Pearson lower precision bound `0.883609731`;
-- positive Recall@10 and reranked Top-1 both `170/180 = 0.944444`;
-- EN positive release recall `1.0`, HI `0.833333`, Hinglish `1.0`;
-- false releases: `5 positive retrieval misses + 3 near_miss + 1 ambiguous + 1 unsupported_source + 4 historical`;
-- security-boundary leaks: four `historical` cases;
-- **validation was not executed**.
+- `MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7`;
+- revision `b5113eb38ab63efdd7f280f8c144ea8b13f978ce`;
+- seven frozen answer types;
+- argmax-only, no fitted threshold;
+- only `current_value` and `current_value_comparison` may continue.
 
-The failure is not marginal. With `170` true releases, at most `3` false releases would satisfy the frozen exact 95% precision-confidence gate; V3 produced `14`.
+Production-shaped implementation exists in:
 
-### Failure diagnosis
+- `src/jarvis/memory/answer_type_guard.py`;
+- `src/jarvis/memory/guarded_query_coordinator.py`;
+- the existing provider-neutral planner / grounding / evidence-gate modules.
 
-The ten positive Top-10 misses were all Hindi and concentrated in two predicates:
+### Fresh final composite acceptance — FROZEN / OWNER RUN NEXT
 
-- five `archive_destination` misses; Gemini 3.5 Flash-Lite incorrectly RELEASED all five wrong Top-1 documents;
-- five `signin_method` misses; Gemini correctly abstained on all five.
+Method:
 
-Whenever the expected positive memory entered Top-10, the frozen Qwen reranker placed it Top-1. This keeps the ranking problem localized to first-stage multilingual candidate starvation rather than reranker ordering.
+- `docs/research/STEP_4_PHASE_4_5D_FINAL_COMPOSITE_ACCEPTANCE_METHOD.md`.
 
-The remaining semantic false releases were concentrated in scope-sensitive cases: Hinglish near-miss/ambiguity, one English unsupported-source query, and Hindi/Hinglish historical queries.
+Fresh corpus:
 
-### Research-first next candidate — Gemini 3.8 Flash
+- 255 total queries;
+- 90 release targets;
+- 165 abstain targets;
+- 55 synthetic documents;
+- 30 release targets per language;
+- 11 abstain families × 5 cases × 3 languages;
+- fresh subjects/predicates/values/wording;
+- exact normalized query overlap with retired V2/V3 fails closed;
+- no real secrets.
 
-Google released stable GA `gemini-3.8-flash` on September 2, 2026 and positions it as its most intelligent Flash model for complex workflows with higher factual rigor. It supports the same Interactions API and structured outputs plus configurable thinking. This is a materially stronger current production model than the failed Flash-Lite judge, so it is the next mature technology to test before adding custom semantic logic.
+Frozen corpus SHA-256:
 
-Frozen development method:
+`69666a37d436828b1d65827852f9e43d524253608209275205c41a36f8accadf`
 
-- `docs/research/STEP_4_PHASE_4_5D_GEMINI38_CALIBRATION_DIAGNOSTIC_METHOD.md`.
+Acceptance gates include zero false/wrong/security releases, exact-memory release only, overall release recall >= `0.75`, direct recall >= `0.75`, comparison recall >= `0.60`, each language >= `0.65`, and one-sided exact 95% released-precision lower bound >= `0.95`.
 
-Harness:
+There is no calibration split because the selected architecture has no learned threshold to fit. If this fresh corpus fails, it is exposed/retired and must not be tuned and rerun as fresh evidence.
 
-- `tools/research/step4_phase45d_gemini38_calibration_diagnostic.py`.
-
-The diagnostic uses **only the already exposed V3 calibration split** and changes one semantic variable:
-
-```text
-same V3 calibration only
-same canonical eligibility/security
-same Qwen3 256d FTS5 + exact cosine + equal RRF
-same Top-10 candidate window
-same Qwen3 reranker + frozen instruction
-same one-query/document Interactions request shape
-same semantic sufficiency prompt + structured schema + store=False
-
-Gemini 3.5 Flash-Lite
-        ↓ only changed semantic variable
-Gemini 3.8 Flash, thinking_level=medium
-```
-
-Before any Gemini 3.8 scoring is accepted as comparable evidence, the harness must reproduce every one of the 360 V3 calibration Top-1 IDs and positive Recall@10/Top-1 flags from the retired owner artifact.
-
-Development selection for a fresh V4 design requires the existing exact precision, recall, language and zero-security-release gates. Even a perfect diagnostic is development evidence only; V4 would need a completely fresh acceptance corpus. The untouched V3 validation split must not be reused as V4 acceptance evidence.
-
-If Gemini 3.8 fails this diagnostic, stop model-hopping and research/implement the structure-aware fallback: parse memory queries into canonical subject/relation/temporal/source constraints, apply deterministic metadata filtering before semantic release, and evaluate multilingual NLI only as a task-matched secondary verifier if needed.
-
----
+The owner acceptance uses current `gemini-3.5-flash-lite` only as the structured proposal adapter. This does **not** make memory authority Gemini-specific and does not add another production provider switch.
 
 ## Phase 4.5E — BLOCKED
 
@@ -335,7 +369,7 @@ Do **not** wire semantic retrieval into `ContextAssembler` / Gemini conversation
 6. 4.5A — COMPLETE.
 7. 4.5B — COMPLETE.
 8. 4.5C — COMPLETE.
-9. **4.5D — ACTIVE: V3 FAIL_CALIBRATION / RETIRED with validation unexposed; Gemini 3.8 calibration-only diagnostic next.**
+9. **4.5D — ACTIVE: provider-independent composite gate selected; fresh final composite acceptance frozen and owner run next.**
 10. **4.5E — BLOCKED.**
 11. 4.6 — NOT STARTED.
 12. 4.7 — NOT STARTED.
