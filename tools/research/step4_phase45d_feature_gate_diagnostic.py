@@ -17,11 +17,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import average_precision_score, roc_auc_score
-from sklearn.model_selection import StratifiedKFold, cross_val_predict
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 
 RANDOM_STATE = 45
 N_SPLITS = 5
@@ -89,7 +84,15 @@ def _labels(cases: list[dict[str, Any]]) -> np.ndarray:
     return np.asarray([bool(case["safe_to_release"]) for case in cases], dtype=np.int64)
 
 
-def _pipeline() -> Pipeline:
+def _pipeline() -> Any:
+    try:
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.pipeline import Pipeline
+        from sklearn.preprocessing import StandardScaler
+    except ImportError as exc:  # pragma: no cover - owner research environment only
+        raise RuntimeError(
+            "scikit-learn is required for the Phase 4.5D feature-gate diagnostic"
+        ) from exc
     return Pipeline(
         [
             ("scale", StandardScaler()),
@@ -151,6 +154,14 @@ def _best_empirical_operating_point(
 
 
 def _evaluate(cases: list[dict[str, Any]], feature_set: FeatureSet) -> dict[str, Any]:
+    try:
+        from sklearn.metrics import average_precision_score, roc_auc_score
+        from sklearn.model_selection import StratifiedKFold, cross_val_predict
+    except ImportError as exc:  # pragma: no cover - owner research environment only
+        raise RuntimeError(
+            "scikit-learn is required for the Phase 4.5D feature-gate diagnostic"
+        ) from exc
+
     X = _features(cases, feature_set)
     y = _labels(cases)
     cv = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=RANDOM_STATE)
