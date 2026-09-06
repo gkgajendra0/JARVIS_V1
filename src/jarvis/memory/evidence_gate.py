@@ -112,7 +112,9 @@ class MemoryEvidenceGate:
             or assertion.subject != facet.subject
             or assertion.predicate != facet.predicate
         ):
-            raise AssertionError("exact facet lookup returned a different canonical facet")
+            raise AssertionError(
+                "exact facet lookup returned a different canonical facet"
+            )
 
         reason = "unique_eligible_current_exact_fact"
         evidence = TrustedMemoryEvidence(assertion=assertion, reason_code=reason)
