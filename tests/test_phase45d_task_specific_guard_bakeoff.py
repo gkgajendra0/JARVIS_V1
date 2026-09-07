@@ -5,6 +5,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
+
 ROOT = Path(__file__).resolve().parents[1]
 RESEARCH = ROOT / "tools" / "research"
 CASES_SCRIPT = RESEARCH / "step4_phase45d_task_specific_guard_cases.py"
@@ -58,12 +60,58 @@ def test_train_holdout_and_retired_v4_have_no_exact_query_overlap() -> None:
 def test_candidate_input_contracts_are_frozen() -> None:
     by_key = {str(row["key"]): row for row in harness.CANDIDATES}
 
+    assert set(by_key) == {
+        "multilingual_minilm_l12",
+        "multilingual_e5_small",
+        "multilingual_mpnet_base_v2",
+        "qwen3_embedding_0_6b_256d",
+    }
     assert by_key["multilingual_minilm_l12"]["input_prefix"] == ""
+    assert by_key["multilingual_minilm_l12"]["truncate_dim"] is None
     assert by_key["multilingual_e5_small"]["input_prefix"] == "query: "
+    assert by_key["multilingual_e5_small"]["truncate_dim"] is None
     assert by_key["multilingual_mpnet_base_v2"]["input_prefix"] == ""
+    assert by_key["multilingual_mpnet_base_v2"]["truncate_dim"] is None
+
+    qwen = by_key["qwen3_embedding_0_6b_256d"]
+    assert qwen["model_id"] == "Qwen/Qwen3-Embedding-0.6B"
+    assert qwen["revision"] == "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3"
+    assert qwen["dimension"] == 256
+    assert qwen["input_prefix"] == ""
+    assert qwen["truncate_dim"] == 256
 
     rows = [{"query": "hello"}, {"query": "नमस्ते"}]
     assert harness._texts(rows, prefix="query: ") == ["query: hello", "query: नमस्ते"]
+
+
+def test_encode_forwards_frozen_truncation_only_when_requested() -> None:
+    class FakeModel:
+        def __init__(self, dimension: int) -> None:
+            self.dimension = dimension
+            self.kwargs: dict[str, object] = {}
+
+        def encode(self, texts, **kwargs):
+            self.kwargs = kwargs
+            return np.ones((len(texts), self.dimension), dtype=np.float32)
+
+    qwen = FakeModel(256)
+    vectors, _ = harness._encode(
+        qwen,
+        ["hello", "नमस्ते"],
+        batch_size=2,
+        truncate_dim=256,
+    )
+    assert vectors.shape == (2, 256)
+    assert qwen.kwargs["truncate_dim"] == 256
+
+    minilm = FakeModel(384)
+    harness._encode(
+        minilm,
+        ["hello"],
+        batch_size=1,
+        truncate_dim=None,
+    )
+    assert "truncate_dim" not in minilm.kwargs
 
 
 def _perfect_predictions():
