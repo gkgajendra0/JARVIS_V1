@@ -55,6 +55,17 @@ def test_train_holdout_and_retired_v4_have_no_exact_query_overlap() -> None:
     harness._assert_no_v4_exact_query_overlap(payload)
 
 
+def test_candidate_input_contracts_are_frozen() -> None:
+    by_key = {str(row["key"]): row for row in harness.CANDIDATES}
+
+    assert by_key["multilingual_minilm_l12"]["input_prefix"] == ""
+    assert by_key["multilingual_e5_small"]["input_prefix"] == "query: "
+    assert by_key["multilingual_mpnet_base_v2"]["input_prefix"] == ""
+
+    rows = [{"query": "hello"}, {"query": "नमस्ते"}]
+    assert harness._texts(rows, prefix="query: ") == ["query: hello", "query: नमस्ते"]
+
+
 def _perfect_predictions():
     output = []
     for row in cases.build_payload()["holdout"]:
