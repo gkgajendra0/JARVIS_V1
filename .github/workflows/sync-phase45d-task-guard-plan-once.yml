@@ -1,0 +1,70 @@
+name: Sync Phase 4.5D task guard plan once
+
+on:
+  push:
+    paths:
+      - .github/workflows/sync-phase45d-task-guard-plan-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: implementation/step-4-memory-context
+      - name: Synchronize CURRENT_PLAN
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("docs/CURRENT_PLAN.md")
+          text = path.read_text(encoding="utf-8")
+
+          old_stage = "**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — PROVIDER-INDEPENDENT COMPOSITE GATE SELECTED — FRESH FINAL ACCEPTANCE QUOTA-INTERRUPTED / CORPUS PRESERVED — PHASE 4.5E BLOCKED**"
+          new_stage = "**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — V4 FAILED / RETIRED — TASK-SPECIFIC LOCAL GUARD BAKE-OFF FROZEN — PHASE 4.5E BLOCKED**"
+          if text.count(old_stage) != 1:
+              raise RuntimeError(f"expected one stage marker, found {text.count(old_stage)}")
+          text = text.replace(old_stage, new_stage, 1)
+
+          start_marker = "## Active 4.5D direction — PROVIDER-INDEPENDENT COMPOSITE GATE SELECTED / FRESH ACCEPTANCE NEXT\n"
+          end_marker = "\n## Phase 4.5E — BLOCKED\n"
+          start = text.find(start_marker)
+          end = text.find(end_marker, start)
+          if start < 0 or end < 0:
+              raise RuntimeError("active 4.5D section markers not found")
+
+          new_active = '''## Active 4.5D direction — JARVIS-SIDE TASK-SPECIFIC LOCAL GUARD REPLACEMENT\n\nThe provider-independent memory-authority architecture remains selected: provider adapters may propose structured query intent, but deterministic JARVIS grounding, lifecycle/security eligibility and exact canonical lookup own release authority. `JARVIS_AI_PROVIDER` remains the single production provider selector.\n\n### V4 fresh final composite acceptance — FAIL_ACCEPTANCE / RETIRED\n\nFrozen V4 corpus SHA-256:\n\n`69666a37d436828b1d65827852f9e43d524253608209275205c41a36f8accadf`\n\nThe quota-safe provider-backed owner run completed all `255` cases with exactly `66` logical Gemini calls and `66` API attempts. Quota was **not** the blocker.\n\nProvider-backed result:\n\n- exact target releases `53/90`;\n- false releases `0`;\n- wrong-target releases `0`;\n- security-boundary releases `0`;\n- empirical precision `1.0`;\n- overall release recall `0.588889`;\n- direct-current recall `0.800000`;\n- current-value-comparison recall `0.166667`;\n- EN `0.666667`, HI `0.566667`, Hinglish `0.533333`;\n- the local zero-shot guard vetoed `24/30` legitimate comparison targets.\n\nA separately frozen provider-independent core acceptance then ran the same V4 corpus with **zero cloud/provider calls** and deterministic hostile proposals.\n\nProvider-independent core result:\n\n- exact target releases `58/90`;\n- false releases `1`: `v4_a0073`, Hinglish `negation`;\n- wrong-target releases `0`;\n- security-boundary releases `0`;\n- security authority-only precheck failures `0`;\n- overall release recall `0.644444`;\n- direct-current recall `0.866667`;\n- comparison recall `0.200000`;\n- the same local guard again vetoed `24/30` legitimate comparison targets.\n\nDurable result:\n\n- `docs/research/STEP_4_PHASE_4_5D_V4_ACCEPTANCE_RESULT.md`.\n\n### V4 diagnosis — COMPLETE\n\nThe failure is now isolated to the generic multilingual zero-shot NLI answer-type guard, not retrieval, Gemini quota, provider planning, canonical lifecycle/security authority or exact canonical lookup. The guard is too conservative on legitimate comparison questions and missed one Hinglish negation boundary.\n\nV4 is exposed and **retired acceptance evidence**. Do not rerun it, tune thresholds on it, train a replacement on its query text, or score replacement candidates on it. V4 may be used only as an exact-query deny-list and as architectural evidence that comparison and negation need explicit representation.\n\nThe existing `MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7` zero-shot guard is therefore retired as the selected production design. Production behavior is not changed until a replacement wins the frozen development bake-off.\n\n### Task-specific local guard bake-off — FROZEN / DEVELOPMENT-ONLY\n\nResearch selected the SetFit-style pattern without adding the SetFit package itself: a frozen multilingual SentenceTransformer produces normalized query embeddings and a fixed scikit-learn `LogisticRegression` head performs task-specific classification. This reuses the already-compatible owner stack instead of disturbing pinned Torch/Transformers.\n\nNew eight-class taxonomy:\n\n1. `current_value`;\n2. `current_value_comparison`;\n3. `reason_explanation`;\n4. `provenance_actor`;\n5. `replacement_successor`;\n6. `related_record`;\n7. `negated_or_contradicted`;\n8. `other_or_advice`.\n\nOnly `current_value` and `current_value_comparison` may continue. The classifier remains veto-only and cannot establish canonical truth.\n\nDevelopment corpus:\n\n- `288` train cases;\n- `192` never-trained-on holdout cases;\n- exact English / Hindi / Hinglish and eight-class balance;\n- disjoint train/holdout facts and paraphrase templates;\n- zero exact normalized train/holdout overlap;\n- zero exact normalized overlap with retired V4;\n- V4 is not used for training or scoring.\n\nFrozen development corpus SHA-256:\n\n`ae854ed664ef6ee0214f65f5fe4b252099fd1dcaea00c13aaf7789cd84afd3ab`\n\nCandidates, all with the same frozen logistic head and no threshold fitting:\n\n- `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` @ `e8f8c211226b894fcb81acc59f3b34ba3efd5f42`;\n- `intfloat/multilingual-e5-small` @ `fd1525a9fd15316a2d503bf26ab031a61d056e98`;\n- `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` @ `4328cf26390c98c5e3c738b4460a05b95f4911f5`.\n\nFrozen development gates require simultaneously: zero false allows, zero negation false allows, overall allow recall >= `0.90`, direct >= `0.90`, comparison >= `0.85`, each language >= `0.85`, eight-class macro-F1 >= `0.85`, argmax-only/no threshold, zero cloud calls, and no V4 training/scoring.\n\nMethod:\n\n- `docs/research/STEP_4_PHASE_4_5D_TASK_SPECIFIC_GUARD_BAKEOFF_METHOD.md`.\n\nHarness:\n\n- `tools/research/step4_phase45d_task_specific_guard_bakeoff.py`;\n- `tools/research/step4_phase45d_task_specific_guard_cases.py`.\n\nIf no candidate passes every frozen development gate, no production guard change is authorized. If a candidate passes and wins the frozen tie-break, freeze its model/revision plus classifier artifact/coefficients, class order, training-corpus hash, sklearn version and artifact checksum; then implement the production task-specific guard and create a completely fresh V5 provider-independent acceptance corpus. A development bake-off pass alone does not close 4.5D.\n'''
+          text = text[:start] + new_active + text[end:]
+
+          old_order = "9. **4.5D — ACTIVE: provider-independent composite gate selected; fresh final composite acceptance frozen; first execution ended in provider quota failure before a complete artifact; rerun unchanged after quota is available.**"
+          new_order = "9. **4.5D — ACTIVE: V4 completed and failed/retired; generic zero-shot NLI guard isolated as the blocker; fresh task-specific local guard bake-off frozen and next.**"
+          if text.count(old_order) != 1:
+              raise RuntimeError(f"expected one implementation-order marker, found {text.count(old_order)}")
+          text = text.replace(old_order, new_order, 1)
+
+          old_do_not = "Do not:\n\n- rerun or overwrite V2 acceptance evidence;"
+          new_do_not = "Do not:\n\n- rerun V4 provider-backed or provider-independent acceptance;\n- tune thresholds, train, or score replacement candidates on V4 query text/results;\n- install SetFit or change Torch/Torchvision merely for this bake-off;\n- modify the production answer-type guard before a candidate passes the frozen bake-off;\n- rerun or overwrite V2 acceptance evidence;"
+          if text.count(old_do_not) != 1:
+              raise RuntimeError(f"expected one do-not marker, found {text.count(old_do_not)}")
+          text = text.replace(old_do_not, new_do_not, 1)
+
+          next_marker = "## Immediate Next Action\n"
+          next_start = text.find(next_marker)
+          if next_start < 0:
+              raise RuntimeError("Immediate Next Action marker not found")
+          new_next = '''## Immediate Next Action\n\n**RUN THE FROZEN ZERO-CLOUD TASK-SPECIFIC LOCAL GUARD BAKE-OFF ON THE OWNER RTX MACHINE.**\n\nThis is development model selection only. It uses a new `288`-train / `192`-holdout corpus and makes zero Gemini/OpenAI calls. It must not use V4 for training or scoring.\n\nBefore the owner run:\n\n- use the exact green repository SHA supplied with the owner command;\n- verify `.step4-phase45d-task-specific-guard-bakeoff-v1.json` is absent;\n- verify the development corpus SHA is `ae854ed664ef6ee0214f65f5fe4b252099fd1dcaea00c13aaf7789cd84afd3ab`;\n- keep owner Torch `2.13.0+cu132`, Torchvision `0.28.0+cu132`, Transformers `5.16.1`, SentenceTransformers `6.0.1` and scikit-learn `1.9.0`;\n- do not run cloud-provider diagnostics in parallel.\n\nIf one candidate passes every frozen development gate, record the result, freeze the winner artifact/contract, implement the production replacement cleanly, and then design a never-exposed V5 provider-independent acceptance. If no candidate passes, research the failure class and create a new development iteration without tuning against the holdout or V4.\n\nPhase 4.5E remains blocked until a fresh V5 acceptance passes and 4.5D has durable closure evidence on a green exact SHA.\n'''
+          text = text[:next_start] + new_next
+
+          path.write_text(text, encoding="utf-8")
+          PY
+      - name: Commit plan synchronization
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/CURRENT_PLAN.md
+          git diff --cached --check
+          git commit -m "Sync Phase 4.5D task guard plan"
+          git push origin HEAD:implementation/step-4-memory-context
