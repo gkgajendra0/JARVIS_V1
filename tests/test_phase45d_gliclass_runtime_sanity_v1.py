@@ -10,7 +10,9 @@ SCRIPT = (
     / "research"
     / "step4_phase45d_gliclass_runtime_sanity_v1.py"
 )
-SPEC = importlib.util.spec_from_file_location("phase45d_gliclass_runtime_sanity_v1", SCRIPT)
+SPEC = importlib.util.spec_from_file_location(
+    "phase45d_gliclass_runtime_sanity_v1", SCRIPT
+)
 assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
