@@ -136,13 +136,17 @@ def _templates() -> dict[str, dict[str, tuple[str, str]]]:
             ),
             "replacement_successor": (
                 "What replaced {alternative} for {subject}'s {relation}?",
-                "After {alternative} was rejected, which value succeeded it for "
-                "{subject}'s {relation}?",
+                (
+                    "After {alternative} was rejected, which value succeeded it for "
+                    "{subject}'s {relation}?"
+                ),
             ),
             "related_record": (
                 "Which approval ticket was created for {subject}'s {relation}?",
-                "What linked record is associated with setting {subject}'s {relation} "
-                "to {value}?",
+                (
+                    "What linked record is associated with setting {subject}'s {relation} "
+                    "to {value}?"
+                ),
             ),
             "historical_value": (
                 "What was {subject}'s previous {relation} before {value}?",
@@ -180,8 +184,10 @@ def _templates() -> dict[str, dict[str, tuple[str, str]]]:
             ),
             "replacement_successor": (
                 "{subject} के {relation} में {alternative} की जगह क्या आया?",
-                "{alternative} reject होने के बाद {subject} के {relation} में कौन सा "
-                "value आया?",
+                (
+                    "{alternative} reject होने के बाद {subject} के {relation} में कौन सा "
+                    "value आया?"
+                ),
             ),
             "related_record": (
                 "{subject} के {relation} के लिए कौन सा approval ticket बना था?",
@@ -223,13 +229,17 @@ def _templates() -> dict[str, dict[str, tuple[str, str]]]:
             ),
             "replacement_successor": (
                 "{subject} ke {relation} me {alternative} ko kis value ne replace kiya?",
-                "{alternative} reject hone ke baad {subject} ke {relation} me kaunsa "
-                "value aaya?",
+                (
+                    "{alternative} reject hone ke baad {subject} ke {relation} me kaunsa "
+                    "value aaya?"
+                ),
             ),
             "related_record": (
                 "{subject} ke {relation} ke liye kaunsa approval ticket bana tha?",
-                "{subject} ka {relation} {value} set karne se kaunsa linked record "
-                "connected hai?",
+                (
+                    "{subject} ka {relation} {value} set karne se kaunsa linked record "
+                    "connected hai?"
+                ),
             ),
             "historical_value": (
                 "{value} se pehle {subject} ka previous {relation} kya tha?",
