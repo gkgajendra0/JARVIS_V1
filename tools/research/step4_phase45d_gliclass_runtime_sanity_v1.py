@@ -112,7 +112,9 @@ def _one_prediction(output: object) -> dict[str, Any]:
     label = item.get("label")
     score = item.get("score")
     if not isinstance(label, str) or not isinstance(score, (int, float)):
-        raise TypeError("GLiClass prediction must contain string label and numeric score")
+        raise TypeError(
+            "GLiClass prediction must contain string label and numeric score"
+        )
     return {"label": label, "score": float(score)}
 
 
@@ -187,7 +189,9 @@ def _run_candidate(candidate: dict[str, str]) -> dict[str, Any]:
         if not isinstance(batch_outputs, list) or len(batch_outputs) != len(
             SHARED_BATCH_CASES
         ):
-            raise TypeError("GLiClass shared-label batch returned unexpected output shape")
+            raise TypeError(
+                "GLiClass shared-label batch returned unexpected output shape"
+            )
 
         shared_batch: list[dict[str, Any]] = []
         for case, individual, output in zip(
@@ -305,7 +309,9 @@ def main() -> None:
     args = _parse_args()
     output = Path(args.output)
     if output.exists():
-        raise RuntimeError(f"refusing to overwrite GLiClass runtime sanity evidence: {output}")
+        raise RuntimeError(
+            f"refusing to overwrite GLiClass runtime sanity evidence: {output}"
+        )
 
     result = run()
     output.write_text(
