@@ -30,6 +30,7 @@ CANDIDATES: Final = (
         "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
         "dimension": 384,
         "input_prefix": "",
+        "truncate_dim": None,
     },
     {
         "key": "multilingual_e5_small",
@@ -37,6 +38,7 @@ CANDIDATES: Final = (
         "revision": "fd1525a9fd15316a2d503bf26ab031a61d056e98",
         "dimension": 384,
         "input_prefix": "query: ",
+        "truncate_dim": None,
     },
     {
         "key": "multilingual_mpnet_base_v2",
@@ -44,6 +46,15 @@ CANDIDATES: Final = (
         "revision": "4328cf26390c98c5e3c738b4460a05b95f4911f5",
         "dimension": 768,
         "input_prefix": "",
+        "truncate_dim": None,
+    },
+    {
+        "key": "qwen3_embedding_0_6b_256d",
+        "model_id": "Qwen/Qwen3-Embedding-0.6B",
+        "revision": "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+        "dimension": 256,
+        "input_prefix": "",
+        "truncate_dim": 256,
     },
 )
 
@@ -119,15 +130,18 @@ def _encode(
     texts: list[str],
     *,
     batch_size: int,
+    truncate_dim: int | None,
 ) -> tuple[np.ndarray, float]:
+    kwargs: dict[str, Any] = {
+        "batch_size": batch_size,
+        "convert_to_numpy": True,
+        "normalize_embeddings": True,
+        "show_progress_bar": False,
+    }
+    if truncate_dim is not None:
+        kwargs["truncate_dim"] = truncate_dim
     started = time.perf_counter()
-    vectors = model.encode(
-        texts,
-        batch_size=batch_size,
-        convert_to_numpy=True,
-        normalize_embeddings=True,
-        show_progress_bar=False,
-    )
+    vectors = model.encode(texts, **kwargs)
     elapsed = time.perf_counter() - started
     array = np.asarray(vectors, dtype=np.float32)
     if array.ndim != 2 or array.shape[0] != len(texts):
@@ -135,6 +149,12 @@ def _encode(
     if not np.all(np.isfinite(array)):
         raise RuntimeError("sentence-transformer returned non-finite embeddings")
     return array, elapsed
+
+
+def _rss_bytes() -> int:
+    import psutil
+
+    return int(psutil.Process().memory_info().rss)
 
 
 def _prediction_rows(
@@ -302,23 +322,60 @@ def _run_candidate(
     print(
         f"Loading {candidate['key']}: {candidate['model_id']}@{candidate['revision']}"
     )
+    rss_baseline = _rss_bytes()
+    rss_samples = [rss_baseline]
+
+    torch_module: Any | None = None
+    cuda_baseline = 0
+    if device == "cuda":
+        import torch
+
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA bake-off requested but torch.cuda.is_available() is false")
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        cuda_baseline = int(torch.cuda.memory_allocated())
+        torch_module = torch
+
+    load_started = time.perf_counter()
     model = SentenceTransformer(
         str(candidate["model_id"]),
         revision=str(candidate["revision"]),
         device=device,
         trust_remote_code=False,
     )
+    model_load_seconds = time.perf_counter() - load_started
+    rss_samples.append(_rss_bytes())
+
+    parameter_count = sum(int(parameter.numel()) for parameter in model.parameters())
+    parameter_bytes = sum(
+        int(parameter.numel() * parameter.element_size()) for parameter in model.parameters()
+    )
+
     input_prefix = str(candidate["input_prefix"])
+    raw_truncate_dim = candidate["truncate_dim"]
+    if raw_truncate_dim is not None and (
+        isinstance(raw_truncate_dim, bool)
+        or not isinstance(raw_truncate_dim, int)
+        or raw_truncate_dim <= 0
+    ):
+        raise TypeError("truncate_dim must be a positive integer or None")
+    truncate_dim = int(raw_truncate_dim) if raw_truncate_dim is not None else None
+
     train_vectors, train_encode_seconds = _encode(
         model,
         _texts(train_rows, prefix=input_prefix),
         batch_size=batch_size,
+        truncate_dim=truncate_dim,
     )
+    rss_samples.append(_rss_bytes())
     holdout_vectors, holdout_encode_seconds = _encode(
         model,
         _texts(holdout_rows, prefix=input_prefix),
         batch_size=batch_size,
+        truncate_dim=truncate_dim,
     )
+    rss_samples.append(_rss_bytes())
     expected_dimension = int(candidate["dimension"])
     if train_vectors.shape[1] != expected_dimension:
         raise RuntimeError(
@@ -335,6 +392,7 @@ def _run_candidate(
     started = time.perf_counter()
     classifier.fit(train_vectors, _labels(train_rows))
     fit_seconds = time.perf_counter() - started
+    rss_samples.append(_rss_bytes())
     predicted = [str(value) for value in classifier.predict(holdout_vectors)]
     expected = _labels(holdout_rows)
     macro_f1 = float(
@@ -357,11 +415,16 @@ def _run_candidate(
         embedding_dimension=expected_dimension,
     )
 
+    rss_peak_sampled = max(rss_samples)
+    cuda_peak_allocated = (
+        int(torch_module.cuda.max_memory_allocated()) if torch_module is not None else 0
+    )
     result = {
         "key": candidate["key"],
         "model_id": candidate["model_id"],
         "revision": candidate["revision"],
         "input_prefix": input_prefix,
+        "truncate_dim": truncate_dim,
         "classifier": {
             "type": "sklearn.linear_model.LogisticRegression",
             "solver": SOLVER,
@@ -370,17 +433,27 @@ def _run_candidate(
             "random_state": RANDOM_STATE,
             "probability_threshold": None,
         },
+        "resources": {
+            "model_load_seconds": round(model_load_seconds, 4),
+            "parameter_count": parameter_count,
+            "parameter_bytes": parameter_bytes,
+            "rss_baseline_bytes": rss_baseline,
+            "rss_peak_sampled_bytes": rss_peak_sampled,
+            "rss_delta_peak_sampled_bytes": max(0, rss_peak_sampled - rss_baseline),
+            "cuda_baseline_allocated_bytes": cuda_baseline,
+            "cuda_peak_allocated_bytes": cuda_peak_allocated,
+            "cuda_delta_peak_allocated_bytes": max(
+                0, cuda_peak_allocated - cuda_baseline
+            ),
+            "rss_measurement": "sampled process RSS at model/train/holdout/fit boundaries",
+            "cuda_measurement": "torch.cuda.max_memory_allocated for this candidate",
+        },
         "summary": summary,
     }
     del classifier, train_vectors, holdout_vectors, model
     gc.collect()
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-    except ImportError:
-        pass
+    if torch_module is not None:
+        torch_module.cuda.empty_cache()
     return result
 
 
@@ -463,6 +536,15 @@ def main() -> None:
                     "macro_f1": row["summary"]["macro_f1"],
                     "passes_development_gate": row["summary"][
                         "passes_development_gate"
+                    ],
+                    "holdout_encode_ms_per_query": row["summary"][
+                        "holdout_encode_ms_per_query"
+                    ],
+                    "rss_delta_peak_sampled_bytes": row["resources"][
+                        "rss_delta_peak_sampled_bytes"
+                    ],
+                    "cuda_delta_peak_allocated_bytes": row["resources"][
+                        "cuda_delta_peak_allocated_bytes"
                     ],
                 }
                 for row in result["candidates"]
