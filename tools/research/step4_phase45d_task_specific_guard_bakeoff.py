@@ -331,7 +331,9 @@ def _run_candidate(
         import torch
 
         if not torch.cuda.is_available():
-            raise RuntimeError("CUDA bake-off requested but torch.cuda.is_available() is false")
+            raise RuntimeError(
+                "CUDA bake-off requested but torch.cuda.is_available() is false"
+            )
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         cuda_baseline = int(torch.cuda.memory_allocated())
@@ -349,7 +351,8 @@ def _run_candidate(
 
     parameter_count = sum(int(parameter.numel()) for parameter in model.parameters())
     parameter_bytes = sum(
-        int(parameter.numel() * parameter.element_size()) for parameter in model.parameters()
+        int(parameter.numel() * parameter.element_size())
+        for parameter in model.parameters()
     )
 
     input_prefix = str(candidate["input_prefix"])
