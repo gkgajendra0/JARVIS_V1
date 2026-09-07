@@ -3,7 +3,6 @@ from __future__ import annotations
 from importlib import util
 from pathlib import Path
 
-
 SCRIPT = (
     Path(__file__).resolve().parents[1]
     / "tools"
