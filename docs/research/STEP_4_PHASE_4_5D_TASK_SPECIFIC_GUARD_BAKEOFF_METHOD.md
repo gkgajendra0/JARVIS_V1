@@ -19,12 +19,13 @@ Current research supports the SetFit pattern for small-data text classification:
 - scikit-learn Logistic Regression is SetFit's recommended/default head;
 - the approach is prompt-free and supports multilingual classification.
 
-We intentionally do **not** add the SetFit package to the owner environment for this bake-off. JARVIS already pins `sentence-transformers==6.0.1`, `transformers==5.16.1`, and the owner environment has `scikit-learn==1.9.0`. Reusing those mature components avoids introducing another dependency into a deliberately frozen Torch/Transformers environment.
+We intentionally do **not** add the SetFit package to the owner environment for this bake-off. JARVIS already pins `sentence-transformers==6.0.1`, `transformers==5.16.1`, and the owner environment has `scikit-learn==1.9.0`. SetFit stable also has an open Transformers-5 compatibility issue, so installing it would unnecessarily destabilize a deliberately frozen Torch/Transformers environment. Reusing the mature SentenceTransformer + scikit-learn components directly avoids that risk.
 
 Research references:
 
 - https://huggingface.co/docs/setfit/how_to/classification_heads
 - https://huggingface.co/docs/setfit/en/conceptual_guides/setfit
+- https://github.com/huggingface/setfit/issues/629
 - https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 - https://huggingface.co/intfloat/multilingual-e5-small
 - https://huggingface.co/sentence-transformers/paraphrase-multilingual-mpnet-base-v2
@@ -97,6 +98,7 @@ All candidates use their immutable model revision and the exact same downstream 
 - embedding dimension: 384
 - ~118M parameters
 - multilingual, including Hindi
+- input contract: raw query text
 
 ### B — multilingual E5 small
 
@@ -104,6 +106,7 @@ All candidates use their immutable model revision and the exact same downstream 
 - revision: `fd1525a9fd15316a2d503bf26ab031a61d056e98`
 - embedding dimension: 384
 - multilingual model card currently tags 94 languages
+- input contract: prefix every classification text with `query: `, because the E5 model card explicitly recommends the query prefix when embeddings are used as features for linear-probe classification
 
 ### C — multilingual MPNet
 
@@ -112,8 +115,9 @@ All candidates use their immutable model revision and the exact same downstream 
 - embedding dimension: 768
 - ~0.3B parameters
 - heavier quality-ceiling candidate
+- input contract: raw query text
 
-No candidate-specific prompt engineering is allowed. Raw query text is encoded for every candidate.
+The only candidate-specific preprocessing allowed is an immutable model-author documented input contract such as E5's `query: ` prefix. No task-specific prompt engineering or per-candidate template changes are allowed.
 
 ## Frozen classifier configuration
 
