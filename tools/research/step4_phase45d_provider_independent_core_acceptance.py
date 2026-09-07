@@ -32,7 +32,6 @@ FROZEN_CORPUS_SHA256 = (
 )
 OUTPUT_DEFAULT = Path(".step4-phase45d-provider-independent-core-acceptance.json")
 SECURITY_CATEGORIES = frozenset(cases.SECURITY_CATEGORIES)
-ORDINARY_CATEGORIES = frozenset(cases.ORDINARY_ABSTAIN_CATEGORIES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,7 +151,9 @@ def build_frozen_proposal_map() -> dict[str, MemoryQueryProposal]:
             language=str(row["language"]),
         )
 
-    ordinary_facts = [fact for fact in cases.CURRENT_FACTS if fact.relation_index == 1][:5]
+    ordinary_facts = [fact for fact in cases.CURRENT_FACTS if fact.relation_index == 1][
+        :5
+    ]
     for category in cases.ORDINARY_ABSTAIN_CATEGORIES:
         for language in cases.LANGUAGES:
             for fact in ordinary_facts:
@@ -270,7 +271,8 @@ def _summarize(
         "zero_security_authority_precheck_releases": not security_authority_failures,
         "every_release_is_exact_expected_memory": not false_releases,
         "overall_release_recall_at_least_0_75": recall >= base.OVERALL_RECALL_FLOOR,
-        "direct_release_recall_at_least_0_75": direct_recall >= base.DIRECT_RECALL_FLOOR,
+        "direct_release_recall_at_least_0_75": direct_recall
+        >= base.DIRECT_RECALL_FLOOR,
         "comparison_release_recall_at_least_0_60": (
             comparison_recall >= base.COMPARISON_RECALL_FLOOR
         ),
@@ -357,7 +359,9 @@ async def _run(*, device: str) -> dict[str, Any]:
     proposal_map = build_frozen_proposal_map()
     interpreter = FrozenAdversarialInterpreter(proposal_map)
 
-    with tempfile.TemporaryDirectory(prefix="jarvis-phase45d-provider-independent-") as temp:
+    with tempfile.TemporaryDirectory(
+        prefix="jarvis-phase45d-provider-independent-"
+    ) as temp:
         worker = base._connection_worker(Path(temp) / "acceptance.db")  # noqa: SLF001
         lifecycle = MemoryLifecycleService(
             worker,
@@ -409,7 +413,9 @@ async def _run(*, device: str) -> dict[str, Any]:
                     "answer_type_guard_unavailable",
                     "answer_type_guard_invalid_decision",
                 }:
-                    raise RuntimeError("answer-type guard failed during core acceptance")
+                    raise RuntimeError(
+                        "answer-type guard failed during core acceptance"
+                    )
                 guard_decision = recording_guard.last_decision
                 if guard_decision is None:
                     raise RuntimeError("core acceptance guard decision is missing")
@@ -461,7 +467,9 @@ async def _run(*, device: str) -> dict[str, Any]:
         security_authority_failures=security_authority_failures,
     )
     status = (
-        "PASS_CORE_ACCEPTANCE" if summary["acceptance_passed"] else "FAIL_CORE_ACCEPTANCE"
+        "PASS_CORE_ACCEPTANCE"
+        if summary["acceptance_passed"]
+        else "FAIL_CORE_ACCEPTANCE"
     )
     return {
         "status": status,
