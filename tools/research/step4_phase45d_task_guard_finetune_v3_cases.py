@@ -34,33 +34,161 @@ class GuardFact:
 
 
 TRAIN_FACT_ROWS: Final = (
-    GuardFact("Aster station", "display profile", "डिस्प्ले प्रोफ़ाइल", "display profile", "dawn-4", "dusk-8"),
-    GuardFact("Beryl controller", "control lane", "कंट्रोल लेन", "control lane", "lane-12", "lane-3"),
-    GuardFact("Cinder monitor", "contrast preset", "कॉन्ट्रास्ट प्रीसेट", "contrast preset", "soft-6", "sharp-2"),
-    GuardFact("Drift gateway", "routing profile", "रूटिंग प्रोफ़ाइल", "routing profile", "west-5", "east-1"),
-    GuardFact("Ember reader", "reading mode", "रीडिंग मोड", "reading mode", "paper-7", "night-2"),
-    GuardFact("Frost dock", "power preset", "पावर प्रीसेट", "power preset", "eco-9", "boost-4"),
-    GuardFact("Grove terminal", "session zone", "सेशन ज़ोन", "session zone", "zone-11", "zone-6"),
-    GuardFact("Helix keypad", "input profile", "इनपुट प्रोफ़ाइल", "input profile", "tap-5", "hold-8"),
-    GuardFact("Iris bridge", "transfer lane", "ट्रांसफर लेन", "transfer lane", "lane-14", "lane-9"),
-    GuardFact("Juniper receiver", "sound preset", "साउंड प्रीसेट", "sound preset", "clear-3", "deep-6"),
-    GuardFact("Kepler panel", "status mode", "स्टेटस मोड", "status mode", "live-8", "quiet-1"),
-    GuardFact("Lattice hub", "upload profile", "अपलोड प्रोफ़ाइल", "upload profile", "burst-2", "steady-7"),
-    GuardFact("Mica camera", "capture mode", "कैप्चर मोड", "capture mode", "frame-9", "frame-4"),
-    GuardFact("Nova console", "access preset", "एक्सेस प्रीसेट", "access preset", "open-5", "guard-2"),
-    GuardFact("Opal tablet", "sync profile", "सिंक प्रोफ़ाइल", "sync profile", "cloud-6", "local-3"),
-    GuardFact("Prism speaker", "volume lane", "वॉल्यूम लेन", "volume lane", "lane-7", "lane-2"),
+    GuardFact(
+        "Aster station",
+        "display profile",
+        "डिस्प्ले प्रोफ़ाइल",
+        "display profile",
+        "dawn-4",
+        "dusk-8",
+    ),
+    GuardFact(
+        "Beryl controller",
+        "control lane",
+        "कंट्रोल लेन",
+        "control lane",
+        "lane-12",
+        "lane-3",
+    ),
+    GuardFact(
+        "Cinder monitor",
+        "contrast preset",
+        "कॉन्ट्रास्ट प्रीसेट",
+        "contrast preset",
+        "soft-6",
+        "sharp-2",
+    ),
+    GuardFact(
+        "Drift gateway",
+        "routing profile",
+        "रूटिंग प्रोफ़ाइल",
+        "routing profile",
+        "west-5",
+        "east-1",
+    ),
+    GuardFact(
+        "Ember reader",
+        "reading mode",
+        "रीडिंग मोड",
+        "reading mode",
+        "paper-7",
+        "night-2",
+    ),
+    GuardFact(
+        "Frost dock", "power preset", "पावर प्रीसेट", "power preset", "eco-9", "boost-4"
+    ),
+    GuardFact(
+        "Grove terminal", "session zone", "सेशन ज़ोन", "session zone", "zone-11", "zone-6"
+    ),
+    GuardFact(
+        "Helix keypad",
+        "input profile",
+        "इनपुट प्रोफ़ाइल",
+        "input profile",
+        "tap-5",
+        "hold-8",
+    ),
+    GuardFact(
+        "Iris bridge",
+        "transfer lane",
+        "ट्रांसफर लेन",
+        "transfer lane",
+        "lane-14",
+        "lane-9",
+    ),
+    GuardFact(
+        "Juniper receiver",
+        "sound preset",
+        "साउंड प्रीसेट",
+        "sound preset",
+        "clear-3",
+        "deep-6",
+    ),
+    GuardFact(
+        "Kepler panel", "status mode", "स्टेटस मोड", "status mode", "live-8", "quiet-1"
+    ),
+    GuardFact(
+        "Lattice hub",
+        "upload profile",
+        "अपलोड प्रोफ़ाइल",
+        "upload profile",
+        "burst-2",
+        "steady-7",
+    ),
+    GuardFact(
+        "Mica camera", "capture mode", "कैप्चर मोड", "capture mode", "frame-9", "frame-4"
+    ),
+    GuardFact(
+        "Nova console",
+        "access preset",
+        "एक्सेस प्रीसेट",
+        "access preset",
+        "open-5",
+        "guard-2",
+    ),
+    GuardFact(
+        "Opal tablet",
+        "sync profile",
+        "सिंक प्रोफ़ाइल",
+        "sync profile",
+        "cloud-6",
+        "local-3",
+    ),
+    GuardFact(
+        "Prism speaker", "volume lane", "वॉल्यूम लेन", "volume lane", "lane-7", "lane-2"
+    ),
 )
 
 HOLDOUT_FACT_ROWS: Final = (
-    GuardFact("Quill display", "layout profile", "लेआउट प्रोफ़ाइल", "layout profile", "tile-6", "stack-2"),
-    GuardFact("Reef sensor", "report mode", "रिपोर्ट मोड", "report mode", "pulse-7", "batch-3"),
-    GuardFact("Sable router", "guest profile", "गेस्ट प्रोफ़ाइल", "guest profile", "guest-4", "guest-9"),
-    GuardFact("Tundra watch", "alert lane", "अलर्ट लेन", "alert lane", "lane-10", "lane-5"),
-    GuardFact("Umber notebook", "backup mode", "बैकअप मोड", "backup mode", "daily-8", "weekly-2"),
-    GuardFact("Vale keyboard", "typing profile", "टाइपिंग प्रोफ़ाइल", "typing profile", "swift-4", "calm-7"),
-    GuardFact("Willow lamp", "night preset", "नाइट प्रीसेट", "night preset", "amber-9", "blue-3"),
-    GuardFact("Zenith pad", "workspace mode", "वर्कस्पेस मोड", "workspace mode", "focus-5", "open-1"),
+    GuardFact(
+        "Quill display",
+        "layout profile",
+        "लेआउट प्रोफ़ाइल",
+        "layout profile",
+        "tile-6",
+        "stack-2",
+    ),
+    GuardFact(
+        "Reef sensor", "report mode", "रिपोर्ट मोड", "report mode", "pulse-7", "batch-3"
+    ),
+    GuardFact(
+        "Sable router",
+        "guest profile",
+        "गेस्ट प्रोफ़ाइल",
+        "guest profile",
+        "guest-4",
+        "guest-9",
+    ),
+    GuardFact(
+        "Tundra watch", "alert lane", "अलर्ट लेन", "alert lane", "lane-10", "lane-5"
+    ),
+    GuardFact(
+        "Umber notebook",
+        "backup mode",
+        "बैकअप मोड",
+        "backup mode",
+        "daily-8",
+        "weekly-2",
+    ),
+    GuardFact(
+        "Vale keyboard",
+        "typing profile",
+        "टाइपिंग प्रोफ़ाइल",
+        "typing profile",
+        "swift-4",
+        "calm-7",
+    ),
+    GuardFact(
+        "Willow lamp", "night preset", "नाइट प्रीसेट", "night preset", "amber-9", "blue-3"
+    ),
+    GuardFact(
+        "Zenith pad",
+        "workspace mode",
+        "वर्कस्पेस मोड",
+        "workspace mode",
+        "focus-5",
+        "open-1",
+    ),
 )
 
 

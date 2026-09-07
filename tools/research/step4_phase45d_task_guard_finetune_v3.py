@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
-import numpy as np
 import step4_phase45d_task_guard_finetune_v3_cases as cases
 
 OUTPUT_DEFAULT = Path(".step4-phase45d-task-guard-finetune-v3.json")
@@ -70,8 +69,8 @@ class CandidatePrediction:
 
 def _git_blob_sha(path: Path) -> str:
     raw = path.read_bytes()
-    header = f"blob {len(raw)}\0".encode("utf-8")
-    return hashlib.sha1(header + raw).hexdigest()  # noqa: S324 - Git object identity
+    header = f"blob {len(raw)}\0".encode()
+    return hashlib.sha1(header + raw).hexdigest()
 
 
 def _assert_frozen_corpus() -> dict[str, object]:
@@ -303,10 +302,13 @@ def _predict(
             return_tensors="pt",
         )
         encoded = {key: value.to(device) for key, value in encoded.items()}
-        with torch.inference_mode(), torch.autocast(
-            device_type="cuda",
-            dtype=torch.bfloat16,
-            enabled=device == "cuda",
+        with (
+            torch.inference_mode(),
+            torch.autocast(
+                device_type="cuda",
+                dtype=torch.bfloat16,
+                enabled=device == "cuda",
+            ),
         ):
             logits = model(**encoded).logits
         indices = logits.argmax(dim=-1).detach().cpu().tolist()
@@ -352,7 +354,9 @@ def _run_candidate(
     label2id = {label: index for index, label in enumerate(cases.LABELS)}
     id2label = {index: label for label, index in label2id.items()}
 
-    print(f"Loading {candidate['key']}: {candidate['model_id']}@{candidate['revision']}")
+    print(
+        f"Loading {candidate['key']}: {candidate['model_id']}@{candidate['revision']}"
+    )
     load_started = time.perf_counter()
     tokenizer = AutoTokenizer.from_pretrained(
         str(candidate["model_id"]),
@@ -613,9 +617,7 @@ def main() -> None:
                         "passes_development_gate"
                     ],
                     "train_seconds": row["summary"]["train_seconds"],
-                    "inference_ms_per_query": row["summary"][
-                        "inference_ms_per_query"
-                    ],
+                    "inference_ms_per_query": row["summary"]["inference_ms_per_query"],
                     "cuda_delta_peak_allocated_bytes": row["resources"][
                         "cuda_delta_peak_allocated_bytes"
                     ],
