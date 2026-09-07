@@ -135,7 +135,9 @@ def _assert_no_retired_query_overlap(payload: dict[str, object]) -> None:
     fresh = {cases.normalized_query(str(row["query"])) for row in rows}
     overlap = sorted(retired.intersection(fresh))
     if overlap:
-        raise RuntimeError(f"question-role corpus overlaps retired queries: {overlap[:3]}")
+        raise RuntimeError(
+            f"question-role corpus overlaps retired queries: {overlap[:3]}"
+        )
 
 
 def _macro_f1(predictions: list[RolePrediction]) -> float:
@@ -167,9 +169,7 @@ def _macro_f1(predictions: list[RolePrediction]) -> float:
 def summarize(predictions: list[RolePrediction]) -> dict[str, Any]:
     allow_rows = [row for row in predictions if row.expected_allow]
     veto_rows = [row for row in predictions if not row.expected_allow]
-    exact_allow = [
-        row for row in allow_rows if row.predicted_role == row.expected_role
-    ]
+    exact_allow = [row for row in allow_rows if row.predicted_role == row.expected_role]
     false_approvals = [row for row in veto_rows if row.predicted_allow]
     wrong_allow_mode = [
         row
@@ -220,9 +220,7 @@ def summarize(predictions: list[RolePrediction]) -> dict[str, Any]:
         "single_label_argmax_no_threshold": True,
         "cloud_provider_calls_zero": True,
     }
-    confusion = Counter(
-        (row.expected_role, row.predicted_role) for row in predictions
-    )
+    confusion = Counter((row.expected_role, row.predicted_role) for row in predictions)
     return {
         "cases": len(predictions),
         "allow_cases": len(allow_rows),
@@ -318,7 +316,9 @@ def _run_candidate(
         load_seconds = time.perf_counter() - load_started
         rss_samples.append(_rss_bytes())
 
-        parameter_count = sum(int(parameter.numel()) for parameter in model.parameters())
+        parameter_count = sum(
+            int(parameter.numel()) for parameter in model.parameters()
+        )
         parameter_bytes = sum(
             int(parameter.numel() * parameter.element_size())
             for parameter in model.parameters()
@@ -354,7 +354,9 @@ def _run_candidate(
     predictions: list[RolePrediction] = []
     for row, output in zip(rows, outputs, strict=True):
         if not isinstance(output, list) or len(output) != 1:
-            raise TypeError("single-label GLiClass output must contain exactly one label")
+            raise TypeError(
+                "single-label GLiClass output must contain exactly one label"
+            )
         item = output[0]
         if not isinstance(item, dict):
             raise TypeError("GLiClass prediction must be a mapping")
@@ -396,9 +398,7 @@ def _run_candidate(
         "resources": {
             "model_load_seconds": round(load_seconds, 4),
             "inference_seconds": round(inference_seconds, 4),
-            "inference_ms_per_case": round(
-                inference_seconds * 1000.0 / len(rows), 4
-            ),
+            "inference_ms_per_case": round(inference_seconds * 1000.0 / len(rows), 4),
             "parameter_count": parameter_count,
             "parameter_bytes": parameter_bytes,
             "rss_baseline_bytes": rss_baseline,
@@ -529,18 +529,14 @@ def main() -> None:
                     ),
                     "false_veto_cases": row["summary"].get("false_veto_cases"),
                     "allow_recall": row["summary"].get("allow_recall"),
-                    "exact_role_accuracy": row["summary"].get(
-                        "exact_role_accuracy"
-                    ),
+                    "exact_role_accuracy": row["summary"].get("exact_role_accuracy"),
                     "macro_f1": row["summary"].get("macro_f1"),
                     "by_language": row["summary"].get("by_language"),
                     "by_role": row["summary"].get("by_role"),
                     "passes_development_gate": row["summary"][
                         "passes_development_gate"
                     ],
-                    "inference_ms_per_case": row["resources"][
-                        "inference_ms_per_case"
-                    ],
+                    "inference_ms_per_case": row["resources"]["inference_ms_per_case"],
                     "cuda_delta_peak_allocated_bytes": row["resources"][
                         "cuda_delta_peak_allocated_bytes"
                     ],

@@ -35,9 +35,7 @@ def test_corpus_shape_balance_and_frozen_hash() -> None:
     assert harness.FROZEN_PAYLOAD_SHA256 == (
         "bb09a6a6b7c6f9248c48f35a39e5f4f8002f678a471d4752152c6a6b26cd4c21"
     )
-    assert Counter(row["role"] for row in rows) == {
-        role: 48 for role in cases.ROLES
-    }
+    assert Counter(row["role"] for row in rows) == {role: 48 for role in cases.ROLES}
     assert Counter(row["language"] for row in rows) == {
         "en": 160,
         "hi": 160,
@@ -180,8 +178,7 @@ def _candidate_result(
             "exact_role_accuracy": exact_accuracy,
             "macro_f1": macro_f1,
             "by_language": {
-                language: {"allow_recall": allow_recall}
-                for language in cases.LANGUAGES
+                language: {"allow_recall": allow_recall} for language in cases.LANGUAGES
             },
         },
         "resources": {
