@@ -117,3 +117,26 @@ With 90 release targets, the 0.75 overall recall floor implies at least 68 corre
 - all gates pass → `PASS_ACCEPTANCE`; Phase 4.5D may be closed and Phase 4.5E may be unblocked only after the result is durably recorded and repository CI remains green;
 - any gate fails → `FAIL_ACCEPTANCE`; corpus is exposed/retired, Phase 4.5D remains open, no threshold/prompt/model tuning against the same corpus;
 - provider quota/transport failure before a complete artifact → execution failure, not model-quality evidence; preserve the frozen corpus and architecture rather than changing them opportunistically.
+
+
+## Quota-safe transport amendment — 2026-09-07
+
+The first owner execution ended in provider quota failure before a complete artifact. Per the already-frozen rule above, that is execution failure rather than model-quality evidence. A research-backed transport amendment is therefore frozen before any complete final result exists.
+
+Durable research:
+
+- `docs/research/STEP_4_PHASE_4_5D_GEMINI_FREE_TIER_QUOTA_RESEARCH.md`.
+
+The semantic/statistical acceptance contract above is unchanged. Execution now additionally requires:
+
+1. a local-only answer-type-guard planning pass that counts exactly how many **remaining** queries can reach Gemini, without consulting expected labels;
+2. current active RPD limit and usage copied from Google AI Studio for the same project/model;
+3. remaining RPD >= required planner calls + `max(25, 10% of active RPD limit)` safety reserve before the first Gemini request;
+4. pinned `google-genai==2.22.0` configured with `HttpRetryOptions(attempts=0)` for acceptance so the SDK cannot amplify retries;
+5. no JARVIS retry loop around the provider call;
+6. exactly one API attempt per logical provider call;
+7. an atomic, exact-SHA-bound checkpoint after each completed case so provider transport interruption resumes without repeating completed cases;
+8. checkpoint persistence contains no query text and no canonical memory value;
+9. Batch API remains excluded from final acceptance because the frozen acceptance validates the production-shaped one-query-per-Interactions-request path.
+
+Changing transport safety in this way does not tune the corpus, semantic models, prompt/schema, memory policy, or acceptance gates and therefore does not convert the preserved fresh corpus into development data.

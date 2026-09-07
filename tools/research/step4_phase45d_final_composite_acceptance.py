@@ -6,8 +6,9 @@ import argparse
 import asyncio
 import itertools
 import json
-import re
+import math
 import sqlite3
+import subprocess
 import tempfile
 import time
 from collections import Counter
@@ -18,6 +19,7 @@ from typing import Any
 
 import step4_phase45d_final_composite_cases as cases
 
+from jarvis.ai_provider import require_provider_api_key
 from jarvis.memory.answer_type_guard import (
     MODEL_ID as ANSWER_TYPE_MODEL_ID,
 )
@@ -35,7 +37,7 @@ from jarvis.memory.lifecycle import MemoryLifecycleService
 from jarvis.memory.migration_runner import MemoryMigrationRunner
 from jarvis.memory.provenance import MemorySource
 from jarvis.memory.query_coordinator import MemoryQueryCoordinator
-from jarvis.memory.query_interpreters import build_memory_query_interpreter
+from jarvis.memory.query_interpreters import GeminiMemoryQueryInterpreter
 from jarvis.memory.query_plan import MemoryFacetCatalog, MemoryQueryProposal
 from jarvis.memory.retrieval import RetrievalEligibility, SemanticRetrievalService
 from jarvis.memory.types import (
@@ -52,8 +54,11 @@ FROZEN_CORPUS_SHA256 = (
 )
 GEMINI_MODEL_ID = "gemini-3.5-flash-lite"
 DEFAULT_GEMINI_RPM = 12.0
-GEMINI_MAX_ATTEMPTS = 5
 OUTPUT_DEFAULT = Path(".step4-phase45d-final-composite-acceptance.json")
+CHECKPOINT_DEFAULT = Path(".step4-phase45d-final-composite-acceptance.checkpoint.json")
+CHECKPOINT_SCHEMA_VERSION = 1
+MIN_QUOTA_RESERVE = 25
+QUOTA_RESERVE_FRACTION = 0.10
 NOW = datetime(2026, 9, 6, 18, 0, tzinfo=UTC)
 EXPECTED_CLOUD_FACETS = 35
 PRECISION_TARGET = 0.95
@@ -101,23 +106,25 @@ class GeminiRequestPacer:
             self._next_start = time.monotonic() + self.interval_seconds
 
 
-def _retry_after_seconds(message: str) -> float | None:
-    match = re.search(
-        r"retry in\s+([0-9]+(?:\.[0-9]+)?)s",
-        message,
-        flags=re.IGNORECASE,
-    )
-    return float(match.group(1)) if match else None
+class ProviderCallBudgetExceeded(RuntimeError):
+    """Raised before a provider call would exceed the certified invocation budget."""
 
 
 class PacedMemoryQueryInterpreter:
-    """Rate-limited wrapper around the selected production provider adapter."""
+    """Single-attempt, rate-limited wrapper around the production provider adapter."""
 
-    def __init__(self, delegate: Any, *, rpm: float) -> None:
+    def __init__(self, delegate: Any, *, rpm: float, max_calls: int) -> None:
         if not callable(getattr(delegate, "interpret", None)):
             raise TypeError("delegate must implement memory query interpretation")
+        if (
+            not isinstance(max_calls, int)
+            or isinstance(max_calls, bool)
+            or max_calls < 0
+        ):
+            raise ValueError("max_calls must be a non-negative integer")
         self._delegate = delegate
         self._pacer = GeminiRequestPacer(rpm)
+        self._max_calls = max_calls
         self.logical_calls = 0
         self.api_attempts = 0
         self.last_proposal: MemoryQueryProposal | None = None
@@ -141,35 +148,136 @@ class PacedMemoryQueryInterpreter:
         text: str,
         catalog: MemoryFacetCatalog,
     ) -> MemoryQueryProposal:
+        if self.logical_calls >= self._max_calls:
+            raise ProviderCallBudgetExceeded(
+                "certified Gemini provider-call budget exhausted before request"
+            )
+        await self._pacer.wait()
         self.logical_calls += 1
-        last_error: Exception | None = None
-        for attempt in range(GEMINI_MAX_ATTEMPTS):
-            await self._pacer.wait()
-            self.api_attempts += 1
-            try:
-                proposal = await self._delegate.interpret(text=text, catalog=catalog)
-                self.last_proposal = proposal
-                self.last_attempts = attempt + 1
-                return proposal
-            except Exception as exc:
-                last_error = exc
-                raw_message = str(exc)
-                message = raw_message.upper()
-                retryable = any(
-                    marker in message
-                    for marker in ("429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE")
-                )
-                if not retryable or attempt == GEMINI_MAX_ATTEMPTS - 1:
-                    raise
-                retry_after = _retry_after_seconds(raw_message)
-                await asyncio.sleep(
-                    max(
-                        float(2**attempt),
-                        self._pacer.interval_seconds,
-                        (retry_after + 1.0) if retry_after is not None else 0.0,
-                    )
-                )
-        raise AssertionError(f"unreachable Gemini retry state: {last_error}")
+        self.api_attempts += 1
+        proposal = await self._delegate.interpret(text=text, catalog=catalog)
+        self.last_proposal = proposal
+        self.last_attempts = 1
+        return proposal
+
+
+def _build_acceptance_gemini_interpreter() -> GeminiMemoryQueryInterpreter:
+    """Build the frozen Gemini adapter with SDK retries disabled for acceptance."""
+
+    from google import genai
+    from google.genai import types
+
+    api_key = require_provider_api_key(
+        "gemini",
+        purpose="Phase 4.5D final composite acceptance",
+    )
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(
+            retry_options=types.HttpRetryOptions(attempts=0),
+        ),
+    )
+    return GeminiMemoryQueryInterpreter(client=client, model=GEMINI_MODEL_ID)
+
+
+def _quota_reserve(active_limit: int) -> int:
+    if not isinstance(active_limit, int) or isinstance(active_limit, bool):
+        raise TypeError("active RPD limit must be an integer")
+    if active_limit <= 0:
+        raise ValueError("active RPD limit must be positive")
+    return max(MIN_QUOTA_RESERVE, math.ceil(active_limit * QUOTA_RESERVE_FRACTION))
+
+
+def _quota_budget(
+    *,
+    active_limit: int,
+    active_usage: int,
+    required_provider_calls: int,
+) -> dict[str, int | bool]:
+    if not isinstance(active_usage, int) or isinstance(active_usage, bool):
+        raise TypeError("active RPD usage must be an integer")
+    if active_usage < 0:
+        raise ValueError("active RPD usage must be non-negative")
+    if active_usage > active_limit:
+        raise ValueError("active RPD usage cannot exceed active RPD limit")
+    if not isinstance(required_provider_calls, int) or isinstance(
+        required_provider_calls, bool
+    ):
+        raise TypeError("required_provider_calls must be an integer")
+    if required_provider_calls < 0:
+        raise ValueError("required_provider_calls must be non-negative")
+    reserve = _quota_reserve(active_limit)
+    remaining = active_limit - active_usage
+    minimum_remaining = required_provider_calls + reserve
+    return {
+        "active_limit_rpd": active_limit,
+        "active_usage_rpd": active_usage,
+        "remaining_rpd": remaining,
+        "required_provider_calls": required_provider_calls,
+        "reserve_rpd": reserve,
+        "minimum_remaining_rpd": minimum_remaining,
+        "sufficient": remaining >= minimum_remaining,
+    }
+
+
+def _repository_sha() -> str:
+    return subprocess.check_output(
+        ["git", "rev-parse", "HEAD"],
+        text=True,
+    ).strip()
+
+
+def _checkpoint_contract(repository_sha: str) -> dict[str, Any]:
+    return {
+        "schema_version": CHECKPOINT_SCHEMA_VERSION,
+        "repository_sha": repository_sha,
+        "corpus_sha256": FROZEN_CORPUS_SHA256,
+        "provider_model": GEMINI_MODEL_ID,
+        "answer_type_model": ANSWER_TYPE_MODEL_ID,
+        "answer_type_revision": ANSWER_TYPE_MODEL_REVISION,
+    }
+
+
+def _checkpoint_payload(
+    *,
+    repository_sha: str,
+    results: list[AcceptanceCaseResult],
+) -> dict[str, Any]:
+    return {
+        "contract": _checkpoint_contract(repository_sha),
+        "completed_cases": [_public_case(row) for row in results],
+    }
+
+
+def _write_checkpoint(
+    path: Path,
+    *,
+    repository_sha: str,
+    results: list[AcceptanceCaseResult],
+) -> None:
+    payload = _checkpoint_payload(repository_sha=repository_sha, results=results)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+
+
+def _load_checkpoint(path: Path, *, repository_sha: str) -> list[AcceptanceCaseResult]:
+    if not path.exists():
+        return []
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("contract") != _checkpoint_contract(repository_sha):
+        raise RuntimeError("acceptance checkpoint contract does not match current run")
+    raw_rows = payload.get("completed_cases")
+    if not isinstance(raw_rows, list):
+        raise TypeError("acceptance checkpoint completed_cases is invalid")
+    rows = [AcceptanceCaseResult(**row) for row in raw_rows]
+    case_ids = [row.case_id for row in rows]
+    if len(case_ids) != len(set(case_ids)):
+        raise RuntimeError("acceptance checkpoint contains duplicate case IDs")
+    return rows
 
 
 class RecordingAnswerTypeGuard:
@@ -478,6 +586,40 @@ def _summarize(
     }
 
 
+async def _plan_provider_calls(
+    *,
+    device: str,
+    completed_case_ids: set[str],
+) -> dict[str, int]:
+    """Count cloud planner calls using only the frozen local guard, never labels."""
+
+    payload = cases.build_payload()
+    corpus_sha = cases.payload_sha256(payload)
+    if corpus_sha != FROZEN_CORPUS_SHA256:
+        raise RuntimeError(
+            f"fresh corpus hash mismatch: {corpus_sha} != {FROZEN_CORPUS_SHA256}"
+        )
+    queries = payload.get("queries")
+    if not isinstance(queries, list) or len(queries) != cases.TOTAL_CASES:
+        raise RuntimeError("fresh acceptance query payload changed")
+
+    guard = LocalZeroShotMemoryAnswerTypeGuard(device=device)
+    remaining_cases = 0
+    required_provider_calls = 0
+    for item in queries:
+        case_id = str(item["case_id"])
+        if case_id in completed_case_ids:
+            continue
+        remaining_cases += 1
+        decision = await guard.evaluate(str(item["query"]))
+        if decision.allow:
+            required_provider_calls += 1
+    return {
+        "remaining_cases": remaining_cases,
+        "required_provider_calls": required_provider_calls,
+    }
+
+
 def _public_case(result: AcceptanceCaseResult) -> dict[str, Any]:
     return {
         "case_id": result.case_id,
@@ -496,7 +638,16 @@ def _public_case(result: AcceptanceCaseResult) -> dict[str, Any]:
     }
 
 
-async def _run(*, device: str, gemini_rpm: float) -> dict[str, Any]:
+async def _run(
+    *,
+    device: str,
+    gemini_rpm: float,
+    provider_budget: int,
+    checkpoint_path: Path,
+    repository_sha: str,
+    checkpoint_results: list[AcceptanceCaseResult],
+    quota_budget: dict[str, int | bool],
+) -> dict[str, Any]:
     payload = cases.build_payload()
     corpus_sha = cases.payload_sha256(payload)
     if corpus_sha != FROZEN_CORPUS_SHA256:
@@ -526,13 +677,11 @@ async def _run(*, device: str, gemini_rpm: float) -> dict[str, Any]:
                     f"{len(catalog.facets)} != {EXPECTED_CLOUD_FACETS}"
                 )
 
-            delegate_interpreter = build_memory_query_interpreter(
-                provider="gemini",
-                model=GEMINI_MODEL_ID,
-            )
+            delegate_interpreter = _build_acceptance_gemini_interpreter()
             interpreter = PacedMemoryQueryInterpreter(
                 delegate_interpreter,
                 rpm=gemini_rpm,
+                max_calls=provider_budget,
             )
             local_guard = LocalZeroShotMemoryAnswerTypeGuard(device=device)
             recording_guard = RecordingAnswerTypeGuard(local_guard)
@@ -545,8 +694,16 @@ async def _run(*, device: str, gemini_rpm: float) -> dict[str, Any]:
                 answer_type_guard=recording_guard,
             )
 
-            results: list[AcceptanceCaseResult] = []
+            results: list[AcceptanceCaseResult] = list(checkpoint_results)
+            completed_case_ids = {row.case_id for row in results}
+            _write_checkpoint(
+                checkpoint_path,
+                repository_sha=repository_sha,
+                results=results,
+            )
             for index, item in enumerate(queries, start=1):
+                if str(item["case_id"]) in completed_case_ids:
+                    continue
                 interpreter.reset_case()
                 recording_guard.reset_case()
                 query = str(item["query"])
@@ -597,6 +754,12 @@ async def _run(*, device: str, gemini_rpm: float) -> dict[str, Any]:
                     exact_expected_release=exact_expected_release,
                 )
                 results.append(result)
+                completed_case_ids.add(result.case_id)
+                _write_checkpoint(
+                    checkpoint_path,
+                    repository_sha=repository_sha,
+                    results=results,
+                )
                 print(
                     f"[{index:03d}/{cases.TOTAL_CASES}] {result.case_id} "
                     f"{result.final_disposition} ({result.final_reason})"
@@ -604,7 +767,21 @@ async def _run(*, device: str, gemini_rpm: float) -> dict[str, Any]:
         finally:
             await worker.close()
 
-    summary = _summarize(results, provider_calls=interpreter.logical_calls)
+    if len(results) != cases.TOTAL_CASES:
+        raise RuntimeError(
+            f"acceptance ended without all cases: {len(results)} != {cases.TOTAL_CASES}"
+        )
+    total_provider_calls = sum(1 for row in results if row.provider_called)
+    total_provider_attempts = sum(row.provider_attempts for row in results)
+    summary = _summarize(results, provider_calls=total_provider_calls)
+    summary["provider_api_attempts"] = total_provider_attempts
+    summary["provider_attempts_equal_logical_calls"] = (
+        total_provider_attempts == total_provider_calls
+    )
+    summary["continuation_checks"]["provider_attempts_equal_logical_calls"] = (
+        total_provider_attempts == total_provider_calls
+    )
+    summary["acceptance_passed"] = all(summary["continuation_checks"].values())
     status = "PASS_ACCEPTANCE" if summary["acceptance_passed"] else "FAIL_ACCEPTANCE"
     return {
         "status": status,
@@ -632,6 +809,14 @@ async def _run(*, device: str, gemini_rpm: float) -> dict[str, Any]:
             "query_text_persisted": False,
             "canonical_memory_value_persisted": False,
         },
+        "quota_execution_contract": {
+            **quota_budget,
+            "sdk_retries": 0,
+            "harness_retries": 0,
+            "checkpoint_resume_enabled": True,
+            "checkpoint_persists_query_text": False,
+            "checkpoint_persists_canonical_memory_value": False,
+        },
         "statistical_contract": {
             "precision_target": PRECISION_TARGET,
             "confidence": CONFIDENCE,
@@ -650,7 +835,11 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
     parser.add_argument("--gemini-rpm", type=float, default=DEFAULT_GEMINI_RPM)
+    parser.add_argument("--quota-plan-only", action="store_true")
+    parser.add_argument("--quota-limit-rpd", type=int)
+    parser.add_argument("--quota-used-rpd", type=int)
     parser.add_argument("--output", default=str(OUTPUT_DEFAULT))
+    parser.add_argument("--checkpoint", default=str(CHECKPOINT_DEFAULT))
     return parser.parse_args()
 
 
@@ -659,21 +848,84 @@ def main() -> None:
     if args.gemini_rpm <= 0:
         raise ValueError("Gemini RPM must be positive")
     output_path = Path(args.output)
+    checkpoint_path = Path(args.checkpoint)
     if output_path.exists():
         raise RuntimeError(
             f"refusing to overwrite fresh acceptance evidence: {output_path}"
         )
 
-    result = asyncio.run(
-        _run(
+    repository_sha = _repository_sha()
+    checkpoint_results = _load_checkpoint(
+        checkpoint_path,
+        repository_sha=repository_sha,
+    )
+    completed_case_ids = {row.case_id for row in checkpoint_results}
+    quota_plan = asyncio.run(
+        _plan_provider_calls(
             device=str(args.device),
-            gemini_rpm=float(args.gemini_rpm),
+            completed_case_ids=completed_case_ids,
         )
     )
+    print("QUOTA_PLAN:", json.dumps(quota_plan, ensure_ascii=False))
+
+    if args.quota_plan_only:
+        if args.quota_limit_rpd is not None and args.quota_used_rpd is not None:
+            budget = _quota_budget(
+                active_limit=int(args.quota_limit_rpd),
+                active_usage=int(args.quota_used_rpd),
+                required_provider_calls=int(quota_plan["required_provider_calls"]),
+            )
+            print("QUOTA_BUDGET:", json.dumps(budget, ensure_ascii=False))
+        return
+
+    if args.quota_limit_rpd is None or args.quota_used_rpd is None:
+        raise RuntimeError(
+            "acceptance requires current --quota-limit-rpd and --quota-used-rpd "
+            "from Google AI Studio"
+        )
+    budget = _quota_budget(
+        active_limit=int(args.quota_limit_rpd),
+        active_usage=int(args.quota_used_rpd),
+        required_provider_calls=int(quota_plan["required_provider_calls"]),
+    )
+    print("QUOTA_BUDGET:", json.dumps(budget, ensure_ascii=False))
+    if not bool(budget["sufficient"]):
+        raise RuntimeError(
+            "insufficient certified Gemini RPD budget; refusing to start provider calls"
+        )
+
+    try:
+        result = asyncio.run(
+            _run(
+                device=str(args.device),
+                gemini_rpm=float(args.gemini_rpm),
+                provider_budget=int(quota_plan["required_provider_calls"]),
+                checkpoint_path=checkpoint_path,
+                repository_sha=repository_sha,
+                checkpoint_results=checkpoint_results,
+                quota_budget=budget,
+            )
+        )
+    except Exception as exc:
+        print("STATUS: EXECUTION_PAUSED_PROVIDER")
+        print(
+            "RESUME:",
+            json.dumps(
+                {
+                    "checkpoint": str(checkpoint_path),
+                    "repository_sha": repository_sha,
+                    "error_type": type(exc).__name__,
+                },
+                ensure_ascii=False,
+            ),
+        )
+        raise
+
     output_path.write_text(
         json.dumps(result, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
+    checkpoint_path.unlink(missing_ok=True)
     print(f"Wrote UTF-8 result: {output_path}")
     print("STATUS:", result["status"])
     print("SUMMARY:", json.dumps(result["summary"], ensure_ascii=False))

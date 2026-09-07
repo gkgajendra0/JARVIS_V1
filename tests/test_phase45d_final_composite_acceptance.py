@@ -141,3 +141,114 @@ def test_one_false_release_fails_acceptance() -> None:
     assert (
         summary["continuation_checks"]["precision_lower_bound_at_least_0_95"] is False
     )
+
+
+def test_quota_reserve_uses_ten_percent_with_minimum_floor() -> None:
+    assert harness._quota_reserve(500) == 50
+    assert harness._quota_reserve(200) == 25
+
+
+def test_quota_budget_refuses_insufficient_headroom() -> None:
+    safe = harness._quota_budget(
+        active_limit=500,
+        active_usage=200,
+        required_provider_calls=200,
+    )
+    assert safe["remaining_rpd"] == 300
+    assert safe["reserve_rpd"] == 50
+    assert safe["sufficient"] is True
+
+    unsafe = harness._quota_budget(
+        active_limit=500,
+        active_usage=300,
+        required_provider_calls=160,
+    )
+    assert unsafe["remaining_rpd"] == 200
+    assert unsafe["minimum_remaining_rpd"] == 210
+    assert unsafe["sufficient"] is False
+
+
+def test_checkpoint_round_trip_is_contract_bound_and_query_free(tmp_path) -> None:
+    rows = _perfect_results()[:2]
+    checkpoint = tmp_path / "checkpoint.json"
+    harness._write_checkpoint(
+        checkpoint,
+        repository_sha="abc123",
+        results=rows,
+    )
+
+    raw = checkpoint.read_text(encoding="utf-8")
+    assert "user_query" not in raw
+    assert "canonical_memory_value" not in raw
+    assert (
+        harness._load_checkpoint(
+            checkpoint,
+            repository_sha="abc123",
+        )
+        == rows
+    )
+
+    try:
+        harness._load_checkpoint(checkpoint, repository_sha="different")
+    except RuntimeError as exc:
+        assert "checkpoint contract" in str(exc)
+    else:
+        raise AssertionError("checkpoint must be bound to the exact repository SHA")
+
+
+class _OneShotDelegate:
+    provider_name = "gemini"
+    model_name = "gemini-3.5-flash-lite"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def interpret(self, *, text, catalog):
+        self.calls += 1
+        raise RuntimeError("429 quota exceeded")
+
+
+def test_paced_interpreter_never_adds_its_own_retry() -> None:
+    import asyncio
+
+    delegate = _OneShotDelegate()
+    interpreter = harness.PacedMemoryQueryInterpreter(delegate, rpm=60, max_calls=1)
+    catalog = harness.MemoryFacetCatalog(facets=())
+    try:
+        asyncio.run(interpreter.interpret(text="test", catalog=catalog))
+    except RuntimeError as exc:
+        assert "429" in str(exc)
+    else:
+        raise AssertionError("delegate failure should propagate")
+
+    assert delegate.calls == 1
+    assert interpreter.logical_calls == 1
+    assert interpreter.api_attempts == 1
+
+
+def test_second_provider_call_is_blocked_before_delegate() -> None:
+    import asyncio
+
+    class Delegate:
+        provider_name = "gemini"
+        model_name = "gemini-3.5-flash-lite"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def interpret(self, *, text, catalog):
+            self.calls += 1
+            return harness.MemoryQueryProposal(intent="unsupported")
+
+    delegate = Delegate()
+    interpreter = harness.PacedMemoryQueryInterpreter(delegate, rpm=60, max_calls=1)
+    catalog = harness.MemoryFacetCatalog(facets=())
+    asyncio.run(interpreter.interpret(text="one", catalog=catalog))
+    try:
+        asyncio.run(interpreter.interpret(text="two", catalog=catalog))
+    except harness.ProviderCallBudgetExceeded:
+        pass
+    else:
+        raise AssertionError("second provider call must be blocked by certified budget")
+
+    assert delegate.calls == 1
