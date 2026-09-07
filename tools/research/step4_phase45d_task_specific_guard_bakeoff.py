@@ -29,18 +29,21 @@ CANDIDATES: Final = (
         "model_id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
         "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
         "dimension": 384,
+        "input_prefix": "",
     },
     {
         "key": "multilingual_e5_small",
         "model_id": "intfloat/multilingual-e5-small",
         "revision": "fd1525a9fd15316a2d503bf26ab031a61d056e98",
         "dimension": 384,
+        "input_prefix": "query: ",
     },
     {
         "key": "multilingual_mpnet_base_v2",
         "model_id": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
         "revision": "4328cf26390c98c5e3c738b4460a05b95f4911f5",
         "dimension": 768,
+        "input_prefix": "",
     },
 )
 
@@ -101,8 +104,14 @@ def _labels(rows: list[dict[str, object]]) -> list[str]:
     return [str(row["label"]) for row in rows]
 
 
-def _texts(rows: list[dict[str, object]]) -> list[str]:
-    return [str(row["query"]) for row in rows]
+def _texts(
+    rows: list[dict[str, object]],
+    *,
+    prefix: str = "",
+) -> list[str]:
+    if not isinstance(prefix, str):
+        raise TypeError("prefix must be a string")
+    return [f"{prefix}{row['query']}" for row in rows]
 
 
 def _encode(
@@ -168,12 +177,16 @@ def summarize_predictions(
         row for row in allow_targets if row.expected_label == "current_value"
     ]
     comparison_targets = [
-        row for row in allow_targets if row.expected_label == "current_value_comparison"
+        row
+        for row in allow_targets
+        if row.expected_label == "current_value_comparison"
     ]
     direct_allowed = [row for row in direct_targets if row.predicted_allow]
     comparison_allowed = [row for row in comparison_targets if row.predicted_allow]
     negation_false_allows = [
-        row for row in false_allows if row.expected_label == "negated_or_contradicted"
+        row
+        for row in false_allows
+        if row.expected_label == "negated_or_contradicted"
     ]
 
     by_language: dict[str, dict[str, int | float]] = {}
@@ -239,7 +252,9 @@ def summarize_predictions(
         "by_label": by_label,
         "false_allow_case_ids": [row.case_id for row in false_allows],
         "false_veto_case_ids": [row.case_id for row in false_vetoes],
-        "negation_false_allow_case_ids": [row.case_id for row in negation_false_allows],
+        "negation_false_allow_case_ids": [
+            row.case_id for row in negation_false_allows
+        ],
         "false_allows_by_expected_label": dict(
             sorted(Counter(row.expected_label for row in false_allows).items())
         ),
@@ -299,14 +314,15 @@ def _run_candidate(
         device=device,
         trust_remote_code=False,
     )
+    input_prefix = str(candidate["input_prefix"])
     train_vectors, train_encode_seconds = _encode(
         model,
-        _texts(train_rows),
+        _texts(train_rows, prefix=input_prefix),
         batch_size=batch_size,
     )
     holdout_vectors, holdout_encode_seconds = _encode(
         model,
-        _texts(holdout_rows),
+        _texts(holdout_rows, prefix=input_prefix),
         batch_size=batch_size,
     )
     expected_dimension = int(candidate["dimension"])
@@ -351,6 +367,7 @@ def _run_candidate(
         "key": candidate["key"],
         "model_id": candidate["model_id"],
         "revision": candidate["revision"],
+        "input_prefix": input_prefix,
         "classifier": {
             "type": "sklearn.linear_model.LogisticRegression",
             "solver": SOLVER,
