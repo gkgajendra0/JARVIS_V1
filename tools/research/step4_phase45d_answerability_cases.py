@@ -127,14 +127,10 @@ def _relation(fact: AnswerabilityFact, language: str) -> str:
 def _canonical_context(fact: AnswerabilityFact, language: str) -> str:
     relation = _relation(fact, language)
     if language == "hi":
-        return (
-            f"वर्तमान canonical memory: {fact.subject} का {relation} "
-            f"{fact.value} है।"
-        )
+        return f"वर्तमान canonical memory: {fact.subject} का {relation} {fact.value} है।"
     if language == "hinglish":
         return (
-            f"Current canonical memory: {fact.subject} ka {relation} "
-            f"{fact.value} hai."
+            f"Current canonical memory: {fact.subject} ka {relation} {fact.value} hai."
         )
     return f"Current canonical memory: {fact.subject}'s {relation} is {fact.value}."
 
@@ -357,9 +353,7 @@ def public_summary() -> dict[str, object]:
         "languages": list(LANGUAGES),
         "fact_count": len(FACTS),
         "qa_cases": len(qa_rows),
-        "qa_answerable_cases": sum(
-            bool(row["expected_answerable"]) for row in qa_rows
-        ),
+        "qa_answerable_cases": sum(bool(row["expected_answerable"]) for row in qa_rows),
         "qa_null_cases": sum(not bool(row["expected_answerable"]) for row in qa_rows),
         "nli_cases": len(nli_rows),
         "payload_sha256": payload_sha256(payload),

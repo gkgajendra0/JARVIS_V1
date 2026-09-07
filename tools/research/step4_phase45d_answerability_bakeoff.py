@@ -106,7 +106,9 @@ def _assert_no_retired_query_overlap(payload: dict[str, object]) -> None:
 
     overlap = sorted(retired.intersection(fresh_questions))
     if overlap:
-        raise RuntimeError(f"answerability corpus overlaps retired queries: {overlap[:3]}")
+        raise RuntimeError(
+            f"answerability corpus overlaps retired queries: {overlap[:3]}"
+        )
 
 
 def summarize_qa(predictions: list[QAPrediction]) -> dict[str, Any]:
@@ -364,7 +366,7 @@ def _run_qa_candidate(
             max_answer_len=MAX_ANSWER_LENGTH,
         )
         if not isinstance(output, dict):
-            raise RuntimeError("QA pipeline returned an unexpected output type")
+            raise TypeError("QA pipeline returned an unexpected output type")
         answer = str(output.get("answer", ""))
         score = float(output.get("score", 0.0))
         predictions.append(
@@ -403,9 +405,7 @@ def _run_qa_candidate(
         "resources": {
             "model_load_seconds": round(load_seconds, 4),
             "inference_seconds": round(inference_seconds, 4),
-            "inference_ms_per_case": round(
-                inference_seconds * 1000.0 / len(rows), 4
-            ),
+            "inference_ms_per_case": round(inference_seconds * 1000.0 / len(rows), 4),
             "parameter_count": parameter_count,
             "parameter_bytes": parameter_bytes,
             "rss_baseline_bytes": rss_baseline,
@@ -455,9 +455,7 @@ def _run_nli_candidate(
     rss_samples.append(_rss_bytes())
 
     expected_labels = {"entailment", "neutral", "contradiction"}
-    actual_labels = {
-        str(label).casefold() for label in model.config.id2label.values()
-    }
+    actual_labels = {str(label).casefold() for label in model.config.id2label.values()}
     if actual_labels != expected_labels:
         raise RuntimeError(
             f"native NLI label contract changed: {actual_labels} != {expected_labels}"
@@ -522,9 +520,7 @@ def _run_nli_candidate(
         "resources": {
             "model_load_seconds": round(load_seconds, 4),
             "inference_seconds": round(inference_seconds, 4),
-            "inference_ms_per_case": round(
-                inference_seconds * 1000.0 / len(rows), 4
-            ),
+            "inference_ms_per_case": round(inference_seconds * 1000.0 / len(rows), 4),
             "parameter_count": parameter_count,
             "parameter_bytes": parameter_bytes,
             "rss_baseline_bytes": rss_baseline,
@@ -554,9 +550,7 @@ def run() -> dict[str, Any]:
     qa_rows = _qa_rows(payload)
     nli_rows = _nli_rows(payload)
 
-    qa_results = [
-        _run_qa_candidate(candidate, qa_rows) for candidate in QA_CANDIDATES
-    ]
+    qa_results = [_run_qa_candidate(candidate, qa_rows) for candidate in QA_CANDIDATES]
     nli_result = _run_nli_candidate(NLI_CANDIDATE, nli_rows)
     selected_qa = select_qa_candidate(qa_results)
     nli_passes = bool(nli_result["summary"]["passes_development_gate"])
@@ -627,9 +621,7 @@ def main() -> None:
                     "passes_development_gate": row["summary"][
                         "passes_development_gate"
                     ],
-                    "inference_ms_per_case": row["resources"][
-                        "inference_ms_per_case"
-                    ],
+                    "inference_ms_per_case": row["resources"]["inference_ms_per_case"],
                     "cuda_delta_peak_allocated_bytes": row["resources"][
                         "cuda_delta_peak_allocated_bytes"
                     ],
@@ -660,9 +652,9 @@ def main() -> None:
                 "inference_ms_per_case": result["nli_candidate"]["resources"][
                     "inference_ms_per_case"
                 ],
-                "cuda_delta_peak_allocated_bytes": result["nli_candidate"][
-                    "resources"
-                ]["cuda_delta_peak_allocated_bytes"],
+                "cuda_delta_peak_allocated_bytes": result["nli_candidate"]["resources"][
+                    "cuda_delta_peak_allocated_bytes"
+                ],
             },
             ensure_ascii=False,
         ),

@@ -39,7 +39,9 @@ def test_answerability_corpus_shape_balance_and_frozen_hash() -> None:
         "3e2bd6830df3d08b3ea4ce8e045ee78cf562c228c5b0d2e5e094ffa42b6b44a3"
     )
 
-    assert Counter((row["language"], row["expected_answerable"]) for row in qa_rows) == {
+    assert Counter(
+        (row["language"], row["expected_answerable"]) for row in qa_rows
+    ) == {
         ("en", True): 32,
         ("en", False): 64,
         ("hi", True): 32,
@@ -229,8 +231,7 @@ def test_qa_selection_uses_only_passing_candidates() -> None:
             "wrong_evidence_release_cases": 0,
             "answerable_recall": 1.0,
             "by_language": {
-                language: {"answerable_recall": 1.0}
-                for language in cases.LANGUAGES
+                language: {"answerable_recall": 1.0} for language in cases.LANGUAGES
             },
         },
         "resources": {
@@ -246,8 +247,7 @@ def test_qa_selection_uses_only_passing_candidates() -> None:
             "wrong_evidence_release_cases": 0,
             "answerable_recall": 0.95,
             "by_language": {
-                language: {"answerable_recall": 0.95}
-                for language in cases.LANGUAGES
+                language: {"answerable_recall": 0.95} for language in cases.LANGUAGES
             },
         },
         "resources": {
