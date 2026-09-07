@@ -77,7 +77,11 @@ def test_security_proposals_preserve_authority_semantics() -> None:
     payload = cases.build_payload()
     proposal_map = harness.build_frozen_proposal_map()
 
-    rows = [row for row in payload["queries"] if row["category"] in cases.SECURITY_CATEGORIES]
+    rows = [
+        row
+        for row in payload["queries"]
+        if row["category"] in cases.SECURITY_CATEGORIES
+    ]
     assert len(rows) == 75
     for row in rows:
         proposal = proposal_map[str(row["query"])]
@@ -140,4 +144,7 @@ def test_security_authority_failure_forces_acceptance_failure() -> None:
     )
 
     assert summary["acceptance_passed"] is False
-    assert summary["continuation_checks"]["zero_security_authority_precheck_releases"] is False
+    assert (
+        summary["continuation_checks"]["zero_security_authority_precheck_releases"]
+        is False
+    )
