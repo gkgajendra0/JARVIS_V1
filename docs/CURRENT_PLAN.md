@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — V4 FAILED / RETIRED — TASK-SPECIFIC LOCAL GUARD BAKE-OFF FROZEN — PHASE 4.5E BLOCKED**
+**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — V4 FAILED / RETIRED — TASK-SPECIFIC LOCAL GUARD BAKE-OFF METHOD V2 FROZEN — PHASE 4.5E BLOCKED**
 
 This file is the operational source of truth. Detailed measurements belong in `docs/research/`; only fresh accepted architecture belongs in ADRs / `docs/CURRENT_ARCHITECTURE.md`.
 
@@ -293,9 +293,11 @@ V4 is exposed and **retired acceptance evidence**. Do not rerun it, tune thresho
 
 The existing `MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7` zero-shot guard is therefore retired as the selected production design. Production behavior is not changed until a replacement wins the frozen development bake-off.
 
-### Task-specific local guard bake-off — FROZEN / DEVELOPMENT-ONLY
+### Task-specific local guard bake-off — METHOD V2 FROZEN / DEVELOPMENT-ONLY
 
 Research selected the SetFit-style pattern without adding the SetFit package itself: a frozen multilingual SentenceTransformer produces normalized query embeddings and a fixed scikit-learn `LogisticRegression` head performs task-specific classification. This reuses the already-compatible owner stack instead of disturbing pinned Torch/Transformers.
+
+Before any owner bake-off result existed, the unexecuted first method draft was corrected to include the already accepted JARVIS Qwen3 embedding backbone as a mandatory reuse baseline and to record latency/model-size/RAM/VRAM diagnostics required by the frozen handover. The corpus, labels, logistic head, semantic gates and tie-break rules were not changed. This correction is frozen as Method V2 and is not post-result tuning.
 
 New eight-class taxonomy:
 
@@ -328,7 +330,10 @@ Candidates, all with the same frozen logistic head and no threshold fitting:
 
 - `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` @ `e8f8c211226b894fcb81acc59f3b34ba3efd5f42`;
 - `intfloat/multilingual-e5-small` @ `fd1525a9fd15316a2d503bf26ab031a61d056e98`;
-- `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` @ `4328cf26390c98c5e3c738b4460a05b95f4911f5`.
+- `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` @ `4328cf26390c98c5e3c738b4460a05b95f4911f5`;
+- existing JARVIS `Qwen/Qwen3-Embedding-0.6B` @ `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`, raw-query input, normalized `truncate_dim=256` reuse baseline.
+
+The bake-off records false allows/vetoes, direct/comparison/language recall, negation false allows, per-class recall, macro-F1/accuracy, model load time, embedding latency, parameter count/bytes, sampled process RSS and per-candidate CUDA peak allocation. Resource metrics are diagnostics and do not replace the frozen semantic gates.
 
 Frozen development gates require simultaneously: zero false allows, zero negation false allows, overall allow recall >= `0.90`, direct >= `0.90`, comparison >= `0.85`, each language >= `0.85`, eight-class macro-F1 >= `0.85`, argmax-only/no threshold, zero cloud calls, and no V4 training/scoring.
 
@@ -367,7 +372,7 @@ Do **not** wire semantic retrieval into `ContextAssembler` / Gemini conversation
 6. 4.5A — COMPLETE.
 7. 4.5B — COMPLETE.
 8. 4.5C — COMPLETE.
-9. **4.5D — ACTIVE: V4 completed and failed/retired; generic zero-shot NLI guard isolated as the blocker; fresh task-specific local guard bake-off frozen and next.**
+9. **4.5D — ACTIVE: V4 completed and failed/retired; generic zero-shot NLI guard isolated as the blocker; corrected zero-cloud task-specific local guard bake-off Method V2 frozen and next.**
 10. **4.5E — BLOCKED.**
 11. 4.6 — NOT STARTED.
 12. 4.7 — NOT STARTED.
@@ -381,12 +386,13 @@ Do not:
 
 - rerun V4 provider-backed or provider-independent acceptance;
 - tune thresholds, train, or score replacement candidates on V4 query text/results;
+- modify the frozen Method V2 corpus/gates/candidate preprocessing after seeing owner bake-off results and still call the rerun the same development evidence;
 - install SetFit or change Torch/Torchvision merely for this bake-off;
 - modify the production answer-type guard before a candidate passes the frozen bake-off;
 - rerun or overwrite V2 acceptance evidence;
 - reuse V2 as fresh acceptance evidence;
 - treat the retrieval-depth diagnostic as acceptance;
-- test 512d/1024d embeddings now; top-10 256d retrieval already reached `900/900` on exposed development positives;
+- test 512d/1024d embeddings now; the Qwen guard reuse baseline is deliberately the existing 256d contract and top-10 256d retrieval already reached `900/900` on exposed development positives;
 - swap Qwen embedding/reranker merely to fix V2 ranking;
 - start 4.5E;
 - wire retrieval into Gemini conversation;
@@ -411,7 +417,7 @@ Do not:
 
 ## Immediate Next Action
 
-**RUN THE FROZEN ZERO-CLOUD TASK-SPECIFIC LOCAL GUARD BAKE-OFF ON THE OWNER RTX MACHINE.**
+**RUN THE FROZEN ZERO-CLOUD TASK-SPECIFIC LOCAL GUARD BAKE-OFF METHOD V2 ON THE OWNER RTX MACHINE.**
 
 This is development model selection only. It uses a new `288`-train / `192`-holdout corpus and makes zero Gemini/OpenAI calls. It must not use V4 for training or scoring.
 
@@ -420,9 +426,10 @@ Before the owner run:
 - use the exact green repository SHA supplied with the owner command;
 - verify `.step4-phase45d-task-specific-guard-bakeoff-v1.json` is absent;
 - verify the development corpus SHA is `ae854ed664ef6ee0214f65f5fe4b252099fd1dcaea00c13aaf7789cd84afd3ab`;
-- keep owner Torch `2.13.0+cu132`, Torchvision `0.28.0+cu132`, Transformers `5.16.1`, SentenceTransformers `6.0.1` and scikit-learn `1.9.0`;
+- install/use the dedicated `phase45d-task-guard` optional dependency set, including pinned `scikit-learn==1.9.0` and `psutil==7.2.2`;
+- keep owner Torch `2.13.0+cu132`, Torchvision `0.28.0+cu132`, Transformers `5.16.1` and SentenceTransformers `6.0.1`;
 - do not run cloud-provider diagnostics in parallel.
 
-If one candidate passes every frozen development gate, record the result, freeze the winner artifact/contract, implement the production replacement cleanly, and then design a never-exposed V5 provider-independent acceptance. If no candidate passes, research the failure class and create a new development iteration without tuning against the holdout or V4.
+If one candidate passes every frozen development gate, record the result, freeze the winner artifact/contract, implement the production replacement cleanly, and then design a never-exposed V5 provider-independent acceptance. If no candidate passes, research the failure class and create a new development iteration without tuning against this holdout or V4.
 
 Phase 4.5E remains blocked until a fresh V5 acceptance passes and 4.5D has durable closure evidence on a green exact SHA.
