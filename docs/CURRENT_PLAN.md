@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — PROVIDER-INDEPENDENT COMPOSITE GATE SELECTED — FRESH FINAL ACCEPTANCE QUOTA-INTERRUPTED / CORPUS PRESERVED — PHASE 4.5E BLOCKED**
+**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — V4 FAILED / RETIRED — TASK-SPECIFIC LOCAL GUARD BAKE-OFF FROZEN — PHASE 4.5E BLOCKED**
 
 This file is the operational source of truth. Detailed measurements belong in `docs/research/`; only fresh accepted architecture belongs in ADRs / `docs/CURRENT_ARCHITECTURE.md`.
 
@@ -242,117 +242,106 @@ This development result isolates the V2 ranking problem:
 
 ---
 
-## Active 4.5D direction — PROVIDER-INDEPENDENT COMPOSITE GATE SELECTED / FRESH ACCEPTANCE NEXT
+## Active 4.5D direction — JARVIS-SIDE TASK-SPECIFIC LOCAL GUARD REPLACEMENT
 
-Fresh V3 is **FAIL_CALIBRATION / RETIRED** and its validation half remains unexposed. The later Gemini 3.8 diagnostic attempt ended in provider quota/transport failure and produced no model-quality evidence. Do not treat that quota event as a model rejection.
+The provider-independent memory-authority architecture remains selected: provider adapters may propose structured query intent, but deterministic JARVIS grounding, lifecycle/security eligibility and exact canonical lookup own release authority. `JARVIS_AI_PROVIDER` remains the single production provider selector.
 
-After V3, Phase 4.5D was redesigned so canonical memory release does not depend on whichever conversational brain provider is active.
+### V4 fresh final composite acceptance — FAIL_ACCEPTANCE / RETIRED
 
-### Provider-independent exact-fact architecture — SELECTED DEVELOPMENT CANDIDATE
-
-Production-shaped contract:
-
-```text
-JARVIS_AI_PROVIDER-selected BrainProvider adapter
-→ structured MemoryQueryProposal (proposal only; no truth/release authority)
-→ local multilingual answer-type veto
-→ deterministic JARVIS grounding + canonical facet validation
-→ deterministic lifecycle / authority / sensitivity eligibility
-→ unique exact current-facet lookup
-→ TrustedMemoryEvidence or ABSTAIN
-```
-
-Key invariants:
-
-- `JARVIS_AI_PROVIDER` remains the single production provider selector;
-- provider adapters are compatibility drivers, not independent memory authorities;
-- the planner receives only the user utterance plus already-eligible `(subject_scope, subject, predicate)` keys, never JARVIS-injected canonical values;
-- exact validated current-fact lookup is indexed canonical SQLite lookup and does not require Qwen embedding/reranking;
-- zero matching current rows → abstain;
-- more than one matching current row → conflict/abstain;
-- local semantic guard is veto-only and cannot create truth, select another memory, resurrect forgotten/history, or override security;
-- provider or local-guard failures fail closed.
-
-### Development evidence — COMPLETE
-
-Structured planner diagnostic on retired V2:
-
-- 45 cases;
-- 12 target releases / 33 target abstains;
-- 10 exact releases;
-- 6 ordinary-semantic false releases;
-- zero security-boundary releases.
-
-Standalone NLI-as-answerability was rejected after blocking all 10 correct releases as well as all six false releases.
-
-Standalone multilingual zero-shot answer-type classification retained all 12 legitimate release targets but had two `absent` false allows, so it was rejected as a standalone release authority and retained only as an independent veto.
-
-Frozen composite AND-gate diagnostic on the same exposed 45 rows:
-
-- exact releases `10/12 = 0.833333`;
-- direct exact releases `8/9`;
-- relation-comparison exact releases `2/3`;
-- English `4/4`, Hindi `3/4`, Hinglish `3/4`;
-- **false releases `0`**;
-- wrong-target releases `0`;
-- security-boundary releases `0`;
-- all frozen continuation checks passed;
-- `promising_for_fresh_acceptance_design = true`.
-
-Durable result:
-
-- `docs/research/STEP_4_PHASE_4_5D_COMPOSITE_MEMORY_GATE_DIAGNOSTIC_RESULT.md`.
-
-The selected local veto is:
-
-- `MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7`;
-- revision `b5113eb38ab63efdd7f280f8c144ea8b13f978ce`;
-- seven frozen answer types;
-- argmax-only, no fitted threshold;
-- only `current_value` and `current_value_comparison` may continue.
-
-Production-shaped implementation exists in:
-
-- `src/jarvis/memory/answer_type_guard.py`;
-- `src/jarvis/memory/guarded_query_coordinator.py`;
-- the existing provider-neutral planner / grounding / evidence-gate modules.
-
-### Fresh final composite acceptance — FROZEN / FIRST OWNER EXECUTION QUOTA-INTERRUPTED / RERUN UNCHANGED AFTER QUOTA
-
-Method:
-
-- `docs/research/STEP_4_PHASE_4_5D_FINAL_COMPOSITE_ACCEPTANCE_METHOD.md`.
-
-Fresh corpus:
-
-- 255 total queries;
-- 90 release targets;
-- 165 abstain targets;
-- 55 synthetic documents;
-- 30 release targets per language;
-- 11 abstain families × 5 cases × 3 languages;
-- fresh subjects/predicates/values/wording;
-- exact normalized query overlap with retired V2/V3 fails closed;
-- no real secrets.
-
-Frozen corpus SHA-256:
+Frozen V4 corpus SHA-256:
 
 `69666a37d436828b1d65827852f9e43d524253608209275205c41a36f8accadf`
 
-Acceptance gates include zero false/wrong/security releases, exact-memory release only, overall release recall >= `0.75`, direct recall >= `0.75`, comparison recall >= `0.60`, each language >= `0.65`, and one-sided exact 95% released-precision lower bound >= `0.95`.
+The quota-safe provider-backed owner run completed all `255` cases with exactly `66` logical Gemini calls and `66` API attempts. Quota was **not** the blocker.
 
-There is no calibration split because the selected architecture has no learned threshold to fit. If this fresh corpus fails, it is exposed/retired and must not be tuned and rerun as fresh evidence.
+Provider-backed result:
 
-The owner acceptance uses current `gemini-3.5-flash-lite` only as the structured proposal adapter. This does **not** make memory authority Gemini-specific and does not add another production provider switch.
+- exact target releases `53/90`;
+- false releases `0`;
+- wrong-target releases `0`;
+- security-boundary releases `0`;
+- empirical precision `1.0`;
+- overall release recall `0.588889`;
+- direct-current recall `0.800000`;
+- current-value-comparison recall `0.166667`;
+- EN `0.666667`, HI `0.566667`, Hinglish `0.533333`;
+- the local zero-shot guard vetoed `24/30` legitimate comparison targets.
 
-First owner execution on `2026-09-06` used SHA `6cba430ca9d8ea8c95c542c0664e64bd9cffbd21`, passed environment/corpus preflight, and began the frozen 255-case run. Google returned HTTP `429` after case 31 for `generativelanguage.googleapis.com/generate_content_free_tier_requests` with limit `500`. The harness terminated before writing a complete artifact.
+A separately frozen provider-independent core acceptance then ran the same V4 corpus with **zero cloud/provider calls** and deterministic hostile proposals.
 
-Per the frozen method, this is **EXECUTION_FAILURE_QUOTA**, not `FAIL_ACCEPTANCE`. The first 31 partial console observations are non-evidentiary and must not be used for tuning. The corpus remains the same fresh acceptance corpus and may be rerun unchanged once sufficient provider quota is available.
+Provider-independent core result:
 
-Durable execution record:
+- exact target releases `58/90`;
+- false releases `1`: `v4_a0073`, Hinglish `negation`;
+- wrong-target releases `0`;
+- security-boundary releases `0`;
+- security authority-only precheck failures `0`;
+- overall release recall `0.644444`;
+- direct-current recall `0.866667`;
+- comparison recall `0.200000`;
+- the same local guard again vetoed `24/30` legitimate comparison targets.
 
-- `docs/research/STEP_4_PHASE_4_5D_FINAL_COMPOSITE_ACCEPTANCE_EXECUTION_FAILURE.md`.
+Durable result:
 
+- `docs/research/STEP_4_PHASE_4_5D_V4_ACCEPTANCE_RESULT.md`.
+
+### V4 diagnosis — COMPLETE
+
+The failure is now isolated to the generic multilingual zero-shot NLI answer-type guard, not retrieval, Gemini quota, provider planning, canonical lifecycle/security authority or exact canonical lookup. The guard is too conservative on legitimate comparison questions and missed one Hinglish negation boundary.
+
+V4 is exposed and **retired acceptance evidence**. Do not rerun it, tune thresholds on it, train a replacement on its query text, or score replacement candidates on it. V4 may be used only as an exact-query deny-list and as architectural evidence that comparison and negation need explicit representation.
+
+The existing `MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7` zero-shot guard is therefore retired as the selected production design. Production behavior is not changed until a replacement wins the frozen development bake-off.
+
+### Task-specific local guard bake-off — FROZEN / DEVELOPMENT-ONLY
+
+Research selected the SetFit-style pattern without adding the SetFit package itself: a frozen multilingual SentenceTransformer produces normalized query embeddings and a fixed scikit-learn `LogisticRegression` head performs task-specific classification. This reuses the already-compatible owner stack instead of disturbing pinned Torch/Transformers.
+
+New eight-class taxonomy:
+
+1. `current_value`;
+2. `current_value_comparison`;
+3. `reason_explanation`;
+4. `provenance_actor`;
+5. `replacement_successor`;
+6. `related_record`;
+7. `negated_or_contradicted`;
+8. `other_or_advice`.
+
+Only `current_value` and `current_value_comparison` may continue. The classifier remains veto-only and cannot establish canonical truth.
+
+Development corpus:
+
+- `288` train cases;
+- `192` never-trained-on holdout cases;
+- exact English / Hindi / Hinglish and eight-class balance;
+- disjoint train/holdout facts and paraphrase templates;
+- zero exact normalized train/holdout overlap;
+- zero exact normalized overlap with retired V4;
+- V4 is not used for training or scoring.
+
+Frozen development corpus SHA-256:
+
+`ae854ed664ef6ee0214f65f5fe4b252099fd1dcaea00c13aaf7789cd84afd3ab`
+
+Candidates, all with the same frozen logistic head and no threshold fitting:
+
+- `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` @ `e8f8c211226b894fcb81acc59f3b34ba3efd5f42`;
+- `intfloat/multilingual-e5-small` @ `fd1525a9fd15316a2d503bf26ab031a61d056e98`;
+- `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` @ `4328cf26390c98c5e3c738b4460a05b95f4911f5`.
+
+Frozen development gates require simultaneously: zero false allows, zero negation false allows, overall allow recall >= `0.90`, direct >= `0.90`, comparison >= `0.85`, each language >= `0.85`, eight-class macro-F1 >= `0.85`, argmax-only/no threshold, zero cloud calls, and no V4 training/scoring.
+
+Method:
+
+- `docs/research/STEP_4_PHASE_4_5D_TASK_SPECIFIC_GUARD_BAKEOFF_METHOD.md`.
+
+Harness:
+
+- `tools/research/step4_phase45d_task_specific_guard_bakeoff.py`;
+- `tools/research/step4_phase45d_task_specific_guard_cases.py`.
+
+If no candidate passes every frozen development gate, no production guard change is authorized. If a candidate passes and wins the frozen tie-break, freeze its model/revision plus classifier artifact/coefficients, class order, training-corpus hash, sklearn version and artifact checksum; then implement the production task-specific guard and create a completely fresh V5 provider-independent acceptance corpus. A development bake-off pass alone does not close 4.5D.
 
 ## Phase 4.5E — BLOCKED
 
@@ -378,7 +367,7 @@ Do **not** wire semantic retrieval into `ContextAssembler` / Gemini conversation
 6. 4.5A — COMPLETE.
 7. 4.5B — COMPLETE.
 8. 4.5C — COMPLETE.
-9. **4.5D — ACTIVE: provider-independent composite gate selected; fresh final composite acceptance frozen; first execution ended in provider quota failure before a complete artifact; rerun unchanged after quota is available.**
+9. **4.5D — ACTIVE: V4 completed and failed/retired; generic zero-shot NLI guard isolated as the blocker; fresh task-specific local guard bake-off frozen and next.**
 10. **4.5E — BLOCKED.**
 11. 4.6 — NOT STARTED.
 12. 4.7 — NOT STARTED.
@@ -390,6 +379,10 @@ Do **not** wire semantic retrieval into `ContextAssembler` / Gemini conversation
 
 Do not:
 
+- rerun V4 provider-backed or provider-independent acceptance;
+- tune thresholds, train, or score replacement candidates on V4 query text/results;
+- install SetFit or change Torch/Torchvision merely for this bake-off;
+- modify the production answer-type guard before a candidate passes the frozen bake-off;
 - rerun or overwrite V2 acceptance evidence;
 - reuse V2 as fresh acceptance evidence;
 - treat the retrieval-depth diagnostic as acceptance;
@@ -418,16 +411,18 @@ Do not:
 
 ## Immediate Next Action
 
-**RERUN THE EXACT SAME FROZEN FINAL COMPOSITE ACCEPTANCE ONLY AFTER THE GEMINI PROJECT HAS SUFFICIENT REQUEST QUOTA.**
+**RUN THE FROZEN ZERO-CLOUD TASK-SPECIFIC LOCAL GUARD BAKE-OFF ON THE OWNER RTX MACHINE.**
 
-The first owner execution on SHA `6cba430ca9d8ea8c95c542c0664e64bd9cffbd21` stopped after case 31 because Google returned HTTP `429` for the free-tier request quota (`generate_content_free_tier_requests`, limit `500`) on `gemini-3.5-flash-lite`. No complete acceptance artifact, summary, or decision was produced.
+This is development model selection only. It uses a new `288`-train / `192`-holdout corpus and makes zero Gemini/OpenAI calls. It must not use V4 for training or scoring.
 
-Durable execution record:
+Before the owner run:
 
-- `docs/research/STEP_4_PHASE_4_5D_FINAL_COMPOSITE_ACCEPTANCE_EXECUTION_FAILURE.md`.
+- use the exact green repository SHA supplied with the owner command;
+- verify `.step4-phase45d-task-specific-guard-bakeoff-v1.json` is absent;
+- verify the development corpus SHA is `ae854ed664ef6ee0214f65f5fe4b252099fd1dcaea00c13aaf7789cd84afd3ab`;
+- keep owner Torch `2.13.0+cu132`, Torchvision `0.28.0+cu132`, Transformers `5.16.1`, SentenceTransformers `6.0.1` and scikit-learn `1.9.0`;
+- do not run cloud-provider diagnostics in parallel.
 
-This is transport/quota failure only. The frozen corpus, model, prompt/schema, local guard, request shape, deterministic policy, acceptance gates, and corpus SHA remain unchanged. Do not tune against the 31 partial printed results and do not create a replacement corpus.
+If one candidate passes every frozen development gate, record the result, freeze the winner artifact/contract, implement the production replacement cleanly, and then design a never-exposed V5 provider-independent acceptance. If no candidate passes, research the failure class and create a new development iteration without tuning against the holdout or V4.
 
-Before rerun, verify the final acceptance artifact is still absent and the frozen corpus SHA remains `69666a37d436828b1d65827852f9e43d524253608209275205c41a36f8accadf`. Then execute the same acceptance harness with `--device cuda --gemini-rpm 12` after the relevant quota resets or the same project has adequate paid quota.
-
-Phase 4.5E remains blocked until a complete fresh final artifact passes every frozen gate and closure evidence is recorded on a green exact SHA.
+Phase 4.5E remains blocked until a fresh V5 acceptance passes and 4.5D has durable closure evidence on a green exact SHA.
