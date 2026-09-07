@@ -20,13 +20,23 @@ jobs:
           python-version: "3.11"
       - name: Install Ruff
         run: python -m pip install "ruff==0.16.5"
-      - name: Format exact files
+      - name: Fix exact lint issue and format exact files
         run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("tools/research/step4_phase45d_task_specific_guard_bakeoff.py")
+          text = path.read_text(encoding="utf-8")
+          old = 'raise RuntimeError(f"{split} corpus must be a list")'
+          new = 'raise TypeError(f"{split} corpus must be a list")'
+          if text.count(old) != 1:
+              raise RuntimeError(f"expected one exact lint marker, found {text.count(old)}")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
           ruff format \
             tools/research/step4_phase45d_task_specific_guard_cases.py \
             tools/research/step4_phase45d_task_specific_guard_bakeoff.py \
             tests/test_phase45d_task_specific_guard_bakeoff.py
-          ruff check --fix \
+          ruff check \
             tools/research/step4_phase45d_task_specific_guard_cases.py \
             tools/research/step4_phase45d_task_specific_guard_bakeoff.py \
             tests/test_phase45d_task_specific_guard_bakeoff.py
