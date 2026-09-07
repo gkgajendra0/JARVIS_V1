@@ -61,6 +61,13 @@ phase45d-task-guard = [
     "scikit-learn==1.9.0",
     "psutil==7.2.2",
 ]
+phase45d-task-guard-finetune = [
+    "transformers==5.16.1",
+    "datasets==5.0.1",
+    "accelerate==1.14.0",
+    "scikit-learn==1.9.0",
+    "psutil==7.2.2",
+]
 speaker = ["sherpa-onnx==1.13.6"]
 active-speaker = [
     "python_speech_features==0.6",
