@@ -2,9 +2,11 @@
 
 ## Status
 
-**FROZEN DEVELOPMENT METHOD — MODEL SELECTION ONLY, NOT ACCEPTANCE**
+**FROZEN DEVELOPMENT METHOD V2 — MODEL SELECTION ONLY, NOT ACCEPTANCE**
 
 Phase 4.5E remains blocked.
+
+Method V2 is a pre-execution correction. The earlier unexecuted draft omitted the already accepted JARVIS Qwen3 embedding backbone and did not record the resource metrics required by the handover. No owner bake-off evidence existed when this correction was made, so adding the required Qwen baseline and resource measurements is not post-result tuning. The corpus, classifier, labels, semantic gates and tie-break rules remain unchanged.
 
 ## Why this bake-off exists
 
@@ -17,9 +19,11 @@ Current research supports the SetFit pattern for small-data text classification:
 - a SentenceTransformer embedding body;
 - a lightweight classification head;
 - scikit-learn Logistic Regression is SetFit's recommended/default head;
-- the approach is prompt-free and supports multilingual classification.
+- the approach supports multilingual classification.
 
-We intentionally do **not** add the SetFit package to the owner environment for this bake-off. JARVIS already pins `sentence-transformers==6.0.1`, `transformers==5.16.1`, and the owner environment has `scikit-learn==1.9.0`. SetFit stable also has an open Transformers-5 compatibility issue, so installing it would unnecessarily destabilize a deliberately frozen Torch/Transformers environment. Reusing the mature SentenceTransformer + scikit-learn components directly avoids that risk.
+We intentionally do **not** add the SetFit package to the owner environment for this bake-off. JARVIS already pins `sentence-transformers==6.0.1`, `transformers==5.16.1`, and `scikit-learn==1.9.0`. SetFit 1.1.3 still has an open Transformers-5 compatibility issue. Reusing the mature SentenceTransformer + scikit-learn components directly avoids destabilizing the frozen Torch/Transformers environment.
+
+Research also reviewed newer multilingual embedding alternatives. `nomic-ai/nomic-embed-text-v2-moe` and `Alibaba-NLP/gte-multilingual-base` both require `trust_remote_code=True` in their documented SentenceTransformer paths, which conflicts with this bake-off's pinned-code/reproducibility boundary. `google/embeddinggemma-300m` is classification-capable and multilingual, but JARVIS already tested and rejected EmbeddingGemma in the accepted 4.5C retrieval line; this guard iteration therefore prioritizes the already accepted Qwen backbone rather than introducing another model family. None of those exclusions is a permanent claim about model quality.
 
 Research references:
 
@@ -29,6 +33,11 @@ Research references:
 - https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 - https://huggingface.co/intfloat/multilingual-e5-small
 - https://huggingface.co/sentence-transformers/paraphrase-multilingual-mpnet-base-v2
+- https://huggingface.co/Qwen/Qwen3-Embedding-0.6B
+- https://huggingface.co/nomic-ai/nomic-embed-text-v2-moe
+- https://huggingface.co/Alibaba-NLP/gte-multilingual-base
+- https://huggingface.co/google/embeddinggemma-300m
+- https://scikit-learn.org/stable/model_persistence.html
 
 ## Architecture under evaluation
 
@@ -89,7 +98,7 @@ Retired V4 is used only as a deny-list for exact-query overlap. V4 labels/result
 
 ## Candidates
 
-All candidates use their immutable model revision and the exact same downstream classifier.
+All candidates use an immutable model revision and the exact same downstream classifier.
 
 ### A — multilingual MiniLM
 
@@ -99,14 +108,16 @@ All candidates use their immutable model revision and the exact same downstream 
 - ~118M parameters
 - multilingual, including Hindi
 - input contract: raw query text
+- truncation: none
 
 ### B — multilingual E5 small
 
 - model: `intfloat/multilingual-e5-small`
 - revision: `fd1525a9fd15316a2d503bf26ab031a61d056e98`
 - embedding dimension: 384
-- multilingual model card currently tags 94 languages
-- input contract: prefix every classification text with `query: `, because the E5 model card explicitly recommends the query prefix when embeddings are used as features for linear-probe classification
+- multilingual model card tags 94 languages
+- input contract: prefix every classification text with `query: `, because the E5 model card recommends the query prefix when embeddings are used as features for linear-probe classification
+- truncation: none
 
 ### C — multilingual MPNet
 
@@ -116,8 +127,24 @@ All candidates use their immutable model revision and the exact same downstream 
 - ~0.3B parameters
 - heavier quality-ceiling candidate
 - input contract: raw query text
+- truncation: none
 
-The only candidate-specific preprocessing allowed is an immutable model-author documented input contract such as E5's `query: ` prefix. No task-specific prompt engineering or per-candidate template changes are allowed.
+### D — existing JARVIS Qwen3 reuse baseline
+
+- model: `Qwen/Qwen3-Embedding-0.6B`
+- revision: `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`
+- embedding dimension: **256**
+- ~0.6B parameters
+- 100+ languages
+- the model card explicitly includes text classification among supported/evaluated tasks
+- input contract: raw query text
+- truncation: `truncate_dim=256`
+
+Qwen is mandatory in this bake-off because it is already accepted and revision-pinned in JARVIS. The 256d setting deliberately tests the existing JARVIS dimensional contract instead of giving Qwen a new 1024d production shape. Qwen supports Matryoshka/user-defined dimensions from 32 to 1024.
+
+Qwen also supports custom task instructions, but this bake-off does **not** invent a classifier-specific Qwen instruction. Raw `model.encode(sentences)` is an officially supported SentenceTransformer path, and avoiding a custom prompt keeps the comparison prompt-free except where a model-author contract explicitly requires a fixed prefix (E5). If Qwen later needs instruction optimization, that would require a separate fresh development method rather than tuning this holdout.
+
+The only candidate-specific preprocessing allowed is the frozen model-author/deployment contract listed above. No per-result prompt changes, template changes, hyperparameter changes, or threshold fitting are allowed.
 
 ## Frozen classifier configuration
 
@@ -135,6 +162,25 @@ decision = argmax predict()
 ```
 
 No hyperparameter search and no threshold fitting are allowed.
+
+## Frozen measurements
+
+For every candidate the harness records:
+
+- false allows and false vetoes;
+- direct-current and comparison allow recall;
+- negation false allows;
+- English/Hindi/Hinglish allow recall;
+- per-label exact recall;
+- accuracy and eight-class macro-F1;
+- model load time;
+- holdout embedding milliseconds per query;
+- embedding dimension;
+- parameter count and parameter bytes;
+- sampled process RSS at model-load/train/holdout/fit boundaries and candidate-local sampled RSS delta;
+- per-candidate `torch.cuda.max_memory_allocated` after resetting CUDA peak statistics.
+
+Resource measurements are diagnostics, not semantic acceptance substitutes. RSS is explicitly labeled sampled rather than claimed as an exact continuous high-water mark.
 
 ## Frozen development continuation gates
 
@@ -166,6 +212,25 @@ Only candidates passing every development gate are selectable. Tie-breaking is f
 
 If no candidate passes, no production guard change is authorized.
 
+## Production artifact direction after a winner exists
+
+Do not serialize a fitted sklearn estimator with `pickle`/`joblib`. Current scikit-learn guidance states that pickle-based formats can execute arbitrary code when loaded; `skops.io` is safer but would add another runtime dependency and still couples loading to the sklearn environment.
+
+For this specific linear head, the preferred production direction is a simple data-only artifact containing:
+
+- immutable backbone model ID + revision;
+- input prefix and truncation dimension;
+- embedding dimension;
+- ordered class labels;
+- `LogisticRegression.coef_` and `intercept_` numeric arrays;
+- classifier configuration;
+- training corpus SHA-256;
+- Python/numpy/scikit-learn versions used to train;
+- training code/repository SHA;
+- artifact SHA-256.
+
+Inference can reproduce multinomial argmax directly from normalized embeddings and frozen coefficients without unpickling executable Python objects. Exact artifact format and round-trip tests are frozen only after a winner exists; no artifact is created during model selection.
+
 ## After a candidate is selected
 
 A development winner does **not** close Phase 4.5D.
@@ -173,8 +238,8 @@ A development winner does **not** close Phase 4.5D.
 Next steps are:
 
 1. freeze the selected embedding model/revision;
-2. freeze the trained classifier artifact/coefficients, class order, training-corpus hash, scikit-learn version, and artifact checksum;
-3. replace the generic NLI production guard cleanly with the selected task-specific guard;
+2. freeze the trained classifier artifact/coefficients, class order, training-corpus hash, dependency versions, training SHA and artifact checksum;
+3. replace the generic NLI production guard cleanly with the selected task-specific guard behind the existing `MemoryAnswerTypeGuard` protocol;
 4. remove/retire dead NLI production code after compatibility tests;
 5. create a completely fresh, never-exposed V5 provider-independent acceptance corpus;
 6. pass V5 and record a green closure SHA;
