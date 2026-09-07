@@ -19,6 +19,7 @@ FROZEN_PAYLOAD_SHA256: Final = (
     "3e2bd6830df3d08b3ea4ce8e045ee78cf562c228c5b0d2e5e094ffa42b6b44a3"
 )
 MAX_ANSWER_LENGTH: Final = 16
+QA_MAX_SEQUENCE_LENGTH: Final = 256
 NLI_MAX_LENGTH: Final = 256
 NLI_BATCH_SIZE: Final = 32
 
@@ -312,12 +313,77 @@ def _nli_rows(payload: dict[str, object]) -> list[dict[str, object]]:
     return rows
 
 
+def _select_qa_answer(
+    *,
+    context: str,
+    input_ids: list[int],
+    sequence_ids: list[int | None],
+    offset_mapping: list[list[int]],
+    start_logits: list[float],
+    end_logits: list[float],
+    cls_token_id: int,
+    max_answer_len: int = MAX_ANSWER_LENGTH,
+) -> tuple[str, float]:
+    size = len(input_ids)
+    if not (
+        len(sequence_ids)
+        == len(offset_mapping)
+        == len(start_logits)
+        == len(end_logits)
+        == size
+    ):
+        raise ValueError("QA selector inputs must have identical token lengths")
+
+    try:
+        cls_index = input_ids.index(cls_token_id)
+    except ValueError as exc:
+        raise RuntimeError(
+            "QA tokenizer output does not contain its CLS token"
+        ) from exc
+
+    context_indices = [
+        index
+        for index, sequence_id in enumerate(sequence_ids)
+        if sequence_id == 1 and offset_mapping[index][1] > offset_mapping[index][0]
+    ]
+    null_score = float(start_logits[cls_index] + end_logits[cls_index])
+    if not context_indices:
+        return "", null_score
+
+    best_start: int | None = None
+    best_end: int | None = None
+    best_score = float("-inf")
+    context_index_set = set(context_indices)
+
+    for start in context_indices:
+        max_end = start + max_answer_len - 1
+        for end in range(start, min(max_end, size - 1) + 1):
+            if end not in context_index_set:
+                continue
+            score = float(start_logits[start] + end_logits[end])
+            if score > best_score:
+                best_start = start
+                best_end = end
+                best_score = score
+
+    if best_start is None or best_end is None or null_score > best_score:
+        return "", null_score
+
+    start_char = int(offset_mapping[best_start][0])
+    end_char = int(offset_mapping[best_end][1])
+    if start_char < 0 or end_char <= start_char or end_char > len(context):
+        raise RuntimeError(
+            f"QA tokenizer returned invalid context offsets: {start_char}:{end_char}"
+        )
+    return context[start_char:end_char], best_score
+
+
 def _run_qa_candidate(
     candidate: dict[str, str],
     rows: list[dict[str, object]],
 ) -> dict[str, Any]:
     import torch
-    from transformers import AutoModelForQuestionAnswering, AutoTokenizer, pipeline
+    from transformers import AutoModelForQuestionAnswering, AutoTokenizer
 
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats()
@@ -339,12 +405,8 @@ def _run_qa_candidate(
     )
     model.to("cuda")
     model.eval()
-    qa = pipeline(
-        "question-answering",
-        model=model,
-        tokenizer=tokenizer,
-        device=0,
-    )
+    if tokenizer.cls_token_id is None:
+        raise RuntimeError("QA tokenizer must define a CLS token for no-answer scoring")
     torch.cuda.synchronize()
     load_seconds = time.perf_counter() - load_started
     rss_samples.append(_rss_bytes())
@@ -358,17 +420,30 @@ def _run_qa_candidate(
     predictions: list[QAPrediction] = []
     started = time.perf_counter()
     for row in rows:
-        output = qa(
-            question=str(row["question"]),
-            context=str(row["context"]),
-            handle_impossible_answer=True,
-            top_k=1,
-            max_answer_len=MAX_ANSWER_LENGTH,
+        context = str(row["context"])
+        encoded = tokenizer(
+            str(row["question"]),
+            context,
+            return_tensors="pt",
+            return_offsets_mapping=True,
+            truncation="only_second",
+            max_length=QA_MAX_SEQUENCE_LENGTH,
         )
-        if not isinstance(output, dict):
-            raise TypeError("QA pipeline returned an unexpected output type")
-        answer = str(output.get("answer", ""))
-        score = float(output.get("score", 0.0))
+        sequence_ids = list(encoded.sequence_ids(0))
+        offset_mapping = encoded.pop("offset_mapping")[0].tolist()
+        input_ids = encoded["input_ids"][0].tolist()
+        device_inputs = {name: value.to("cuda") for name, value in encoded.items()}
+        with torch.inference_mode():
+            output = model(**device_inputs)
+        answer, score = _select_qa_answer(
+            context=context,
+            input_ids=input_ids,
+            sequence_ids=sequence_ids,
+            offset_mapping=offset_mapping,
+            start_logits=output.start_logits[0].detach().float().cpu().tolist(),
+            end_logits=output.end_logits[0].detach().float().cpu().tolist(),
+            cls_token_id=int(tokenizer.cls_token_id),
+        )
         predictions.append(
             QAPrediction(
                 case_id=str(row["case_id"]),
@@ -394,8 +469,11 @@ def _run_qa_candidate(
         "revision": candidate["revision"],
         "decision_contract": {
             "task": "extractive_question_answering_with_no_answer",
-            "handle_impossible_answer": True,
-            "top_k": 1,
+            "adapter": "transformers_v5_native_qa_logits",
+            "null_candidate": "cls_start_plus_end_logit",
+            "span_candidate": "best_valid_context_start_plus_end_logit",
+            "null_wins_only_when_strictly_greater": True,
+            "max_sequence_length": QA_MAX_SEQUENCE_LENGTH,
             "max_answer_length": MAX_ANSWER_LENGTH,
             "fitted_probability_threshold": None,
             "weights": "safetensors_only",
@@ -417,7 +495,7 @@ def _run_qa_candidate(
         },
     }
 
-    del qa, model, tokenizer
+    del model, tokenizer
     gc.collect()
     torch.cuda.empty_cache()
     return result

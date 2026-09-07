@@ -86,6 +86,9 @@ def test_candidate_contracts_are_pinned_safe_and_zero_training() -> None:
         "08d6e89c7a6557f967db2e1021f7f640483400ed"
     )
 
+    assert harness.QA_MAX_SEQUENCE_LENGTH == 256
+    assert harness.MAX_ANSWER_LENGTH == 16
+
     assert harness.NLI_CANDIDATE["model_id"] == (
         "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
     )
@@ -257,3 +260,57 @@ def test_qa_selection_uses_only_passing_candidates() -> None:
     }
 
     assert harness.select_qa_candidate([result_a, result_b]) == "b"
+
+
+def test_native_qa_selector_returns_exact_context_span() -> None:
+    answer, score = harness._select_qa_answer(
+        context="Mosaic-4 enabled",
+        input_ids=[0, 10, 2, 20, 21, 2],
+        sequence_ids=[None, 0, None, 1, 1, None],
+        offset_mapping=[[0, 0], [0, 4], [0, 0], [0, 8], [9, 16], [0, 0]],
+        start_logits=[0.0, 99.0, 50.0, 5.0, 1.0, 50.0],
+        end_logits=[0.0, 99.0, 50.0, 1.0, 5.0, 50.0],
+        cls_token_id=0,
+    )
+    assert answer == "Mosaic-4 enabled"
+    assert score == 10.0
+
+
+def test_native_qa_selector_returns_null_when_cls_wins() -> None:
+    answer, score = harness._select_qa_answer(
+        context="Mosaic-4 enabled",
+        input_ids=[0, 10, 2, 20, 21, 2],
+        sequence_ids=[None, 0, None, 1, 1, None],
+        offset_mapping=[[0, 0], [0, 4], [0, 0], [0, 8], [9, 16], [0, 0]],
+        start_logits=[7.0, 99.0, 50.0, 5.0, 1.0, 50.0],
+        end_logits=[7.0, 99.0, 50.0, 1.0, 5.0, 50.0],
+        cls_token_id=0,
+    )
+    assert answer == ""
+    assert score == 14.0
+
+
+def test_native_qa_selector_ignores_non_context_logits() -> None:
+    answer, _ = harness._select_qa_answer(
+        context="Mosaic-4 enabled",
+        input_ids=[0, 10, 2, 20, 21, 2],
+        sequence_ids=[None, 0, None, 1, 1, None],
+        offset_mapping=[[0, 0], [0, 4], [0, 0], [0, 8], [9, 16], [0, 0]],
+        start_logits=[0.0, 500.0, 400.0, 6.0, 1.0, 300.0],
+        end_logits=[0.0, 500.0, 400.0, 1.0, 6.0, 300.0],
+        cls_token_id=0,
+    )
+    assert answer == "Mosaic-4 enabled"
+
+
+def test_native_qa_selector_span_wins_exact_tie_with_null() -> None:
+    answer, _ = harness._select_qa_answer(
+        context="Mosaic-4",
+        input_ids=[0, 10, 2, 20, 2],
+        sequence_ids=[None, 0, None, 1, None],
+        offset_mapping=[[0, 0], [0, 4], [0, 0], [0, 8], [0, 0]],
+        start_logits=[5.0, 0.0, 0.0, 5.0, 0.0],
+        end_logits=[5.0, 0.0, 0.0, 5.0, 0.0],
+        cls_token_id=0,
+    )
+    assert answer == "Mosaic-4"

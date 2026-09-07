@@ -6,7 +6,13 @@
 
 Phase 4.5D remains active. Phase 4.5E remains blocked.
 
-This method replaces the unexecuted custom eight-class fine-tune V3. It is frozen before any owner model result exists.
+This method replaces the unexecuted custom eight-class fine-tune V3. It was frozen before any owner model result existed.
+
+### Pre-scoring Transformers v5 compatibility amendment
+
+The first owner launch at repository SHA `f488a1b26a13f00ef78ba3239f919da77c47438a` stopped before the first QA case was scored because Transformers `5.16.1` no longer registers the legacy text `question-answering` pipeline. The environment, frozen corpus hash, first model revision, Safetensors load and CUDA path all succeeded; no output evidence file was written. Therefore the V1 corpus remains unexposed to model results.
+
+Research confirmed that Transformers v5 still supports `AutoModelForQuestionAnswering` and native `start_logits` / `end_logits` inference. V1 is amended only at the execution-adapter layer: the removed convenience pipeline is replaced with a JARVIS-local deterministic adapter over those native logits. Corpus, candidate checkpoints, gates, tie-breaks, languages and no-threshold rule are unchanged.
 
 ## Decision being tested
 
@@ -28,7 +34,7 @@ Output:
 - exact evidence span when the fact answers the question;
 - empty/no-answer when the fact is insufficient.
 
-The Hugging Face QuestionAnsweringPipeline is used with `handle_impossible_answer=True`, `top_k=1` and no JARVIS-fitted probability threshold. The model's native impossible-answer candidate competes with extractive answer spans.
+Transformers v5 native `AutoModelForQuestionAnswering` logits are used directly. Valid context spans compete with the tokenizer CLS/no-answer position. The decision compares `start_logit + end_logit` for CLS against the best valid context span; because the same start/end softmax denominators apply to every candidate, this preserves the native SQuAD-2 ranking without introducing a fitted threshold.
 
 ### Lane B — native multilingual NLI
 
@@ -64,7 +70,8 @@ Research references:
 - https://aclanthology.org/2020.tacl-1.30/
 - https://aclanthology.org/2022.naacl-main.79/
 - https://arxiv.org/abs/2206.08441
-- https://huggingface.co/docs/transformers/main_classes/pipelines#transformers.QuestionAnsweringPipeline
+- https://huggingface.co/docs/transformers/main/tasks/question_answering
+- https://github.com/huggingface/course/issues/1211
 - https://huggingface.co/deepset/xlm-roberta-base-squad2
 - https://huggingface.co/timpal0l/mdeberta-v3-base-squad2
 - https://huggingface.co/MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7
@@ -157,8 +164,11 @@ Both run in ordinary FP32, one at a time on the owner CUDA path. No quantization
 Frozen QA inference contract:
 
 ```text
-handle_impossible_answer = true
-top_k = 1
+adapter = transformers_v5_native_qa_logits
+null candidate = CLS start_logit + end_logit
+span candidate = best valid context start_logit + end_logit
+null wins only when strictly greater
+max_sequence_length = 256
 max_answer_length = 16
 fitted probability threshold = none
 trust_remote_code = false

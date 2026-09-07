@@ -193,11 +193,13 @@ Frozen fresh corpus:
 2. `timpal0l/mdeberta-v3-base-squad2`
    - revision `08d6e89c7a6557f967db2e1021f7f640483400ed`.
 
-Frozen QA contract:
+Frozen QA contract (pre-scoring Transformers-v5 execution amendment):
 
-- Hugging Face question-answering pipeline;
-- `handle_impossible_answer=True`;
-- `top_k=1`;
+- first owner launch on `f488a1b26a13f00ef78ba3239f919da77c47438a` failed before scoring because Transformers `5.16.1` removed the legacy text QA pipeline; no result file was written and the corpus remains unexposed;
+- native `AutoModelForQuestionAnswering` start/end logits;
+- deterministic CLS/no-answer vs best valid context-span comparison;
+- strict null-win rule (`null_score > best_span_score`);
+- max sequence length `256`;
 - max answer length `16`;
 - FP32;
 - Safetensors only;
