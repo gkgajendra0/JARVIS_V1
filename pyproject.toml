@@ -61,11 +61,9 @@ phase45d-task-guard = [
     "scikit-learn==1.9.0",
     "psutil==7.2.2",
 ]
-phase45d-task-guard-finetune = [
+phase45d-answerability = [
     "transformers==5.16.1",
-    "datasets==5.0.1",
-    "accelerate==1.14.0",
-    "scikit-learn==1.9.0",
+    "sentencepiece==0.2.2",
     "psutil==7.2.2",
 ]
 speaker = ["sherpa-onnx==1.13.6"]
@@ -85,7 +83,7 @@ sensor-av = [
 dev = ["pytest>=8,<10", "pytest-asyncio>=0.23,<2", "ruff==0.16.5"]
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = {"" = "src"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
