@@ -2,260 +2,58 @@
 
 ## Status
 
-**FROZEN DEVELOPMENT METHOD V3 — END-TO-END LOCAL CLASSIFIER MODEL SELECTION, NOT ACCEPTANCE**
+**SUPERSEDED BEFORE OWNER EXECUTION — NEVER RUN / NO RESULT EVIDENCE**
 
 Phase 4.5D remains active. Phase 4.5E remains blocked.
 
-This method was frozen only after Method V2 completed and failed every candidate. Method V2 is exposed/retired and is not training or scoring data for V3.
+This document is retained only as historical architecture evidence. The V3 corpus, harness, tests, temporary formatter workflow, and dedicated fine-tuning dependency group were removed before any owner GPU run. No V3 model was trained, no V3 holdout was scored, and no V3 result artifact exists.
 
-## Why V3 exists
+## Why it was superseded
 
-Method V2 tested four frozen multilingual embedding bodies plus the same fixed LogisticRegression head. Every candidate produced multiple false allows (`9` to `14`), comparison recall stayed between `0.625` and `0.75`, and the best eight-class macro-F1 was `0.809516`.
+Method V2 had correctly rejected the frozen-encoder + LogisticRegression architecture. The first reaction was to make the encoder itself task-specific by fine-tuning mmBERT/XLM-R on the same eight query classes.
 
-That result rejects the **frozen-encoder linear-probe** architecture for this release boundary. It does not justify threshold tuning or another embedding-only bake-off.
+A deeper research pass before owner execution found that this still framed the release boundary too narrowly as **query-only intent classification**. The mature problem is instead **answerability / evidence sufficiency**:
 
-The next architecture must make the semantic encoder itself task-specific.
+> Given this exact user question and this exact already-eligible canonical memory evidence, does the evidence actually contain the requested answer?
 
-## Research basis
+The relevant established lines are SQuAD 2.0 unanswerable QA, Read + Verify, TyDi QA minimal answers, GAAMA/PrimeQA boolean QA with a no-answer state, retrieval/output rails, and modern grounding verification.
 
-Two mature paths were reviewed after the V2 failure.
+The architectural distinction is load-bearing:
 
-### Proper SetFit semantics
+- retrieval asks which eligible memories are related;
+- answerability asks whether a particular memory contains the requested answer;
+- boolean NLI asks whether a proposition is entailed, contradicted, or unknown given that memory;
+- grounding verification checks whether final wording remains supported;
+- JARVIS lifecycle/security/canonical policy remains the only release authority.
 
-Current SetFit documentation describes a two-stage method:
+A query-only eight-class model cannot directly evaluate evidence sufficiency because it never sees the candidate canonical fact. Training such a model before benchmarking existing answerability components would violate the project's research-first rule.
 
-1. fine-tune the SentenceTransformer body with contrastive learning;
-2. train a lightweight classification head over the resulting embeddings.
+## Replacement direction
 
-Method V2 intentionally performed only the second idea: the embedding bodies remained frozen. Therefore Method V2 was not full SetFit training.
+The next development iteration benchmarks mature components with **zero task-specific training**:
 
-The SetFit package itself is still not introduced into JARVIS because its open Transformers-5 compatibility issue remains unresolved for the current published package line. JARVIS keeps the accepted Transformers `5.16.1` environment rather than downgrading it for SetFit.
+1. extractive SQuAD-2-style readers for open current-value questions, using their native answer-span vs no-answer decision;
+2. the already-pinned multilingual mDeBERTa NLI model in its **native premise/hypothesis entailment task** for current-value comparisons, instead of the retired zero-shot query-intent use;
+3. only after those lanes are understood, a separate modern grounding/output rail such as LettuceDetect may be benchmarked against final response wording.
 
-### Direct multilingual sequence classification
+The replacement development corpus is fresh and must not reuse retired V4 or exposed Method V2 queries for training or scoring. No probability threshold fitting is permitted on the fresh holdout.
 
-The guard is fundamentally a short-text classification task, so direct supervised encoder fine-tuning is more task-aligned than forcing a retrieval embedding model to stay frozen.
+## What remains useful from V3
 
-`jhu-clsp/mmBERT` is the selected modern primary family for this experiment:
+The old eight categories remain useful only as **diagnostic failure families** when constructing hard no-answer cases (reason, provenance, successor, related record, advice, contradiction). They are no longer the production output taxonomy or the metric being optimized.
 
-- modern multilingual encoder architecture;
-- trained on 3T+ tokens;
-- 1800+ language coverage;
-- model authors report improved classification performance over XLM-R;
-- small model: about 140M parameters;
-- base model: about 307M parameters;
-- standard Hugging Face Transformers fine-tuning path.
+## Research references
 
-`FacebookAI/xlm-roberta-base` remains the established multilingual encoder baseline so the experiment does not assume the newer family must win.
+- SQuAD 2.0: https://aclanthology.org/P18-2124/
+- Read + Verify: https://ojs.aaai.org/index.php/AAAI/article/view/4619
+- TyDi QA: https://aclanthology.org/2020.tacl-1.30/
+- Yes, No or IDK: https://aclanthology.org/2022.naacl-main.79/
+- GAAMA 2.0: https://arxiv.org/abs/2206.08441
+- Hugging Face QA pipeline: https://huggingface.co/docs/transformers/main_classes/pipelines#transformers.QuestionAnsweringPipeline
+- `deepset/xlm-roberta-base-squad2`: https://huggingface.co/deepset/xlm-roberta-base-squad2
+- `timpal0l/mdeberta-v3-base-squad2`: https://huggingface.co/timpal0l/mdeberta-v3-base-squad2
+- native multilingual NLI model already pinned by JARVIS: https://huggingface.co/MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7
 
-All selected immutable revisions expose safetensors weights, and V3 requires `use_safetensors=True` plus `trust_remote_code=False`.
+## Governance consequence
 
-Research references:
-
-- https://huggingface.co/docs/setfit/index
-- https://huggingface.co/blog/setfit
-- https://github.com/huggingface/setfit/issues/629
-- https://huggingface.co/jhu-clsp/mmBERT-small
-- https://huggingface.co/jhu-clsp/mmBERT-base
-- https://huggingface.co/FacebookAI/xlm-roberta-base
-- https://huggingface.co/docs/transformers/main/training
-- https://huggingface.co/docs/transformers/main_classes/trainer
-- https://huggingface.co/docs/transformers/v5.16.0/accelerate
-- https://pypi.org/project/datasets/5.0.1/
-- https://pypi.org/project/accelerate/1.14.0/
-
-## Architecture under evaluation
-
-```text
-query
-→ immutable multilingual pretrained encoder
-→ end-to-end supervised fine-tuning on fresh eight-class JARVIS corpus
-→ model-native sequence-classification head
-→ argmax eight-class prediction
-→ ALLOW only current_value/current_value_comparison
-→ existing deterministic JARVIS grounding / lifecycle / security / exact lookup
-```
-
-The classifier remains veto-only. It cannot create canonical truth, bypass eligibility, resurrect forgotten memory, or establish that a retrieved value is true.
-
-## Taxonomy
-
-V3 deliberately preserves the Method V2 eight-class taxonomy so this experiment isolates the representation/training architecture rather than changing both taxonomy and model simultaneously:
-
-1. `current_value`;
-2. `current_value_comparison`;
-3. `reason_explanation`;
-4. `provenance_actor`;
-5. `replacement_successor`;
-6. `related_record`;
-7. `negated_or_contradicted`;
-8. `other_or_advice`.
-
-Only the first two classes are release-eligible.
-
-## Fresh development corpus
-
-V3 uses a completely new synthetic corpus:
-
-- English, Hindi, Hinglish;
-- eight labels;
-- `384` train cases;
-- `192` never-trained-on holdout cases;
-- exact class/language balance;
-- 16 train facts and 8 disjoint holdout facts;
-- rotating train paraphrase templates;
-- separate holdout paraphrase templates;
-- zero normalized train/holdout query overlap;
-- zero exact normalized overlap with retired V4;
-- zero exact normalized overlap with all exposed Method V2 train and holdout queries.
-
-Frozen corpus source:
-
-- file: `tools/research/step4_phase45d_task_guard_finetune_v3_cases.py`;
-- Git blob SHA: `77f614d34b94e44277f4bf4bdaffa5da22989268`.
-
-The harness recomputes the Git blob identity before loading any model. It also records the deterministic payload SHA-256 in the result JSON.
-
-Retired corpora are deny-lists only. Their labels/results are not V3 training or scoring data.
-
-## Candidates
-
-### A — mmBERT small
-
-- model: `jhu-clsp/mmBERT-small`;
-- revision: `0eb3d056ec1d6333cf4e19b0966dfde342a41a3a`;
-- family: ModernBERT/mmBERT;
-- approximately 140M parameters;
-- immutable revision includes safetensors weights.
-
-### B — mmBERT base
-
-- model: `jhu-clsp/mmBERT-base`;
-- revision: `eaee9e8f76c40fd045034538248ad9d59f380aac`;
-- family: ModernBERT/mmBERT;
-- approximately 307M parameters;
-- immutable revision includes safetensors weights.
-
-### C — XLM-R base
-
-- model: `FacebookAI/xlm-roberta-base`;
-- revision: `42f548f32366559214515ec137cdd16002968bf6`;
-- family: XLM-R;
-- established massively multilingual baseline;
-- immutable revision adds safetensors weights.
-
-No generic zero-shot NLI model, retrieval embedding model, Gemini call, or OpenAI call is part of this bake-off.
-
-## Frozen training configuration
-
-Every candidate uses the same training contract:
-
-```text
-task = 8-class sequence classification
-max_length = 128
-epochs = 5
-per-device train batch = 8
-gradient accumulation = 2
-effective batch = 16
-learning rate = 2e-5
-weight decay = 0.01
-warmup ratio = 0.10
-scheduler = linear
-BF16 = true
-FP16 = false
-TF32 = false
-gradient checkpointing = true
-seed = 45
-data seed = 45
-training-time holdout evaluation = none
-early stopping = none
-hyperparameter search = none
-probability threshold = none
-release decision = argmax class only
-```
-
-The holdout is evaluated exactly once after fixed training completes. It is not used for checkpoint selection, early stopping, learning-rate choice, epoch choice, or threshold fitting.
-
-## Dependency contract
-
-New development-only optional dependency set:
-
-`phase45d-task-guard-finetune`
-
-Pinned additions:
-
-- Transformers `5.16.1` — already accepted in JARVIS;
-- Datasets `5.0.1`;
-- Accelerate `1.14.0`;
-- scikit-learn `1.9.0` for metrics;
-- psutil `7.2.2` for resource diagnostics.
-
-The owner Torch `2.13.0+cu132` / Torchvision `0.28.0+cu132` contract is not changed or reinstalled by this optional set.
-
-## Frozen measurements
-
-For each candidate V3 records:
-
-- false allows;
-- false vetoes;
-- negation false allows;
-- overall allow recall;
-- direct-current allow recall;
-- current-value-comparison allow recall;
-- English/Hindi/Hinglish allow recall;
-- per-label exact recall;
-- eight-class accuracy and macro-F1;
-- training time;
-- inference milliseconds/query;
-- model load time;
-- parameter count and parameter bytes;
-- sampled process RSS;
-- per-candidate CUDA peak allocation.
-
-Only a candidate passing every semantic gate is saved locally as a candidate artifact. Failed candidate weights are not retained by the harness. If multiple models pass, only the selected winner remains in the local artifact directory.
-
-## Frozen development gates
-
-A candidate must satisfy all simultaneously:
-
-1. zero false allows across all veto targets;
-2. zero negation false allows;
-3. overall allow recall >= `0.90`;
-4. direct-current allow recall >= `0.90`;
-5. comparison allow recall >= `0.85`;
-6. English, Hindi and Hinglish allow recall each >= `0.85`;
-7. eight-class macro-F1 >= `0.85`;
-8. argmax only, no probability threshold;
-9. zero cloud/provider calls;
-10. retired V4 and Method V2 corpora are not used for training or scoring.
-
-These remain development gates, not final acceptance gates.
-
-## Frozen tie-break
-
-Only passing candidates are selectable. Tie-break order:
-
-1. fewer false allows;
-2. fewer negation false allows;
-3. higher comparison allow recall;
-4. higher overall allow recall;
-5. higher macro-F1;
-6. lower inference milliseconds/query;
-7. fewer parameter bytes.
-
-Because passing already requires zero false allows and zero negation false allows, the first two rules preserve the safety-first contract explicitly.
-
-## Result handling
-
-If no candidate passes, V3 is retired and no production guard change is authorized. Do not tune V3's exposed holdout.
-
-If a candidate passes:
-
-1. keep the exact saved winner artifact from the owner bake-off;
-2. record its model/revision, tokenizer/config, safetensors checksums, training corpus source blob, payload SHA-256, dependency versions, repository SHA and result JSON;
-3. implement it behind the existing `MemoryAnswerTypeGuard` protocol;
-4. remove dead generic NLI production code only after compatibility tests;
-5. create a completely fresh provider-independent final acceptance corpus;
-6. pass that fresh acceptance before closing Phase 4.5D;
-7. only then unblock 4.5E.
-
-A V3 development pass alone never authorizes semantic retrieval into the Gemini conversation.
+Superseding V3 before execution does not constitute tuning against V3 evidence because there is no V3 evidence. No production guard behavior is changed by this decision. Phase 4.5D can close only after a mature-component development architecture wins fresh evidence, is implemented cleanly, and then passes a completely fresh final acceptance. Phase 4.5E remains blocked until that closure.
