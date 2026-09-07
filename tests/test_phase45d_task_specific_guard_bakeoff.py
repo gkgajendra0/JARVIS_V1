@@ -49,9 +49,7 @@ def test_task_specific_corpus_shape_balance_and_frozen_hash() -> None:
 def test_train_holdout_and_retired_v4_have_no_exact_query_overlap() -> None:
     payload = cases.build_payload()
     train = {cases.normalized_query(str(row["query"])) for row in payload["train"]}
-    holdout = {
-        cases.normalized_query(str(row["query"])) for row in payload["holdout"]
-    }
+    holdout = {cases.normalized_query(str(row["query"])) for row in payload["holdout"]}
 
     assert not train.intersection(holdout)
     harness._assert_no_v4_exact_query_overlap(payload)

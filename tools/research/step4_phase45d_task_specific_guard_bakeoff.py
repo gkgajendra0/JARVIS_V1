@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, Final
 
 import numpy as np
-
 import step4_phase45d_task_specific_guard_cases as cases
 
 OUTPUT_DEFAULT = Path(".step4-phase45d-task-specific-guard-bakeoff-v1.json")
@@ -94,7 +93,7 @@ def _assert_no_v4_exact_query_overlap(payload: dict[str, object]) -> None:
 def _rows(payload: dict[str, object], split: str) -> list[dict[str, object]]:
     raw = payload[split]
     if not isinstance(raw, list):
-        raise RuntimeError(f"{split} corpus must be a list")
+        raise TypeError(f"{split} corpus must be a list")
     return raw
 
 
@@ -169,16 +168,12 @@ def summarize_predictions(
         row for row in allow_targets if row.expected_label == "current_value"
     ]
     comparison_targets = [
-        row
-        for row in allow_targets
-        if row.expected_label == "current_value_comparison"
+        row for row in allow_targets if row.expected_label == "current_value_comparison"
     ]
     direct_allowed = [row for row in direct_targets if row.predicted_allow]
     comparison_allowed = [row for row in comparison_targets if row.predicted_allow]
     negation_false_allows = [
-        row
-        for row in false_allows
-        if row.expected_label == "negated_or_contradicted"
+        row for row in false_allows if row.expected_label == "negated_or_contradicted"
     ]
 
     by_language: dict[str, dict[str, int | float]] = {}
@@ -244,9 +239,7 @@ def summarize_predictions(
         "by_label": by_label,
         "false_allow_case_ids": [row.case_id for row in false_allows],
         "false_veto_case_ids": [row.case_id for row in false_vetoes],
-        "negation_false_allow_case_ids": [
-            row.case_id for row in negation_false_allows
-        ],
+        "negation_false_allow_case_ids": [row.case_id for row in negation_false_allows],
         "false_allows_by_expected_label": dict(
             sorted(Counter(row.expected_label for row in false_allows).items())
         ),
@@ -298,8 +291,7 @@ def _run_candidate(
     from sklearn.metrics import accuracy_score, f1_score
 
     print(
-        f"Loading {candidate['key']}: "
-        f"{candidate['model_id']}@{candidate['revision']}"
+        f"Loading {candidate['key']}: {candidate['model_id']}@{candidate['revision']}"
     )
     model = SentenceTransformer(
         str(candidate["model_id"]),

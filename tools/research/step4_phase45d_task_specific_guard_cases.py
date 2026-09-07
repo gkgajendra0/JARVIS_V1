@@ -38,29 +38,122 @@ class GuardFact:
 
 
 TRAIN_FACT_ROWS: Final = (
-    GuardFact("Orion desk", "focus profile", "फोकस प्रोफ़ाइल", "focus profile", "amber-7", "cobalt-2"),
-    GuardFact("Atlas tablet", "sync channel", "सिंक चैनल", "sync channel", "north-4", "south-9"),
-    GuardFact("Nimbus lamp", "reading preset", "रीडिंग प्रीसेट", "reading preset", "warm-3", "cool-8"),
+    GuardFact(
+        "Orion desk",
+        "focus profile",
+        "फोकस प्रोफ़ाइल",
+        "focus profile",
+        "amber-7",
+        "cobalt-2",
+    ),
+    GuardFact(
+        "Atlas tablet", "sync channel", "सिंक चैनल", "sync channel", "north-4", "south-9"
+    ),
+    GuardFact(
+        "Nimbus lamp",
+        "reading preset",
+        "रीडिंग प्रीसेट",
+        "reading preset",
+        "warm-3",
+        "cool-8",
+    ),
     GuardFact("Cedar router", "guest band", "गेस्ट बैंड", "guest band", "band-6", "band-1"),
-    GuardFact("Kite notebook", "backup lane", "बैकअप लेन", "backup lane", "lane-5", "lane-8"),
-    GuardFact("Quartz speaker", "night level", "नाइट लेवल", "night level", "level-2", "level-6"),
-    GuardFact("Harbor display", "layout mode", "लेआउट मोड", "layout mode", "grid-4", "stack-7"),
-    GuardFact("Pine console", "access zone", "एक्सेस ज़ोन", "access zone", "zone-3", "zone-9"),
-    GuardFact("Comet watch", "alert profile", "अलर्ट प्रोफ़ाइल", "alert profile", "pulse-5", "pulse-1"),
-    GuardFact("Maple hub", "upload route", "अपलोड रूट", "upload route", "route-8", "route-2"),
-    GuardFact("Silver camera", "capture preset", "कैप्चर प्रीसेट", "capture preset", "preset-6", "preset-3"),
-    GuardFact("Delta keyboard", "typing mode", "टाइपिंग मोड", "typing mode", "mode-4", "mode-7"),
+    GuardFact(
+        "Kite notebook", "backup lane", "बैकअप लेन", "backup lane", "lane-5", "lane-8"
+    ),
+    GuardFact(
+        "Quartz speaker", "night level", "नाइट लेवल", "night level", "level-2", "level-6"
+    ),
+    GuardFact(
+        "Harbor display", "layout mode", "लेआउट मोड", "layout mode", "grid-4", "stack-7"
+    ),
+    GuardFact(
+        "Pine console", "access zone", "एक्सेस ज़ोन", "access zone", "zone-3", "zone-9"
+    ),
+    GuardFact(
+        "Comet watch",
+        "alert profile",
+        "अलर्ट प्रोफ़ाइल",
+        "alert profile",
+        "pulse-5",
+        "pulse-1",
+    ),
+    GuardFact(
+        "Maple hub", "upload route", "अपलोड रूट", "upload route", "route-8", "route-2"
+    ),
+    GuardFact(
+        "Silver camera",
+        "capture preset",
+        "कैप्चर प्रीसेट",
+        "capture preset",
+        "preset-6",
+        "preset-3",
+    ),
+    GuardFact(
+        "Delta keyboard", "typing mode", "टाइपिंग मोड", "typing mode", "mode-4", "mode-7"
+    ),
 )
 
 HOLDOUT_FACT_ROWS: Final = (
-    GuardFact("Raven panel", "status profile", "स्टेटस प्रोफ़ाइल", "status profile", "echo-2", "echo-9"),
-    GuardFact("Birch terminal", "login lane", "लॉगिन लेन", "login lane", "lane-3", "lane-7"),
-    GuardFact("Lunar dock", "charging preset", "चार्जिंग प्रीसेट", "charging preset", "steady-4", "rapid-8"),
-    GuardFact("Copper sensor", "reporting mode", "रिपोर्टिंग मोड", "reporting mode", "mode-5", "mode-1"),
-    GuardFact("Falcon pad", "workspace zone", "वर्कस्पेस ज़ोन", "workspace zone", "zone-6", "zone-2"),
-    GuardFact("Moss receiver", "audio profile", "ऑडियो प्रोफ़ाइल", "audio profile", "profile-8", "profile-3"),
-    GuardFact("Indigo bridge", "transfer route", "ट्रांसफर रूट", "transfer route", "route-5", "route-1"),
-    GuardFact("Solar keypad", "unlock preset", "अनलॉक प्रीसेट", "unlock preset", "preset-7", "preset-2"),
+    GuardFact(
+        "Raven panel",
+        "status profile",
+        "स्टेटस प्रोफ़ाइल",
+        "status profile",
+        "echo-2",
+        "echo-9",
+    ),
+    GuardFact(
+        "Birch terminal", "login lane", "लॉगिन लेन", "login lane", "lane-3", "lane-7"
+    ),
+    GuardFact(
+        "Lunar dock",
+        "charging preset",
+        "चार्जिंग प्रीसेट",
+        "charging preset",
+        "steady-4",
+        "rapid-8",
+    ),
+    GuardFact(
+        "Copper sensor",
+        "reporting mode",
+        "रिपोर्टिंग मोड",
+        "reporting mode",
+        "mode-5",
+        "mode-1",
+    ),
+    GuardFact(
+        "Falcon pad",
+        "workspace zone",
+        "वर्कस्पेस ज़ोन",
+        "workspace zone",
+        "zone-6",
+        "zone-2",
+    ),
+    GuardFact(
+        "Moss receiver",
+        "audio profile",
+        "ऑडियो प्रोफ़ाइल",
+        "audio profile",
+        "profile-8",
+        "profile-3",
+    ),
+    GuardFact(
+        "Indigo bridge",
+        "transfer route",
+        "ट्रांसफर रूट",
+        "transfer route",
+        "route-5",
+        "route-1",
+    ),
+    GuardFact(
+        "Solar keypad",
+        "unlock preset",
+        "अनलॉक प्रीसेट",
+        "unlock preset",
+        "preset-7",
+        "preset-2",
+    ),
 )
 
 
@@ -359,7 +452,9 @@ def _validate_payload(payload: dict[str, object]) -> None:
     all_rows = train + holdout
     queries = [normalized_query(str(row["query"])) for row in all_rows]
     if len(set(queries)) != len(queries):
-        raise RuntimeError("task-specific guard corpus contains duplicate normalized queries")
+        raise RuntimeError(
+            "task-specific guard corpus contains duplicate normalized queries"
+        )
     train_queries = {normalized_query(str(row["query"])) for row in train}
     holdout_queries = {normalized_query(str(row["query"])) for row in holdout}
     if train_queries.intersection(holdout_queries):
