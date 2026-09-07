@@ -11,7 +11,6 @@ requires-python = ">=3.11"
 dependencies = [
     "livekit==1.1.15",
     "livekit-agents[google,openai]==1.7.1",
-    "livekit-wakeword==0.2.1",
     "openai==2.54.0",
     "google-genai==2.22.0",
     "sounddevice>=0.5,<1",
@@ -60,6 +59,7 @@ phase45d-task-guard = [
     "sentence-transformers==6.0.1",
     "transformers==5.16.1",
     "scikit-learn==1.9.0",
+    "psutil==7.2.2",
 ]
 speaker = ["sherpa-onnx==1.13.6"]
 active-speaker = [
