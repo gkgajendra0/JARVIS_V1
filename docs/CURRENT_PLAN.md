@@ -6,7 +6,7 @@
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — V4 / METHOD V2 / ANSWERABILITY V1 FAILED + RETIRED — CUSTOM FINE-TUNE V3 SUPERSEDED BEFORE EXECUTION — QUESTION-ROLE BAKE-OFF V1 FROZEN / PRE-OWNER — PHASE 4.5E BLOCKED**
+**STEP 3 COMPLETE + MERGED — STEP 4 PHASES 4.0A–4.5C COMPLETE — PHASE 4.5D ACTIVE — V4 / METHOD V2 / ANSWERABILITY V1 / QUESTION-ROLE V1 FAILED + RETIRED — CUSTOM FINE-TUNE V3 SUPERSEDED BEFORE EXECUTION — GLiClass UPSTREAM-CONTRACT RUNTIME SANITY DIAGNOSTIC PREPARED / PRE-OWNER — PHASE 4.5E BLOCKED**
 
 This file is the operational source of truth. Detailed measurements and retired experiments belong in `docs/research/`; only accepted architecture belongs in ADRs / `docs/CURRENT_ARCHITECTURE.md`.
 
@@ -112,20 +112,21 @@ Existing `MemoryQueryProposal` / `MemoryQueryPolicy` remains provider-independen
 
 Goal: safely determine **what answer role the user is requesting** and whether an already-eligible canonical current fact is allowed to answer it.
 
-The current architecture hypothesis is deliberately split:
+The retained end-state direction remains layered and fail-closed:
 
 ```text
 raw user query
     ↓
 provider structured proposal (advisory)
     AND
-local independent question-role veto
+independent semantic validation / abstention signal
     ↓ strict consensus
 JARVIS deterministic policy / lifecycle / security / grounding
     ↓
 exact canonical facet lookup
     ↓
-if comparison: downstream truth evaluator may answer YES/NO
+if comparison and answerability is already established:
+    downstream truth evaluator may answer YES/NO
     ↓
 deterministic factual composition
 ```
@@ -154,30 +155,19 @@ Owner SHA:
 
 `d9dc8cc06edd81288c6af370c0032a7f771e8b23`
 
-Every frozen-embedding + LogisticRegression candidate violated the zero-false-allow boundary:
-
-| Candidate | False allows | Allow recall | Comparison recall | Macro-F1 |
-| --- | ---: | ---: | ---: | ---: |
-| MiniLM L12 | 9 | 0.791667 | 0.625000 | 0.646962 |
-| E5-small | 11 | 0.854167 | 0.708333 | 0.726627 |
-| MPNet-base-v2 | 12 | 0.854167 | 0.750000 | 0.809516 |
-| Qwen3-Embedding 0.6B / 256d | 14 | 0.791667 | 0.625000 | 0.623784 |
-
-Do not rerun/tune Method V2.
+Every frozen-embedding + LogisticRegression candidate violated the zero-false-allow boundary. Do not rerun/tune Method V2.
 
 ### Custom eight-class fine-tune V3 — SUPERSEDED BEFORE EXECUTION
 
-The prepared mmBERT/XLM-R custom fine-tune was never owner-run. Its executable path was removed before training/scoring after deeper mature-solution research. Historical rationale remains in:
+The prepared mmBERT/XLM-R custom fine-tune was never owner-run. Its executable path was removed before training/scoring after deeper mature-solution research.
+
+Historical method:
 
 - `docs/research/STEP_4_PHASE_4_5D_TASK_GUARD_FINETUNE_V3_METHOD.md`.
 
 There is no V3 result evidence.
 
 ### Answerability Component Bake-Off V1 — FAIL / RETIRED
-
-Method:
-
-- `docs/research/STEP_4_PHASE_4_5D_ANSWERABILITY_BAKEOFF_METHOD.md`.
 
 Durable owner result:
 
@@ -191,166 +181,92 @@ Frozen corpus SHA:
 
 `3e2bd6830df3d08b3ea4ce8e045ee78cf562c228c5b0d2e5e094ffa42b6b44a3`
 
-Result:
+Key result:
 
-| Component | Unsafe release result | Answerable / comparison recall | Result |
-| --- | --- | ---: | --- |
-| XLM-R SQuAD2 | 45 unauthorized no-answer releases + 2 wrong evidence spans | 0.604167 | FAIL |
-| mDeBERTa SQuAD2 | 39 unauthorized no-answer releases + 8 wrong evidence spans | 0.718750 | FAIL |
-| native mDeBERTa NLI | 24/24 neutral/unknown cases forced to YES/NO; 0 wrong YES↔NO verdicts | 1.000000 | FAIL |
+- XLM-R SQuAD2: `45` unauthorized no-answer releases + `2` wrong evidence spans; answerable recall `0.604167`;
+- mDeBERTa SQuAD2: `39` unauthorized no-answer releases + `8` wrong evidence spans; answerable recall `0.718750`;
+- native multilingual NLI: all `24/24` neutral/unknown cases forced to YES/NO, but answerable comparison recall `1.000000` with zero wrong YES↔NO verdicts.
 
-Language QA recall also showed the multilingual-backbone limitation: mDeBERTa achieved EN `0.96875` but HI and Hinglish only `0.59375` each.
+**Diagnosis:** generic SQuAD2 readers are unsafe as evidence-release authorities. Native NLI is useful only as a downstream truth evaluator after an independent answerability gate has already established that a comparison is answerable. Do not rerun or threshold-tune this corpus.
 
-**Diagnosis:** generic SQuAD2 readers are unsafe as evidence-release authorities; native NLI is excellent at truth classification once a comparison is answerable but is unsafe as an abstention authority. V1 is exposed and retired. Do not threshold-tune or rerun it.
-
----
-
-# Active 4.5D development direction — multilingual question-role veto
-
-The next test is intentionally narrower than QA or query+document semantic sufficiency.
-
-Question being tested:
-
-> Can a mature multilingual zero-shot classifier identify the **type of answer requested by the raw user query** well enough to veto inappropriate exact-current-fact routing?
-
-This reuses the retained structured exact-facet architecture instead of adding another document reader.
-
-## Why GLiNER2.5 is not the next implementation
-
-GLiNER2.5 Multi was researched as a current schema-conditioned multilingual alternative. Its current local dependency contract requires Transformers `<5`, while JARVIS is accepted on Transformers `5.16.1`.
-
-Therefore do not:
-
-- downgrade the accepted Transformers runtime;
-- install GLiNER2 with `--no-deps` / unsupported compatibility bypasses;
-- use a third-party workaround in the memory safety boundary.
-
-GLiNER2.5 remains a future/watchlist candidate when upstream supports the accepted runtime cleanly.
-
-## Selected mature family — GLiClass Multilang
-
-`gliclass==0.1.20` explicitly supports Transformers `>=5` and Torch `>=2`.
-
-This is materially different from the prior failed GLiClass binary semantic judge:
-
-- old task: `query + memory document → RELEASE/ABSTAIN`, margin threshold calibrated on exposed data — retired;
-- new task: `raw query → one requested answer role`, native **single-label softmax argmax**, no memory document, no confidence threshold.
-
-The GLiClass implementation itself uses threshold only for multi-label mode; single-label mode always uses softmax argmax.
-
----
-
-## Question-Role Bake-Off V1 — FROZEN / PRE-OWNER
+### Question-Role Bake-Off V1 — FAIL / RETIRED
 
 Method:
 
 - `docs/research/STEP_4_PHASE_4_5D_QUESTION_ROLE_BAKEOFF_V1_METHOD.md`.
 
+Durable owner result:
+
+- `docs/research/STEP_4_PHASE_4_5D_QUESTION_ROLE_BAKEOFF_V1_RESULT.md`.
+
+Owner SHA:
+
+`bd67a91ff6dda4875ca62375c8a497d56c5ae315`
+
+Frozen corpus SHA:
+
+`bb09a6a6b7c6f9248c48f35a39e5f4f8002f678a471d4752152c6a6b26cd4c21`
+
+Owner result:
+
+| Candidate | Unsafe false approvals | False vetoes | Allow recall | Exact role accuracy | Macro-F1 | Behavior | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| GLiClass Multilang Mini | 0 | 96 | 0.000000 | 0.100000 | 0.018182 | predicted `broad_recall` for all 480 cases | FAIL |
+| GLiClass Multilang Ultra | 0 | 96 | 0.000000 | 0.100000 | 0.018182 | predicted `historical_value` for all 480 cases | FAIL |
+
+Both models had EN / HI / Hinglish allow recall `0.0`. The zero unsafe-approval count is not a safety success because neither model approved any allow case at all.
+
+**Diagnosis:** the frozen V1 formulation is unusable and permanently retired. The universal one-class collapse is pathological enough that it does not, by itself, prove GLiClass is generally incapable of multilingual intent classification.
+
+Ultra also emitted a Transformers-v5 tied-weight / missing-key warning for `model.encoder_model.encoder.embed_tokens.weight`. The same warning is an acknowledged upstream GLiClass issue; maintainers have stated that it is a warning and that the model otherwise works, so the warning alone cannot be treated as the root cause.
+
+Do not rerun Question-Role V1, alter its prompt/labels and call it the same experiment, fit thresholds on it, train on it, or score new candidates on its 480 exposed queries.
+
+---
+
+# Immediate 4.5D diagnostic — GLiClass upstream-contract runtime sanity
+
+Purpose: separate **runtime/checkpoint/pipeline compatibility** from the failed JARVIS V1 formulation before abandoning or reusing the GLiClass family.
+
+This is a tiny diagnostic, not a JARVIS benchmark and not an acceptance test.
+
 Harness:
 
-- `tools/research/step4_phase45d_question_role_cases.py`;
-- `tools/research/step4_phase45d_question_role_bakeoff.py`;
-- `tests/test_phase45d_question_role_bakeoff.py`.
+- `tools/research/step4_phase45d_gliclass_runtime_sanity_v1.py`
+- `tests/test_phase45d_gliclass_runtime_sanity_v1.py`
 
-Optional dependency group:
+It uses only public GLiClass model-card examples:
 
-- `.[phase45d-question-role]`
-- `gliclass==0.1.20`
-- `psutil==7.2.2`
+- English NASA topic classification;
+- documented English alarm-intent classification;
+- German NASA classification;
+- Arabic NASA text with English labels;
+- French government text with English economy/politics labels.
 
-The group does not pin/reinstall Torch or Transformers; the accepted owner versions must remain intact.
+It also compares individual inference against a shared-label batch made only from those public examples.
 
-### Fresh frozen corpus
+### Frozen diagnostic constraints
 
-- 8 fresh synthetic subjects/facts;
-- EN / HI / Hinglish;
-- 10 semantic answer roles;
-- 2 paraphrases per fact/language/role;
-- total `480` cases;
-- `96` allow cases;
-- `384` veto cases;
-- payload SHA-256 `bb09a6a6b7c6f9248c48f35a39e5f4f8002f678a471d4752152c6a6b26cd4c21`;
-- exact-query deny-list against Answerability V1, Method V2 train+holdout, and V4;
-- zero task-specific training;
-- zero cloud/provider calls.
+- same pinned Mini/Ultra revisions used in Question-Role V1;
+- accepted owner runtime unchanged;
+- no Question-Role V1 query text;
+- no JARVIS custom role labels;
+- no JARVIS task prompt;
+- no training;
+- no threshold fitting;
+- zero cloud/provider calls;
+- Safetensors-only / `trust_remote_code=False`;
+- separate output artifact `.step4-phase45d-gliclass-runtime-sanity-v1.json`;
+- refuses overwrite;
+- cannot authorize production, Question-Role V1 rerun, final acceptance, or Phase 4.5E.
 
-### Frozen answer roles
+### Frozen diagnostic interpretation
 
-Only these may approve the exact current-fact path:
+If the documented public examples also collapse, or shared-label batch top labels materially disagree with individual inference, reject GLiClass from the accepted runtime path.
 
-1. `current_value`
-2. `current_value_comparison`
+If the documented public examples behave normally and batch/individual behavior is consistent, treat the accepted runtime as usable and retain Question-Role V1 as a **formulation/design failure**. Do not rerun V1; research and freeze a separate next architecture/corpus.
 
-These veto it:
-
-3. `reason_explanation`
-4. `provenance_actor`
-5. `replacement_successor`
-6. `related_record`
-7. `historical_value`
-8. `external_source`
-9. `broad_recall`
-10. `advice_or_other`
-
-Positive and negated present-value comparisons are both deliberately classified as `current_value_comparison`; negation alone is not a veto.
-
-### Frozen candidates
-
-Both were frozen before any fresh-corpus owner result:
-
-1. `knowledgator/gliclass-multilang-mini`
-   - revision `0bd888b6c3ef9fca5f0a9d407bddfbbc7623486b`.
-2. `knowledgator/gliclass-multilang-ultra`
-   - revision `9d6ca10258a3bddcf05b88c89cb8a8390e87e90c`.
-
-Candidates run sequentially, Safetensors-only, `trust_remote_code=False`. If Ultra cannot fit on the accepted RTX path, record `RESOURCE_REJECTED`; do not change precision, quantize, or swap models after evidence is visible.
-
-### Frozen inference contract
-
-- `classification_type = single-label`;
-- decision = native softmax argmax;
-- fitted threshold = none;
-- few-shot examples = zero;
-- fixed task prompt and fixed descriptive role labels;
-- max length `256`;
-- batch `8`;
-- zero cloud calls.
-
-### Frozen development gates
-
-A candidate must satisfy every gate:
-
-1. **zero unsafe false approvals** from any of the 384 veto cases;
-2. **zero wrong allow modes** between direct current-value and current-value-comparison;
-3. overall exact allow-role recall >= `0.90`;
-4. exact `current_value` recall >= `0.90`;
-5. exact `current_value_comparison` recall >= `0.90`;
-6. EN allow recall >= `0.85`;
-7. HI allow recall >= `0.85`;
-8. Hinglish allow recall >= `0.85`;
-9. argmax only / no threshold;
-10. zero cloud/provider calls.
-
-Exact 10-role accuracy and macro-F1 are diagnostic only.
-
-### Development-pass meaning
-
-A passing candidate does **not** authorize production or final acceptance.
-
-It authorizes only a **fresh composite integration benchmark** using:
-
-```text
-provider structured proposal
-AND
-local question-role approval
-AND
-deterministic JARVIS policy / exact facet / security
-→ exact lookup
-```
-
-For approved comparisons only, the already-pinned native NLI may be tested downstream as YES/NO truth evaluation because V1 showed perfect answerable comparison recall with zero wrong verdicts. It must not become the abstention gate.
-
-Only after the complete composite contract is frozen and passes fresh development evidence may a never-exposed final acceptance be created.
+No conclusion about a next production guard may be made from this sanity diagnostic alone.
 
 ---
 
@@ -370,11 +286,11 @@ Do not:
 - rerun/tune Method V2;
 - resurrect the removed custom V3 fine-tune;
 - rerun or threshold-tune Answerability V1;
-- reuse any exposed V1/V2/V4 text as fresh scoring data;
-- alter Question-Role V1 prompt, labels, cases, candidate set, revisions, gates, or argmax contract after owner results and call it the same evidence;
-- fit GLiClass confidence/margin thresholds on the fresh 480 cases;
-- train/fine-tune on the fresh 480 cases;
-- add hand-written Hindi/Hinglish keyword rules;
+- rerun Question-Role V1;
+- reuse exposed V1/V2/V4/question-role case text as fresh scoring data;
+- fit GLiClass confidence/margin thresholds on the exposed 480 question-role cases;
+- train/fine-tune on the exposed 480 question-role cases;
+- add hand-written Hindi/Hinglish keyword patches;
 - downgrade Transformers for GLiNER2.5;
 - bypass GLiNER2 dependency safety with `--no-deps`;
 - swap Qwen embedding/reranker or embedding dimensions merely to fix answer-role semantics;
@@ -386,7 +302,7 @@ Do not:
 
 ## Immediate Next Action
 
-**DO NOT RUN QUESTION-ROLE V1 UNTIL THE EXACT FINAL BRANCH SHA HAS FULL GREEN CI.**
+**DO NOT RUN THE GLiClass RUNTIME SANITY DIAGNOSTIC UNTIL ITS EXACT FINAL BRANCH SHA HAS FULL GREEN CI.**
 
 Before owner execution, certify on one exact SHA:
 
@@ -394,13 +310,9 @@ Before owner execution, certify on one exact SHA:
 - full pytest;
 - Windows DPAPI;
 - Windows Hello;
-- no temporary workflows/scripts;
-- frozen corpus hash `bb09a6a6b7c6f9248c48f35a39e5f4f8002f678a471d4752152c6a6b26cd4c21`;
-- exact GLiClass model revisions above;
-- owner Torch/Torchvision/Transformers versions unchanged.
+- no temporary workflow/script artifacts;
+- diagnostic-only contract unchanged;
+- exact Mini/Ultra revisions unchanged;
+- owner Torch/Torchvision/Transformers/GLiClass versions unchanged.
 
-Only after that certification issue the one-time owner run command. Output must be written once to:
-
-`.step4-phase45d-question-role-bakeoff-v1.json`
-
-After owner evidence exists, do not rerun the experiment.
+After certification, run the runtime sanity diagnostic once. Do not rerun Question-Role V1 regardless of its result.
