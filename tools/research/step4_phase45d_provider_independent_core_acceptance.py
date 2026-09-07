@@ -157,7 +157,7 @@ def build_frozen_proposal_map() -> dict[str, MemoryQueryProposal]:
     for category in cases.ORDINARY_ABSTAIN_CATEGORIES:
         for language in cases.LANGUAGES:
             for fact in ordinary_facts:
-                query = cases._ordinary_abstain_query(  # noqa: SLF001 - frozen corpus helper
+                query = cases._ordinary_abstain_query(
                     fact=fact,
                     category=category,
                     language=language,
@@ -179,7 +179,7 @@ def build_frozen_proposal_map() -> dict[str, MemoryQueryProposal]:
         ]
         for language in cases.LANGUAGES:
             for item in items:
-                query = cases._boundary_query(  # noqa: SLF001 - frozen corpus helper
+                query = cases._boundary_query(
                     item,
                     language,
                 )
@@ -259,7 +259,7 @@ def _summarize(
     recall = len(exact_releases) / len(target_releases)
     direct_recall = len(direct_exact) / len(direct_targets)
     comparison_recall = len(comparison_exact) / len(comparison_targets)
-    precision_lower_bound = base._precision_lower_bound_all_successes(  # noqa: SLF001
+    precision_lower_bound = base._precision_lower_bound_all_successes(
         len(exact_releases),
         len(false_releases),
     )
@@ -362,16 +362,16 @@ async def _run(*, device: str) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(
         prefix="jarvis-phase45d-provider-independent-"
     ) as temp:
-        worker = base._connection_worker(Path(temp) / "acceptance.db")  # noqa: SLF001
+        worker = base._connection_worker(Path(temp) / "acceptance.db")
         lifecycle = MemoryLifecycleService(
             worker,
             clock=lambda: base.NOW,
-            assertion_id_factory=base._id_factory("core-assertion"),  # noqa: SLF001
-            operation_id_factory=base._id_factory("core-operation"),  # noqa: SLF001
+            assertion_id_factory=base._id_factory("core-assertion"),
+            operation_id_factory=base._id_factory("core-operation"),
         )
         retrieval = SemanticRetrievalService(worker)
         try:
-            assertion_to_memory = await base._populate_fresh_memory(lifecycle)  # noqa: SLF001
+            assertion_to_memory = await base._populate_fresh_memory(lifecycle)
             eligibility = RetrievalEligibility.cloud_context()
             catalog = await retrieval.eligible_facet_catalog(eligibility=eligibility)
             if len(catalog.facets) != base.EXPECTED_CLOUD_FACETS:
