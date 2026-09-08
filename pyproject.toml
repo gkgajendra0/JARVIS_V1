@@ -61,15 +61,6 @@ phase45d-task-guard = [
     "scikit-learn==1.9.0",
     "psutil==7.2.2",
 ]
-phase45d-answerability = [
-    "transformers==5.16.1",
-    "sentencepiece==0.2.2",
-    "psutil==7.2.2",
-]
-phase45d-question-role = [
-    "gliclass==0.1.20",
-    "psutil==7.2.2",
-]
 speaker = ["sherpa-onnx==1.13.6"]
 active-speaker = [
     "python_speech_features==0.6",

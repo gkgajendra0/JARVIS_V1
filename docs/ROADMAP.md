@@ -11,8 +11,8 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 | 2 | Wake, Voice Session, and Audio Robustness | CAP-002, CAP-003 | DONE |
 | 2.5 | Vision Sensor & Active Target Tracking Foundation | Camera/PTZ boundaries, local person detection/tracking, deterministic target lock, active following | DONE |
 | 3 | Identity, Graduated Trust, Authority, and Observability Foundation | CAP-004, CAP-034, CAP-035, CAP-036, CAP-037 | DONE |
-| 4 | Live Context and Personal Memory | CAP-008 through CAP-013 | ACTIVE |
-| 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | PLANNED |
+| 4 | Live Context and Personal Memory | CAP-008 through CAP-013 | DONE (BOUNDED; 4.5D+ DEFERRED) |
+| 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | PLANNED — AWAITING OWNER START |
 | 6 | Knowledge, Current Research, and Truthfulness | CAP-014 through CAP-017 | PLANNED |
 | 7 | Governed Capability Runtime + Local Files/System/Project Safe Reads | CAP-018, CAP-021, CAP-022, CAP-032 | PLANNED |
 | 8 | Notes, Tasks, Reminders, and Scheduling | CAP-027, CAP-028 | PLANNED |
@@ -78,6 +78,8 @@ REQUIREMENTS
 -> DONE
 ```
 
+A step may also close **bounded with explicit deferrals** when the owner deliberately chooses not to weaken a safety/reliability boundary and the accepted subset is independently useful. Such a closure must document the residual limitation and must not silently mark the deferred capability as working.
+
 Research for future steps is intentionally deferred until those steps become active. This keeps decisions current and avoids speculative architecture.
 
 ## Strategic Evolution Milestones
@@ -126,19 +128,29 @@ Closure evidence: `docs/research/STEP_3_CLOSURE_ACCEPTANCE.md`.
 
 ## Step 4 - Live Context and Personal Memory
 
-Goal: give JARVIS one coherent, privacy-aware context/memory owner so useful personal/project continuity survives beyond a single conversation without turning every utterance into permanent memory.
+Step 4 is **bounded complete**. The accepted outcome provides a coherent privacy-aware memory/context foundation without pretending that automatic semantic conversational recall is solved.
 
-Step 4 covers:
+Accepted through Phase 4.5C:
 
-- live session/task/project context;
-- durable semantic facts/preferences/rules;
-- episodic events/milestones;
-- reflection and memory-candidate generation;
-- provenance, confidence, correction, supersession, and forgetting;
-- retrieval of relevant personal/project memory;
-- transient emotional interaction context that does not become permanent identity labeling by default.
+- bounded live session/task context;
+- encrypted canonical durable facts/preferences/rules with provenance and temporal lifecycle;
+- governed explicit remember/inspect/correct/forget;
+- correction, supersession, and physical forgetting;
+- structured memory-candidate generation with session-local quarantine and no implicit durable admission;
+- encrypted derived embedding lifecycle;
+- FTS5 + Qwen dense first-stage retrieval with RRF;
+- Qwen reranking over already-eligible canonical records;
+- deterministic security/sensitivity/lifecycle boundaries ahead of learned ranking.
 
-Technology is **not selected yet**. Step 4 begins with requirements recovery and current-2026 technology research. Models may propose memory candidates but may not directly mutate canonical durable memory.
+Deliberately deferred:
+
+- Phase 4.5D semantic answerability/release authority;
+- Phase 4.5E automatic semantic memory injection into normal conversation;
+- remaining unstarted Step-4 extensions.
+
+Multiple frozen research-backed 4.5D approaches failed the required zero-unsafe-release / multilingual behavior gates. The owner chose a fail-closed bounded closure rather than lowering those gates. Retrieval infrastructure remains accepted but cannot automatically establish that a memory is appropriate evidence for an arbitrary question.
+
+Closure evidence: `docs/research/STEP_4_PHASE_4_5D_DEFERRED_CLOSURE.md`.
 
 ## Final Target - Personal Intelligence Runtime
 

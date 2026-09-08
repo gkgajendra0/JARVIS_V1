@@ -2,9 +2,9 @@
 
 ## Status
 
-**STEP 3 COMPLETE + MERGED. STEP 4 MEMORY/CONTEXT ARCHITECTURE IS APPROVED; PHASES 4.0A–4.4 ARE ACCEPTED. PHASE 4.5 SEMANTIC RETRIEVAL IS THE NEXT ACTIVE BOUNDARY. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 REMAINS DISABLED.**
+**STEP 3 COMPLETE + MERGED. STEP 4 IS CLOSED AS A BOUNDED ACCEPTED FOUNDATION THROUGH PHASE 4.5C. PHASE 4.5D SEMANTIC RELEASE/ANSWERABILITY AND PHASE 4.5E AUTOMATIC CONVERSATIONAL SEMANTIC MEMORY INJECTION ARE DEFERRED / NOT ACCEPTED. STEP 5 IS PLANNED BUT NOT STARTED. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 REMAINS DISABLED.**
 
-This file describes architecture that actually exists and has passed the normal acceptance lifecycle. Detailed experiments/evidence belong in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; durable decisions belong in `docs/decisions/`.
+This file describes architecture that actually exists and has passed the accepted lifecycle. Detailed experiments/evidence belong in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; durable decisions belong in `docs/decisions/`.
 
 ---
 
@@ -54,8 +54,17 @@ accepted USER turns
         |     -> physical disposal on session close
         |     X no durable admission
         |
+        +-> Phase-4.5A–4.5C derived retrieval foundation [ACCEPTED]
+        |     -> eligible canonical records only
+        |     -> FTS5 lexical rank + Qwen dense rank
+        |     -> equal-weight RRF
+        |     -> Qwen reranker
+        |     X does not establish truth
+        |     X not automatically released to Gemini conversation
+        |
         +-> ContextAssembler
               -> bounded evidence-rich provider context
+              -> no automatic 4.5D/4.5E semantic-memory release
 ```
 
 Permanent rules:
@@ -66,9 +75,12 @@ Permanent rules:
 - `ContextAssembler` is the sole Step-4 model-context release owner;
 - production JARVIS has exactly one active cloud-AI provider/account at a time;
 - production subsystems may use capability-specific models inside that provider family but may not independently select a second cloud-AI provider;
-- implicit memory candidates have no durable authority unless a later separately measured policy is explicitly approved.
+- local model/checkpoint inference does not gain canonical truth or authority merely because it is local;
+- retrieval ranks already-eligible canonical records and cannot establish, modify, resurrect, or forget truth;
+- implicit memory candidates have no durable authority;
+- automatic semantic memory release remains disabled until a future separately accepted boundary exists.
 
-Decision: ADR-015.
+Decision: ADR-015 governs cloud-provider ownership.
 
 ---
 
@@ -91,7 +103,7 @@ Provider-specific SDKs remain confined to narrow adapters. `JARVIS_REALTIME_PROV
 
 Production never silently falls back to another cloud-AI provider when the active provider lacks a capability.
 
-Local model/checkpoint downloads and local inference are outside ADR-015.
+Local model/checkpoint downloads and local inference are outside ADR-015 but remain bounded by JARVIS deterministic authority and truth rules.
 
 ---
 
@@ -107,7 +119,7 @@ Windows environment for the active provider secret
         -> jarvis-voice
 ```
 
-Accepted machine roles:
+Accepted machine roles include:
 
 - Pocket3 microphone selected by stable Windows WASAPI identity;
 - NVIDIA `24'TV` conversation output at 48 kHz;
@@ -121,7 +133,7 @@ Accepted machine roles:
 
 API keys remain outside normal machine-profile state. Startup preflight checks only the credential required by the selected active provider.
 
-The accepted Phase-4.4 owner run also proved fail-closed hardware behavior: when Pocket3 was absent from Windows enumeration, startup stopped instead of falling back to a random microphone. After Pocket3 returned in Webcam mode, the stable selector resolved correctly and normal production startup resumed.
+Fail-closed hardware behavior remains accepted: if the configured Pocket3 device is absent, startup does not silently choose a random microphone.
 
 ---
 
@@ -199,7 +211,9 @@ Accepted trust vocabulary:
 
 ---
 
-## Step 4 accepted context/memory ownership
+# Step 4 accepted bounded architecture
+
+## Ownership model
 
 ```text
 ConversationSession
@@ -224,7 +238,10 @@ FTS5
     = derived/rebuildable lexical index
 
 MemoryCandidateSessionRuntime
-    = non-durable semantic shadow only
+    = non-durable semantic shadow/quarantine
+
+Derived vector index / retrieval stack
+    = rebuildable ranking data over already-eligible canonical records
 ```
 
 Provider history/caches are never canonical JARVIS memory.
@@ -235,17 +252,17 @@ Accepted turns carry stable JARVIS `session_id`, `turn_id`, and aware UTC `accep
 
 ### LiveContext
 
-Accepted Phase 4.2 runtime maintains bounded in-memory accepted-turn tail, active goal/topic/entities/unresolved work/interaction state, monotonic TTL, and no automatic durable dump. Session disposal does not persist raw conversation state.
+The accepted runtime maintains bounded in-memory accepted-turn tail, active goal/topic/entities/unresolved work/interaction state, monotonic TTL, and no automatic durable dump. Session disposal does not persist raw conversation state.
 
 ### ContextAssembler
 
 `ContextAssembler` applies deterministic precedence, sensitivity release filtering, strict local budget, and immutable JARVIS provenance. It is the sole Step-4 owner of context released toward realtime providers.
 
-Gemini 3.1 realtime mid-session chat-context forwarding remains unsupported/fail-closed in the accepted LiveKit adapter; no automatic provider-history mutation is enabled.
+Automatic semantic-memory retrieval results from the 4.5A–4.5C foundation are **not** released through `ContextAssembler` merely because they can be ranked.
 
 ---
 
-## Step 4 canonical encrypted memory kernel
+## Canonical encrypted memory kernel — ACCEPTED
 
 ```text
 MemoryService
@@ -264,7 +281,7 @@ Accepted storage/security properties:
 - Windows DPAPI user-scope protection + purpose binding;
 - no plaintext key file;
 - no plaintext SQLite fallback when memory is enabled;
-- physical forget removes canonical + derived FTS data;
+- physical forget removes canonical and derived data;
 - exact current queries are deterministic;
 - database/key material lives under the approved local machine boundary, normally `%LOCALAPPDATA%\JARVIS\memory.db` plus protected key material.
 
@@ -294,7 +311,7 @@ latest canonical accepted USER turn
  -> encrypted canonical lifecycle
 ```
 
-Accepted behavior:
+Accepted invariants include:
 
 - latest canonical USER turn must authorize the matching operation;
 - model-proposed predicate/value must be grounded in that turn;
@@ -303,20 +320,12 @@ Accepted behavior:
 - source/store sensitivity must agree;
 - `local_only` values are not released through provider-facing inspect;
 - mutation results do not echo stored values;
-- mutating tools disallow interruption during durable execution;
 - exact zero/ambiguous targets fail closed;
-- spoken-number predicate normalization uses pinned `number-parser==0.3.2`;
-- no fuzzy/semantic target selection exists yet;
-- implicit ordinary statements are not durably admitted;
-- provider history is not used as canonical memory.
-
-Real owner-PC acceptance proved remember, cross-process recall, correction, corrected cross-process recall, physical forget, cross-process absence, implicit-write rejection, and synthetic credential rejection.
+- no implicit ordinary statement becomes durable memory.
 
 ---
 
 ## Phase 4.4 candidate extraction / quarantine — ACCEPTED
-
-Accepted boundary:
 
 ```text
 exact accepted canonical USER turn
@@ -333,42 +342,92 @@ exact accepted canonical USER turn
 Accepted invariants:
 
 - extraction runs off the conversation response path;
-- exact accepted turn object is used; no asynchronous latest-turn race;
-- non-USER sources do not enter the personal-memory extractor path;
-- explicit Phase-4.3 memory operations remain on their governed path;
+- exact accepted USER turn object is used;
 - provider/model proposes semantic evidence only;
 - JARVIS owns provenance and authority metadata;
 - no confidence threshold grants truth;
 - no candidate writes `MemoryService`, SQLCipher, FTS, or embeddings;
 - no implicit durable admission exists;
 - quarantine is physically discarded with the session;
-- ordinary personal facts do not invoke explicit `remember_memory` after model-facing routing hardening;
-- ordinary personal facts do not expose candidate/quarantine mechanics or ask for memory confirmation;
 - extraction uses the same active cloud-AI provider selected for JARVIS production.
 
-Measured Gemini 3.5 Flash-Lite corpus result:
+Detailed measured evidence remains in `docs/research/STEP_4_PHASE_4_4_*`.
 
-- 14/14 schema-valid;
-- 100% intent/type/durable core exact;
-- zero false durable proposals;
-- zero misses;
-- English/Hindi/Hinglish accepted;
-- p50 ~1.636 s, p95/max ~2.415 s.
+---
 
-Real owner-PC production acceptance proved:
+## Phase 4.5A–4.5C derived semantic retrieval foundation — ACCEPTED
 
-- implicit fact -> `outcome=quarantined`, `durable_admission=False`;
-- session close -> `disposed_candidates=1`, `quarantine_disposed=True`;
-- fresh explicit memory query -> Phase-4.4 skipped, Phase-4.3 exact lookup miss;
-- no cross-session resurrection of the synthetic value;
-- wake/Pocket3/Gemini/vision/return-to-wake remained functional;
-- CAM++/LR-ASD/prototype/authority behavior remained unchanged.
+The accepted derived stack operates only over records that have already passed canonical lifecycle/security/sensitivity eligibility.
 
-Evidence:
+### Embedding
 
-- `docs/research/STEP_4_PHASE_4_4_GEMINI_MODEL_SELECTION.md`;
-- `docs/research/STEP_4_PHASE_4_4_OWNER_PC_ACCEPTANCE.md`;
-- `docs/research/STEP_4_PHASE_4_4_IMPLEMENTATION_RESULT.md`.
+`Qwen/Qwen3-Embedding-0.6B`
+
+- revision `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`;
+- normalized 256-dimensional embedding contract;
+- exact local cosine comparison;
+- derived vectors remain rebuildable and non-canonical.
+
+### First-stage retrieval
+
+```text
+eligible canonical records
+       +-> SQLite FTS5 lexical rank
+       +-> Qwen dense rank
+       -> equal-weight reciprocal-rank fusion (k=60)
+```
+
+### Reranking
+
+`Qwen/Qwen3-Reranker-0.6B`
+
+- revision `e61197ed45024b0ed8a2d74b80b4d909f1255473`;
+- BF16 accepted owner path;
+- deterministic tie handling.
+
+Accepted owner stack:
+
+- Torch `2.13.0+cu132`;
+- Torchvision `0.28.0+cu132`;
+- Transformers `5.16.1`;
+- SentenceTransformers `6.0.1`;
+- NVIDIA GeForce RTX 5060 Ti 8 GB.
+
+This stack answers **which eligible records are related/rank highly**. It does not answer whether a record is semantically sufficient or appropriate for the exact user question.
+
+---
+
+## Phase 4.5D semantic release authority — DEFERRED / NOT ACCEPTED
+
+The unresolved boundary is:
+
+```text
+user question
+ + candidate canonical memory
+ -> determine whether this exact fact may answer this requested semantic role
+ -> release or abstain
+```
+
+Research and owner evidence showed that the tested generic QA, NLI-abstention, frozen-embedding classifier, and zero-shot question-role approaches did not meet the zero-unsafe-release / multilingual recall requirements.
+
+Therefore:
+
+- no 4.5D learned guard is production-selected;
+- no confidence threshold is fitted on exposed failure corpora;
+- no safety gate is weakened;
+- no automatic semantic release is enabled;
+- exact retired evidence remains documented under `docs/research/`;
+- closure rationale is `docs/research/STEP_4_PHASE_4_5D_DEFERRED_CLOSURE.md`.
+
+Native multilingual NLI evidence may be reconsidered in a future architecture only as a downstream YES/NO truth evaluator **after** answerability has been established independently; it is not an abstention authority.
+
+---
+
+## Phase 4.5E and remaining Step-4 extensions — DEFERRED
+
+Normal conversational semantic-memory injection is not accepted. The presence of the 4.5A–4.5C retrieval stack does not authorize provider-facing injection.
+
+The remaining unstarted Step-4 extensions are deferred with the bounded closure so later roadmap steps can proceed without pretending the unresolved semantic release boundary is solved.
 
 ---
 
@@ -385,18 +444,17 @@ Evidence:
 
 ---
 
-## Next unaccepted architecture
+## Explicitly not accepted / deferred
 
-The following remain future Step-4 work and are not current accepted production behavior:
+The following are not current production behavior:
 
-- Phase 4.5 semantic embedding retrieval/reranking and automatic semantic context selection;
-- semantic abstention calibration;
+- automatic semantic memory release into normal Gemini conversation;
+- a production 4.5D answerability/semantic-role guard;
 - implicit durable candidate admission;
-- deterministic canonical subject/predicate normalization for any future implicit admission;
-- episodic/reflection learning;
+- autonomous episodic/reflection learning;
 - production self-knowledge registry/aggregation;
 - portable memory disaster recovery/export;
 - automatic provider chat-history synchronization;
 - autonomous diagnosis/repair/self-modification.
 
-Phase 4.5 must preserve all existing authority, sensitivity, lifecycle and provider boundaries. Retrieval may rank eligible canonical records; it may not establish or mutate truth.
+Any future reopening of semantic conversational memory must preserve all accepted authority, sensitivity, lifecycle, provider, and canonical-truth boundaries and must use fresh never-exposed evidence.
