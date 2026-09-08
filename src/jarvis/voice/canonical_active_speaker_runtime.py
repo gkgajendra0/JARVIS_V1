@@ -13,8 +13,10 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from livekit.agents import AgentStateChangedEvent, UserStateChangedEvent
+
 from jarvis.config import JarvisConfig
-from jarvis.conversation import ConversationSession
+from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_shadow import EnrolledSpeakerShadowObserver
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
@@ -80,10 +82,69 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
     ) -> None:
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
         self._session_conversation: ConversationSession | None = None
+        self._user_is_speaking = False
+        self._session_ready_for_inactivity = False
 
         def capture_session(config: JarvisConfig):
             session, bridge = original_session_factory(config)
             self._session_conversation = bridge.conversation
+            self._user_is_speaking = False
+            self._session_ready_for_inactivity = False
+
+            def track_agent_state(event: AgentStateChangedEvent) -> None:
+                LOGGER.info(
+                    "Voice agent state changed: %s -> %s",
+                    event.old_state,
+                    event.new_state,
+                )
+                if self._session_ready_for_inactivity:
+                    return
+                if event.new_state != "listening":
+                    return
+
+                # VoiceRuntimeController historically arms the first-request timeout
+                # before await session.start(). That lets provider/VAD startup consume
+                # the user's entire response window. The first real LiveKit listening
+                # state is the boundary at which inactivity timing may begin.
+                self._session_ready_for_inactivity = True
+                if self._user_is_speaking:
+                    self._cancel_timeout()
+                    return
+                self._arm_timeout(config.initial_request_timeout_seconds)
+
+            def track_user_activity(event: UserStateChangedEvent) -> None:
+                LOGGER.info(
+                    "Voice user state changed: %s -> %s",
+                    event.old_state,
+                    event.new_state,
+                )
+                if event.new_state == "speaking":
+                    self._user_is_speaking = True
+                    # User activity is the opposite of inactivity. Cancel any initial
+                    # or follow-up shutdown timer for as long as local VAD sees speech.
+                    self._cancel_timeout()
+                    return
+                if event.new_state != "listening":
+                    return
+
+                self._user_is_speaking = False
+                if not self._session_ready_for_inactivity:
+                    return
+                has_user_turn = any(
+                    turn.role is ConversationRole.USER
+                    for turn in bridge.conversation.turns
+                )
+                timeout = (
+                    config.follow_up_timeout_seconds
+                    if has_user_turn
+                    else config.initial_request_timeout_seconds
+                )
+                self._arm_timeout(timeout)
+
+            # Local VAD is activity evidence only. Realtime Gemini/OpenAI remain the
+            # turn-completion authority configured in livekit_session.py.
+            session.on("agent_state_changed", track_agent_state)
+            session.on("user_state_changed", track_user_activity)
             return session, bridge
 
         super().__init__(*args, session_factory=capture_session, **kwargs)
@@ -103,6 +164,40 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 memory_query_coordinator=memory_query_coordinator,
                 research_service=research_service,
             )
+
+    def _arm_timeout(self, seconds: float) -> None:
+        """Arm inactivity shutdown only after startup and only while user is silent."""
+
+        if not self._session_ready_for_inactivity or self._user_is_speaking:
+            self._cancel_timeout()
+            return
+
+        self._cancel_timeout()
+        active_end = self._active_end
+        if active_end is None:
+            return
+
+        def expire_inactivity() -> None:
+            LOGGER.info(
+                "Voice session inactivity timeout expired | seconds=%.2f | "
+                "user_speaking=%s | canonical_user_turns=%s",
+                seconds,
+                self._user_is_speaking,
+                (
+                    sum(
+                        turn.role is ConversationRole.USER
+                        for turn in self._session_conversation.turns
+                    )
+                    if self._session_conversation is not None
+                    else 0
+                ),
+            )
+            active_end.set()
+
+        self._timeout_handle = asyncio.get_running_loop().call_later(
+            seconds,
+            expire_inactivity,
+        )
 
     async def run(self) -> None:
         memory_runtime = self._memory_runtime
@@ -127,6 +222,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         try:
             await super().run()
         finally:
+            self._session_ready_for_inactivity = False
+            self._user_is_speaking = False
             self._session_conversation = None
             if self._research_service is not None:
                 await self._research_service.close()

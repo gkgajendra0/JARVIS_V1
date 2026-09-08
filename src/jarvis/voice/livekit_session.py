@@ -103,7 +103,7 @@ class LiveKitConversationBridge:
 
     def add_close_observer(self, observer: ConversationCloseObserver) -> None:
         if not callable(observer):
-            raise TypeError("conversation-close observer must be callable")
+            raise TypeError("close observer must be callable")
         self._close_observers.append(observer)
 
     def _notify_accepted_turn(self, turn: ConversationTurn) -> None:
@@ -174,9 +174,13 @@ def create_voice_session(
 ) -> tuple[AgentSession, LiveKitConversationBridge]:
     conversation = ConversationSession()
     live_context = LiveContext(max_recent_turns=config.live_context_recent_turns)
+    # Do not pass vad=None here. LiveKit auto-provisions its bundled local Silero VAD
+    # when the argument is omitted. JARVIS uses that VAD only for local user-activity
+    # state (speaking/listening) so inactivity timers cannot expire during continuous
+    # speech. Realtime Gemini/OpenAI still own actual turn completion through their
+    # provider-native server-side turn detection.
     livekit_session = AgentSession(
         llm=_create_realtime_model(config),
-        vad=None,
         turn_handling=TurnHandlingOptions(
             turn_detection=None,
             interruption={"enabled": True},
