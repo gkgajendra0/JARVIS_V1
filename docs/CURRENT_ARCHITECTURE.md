@@ -2,7 +2,7 @@
 
 ## Status
 
-**STEP 3 COMPLETE + MERGED. STEP 4 IS BOUNDED COMPLETE. PHASES 4.0A–4.5C ARE ACCEPTED, AND THE OWNER-AUTHORIZED PROVIDER-ASSISTED 4.5D `recall_memory` FALLBACK IS ACCEPTED. THE ORIGINAL STRICT INDEPENDENT 4.5D SEMANTIC VERIFIER REMAINS DEFERRED / UNRESOLVED. PHASE 4.5E AUTOMATIC CONVERSATIONAL SEMANTIC-MEMORY INJECTION REMAINS DEFERRED. STEP 5 IS PLANNED BUT NOT STARTED. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 REMAINS DISABLED.**
+**STEP 3 COMPLETE + MERGED. STEP 4 IS BOUNDED COMPLETE. PHASES 4.0A–4.5C ARE ACCEPTED, AND THE OWNER-AUTHORIZED PROVIDER-ASSISTED 4.5D `recall_memory` FALLBACK IS ACCEPTED. THE ORIGINAL STRICT INDEPENDENT 4.5D SEMANTIC VERIFIER REMAINS DEFERRED / UNRESOLVED. PHASE 4.5E AUTOMATIC CONVERSATIONAL SEMANTIC-MEMORY INJECTION REMAINS DEFERRED. STEP 5 IS BOUNDED COMPLETE WITH MINIMAL PROVIDER-FAILURE DIAGNOSIS + WINDOWS-LOCAL TRUTHFUL STATUS SPEECH ACCEPTED; FULL LOCAL/OFFLINE CONVERSATION REMAINS DEFERRED. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 REMAINS DISABLED.**
 
 This file describes architecture that actually exists and has passed the accepted lifecycle. Detailed experiments/evidence belong in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; durable decisions belong in `docs/decisions/`.
 
@@ -90,7 +90,9 @@ Permanent rules:
 - implicit memory candidates have no durable authority;
 - the accepted provider-assisted `recall_memory` tool is a bounded explicit tool path, not automatic context injection;
 - automatic semantic memory injection through `ContextAssembler` remains disabled;
-- provider failure on semantic recall fails closed to abstention and never silently switches cloud providers.
+- provider failure on semantic recall fails closed to abstention and never silently switches cloud providers;
+- unrecoverable realtime-provider failures are diagnosed by JARVIS-owned deterministic policy, not by an LLM prompt;
+- a terminal realtime failure may produce a fixed Windows-local status announcement before the failed session closes, without changing canonical conversation/memory/identity/authority ownership.
 
 Decision: ADR-015 governs cloud-provider ownership.
 
@@ -117,6 +119,60 @@ Provider-specific SDKs remain confined to narrow adapters. `JARVIS_REALTIME_PROV
 Production never silently falls back to another cloud-AI provider when the active provider lacks a capability or hits a quota/rate limit.
 
 Local model/checkpoint downloads and local inference are outside ADR-015 but remain bounded by JARVIS deterministic authority and truth rules.
+
+---
+
+## Step 5 bounded minimal provider resilience — ACCEPTED
+
+The currently accepted Step-5 scope does **not** implement a local conversational brain. It adds a deterministic failure boundary around the existing realtime-provider session so cloud failure becomes diagnosable and truthful rather than opaque.
+
+```text
+LiveKit realtime ErrorEvent
+        |
+        v
+JARVIS classify_provider_failure()
+        |
+        +-> quota_exhausted
+        +-> rate_limited
+        +-> authentication_failed / permission_denied
+        +-> model_unavailable / request_rejected
+        +-> provider_server_error / service_unavailable
+        +-> timeout / connection_lost / unknown
+        |
+        v
+ProviderResilienceState = DEGRADED
+        |
+        v
+WindowsLocalStatusSpeech
+(System.Speech -> temporary mono PCM WAV)
+        |
+        v
+existing JARVIS selected AudioOutput
+        |
+        v
+explicit failed AgentSession close
+        |
+        v
+existing VoiceRuntimeController returns toward wake/idle
+```
+
+Accepted properties:
+
+- terminal failure classification is bounded deterministic JARVIS code;
+- recoverable realtime errors remain recoverable and do not trigger the terminal announcement path;
+- raw provider payloads are not copied into spoken messages or normal bounded status logs;
+- status speech does not depend on Gemini/OpenAI TTS and therefore remains available when that provider conversation path is dead;
+- the local speaker path reuses the existing selected JARVIS output rather than opening an unrelated production microphone/conversation owner;
+- only the failed session is closed; canonical memory, identity, authority, and durable truth ownership are unchanged;
+- no second cloud provider is selected automatically;
+- no local LLM, local STT, or local conversational TTS is accepted;
+- a subsequent healthy realtime agent state returns `ProviderResilienceState` to healthy.
+
+Owner-machine acceptance used the configured `24'TV (NVIDIA High Definition Audio) @ 48000 Hz` endpoint. The synthetic quota-exhaustion smoke returned `STEP5_SMOKE_STATUS: PASS`, and the owner explicitly confirmed hearing the fixed local status message.
+
+Acceptance evidence: `docs/research/STEP_5_MINIMAL_PROVIDER_RESILIENCE_ACCEPTANCE.md`.
+
+Full local/offline survival research remains preserved but unimplemented in `docs/research/STEP_5_RESILIENCE_RESEARCH_AND_ARCHITECTURE_PROPOSAL.md`.
 
 ---
 
@@ -148,6 +204,8 @@ Accepted machine roles include:
 API keys remain outside normal machine-profile state. Startup preflight checks only the credential required by the selected active provider.
 
 Fail-closed hardware behavior remains accepted: if the configured Pocket3 device is absent, startup does not silently choose a random microphone.
+
+The bounded Step-5 closure does not yet allow startup without valid active-provider credentials, because no local conversational intelligence stack has been accepted.
 
 ---
 
@@ -483,6 +541,7 @@ The remaining unstarted Step-4 extensions are deferred with the bounded closure 
 - successful memory mutations log bounded operation metadata rather than values;
 - candidate shadow logs bounded outcomes/reasons/counts rather than candidate values;
 - semantic recall logs release/abstain metadata and predicate identifiers, not arbitrary provider payload archives;
+- Step-5 terminal provider failures log bounded provider/kind/status/retryability metadata, not arbitrary raw provider payload archives;
 - diagnostic model outputs cannot silently change authority;
 - failures and insufficient evidence remain explicit.
 
@@ -499,6 +558,10 @@ The following are not current production behavior:
 - production self-knowledge registry/aggregation;
 - portable memory disaster recovery/export;
 - automatic provider chat-history synchronization;
+- full local/offline conversational LLM fallback;
+- local/offline STT and conversational TTS;
+- automatic cloud-to-local or cloud-to-cloud provider failover;
+- startup without cloud credentials based on a validated local intelligence stack;
 - autonomous diagnosis/repair/self-modification.
 
 Any future replacement of the bounded provider-assisted recall gate must preserve all accepted authority, sensitivity, lifecycle, provider, and canonical-truth boundaries and must not reuse retired exposed corpora for fresh model tuning/scoring.

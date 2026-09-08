@@ -12,8 +12,8 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 | 2.5 | Vision Sensor & Active Target Tracking Foundation | Camera/PTZ boundaries, local person detection/tracking, deterministic target lock, active following | DONE |
 | 3 | Identity, Graduated Trust, Authority, and Observability Foundation | CAP-004, CAP-034, CAP-035, CAP-036, CAP-037 | DONE |
 | 4 | Live Context and Personal Memory | CAP-008 through CAP-013 | DONE (BOUNDED; provider-assisted 4.5D recall accepted; strict independent verifier + 4.5E deferred) |
-| 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | ACTIVE — REQUIREMENTS/RESEARCH COMPLETE; ARCHITECTURE PROPOSED; OWNER APPROVAL REQUIRED |
-| 6 | Knowledge, Current Research, and Truthfulness | CAP-014 through CAP-017 | PLANNED |
+| 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | DONE (BOUNDED; minimal provider-failure diagnosis + local truthful status accepted; full local/offline stack deferred) |
+| 6 | Knowledge, Current Research, and Truthfulness | CAP-014 through CAP-017 | ACTIVE — REQUIREMENTS / RESEARCH NEXT |
 | 7 | Governed Capability Runtime + Local Files/System/Project Safe Reads | CAP-018, CAP-021, CAP-022, CAP-032 | PLANNED |
 | 8 | Notes, Tasks, Reminders, and Scheduling | CAP-027, CAP-028 | PLANNED |
 | 9 | Computer, Application, and Device Control | CAP-023, CAP-024 | PLANNED |
@@ -171,18 +171,42 @@ Accepted fallback evidence: `docs/research/STEP_4_PHASE_4_5D_PROVIDER_ASSISTED_F
 
 ## Step 5 - Local/Offline Survival and Provider Resilience
 
-Step 5 is now the active roadmap slice after explicit owner authorization to move beyond the deliberately deferred Phase-4.5E problem.
+Step 5 is **bounded complete**.
 
-Requirements and current-technology research are complete, and a bounded architecture has been proposed for owner approval before implementation. The intended sequence is:
+The accepted subset is the minimal resilience foundation needed now:
 
-- first establish deterministic provider-health/resilience state and controlled handoff contracts around the existing canonical JARVIS conversation/session owners;
-- then benchmark a bounded local conversational fallback on the owner Windows/RTX machine;
-- then add full network-offline STT/TTS only if the measured local stack is useful and resource-safe;
-- consider cloud-to-cloud failover only after the local-survival boundary exists and only if it remains valuable.
+- JARVIS deterministically classifies terminal realtime-provider failures into bounded reason classes such as quota exhaustion, rate limiting, auth/permission errors, server/service errors, timeouts, connection loss, and unknown failure;
+- provider health becomes an explicit degraded state rather than an opaque crash;
+- terminal failures are announced with a fixed JARVIS-owned Windows-local `System.Speech` path that does not depend on the failed Gemini/OpenAI TTS service;
+- the local PCM announcement is played through the existing selected JARVIS output;
+- the failed session closes explicitly and the existing outer voice lifecycle returns toward wake/idle;
+- a later healthy realtime session marks provider health recovered;
+- canonical conversation, memory, identity, and authority ownership are not duplicated;
+- no second cloud provider is silently selected.
 
-Step 5 must not rewrite the accepted LiveKit/audio foundation, create a duplicate provider router, or claim cloud capability parity while operating in a reduced local mode.
+Owner-machine acceptance on 2026-09-08 passed through the configured `24'TV (NVIDIA High Definition Audio) @ 48000 Hz` output, and the owner explicitly confirmed hearing the local quota-exhaustion status message. Acceptance evidence is recorded in `docs/research/STEP_5_MINIMAL_PROVIDER_RESILIENCE_ACCEPTANCE.md`.
 
-Detailed active planning and technology decisions belong in `CURRENT_PLAN.md` and `docs/research/STEP_5_RESILIENCE_RESEARCH_AND_ARCHITECTURE_PROPOSAL.md`.
+Deliberately deferred:
+
+- Ollama/local LLM selection or installation;
+- cloud-to-local conversational handoff;
+- local/offline STT;
+- local/offline conversational TTS;
+- full network-offline spoken conversation;
+- cloud-to-cloud automatic failover;
+- startup without cloud credentials based on a validated local intelligence stack.
+
+The earlier research proposal remains preserved for future reopening: `docs/research/STEP_5_RESILIENCE_RESEARCH_AND_ARCHITECTURE_PROPOSAL.md`.
+
+## Step 6 - Knowledge, Current Research, and Truthfulness
+
+Step 6 is now the active roadmap slice.
+
+It begins with requirements recovery and fresh current-technology research for CAP-014 through CAP-017. The goal is to give JARVIS a disciplined way to decide when current external information is needed, gather source-backed evidence, distinguish fresh/current facts from model knowledge, verify claims appropriately, and answer truthfully when evidence is unavailable or conflicting.
+
+Step 6 must reuse the existing provider/conversation/context/authority foundations rather than creating an uncontrolled second research brain or bypassing provenance boundaries.
+
+Detailed active planning belongs in `CURRENT_PLAN.md`.
 
 ## Final Target - Personal Intelligence Runtime
 
