@@ -211,6 +211,49 @@ def test_research_builder_is_independent_of_active_ai_provider(
 
 
 @pytest.mark.asyncio
+async def test_voice_stable_definition_is_blocked_before_network_research() -> None:
+    provider = _FakeProvider(
+        ProviderResearchEvidence(sources=(_source("example.com"),))
+    )
+    service = CurrentResearchService(provider)
+    conversation = ConversationSession(session_id="stable-research-gate")
+    conversation.start()
+    latest = conversation.accept_turn(ConversationRole.USER, "What is a SQL join?")
+    tools = ResearchAgentTools(service, conversation)
+
+    payload = await tools.research("SQL join definition", mode="current")
+
+    assert provider.calls == []
+    assert payload["ok"] is False
+    assert payload["status"] == "research_not_warranted"
+    assert payload["reason"] == "research_not_warranted_by_current_user_request"
+    assert payload["canonical_user_turn_id"] == latest.turn_id
+
+
+@pytest.mark.asyncio
+async def test_voice_explicit_current_request_can_reach_web_provider() -> None:
+    provider = _FakeProvider(
+        ProviderResearchEvidence(sources=(_source("ai.google.dev"),))
+    )
+    service = CurrentResearchService(provider)
+    conversation = ConversationSession(session_id="current-research-gate")
+    conversation.start()
+    latest = conversation.accept_turn(
+        ConversationRole.USER,
+        "Search the web and tell me the latest Gemini API recommendation.",
+    )
+    tools = ResearchAgentTools(service, conversation)
+
+    payload = await tools.research("latest Gemini API recommendation", mode="current")
+
+    assert provider.calls == [
+        ("latest Gemini API recommendation", ResearchMode.CURRENT)
+    ]
+    assert payload["ok"] is True
+    assert payload["canonical_user_turn_id"] == latest.turn_id
+
+
+@pytest.mark.asyncio
 async def test_voice_brain_can_issue_subquery_but_canonical_turn_remains_anchored() -> (
     None
 ):
