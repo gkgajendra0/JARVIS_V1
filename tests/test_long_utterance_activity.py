@@ -65,9 +65,9 @@ def test_voice_session_omits_vad_none_but_keeps_provider_turn_detection(
     assert session is fake_session
     assert "vad" not in captured
     turn_handling = captured["turn_handling"]
-    assert turn_handling.turn_detection is None
-    assert turn_handling.interruption["enabled"] is True
-    assert turn_handling.preemptive_generation["enabled"] is False
+    assert turn_handling["turn_detection"] is None
+    assert turn_handling["interruption"]["enabled"] is True
+    assert turn_handling["preemptive_generation"]["enabled"] is False
 
 
 @pytest.mark.asyncio
