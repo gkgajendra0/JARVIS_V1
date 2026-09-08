@@ -14,6 +14,7 @@ from jarvis.knowledge.research import (
     CurrentResearchService,
     EvidenceSource,
     ProviderResearchEvidence,
+    ResearchConfigurationError,
     ResearchMode,
     ResearchProvider,
     utc_now,
@@ -25,8 +26,9 @@ EXA_API_KEY_ENV = "EXA_API_KEY"
 def _required_exa_api_key() -> str:
     value = os.getenv(EXA_API_KEY_ENV)
     if value is None or not value.strip():
-        raise RuntimeError(
-            f"{EXA_API_KEY_ENV} is required for the configured web-search provider"
+        raise ResearchConfigurationError(
+            "research_credentials_missing",
+            f"{EXA_API_KEY_ENV} is required for live web research",
         )
     return value.strip()
 
