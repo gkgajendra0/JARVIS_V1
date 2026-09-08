@@ -50,6 +50,14 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+class ResearchConfigurationError(RuntimeError):
+    """Known local research configuration problem that should fail transparently."""
+
+    def __init__(self, reason_code: str, message: str) -> None:
+        super().__init__(message)
+        self.reason_code = reason_code
+
+
 class ResearchMode(str, Enum):
     CURRENT = "current"
     FACT_CHECK = "fact_check"
@@ -247,6 +255,18 @@ class CurrentResearchService:
                 mode,
                 researched_at,
                 "research_timeout",
+            )
+        except ResearchConfigurationError as exc:
+            LOGGER.warning(
+                "Web research configuration unavailable | provider=%s | reason=%s",
+                self.provider_name,
+                exc.reason_code,
+            )
+            return self._unavailable(
+                normalized_query,
+                mode,
+                researched_at,
+                exc.reason_code,
             )
         except Exception as exc:  # noqa: BLE001 - provider boundary must fail closed
             failure = classify_provider_failure(exc, provider=self.provider_name)
