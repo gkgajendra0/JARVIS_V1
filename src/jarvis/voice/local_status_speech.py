@@ -49,7 +49,9 @@ class WindowsLocalStatusSpeech:
     async def _synthesize_to_wave(self, path: Path, text: str) -> None:
         powershell = shutil.which("powershell.exe") or shutil.which("powershell")
         if powershell is None:
-            raise RuntimeError("Windows PowerShell is unavailable for local status speech")
+            raise RuntimeError(
+                "Windows PowerShell is unavailable for local status speech"
+            )
 
         text_b64 = base64.b64encode(text.encode("utf-8")).decode("ascii")
         path_b64 = base64.b64encode(str(path).encode("utf-8")).decode("ascii")
@@ -90,7 +92,9 @@ try {{
         except TimeoutError:
             process.kill()
             await process.communicate()
-            raise RuntimeError("Windows local status speech synthesis timed out") from None
+            raise RuntimeError(
+                "Windows local status speech synthesis timed out"
+            ) from None
         if process.returncode != 0:
             detail = stderr.decode("utf-8", errors="replace").strip()
             raise RuntimeError(
@@ -116,9 +120,7 @@ try {{
                     raise RuntimeError(
                         "Windows local status speech produced unsupported WAV format"
                     )
-                samples_per_frame = max(
-                    1, sample_rate * _LOCAL_STATUS_FRAME_MS // 1000
-                )
+                samples_per_frame = max(1, sample_rate * _LOCAL_STATUS_FRAME_MS // 1000)
                 while True:
                     data = wav_file.readframes(samples_per_frame)
                     if not data:
