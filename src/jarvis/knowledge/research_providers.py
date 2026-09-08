@@ -1,135 +1,162 @@
-"""Same-provider web research adapters for Gemini and OpenAI."""
+"""Replaceable live-web search provider adapters for JARVIS Step 6."""
 
 from __future__ import annotations
 
-from google import genai
-from openai import OpenAI
+import hashlib
+import os
+from collections.abc import Mapping, Sequence
+from datetime import datetime
+from urllib.parse import urlparse
 
-from jarvis.ai_provider import normalize_ai_provider, require_provider_api_key
-from jarvis.knowledge.provider_evidence import as_payload, extract_provider_evidence
+from exa_py import Exa
+
 from jarvis.knowledge.research import (
     CurrentResearchService,
+    EvidenceSource,
     ProviderResearchEvidence,
     ResearchMode,
     ResearchProvider,
     utc_now,
 )
 
-# Researched production defaults as of September 2026. Callers may still provide an
-# explicit model override without changing the provider-neutral service contract.
-DEFAULT_RESEARCH_MODELS = {
-    "gemini": "gemini-3.8-flash",
-    "openai": "gpt-5.6-sol",
-}
+EXA_API_KEY_ENV = "EXA_API_KEY"
 
 
-def _research_instructions(mode: ResearchMode) -> str:
-    base = (
-        "Research the user's exact question using live web search before answering. "
-        "Do not claim you searched unless search actually ran. Prefer primary sources "
-        "and current information where relevant. Keep the synthesis concise but "
-        "complete. Do not invent URLs or source names."
-    )
-    if mode is ResearchMode.FACT_CHECK:
-        return (
-            f"{base} This is a fact-check. Corroborate important claims across more "
-            "than one independent source when practical and state material disagreement."
+def _required_exa_api_key() -> str:
+    value = os.getenv(EXA_API_KEY_ENV)
+    if value is None or not value.strip():
+        raise RuntimeError(
+            f"{EXA_API_KEY_ENV} is required for the configured web-search provider"
         )
-    if mode is ResearchMode.AUTHORITATIVE:
-        return (
-            f"{base} This requires authoritative evidence. Prioritize official "
-            "government, regulator, standards body, academic, manufacturer, or other "
-            "primary-domain sources appropriate to the question. If authoritative "
-            "evidence cannot be found, say so plainly."
-        )
-    return f"{base} Prioritize fresh sources for time-sensitive claims."
+    return value.strip()
 
 
-class GeminiWebResearchProvider:
-    provider_name = "gemini"
+def _value(item: object, name: str) -> object | None:
+    if isinstance(item, Mapping):
+        return item.get(name)
+    return getattr(item, name, None)
 
-    def __init__(self, *, model: str) -> None:
-        self.model_name = model
-        self._client: genai.Client | None = None
 
-    def _get_client(self) -> genai.Client:
+def _source_id(url: str) -> str:
+    return f"web_{hashlib.sha256(url.encode('utf-8')).hexdigest()[:16]}"
+
+
+def _clean_domain(url: str) -> str | None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    return parsed.netloc.casefold().split("@")[-1].split(":")[0].removeprefix("www.")
+
+
+def _excerpt(item: object) -> str:
+    highlights = _value(item, "highlights")
+    if isinstance(highlights, Sequence) and not isinstance(
+        highlights, (str, bytes, bytearray)
+    ):
+        parts = [
+            value.strip()
+            for value in highlights
+            if isinstance(value, str) and value.strip()
+        ]
+        if parts:
+            return " [...] ".join(parts)
+    text = _value(item, "text")
+    return text.strip() if isinstance(text, str) else ""
+
+
+def _published_at(item: object) -> str | None:
+    for name in ("published_date", "publishedDate"):
+        value = _value(item, name)
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+class ExaWebResearchProvider:
+    """Retrieve source excerpts from Exa; never synthesize the final JARVIS answer."""
+
+    provider_name = "exa"
+    model_name = "exa-search"
+
+    def __init__(self, *, num_results: int = 8) -> None:
+        if not 1 <= num_results <= 10:
+            raise ValueError("num_results must be between 1 and 10")
+        self._num_results = num_results
+        self._client: Exa | None = None
+
+    def _get_client(self) -> Exa:
         if self._client is None:
-            self._client = genai.Client(
-                api_key=require_provider_api_key("gemini", purpose="web research")
-            )
+            self._client = Exa(api_key=_required_exa_api_key())
         return self._client
 
     def research(self, query: str, mode: ResearchMode) -> ProviderResearchEvidence:
-        interaction = self._get_client().interactions.create(
-            model=self.model_name,
-            input=f"{_research_instructions(mode)}\n\nUSER QUESTION:\n{query}",
-            tools=[{"type": "google_search"}],
-            store=False,
+        del mode  # JARVIS applies evidence sufficiency after provider retrieval.
+        response = self._get_client().search(
+            query,
+            type="auto",
+            num_results=self._num_results,
+            contents={"highlights": True},
         )
-        return extract_provider_evidence(
-            as_payload(getattr(interaction, "steps", ())),
-            answer=str(getattr(interaction, "output_text", "") or ""),
-            retrieved_at=utc_now(),
-        )
+        retrieved_at = utc_now()
+        raw_results = _value(response, "results")
+        if not isinstance(raw_results, Sequence) or isinstance(
+            raw_results, (str, bytes, bytearray)
+        ):
+            return ProviderResearchEvidence(sources=())
+
+        sources: list[EvidenceSource] = []
+        seen_urls: set[str] = set()
+        for item in raw_results:
+            raw_url = _value(item, "url")
+            if not isinstance(raw_url, str):
+                continue
+            url = raw_url.strip()
+            if not url or url in seen_urls:
+                continue
+            domain = _clean_domain(url)
+            if domain is None:
+                continue
+            title_value = _value(item, "title")
+            title = (
+                title_value.strip()
+                if isinstance(title_value, str) and title_value.strip()
+                else domain
+            )
+            sources.append(
+                EvidenceSource(
+                    source_id=_source_id(url),
+                    url=url,
+                    title=title,
+                    domain=domain,
+                    retrieved_at=retrieved_at,
+                    excerpt=_excerpt(item),
+                    published_at=_published_at(item),
+                )
+            )
+            seen_urls.add(url)
+
+        return ProviderResearchEvidence(sources=tuple(sources))
 
     def close(self) -> None:
-        if self._client is None:
-            return
-        close = getattr(self._client, "close", None)
-        if callable(close):
-            close()
+        # exa-py exposes no sync client close requirement for this search path.
         self._client = None
-
-
-class OpenAIWebResearchProvider:
-    provider_name = "openai"
-
-    def __init__(self, *, model: str) -> None:
-        self.model_name = model
-        self._client: OpenAI | None = None
-
-    def _get_client(self) -> OpenAI:
-        if self._client is None:
-            self._client = OpenAI(
-                api_key=require_provider_api_key("openai", purpose="web research")
-            )
-        return self._client
-
-    def research(self, query: str, mode: ResearchMode) -> ProviderResearchEvidence:
-        response = self._get_client().responses.create(
-            model=self.model_name,
-            instructions=_research_instructions(mode),
-            input=query,
-            tools=[{"type": "web_search"}],
-            tool_choice="required",
-            include=["web_search_call.action.sources"],
-            store=False,
-        )
-        return extract_provider_evidence(
-            as_payload(getattr(response, "output", ())),
-            answer=str(getattr(response, "output_text", "") or ""),
-            retrieved_at=utc_now(),
-        )
-
-    def close(self) -> None:
-        if self._client is not None:
-            self._client.close()
-            self._client = None
 
 
 def build_current_research_service(
     *,
-    provider: str,
+    provider: str | None = None,
     model: str | None = None,
-    timeout_seconds: float = 60.0,
+    timeout_seconds: float = 30.0,
 ) -> CurrentResearchService:
-    normalized = normalize_ai_provider(provider)
-    resolved_model = (model or DEFAULT_RESEARCH_MODELS[normalized]).strip()
-    if not resolved_model:
-        raise ValueError("research model must not be empty")
-    adapter: ResearchProvider
-    if normalized == "gemini":
-        adapter = GeminiWebResearchProvider(model=resolved_model)
-    else:
-        adapter = OpenAIWebResearchProvider(model=resolved_model)
+    """Build the independent search boundary.
+
+    ``provider`` and ``model`` are temporarily accepted so existing composition can
+    remain source-compatible while Step 6 is validated. They do not select or switch
+    the active conversational brain and are intentionally ignored by web retrieval.
+    """
+
+    del provider, model
+    adapter: ResearchProvider = ExaWebResearchProvider()
     return CurrentResearchService(adapter, timeout_seconds=timeout_seconds)
