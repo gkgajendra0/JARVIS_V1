@@ -2,13 +2,13 @@
 
 ## Active Step
 
-**No implementation step is active. Step 4 is closed with an accepted bounded provider-assisted 4.5D recall fallback. Step 5 remains planned and not started until explicit owner authorization.**
+**Step 4 is deliberately reopened for the bounded Phase 4.5E context-injection investigation. Phase 4.5E.1 shadow semantic retrieval is active. Step 5 remains planned and must not start while this slice is active.**
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 BOUNDED COMPLETE — 4.5A–4.5C ACCEPTED — PROVIDER-ASSISTED 4.5D RECALL FALLBACK ACCEPTED — STRICT INDEPENDENT 4.5D VERIFIER STILL DEFERRED / UNRESOLVED — 4.5E AUTOMATIC CONTEXT INJECTION DEFERRED — STEP 5 PLANNED / NOT STARTED**
+**STEP 3 COMPLETE + MERGED — STEP 4 BOUNDED FOUNDATION ACCEPTED — 4.5A–4.5C ACCEPTED — PROVIDER-ASSISTED 4.5D RECALL ACCEPTED — 4.5E.1 SHADOW RETRIEVAL IMPLEMENTED ON BRANCH / AUTOMATED + OWNER-MACHINE ACCEPTANCE IN PROGRESS — AUTOMATIC MEMORY INJECTION STILL DISABLED — STEP 5 NOT STARTED**
 
-This file is the operational source of truth. Detailed measurements and retired experiments belong in `docs/research/`; accepted architecture belongs in `docs/CURRENT_ARCHITECTURE.md` and ADRs.
+This file is the operational source of truth. Detailed measurements and experiment evidence belong in `docs/research/`; only accepted architecture belongs in `docs/CURRENT_ARCHITECTURE.md` and ADRs.
 
 ---
 
@@ -22,7 +22,7 @@ This file is the operational source of truth. Detailed measurements and retired 
 - provider history/caches are not canonical memory;
 - secrets are never normal durable memory/model context;
 - models do not write persistent memory directly;
-- `MemoryService` is the sole durable mutation facade;
+- `MemoryService` remains the sole canonical durable-memory mutation facade;
 - `ContextAssembler` remains the sole owner of ordinary provider-context assembly;
 - retrieval ranks already-eligible canonical records and never establishes truth;
 - canonical lifecycle/security/sensitivity filtering occurs before learned semantic work;
@@ -37,7 +37,7 @@ This file is the operational source of truth. Detailed measurements and retired 
 
 ### 4.0A–4.4
 
-Accepted behavior includes:
+Accepted behavior remains:
 
 - stable conversation provenance;
 - bounded `LiveContext` and deterministic `ContextAssembler`;
@@ -53,148 +53,170 @@ Selected Phase-4.4 provider model: **`gemini-3.5-flash-lite`**.
 
 ### 4.5A–4.5C
 
-The accepted derived retrieval foundation remains:
+Accepted local derived retrieval foundation:
 
-**Embedding:** `Qwen/Qwen3-Embedding-0.6B`
+- `Qwen/Qwen3-Embedding-0.6B`, revision `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`;
+- normalized 256-dimensional vectors;
+- eligible-current SQLite FTS5 lexical retrieval;
+- exact local cosine dense retrieval;
+- equal-weight RRF with `k=60`;
+- `Qwen/Qwen3-Reranker-0.6B`, revision `e61197ed45024b0ed8a2d74b80b4d909f1255473`;
+- top-3 reranking, BF16 owner path, deterministic tie handling.
 
-- revision `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`;
-- normalized 256d contract;
-- exact local cosine.
+Accepted owner GPU environment remains Torch `2.13.0+cu132`, Torchvision `0.28.0+cu132`, Transformers `5.16.1`, SentenceTransformers `6.0.1`, and RTX 5060 Ti 8 GB.
 
-**First stage:**
+### 4.5D bounded provider-assisted recall
 
-- eligible-current SQLite FTS5 lexical rank;
-- exact Qwen dense rank;
-- equal-weight RRF, `k=60`;
-- development candidate depth `10` where applicable.
+The accepted explicit `recall_memory` tool remains unchanged. It uses the active provider only for bounded structured facet selection and a second semantic release check, with JARVIS retaining canonical key reconstruction, exact lookup, lifecycle/security policy, and release authority.
 
-**Reranker:** `Qwen/Qwen3-Reranker-0.6B`
-
-- revision `e61197ed45024b0ed8a2d74b80b4d909f1255473`;
-- BF16 owner path;
-- deterministic tie handling.
-
-Accepted owner environment:
-
-- Torch `2.13.0+cu132`;
-- Torchvision `0.28.0+cu132`;
-- Transformers `5.16.1`;
-- SentenceTransformers `6.0.1`;
-- NVIDIA GeForce RTX 5060 Ti 8 GB.
-
-### 4.5D bounded provider-assisted recall — ACCEPTED
-
-The original goal of an independent proof-quality multilingual semantic release guard remains unresolved. After the frozen local/generic approaches failed, the owner explicitly authorized a pragmatic fallback.
-
-Accepted flow:
-
-```text
-latest accepted USER question
- -> active-provider structured query selection
- -> provider selects one numbered cloud-safe eligible facet
- -> JARVIS reconstructs the exact canonical key
- -> deterministic grounding/query policy
- -> one exact eligible current canonical assertion
- -> second same-provider structured semantic verifier
- -> JARVIS RELEASE only for directly-supported current value/comparison
- -> otherwise ABSTAIN
- -> zero-argument recall_memory tool result to realtime conversation
-```
-
-Critical retained boundaries:
-
-- the realtime model cannot supply a memory key to `recall_memory`;
-- provider facet selection is only an index into a JARVIS-owned eligible catalog;
-- JARVIS reconstructs canonical `subject_scope` / `subject` / `predicate` itself;
-- `local_only` and `secret_prohibited` memory never enter the cloud recall path;
-- exact lookup must resolve one current canonical assertion;
-- provider errors, malformed output, ambiguity, conflicts, semantic-role vetoes, and quota failures all fail closed to ABSTAIN;
-- provider output never mutates canonical truth.
-
-Configuration:
-
-- opt-in model setting: `JARVIS_MEMORY_SEMANTIC_RECALL_MODEL`;
-- model must belong to the active `JARVIS_AI_PROVIDER` family;
-- owner acceptance on Gemini used **`gemini-3.5-flash`**.
-
-Final owner-tested code SHA before documentation-only closure commits:
-
-`bd95734032e2f936945fa02e16bb002ac6b478ea`
-
-Full Code Quality run `34190011723` passed Ruff, full pytest, Windows Hello, and Windows DPAPI.
-
-Owner live acceptance passed on the disposable `test_color = purple` memory:
-
-- `What is my test color?` -> released `purple`;
-- `My test color is purple, right?` -> released/confirmed `purple`;
-- `Why is my test color purple?` -> abstained and did not invent a reason;
-- `Jarvis forget my test color.` -> explicit physical forget committed.
-
-Durable acceptance record:
+Historical acceptance evidence:
 
 - `docs/research/STEP_4_PHASE_4_5D_PROVIDER_ASSISTED_FALLBACK.md`
 
-### What remains unresolved/deferred
-
-- **Strict independent 4.5D verifier — DEFERRED / UNRESOLVED.** No tested independent learned/QA/NLI/question-role authority met the frozen safety boundary.
-- **4.5E automatic semantic memory injection — DEFERRED.** `ContextAssembler` does not automatically inject ranked semantic memories into normal conversation.
-- **4.6–4.8 — DEFERRED / NOT STARTED.** These do not block later roadmap work.
-
-The accepted 4.5D fallback is therefore **bounded useful recall**, not a claim that the original independent semantic authorization problem is solved.
+The strict independent 4.5D semantic verifier remains deferred/unresolved. Retired 4.5D corpora and failed approaches must not be reused as fresh 4.5E training/evaluation data.
 
 ---
 
-## Retired 4.5D evidence remains authoritative
+## Phase 4.5E technology decision
 
-The following failed/exposed methods remain retired and must not be rerun, tuned, trained on, or used as fresh replacement-model scoring data:
+**ADAPT the accepted JARVIS memory stack. Do not adopt a second memory framework.**
 
-1. **V4 composite acceptance — FAIL / RETIRED**
-   - `docs/research/STEP_4_PHASE_4_5D_V4_ACCEPTANCE_RESULT.md`
-2. **Task-specific guard Method V2 — FAIL / RETIRED**
-   - `docs/research/STEP_4_PHASE_4_5D_TASK_SPECIFIC_GUARD_BAKEOFF_V2_RESULT.md`
-3. **Custom fine-tune V3 — SUPERSEDED BEFORE EXECUTION**
-   - no owner result; executable fine-tune path was not promoted.
-4. **Answerability Component Bake-Off V1 — FAIL / RETIRED**
-   - `docs/research/STEP_4_PHASE_4_5D_ANSWERABILITY_BAKEOFF_V1_RESULT.md`
-5. **Question-Role Bake-Off V1 — FAIL / RETIRED**
-   - `docs/research/STEP_4_PHASE_4_5D_QUESTION_ROLE_BAKEOFF_V1_RESULT.md`
+Current research found that Mem0, LangGraph/LangMem, Zep/Graphiti, LlamaIndex-style memory/RAG stacks and similar products overlap with storage/retrieval/reranking mechanics JARVIS already owns or has accepted. They do not solve JARVIS's actual 4.5E authority question: whether a true retrieved memory should influence this specific answer.
 
-Retired corpus identifiers remain:
-
-- Answerability V1: `3e2bd6830df3d08b3ea4ce8e045ee78cf562c228c5b0d2e5e094ffa42b6b44a3`;
-- Question-Role V1: `bb09a6a6b7c6f9248c48f35a39e5f4f8002f678a471d4752152c6a6b26cd4c21`.
-
-The original bounded deferral record remains historical evidence:
-
-- `docs/research/STEP_4_PHASE_4_5D_DEFERRED_CLOSURE.md`
-
-The later provider-assisted acceptance does not rewrite or invalidate those failures.
+Security guidance also treats persistent/retrieved memory as an injection/poisoning surface. Therefore semantic similarity or reranker score may nominate evidence but must never by itself authorize provider-context injection.
 
 ---
 
-## Accepted runtime state after final Step-4 closure
+## Phase 4.5E.1 — active bounded slice
+
+### Goal
+
+Measure what the accepted local retrieval stack proposes for ordinary accepted USER turns **without allowing those proposals to affect the answer**.
+
+### Implemented branch flow
 
 ```text
-explicit governed memory operations              ENABLED / ACCEPTED
-candidate extraction + session quarantine        ENABLED when configured / ACCEPTED
-canonical SQLCipher memory                       ACCEPTED
-4.5A–4.5C derived retrieval/reranking            ACCEPTED foundation
-provider-assisted recall_memory tool             ACCEPTED when explicitly configured
-strict independent 4.5D semantic verifier        DEFERRED / UNRESOLVED
-4.5E automatic ContextAssembler semantic inject  DEFERRED / DISABLED
-remaining unstarted Step-4 extensions            DEFERRED
+accepted canonical USER turn
+ -> session-local MemoryContextShadowRuntime
+ -> RetrievalEligibility.cloud_context()
+ -> refresh missing/stale rebuildable derived embeddings only
+ -> Qwen query embedding
+ -> existing FTS5 + dense + RRF first stage
+ -> existing Qwen top-3 reranker
+ -> session-local diagnostic observation
+ -> metrics/logging
+
+NO ContextAssembler mutation
+NO provider-context insertion
+NO provider relevance call
+NO canonical memory mutation
+NO automatic memory influence
 ```
 
-Provider availability is a real residual dependency. The owner observed `gemini-3.8-flash` HTTP 500/429 quota failures; JARVIS correctly abstained with `provider_memory_release_guard_unavailable`. The successful owner acceptance used `gemini-3.5-flash`. Provider failure must continue to degrade to truthful abstention rather than cross-provider fallback or memory release.
+### Runtime boundaries
+
+- feature flag: `JARVIS_MEMORY_CONTEXT_SHADOW_ENABLED=false` by default;
+- enabling it requires `JARVIS_MEMORY_ENABLED=true`;
+- only already-accepted canonical USER turns are observed;
+- work is scheduled asynchronously through the existing accepted-turn observer boundary;
+- encoder/reranker adapters are process-scoped and lazy-loaded once, then shared across sessions;
+- shadow observations are session-local and disposed on session close;
+- model/shadow failures cannot fail canonical conversation or change provider context;
+- normal production logs contain turn IDs, assertion IDs, counts, and latency, not raw remembered values;
+- `RetrievalEligibility.cloud_context()` applies before any learned ranking;
+- `local_only` / `secret_prohibited` values therefore cannot enter this cloud-context candidate path;
+- missing/stale vector rows may be rebuilt because they are encrypted derived artifacts, not canonical truth.
+
+### Important implementation discovery
+
+Existing durable assertions are not guaranteed to already possess Qwen embedding rows because 4.5A established vector storage, 4.5B established retrieval, 4.5C established model adapters, and the accepted 4.5D provider fallback did not need those local models.
+
+Phase 4.5E.1 therefore refreshes only missing/stale derived embeddings before measuring the dense path. Without this, a supposedly semantic shadow run could silently degrade to lexical-only retrieval and produce misleading evidence.
+
+---
+
+## Phase 4.5E.1 acceptance gates
+
+### Automated
+
+Must pass on the exact branch head:
+
+- Ruff formatting;
+- Ruff lint;
+- full pytest;
+- Windows DPAPI smoke;
+- Windows Hello helper build/probe;
+- tests proving USER-only shadow observation;
+- tests proving cloud-context eligibility;
+- tests proving derived-vector refresh and reuse;
+- tests proving model failure isolation;
+- tests proving session evidence disposal;
+- composition test proving process-shared model adapters plus session-local shadow runtimes.
+
+### Owner-machine
+
+After automated gates are green, run the exact branch on the owner Windows/RTX 5060 Ti machine with 4.5E shadow enabled and verify:
+
+1. normal wake/conversation behavior remains usable;
+2. local Qwen models load and execute on the accepted GPU stack;
+3. the first eligible-memory pass may rebuild missing derived vectors, then later turns reuse them;
+4. ordinary USER turns produce top-3 shadow observations without changing spoken answers;
+5. raw memory values are not emitted in normal logs;
+6. conversation continues truthfully if shadow retrieval/model work fails;
+7. GPU/resource impact is acceptable alongside the existing voice/vision/identity runtime.
+
+Do **not** call 4.5E.1 accepted until this owner-machine run is complete.
+
+---
+
+## Phase 4.5E.2 — blocked on 4.5E.1 evidence
+
+Only after 4.5E.1 acceptance, create a new frozen 4.5E-specific evaluation corpus. Do not reuse the retired 4.5D corpora for model selection.
+
+The next decision separates deterministic vetoes from semantic usefulness:
+
+Deterministic vetoes:
+
+- ineligible;
+- sensitive beyond cloud-context policy;
+- stale where freshness policy forbids use;
+- conflicting/ambiguous canonical state;
+- instruction-like or authority-seeking memory content.
+
+Semantic utility candidates:
+
+- `ESSENTIAL`;
+- `HELPFUL`;
+- `UNNECESSARY`;
+- `STEERING_RISK`.
+
+The first technology to bake off is a second task-specific prompt over the already-loaded Qwen reranker. No numeric threshold is accepted in advance; any release rule must come from measured false-influence/precision evidence.
+
+---
+
+## Phase 4.5E.3 — not authorized
+
+Actual ordinary-conversation injection remains disabled.
+
+If 4.5E.2 later passes, the first proposed activation remains deliberately narrow:
+
+- at most one memory;
+- `ESSENTIAL` only initially;
+- current exact canonical assertion only;
+- cloud-context eligible;
+- deterministic vetoes passed;
+- bounded token budget;
+- rendered as explicitly non-authoritative factual data;
+- routed only through `ContextAssembler`;
+- current user text always outranks memory;
+- uncertain means do not inject.
+
+No code for this activation should be written before 4.5E.2 evidence and explicit owner approval.
 
 ---
 
 ## Immediate Next Action
 
-**WAIT FOR OWNER AUTHORIZATION TO START STEP 5.**
+**Finish Phase 4.5E.1 automated validation, then run owner-machine shadow acceptance.**
 
-Do not start Step 5 research, architecture, dependency selection, implementation, or code changes until the owner explicitly says to start Step 5.
-
-When authorized, Step 5 begins from the normal lifecycle:
-
-`requirements recovery -> current web research -> technology decision -> architecture -> owner approval -> implementation`.
+Step 5 remains not started. Automatic provider-context memory injection remains disabled.
