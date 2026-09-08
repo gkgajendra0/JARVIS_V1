@@ -8,6 +8,7 @@ from jarvis.machine_config import default_machine_config_path
 from jarvis.security import WindowsDpapiKeyProtector
 
 from .database import SqlCipherMemoryDatabaseFactory
+from .embeddings import SemanticEmbeddingStore
 from .lifecycle import MemoryLifecycleService
 from .query import CanonicalMemoryReader
 from .retrieval import SemanticRetrievalService
@@ -34,6 +35,7 @@ class MemoryRuntime:
         if not isinstance(service, MemoryService):
             raise TypeError("service must be a MemoryService")
         self.service = service
+        self.embedding_store = SemanticEmbeddingStore(writer)
         self.retrieval = SemanticRetrievalService(reader)
         self._writer = writer
         self._reader = reader
