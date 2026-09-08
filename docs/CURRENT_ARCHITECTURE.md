@@ -2,7 +2,7 @@
 
 ## Status
 
-**STEP 3 COMPLETE + MERGED. STEP 4 IS CLOSED AS A BOUNDED ACCEPTED FOUNDATION THROUGH PHASE 4.5C. PHASE 4.5D SEMANTIC RELEASE/ANSWERABILITY AND PHASE 4.5E AUTOMATIC CONVERSATIONAL SEMANTIC MEMORY INJECTION ARE DEFERRED / NOT ACCEPTED. STEP 5 IS PLANNED BUT NOT STARTED. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 REMAINS DISABLED.**
+**STEP 3 COMPLETE + MERGED. STEP 4 IS BOUNDED COMPLETE. PHASES 4.0A–4.5C ARE ACCEPTED, AND THE OWNER-AUTHORIZED PROVIDER-ASSISTED 4.5D `recall_memory` FALLBACK IS ACCEPTED. THE ORIGINAL STRICT INDEPENDENT 4.5D SEMANTIC VERIFIER REMAINS DEFERRED / UNRESOLVED. PHASE 4.5E AUTOMATIC CONVERSATIONAL SEMANTIC-MEMORY INJECTION REMAINS DEFERRED. STEP 5 IS PLANNED BUT NOT STARTED. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 REMAINS DISABLED.**
 
 This file describes architecture that actually exists and has passed the accepted lifecycle. Detailed experiments/evidence belong in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; durable decisions belong in `docs/decisions/`.
 
@@ -48,7 +48,7 @@ accepted USER turns
         +-> Phase-4.4 candidate extraction [ACCEPTED, opt-in]
         |     -> exact canonical USER turn
         |     -> deterministic pre-provider gates
-        |     -> Gemini 3.5 Flash-Lite structured proposal
+        |     -> active-provider structured proposal
         |     -> deterministic JARVIS proposal policy
         |     -> typed session-local quarantine
         |     -> physical disposal on session close
@@ -60,11 +60,21 @@ accepted USER turns
         |     -> equal-weight RRF
         |     -> Qwen reranker
         |     X does not establish truth
-        |     X not automatically released to Gemini conversation
+        |
+        +-> provider-assisted recall_memory [ACCEPTED, opt-in]
+        |     -> latest accepted USER question
+        |     -> active-provider structured facet selection
+        |     -> provider returns numbered eligible-facet index only
+        |     -> JARVIS reconstructs exact canonical facet
+        |     -> deterministic grounding/query policy
+        |     -> one exact cloud-safe current assertion
+        |     -> second same-provider structured semantic verifier
+        |     -> RELEASE current-value/current-comparison only
+        |     -> otherwise/error/quota/conflict => ABSTAIN
         |
         +-> ContextAssembler
               -> bounded evidence-rich provider context
-              -> no automatic 4.5D/4.5E semantic-memory release
+              -> X no automatic Phase-4.5E semantic-memory injection
 ```
 
 Permanent rules:
@@ -72,13 +82,15 @@ Permanent rules:
 - identity/perception evidence is not execution permission;
 - provider/model output does not establish canonical personal truth;
 - `MemoryService` is the sole durable memory mutation facade;
-- `ContextAssembler` is the sole Step-4 model-context release owner;
+- `ContextAssembler` is the sole owner of ordinary Step-4 provider-context assembly;
 - production JARVIS has exactly one active cloud-AI provider/account at a time;
 - production subsystems may use capability-specific models inside that provider family but may not independently select a second cloud-AI provider;
 - local model/checkpoint inference does not gain canonical truth or authority merely because it is local;
 - retrieval ranks already-eligible canonical records and cannot establish, modify, resurrect, or forget truth;
 - implicit memory candidates have no durable authority;
-- automatic semantic memory release remains disabled until a future separately accepted boundary exists.
+- the accepted provider-assisted `recall_memory` tool is a bounded explicit tool path, not automatic context injection;
+- automatic semantic memory injection through `ContextAssembler` remains disabled;
+- provider failure on semantic recall fails closed to abstention and never silently switches cloud providers.
 
 Decision: ADR-015 governs cloud-provider ownership.
 
@@ -94,14 +106,15 @@ JARVIS_AI_PROVIDER
        +-> realtime conversation
        +-> scripted cloud TTS
        +-> structured memory-candidate extraction
+       +-> provider-assisted semantic memory planning/verifying when configured
        +-> future cloud reasoning/tool roles
 ```
 
-Current active provider is Gemini. Realtime conversation and structured extraction may use different Gemini model IDs because their capability surfaces differ. This does not create a second provider account.
+Current active provider is Gemini. Realtime conversation, candidate extraction, and semantic recall may use different Gemini model IDs because their capability surfaces differ. This does not create a second provider account.
 
 Provider-specific SDKs remain confined to narrow adapters. `JARVIS_REALTIME_PROVIDER` is migration-only compatibility; new configuration uses `JARVIS_AI_PROVIDER`.
 
-Production never silently falls back to another cloud-AI provider when the active provider lacks a capability.
+Production never silently falls back to another cloud-AI provider when the active provider lacks a capability or hits a quota/rate limit.
 
 Local model/checkpoint downloads and local inference are outside ADR-015 but remain bounded by JARVIS deterministic authority and truth rules.
 
@@ -129,7 +142,8 @@ Accepted machine roles include:
 - LR-ASD/CAM++ assets locally managed;
 - vision/speaker/active-speaker switches persisted;
 - persistent memory controlled by `JARVIS_MEMORY_ENABLED`;
-- candidate extraction controlled separately by `JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED` plus explicit model ID.
+- candidate extraction controlled separately by `JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED` plus explicit model ID;
+- bounded provider-assisted semantic recall enabled only when `JARVIS_MEMORY_SEMANTIC_RECALL_MODEL` is configured.
 
 API keys remain outside normal machine-profile state. Startup preflight checks only the credential required by the selected active provider.
 
@@ -229,7 +243,7 @@ MemoryLifecycleService
     = canonical temporal lifecycle implementation
 
 ContextAssembler
-    = sole Step-4 provider-context release owner
+    = sole ordinary provider-context assembly owner
 
 SQLCipher + SQLite
     = canonical durable memory store
@@ -242,6 +256,9 @@ MemoryCandidateSessionRuntime
 
 Derived vector index / retrieval stack
     = rebuildable ranking data over already-eligible canonical records
+
+ProviderVerifiedMemoryQueryCoordinator
+    = bounded opt-in semantic recall coordinator; no mutation authority
 ```
 
 Provider history/caches are never canonical JARVIS memory.
@@ -256,9 +273,9 @@ The accepted runtime maintains bounded in-memory accepted-turn tail, active goal
 
 ### ContextAssembler
 
-`ContextAssembler` applies deterministic precedence, sensitivity release filtering, strict local budget, and immutable JARVIS provenance. It is the sole Step-4 owner of context released toward realtime providers.
+`ContextAssembler` applies deterministic precedence, sensitivity release filtering, strict local budget, and immutable JARVIS provenance. It remains the sole owner of ordinary context released toward realtime providers.
 
-Automatic semantic-memory retrieval results from the 4.5A–4.5C foundation are **not** released through `ContextAssembler` merely because they can be ranked.
+Phase-4.5A–4.5C ranked retrieval results are **not** automatically released through `ContextAssembler` merely because they can be ranked. The accepted 4.5D fallback is instead an explicit zero-argument `recall_memory` tool invoked for the latest accepted user question.
 
 ---
 
@@ -289,7 +306,7 @@ Accepted storage/security properties:
 
 ## Phase 4.3 explicit durable memory operations — ACCEPTED
 
-Normal voice sessions may expose four governed memory tools when persistent memory is enabled:
+Normal voice sessions may expose four governed mutation/inspection memory tools when persistent memory is enabled:
 
 ```text
 remember
@@ -393,41 +410,67 @@ Accepted owner stack:
 - SentenceTransformers `6.0.1`;
 - NVIDIA GeForce RTX 5060 Ti 8 GB.
 
-This stack answers **which eligible records are related/rank highly**. It does not answer whether a record is semantically sufficient or appropriate for the exact user question.
+This stack answers **which eligible records are related/rank highly**. It does not itself decide whether a record is semantically sufficient for the exact user question.
 
 ---
 
-## Phase 4.5D semantic release authority — DEFERRED / NOT ACCEPTED
+## Phase 4.5D strict independent semantic verifier — DEFERRED / UNRESOLVED
 
-The unresolved boundary is:
+The original target was an independent learned/deterministic boundary able to decide semantic sufficiency across current-value, reason, provenance, history, replacement, related-record, external-source, broad-recall, and advice requests with zero unsafe releases under the frozen multilingual acceptance gates.
+
+The tested generic QA, NLI-abstention, frozen-embedding classifier, and zero-shot question-role approaches did not meet those requirements. Their failure evidence remains authoritative and retired under `docs/research/`.
+
+No failed model is promoted, no exposed corpus is reused for tuning, and the original strict verifier is not claimed solved.
+
+Historical closure rationale: `docs/research/STEP_4_PHASE_4_5D_DEFERRED_CLOSURE.md`.
+
+---
+
+## Phase 4.5D provider-assisted `recall_memory` fallback — ACCEPTED / BOUNDED
+
+The owner subsequently authorized a pragmatic same-provider fallback.
 
 ```text
-user question
- + candidate canonical memory
- -> determine whether this exact fact may answer this requested semantic role
- -> release or abstain
+latest accepted USER question
+ -> cloud-safe eligible facet catalog (no values)
+ -> same-provider structured semantic selection
+ -> provider returns one eligible facet index
+ -> JARVIS reconstructs canonical facet
+ -> deterministic grounding/query policy
+ -> exact current canonical lookup
+ -> exactly one eligible assertion
+ -> same-provider structured release judgement
+ -> JARVIS allows only directly-supported current value/comparison
+ -> otherwise ABSTAIN
+ -> recall_memory result to realtime model
 ```
 
-Research and owner evidence showed that the tested generic QA, NLI-abstention, frozen-embedding classifier, and zero-shot question-role approaches did not meet the zero-unsafe-release / multilingual recall requirements.
+Important design properties:
 
-Therefore:
+- `recall_memory` is zero-argument from the realtime model's perspective;
+- the realtime model cannot nominate a predicate or canonical key;
+- provider facet selection is only an index into a JARVIS-owned sorted catalog;
+- canonical `subject_scope`, `subject`, and `predicate` are reconstructed by JARVIS;
+- only `RetrievalEligibility.cloud_context()` records are eligible, excluding `local_only` and `secret_prohibited` memory;
+- the provider never writes or changes memory;
+- the provider verifier receives only the one already-eligible canonical current fact selected after deterministic checks;
+- only `current_value` and `current_value_comparison` with `directly_supported=true` can release;
+- all provider errors, malformed output, semantic vetoes, ambiguity, conflicts, stale facts, HTTP failures, quota failures, and rate limits become ABSTAIN;
+- no automatic cross-provider fallback occurs.
 
-- no 4.5D learned guard is production-selected;
-- no confidence threshold is fitted on exposed failure corpora;
-- no safety gate is weakened;
-- no automatic semantic release is enabled;
-- exact retired evidence remains documented under `docs/research/`;
-- closure rationale is `docs/research/STEP_4_PHASE_4_5D_DEFERRED_CLOSURE.md`.
+Owner acceptance used Gemini `gemini-3.5-flash` on exact code SHA `bd95734032e2f936945fa02e16bb002ac6b478ea`. The owner live smoke released the stored current value, released a direct comparison, abstained safely on a `why` question without inventing a reason, and physically forgot the disposable test memory. Full Code Quality run `34190011723` passed all normal gates.
 
-Native multilingual NLI evidence may be reconsidered in a future architecture only as a downstream YES/NO truth evaluator **after** answerability has been established independently; it is not an abstention authority.
+The prior `gemini-3.8-flash` owner attempt reached the final verifier but hit provider HTTP 500/429 quota errors; the coordinator abstained with `provider_memory_release_guard_unavailable`. That is accepted fail-closed behavior and demonstrates the remaining provider-availability dependency.
+
+Detailed acceptance: `docs/research/STEP_4_PHASE_4_5D_PROVIDER_ASSISTED_FALLBACK.md`.
 
 ---
 
 ## Phase 4.5E and remaining Step-4 extensions — DEFERRED
 
-Normal conversational semantic-memory injection is not accepted. The presence of the 4.5A–4.5C retrieval stack does not authorize provider-facing injection.
+Automatic semantic memory injection through normal `ContextAssembler` assembly remains disabled. The accepted provider-assisted fallback does not change this: semantic recall is a governed tool path only.
 
-The remaining unstarted Step-4 extensions are deferred with the bounded closure so later roadmap steps can proceed without pretending the unresolved semantic release boundary is solved.
+The remaining unstarted Step-4 extensions are deferred with the bounded closure so later roadmap steps can proceed without pretending they are implemented.
 
 ---
 
@@ -439,6 +482,7 @@ The remaining unstarted Step-4 extensions are deferred with the bounded closure 
 - secrets/tokens are not normal logs/model context or durable memory;
 - successful memory mutations log bounded operation metadata rather than values;
 - candidate shadow logs bounded outcomes/reasons/counts rather than candidate values;
+- semantic recall logs release/abstain metadata and predicate identifiers, not arbitrary provider payload archives;
 - diagnostic model outputs cannot silently change authority;
 - failures and insufficient evidence remain explicit.
 
@@ -448,8 +492,8 @@ The remaining unstarted Step-4 extensions are deferred with the bounded closure 
 
 The following are not current production behavior:
 
-- automatic semantic memory release into normal Gemini conversation;
-- a production 4.5D answerability/semantic-role guard;
+- a proof-quality independent 4.5D answerability/semantic-role verifier;
+- automatic Phase-4.5E semantic memory injection into normal conversation context;
 - implicit durable candidate admission;
 - autonomous episodic/reflection learning;
 - production self-knowledge registry/aggregation;
@@ -457,4 +501,4 @@ The following are not current production behavior:
 - automatic provider chat-history synchronization;
 - autonomous diagnosis/repair/self-modification.
 
-Any future reopening of semantic conversational memory must preserve all accepted authority, sensitivity, lifecycle, provider, and canonical-truth boundaries and must use fresh never-exposed evidence.
+Any future replacement of the bounded provider-assisted recall gate must preserve all accepted authority, sensitivity, lifecycle, provider, and canonical-truth boundaries and must not reuse retired exposed corpora for fresh model tuning/scoring.
