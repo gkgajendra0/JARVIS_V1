@@ -161,6 +161,44 @@ async def test_authoritative_mode_accepts_observed_primary_domain() -> None:
 
 
 @pytest.mark.asyncio
+async def test_authoritative_mode_accepts_curated_first_party_docs() -> None:
+    provider = _FakeProvider(
+        ProviderResearchEvidence(
+            answer="Official product documentation.",
+            sources=(_source("ai.google.dev", "/gemini-api/docs/models"),),
+        )
+    )
+    service = CurrentResearchService(provider)
+
+    result = await service.research(
+        "What does Google document about Gemini?",
+        mode=ResearchMode.AUTHORITATIVE,
+    )
+
+    assert result.status is ResearchStatus.AUTHORITATIVE_SOURCE_PRESENT
+    assert result.ok is True
+
+
+@pytest.mark.asyncio
+async def test_authoritative_mode_does_not_trust_arbitrary_academic_domain() -> None:
+    provider = _FakeProvider(
+        ProviderResearchEvidence(
+            answer="Academic page only.",
+            sources=(_source("random-university.edu"),),
+        )
+    )
+    service = CurrentResearchService(provider)
+
+    result = await service.research(
+        "What does the regulator require?",
+        mode=ResearchMode.AUTHORITATIVE,
+    )
+
+    assert result.status is ResearchStatus.INSUFFICIENT_EVIDENCE
+    assert result.reason_code == "authoritative_source_not_observed"
+
+
+@pytest.mark.asyncio
 async def test_provider_failure_becomes_research_unavailable() -> None:
     service = CurrentResearchService(
         _FakeProvider(error=RuntimeError("provider exploded"))
@@ -176,15 +214,13 @@ async def test_provider_failure_becomes_research_unavailable() -> None:
 
 def test_provider_evidence_normalizes_queries_sources_and_citations() -> None:
     payload = [
-        {"type": "google_search_call", "queries": ["first query", "second query"]},
+        {
+            "type": "google_search_call",
+            "arguments": {"queries": ["first query", "second query"]},
+        },
         {
             "type": "google_search_result",
-            "results": [
-                {
-                    "title": "Official example",
-                    "url": "https://example.gov/report",
-                }
-            ],
+            "result": [{"search_suggestions": [{"query": "first query"}]}],
         },
         {
             "type": "model_output",
