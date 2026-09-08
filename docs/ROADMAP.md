@@ -11,7 +11,7 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 | 2 | Wake, Voice Session, and Audio Robustness | CAP-002, CAP-003 | DONE |
 | 2.5 | Vision Sensor & Active Target Tracking Foundation | Camera/PTZ boundaries, local person detection/tracking, deterministic target lock, active following | DONE |
 | 3 | Identity, Graduated Trust, Authority, and Observability Foundation | CAP-004, CAP-034, CAP-035, CAP-036, CAP-037 | DONE |
-| 4 | Live Context and Personal Memory | CAP-008 through CAP-013 | DONE (BOUNDED; 4.5D+ DEFERRED) |
+| 4 | Live Context and Personal Memory | CAP-008 through CAP-013 | DONE (BOUNDED; provider-assisted 4.5D recall accepted; strict independent verifier + 4.5E deferred) |
 | 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | PLANNED — AWAITING OWNER START |
 | 6 | Knowledge, Current Research, and Truthfulness | CAP-014 through CAP-017 | PLANNED |
 | 7 | Governed Capability Runtime + Local Files/System/Project Safe Reads | CAP-018, CAP-021, CAP-022, CAP-032 | PLANNED |
@@ -128,9 +128,9 @@ Closure evidence: `docs/research/STEP_3_CLOSURE_ACCEPTANCE.md`.
 
 ## Step 4 - Live Context and Personal Memory
 
-Step 4 is **bounded complete**. The accepted outcome provides a coherent privacy-aware memory/context foundation without pretending that automatic semantic conversational recall is solved.
+Step 4 is **bounded complete**. The accepted outcome provides a coherent privacy-aware memory/context foundation plus a pragmatic governed semantic-recall tool, without pretending that the original proof-quality independent semantic verifier or automatic context injection is solved.
 
-Accepted through Phase 4.5C:
+Accepted foundation:
 
 - bounded live session/task context;
 - encrypted canonical durable facts/preferences/rules with provenance and temporal lifecycle;
@@ -142,15 +142,32 @@ Accepted through Phase 4.5C:
 - Qwen reranking over already-eligible canonical records;
 - deterministic security/sensitivity/lifecycle boundaries ahead of learned ranking.
 
-Deliberately deferred:
+Accepted bounded 4.5D provider-assisted recall:
 
-- Phase 4.5D semantic answerability/release authority;
-- Phase 4.5E automatic semantic memory injection into normal conversation;
+- opt-in zero-argument `recall_memory` tool reads the latest accepted USER question;
+- active provider receives only a cloud-safe eligible facet catalog for structured semantic selection;
+- the provider returns a numbered facet index rather than owning canonical keys;
+- JARVIS reconstructs and deterministically validates the canonical facet;
+- one exact current assertion must resolve;
+- the same active provider performs a second structured semantic check;
+- JARVIS releases only directly-supported current-value/current-comparison requests;
+- provider errors, malformed output, unsafe semantic roles, ambiguity, conflicts, rate limits, and quota failures all abstain;
+- `local_only` / secret-prohibited memory cannot cross the cloud recall boundary;
+- the provider never gains mutation or canonical-truth authority.
+
+Owner acceptance on exact code SHA `bd95734032e2f936945fa02e16bb002ac6b478ea` used Gemini `gemini-3.5-flash`. The live smoke successfully recalled `test_color = purple`, confirmed a direct comparison, abstained on a `why` question without inventing a reason, and physically forgot the disposable memory. Full Code Quality run `34190011723` passed all normal gates.
+
+Still deliberately deferred:
+
+- the original strict independent Phase-4.5D semantic answerability/release verifier;
+- Phase 4.5E automatic semantic memory injection through ordinary conversation context assembly;
 - remaining unstarted Step-4 extensions.
 
-Multiple frozen research-backed 4.5D approaches failed the required zero-unsafe-release / multilingual behavior gates. The owner chose a fail-closed bounded closure rather than lowering those gates. Retrieval infrastructure remains accepted but cannot automatically establish that a memory is appropriate evidence for an arbitrary question.
+Earlier research-backed independent 4.5D approaches failed the frozen zero-unsafe-release / multilingual behavior gates and remain retired. Their failure evidence is not rewritten by the provider-assisted acceptance.
 
-Closure evidence: `docs/research/STEP_4_PHASE_4_5D_DEFERRED_CLOSURE.md`.
+Historical strict-deferral evidence: `docs/research/STEP_4_PHASE_4_5D_DEFERRED_CLOSURE.md`.
+
+Accepted fallback evidence: `docs/research/STEP_4_PHASE_4_5D_PROVIDER_ASSISTED_FALLBACK.md`.
 
 ## Final Target - Personal Intelligence Runtime
 

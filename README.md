@@ -5,12 +5,13 @@ JARVIS V1 is a clean implementation of a personal, voice-first JARVIS assistant.
 The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARVIS
 V1 does not import it or depend on it at runtime.
 
-Steps 1, 2, 2.5, and 3 are accepted. Step 4 — Live Context and Personal Memory — is
-closed as a **bounded accepted foundation through Phase 4.5C**. Phase 4.5D semantic
-release/answerability and automatic semantic conversational memory injection remain
-deliberately deferred rather than weakening the safety boundary. Step 5 is planned but
-**not started** and awaits explicit owner authorization. See `docs/CURRENT_PLAN.md` for
-the current operational state.
+Steps 1, 2, 2.5, 3, and Step 4's bounded accepted scope are complete. Step 4 — Live
+Context and Personal Memory — includes the accepted 4.5A–4.5C retrieval foundation
+plus an **opt-in bounded provider-assisted 4.5D `recall_memory` fallback**. The original
+strict independent 4.5D verifier remains unresolved, and Phase 4.5E automatic semantic
+memory injection remains deliberately deferred. Step 5 is planned but **not started**
+and awaits explicit owner authorization. See `docs/CURRENT_PLAN.md` for the current
+operational state.
 
 ## Setup
 
@@ -43,6 +44,19 @@ Different capability roles may use different model IDs within the selected provi
 family (for example realtime voice versus structured extraction), but production
 subsystems may not independently select a second cloud-AI provider. Research bake-offs
 may compare providers without changing this production rule.
+
+Bounded provider-assisted semantic recall is opt-in. When desired, configure a model
+from the same active provider family, for example the owner-accepted Gemini path:
+
+```powershell
+$env:JARVIS_MEMORY_ENABLED = "true"
+$env:JARVIS_MEMORY_SEMANTIC_RECALL_MODEL = "gemini-3.5-flash"
+```
+
+This enables the governed `recall_memory` tool path; it does **not** enable automatic
+semantic-memory injection through normal conversation context assembly. Provider errors
+or quota/rate-limit failures cause semantic recall to abstain rather than silently
+switch providers or release memory.
 
 API keys must stay local. Do not commit `.env` or paste keys into source code. Normal
 machine settings are persisted by `jarvis-setup`; secrets remain in the Windows

@@ -9,8 +9,10 @@ import pytest
 from jarvis.memory.query_interpreters import (
     GeminiMemoryQueryInterpreter,
     MemoryQueryInterpretationError,
+    MemoryQuerySelection,
     OpenAIMemoryQueryInterpreter,
     build_memory_query_interpreter,
+    materialize_memory_query_selection,
     memory_query_interpreter_input,
 )
 from jarvis.memory.query_plan import (
@@ -28,6 +30,17 @@ def _catalog() -> MemoryFacetCatalog:
             MemoryFacetKey("profile", "Aquila", "archive_destination"),
             MemoryFacetKey("profile", "Aquila", "signin_method"),
         )
+    )
+
+
+def _selection(*, facet_index: int = 0) -> MemoryQuerySelection:
+    return MemoryQuerySelection(
+        intent=MemoryQueryIntent.EXACT_FACT,
+        facet_index=facet_index,
+        subject_reference="Aquila",
+        requested_relation="archive destination",
+        temporal_scope=MemoryTemporalScope.CURRENT,
+        as_of_text=None,
     )
 
 
@@ -75,7 +88,7 @@ class FakeGeminiClient:
         self.interactions = interactions
 
 
-def test_interpreter_input_contains_only_user_query_and_facet_keys() -> None:
+def test_interpreter_input_numbers_facet_keys_without_values() -> None:
     payload = json.loads(
         memory_query_interpreter_input(
             text="Aquila archive destination?",
@@ -87,11 +100,13 @@ def test_interpreter_input_contains_only_user_query_and_facet_keys() -> None:
         "user_query": "Aquila archive destination?",
         "eligible_facets": [
             {
+                "facet_index": 0,
                 "subject_scope": "profile",
                 "subject": "Aquila",
                 "predicate": "archive_destination",
             },
             {
+                "facet_index": 1,
                 "subject_scope": "profile",
                 "subject": "Aquila",
                 "predicate": "signin_method",
@@ -104,10 +119,54 @@ def test_interpreter_input_contains_only_user_query_and_facet_keys() -> None:
     assert "source_id" not in serialized
 
 
+def test_materialize_selection_reconstructs_canonical_facet_from_index() -> None:
+    proposal = materialize_memory_query_selection(_selection(), catalog=_catalog())
+
+    assert proposal == _proposal()
+
+
+def test_materialize_exact_selection_with_no_facet_stays_incomplete_for_abstain() -> (
+    None
+):
+    proposal = materialize_memory_query_selection(
+        _selection(facet_index=-1),
+        catalog=_catalog(),
+    )
+
+    assert proposal.intent is MemoryQueryIntent.EXACT_FACT
+    assert proposal.subject_scope is None
+    assert proposal.subject is None
+    assert proposal.predicate is None
+    assert proposal.subject_reference == "Aquila"
+    assert proposal.requested_relation == "archive destination"
+
+
+def test_materialize_selection_rejects_out_of_range_facet_index() -> None:
+    with pytest.raises(MemoryQueryInterpretationError, match="outside"):
+        materialize_memory_query_selection(
+            _selection(facet_index=99),
+            catalog=_catalog(),
+        )
+
+
+def test_selection_schema_requires_explicit_facet_index_and_nullable_fields() -> None:
+    schema = MemoryQuerySelection.model_json_schema()
+
+    assert {
+        "intent",
+        "facet_index",
+        "subject_reference",
+        "requested_relation",
+        "temporal_scope",
+        "as_of_text",
+    }.issubset(set(schema["required"]))
+    assert schema["properties"]["facet_index"]["minimum"] == -1
+
+
 @pytest.mark.asyncio
-async def test_openai_interpreter_uses_native_schema_without_storage() -> None:
-    proposal = _proposal()
-    client = FakeOpenAIClient(proposal)
+async def test_openai_interpreter_uses_selection_schema_without_storage() -> None:
+    selection = _selection()
+    client = FakeOpenAIClient(selection)
     interpreter = OpenAIMemoryQueryInterpreter(client=client, model="gpt-test")
 
     result = await interpreter.interpret(
@@ -115,22 +174,22 @@ async def test_openai_interpreter_uses_native_schema_without_storage() -> None:
         catalog=_catalog(),
     )
 
-    assert result is proposal
+    assert result == _proposal()
     assert interpreter.provider_name == "openai"
     assert interpreter.model_name == "gpt-test"
     assert len(client.responses.calls) == 1
     call = client.responses.calls[0]
     assert call["model"] == "gpt-test"
     assert call["store"] is False
-    assert call["text_format"] is MemoryQueryProposal
+    assert call["text_format"] is MemoryQuerySelection
     assert len(call["input"]) == 2
     payload = json.loads(call["input"][-1]["content"])
     assert payload["user_query"] == "Aquila archive destination?"
-    assert set(payload) == {"user_query", "eligible_facets"}
+    assert payload["eligible_facets"][0]["facet_index"] == 0
 
 
 @pytest.mark.asyncio
-async def test_openai_interpreter_fails_closed_without_validated_proposal() -> None:
+async def test_openai_interpreter_fails_closed_without_validated_selection() -> None:
     client = FakeOpenAIClient(None)
     interpreter = OpenAIMemoryQueryInterpreter(client=client, model="gpt-test")
 
@@ -142,9 +201,9 @@ async def test_openai_interpreter_fails_closed_without_validated_proposal() -> N
 
 
 @pytest.mark.asyncio
-async def test_gemini_interpreter_uses_json_schema_without_storage() -> None:
-    proposal = _proposal()
-    client = FakeGeminiClient(proposal.model_dump_json())
+async def test_gemini_interpreter_uses_selection_schema_without_storage() -> None:
+    selection = _selection()
+    client = FakeGeminiClient(selection.model_dump_json())
     interpreter = GeminiMemoryQueryInterpreter(client=client, model="gemini-test")
 
     result = await interpreter.interpret(
@@ -152,7 +211,7 @@ async def test_gemini_interpreter_uses_json_schema_without_storage() -> None:
         catalog=_catalog(),
     )
 
-    assert result == proposal
+    assert result == _proposal()
     assert interpreter.provider_name == "gemini"
     assert interpreter.model_name == "gemini-test"
     assert len(client.interactions.calls) == 1
@@ -162,20 +221,18 @@ async def test_gemini_interpreter_uses_json_schema_without_storage() -> None:
     assert call["response_format"] == {
         "type": "text",
         "mime_type": "application/json",
-        "schema": MemoryQueryProposal.model_json_schema(),
+        "schema": MemoryQuerySelection.model_json_schema(),
     }
     payload = json.loads(call["input"])
     assert payload["user_query"] == "Aquila archive destination?"
-    assert set(payload) == {"user_query", "eligible_facets"}
+    assert payload["eligible_facets"][0]["facet_index"] == 0
     assert "decide whether any memory may be released" in call["system_instruction"]
 
 
 @pytest.mark.asyncio
-async def test_schema_valid_but_incomplete_exact_proposal_is_returned_for_policy_abstain() -> (
-    None
-):
-    incomplete = MemoryQueryProposal(intent=MemoryQueryIntent.EXACT_FACT)
-    client = FakeGeminiClient(incomplete.model_dump_json())
+async def test_gemini_exact_selection_minus_one_returns_policy_abstain_shape() -> None:
+    selection = _selection(facet_index=-1)
+    client = FakeGeminiClient(selection.model_dump_json())
     interpreter = GeminiMemoryQueryInterpreter(client=client, model="gemini-test")
 
     result = await interpreter.interpret(
@@ -183,13 +240,14 @@ async def test_schema_valid_but_incomplete_exact_proposal_is_returned_for_policy
         catalog=_catalog(),
     )
 
-    assert result == incomplete
+    assert result.intent is MemoryQueryIntent.EXACT_FACT
+    assert result.subject_scope is None
     assert result.subject is None
     assert result.predicate is None
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("output", (None, "", "not-json", '{"intent":"not-an-intent"}'))
+@pytest.mark.parametrize("output", (None, "", "not-json", '{"intent":"exact_fact"}'))
 async def test_gemini_interpreter_fails_closed_on_missing_or_invalid_output(
     output: Any,
 ) -> None:
