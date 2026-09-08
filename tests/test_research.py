@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 import pytest
 
 from jarvis.conversation import ConversationRole, ConversationSession
-from jarvis.knowledge.provider_evidence import extract_provider_evidence
 from jarvis.knowledge.research import (
     CurrentResearchService,
     EvidenceSource,
@@ -11,23 +10,27 @@ from jarvis.knowledge.research import (
     ResearchMode,
     ResearchStatus,
 )
-from jarvis.knowledge.research_providers import build_current_research_service
+from jarvis.knowledge.research_providers import (
+    ExaWebResearchProvider,
+    build_current_research_service,
+)
 from jarvis.voice.research_tools import ResearchAgentTools
 
 
-def _source(domain: str, path: str = "/") -> EvidenceSource:
+def _source(domain: str, path: str = "/", *, excerpt: str = "evidence") -> EvidenceSource:
     return EvidenceSource(
         source_id=f"src-{domain}-{path}",
         url=f"https://{domain}{path}",
         title=domain,
         domain=domain,
         retrieved_at=datetime.now(UTC),
+        excerpt=excerpt,
     )
 
 
 class _FakeProvider:
     provider_name = "fake"
-    model_name = "fake-research"
+    model_name = "fake-search"
 
     def __init__(
         self,
@@ -35,7 +38,7 @@ class _FakeProvider:
         *,
         error: Exception | None = None,
     ) -> None:
-        self.evidence = evidence or ProviderResearchEvidence(answer="", sources=())
+        self.evidence = evidence or ProviderResearchEvidence(sources=())
         self.error = error
         self.calls: list[tuple[str, ResearchMode]] = []
         self.closed = False
@@ -50,6 +53,10 @@ class _FakeProvider:
         self.closed = True
 
 
+class _QuotaError(RuntimeError):
+    status_code = 429
+
+
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
@@ -58,10 +65,7 @@ class _FakeProvider:
         (" authoritative ", ResearchMode.AUTHORITATIVE),
     ],
 )
-def test_research_mode_parses_bounded_values(
-    value: str,
-    expected: ResearchMode,
-) -> None:
+def test_research_mode_parses_bounded_values(value: str, expected: ResearchMode) -> None:
     assert ResearchMode.parse(value) is expected
 
 
@@ -72,107 +76,57 @@ def test_research_mode_rejects_unknown_value() -> None:
 
 @pytest.mark.asyncio
 async def test_current_research_marks_one_source_as_web_researched() -> None:
-    provider = _FakeProvider(
-        ProviderResearchEvidence(
-            answer="A current answer.",
-            sources=(_source("example.com"),),
-            executed_queries=("current example",),
-        )
-    )
+    provider = _FakeProvider(ProviderResearchEvidence(sources=(_source("example.com"),)))
     service = CurrentResearchService(provider)
 
-    result = await service.research("What is current?", mode=ResearchMode.CURRENT)
+    result = await service.research("current example", mode=ResearchMode.CURRENT)
 
     assert result.status is ResearchStatus.WEB_RESEARCHED
     assert result.ok is True
-    assert result.executed_queries == ("current example",)
-    assert provider.calls == [("What is current?", ResearchMode.CURRENT)]
+    assert result.query == "current example"
+    assert provider.calls == [("current example", ResearchMode.CURRENT)]
 
 
 @pytest.mark.asyncio
 async def test_fact_check_requires_multiple_source_domains() -> None:
-    provider = _FakeProvider(
-        ProviderResearchEvidence(
-            answer="One-source answer.",
-            sources=(_source("example.com"),),
-        )
+    service = CurrentResearchService(
+        _FakeProvider(ProviderResearchEvidence(sources=(_source("example.com"),)))
     )
-    service = CurrentResearchService(provider)
 
-    result = await service.research("Is this claim true?", mode=ResearchMode.FACT_CHECK)
+    result = await service.research("Is this true?", mode=ResearchMode.FACT_CHECK)
 
     assert result.status is ResearchStatus.INSUFFICIENT_EVIDENCE
-    assert result.ok is False
     assert result.reason_code == "fact_check_requires_multiple_source_domains"
 
 
 @pytest.mark.asyncio
-async def test_fact_check_accepts_multi_source_research() -> None:
-    provider = _FakeProvider(
-        ProviderResearchEvidence(
-            answer="Corroborated answer.",
-            sources=(_source("one.example"), _source("two.example")),
+async def test_fact_check_accepts_multiple_source_domains() -> None:
+    service = CurrentResearchService(
+        _FakeProvider(
+            ProviderResearchEvidence(
+                sources=(_source("one.example"), _source("two.example"))
+            )
         )
     )
-    service = CurrentResearchService(provider)
 
-    result = await service.research("Is this claim true?", mode=ResearchMode.FACT_CHECK)
+    result = await service.research("Is this true?", mode=ResearchMode.FACT_CHECK)
 
     assert result.status is ResearchStatus.MULTI_SOURCE_RESEARCHED
     assert result.ok is True
 
 
 @pytest.mark.asyncio
-async def test_authoritative_mode_fails_closed_without_authoritative_domain() -> None:
-    provider = _FakeProvider(
-        ProviderResearchEvidence(
-            answer="Secondary-only answer.",
-            sources=(_source("random-blog.example"), _source("news.example")),
-        )
-    )
-    service = CurrentResearchService(provider)
-
-    result = await service.research(
-        "What does the regulator require?",
-        mode=ResearchMode.AUTHORITATIVE,
-    )
-
-    assert result.status is ResearchStatus.INSUFFICIENT_EVIDENCE
-    assert result.reason_code == "authoritative_source_not_observed"
-
-
-@pytest.mark.asyncio
-async def test_authoritative_mode_accepts_observed_primary_domain() -> None:
-    provider = _FakeProvider(
-        ProviderResearchEvidence(
-            answer="Official answer.",
-            sources=(_source("example.gov"),),
-        )
-    )
-    service = CurrentResearchService(provider)
-
-    result = await service.research(
-        "What does the regulator require?",
-        mode=ResearchMode.AUTHORITATIVE,
-    )
-
-    assert result.status is ResearchStatus.AUTHORITATIVE_SOURCE_PRESENT
-    assert result.ok is True
-
-
-@pytest.mark.asyncio
 async def test_authoritative_mode_accepts_curated_first_party_docs() -> None:
-    provider = _FakeProvider(
-        ProviderResearchEvidence(
-            answer="Official product documentation.",
-            sources=(_source("ai.google.dev", "/gemini-api/docs/models"),),
+    service = CurrentResearchService(
+        _FakeProvider(
+            ProviderResearchEvidence(
+                sources=(_source("ai.google.dev", "/gemini-api/docs/models"),)
+            )
         )
     )
-    service = CurrentResearchService(provider)
 
     result = await service.research(
-        "What does Google document about Gemini?",
-        mode=ResearchMode.AUTHORITATIVE,
+        "What does Google document?", mode=ResearchMode.AUTHORITATIVE
     )
 
     assert result.status is ResearchStatus.AUTHORITATIVE_SOURCE_PRESENT
@@ -180,18 +134,15 @@ async def test_authoritative_mode_accepts_curated_first_party_docs() -> None:
 
 
 @pytest.mark.asyncio
-async def test_authoritative_mode_does_not_trust_arbitrary_academic_domain() -> None:
-    provider = _FakeProvider(
-        ProviderResearchEvidence(
-            answer="Academic page only.",
-            sources=(_source("random-university.edu"),),
+async def test_authoritative_mode_fails_closed_for_unknown_domain() -> None:
+    service = CurrentResearchService(
+        _FakeProvider(
+            ProviderResearchEvidence(sources=(_source("random-university.edu"),))
         )
     )
-    service = CurrentResearchService(provider)
 
     result = await service.research(
-        "What does the regulator require?",
-        mode=ResearchMode.AUTHORITATIVE,
+        "What does the regulator require?", mode=ResearchMode.AUTHORITATIVE
     )
 
     assert result.status is ResearchStatus.INSUFFICIENT_EVIDENCE
@@ -199,114 +150,65 @@ async def test_authoritative_mode_does_not_trust_arbitrary_academic_domain() -> 
 
 
 @pytest.mark.asyncio
-async def test_provider_failure_becomes_research_unavailable() -> None:
+async def test_provider_quota_failure_keeps_exact_failure_class() -> None:
     service = CurrentResearchService(
-        _FakeProvider(error=RuntimeError("provider exploded"))
+        _FakeProvider(error=_QuotaError("quota exceeded for this account"))
     )
 
     result = await service.research("What happened today?")
 
     assert result.status is ResearchStatus.RESEARCH_UNAVAILABLE
-    assert result.ok is False
-    assert result.reason_code == "research_provider_error"
+    assert result.reason_code == "research_quota_exhausted"
     assert result.sources == ()
 
 
-def test_provider_evidence_normalizes_queries_sources_and_citations() -> None:
-    payload = [
-        {
-            "type": "google_search_call",
-            "arguments": {"queries": ["first query", "second query"]},
-        },
-        {
-            "type": "google_search_result",
-            "result": [{"search_suggestions": [{"query": "first query"}]}],
-        },
-        {
-            "type": "model_output",
-            "content": [
-                {
-                    "type": "text",
-                    "annotations": [
-                        {
-                            "type": "url_citation",
-                            "url": "https://example.gov/report",
-                            "title": "Official example",
-                            "start_index": 4,
-                            "end_index": 15,
-                        }
-                    ],
-                }
-            ],
-        },
-    ]
-
-    evidence = extract_provider_evidence(
-        payload,
-        answer="Grounded answer.",
-        retrieved_at=datetime.now(UTC),
-    )
-
-    assert evidence.answer == "Grounded answer."
-    assert evidence.executed_queries == ("first query", "second query")
-    assert len(evidence.sources) == 1
-    assert evidence.sources[0].domain == "example.gov"
-    assert len(evidence.citations) == 1
-    assert evidence.citations[0].source_id == evidence.sources[0].source_id
-    assert evidence.citations[0].start_index == 4
-    assert evidence.citations[0].end_index == 15
-
-
-def test_openai_style_search_sources_are_normalized() -> None:
-    payload = [
-        {
-            "type": "web_search_call",
-            "action": {
-                "type": "search",
-                "query": "latest source",
-                "sources": [
+def test_exa_provider_normalizes_realistic_sdk_results() -> None:
+    class _FakeExa:
+        def search(self, query: str, **kwargs: object):
+            assert query == "latest Gemini API"
+            assert kwargs["type"] == "auto"
+            assert kwargs["contents"] == {"highlights": True}
+            return {
+                "results": [
                     {
-                        "type": "url",
-                        "url": "https://docs.example.com/latest",
-                        "title": "Latest docs",
+                        "title": "Gemini API docs",
+                        "url": "https://ai.google.dev/gemini-api/docs",
+                        "publishedDate": "2026-09-02T00:00:00Z",
+                        "highlights": ["Gemini 3.8 Flash is generally available."],
                     }
-                ],
-            },
-        }
-    ]
+                ]
+            }
 
-    evidence = extract_provider_evidence(
-        payload,
-        answer="Latest answer.",
-        retrieved_at=datetime.now(UTC),
-    )
+    provider = ExaWebResearchProvider()
+    provider._client = _FakeExa()  # type: ignore[assignment]
 
-    assert evidence.executed_queries == ("latest source",)
-    assert [source.domain for source in evidence.sources] == ["docs.example.com"]
+    evidence = provider.research("latest Gemini API", ResearchMode.CURRENT)
+
+    assert len(evidence.sources) == 1
+    source = evidence.sources[0]
+    assert source.domain == "ai.google.dev"
+    assert source.excerpt == "Gemini 3.8 Flash is generally available."
+    assert source.published_at == "2026-09-02T00:00:00Z"
 
 
-def test_research_builder_follows_active_ai_provider_without_needing_key_at_build(
+def test_research_builder_is_independent_of_active_ai_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("EXA_API_KEY", raising=False)
 
-    gemini = build_current_research_service(provider="gemini")
-    openai = build_current_research_service(provider="openai")
+    gemini_runtime = build_current_research_service(provider="gemini")
+    openai_runtime = build_current_research_service(provider="openai")
 
-    assert gemini.provider_name == "gemini"
-    assert gemini.model_name == "gemini-3.8-flash"
-    assert openai.provider_name == "openai"
-    assert openai.model_name == "gpt-5.6-sol"
+    assert gemini_runtime.provider_name == "exa"
+    assert openai_runtime.provider_name == "exa"
+    assert gemini_runtime.model_name == "exa-search"
+    assert openai_runtime.model_name == "exa-search"
 
 
 @pytest.mark.asyncio
-async def test_voice_research_tool_uses_exact_latest_canonical_user_question() -> None:
+async def test_voice_brain_can_issue_subquery_but_canonical_turn_remains_anchored() -> None:
     provider = _FakeProvider(
-        ProviderResearchEvidence(
-            answer="Researched.",
-            sources=(_source("example.com"),),
-        )
+        ProviderResearchEvidence(sources=(_source("docs.snowflake.com"),))
     )
     service = CurrentResearchService(provider)
     conversation = ConversationSession(session_id="research-session")
@@ -315,17 +217,20 @@ async def test_voice_research_tool_uses_exact_latest_canonical_user_question() -
     conversation.accept_turn(ConversationRole.ASSISTANT, "Old answer")
     latest = conversation.accept_turn(
         ConversationRole.USER,
-        "What changed in Snowflake today?",
+        "Research what changed in Snowflake today and verify the release notes.",
     )
     tools = ResearchAgentTools(service, conversation)
 
-    payload = await tools.research(mode="current")
+    payload = await tools.research(
+        "Snowflake release notes September 2026",
+        mode="authoritative",
+    )
 
     assert provider.calls == [
-        ("What changed in Snowflake today?", ResearchMode.CURRENT)
+        ("Snowflake release notes September 2026", ResearchMode.AUTHORITATIVE)
     ]
     assert payload["ok"] is True
-    assert latest.text == "What changed in Snowflake today?"
+    assert payload["canonical_user_turn_id"] == latest.turn_id
 
 
 @pytest.mark.asyncio
