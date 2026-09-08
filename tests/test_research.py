@@ -259,9 +259,9 @@ def test_research_builder_follows_active_ai_provider_without_needing_key_at_buil
     openai = build_current_research_service(provider="openai")
 
     assert gemini.provider_name == "gemini"
-    assert gemini.model_name == "gemini-3.7-flash"
+    assert gemini.model_name == "gemini-3.8-flash"
     assert openai.provider_name == "openai"
-    assert openai.model_name == "gpt-5.2"
+    assert openai.model_name == "gpt-5.6-sol"
 
 
 @pytest.mark.asyncio
