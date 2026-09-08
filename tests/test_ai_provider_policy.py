@@ -95,7 +95,6 @@ def test_production_source_has_one_provider_selector_and_one_credential_owner() 
 
 def test_provider_sdk_imports_stay_inside_approved_adapter_boundaries() -> None:
     allowed = {
-        Path("src/jarvis/knowledge/research_providers.py"),
         Path("src/jarvis/memory/extractors.py"),
         Path("src/jarvis/memory/query_interpreters.py"),
         Path("src/jarvis/voice/livekit_session.py"),
