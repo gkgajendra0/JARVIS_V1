@@ -38,12 +38,15 @@ from jarvis.memory.query_interpreters import build_memory_query_interpreter
 from jarvis.memory.release_guard import build_memory_release_guard
 from jarvis.memory.runtime import build_default_memory_runtime
 from jarvis.preflight import StartupPreflightError, require_startup_preflight
+from jarvis.provider_resilience import ProviderResilienceState
 from jarvis.vision.service import build_default_vision_service
 from jarvis.voice.canonical_active_speaker_runtime import (
     CanonicalActiveSpeakerRuntimeController,
 )
 from jarvis.voice.livekit_session import create_voice_session
+from jarvis.voice.local_status_speech import build_local_status_speech
 from jarvis.voice.media_devices_audio import MediaDevicesConversationRuntime
+from jarvis.voice.provider_resilience import ProviderResilienceSessionObserver
 from jarvis.voice.wakeword import LiveKitWakeDetector, load_livekit_predictor
 
 LOGGER = logging.getLogger(__name__)
@@ -195,8 +198,24 @@ def build_production_voice_runtime(
             config.memory_candidate_extraction_model,
         )
 
+    provider_resilience_state = ProviderResilienceState()
+    local_status_speech = build_local_status_speech()
+    LOGGER.info(
+        "Step-5 minimal provider resilience is configured: provider=%s "
+        "terminal_error_diagnosis=True local_status_speech=%s automatic_failover=False",
+        config.ai_provider,
+        local_status_speech is not None,
+    )
+
     def production_session_factory(session_config: JarvisConfig):
         session, bridge = create_voice_session(session_config)
+        ProviderResilienceSessionObserver(
+            session,
+            provider=session_config.ai_provider,
+            state=provider_resilience_state,
+            status_speech=local_status_speech,
+            output_getter=lambda: audio.output,
+        )
         if candidate_extractor is not None:
             candidate_runtime = MemoryCandidateSessionRuntime(
                 conversation=bridge.conversation,
