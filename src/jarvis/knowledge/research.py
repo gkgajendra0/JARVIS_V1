@@ -15,8 +15,35 @@ MAX_TOOL_ANSWER_CHARS = 12_000
 MAX_TOOL_SOURCES = 12
 MAX_TOOL_QUERIES = 12
 
-_AUTHORITATIVE_SUFFIXES = (".gov", ".gov.in", ".nic.in", ".edu", ".ac.in")
-_AUTHORITATIVE_DOMAINS = frozenset({"who.int", "rbi.org.in", "sebi.gov.in"})
+# This is deliberately a bounded trust registry, not a claim that every page on the
+# internet can be classified authoritatively from its TLD. Government namespaces are
+# strong deterministic signals; common first-party product/standards documentation
+# used by JARVIS is curated explicitly. Unknown domains fail closed in authoritative
+# mode until a later evidence-driven policy extension is approved.
+_AUTHORITATIVE_GOVERNMENT_SUFFIXES = (".gov", ".gov.in", ".nic.in")
+_AUTHORITATIVE_BASE_DOMAINS = frozenset(
+    {
+        "who.int",
+        "rbi.org.in",
+        "sebi.gov.in",
+        "ai.google.dev",
+        "developers.google.com",
+        "cloud.google.com",
+        "developers.openai.com",
+        "platform.openai.com",
+        "docs.livekit.io",
+        "docs.snowflake.com",
+        "docs.aws.amazon.com",
+        "learn.microsoft.com",
+        "developer.apple.com",
+        "developer.android.com",
+        "developer.nvidia.com",
+        "docs.nvidia.com",
+        "ietf.org",
+        "w3.org",
+        "nist.gov",
+    }
+)
 
 
 def utc_now() -> datetime:
@@ -131,10 +158,20 @@ class ResearchProvider(Protocol):
     def close(self) -> None: ...
 
 
+def _matches_base_domain(domain: str, base_domain: str) -> bool:
+    return domain == base_domain or domain.endswith(f".{base_domain}")
+
+
 def _is_authoritative_domain(domain: str) -> bool:
     normalized = domain.casefold().removeprefix("www.")
-    return normalized in _AUTHORITATIVE_DOMAINS or any(
-        normalized.endswith(suffix) for suffix in _AUTHORITATIVE_SUFFIXES
+    if any(
+        normalized.endswith(suffix)
+        for suffix in _AUTHORITATIVE_GOVERNMENT_SUFFIXES
+    ):
+        return True
+    return any(
+        _matches_base_domain(normalized, base_domain)
+        for base_domain in _AUTHORITATIVE_BASE_DOMAINS
     )
 
 
