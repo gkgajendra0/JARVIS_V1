@@ -40,7 +40,9 @@ def test_production_context_shadow_uses_shared_models_and_session_local_runtime(
     reranker = object()
     created_bridges: list[FakeBridge] = []
 
-    monkeypatch.setattr(production_runtime, "load_livekit_predictor", lambda path: object())
+    monkeypatch.setattr(
+        production_runtime, "load_livekit_predictor", lambda path: object()
+    )
     monkeypatch.setattr(
         production_runtime,
         "LiveKitWakeDetector",
