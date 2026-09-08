@@ -114,6 +114,25 @@ def test_http_failures_map_to_bounded_diagnostics(
     assert failure.status_code == status
 
 
+def test_http_status_is_read_from_nested_response_object() -> None:
+    class FakeResponse:
+        status_code = 429
+        reason = "Too Many Requests"
+
+    class RequestsStyleHTTPError(RuntimeError):
+        def __init__(self) -> None:
+            super().__init__("429 Client Error")
+            self.response = FakeResponse()
+
+    failure = classify_provider_failure(
+        RequestsStyleHTTPError(),
+        provider="exa",
+    )
+
+    assert failure.status_code == 429
+    assert failure.kind is ProviderFailureKind.RATE_LIMITED
+
+
 def test_connection_failure_does_not_claim_exact_internet_root_cause() -> None:
     class APIConnectionError(RuntimeError):
         pass
