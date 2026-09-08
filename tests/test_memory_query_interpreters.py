@@ -125,7 +125,9 @@ def test_materialize_selection_reconstructs_canonical_facet_from_index() -> None
     assert proposal == _proposal()
 
 
-def test_materialize_exact_selection_with_no_facet_stays_incomplete_for_abstain() -> None:
+def test_materialize_exact_selection_with_no_facet_stays_incomplete_for_abstain() -> (
+    None
+):
     proposal = materialize_memory_query_selection(
         _selection(facet_index=-1),
         catalog=_catalog(),
