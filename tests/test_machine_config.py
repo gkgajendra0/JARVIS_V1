@@ -14,6 +14,7 @@ def test_machine_config_round_trip(tmp_path: Path) -> None:
         {
             "JARVIS_AI_PROVIDER": "gemini",
             "JARVIS_AUDIO_INPUT_DEVICE": "name:Osmo|hostapi:Windows WASAPI",
+            "JARVIS_MEMORY_CONTEXT_SHADOW_ENABLED": "true",
         },
         path,
     )
@@ -22,6 +23,7 @@ def test_machine_config_round_trip(tmp_path: Path) -> None:
     assert load_machine_settings(path) == {
         "JARVIS_AI_PROVIDER": "gemini",
         "JARVIS_AUDIO_INPUT_DEVICE": "name:Osmo|hostapi:Windows WASAPI",
+        "JARVIS_MEMORY_CONTEXT_SHADOW_ENABLED": "true",
     }
 
 
