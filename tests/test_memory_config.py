@@ -18,7 +18,9 @@ def _isolate_machine_config(
 
 
 def test_memory_rollout_is_disabled_by_default() -> None:
-    assert JarvisConfig.from_environment().memory_enabled is False
+    config = JarvisConfig.from_environment()
+    assert config.memory_enabled is False
+    assert config.memory_context_shadow_enabled is False
 
 
 def test_memory_rollout_reads_explicit_environment_switch(
@@ -34,6 +36,23 @@ def test_invalid_memory_rollout_value_fails_truthfully(
     monkeypatch.setenv("JARVIS_MEMORY_ENABLED", "sometimes")
     with pytest.raises(ValueError, match="JARVIS_MEMORY_ENABLED"):
         JarvisConfig.from_environment()
+
+
+def test_memory_context_shadow_requires_memory_enabled() -> None:
+    with pytest.raises(ValueError, match="JARVIS_MEMORY_CONTEXT_SHADOW_ENABLED"):
+        JarvisConfig(memory_context_shadow_enabled=True)
+
+
+def test_memory_context_shadow_reads_explicit_environment_switch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("JARVIS_MEMORY_ENABLED", "true")
+    monkeypatch.setenv("JARVIS_MEMORY_CONTEXT_SHADOW_ENABLED", "true")
+
+    config = JarvisConfig.from_environment()
+
+    assert config.memory_enabled is True
+    assert config.memory_context_shadow_enabled is True
 
 
 def test_memory_rollout_setting_may_be_persisted_without_secrets(
