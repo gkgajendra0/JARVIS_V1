@@ -2,7 +2,8 @@
 
 This runtime observes already-accepted canonical USER turns and measures the
 existing local retrieval stack without mutating conversation state, provider
-context, or durable memory.
+context, or canonical durable memory. Rebuildable encrypted embedding rows may be
+refreshed so the measured dense path is real rather than silently lexical-only.
 """
 
 from __future__ import annotations
@@ -11,7 +12,6 @@ import asyncio
 import logging
 import time
 from collections import deque
-from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -19,6 +19,8 @@ import numpy as np
 
 from jarvis.conversation import ConversationRole, ConversationTurn
 
+from .assertions import SemanticAssertionRecord
+from .query_plan import MemoryFacetCatalog, MemoryFacetKey
 from .retrieval import RetrievalCandidate, RetrievalEligibility
 from .retrieval_models import (
     QueryEmbeddingEncoder,
@@ -31,7 +33,22 @@ DEFAULT_CANDIDATE_LIMIT = 3
 DEFAULT_MAX_OBSERVATIONS = 64
 
 
-class FirstStageMemoryRetriever(Protocol):
+class MemoryContextShadowRetriever(Protocol):
+    async def eligible_facet_catalog(
+        self,
+        *,
+        eligibility: RetrievalEligibility | None = None,
+    ) -> MemoryFacetCatalog:
+        """Return exact eligible current facets."""
+
+    async def retrieve_exact_current_facet(
+        self,
+        facet: MemoryFacetKey,
+        *,
+        eligibility: RetrievalEligibility | None = None,
+    ) -> tuple[SemanticAssertionRecord, ...]:
+        """Return eligible current assertions for one exact facet."""
+
     async def retrieve_first_stage(
         self,
         query_text: str,
@@ -44,12 +61,32 @@ class FirstStageMemoryRetriever(Protocol):
         """Return already-eligible first-stage retrieval candidates."""
 
 
+class DerivedEmbeddingStore(Protocol):
+    async def is_current(
+        self,
+        assertion_id: str,
+        *,
+        normalized_text: str,
+    ) -> bool:
+        """Return whether the selected derived-vector contract is current."""
+
+    async def upsert(
+        self,
+        assertion_id: str,
+        *,
+        normalized_text: str,
+        vector: np.ndarray,
+    ) -> object:
+        """Replace one rebuildable derived embedding row."""
+
+
 @dataclass(frozen=True, slots=True)
 class MemoryContextShadowObservation:
     """Session-local diagnostic evidence for one accepted USER turn."""
 
     turn_id: str
     reranked_candidates: tuple[RerankedCandidate, ...]
+    indexed_embeddings: int
     latency_ms: float
 
     @property
@@ -65,16 +102,30 @@ class MemoryContextShadowRuntime:
     def __init__(
         self,
         *,
-        retrieval: FirstStageMemoryRetriever,
+        retrieval: MemoryContextShadowRetriever,
+        embedding_store: DerivedEmbeddingStore,
         query_encoder: QueryEmbeddingEncoder,
         reranker: RetrievalReranker,
         candidate_limit: int = DEFAULT_CANDIDATE_LIMIT,
         max_observations: int = DEFAULT_MAX_OBSERVATIONS,
     ) -> None:
-        if not callable(getattr(retrieval, "retrieve_first_stage", None)):
-            raise TypeError("retrieval must implement retrieve_first_stage")
-        if not callable(getattr(query_encoder, "encode_query", None)):
-            raise TypeError("query_encoder must implement encode_query")
+        for method_name in (
+            "eligible_facet_catalog",
+            "retrieve_exact_current_facet",
+            "retrieve_first_stage",
+        ):
+            if not callable(getattr(retrieval, method_name, None)):
+                raise TypeError(f"retrieval must implement {method_name}")
+        if not callable(getattr(embedding_store, "is_current", None)) or not callable(
+            getattr(embedding_store, "upsert", None)
+        ):
+            raise TypeError("embedding_store must implement is_current and upsert")
+        if not callable(getattr(query_encoder, "encode_query", None)) or not callable(
+            getattr(query_encoder, "encode_documents", None)
+        ):
+            raise TypeError(
+                "query_encoder must implement encode_query and encode_documents"
+            )
         if not callable(getattr(reranker, "rerank", None)):
             raise TypeError("reranker must implement rerank")
         if isinstance(candidate_limit, bool) or not isinstance(candidate_limit, int):
@@ -87,6 +138,7 @@ class MemoryContextShadowRuntime:
             raise ValueError("max_observations must be positive")
 
         self._retrieval = retrieval
+        self._embedding_store = embedding_store
         self._query_encoder = query_encoder
         self._reranker = reranker
         self._candidate_limit = candidate_limit
@@ -94,6 +146,7 @@ class MemoryContextShadowRuntime:
             maxlen=max_observations
         )
         self._tasks: set[asyncio.Task[None]] = set()
+        self._index_lock = asyncio.Lock()
         self._closed = False
 
     @property
@@ -126,9 +179,57 @@ class MemoryContextShadowRuntime:
         while self._tasks:
             await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
 
+    async def _ensure_current_embeddings(
+        self,
+        eligibility: RetrievalEligibility,
+    ) -> int:
+        """Refresh only rebuildable vectors for currently cloud-eligible assertions."""
+
+        async with self._index_lock:
+            catalog = await self._retrieval.eligible_facet_catalog(
+                eligibility=eligibility
+            )
+            records_by_id: dict[str, SemanticAssertionRecord] = {}
+            for facet in catalog.facets:
+                records = await self._retrieval.retrieve_exact_current_facet(
+                    facet,
+                    eligibility=eligibility,
+                )
+                for record in records:
+                    records_by_id[record.assertion_id] = record
+
+            stale: list[SemanticAssertionRecord] = []
+            for record in records_by_id.values():
+                current = await self._embedding_store.is_current(
+                    record.assertion_id,
+                    normalized_text=record.normalized_text,
+                )
+                if not current:
+                    stale.append(record)
+            if not stale:
+                return 0
+
+            vectors = await asyncio.to_thread(
+                self._query_encoder.encode_documents,
+                tuple(record.normalized_text for record in stale),
+            )
+            if len(vectors) != len(stale):
+                raise RuntimeError(
+                    "document encoder returned a different number of vectors than records"
+                )
+            for record, vector in zip(stale, vectors, strict=True):
+                await self._embedding_store.upsert(
+                    record.assertion_id,
+                    normalized_text=record.normalized_text,
+                    vector=vector,
+                )
+            return len(stale)
+
     async def _process_turn(self, turn: ConversationTurn) -> None:
         started = time.perf_counter()
         try:
+            eligibility = RetrievalEligibility.cloud_context()
+            indexed_embeddings = await self._ensure_current_embeddings(eligibility)
             query_vector = await asyncio.to_thread(
                 self._query_encoder.encode_query,
                 turn.text,
@@ -136,7 +237,7 @@ class MemoryContextShadowRuntime:
             candidates = await self._retrieval.retrieve_first_stage(
                 turn.text,
                 query_vector,
-                eligibility=RetrievalEligibility.cloud_context(),
+                eligibility=eligibility,
                 limit=self._candidate_limit,
             )
             reranked = await asyncio.to_thread(
@@ -160,15 +261,18 @@ class MemoryContextShadowRuntime:
         observation = MemoryContextShadowObservation(
             turn_id=turn.turn_id,
             reranked_candidates=tuple(reranked),
+            indexed_embeddings=indexed_embeddings,
             latency_ms=latency_ms,
         )
         self._observations.append(observation)
         LOGGER.info(
             "Phase-4.5E memory context shadow turn %s | candidates=%s | "
-            "assertion_ids=%s | latency_ms=%.3f | context_injection=False",
+            "assertion_ids=%s | indexed_embeddings=%s | latency_ms=%.3f | "
+            "context_injection=False",
             turn.turn_id,
             len(observation.reranked_candidates),
             observation.assertion_ids,
+            observation.indexed_embeddings,
             observation.latency_ms,
         )
 
