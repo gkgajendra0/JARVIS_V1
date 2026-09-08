@@ -146,17 +146,7 @@ class ExaWebResearchProvider:
 
 def build_current_research_service(
     *,
-    provider: str | None = None,
-    model: str | None = None,
     timeout_seconds: float = 30.0,
 ) -> CurrentResearchService:
-    """Build the independent search boundary.
-
-    ``provider`` and ``model`` are temporarily accepted so existing composition can
-    remain source-compatible while Step 6 is validated. They do not select or switch
-    the active conversational brain and are intentionally ignored by web retrieval.
-    """
-
-    del provider, model
     adapter: ResearchProvider = ExaWebResearchProvider()
     return CurrentResearchService(adapter, timeout_seconds=timeout_seconds)
