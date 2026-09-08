@@ -4,7 +4,7 @@ Date: 2026-09-08
 
 ## Status
 
-**RESEARCH COMPLETE — ARCHITECTURE PROPOSED — IMPLEMENTATION REQUIRES OWNER APPROVAL**
+**RESEARCH COMPLETE — PROVIDER-NEUTRAL ARCHITECTURE OWNER-APPROVED — IMPLEMENTATION IN PROGRESS**
 
 Step 6 covers CAP-014 through CAP-017:
 
@@ -13,383 +13,337 @@ Step 6 covers CAP-014 through CAP-017:
 - CAP-016 Trusted Domain Knowledge;
 - CAP-017 Fact Checking and Truthfulness.
 
-Permanent product intent recovered from `PRODUCT.md`:
+The product requirement is not to make one vendor the owner of JARVIS knowledge. JARVIS must be able to use the currently selected brain intelligently for research while preserving a provider-neutral evidence/truth boundary so Gemini, OpenAI, or a future provider can be replaced without rewriting canonical conversation, provenance, or truthfulness policy.
 
-- select the appropriate source rather than treating model knowledge as universally sufficient;
+Permanent requirements recovered from `PRODUCT.md` remain:
+
+- choose an appropriate source rather than treating model knowledge as universally sufficient;
 - current external information must be source-backed;
-- specialist/high-stakes questions should prefer authoritative evidence;
-- JARVIS must distinguish known, remembered, current-verified, inferred, stale, uncertain, and unavailable states when relevant;
+- specialist/high-stakes requests should prefer authoritative evidence;
+- distinguish model knowledge, researched evidence, insufficient evidence, stale/unverified state, and provider failure when relevant;
 - capability limitations must be stated plainly;
-- commodity search/retrieval should adopt mature existing technology rather than be rebuilt.
-
-Legacy evidence reinforces the same goals but does not authorize the old knowledge-router/composer architecture. V1 keeps one conversation/context authority and rejects a second generic brain.
+- adopt mature provider search/research mechanics rather than rebuilding a search engine or second generic brain.
 
 ---
 
-## Research-first technology comparison
+## Research-first technology findings
 
-### Candidate A — Gemini Live API built-in Google Search
+### Gemini Live built-in Google Search — useful but insufficient as the JARVIS evidence boundary
 
-Google officially supports Grounding with Google Search in the Live API. The current Gemini Live API can combine Google Search with normal function tools.
+Google supports Grounding with Google Search in the Live API, and the exact JARVIS-pinned LiveKit `1.7.1` Google plugin exposes `google.tools.GoogleSearch()`.
 
-LiveKit's Google plugin also exposes `google.tools.GoogleSearch()` as a provider tool. Importantly, the exact LiveKit `1.7.1` source pinned by JARVIS already contains this provider tool with `exclude_domains`, `blocking_confidence`, and `time_range_filter` support.
+However, Google's Live response schema contains grounding metadata while the pinned LiveKit realtime adapter does not expose that grounding/citation metadata through a stable public JARVIS-facing surface. A current-source check also found no reason to depend on private LiveKit internals for this requirement.
 
-**Benefit:**
+Therefore simply enabling Google Search in Gemini Live would let the model obtain fresh information but would not give JARVIS a dependable provider-independent source/provenance record.
 
-- lowest-latency path;
-- no extra API/provider/account;
-- provider chooses when search is useful;
-- works naturally inside native-audio conversation.
+**Decision: REJECT as the sole Step-6 evidence boundary. Do not subclass/patch LiveKit private realtime internals just to capture citations.**
 
-**Blocking limitation for Step 6 truthfulness:**
+### Gemini Interactions API + Google Search — selected Gemini research adapter
 
-Google's Live response schema contains `LiveServerContent.grounding_metadata`, including grounding chunks/supports/search queries. However, the exact LiveKit Google realtime adapter at JARVIS's pinned `1.7.1` does not forward, emit, or retain `grounding_metadata`. Its `_handle_server_content()` processes model content, transcriptions, completion, and interruption but ignores the grounding metadata field.
+Google's Interactions API is GA in 2026 and supports built-in Google Search. It exposes observable search steps, executed queries, result/source metadata, and URL citations while allowing `store=False` so research calls do not become an uncontrolled server-side canonical history.
 
-A check of current LiveKit `main` shows the same omission as of this research date.
+JARVIS already pins `google-genai==2.22.0`; no new Python dependency or second provider credential is required when Gemini is the active provider.
 
-Therefore simply enabling `google.tools.GoogleSearch()` would allow the model to use current web information, but JARVIS would not have a stable public LiveKit surface for source URLs/claim provenance. That fails CAP-015/CAP-017's requirement that source-backed current claims be observable and auditable by JARVIS rather than trusted blindly because the realtime model says it searched.
+**Decision: ADAPT as the Gemini implementation of the JARVIS research contract.**
 
-**Decision:** do not modify/subclass LiveKit private realtime internals merely to intercept `grounding_metadata`.
+### OpenAI Responses API + Web Search — selected OpenAI research adapter
 
-### Candidate B — Gemini Interactions API + Google Search
+OpenAI's Responses API supports built-in web search, can require the web-search tool for an explicit research operation, can return underlying search sources with `include=["web_search_call.action.sources"]`, and supports `store=False`.
 
-Google's Interactions API is GA as of June 2026 and is recommended by Google for new Gemini application work.
+JARVIS already pins `openai==2.54.0`. When OpenAI is selected as `JARVIS_AI_PROVIDER`, the same JARVIS research contract can therefore use OpenAI's web research path without changing the voice/memory/truth architecture.
 
-A normal Interactions API request may use:
+**Decision: ADAPT as the OpenAI implementation of the same JARVIS research contract.**
 
-```python
-client.interactions.create(
-    model="gemini-3.7-flash",
-    input=question,
-    tools=[{"type": "google_search"}],
-)
-```
+### Provider-specific Deep Research agents — retain, do not require for first Step 6
 
-The returned interaction provides observable steps:
+Both ecosystems now expose more expensive/longer-running research mechanics. These may eventually improve explicit multi-minute research, but they introduce background lifecycle, progress, cancellation, latency, and cost concerns.
 
-```text
-google_search_call
-  -> queries executed
+**Decision: DEFER specialized background Deep Research. Normal Step-6 research uses the active provider's mature web-search-capable model first.**
 
-google_search_result
-  -> search result metadata / search suggestions
+### Brave / Tavily / Exa / other independent search APIs — valid future adapters, not required now
 
-model_output
-  -> text
-  -> inline url_citation annotations
-       url
-       title
-       start_index
-       end_index
-```
+Independent search systems can be useful when deterministic domain filtering or a provider-independent raw index becomes necessary. Adding a new credential/service before the already-installed active-provider search paths are evaluated would add complexity without evidence that it is needed.
 
-This is the exact missing provenance surface.
-
-JARVIS already pins `google-genai==2.22.0`, whose Interactions API implementation is current. No new Python dependency or provider account is required.
-
-**Decision: SELECT / ADAPT as Step-6 primary current-information boundary.**
-
-### Candidate C — Gemini Deep Research agent
-
-Google currently exposes `deep-research-preview-04-2026` and `deep-research-max-preview-04-2026` through the Interactions API. Deep Research autonomously plans/searches/reads/synthesizes and runs as a background task because research can take minutes.
-
-This is mature enough to retain as a Step-6 later slice for explicit complex research, but it is inappropriate for every ordinary voice question because of latency, cost, and preview-agent behavior.
-
-**Decision:** retain as a later explicit deep-research path; do not put it on normal realtime conversation.
-
-### Candidate D — Brave Search API
-
-Brave offers a large independent web index, freshness/date filtering, source metadata, and Search Goggles that can boost/downrank/discard domains. It is technically attractive for deterministic trusted-domain search and costs roughly $5/1000 Search requests at the researched pricing.
-
-**Decision:** do not add another external search credential/provider yet. Revisit only if same-provider Gemini search cannot meet the frozen trusted-domain acceptance gates.
-
-### Candidate E — Tavily / other agent-search APIs
-
-Current specialist agent-search products provide domain and freshness controls and can be useful for explicit source-filtered workflows.
-
-**Decision:** not selected for the first slice. Adding another service before testing the source-rich Gemini API already present in JARVIS would violate the project's research-first preference for the smallest mature integration that solves the requirement.
+**Decision: RETAIN as future evidence-driven adapters. No hard dependency on Google or OpenAI search is created in JARVIS core contracts.**
 
 ---
 
-## Selected Step-6 architecture
+## Owner-approved provider-neutral architecture
 
 ### Principle
 
-**Realtime Gemini remains the conversational brain. A JARVIS-owned research adapter becomes an evidence service, not a second conversation brain.**
+**The active AI brain is allowed to perform intelligent research orchestration. JARVIS owns the research contract, the canonical user question, normalized evidence/provenance, truth status, and provider selection.**
 
 ```text
-user speaks
-   |
-   v
-existing Gemini Live realtime conversation
-   |
-   | when current/external verification is needed
-   v
-JARVIS function tool: research_current
-   |
-   | exact latest accepted canonical USER question
-   v
-CurrentResearchService
-   |
-   v
-same active Gemini provider/account
-Interactions API + Google Search
-   |
-   +-> synthesized research answer
-   +-> executed search queries
-   +-> URL citation annotations
-   +-> source titles / URLs
-   +-> retrieval timestamp
-   |
-   v
-JARVIS ResearchResult / EvidenceSource
-   |
-   +-> bounded tool result to realtime Gemini
-   +-> privacy-safe provenance/diagnostics for future HUD
-   |
-   v
-spoken answer
+                           JARVIS
+                              |
+                  one JARVIS_AI_PROVIDER
+                              |
+             +----------------+----------------+
+             |                                 |
+        Gemini brain                      OpenAI brain
+             |                                 |
+             | model decides research is useful|
+             +----------------+----------------+
+                              |
+                    research_current tool
+                              |
+               exact canonical latest USER turn
+                              |
+                    CurrentResearchService
+                              |
+              +---------------+---------------+
+              |                               |
+       Gemini adapter                    OpenAI adapter
+ Interactions + Google Search       Responses + Web Search
+              |                               |
+              +---------------+---------------+
+                              |
+                  provider output normalization
+                              |
+                EvidenceSource / ResearchResult
+                              |
+              source domains + URLs + titles
+              executed queries + timestamp
+              bounded research/truth status
+                              |
+                              v
+                    active brain synthesizes
+                              |
+                         spoken answer
 ```
 
-### Why this is not a second brain
+Provider switch example:
 
-- the canonical conversation remains `ConversationSession`;
-- the realtime model remains the user-facing conversational model;
-- research requests are stateless with respect to canonical JARVIS conversation unless JARVIS explicitly supplies bounded context;
-- Interactions server history is never canonical JARVIS history;
-- the research adapter cannot mutate memory, identity, authority, files, devices, or conversation truth;
-- it returns evidence + a bounded synthesis only;
-- `ContextAssembler` remains the ordinary Step-4 context owner;
-- Phase-4.5E automatic memory injection stays disabled.
+```text
+JARVIS_AI_PROVIDER=gemini
+ -> Gemini realtime brain
+ -> Gemini research adapter
+
+JARVIS_AI_PROVIDER=openai
+ -> OpenAI realtime brain
+ -> OpenAI research adapter
+```
+
+There is no silent Gemini-to-OpenAI or OpenAI-to-Gemini research fallback. The selected active provider remains the one production cloud-AI family/account under ADR-015.
+
+### Why the brain is used rather than recreating ChatGPT-like research ourselves
+
+Modern provider research tools already know how to formulate searches, read results, run additional searches when needed, and synthesize findings. Reimplementing that orchestration as a custom keyword/search crawler would be lower quality and violate the research-first rule.
+
+JARVIS therefore lets the active brain/provider do semantic research orchestration while retaining the parts that must remain ours:
+
+- exact original accepted USER request;
+- whether a real research tool call occurred;
+- provider/model used;
+- normalized source URLs/titles/domains;
+- returned search queries where available;
+- research timestamp;
+- bounded evidence sufficiency status;
+- fail-closed behavior;
+- canonical conversation/memory/authority boundaries.
 
 ---
 
-## JARVIS-owned evidence contract
+## JARVIS-owned research contract
 
-Provider-specific interaction objects must not leak into core JARVIS state.
+Provider SDK types must not leak into core state.
 
-Proposed provider-independent types:
+Current implementation types:
 
 ```text
+ResearchMode
+  CURRENT
+  FACT_CHECK
+  AUTHORITATIVE
+
 EvidenceSource
   source_id
   url
   title
   domain
   retrieved_at
-  cited_text/span metadata when available
+
+EvidenceCitation
+  source_id
+  start_index / end_index when exposed
 
 ResearchResult
   status
+  mode
   answer
   sources[]
+  citations[]
   executed_queries[]
   researched_at
-  freshness intent/window
-  source_policy result
-  failure reason if unavailable
+  provider
+  model
+  reason_code
 ```
 
-Suggested result status vocabulary:
+Current conservative status vocabulary:
 
 ```text
-CURRENT_VERIFIED
-GROUNDED_GENERAL
-TRUSTED_SOURCE_VERIFIED
-CONFLICTING_EVIDENCE
+WEB_RESEARCHED
+MULTI_SOURCE_RESEARCHED
+AUTHORITATIVE_SOURCE_PRESENT
 INSUFFICIENT_EVIDENCE
 RESEARCH_UNAVAILABLE
 ```
 
-The provider can supply evidence, but JARVIS owns these result states.
+These names deliberately avoid claiming that a model-generated synthesis is mathematically “verified truth.” A source was observed and used; source quality and claim support remain separate questions.
 
 ---
 
-## Query authority
+## Research routing
 
-The realtime model should **not** be permitted to silently rewrite the user's question into an unrelated research task.
+The active brain performs most semantic routing. JARVIS does not need a large handcrafted command classifier.
 
-The first `research_current` tool should therefore be zero-argument or semantically bounded from the realtime model's perspective, following the successful Step-4.5D pattern:
+The agent contract requires research for:
 
-```text
-latest accepted canonical USER turn
- -> JARVIS research policy
- -> exact/bounded research request
- -> external evidence
-```
+- explicit “search”, “research”, “check online”, “verify”, or “fact-check” requests;
+- latest/current/today/recent information whose answer materially changes over time.
 
-The research model may generate Google search queries internally as part of Google's grounded-search workflow, but JARVIS retains the original canonical user question and records the executed queries returned by the API.
+The brain may also choose research when external evidence would materially improve an ordinary answer.
 
----
+Research is normally unnecessary for:
 
-## Source-routing policy
-
-Step 6 must not search the web for every sentence.
-
-Initial intended routing classes:
-
-```text
-MODEL_OK
-CURRENT_WEB_REQUIRED
-TRUSTED_DOMAIN_REQUIRED
-DEEP_RESEARCH_REQUESTED
-UNSUPPORTED_SOURCE
-```
-
-### Mandatory-search examples
-
-The acceptance corpus must include:
-
-- explicit requests to search/check/verify online;
-- latest/current/today/recent developments;
-- rapidly changing prices, availability, schedules, product/service status, software/API behavior;
-- claims whose truth materially depends on fresh external evidence.
-
-### Model-only examples
-
-- stable explanations where freshness is irrelevant;
+- stable explanations;
 - writing/rephrasing/brainstorming;
-- reasoning from user-provided text;
-- conversational follow-ups that require no external fact.
+- reasoning directly from user-supplied content;
+- conversational follow-ups with no external freshness requirement.
 
-### Trusted-domain examples
+Minimum deterministic truth guard:
 
-High-stakes/specialist requests should not be declared verified merely because a random web page was cited. The source policy must be JARVIS-owned and evaluated after retrieval.
-
-The first implementation must **not hardcode a giant universal domain allowlist**. Step 6.3 will freeze a small task/domain corpus and source-class policy first. If Gemini Google Search cannot reliably return acceptable authoritative citations under that policy, then a raw search adapter with stronger deterministic domain filtering (Brave Goggles/site filters or another mature search API) becomes justified.
-
----
-
-## Truthfulness rules
-
-1. No search result => no claim that the web was checked successfully.
-2. No citations => no `CURRENT_VERIFIED` status.
-3. A citation proves only that a source was used; source quality is a separate JARVIS policy decision.
-4. Search/model synthesis is evidence, not canonical personal memory.
-5. Conflicting credible sources must remain visibly conflicting; JARVIS must not silently pick a preferred story.
-6. If a claim is time-sensitive, the response should carry a research timestamp/freshness meaning internally.
-7. Stable model-knowledge answers should not pretend they were live-verified.
-8. Provider/search failure must produce `RESEARCH_UNAVAILABLE` rather than a confident stale answer where current verification was required.
-9. Tool arguments/results must never grant execution or memory-write authority.
-10. Ordinary spoken answers stay concise; source details remain available for “what are your sources?” and later HUD presentation.
+- if research was required/invoked and the research result is insufficient/unavailable, the brain must say fresh verification is insufficient/unavailable;
+- it may not silently substitute model-only knowledge and describe it as freshly checked.
 
 ---
 
-## Important implementation roadblocks discovered
+## Canonical query grounding
 
-### 1. LiveKit realtime grounding metadata is currently not surfaced
+The realtime model does not send arbitrary free-form research text.
 
-This is the main reason not to implement Step 6 by merely adding `google.tools.GoogleSearch()` to the realtime model.
+`research_current` reads the latest accepted canonical USER turn itself. The only semantic control exposed to the brain is the bounded mode:
 
-### 2. `on_user_turn_completed()` is not usable with the current accepted turn-detection architecture
+```text
+current
+fact_check
+authoritative
+```
 
-LiveKit documents that `Agent.on_user_turn_completed()` can be used for RAG before a reply, **but with realtime models it requires agent-side turn detection instead of provider-side realtime turn detection**.
+The provider may internally formulate multiple search queries, but JARVIS preserves the user's actual accepted question and records returned executed-query metadata when available.
 
-JARVIS deliberately uses Gemini provider-native activity/turn completion in the currently accepted voice path. Changing this just to implement research would reopen Step-2 audio/turn behavior and is not justified.
-
-Therefore Step 6 should use a normal function-tool call instead of replacing the accepted voice-turn architecture.
-
-### 3. Gemini Live tool configuration is not freely mutable
-
-The pinned realtime adapter reports `mutable_tools=False`; tools should be attached at session startup rather than dynamically swapped per turn. Step 6 should add one stable bounded research tool, not dynamic tool churn.
+This prevents a function call from silently changing “research my exact question” into a materially different task.
 
 ---
 
-## Proposed Step-6 slices
+## Truthfulness/source-policy rules
 
-### 6.1 — Source-rich current research foundation
-
-Implement:
-
-- provider-independent `EvidenceSource` / `ResearchResult` contract;
-- Gemini Interactions + Google Search adapter using existing active-provider credentials;
-- claim-linked citation extraction;
-- exact latest canonical USER question grounding;
-- bounded `research_current` realtime function tool;
-- `RESEARCH_UNAVAILABLE` fail-closed behavior;
-- privacy-safe diagnostics;
-- frozen English/Hinglish/Hindi current-vs-stable evaluation corpus.
-
-No Deep Research yet.
-
-### 6.2 — Source routing + truthfulness acceptance
-
-Freeze/evaluate routing behavior for:
-
-- stable/model-only questions;
-- explicit web/search requests;
-- current/latest/rapidly changing facts;
-- unavailable research;
-- conflicting sources;
-- “what are your sources?” follow-ups;
-- no fake `CURRENT_VERIFIED` claims without citations.
-
-Do not guess routing thresholds from anecdotes; use a frozen corpus and real owner voice tests.
-
-### 6.3 — Trusted-domain verification
-
-Research/freeze a small source-class policy for specialist/high-stakes categories.
-
-First attempt:
-
-- same Gemini research adapter;
-- post-retrieval deterministic source-policy validation;
-- abstain/research-unavailable if authoritative evidence is absent.
-
-Only if evidence shows native Google Search cannot satisfy source constraints should Step 6 add a separate raw-search adapter such as Brave with Goggles/site filtering.
-
-### 6.4 — Explicit deep research
-
-Optional later slice:
-
-- explicit deep-research request only;
-- Gemini Deep Research agent through Interactions API;
-- background task/progress/cancel/result contract;
-- cited final report;
-- no blocking normal realtime voice session for several minutes.
-
-This slice is not required before 6.1–6.3 prove the normal source-aware foundation.
+1. A model response without a research tool execution is not “live researched.”
+2. No usable sources means no successful source-backed status.
+3. Provider citations/search sources are evidence, not canonical personal truth.
+4. `fact_check` initially requires evidence from more than one source domain before returning an `ok=true` result.
+5. `authoritative` initially fails closed unless a small conservative official/academic/regulatory source policy is observed.
+6. The first authoritative policy is deliberately narrow rather than pretending every trustworthy organization can be classified automatically.
+7. Current research never mutates personal memory, identity, authority, files, devices, or canonical conversation truth.
+8. Provider/search failures become `RESEARCH_UNAVAILABLE`.
+9. Normal logs record bounded metadata such as provider/model/status/source/query counts, not raw provider payloads or the complete user question.
+10. Source details remain available for “what sources did you use?” while ordinary spoken answers remain concise.
 
 ---
 
-## Acceptance direction
+## Important implementation roadblocks retained
 
-The first Step-6 implementation should be accepted only if owner-machine evidence demonstrates at minimum:
+### LiveKit realtime grounding metadata
 
-1. a stable question can be answered without unnecessary web research;
-2. an explicit current/latest question invokes research and returns real citations;
-3. the research tool is grounded to the user's actual accepted question;
-4. source URLs/titles are captured by JARVIS, not merely spoken by the model;
-5. a simulated/search-provider failure does not become a stale confident answer;
-6. a current claim without citations cannot be labeled current-verified;
-7. English, Hindi, and Hinglish work;
-8. normal wake/barge-in/conversation behavior remains intact;
-9. memory/identity/authority state is unaffected;
-10. no raw provider payload logging or uncontrolled server-side conversation history becomes canonical JARVIS state.
+Do not implement Step 6 by simply turning on Gemini Live Google Search because JARVIS cannot currently capture the grounding metadata through the accepted public LiveKit surface.
+
+### Accepted provider-native turn detection
+
+Changing the existing voice turn-detection architecture merely to inject pre-response RAG would reopen accepted Step-2 behavior. Step 6 therefore uses a normal function tool within the accepted realtime session.
+
+### Tool mutability
+
+The current Gemini realtime adapter reports immutable tool configuration for the active session. `research_current` is therefore attached as a stable session tool instead of being dynamically injected per turn.
+
+### Long-running research
+
+Normal research runs outside the event loop via a worker thread with an application timeout. Cancelling/timeout cannot forcibly terminate an already-running synchronous provider HTTP thread. This is acceptable for a read-only bounded request but remains a documented limitation. Multi-minute background research needs a separate later lifecycle.
+
+---
+
+## Implementation slices
+
+### 6.1 — Provider-neutral current research foundation — IMPLEMENTING
+
+- `CurrentResearchService` and provider-independent evidence types;
+- Gemini Interactions + Google Search adapter;
+- OpenAI Responses + Web Search adapter;
+- same-provider selection from `JARVIS_AI_PROVIDER`;
+- canonical latest-USER grounding;
+- stable `research_current` tool;
+- evidence/source/query normalization;
+- read-only fail-closed behavior;
+- unit tests with synthetic Gemini/OpenAI provider shapes.
+
+### 6.2 — Real routing/truthfulness acceptance — NEXT GATE
+
+Owner-machine evaluation must demonstrate:
+
+- stable question does not unnecessarily research;
+- explicit current/search request invokes research;
+- actual source metadata reaches JARVIS;
+- source follow-up names only observed sources;
+- fact-check mode does not claim success from one domain;
+- unavailable research is stated truthfully;
+- English/Hindi/Hinglish remain natural;
+- wake/barge-in/conversation/memory behavior remains intact.
+
+### 6.3 — Trusted-domain expansion — EVIDENCE DRIVEN
+
+The initial official-domain policy is intentionally small. Expand only from a frozen acceptance corpus and real cases. If same-provider search cannot satisfy required source constraints, research an independent raw search adapter rather than weakening the truth gate.
+
+### 6.4 — Explicit deep research — DEFERRED UNTIL NEEDED
+
+A dedicated long-running research agent may later use provider-native Deep Research capabilities through the same JARVIS result/evidence boundary. It will need background progress/cancel/result handling and is not part of the initial Step-6 merge.
+
+---
+
+## Acceptance gates
+
+Before protected-main merge:
+
+1. provider-independent unit tests pass;
+2. Gemini and OpenAI response shapes are normalized without provider SDK objects becoming JARVIS state;
+3. active-provider selection does not silently use the other provider;
+4. exact canonical latest USER question is passed to research;
+5. provider failure/no evidence returns `ok=false`;
+6. no raw provider payload/user-query logging is added;
+7. existing full CI remains green;
+8. owner machine demonstrates at least the currently active provider's real web-search path and source capture;
+9. owner voice test confirms normal stable conversation plus one current researched question and source follow-up;
+10. the inactive provider adapter remains covered by contract/unit tests and can receive a separate owner smoke when that provider is intentionally activated.
 
 ---
 
 ## Primary research sources
 
-Official / primary sources consulted:
+Official/primary references consulted during the architecture decision include:
 
 - Google AI — Grounding with Google Search: https://ai.google.dev/gemini-api/docs/google-search
 - Google AI — Live API tool use: https://ai.google.dev/gemini-api/docs/live-api/tools
-- Google AI — Interactions API overview: https://ai.google.dev/gemini-api/docs/interactions-overview
-- Google AI — Interactions API reference: https://ai.google.dev/api/interactions-api-v1
-- Google AI — URL Context: https://ai.google.dev/gemini-api/docs/url-context
-- Google AI — Deep Research agent: https://ai.google.dev/gemini-api/docs/deep-research
-- Google Gen AI SDK docs: https://googleapis.github.io/python-genai/
-- LiveKit — Tool definition and use: https://docs.livekit.io/agents/logic/tools/
-- LiveKit — Pipeline nodes and hooks: https://docs.livekit.io/agents/logic/nodes/
-- LiveKit Google plugin/source at exact JARVIS pinned `livekit-agents@1.7.1`
-- Brave Search API: https://brave.com/search/api/
-- Brave Goggles docs: https://api-dashboard.search.brave.com/documentation/resources/goggles
+- Google AI — Interactions API overview/reference: https://ai.google.dev/gemini-api/docs/interactions-overview
+- Google AI — Deep Research: https://ai.google.dev/gemini-api/docs/deep-research
+- Google Gen AI Python SDK documentation/changelog
+- OpenAI API — Responses API / Web Search / response source inclusion
+- OpenAI model/tool documentation for web-search-capable Responses workflows
+- LiveKit — tool definition/use and current Google realtime implementation
+- exact JARVIS-pinned `livekit-agents@1.7.1` source
+- Brave Search API / other independent search products as future alternatives
 
 ## Technology decision
 
-**ADAPT the existing provider stack rather than introducing a new search framework.**
+**ADAPT provider-native research, OWN JARVIS evidence/truth authority.**
 
-For normal current-information work, use a thin JARVIS-owned research service over the already-installed Gemini Interactions API + Google Search because it exposes the source/citation surface that LiveKit realtime currently hides.
-
-Keep realtime conversation native and unchanged. Keep Deep Research and a second raw-search provider as later evidence-driven options, not default architecture.
+Use the currently selected brain/provider's mature web research capability rather than rebuilding search orchestration. Gemini and OpenAI are implementations behind one JARVIS-owned research contract. Neither vendor owns canonical conversation, provider selection, evidence normalization, truth status, memory, or authority. A future provider or independent search engine can be added behind the same boundary if evidence shows it is useful.
