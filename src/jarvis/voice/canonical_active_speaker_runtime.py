@@ -120,10 +120,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 )
         if self._research_service is not None:
             LOGGER.info(
-                "Step-6 current research tool is active | provider=%s | model=%s | "
-                "same_provider=True | cross_provider_fallback=False",
+                "Step-6 web research tool is active | search_provider=%s | "
+                "active_brain_independent=True",
                 self._research_service.provider_name,
-                self._research_service.model_name,
             )
         try:
             await super().run()
