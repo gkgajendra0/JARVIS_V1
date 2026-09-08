@@ -15,9 +15,11 @@ from jarvis.knowledge.research import (
     utc_now,
 )
 
+# Researched production defaults as of September 2026. Callers may still provide an
+# explicit model override without changing the provider-neutral service contract.
 DEFAULT_RESEARCH_MODELS = {
-    "gemini": "gemini-3.7-flash",
-    "openai": "gpt-5.2",
+    "gemini": "gemini-3.8-flash",
+    "openai": "gpt-5.6-sol",
 }
 
 
