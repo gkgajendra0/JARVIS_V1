@@ -58,9 +58,7 @@ def test_voice_session_omits_vad_none_but_keeps_provider_turn_detection(
     monkeypatch.setattr(
         "jarvis.voice.livekit_session._create_realtime_model", lambda _config: object()
     )
-    monkeypatch.setattr(
-        "jarvis.voice.livekit_session.AgentSession", fake_agent_session
-    )
+    monkeypatch.setattr("jarvis.voice.livekit_session.AgentSession", fake_agent_session)
 
     session, _bridge = create_voice_session(JarvisConfig())
 
@@ -73,7 +71,9 @@ def test_voice_session_omits_vad_none_but_keeps_provider_turn_detection(
 
 
 @pytest.mark.asyncio
-async def test_active_speech_cancels_inactivity_instead_of_starting_utterance_kill() -> None:
+async def test_active_speech_cancels_inactivity_instead_of_starting_utterance_kill() -> (
+    None
+):
     config = JarvisConfig(
         initial_request_timeout_seconds=0.03,
         follow_up_timeout_seconds=0.04,
