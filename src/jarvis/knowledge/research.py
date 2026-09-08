@@ -29,7 +29,7 @@ class ResearchMode(str, Enum):
     AUTHORITATIVE = "authoritative"
 
     @classmethod
-    def parse(cls, value: str) -> "ResearchMode":
+    def parse(cls, value: str) -> ResearchMode:
         if not isinstance(value, str):
             raise TypeError("research mode must be a string")
         normalized = value.strip().casefold().replace("-", "_")
