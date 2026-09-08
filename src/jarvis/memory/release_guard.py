@@ -8,9 +8,8 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from jarvis.ai_provider import normalize_ai_provider, require_provider_api_key
-
 from .assertions import SemanticAssertionRecord
+from .query_interpreters import build_structured_provider_client
 
 
 class MemoryReleaseAnswerType(StrEnum):
@@ -219,26 +218,21 @@ def build_memory_release_guard(
 ) -> MemoryReleaseGuard:
     """Build the verifier under the already-selected production provider family."""
 
-    normalized_provider = normalize_ai_provider(provider)
     normalized_model = _require_text(model, name="model")
-    api_key = require_provider_api_key(
-        normalized_provider,
+    normalized_provider, client = build_structured_provider_client(
+        provider=provider,
         purpose="semantic memory release verification",
     )
 
     if normalized_provider == "openai":
-        from openai import AsyncOpenAI
-
         return OpenAIMemoryReleaseGuard(
-            client=AsyncOpenAI(api_key=api_key),
+            client=client,
             model=normalized_model,
         )
 
     if normalized_provider == "gemini":
-        from google import genai
-
         return GeminiMemoryReleaseGuard(
-            client=genai.Client(api_key=api_key),
+            client=client,
             model=normalized_model,
         )
 
