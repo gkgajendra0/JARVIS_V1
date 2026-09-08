@@ -54,7 +54,7 @@ class ComputerUseService:
                     executor=self._executor,
                     max_steps=self._max_steps,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - provider SDK errors vary.
                 return ComputerUseResult(
                     status=ComputerUseStatus.FAILED,
                     provider=self.provider_name,
