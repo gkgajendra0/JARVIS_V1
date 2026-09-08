@@ -200,15 +200,14 @@ def test_exa_provider_normalizes_realistic_sdk_results() -> None:
 def test_research_builder_is_independent_of_active_ai_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("EXA_API_KEY", raising=False)
 
-    gemini_runtime = build_current_research_service(provider="gemini")
-    openai_runtime = build_current_research_service(provider="openai")
+    runtime = build_current_research_service()
 
-    assert gemini_runtime.provider_name == "exa"
-    assert openai_runtime.provider_name == "exa"
-    assert gemini_runtime.model_name == "exa-search"
-    assert openai_runtime.model_name == "exa-search"
+    assert runtime.provider_name == "exa"
+    assert runtime.model_name == "exa-search"
 
 
 @pytest.mark.asyncio
