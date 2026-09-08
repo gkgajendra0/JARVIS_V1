@@ -17,6 +17,7 @@ import math
 import statistics
 import time
 from collections import Counter
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -117,7 +118,7 @@ def _threshold_candidates(values: np.ndarray) -> tuple[float, ...]:
     if not unique:
         raise ValueError("cannot calibrate an empty score vector")
     candidates = [math.inf]
-    for left, right in zip(unique, unique[1:], strict=False):
+    for left, right in pairwise(unique):
         candidates.append((left + right) / 2.0)
     candidates.extend([unique[0] - 1.0, -math.inf])
     return tuple(candidates)
