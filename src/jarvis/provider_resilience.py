@@ -173,7 +173,7 @@ def _classification_text(chain: tuple[object, ...]) -> str:
             try:
                 parts.append(str(body))
             except Exception:  # noqa: BLE001 - diagnostic evidence is best effort only
-                pass
+                parts.append(type(body).__name__)
     return " ".join(parts).casefold()
 
 
