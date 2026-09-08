@@ -165,8 +165,7 @@ def _matches_base_domain(domain: str, base_domain: str) -> bool:
 def _is_authoritative_domain(domain: str) -> bool:
     normalized = domain.casefold().removeprefix("www.")
     if any(
-        normalized.endswith(suffix)
-        for suffix in _AUTHORITATIVE_GOVERNMENT_SUFFIXES
+        normalized.endswith(suffix) for suffix in _AUTHORITATIVE_GOVERNMENT_SUFFIXES
     ):
         return True
     return any(
