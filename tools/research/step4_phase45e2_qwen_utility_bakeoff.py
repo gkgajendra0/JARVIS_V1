@@ -326,6 +326,11 @@ def main() -> None:
     )
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--latency-repeats", type=int, default=20)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Write UTF-8 JSON directly to this path instead of relying on stdout.",
+    )
     args = parser.parse_args()
 
     cases = _load_corpus(args.corpus)
@@ -430,7 +435,15 @@ def main() -> None:
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    if args.output is not None:
+        args.output.write_text(
+            json.dumps(result, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Wrote Phase 4.5E.2 results to {args.output}")
+        return
+
+    print(json.dumps(result, indent=2, ensure_ascii=True))
 
 
 if __name__ == "__main__":
