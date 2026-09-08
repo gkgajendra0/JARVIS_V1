@@ -1,8 +1,7 @@
-"""Owner-machine real-network smoke for the Step-6 research boundary.
+"""Owner-machine real-network smoke for the Step-6 web evidence boundary.
 
-This diagnostic uses the active JARVIS_AI_PROVIDER from the normal machine profile,
-performs one real source-backed research call, and prints only bounded evidence.
-It does not start voice, mutate memory, or switch providers.
+This diagnostic performs one real independent web-search call and prints bounded
+source evidence. It does not start voice, mutate memory, or switch the active brain.
 """
 
 from __future__ import annotations
@@ -10,7 +9,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 
-from jarvis.config import JarvisConfig
 from jarvis.knowledge.research import ResearchMode
 from jarvis.knowledge.research_providers import build_current_research_service
 
@@ -32,10 +30,8 @@ def _parse_args() -> argparse.Namespace:
 
 
 async def _run(query: str, mode: ResearchMode) -> int:
-    config = JarvisConfig.from_environment()
-    service = build_current_research_service(provider=config.ai_provider)
+    service = build_current_research_service()
     print(f"STEP6_SMOKE_PROVIDER: {service.provider_name}")
-    print(f"STEP6_SMOKE_MODEL: {service.model_name}")
     print(f"STEP6_SMOKE_MODE: {mode.value}")
     try:
         result = await service.research(query, mode=mode)
@@ -44,18 +40,15 @@ async def _run(query: str, mode: ResearchMode) -> int:
 
     print(f"STEP6_SMOKE_RESEARCH_STATUS: {result.status.value}")
     print(f"STEP6_SMOKE_SOURCE_COUNT: {len(result.sources)}")
-    print(f"STEP6_SMOKE_QUERY_COUNT: {len(result.executed_queries)}")
     for index, source in enumerate(result.sources[:10], start=1):
         print(
             f"STEP6_SMOKE_SOURCE_{index}: "
             f"{source.title} | {source.domain} | {source.url}"
         )
-    for index, executed_query in enumerate(result.executed_queries[:10], start=1):
-        print(f"STEP6_SMOKE_SEARCH_QUERY_{index}: {executed_query}")
+        excerpt = " ".join(source.excerpt.split())[:500]
+        if excerpt:
+            print(f"STEP6_SMOKE_EXCERPT_{index}: {excerpt}")
 
-    answer_preview = " ".join(result.answer.split())[:800]
-    if answer_preview:
-        print(f"STEP6_SMOKE_ANSWER_PREVIEW: {answer_preview}")
     if not result.ok:
         print(f"STEP6_SMOKE_REASON: {result.reason_code}")
         print("STEP6_SMOKE_STATUS: FAIL")
