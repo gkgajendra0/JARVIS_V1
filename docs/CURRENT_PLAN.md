@@ -2,13 +2,13 @@
 
 ## Active Work
 
-**Step 6 — Knowledge, Current Research, and Truthfulness (CAP-014 through CAP-017) — OWNER ACCEPTED / FINAL MERGE GATE.**
+**Step 2 long-utterance robustness correction — OWNER ACCEPTED / FINAL MERGE GATE.**
 
-After the Step-6 protected-main merge, the next work is a **bounded Step-2 voice-session robustness correction** discovered during Step-6 acceptance. Step 7 remains planned and must not start until that regression is fixed and owner-tested.
+After this correction is squash-merged to protected `main`, **Step 7 — Governed Capability Runtime + Local Files/System/Project Safe Reads (CAP-018, CAP-021, CAP-022, CAP-032)** becomes the next roadmap slice. Step 7 implementation is not yet authorized; it must begin with fresh requirements recovery and research.
 
 ## Current Stage
 
-**STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 OWNER ACCEPTED — FINAL EXACT-HEAD CI / PROTECTED-MAIN MERGE — THEN STEP-2 LONG-UTTERANCE CORRECTION.**
+**STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 BOUNDED COMPLETE — STEP-2 LONG-UTTERANCE CORRECTION OWNER ACCEPTED — FINAL EXACT-HEAD CI / PROTECTED-MAIN MERGE — THEN STEP 7 REQUIREMENTS + RESEARCH.**
 
 This file is the operational source of truth. `PRODUCT.md` owns permanent product intent, `ROADMAP.md` owns sequence, accepted architecture belongs in `CURRENT_ARCHITECTURE.md`, and detailed research/evidence belongs in `docs/research/`.
 
@@ -20,11 +20,13 @@ Step 4 remains bounded complete with encrypted canonical memory, explicit rememb
 
 Step 5 remains bounded complete with deterministic terminal provider-failure diagnosis, Windows-local truthful status speech, safe failed-session closure, and return toward wake/idle. Full local/offline conversation remains deferred.
 
+Step 6 is bounded complete with provider-neutral source-aware web research, accepted Exa retrieval, JARVIS-owned evidence/provenance/truth status, deterministic research-warrant gating, and fail-closed source sufficiency behavior.
+
 ---
 
 ## Step 6 — accepted bounded outcome
 
-Step 6 now provides the accepted source-aware web-research foundation:
+The accepted source-aware research path is:
 
 ```text
 latest canonical USER request
@@ -78,9 +80,9 @@ Acceptance evidence:
 Owner-machine evidence on 2026-09-08 included:
 
 - real-network Exa smoke: `multi_source_researched`, 8 real sources, `PASS`;
-- stable SQL JOIN question answered without a web-research completion event;
-- explicit current Google/Gemini request: Exa `authoritative_source_present`, 8 sources, `explicit_research_request` warrant;
-- source follow-up named only observed official Google source families;
+- stable SQL JOIN question did not require successful web research;
+- explicit current Google/Gemini request returned 8 sources including official Google documentation;
+- source follow-up remained grounded to observed source families;
 - explicit owner acceptance of Step 6 as complete.
 
 Deferred Step-6 extensions remain:
@@ -95,33 +97,82 @@ Deferred Step-6 extensions remain:
 
 ---
 
-## Reopened Step-2 robustness defect — next bounded work
+## Reopened Step-2 robustness correction — OWNER ACCEPTED
 
-Step-6 voice acceptance exposed a pre-existing Step-2 defect: long spoken requests can be cut off and the active session can return to wake/idle before the realtime provider commits the user turn.
+Step-6 voice acceptance exposed a pre-existing Step-2 defect: a long first spoken request could be cut off because the outer voice lifecycle could return to wake/idle before the realtime provider committed the user turn.
 
-Fresh research identified the architecture mismatch:
+Fresh research and owner-machine evidence established two lifecycle causes:
 
-- production `AgentSession` currently passes `vad=None`, explicitly opting out of LiveKit VAD;
-- JARVIS inactivity timers rely on `user_state_changed` to know that the user is actively speaking;
-- LiveKit documents `user_state_changed` as VAD-driven;
-- the initial timer is 8 seconds and follow-up timer is 15 seconds;
-- therefore a long utterance can remain invisible to the outer inactivity policy until its final provider commit, allowing the inactivity timer to end the session mid-speech.
+1. production `AgentSession` had explicitly opted out of LiveKit local VAD while outer inactivity policy depended on user speech-state events;
+2. the initial inactivity timeout could run across realtime-session startup, consuming part of the user's response window before the session reached its first real listening state.
 
-Approved correction direction after Step-6 merge:
+Accepted correction:
 
-1. branch from the new protected `main`;
-2. retain Gemini/OpenAI realtime-provider native turn completion;
-3. restore LiveKit bundled VAD as the local speaking/listening activity signal rather than as a second turn authority;
-4. when user state becomes `speaking`, cancel the inactivity shutdown timer instead of arming a 15-second utterance kill timer;
-5. when the user becomes inactive/listening, arm the appropriate initial/follow-up inactivity timeout;
-6. keep `max_utterance_seconds` only where it is genuinely a bounded diagnostic audio-buffer limit unless a separate evidence-backed user-turn safety policy is later required;
-7. add regression tests proving continuous speech is not terminated by the old max-utterance timeout;
-8. owner-test a deliberately long research/fact-check sentence plus normal short queries and barge-in behavior.
+```text
+wake detected
+    |
+    v
+AgentSession + realtime provider initialize
+    |
+    | no outer inactivity countdown during startup
+    v
+first real LiveKit listening state
+    |
+    +-> initial inactivity window becomes eligible
+    |
+    v
+local speech activity: speaking
+    |
+    +-> cancel/suppress outer inactivity shutdown
+    |
+    | provider-native Gemini/OpenAI turn completion remains authoritative
+    v
+local speech activity: listening
+    |
+    +-> normal initial/follow-up inactivity timing resumes
+```
 
-Research references are the current LiveKit turn/session/VAD documentation and Gemini Live automatic activity-detection documentation reviewed on 2026-09-08.
+Accepted invariants:
+
+- local speech activity is lifecycle evidence only, not a second conversational turn authority;
+- Gemini/OpenAI native realtime turn completion remains unchanged;
+- active speech cannot be killed by the historical outer `max_utterance_seconds` timeout path;
+- no initial inactivity timer runs while the realtime session is still initializing;
+- an actually idle wake session still expires normally after the configured initial timeout;
+- follow-up conversation and interruption/barge-in remain usable.
+
+Owner-machine acceptance on exact code head `2543e56` proved:
+
+- an idle wake with no user turn correctly expired after 8 seconds;
+- a long SQL explanation request was committed in full as one canonical USER turn and JARVIS stayed active to answer it;
+- subsequent `Jarvis, explain me in short.` was accepted in the same session;
+- `Okay, Jarvis. Stop. I don't need it.` interrupted/stopped the longer interaction and JARVIS responded `Understood, sir.`
+
+Acceptance evidence:
+
+- `docs/research/STEP_2_LONG_UTTERANCE_ACTIVITY_ACCEPTANCE.md`
+
+Gemini's provider-native silence/end-of-turn tuning remains unchanged because this owner-machine acceptance no longer demonstrated a need to alter it as part of the defect.
+
+---
+
+## Next roadmap slice after merge
+
+**Step 7 — Governed Capability Runtime + Local Files/System/Project Safe Reads**
+
+The next chat/work slice must start research-first. Before implementation:
+
+1. recover CAP-018, CAP-021, CAP-022 and CAP-032 requirements from `PRODUCT.md` and accepted decisions;
+2. inspect the merged repository and existing authority/tool boundaries;
+3. research current mature capability-runtime, local-file/project indexing, sandbox/read-only system integration, and tool-contract options;
+4. prefer proven mature technology over custom infrastructure where it satisfies JARVIS requirements;
+5. propose the smallest provider-neutral governed capability contract needed by real Step-7 reads;
+6. obtain owner architecture approval before implementation.
+
+Step 7 must not create a second authority system, bypass canonical conversation/truth provenance, or quietly expand into browser automation, file writes, device control, or Step-12 coding operations.
 
 ---
 
 ## Immediate Next Action
 
-**FINAL EXACT-HEAD STEP-6 CI -> SQUASH MERGE PR #24 -> CREATE FRESH STEP-2 ROBUSTNESS BRANCH -> IMPLEMENT + TEST THE LONG-UTTERANCE FIX.**
+**FINAL EXACT-HEAD CI FOR PR #25 -> SQUASH MERGE STEP-2 CORRECTION TO PROTECTED `main` -> START STEP 7 REQUIREMENTS / RESEARCH FROM THE NEW `main`.**
