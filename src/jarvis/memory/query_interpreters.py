@@ -178,6 +178,33 @@ class GeminiMemoryQueryInterpreter:
             ) from exc
 
 
+def build_structured_provider_client(
+    *,
+    provider: str,
+    purpose: str,
+) -> tuple[str, Any]:
+    """Construct one cloud SDK client inside the approved memory adapter boundary."""
+
+    normalized_provider = normalize_ai_provider(provider)
+    normalized_purpose = _require_non_empty(purpose, name="purpose")
+    api_key = require_provider_api_key(
+        normalized_provider,
+        purpose=normalized_purpose,
+    )
+
+    if normalized_provider == "openai":
+        from openai import AsyncOpenAI
+
+        return normalized_provider, AsyncOpenAI(api_key=api_key)
+
+    if normalized_provider == "gemini":
+        from google import genai
+
+        return normalized_provider, genai.Client(api_key=api_key)
+
+    raise AssertionError(f"Unhandled AI provider: {normalized_provider}")
+
+
 def build_memory_query_interpreter(
     *,
     provider: str,
@@ -185,26 +212,21 @@ def build_memory_query_interpreter(
 ) -> MemoryQueryInterpreter:
     """Build an adapter for the already-selected active production AI provider."""
 
-    normalized_provider = normalize_ai_provider(provider)
     normalized_model = _require_non_empty(model, name="model")
-    api_key = require_provider_api_key(
-        normalized_provider,
+    normalized_provider, client = build_structured_provider_client(
+        provider=provider,
         purpose="memory query interpretation",
     )
 
     if normalized_provider == "openai":
-        from openai import AsyncOpenAI
-
         return OpenAIMemoryQueryInterpreter(
-            client=AsyncOpenAI(api_key=api_key),
+            client=client,
             model=normalized_model,
         )
 
     if normalized_provider == "gemini":
-        from google import genai
-
         return GeminiMemoryQueryInterpreter(
-            client=genai.Client(api_key=api_key),
+            client=client,
             model=normalized_model,
         )
 
