@@ -103,7 +103,7 @@ class LiveKitConversationBridge:
 
     def add_close_observer(self, observer: ConversationCloseObserver) -> None:
         if not callable(observer):
-            raise TypeError("accepted-turn observer must be callable")
+            raise TypeError("close observer must be callable")
         self._close_observers.append(observer)
 
     def _notify_accepted_turn(self, turn: ConversationTurn) -> None:
