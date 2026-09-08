@@ -13,8 +13,10 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from livekit.agents import UserStateChangedEvent
+
 from jarvis.config import JarvisConfig
-from jarvis.conversation import ConversationSession
+from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_shadow import EnrolledSpeakerShadowObserver
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
@@ -80,10 +82,38 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
     ) -> None:
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
         self._session_conversation: ConversationSession | None = None
+        self._user_is_speaking = False
 
         def capture_session(config: JarvisConfig):
             session, bridge = original_session_factory(config)
             self._session_conversation = bridge.conversation
+            self._user_is_speaking = False
+
+            def track_user_activity(event: UserStateChangedEvent) -> None:
+                if event.new_state == "speaking":
+                    self._user_is_speaking = True
+                    # User activity is the opposite of inactivity. Cancel any initial
+                    # or follow-up shutdown timer for as long as local VAD sees speech.
+                    self._cancel_timeout()
+                    return
+                if event.new_state != "listening":
+                    return
+
+                self._user_is_speaking = False
+                has_user_turn = any(
+                    turn.role is ConversationRole.USER
+                    for turn in bridge.conversation.turns
+                )
+                timeout = (
+                    config.follow_up_timeout_seconds
+                    if has_user_turn
+                    else config.initial_request_timeout_seconds
+                )
+                self._arm_timeout(timeout)
+
+            # This local VAD event is activity evidence only. Realtime Gemini/OpenAI
+            # remain the turn-completion authority configured in livekit_session.py.
+            session.on("user_state_changed", track_user_activity)
             return session, bridge
 
         super().__init__(*args, session_factory=capture_session, **kwargs)
@@ -103,6 +133,14 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 memory_query_coordinator=memory_query_coordinator,
                 research_service=research_service,
             )
+
+    def _arm_timeout(self, seconds: float) -> None:
+        """Arm inactivity shutdown only while the user is not actively speaking."""
+
+        if self._user_is_speaking:
+            self._cancel_timeout()
+            return
+        super()._arm_timeout(seconds)
 
     async def run(self) -> None:
         memory_runtime = self._memory_runtime
@@ -127,6 +165,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         try:
             await super().run()
         finally:
+            self._user_is_speaking = False
             self._session_conversation = None
             if self._research_service is not None:
                 await self._research_service.close()
