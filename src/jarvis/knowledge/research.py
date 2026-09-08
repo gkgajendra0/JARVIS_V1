@@ -271,10 +271,12 @@ class CurrentResearchService:
         except Exception as exc:  # noqa: BLE001 - provider boundary must fail closed
             failure = classify_provider_failure(exc, provider=self.provider_name)
             LOGGER.warning(
-                "Web research provider failed | provider=%s | kind=%s | status=%s",
+                "Web research provider failed | provider=%s | kind=%s | status=%s | "
+                "error_type=%s",
                 self.provider_name,
                 failure.kind.value,
                 failure.status_code,
+                type(exc).__name__,
             )
             return self._unavailable(
                 normalized_query,
