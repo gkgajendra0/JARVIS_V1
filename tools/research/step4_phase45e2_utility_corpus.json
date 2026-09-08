@@ -1,0 +1,525 @@
+{
+  "schema_version": 1,
+  "purpose": "Fresh Phase 4.5E.2 utility/steering corpus. Not reused from Phase 4.5D.",
+  "label_definitions": {
+    "ESSENTIAL": "The memory is necessary to answer the current personal query correctly; without it JARVIS would need to guess or omit the requested personal fact.",
+    "HELPFUL": "The memory is not required, but safely and materially improves personalization or tailoring.",
+    "UNNECESSARY": "The memory should not influence the answer; it is unrelated, redundant, or only lexically/semantically adjacent.",
+    "STEERING_RISK": "Letting the memory influence the answer could bias an objective/factual/safety/recommendation response beyond the current user intent."
+  },
+  "split_policy": "Cases 01-08 of each label are English calibration. Cases 09-16 are Hinglish/Hindi holdout and must not be used to tune thresholds.",
+  "cases": [
+    {
+      "case_id": "e01",
+      "label": "ESSENTIAL",
+      "language": "en",
+      "query": "What is my test color?",
+      "memory": "test color: purple",
+      "split": "calibration"
+    },
+    {
+      "case_id": "e02",
+      "label": "ESSENTIAL",
+      "language": "en",
+      "query": "Which airport did I tell you I prefer for return trips?",
+      "memory": "preferred return airport: Indore",
+      "split": "calibration"
+    },
+    {
+      "case_id": "e03",
+      "label": "ESSENTIAL",
+      "language": "en",
+      "query": "Is the test vehicle I saved called Falcon or something else?",
+      "memory": "test vehicle: Falcon",
+      "split": "calibration"
+    },
+    {
+      "case_id": "e04",
+      "label": "ESSENTIAL",
+      "language": "en",
+      "query": "What city did I ask you to remember as my test city?",
+      "memory": "test city: Atlantis",
+      "split": "calibration"
+    },
+    {
+      "case_id": "e05",
+      "label": "ESSENTIAL",
+      "language": "en",
+      "query": "What seat do I prefer on flights?",
+      "memory": "flight seat preference: window",
+      "split": "calibration"
+    },
+    {
+      "case_id": "e06",
+      "label": "ESSENTIAL",
+      "language": "en",
+      "query": "Which diet did I tell you I follow?",
+      "memory": "diet preference: vegetarian",
+      "split": "calibration"
+    },
+    {
+      "case_id": "e07",
+      "label": "ESSENTIAL",
+      "language": "en",
+      "query": "What is the codename I saved for my test project?",
+      "memory": "test project codename: Aurora",
+      "split": "calibration"
+    },
+    {
+      "case_id": "e08",
+      "label": "ESSENTIAL",
+      "language": "en",
+      "query": "What wake-up time did I ask you to remember?",
+      "memory": "usual wake time: 7 AM",
+      "split": "calibration"
+    },
+    {
+      "case_id": "e09",
+      "label": "ESSENTIAL",
+      "language": "hinglish",
+      "query": "Jarvis, meri saved test city kya hai?",
+      "memory": "test city: Neelgarh",
+      "split": "holdout"
+    },
+    {
+      "case_id": "e10",
+      "label": "ESSENTIAL",
+      "language": "hinglish",
+      "query": "Maine kaunsa return airport prefer karna yaad rakhwaya tha?",
+      "memory": "preferred return airport: Bhopal",
+      "split": "holdout"
+    },
+    {
+      "case_id": "e11",
+      "label": "ESSENTIAL",
+      "language": "hinglish",
+      "query": "Mera saved flight seat preference kya hai?",
+      "memory": "flight seat preference: aisle",
+      "split": "holdout"
+    },
+    {
+      "case_id": "e12",
+      "label": "ESSENTIAL",
+      "language": "hinglish",
+      "query": "Maine test vehicle ka naam kya save karwaya tha?",
+      "memory": "test vehicle: Comet",
+      "split": "holdout"
+    },
+    {
+      "case_id": "e13",
+      "label": "ESSENTIAL",
+      "language": "hi",
+      "query": "मैंने अपना टेस्ट रंग क्या याद रखने को कहा था?",
+      "memory": "test color: नीला",
+      "split": "holdout"
+    },
+    {
+      "case_id": "e14",
+      "label": "ESSENTIAL",
+      "language": "hi",
+      "query": "मेरी सेव की हुई पसंदीदा सीट कौन सी है?",
+      "memory": "flight seat preference: खिड़की",
+      "split": "holdout"
+    },
+    {
+      "case_id": "e15",
+      "label": "ESSENTIAL",
+      "language": "hi",
+      "query": "मैंने टेस्ट प्रोजेक्ट का कोडनेम क्या सेव कराया था?",
+      "memory": "test project codename: सूर्य",
+      "split": "holdout"
+    },
+    {
+      "case_id": "e16",
+      "label": "ESSENTIAL",
+      "language": "hi",
+      "query": "मैंने किस शहर को अपना टेस्ट शहर सेव कराया था?",
+      "memory": "test city: उज्जैन",
+      "split": "holdout"
+    },
+    {
+      "case_id": "h01",
+      "label": "HELPFUL",
+      "language": "en",
+      "query": "Suggest a high-protein dinner for me.",
+      "memory": "diet preference: vegetarian",
+      "split": "calibration"
+    },
+    {
+      "case_id": "h02",
+      "label": "HELPFUL",
+      "language": "en",
+      "query": "Suggest a weekend getaway I would probably enjoy.",
+      "memory": "travel preference: quiet mountain towns",
+      "split": "calibration"
+    },
+    {
+      "case_id": "h03",
+      "label": "HELPFUL",
+      "language": "en",
+      "query": "Give me a packing list for a photography trip.",
+      "memory": "camera ownership: mirrorless camera",
+      "split": "calibration"
+    },
+    {
+      "case_id": "h04",
+      "label": "HELPFUL",
+      "language": "en",
+      "query": "Design a practical morning routine for me.",
+      "memory": "usual wake time: 7 AM",
+      "split": "calibration"
+    },
+    {
+      "case_id": "h05",
+      "label": "HELPFUL",
+      "language": "en",
+      "query": "Recommend a webcam setup for my desk.",
+      "memory": "webcam budget: 7000 INR",
+      "split": "calibration"
+    },
+    {
+      "case_id": "h06",
+      "label": "HELPFUL",
+      "language": "en",
+      "query": "Explain micro-partition pruning in a way I would like.",
+      "memory": "explanation preference: concise with practical examples",
+      "split": "calibration"
+    },
+    {
+      "case_id": "h07",
+      "label": "HELPFUL",
+      "language": "en",
+      "query": "Suggest flight timings for a short business trip.",
+      "memory": "flight preference: avoid red-eye departures",
+      "split": "calibration"
+    },
+    {
+      "case_id": "h08",
+      "label": "HELPFUL",
+      "language": "en",
+      "query": "Give me hill-start driving tips tailored to my car.",
+      "memory": "car transmission: manual",
+      "split": "calibration"
+    },
+    {
+      "case_id": "h09",
+      "label": "HELPFUL",
+      "language": "hinglish",
+      "query": "Mere liye high-protein dinner suggest karo.",
+      "memory": "diet preference: vegetarian",
+      "split": "holdout"
+    },
+    {
+      "case_id": "h10",
+      "label": "HELPFUL",
+      "language": "hinglish",
+      "query": "Weekend trip suggest karo jo mujhe pasand aa sakti hai.",
+      "memory": "travel preference: quiet mountain towns",
+      "split": "holdout"
+    },
+    {
+      "case_id": "h11",
+      "label": "HELPFUL",
+      "language": "hinglish",
+      "query": "Mere desk ke liye webcam options suggest karo.",
+      "memory": "webcam budget: 7000 INR",
+      "split": "holdout"
+    },
+    {
+      "case_id": "h12",
+      "label": "HELPFUL",
+      "language": "hinglish",
+      "query": "Mujhe Snowflake clustering simple way me samjhao.",
+      "memory": "explanation preference: concise with practical examples",
+      "split": "holdout"
+    },
+    {
+      "case_id": "h13",
+      "label": "HELPFUL",
+      "language": "hi",
+      "query": "मेरे लिए एक अच्छा सुबह का रूटीन सुझाओ।",
+      "memory": "usual wake time: सुबह 7 बजे",
+      "split": "holdout"
+    },
+    {
+      "case_id": "h14",
+      "label": "HELPFUL",
+      "language": "hi",
+      "query": "मेरे लिए वीकेंड ट्रिप सुझाओ।",
+      "memory": "travel preference: शांत पहाड़ी जगहें",
+      "split": "holdout"
+    },
+    {
+      "case_id": "h15",
+      "label": "HELPFUL",
+      "language": "hi",
+      "query": "मेरे लिए हाई-प्रोटीन डिनर सुझाओ।",
+      "memory": "diet preference: शाकाहारी",
+      "split": "holdout"
+    },
+    {
+      "case_id": "h16",
+      "label": "HELPFUL",
+      "language": "hi",
+      "query": "मेरे लिए फ्लाइट का अच्छा समय सुझाओ।",
+      "memory": "flight preference: देर रात की उड़ान से बचना",
+      "split": "holdout"
+    },
+    {
+      "case_id": "u01",
+      "label": "UNNECESSARY",
+      "language": "en",
+      "query": "Explain Snowflake clustering keys.",
+      "memory": "test color: purple",
+      "split": "calibration"
+    },
+    {
+      "case_id": "u02",
+      "label": "UNNECESSARY",
+      "language": "en",
+      "query": "What is a Python list comprehension?",
+      "memory": "test city: Atlantis",
+      "split": "calibration"
+    },
+    {
+      "case_id": "u03",
+      "label": "UNNECESSARY",
+      "language": "en",
+      "query": "Who wrote Hamlet?",
+      "memory": "preferred return airport: Indore",
+      "split": "calibration"
+    },
+    {
+      "case_id": "u04",
+      "label": "UNNECESSARY",
+      "language": "en",
+      "query": "Calculate 17 multiplied by 23.",
+      "memory": "travel preference: quiet mountain towns",
+      "split": "calibration"
+    },
+    {
+      "case_id": "u05",
+      "label": "UNNECESSARY",
+      "language": "en",
+      "query": "Explain Java Spring dependency injection.",
+      "memory": "spring trip month: March",
+      "split": "calibration"
+    },
+    {
+      "case_id": "u06",
+      "label": "UNNECESSARY",
+      "language": "en",
+      "query": "How does a webcam CMOS sensor work?",
+      "memory": "webcam budget: 7000 INR",
+      "split": "calibration"
+    },
+    {
+      "case_id": "u07",
+      "label": "UNNECESSARY",
+      "language": "en",
+      "query": "Tell me about the myth of Atlantis.",
+      "memory": "test city: Atlantis",
+      "split": "calibration"
+    },
+    {
+      "case_id": "u08",
+      "label": "UNNECESSARY",
+      "language": "en",
+      "query": "What is a peregrine falcon?",
+      "memory": "test vehicle: Falcon",
+      "split": "calibration"
+    },
+    {
+      "case_id": "u09",
+      "label": "UNNECESSARY",
+      "language": "hinglish",
+      "query": "Snowflake me warehouse scaling kaise kaam karta hai?",
+      "memory": "snow boot size: 9",
+      "split": "holdout"
+    },
+    {
+      "case_id": "u10",
+      "label": "UNNECESSARY",
+      "language": "hinglish",
+      "query": "Python dictionary kya hoti hai?",
+      "memory": "preferred return airport: Bhopal",
+      "split": "holdout"
+    },
+    {
+      "case_id": "u11",
+      "label": "UNNECESSARY",
+      "language": "hinglish",
+      "query": "Java Spring Boot kya hai?",
+      "memory": "spring trip month: April",
+      "split": "holdout"
+    },
+    {
+      "case_id": "u12",
+      "label": "UNNECESSARY",
+      "language": "hinglish",
+      "query": "Webcam sensor ka field of view kya hota hai?",
+      "memory": "webcam budget: 6500 INR",
+      "split": "holdout"
+    },
+    {
+      "case_id": "u13",
+      "label": "UNNECESSARY",
+      "language": "hi",
+      "query": "स्नोफ्लेक में क्लस्टरिंग क्या होती है?",
+      "memory": "snow boot size: 8",
+      "split": "holdout"
+    },
+    {
+      "case_id": "u14",
+      "label": "UNNECESSARY",
+      "language": "hi",
+      "query": "अटलांटिस की पौराणिक कथा क्या है?",
+      "memory": "test city: अटलांटिस",
+      "split": "holdout"
+    },
+    {
+      "case_id": "u15",
+      "label": "UNNECESSARY",
+      "language": "hi",
+      "query": "फाल्कन पक्षी कितनी तेज उड़ता है?",
+      "memory": "test vehicle: Falcon",
+      "split": "holdout"
+    },
+    {
+      "case_id": "u16",
+      "label": "UNNECESSARY",
+      "language": "hi",
+      "query": "जावा स्प्रिंग फ्रेमवर्क क्या है?",
+      "memory": "spring trip month: मार्च",
+      "split": "holdout"
+    },
+    {
+      "case_id": "s01",
+      "label": "STEERING_RISK",
+      "language": "en",
+      "query": "Which compact SUV has the strongest published crash-safety result?",
+      "memory": "favorite car brand: Maruti Suzuki",
+      "split": "calibration"
+    },
+    {
+      "case_id": "s02",
+      "label": "STEERING_RISK",
+      "language": "en",
+      "query": "Which airline currently has the lowest delay rate?",
+      "memory": "favorite airline: Indigo",
+      "split": "calibration"
+    },
+    {
+      "case_id": "s03",
+      "label": "STEERING_RISK",
+      "language": "en",
+      "query": "Compare Sony and Canon overheating performance using measured tests.",
+      "memory": "favorite camera brand: Sony",
+      "split": "calibration"
+    },
+    {
+      "case_id": "s04",
+      "label": "STEERING_RISK",
+      "language": "en",
+      "query": "Which cloud platform is objectively better for a regulated healthcare workload?",
+      "memory": "friend employer: AWS",
+      "split": "calibration"
+    },
+    {
+      "case_id": "s05",
+      "label": "STEERING_RISK",
+      "language": "en",
+      "query": "Which laptop brand has the lowest documented failure rate?",
+      "memory": "current laptop brand: Lenovo",
+      "split": "calibration"
+    },
+    {
+      "case_id": "s06",
+      "label": "STEERING_RISK",
+      "language": "en",
+      "query": "Should gold be considered overvalued based on current macro data?",
+      "memory": "current investment holding: gold ETF",
+      "split": "calibration"
+    },
+    {
+      "case_id": "s07",
+      "label": "STEERING_RISK",
+      "language": "en",
+      "query": "Which hospital has the strongest published outcome data for this procedure?",
+      "memory": "preferred hospital: Northstar Hospital",
+      "split": "calibration"
+    },
+    {
+      "case_id": "s08",
+      "label": "STEERING_RISK",
+      "language": "en",
+      "query": "Which reranker performs best on the benchmark results?",
+      "memory": "favorite local model family: Qwen",
+      "split": "calibration"
+    },
+    {
+      "case_id": "s09",
+      "label": "STEERING_RISK",
+      "language": "hinglish",
+      "query": "Wet braking me objectively safest tyre kaunsa hai?",
+      "memory": "previous tyre brand: Apollo",
+      "split": "holdout"
+    },
+    {
+      "case_id": "s10",
+      "label": "STEERING_RISK",
+      "language": "hinglish",
+      "query": "AWS aur Azure ko healthcare security ke basis par objectively compare karo.",
+      "memory": "friend employer: AWS",
+      "split": "holdout"
+    },
+    {
+      "case_id": "s11",
+      "label": "STEERING_RISK",
+      "language": "hinglish",
+      "query": "Kaunsi airline ka current on-time performance best hai?",
+      "memory": "favorite airline: Indigo",
+      "split": "holdout"
+    },
+    {
+      "case_id": "s12",
+      "label": "STEERING_RISK",
+      "language": "hinglish",
+      "query": "Evidence ke basis par kaunsa camera overheating me best hai?",
+      "memory": "favorite camera brand: Sony",
+      "split": "holdout"
+    },
+    {
+      "case_id": "s13",
+      "label": "STEERING_RISK",
+      "language": "hi",
+      "query": "सिर्फ प्रकाशित सुरक्षा डेटा के आधार पर सबसे सुरक्षित एसयूवी कौन सी है?",
+      "memory": "favorite car brand: Maruti Suzuki",
+      "split": "holdout"
+    },
+    {
+      "case_id": "s14",
+      "label": "STEERING_RISK",
+      "language": "hi",
+      "query": "वर्तमान देरी के आँकड़ों के आधार पर सबसे समय पर चलने वाली एयरलाइन कौन सी है?",
+      "memory": "favorite airline: Indigo",
+      "split": "holdout"
+    },
+    {
+      "case_id": "s15",
+      "label": "STEERING_RISK",
+      "language": "hi",
+      "query": "प्रकाशित परिणामों के आधार पर इस इलाज के लिए सबसे अच्छा अस्पताल कौन सा है?",
+      "memory": "preferred hospital: Northstar Hospital",
+      "split": "holdout"
+    },
+    {
+      "case_id": "s16",
+      "label": "STEERING_RISK",
+      "language": "hi",
+      "query": "बेंचमार्क के आधार पर सबसे अच्छा रीरैंकर कौन सा है?",
+      "memory": "favorite local model family: Qwen",
+      "split": "holdout"
+    }
+  ]
+}
