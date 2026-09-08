@@ -51,7 +51,11 @@ class ProviderResilienceSessionObserver:
         return self._terminal_task
 
     def _on_agent_state_changed(self, event: Any) -> None:
-        if getattr(event, "new_state", None) not in {"listening", "thinking", "speaking"}:
+        if getattr(event, "new_state", None) not in {
+            "listening",
+            "thinking",
+            "speaking",
+        }:
             return
         if self._state.mark_recovered():
             LOGGER.info(
