@@ -8,13 +8,13 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 | ---: | --- | --- | --- |
 | 0 | Clean Foundation | Minimal app lifecycle, package structure, config, logging, baseline tests | DONE |
 | 1 | Natural Conversational Core | CAP-001, CAP-005, CAP-006, CAP-007 | DONE |
-| 2 | Wake, Voice Session, and Audio Robustness | CAP-002, CAP-003 | DONE |
+| 2 | Wake, Voice Session, and Audio Robustness | CAP-002, CAP-003 | DONE (long-utterance activity correction owner-accepted 2026-09-08) |
 | 2.5 | Vision Sensor & Active Target Tracking Foundation | Camera/PTZ boundaries, local person detection/tracking, deterministic target lock, active following | DONE |
 | 3 | Identity, Graduated Trust, Authority, and Observability Foundation | CAP-004, CAP-034, CAP-035, CAP-036, CAP-037 | DONE |
 | 4 | Live Context and Personal Memory | CAP-008 through CAP-013 | DONE (BOUNDED; provider-assisted 4.5D recall accepted; strict independent verifier + 4.5E deferred) |
 | 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | DONE (BOUNDED; minimal provider-failure diagnosis + local truthful status accepted; full local/offline stack deferred) |
-| 6 | Knowledge, Current Research, and Truthfulness | CAP-014 through CAP-017 | ACTIVE — REQUIREMENTS / RESEARCH NEXT |
-| 7 | Governed Capability Runtime + Local Files/System/Project Safe Reads | CAP-018, CAP-021, CAP-022, CAP-032 | PLANNED |
+| 6 | Knowledge, Current Research, and Truthfulness | CAP-014 through CAP-017 | DONE (BOUNDED; provider-neutral source-aware web research + truth/provenance policy accepted) |
+| 7 | Governed Capability Runtime + Local Files/System/Project Safe Reads | CAP-018, CAP-021, CAP-022, CAP-032 | ACTIVE NEXT — REQUIREMENTS / RESEARCH |
 | 8 | Notes, Tasks, Reminders, and Scheduling | CAP-027, CAP-028 | PLANNED |
 | 9 | Computer, Application, and Device Control | CAP-023, CAP-024 | PLANNED |
 | 10 | Browser and Web Interaction | CAP-025 | PLANNED |
@@ -114,6 +114,8 @@ Completed outcome: manual realtime conversation, multilingual English/Hindi/Hing
 
 Completed outcome: local wake detection, one JARVIS-owned audio path, preserved wake tail, realtime follow-up conversation, explicit return to idle, and clean re-wake work on the target Windows system. Extended endurance and device-failure trials were explicitly waived and remain recorded as residual risks.
 
+A bounded robustness correction was reopened and owner-accepted on 2026-09-08 after Step-6 testing exposed a long-utterance lifecycle race. The accepted correction preserves provider-native realtime turn completion, restores local speech activity evidence for the outer lifecycle, suppresses inactivity timing during realtime-session initialization, cancels inactivity shutdown while the user is actively speaking, and preserves normal idle timeout/follow-up/barge-in behavior. Acceptance evidence: `docs/research/STEP_2_LONG_UTTERANCE_ACTIVITY_ACCEPTANCE.md`.
+
 ## Step 2.5 - Vision Sensor & Active Target Tracking Foundation
 
 Completed outcome: one JARVIS-owned Pocket 3 camera path, replaceable detector/tracker/PTZ boundaries, RF-DETR Nano person detection, OC-SORT tracking, head-first framing evidence, deterministic target locking, safe pan/tilt/adaptive-zoom follow, canonical visual state, and real Windows + RTX 5060 Ti + Pocket 3 human acceptance.
@@ -163,8 +165,6 @@ Still deliberately deferred:
 - Phase 4.5E automatic semantic memory injection through ordinary conversation context assembly;
 - remaining unstarted Step-4 extensions.
 
-Earlier research-backed independent 4.5D approaches failed the frozen zero-unsafe-release / multilingual behavior gates and remain retired. Their failure evidence is not rewritten by the provider-assisted acceptance.
-
 Historical strict-deferral evidence: `docs/research/STEP_4_PHASE_4_5D_DEFERRED_CLOSURE.md`.
 
 Accepted fallback evidence: `docs/research/STEP_4_PHASE_4_5D_PROVIDER_ASSISTED_FALLBACK.md`.
@@ -200,11 +200,41 @@ The earlier research proposal remains preserved for future reopening: `docs/rese
 
 ## Step 6 - Knowledge, Current Research, and Truthfulness
 
-Step 6 is now the active roadmap slice.
+Step 6 is **bounded complete**.
 
-It begins with requirements recovery and fresh current-technology research for CAP-014 through CAP-017. The goal is to give JARVIS a disciplined way to decide when current external information is needed, gather source-backed evidence, distinguish fresh/current facts from model knowledge, verify claims appropriately, and answer truthfully when evidence is unavailable or conflicting.
+Accepted outcome:
 
-Step 6 must reuse the existing provider/conversation/context/authority foundations rather than creating an uncontrolled second research brain or bypassing provenance boundaries.
+- the active conversational brain may decide that research is useful and formulate bounded supporting web queries;
+- JARVIS exposes a provider-neutral `search_web`/current-research boundary rather than tying research architecture to Gemini or OpenAI;
+- Exa is the accepted first replaceable live-web retrieval adapter;
+- returned webpages are normalized into JARVIS-owned source evidence with titles, URLs, domains, excerpts and research timestamps;
+- JARVIS owns truth/research status, provenance, deterministic research-warrant gating, source sufficiency, and fail-closed behavior;
+- stable model-knowledge questions are blocked from unnecessary network retrieval;
+- explicit/current/freshness requests can require live research;
+- fact-check mode requires multiple source domains;
+- authoritative mode requires a bounded official/primary-source signal;
+- search/provider failure is reported as unavailable rather than silently presented as freshly verified;
+- research evidence gains no memory, identity, authority, permission, file, device, or execution power.
+
+Owner-machine evidence included a real Exa smoke returning 8 sources and a live voice research request returning official Google documentation among its source set. Acceptance evidence is recorded in `docs/research/STEP_6_KNOWLEDGE_TRUTHFULNESS_ACCEPTANCE.md`.
+
+Still deliberately deferred:
+
+- multi-minute/background deep-research agents;
+- browser automation;
+- Step-7 local project/file knowledge;
+- universal trusted-domain classification;
+- proactive/background recurring research;
+- automatic semantic-memory injection;
+- simultaneous multi-search-backend routing without measured need.
+
+## Step 7 - Governed Capability Runtime + Local Files/System/Project Safe Reads
+
+Step 7 is the **next active roadmap slice after the Step-2 correction merge**.
+
+It begins with requirements recovery and fresh research for CAP-018, CAP-021, CAP-022 and CAP-032. The implementation goal is not a giant universal agent framework: it is the smallest governed capability contract required by real safe-read capabilities, plus trustworthy local project/file/system read paths that reuse existing conversation, truth, provenance and authority foundations.
+
+Step 7 must remain read-focused. Browser automation, file writes, computer/device control, external communication, and coding/project mutation remain assigned to later roadmap steps.
 
 Detailed active planning belongs in `CURRENT_PLAN.md`.
 
