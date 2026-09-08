@@ -29,6 +29,7 @@ from jarvis.identity.speaker_shadow import (
     build_default_enrolled_speaker_observer,
 )
 from jarvis.identity.speech_region import LiveKitSileroSpeechRegionDetector
+from jarvis.knowledge.research_providers import build_current_research_service
 from jarvis.logging_config import configure_logging
 from jarvis.memory.candidate_runtime import MemoryCandidateSessionRuntime
 from jarvis.memory.extractors import build_memory_candidate_extractor
@@ -198,6 +199,14 @@ def build_production_voice_runtime(
             config.memory_candidate_extraction_model,
         )
 
+    research_service = build_current_research_service(provider=config.ai_provider)
+    LOGGER.info(
+        "Step-6 source-aware research is configured: active_provider=%s model=%s "
+        "provider_neutral_contract=True same_provider=True cross_provider_fallback=False",
+        research_service.provider_name,
+        research_service.model_name,
+    )
+
     provider_resilience_state = ProviderResilienceState()
     local_status_speech = build_local_status_speech()
     LOGGER.info(
@@ -242,6 +251,7 @@ def build_production_voice_runtime(
         speaker_shadow_observer=speaker_shadow_observer,
         memory_runtime=memory_runtime,
         memory_query_coordinator=memory_query_coordinator,
+        research_service=research_service,
         session_factory=production_session_factory,
     )
 
