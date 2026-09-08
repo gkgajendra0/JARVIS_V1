@@ -151,7 +151,10 @@ def _status_for_evidence(
     domains = {source.domain for source in evidence.sources}
     if mode is ResearchMode.AUTHORITATIVE:
         if not any(_is_authoritative_domain(domain) for domain in domains):
-            return ResearchStatus.INSUFFICIENT_EVIDENCE, "authoritative_source_not_observed"
+            return (
+                ResearchStatus.INSUFFICIENT_EVIDENCE,
+                "authoritative_source_not_observed",
+            )
         return ResearchStatus.AUTHORITATIVE_SOURCE_PRESENT, None
     if mode is ResearchMode.FACT_CHECK and len(domains) < 2:
         return (
@@ -166,7 +169,9 @@ def _status_for_evidence(
 class CurrentResearchService:
     """Use one active provider for web research without owning conversation truth."""
 
-    def __init__(self, provider: ResearchProvider, *, timeout_seconds: float = 60.0) -> None:
+    def __init__(
+        self, provider: ResearchProvider, *, timeout_seconds: float = 60.0
+    ) -> None:
         if timeout_seconds <= 0:
             raise ValueError("research timeout_seconds must be greater than zero")
         self._provider = provider
