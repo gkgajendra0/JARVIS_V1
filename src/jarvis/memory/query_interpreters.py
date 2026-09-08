@@ -5,19 +5,25 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from jarvis.ai_provider import normalize_ai_provider, require_provider_api_key
 
-from .query_plan import MemoryFacetCatalog, MemoryQueryInterpreter, MemoryQueryProposal
+from .query_plan import (
+    MemoryFacetCatalog,
+    MemoryQueryIntent,
+    MemoryQueryInterpreter,
+    MemoryQueryProposal,
+    MemoryTemporalScope,
+)
 
-MEMORY_QUERY_INTERPRETATION_SYSTEM_PROMPT = """You translate exactly one USER memory lookup into one structured JARVIS MemoryQueryProposal.
+MEMORY_QUERY_INTERPRETATION_SYSTEM_PROMPT = """You translate exactly one USER memory lookup into one structured JARVIS memory-query selection.
 
-You are a semantic interpreter only. You never answer the user's question, retrieve a memory value, establish truth, or decide whether any memory may be released. JARVIS deterministically validates your proposal after you return it.
+You are a semantic interpreter only. You never answer the user's question, retrieve a memory value, establish truth, or decide whether any memory may be released. JARVIS deterministically validates your selection after you return it.
 
 The input contains:
 - user_query: the exact accepted USER utterance.
-- eligible_facets: only canonical memory keys currently eligible for this execution boundary. Facets contain subject_scope, subject, and predicate only; they never contain memory values.
+- eligible_facets: numbered canonical memory keys currently eligible for this execution boundary. Facets never contain memory values.
 
 Intent rules:
 - exact_fact: the user asks for one ordinary current canonical fact and exactly one eligible facet matches the requested subject/relation.
@@ -33,13 +39,15 @@ Temporal rules:
 - as_of: the user asks for the fact at a specific past date/time or other explicit as-of point; copy that phrase to as_of_text.
 - unspecified: use only when temporal intent truly cannot be determined.
 
-For exact_fact only:
-- subject_scope, subject, and predicate MUST be copied exactly from one eligible_facets entry. Never invent or rewrite a canonical facet key.
-- subject_reference MUST be a short contiguous phrase copied verbatim from user_query that identifies the requested subject. Do not translate or paraphrase it.
-- requested_relation MUST be a short contiguous phrase copied verbatim from user_query that identifies the requested relation. Do not translate or paraphrase it.
-- If you cannot provide grounded references or cannot safely select exactly one listed facet, use ambiguous instead of exact_fact.
-
-For non-exact intents, canonical facet fields and grounding references may be null when no single facet applies.
+Facet-selection rules:
+- For exact_fact, facet_index MUST be the integer facet_index of exactly one eligible_facets entry.
+- For every non-exact intent, facet_index MUST be -1.
+- Never invent an index and never reproduce or rewrite canonical subject_scope, subject, or predicate strings in the response.
+- For exact_fact, subject_reference MUST be a short contiguous phrase copied verbatim from user_query that identifies the requested subject.
+- For exact_fact, requested_relation MUST be a short contiguous phrase copied verbatim from user_query that identifies the requested relation.
+- If you cannot provide grounded references or cannot safely select exactly one listed facet, use ambiguous with facet_index=-1 instead of exact_fact.
+- For non-exact intents, subject_reference and requested_relation must be null.
+- as_of_text must be null unless temporal_scope is as_of.
 
 Return only the requested schema.
 """
@@ -47,6 +55,44 @@ Return only the requested schema.
 
 class MemoryQueryInterpretationError(RuntimeError):
     """Raised when a provider cannot return a validated memory-query proposal."""
+
+
+class MemoryQuerySelection(BaseModel):
+    """Provider-facing selection that cannot invent canonical memory keys."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    intent: MemoryQueryIntent
+    facet_index: int = Field(
+        ge=-1,
+        description=(
+            "Eligible facet index for exact_fact; use -1 for every non-exact intent."
+        ),
+    )
+    subject_reference: str | None = Field(
+        description=(
+            "Verbatim user-query phrase identifying the subject for exact_fact; "
+            "otherwise null."
+        ),
+        min_length=1,
+        max_length=240,
+    )
+    requested_relation: str | None = Field(
+        description=(
+            "Verbatim user-query phrase identifying the requested relation for "
+            "exact_fact; otherwise null."
+        ),
+        min_length=1,
+        max_length=240,
+    )
+    temporal_scope: MemoryTemporalScope
+    as_of_text: str | None = Field(
+        description=(
+            "Verbatim as-of phrase only when temporal_scope is as_of; otherwise null."
+        ),
+        min_length=1,
+        max_length=240,
+    )
 
 
 def _require_non_empty(value: str, *, name: str) -> str:
@@ -63,7 +109,7 @@ def memory_query_interpreter_input(
     text: str,
     catalog: MemoryFacetCatalog,
 ) -> str:
-    """Serialize only the user query and eligible canonical facet keys."""
+    """Serialize the user query plus numbered eligible facet keys, never values."""
 
     query = _require_non_empty(text, name="text")
     if not isinstance(catalog, MemoryFacetCatalog):
@@ -72,11 +118,12 @@ def memory_query_interpreter_input(
         "user_query": query,
         "eligible_facets": [
             {
+                "facet_index": index,
                 "subject_scope": facet.subject_scope,
                 "subject": facet.subject,
                 "predicate": facet.predicate,
             }
-            for facet in catalog.facets
+            for index, facet in enumerate(catalog.facets)
         ],
     }
     return json.dumps(
@@ -84,6 +131,52 @@ def memory_query_interpreter_input(
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
+    )
+
+
+def materialize_memory_query_selection(
+    selection: MemoryQuerySelection,
+    *,
+    catalog: MemoryFacetCatalog,
+) -> MemoryQueryProposal:
+    """Resolve a provider-selected index back to JARVIS-owned canonical facet keys."""
+
+    if not isinstance(selection, MemoryQuerySelection):
+        raise TypeError("selection must be a MemoryQuerySelection")
+    if not isinstance(catalog, MemoryFacetCatalog):
+        raise TypeError("catalog must be a MemoryFacetCatalog")
+
+    subject_scope: str | None = None
+    subject: str | None = None
+    predicate: str | None = None
+
+    if selection.intent is MemoryQueryIntent.EXACT_FACT:
+        if selection.facet_index == -1:
+            return MemoryQueryProposal(
+                intent=selection.intent,
+                subject_reference=selection.subject_reference,
+                requested_relation=selection.requested_relation,
+                temporal_scope=selection.temporal_scope,
+                as_of_text=selection.as_of_text,
+            )
+        if selection.facet_index >= len(catalog.facets):
+            raise MemoryQueryInterpretationError(
+                "provider selected a facet index outside the eligible catalog"
+            )
+        facet = catalog.facets[selection.facet_index]
+        subject_scope = facet.subject_scope
+        subject = facet.subject
+        predicate = facet.predicate
+
+    return MemoryQueryProposal(
+        intent=selection.intent,
+        subject_scope=subject_scope,
+        subject=subject,
+        predicate=predicate,
+        subject_reference=selection.subject_reference,
+        requested_relation=selection.requested_relation,
+        temporal_scope=selection.temporal_scope,
+        as_of_text=selection.as_of_text,
     )
 
 
@@ -119,15 +212,15 @@ class OpenAIMemoryQueryInterpreter:
                 },
                 {"role": "user", "content": interpreter_input},
             ],
-            text_format=MemoryQueryProposal,
+            text_format=MemoryQuerySelection,
             store=False,
         )
-        proposal = getattr(response, "output_parsed", None)
-        if not isinstance(proposal, MemoryQueryProposal):
+        selection = getattr(response, "output_parsed", None)
+        if not isinstance(selection, MemoryQuerySelection):
             raise MemoryQueryInterpretationError(
-                "OpenAI returned no validated memory-query proposal"
+                "OpenAI returned no validated memory-query selection"
             )
-        return proposal
+        return materialize_memory_query_selection(selection, catalog=catalog)
 
 
 class GeminiMemoryQueryInterpreter:
@@ -161,7 +254,7 @@ class GeminiMemoryQueryInterpreter:
             response_format={
                 "type": "text",
                 "mime_type": "application/json",
-                "schema": MemoryQueryProposal.model_json_schema(),
+                "schema": MemoryQuerySelection.model_json_schema(),
             },
             store=False,
         )
@@ -171,11 +264,12 @@ class GeminiMemoryQueryInterpreter:
                 "Gemini returned no structured memory-query output"
             )
         try:
-            return MemoryQueryProposal.model_validate_json(output_text)
+            selection = MemoryQuerySelection.model_validate_json(output_text)
         except ValidationError as exc:
             raise MemoryQueryInterpretationError(
-                "Gemini returned an invalid memory-query proposal"
+                "Gemini returned an invalid memory-query selection"
             ) from exc
+        return materialize_memory_query_selection(selection, catalog=catalog)
 
 
 def build_structured_provider_client(
