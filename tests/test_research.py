@@ -17,7 +17,9 @@ from jarvis.knowledge.research_providers import (
 from jarvis.voice.research_tools import ResearchAgentTools
 
 
-def _source(domain: str, path: str = "/", *, excerpt: str = "evidence") -> EvidenceSource:
+def _source(
+    domain: str, path: str = "/", *, excerpt: str = "evidence"
+) -> EvidenceSource:
     return EvidenceSource(
         source_id=f"src-{domain}-{path}",
         url=f"https://{domain}{path}",
@@ -65,7 +67,9 @@ class _QuotaError(RuntimeError):
         (" authoritative ", ResearchMode.AUTHORITATIVE),
     ],
 )
-def test_research_mode_parses_bounded_values(value: str, expected: ResearchMode) -> None:
+def test_research_mode_parses_bounded_values(
+    value: str, expected: ResearchMode
+) -> None:
     assert ResearchMode.parse(value) is expected
 
 
@@ -76,7 +80,9 @@ def test_research_mode_rejects_unknown_value() -> None:
 
 @pytest.mark.asyncio
 async def test_current_research_marks_one_source_as_web_researched() -> None:
-    provider = _FakeProvider(ProviderResearchEvidence(sources=(_source("example.com"),)))
+    provider = _FakeProvider(
+        ProviderResearchEvidence(sources=(_source("example.com"),))
+    )
     service = CurrentResearchService(provider)
 
     result = await service.research("current example", mode=ResearchMode.CURRENT)
@@ -206,7 +212,9 @@ def test_research_builder_is_independent_of_active_ai_provider(
 
 
 @pytest.mark.asyncio
-async def test_voice_brain_can_issue_subquery_but_canonical_turn_remains_anchored() -> None:
+async def test_voice_brain_can_issue_subquery_but_canonical_turn_remains_anchored() -> (
+    None
+):
     provider = _FakeProvider(
         ProviderResearchEvidence(sources=(_source("docs.snowflake.com"),))
     )
