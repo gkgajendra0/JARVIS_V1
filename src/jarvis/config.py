@@ -110,6 +110,7 @@ class JarvisConfig:
     memory_enabled: bool = False
     memory_candidate_extraction_enabled: bool = False
     memory_candidate_extraction_model: str | None = None
+    memory_semantic_recall_model: str | None = None
     vision_enabled: bool = False
     vision_head_model_path: str | None = None
     speaker_shadow_enabled: bool = False
@@ -140,6 +141,7 @@ class JarvisConfig:
             "vision_head_model_path",
             "active_speaker_model_path",
             "memory_candidate_extraction_model",
+            "memory_semantic_recall_model",
         ):
             value = getattr(self, name)
             if value is not None:
@@ -157,6 +159,11 @@ class JarvisConfig:
                     "JARVIS_MEMORY_CANDIDATE_EXTRACTION_MODEL is required when "
                     "candidate extraction is enabled"
                 )
+
+        if self.memory_semantic_recall_model is not None and not self.memory_enabled:
+            raise ValueError(
+                "JARVIS_MEMORY_SEMANTIC_RECALL_MODEL requires JARVIS_MEMORY_ENABLED"
+            )
 
         for name in (
             "audio_input_device",
@@ -192,6 +199,10 @@ class JarvisConfig:
             raise ValueError("audio_pre_roll_seconds must be finite")
         if not 0 <= self.audio_pre_roll_seconds <= self.audio_ring_buffer_seconds:
             raise ValueError("audio pre-roll must fit inside the ring buffer")
+
+    @property
+    def memory_semantic_recall_enabled(self) -> bool:
+        return self.memory_enabled and self.memory_semantic_recall_model is not None
 
     @property
     def realtime_provider(self) -> str:
@@ -272,6 +283,9 @@ class JarvisConfig:
             ),
             memory_candidate_extraction_model=_configured_optional_text(
                 "JARVIS_MEMORY_CANDIDATE_EXTRACTION_MODEL", machine
+            ),
+            memory_semantic_recall_model=_configured_optional_text(
+                "JARVIS_MEMORY_SEMANTIC_RECALL_MODEL", machine
             ),
             vision_enabled=_configured_bool("JARVIS_VISION_ENABLED", False, machine),
             vision_head_model_path=_configured_optional_text(

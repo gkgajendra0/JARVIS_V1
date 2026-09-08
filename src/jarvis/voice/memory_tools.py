@@ -8,7 +8,8 @@ import unicodedata
 from livekit.agents import RunContext, function_tool
 from livekit.agents.llm import ToolError
 
-from jarvis.conversation import ConversationSession, ConversationTurn
+from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
+from jarvis.memory.evidence_gate import MemoryEvidenceDisposition
 from jarvis.memory.explicit import (
     ExplicitMemoryAction,
     ExplicitMemoryAuthorizationError,
@@ -18,6 +19,8 @@ from jarvis.memory.explicit import (
     parse_memory_sensitivity,
     reject_prohibited_secret,
 )
+from jarvis.memory.provider_verified_query import ProviderVerifiedMemoryQueryCoordinator
+from jarvis.memory.retrieval import RetrievalEligibility
 from jarvis.memory.service import (
     MemoryAlreadyExistsError,
     MemoryAmbiguousError,
@@ -84,22 +87,35 @@ class MemoryAgentTools:
         self,
         service: MemoryService,
         conversation: ConversationSession,
+        *,
+        semantic_query_coordinator: ProviderVerifiedMemoryQueryCoordinator
+        | None = None,
     ) -> None:
         if not isinstance(service, MemoryService):
             raise TypeError("service must be a MemoryService")
         if not isinstance(conversation, ConversationSession):
             raise TypeError("conversation must be a ConversationSession")
+        if semantic_query_coordinator is not None and not callable(
+            getattr(semantic_query_coordinator, "resolve", None)
+        ):
+            raise TypeError(
+                "semantic_query_coordinator must implement resolve when provided"
+            )
         self._service = service
         self._conversation = conversation
+        self._semantic_query_coordinator = semantic_query_coordinator
 
     @property
     def tools(self) -> list:
-        return [
+        tools = [
             self.remember_memory,
             self.correct_memory,
             self.forget_memory,
             self.inspect_memory,
         ]
+        if self._semantic_query_coordinator is not None:
+            tools.append(self.recall_memory)
+        return tools
 
     async def remember(
         self,
@@ -207,6 +223,64 @@ class MemoryAgentTools:
             "predicate": forgotten_predicate,
         }
 
+    def _latest_user_turn(self) -> ConversationTurn:
+        turn = next(
+            (
+                candidate
+                for candidate in reversed(self._conversation.turns)
+                if candidate.role is ConversationRole.USER
+            ),
+            None,
+        )
+        if turn is None:
+            raise MemoryToolGroundingError(
+                "semantic recall requires a latest accepted user utterance"
+            )
+        return turn
+
+    async def semantic_recall(self) -> dict[str, object]:
+        coordinator = self._semantic_query_coordinator
+        if coordinator is None:
+            raise MemoryToolGroundingError(
+                "semantic memory recall is not enabled for this session"
+            )
+        turn = self._latest_user_turn()
+        decision = await coordinator.resolve(
+            turn.text,
+            eligibility=RetrievalEligibility.cloud_context(),
+        )
+        if decision.disposition is MemoryEvidenceDisposition.ABSTAIN:
+            LOGGER.info(
+                "Semantic memory recall abstained | turn_id=%s | reason=%s",
+                turn.turn_id,
+                decision.reason_code,
+            )
+            return {
+                "ok": False,
+                "operation": "semantic_recall",
+                "reason": "No safely releasable current memory matched this question.",
+            }
+        if decision.evidence is None:
+            raise RuntimeError("semantic recall released without trusted evidence")
+        record = decision.evidence.assertion
+        LOGGER.info(
+            "Semantic memory recall released | turn_id=%s | predicate=%s | "
+            "sensitivity=%s | reason=%s",
+            turn.turn_id,
+            record.predicate,
+            record.sensitivity.value,
+            decision.reason_code,
+        )
+        return {
+            "ok": True,
+            "operation": "semantic_recall",
+            "predicate": record.predicate,
+            "value": record.value,
+            "sensitivity": record.sensitivity.value,
+            "freshness": record.freshness_class.value,
+            "verification": record.verification_state.value,
+        }
+
     async def inspect(self, *, predicate: str) -> dict[str, object]:
         turn = authorize_explicit_memory_action(
             self._conversation,
@@ -311,6 +385,23 @@ class MemoryAgentTools:
         """
         context.disallow_interruptions()
         return await self._call_tool(self.forget(predicate=predicate))
+
+    @function_tool()
+    async def recall_memory(
+        self,
+        context: RunContext,
+    ) -> dict[str, object]:
+        """Recall one current personal fact for the latest USER question.
+
+        Use this only when the latest accepted user utterance asks for a personal fact
+        that may already exist in JARVIS durable memory. Do not provide a predicate or
+        memory key: JARVIS reads the canonical latest USER utterance itself, performs
+        structured semantic planning, exact canonical lookup, cloud-sensitivity
+        filtering, and a second same-provider ALLOW/ABSTAIN verification. If the tool
+        returns ok=false, do not guess or claim a remembered answer.
+        """
+        del context
+        return await self._call_tool(self.semantic_recall())
 
     @function_tool()
     async def inspect_memory(

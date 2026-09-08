@@ -18,6 +18,7 @@ from jarvis.conversation import ConversationSession
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_shadow import EnrolledSpeakerShadowObserver
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
+from jarvis.memory.provider_verified_query import ProviderVerifiedMemoryQueryCoordinator
 from jarvis.memory.runtime import MemoryRuntime
 from jarvis.voice.livekit_session import create_voice_session
 from jarvis.voice.memory_tools import MemoryAgentTools
@@ -34,10 +35,12 @@ class _SessionToolBundle:
         vision_tools: Any | None,
         memory_runtime: MemoryRuntime,
         conversation_getter: Callable[[], ConversationSession | None],
+        memory_query_coordinator: ProviderVerifiedMemoryQueryCoordinator | None,
     ) -> None:
         self._vision_tools = vision_tools
         self._memory_runtime = memory_runtime
         self._conversation_getter = conversation_getter
+        self._memory_query_coordinator = memory_query_coordinator
 
     @property
     def tools(self) -> list:
@@ -48,6 +51,7 @@ class _SessionToolBundle:
                 MemoryAgentTools(
                     self._memory_runtime.service,
                     conversation,
+                    semantic_query_coordinator=self._memory_query_coordinator,
                 ).tools
             )
         return tools
@@ -61,6 +65,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         *args: Any,
         speaker_shadow_observer: EnrolledSpeakerShadowObserver | None = None,
         memory_runtime: MemoryRuntime | None = None,
+        memory_query_coordinator: ProviderVerifiedMemoryQueryCoordinator | None = None,
         **kwargs: Any,
     ) -> None:
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
@@ -74,11 +79,17 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         super().__init__(*args, session_factory=capture_session, **kwargs)
         self._speaker_shadow_observer = speaker_shadow_observer
         self._memory_runtime = memory_runtime
+        if memory_query_coordinator is not None and memory_runtime is None:
+            raise ValueError(
+                "memory_query_coordinator requires an active memory runtime"
+            )
+        self._memory_query_coordinator = memory_query_coordinator
         if memory_runtime is not None:
             self._vision_tools = _SessionToolBundle(
                 self._vision_tools,
                 memory_runtime,
                 lambda: self._memory_conversation,
+                memory_query_coordinator,
             )
 
     async def run(self) -> None:
@@ -91,6 +102,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         LOGGER.info(
             "JARVIS explicit persistent memory is active; implicit admission remains disabled"
         )
+        if self._memory_query_coordinator is not None:
+            LOGGER.warning(
+                "Bounded provider-assisted semantic recall is active | provider=%s | "
+                "model=%s | final semantic verification is probabilistic and fail-closed",
+                self._memory_query_coordinator.provider_name,
+                self._memory_query_coordinator.model_name,
+            )
         try:
             await super().run()
         finally:

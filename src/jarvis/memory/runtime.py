@@ -10,6 +10,7 @@ from jarvis.security import WindowsDpapiKeyProtector
 from .database import SqlCipherMemoryDatabaseFactory
 from .lifecycle import MemoryLifecycleService
 from .query import CanonicalMemoryReader
+from .retrieval import SemanticRetrievalService
 from .service import MemoryService
 from .worker import SerialConnectionWorker
 
@@ -33,6 +34,7 @@ class MemoryRuntime:
         if not isinstance(service, MemoryService):
             raise TypeError("service must be a MemoryService")
         self.service = service
+        self.retrieval = SemanticRetrievalService(reader)
         self._writer = writer
         self._reader = reader
         self._started = False

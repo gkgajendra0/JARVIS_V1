@@ -133,3 +133,9 @@ Any future benchmark must use a **fresh never-exposed corpus**. Retired V4, Meth
 Step 4 is accepted only as the bounded foundation actually proven through Phase 4.5C. Automatic semantic conversational recall is a documented residual limitation, not a hidden partial feature.
 
 **Step 5 remains PLANNED and NOT STARTED until the owner explicitly authorizes it.**
+
+---
+
+## Owner-authorized bounded reopening — 2026-09-08
+
+The strict independent semantic release boundary documented above remains deferred and unresolved. The owner subsequently authorized a pragmatic same-provider structured semantic recall fallback rather than leaving semantic recall entirely unavailable. This does not promote any retired 4.5D model or relax canonical lifecycle/security rules. The fallback is tracked separately in `STEP_4_PHASE_4_5D_PROVIDER_ASSISTED_FALLBACK.md`; Step 5 remains not started until separately authorized.

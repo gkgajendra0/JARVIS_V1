@@ -2,11 +2,11 @@
 
 ## Active Step
 
-**No implementation step is active. Step 5 is awaiting explicit owner authorization.**
+**Step 4 Phase 4.5D bounded provider-assisted semantic recall fallback is active. Step 5 remains not started.**
 
 ## Current Stage
 
-**STEP 3 COMPLETE + MERGED — STEP 4 BOUNDED CLOSURE COMPLETE THROUGH 4.5C — PHASE 4.5D DEFERRED / UNRESOLVED — PHASE 4.5E AND REMAINING UNSTARTED STEP-4 EXTENSIONS DEFERRED — STEP 5 PLANNED / NOT STARTED**
+**STEP 3 COMPLETE + MERGED — STEP 4 FOUNDATION THROUGH 4.5C ACCEPTED — STRICT INDEPENDENT 4.5D GUARD REMAINS DEFERRED / UNRESOLVED — OWNER-AUTHORIZED PROVIDER-ASSISTED 4.5D FALLBACK ACTIVE — STEP 5 PLANNED / NOT STARTED**
 
 This file is the operational source of truth. Detailed measurements and retired experiments belong in `docs/research/`; only accepted architecture belongs in `docs/CURRENT_ARCHITECTURE.md` and ADRs.
 
@@ -172,6 +172,14 @@ At closure:
 - the unexecuted GLiClass runtime-sanity harness/test is removed;
 - experiment-only optional dependency groups used only by those removed latest harnesses are removed;
 - Git history remains the archive for exact retired executable source.
+
+---
+
+## Reopened bounded 4.5D fallback
+
+The owner authorized a pragmatic provider-assisted recall path on 2026-09-08. The strict independent semantic guard remains unresolved; this does not rewrite the failed research evidence. The bounded fallback uses the active `JARVIS_AI_PROVIDER` for both structured query interpretation and a second structured semantic `ALLOW/ABSTAIN` verification around JARVIS-owned exact canonical lookup. It is opt-in through `JARVIS_MEMORY_SEMANTIC_RECALL_MODEL`, fail-closed on all provider/validation errors, and never releases `local_only` or secret-prohibited memory to the cloud provider. See `docs/research/STEP_4_PHASE_4_5D_PROVIDER_ASSISTED_FALLBACK.md`.
+
+Step 5 remains explicitly not started until this fallback is integrated and the owner separately authorizes Step 5.
 
 ---
 

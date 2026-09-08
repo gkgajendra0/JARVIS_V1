@@ -32,6 +32,10 @@ from jarvis.identity.speech_region import LiveKitSileroSpeechRegionDetector
 from jarvis.logging_config import configure_logging
 from jarvis.memory.candidate_runtime import MemoryCandidateSessionRuntime
 from jarvis.memory.extractors import build_memory_candidate_extractor
+from jarvis.memory.provider_verified_query import ProviderVerifiedMemoryQueryCoordinator
+from jarvis.memory.query_coordinator import MemoryQueryCoordinator
+from jarvis.memory.query_interpreters import build_memory_query_interpreter
+from jarvis.memory.release_guard import build_memory_release_guard
 from jarvis.memory.runtime import build_default_memory_runtime
 from jarvis.preflight import StartupPreflightError, require_startup_preflight
 from jarvis.vision.service import build_default_vision_service
@@ -148,6 +152,34 @@ def build_production_voice_runtime(
 
     memory_runtime = build_default_memory_runtime() if config.memory_enabled else None
 
+    memory_query_coordinator = None
+    if memory_runtime is not None and config.memory_semantic_recall_enabled:
+        assert config.memory_semantic_recall_model is not None
+        query_model = config.memory_semantic_recall_model
+        interpreter = build_memory_query_interpreter(
+            provider=config.ai_provider,
+            model=query_model,
+        )
+        release_guard = build_memory_release_guard(
+            provider=config.ai_provider,
+            model=query_model,
+        )
+        memory_query_coordinator = ProviderVerifiedMemoryQueryCoordinator(
+            coordinator=MemoryQueryCoordinator(
+                interpreter=interpreter,
+                retrieval=memory_runtime.retrieval,
+            ),
+            release_guard=release_guard,
+        )
+        LOGGER.warning(
+            "Phase-4.5D bounded provider-assisted semantic recall configured: "
+            "active_provider=%s model=%s structured_planner=True "
+            "structured_release_verifier=True deterministic_core=True "
+            "probabilistic_semantic_boundary=True",
+            config.ai_provider,
+            query_model,
+        )
+
     candidate_extractor = None
     if config.memory_candidate_extraction_enabled:
         assert config.memory_candidate_extraction_model is not None
@@ -190,6 +222,7 @@ def build_production_voice_runtime(
         speech_region_detector=speech_region_detector,
         speaker_shadow_observer=speaker_shadow_observer,
         memory_runtime=memory_runtime,
+        memory_query_coordinator=memory_query_coordinator,
         session_factory=production_session_factory,
     )
 
