@@ -199,12 +199,12 @@ def build_production_voice_runtime(
             config.memory_candidate_extraction_model,
         )
 
-    research_service = build_current_research_service(provider=config.ai_provider)
+    research_service = build_current_research_service()
     LOGGER.info(
-        "Step-6 source-aware research is configured: active_provider=%s model=%s "
-        "provider_neutral_contract=True same_provider=True cross_provider_fallback=False",
+        "Step-6 source-aware research is configured: active_brain=%s "
+        "search_provider=%s brain_search_decoupled=True provider_neutral_contract=True",
+        config.ai_provider,
         research_service.provider_name,
-        research_service.model_name,
     )
 
     provider_resilience_state = ProviderResilienceState()
