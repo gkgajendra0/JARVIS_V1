@@ -9,7 +9,7 @@ from livekit.agents import RunContext, function_tool
 from livekit.agents.llm import ToolError
 
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
-from jarvis.knowledge.web_search import CurrentResearchService, ResearchMode
+from jarvis.knowledge.research import CurrentResearchService, ResearchMode
 
 LOGGER = logging.getLogger(__name__)
 
