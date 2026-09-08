@@ -2,7 +2,7 @@
 
 ## Status
 
-**OWNER-AUTHORIZED BOUNDED COMPROMISE — IMPLEMENTATION ACTIVE**
+**OWNER-AUTHORIZED BOUNDED COMPROMISE — IMPLEMENTED / CI + OWNER LIVE SMOKE PENDING**
 
 Date: 2026-09-08
 
@@ -85,3 +85,9 @@ All other answer types veto release:
 This fallback is intentionally weaker than the originally desired independent deterministic/learned safety boundary. The same provider family participates in both semantic planning and final semantic verification, so correlated model mistakes remain possible. Structured output constrains shape, not semantic truth.
 
 The product therefore treats this as **bounded useful recall**, not a proof-quality semantic authorization mechanism. If a future mature multilingual verifier meets the original strict acceptance boundary, it may replace the provider verifier without redesigning canonical storage, lifecycle, query policy, or the recall tool surface.
+
+## Implementation candidate
+
+The first integrated implementation commit is `4ba9defc268558f6abb964378d03b5b1736b5df4` on `implementation/step-4-provider-memory-release`.
+
+The one-shot integration workflow completed its focused Ruff and unit-test gate and removed all temporary patch/workflow artifacts before committing. This is not final acceptance: the normal full repository CI and one live same-provider owner smoke remain required before merge to `main`.
