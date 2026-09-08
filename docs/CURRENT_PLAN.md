@@ -8,7 +8,7 @@ Owner authorization to move forward was given on 2026-09-08 after deliberately d
 
 ## Current Stage
 
-**STEP 4 BOUNDED COMPLETE — PHASE 4.5E AUTOMATIC MEMORY INFLUENCE DEFERRED / NOT ACCEPTED — STEP 5 ACTIVE AT REQUIREMENTS / RESEARCH — NO STEP-5 IMPLEMENTATION AUTHORIZED YET**
+**STEP 4 BOUNDED COMPLETE — PHASE 4.5E AUTOMATIC MEMORY INFLUENCE DEFERRED / NOT ACCEPTED — STEP 5 REQUIREMENTS + CURRENT RESEARCH COMPLETE — ARCHITECTURE PROPOSED — OWNER APPROVAL REQUIRED BEFORE 5.1 IMPLEMENTATION**
 
 This file is the operational source of truth. `PRODUCT.md` owns permanent product intent, `ROADMAP.md` owns sequence, accepted architecture belongs in `CURRENT_ARCHITECTURE.md`, and detailed research/evidence belongs in `docs/research/`.
 
@@ -82,43 +82,102 @@ Step-5 implications:
 
 ## Known evidence entering Step 5
 
-Step 5 begins with real failures already observed rather than hypothetical requirements:
-
 - Gemini provider calls can fail with HTTP 500 / 429 and quota exhaustion; accepted 4.5D semantic recall already fails closed on such errors.
 - Voice conversation currently depends on a configured realtime cloud provider for full intelligence.
+- Missing active cloud credentials currently fail startup preflight even though local wake/vision/etc. could otherwise operate.
+- The outer `VoiceRuntimeController` already owns wake/active/recovering lifecycle and returns to local wake after a failed activation.
+- `LiveKitConversationBridge` already converts provider events into one canonical JARVIS `ConversationSession`.
 - The owner machine has an NVIDIA RTX 5060 Ti 8 GB and already runs local wake, vision/tracking, identity diagnostics, and Qwen memory retrieval components.
-- Local Qwen memory models are useful supporting components but are not a general offline conversational brain by themselves.
-- Existing provider-selection/config code must be inspected before introducing any failover abstraction; no duplicate provider router should be created.
 
 ---
 
-## Step 5 research questions
+## Step 5 research decision
 
-Before implementation, answer these with current web research and repository inspection:
+Detailed record:
 
-1. What minimum useful JARVIS experience must survive complete internet/provider loss?
-2. Which existing local components already survive with no cloud and which currently terminate/degrade?
-3. Can the current LiveKit/realtime architecture switch or reconnect providers without corrupting the canonical `ConversationSession`?
-4. What mature local inference runtime best fits Windows + RTX 5060 Ti 8 GB for a bounded offline conversational fallback?
-5. What mature local STT/TTS path, if any, is necessary for true network-offline voice survival versus retaining existing local audio capture/wake with reduced functionality?
-6. Which provider-resilience mechanics should be deterministic JARVIS infrastructure: timeout, retry/backoff, circuit breaker, health state, reconnect, session handoff, and explicit degraded modes?
-7. Should Step 5 provide provider failover between cloud providers, local fallback, or both, and under which authority/consistency constraints?
-8. How will JARVIS truthfully represent capability differences when the fallback model cannot use the same provider-native tools/features?
-9. How will resource arbitration prevent a local fallback model from starving accepted vision/identity/Qwen workloads on the 8 GB GPU?
-10. What exact owner-machine outage scenarios will define acceptance before implementation starts?
+- `docs/research/STEP_5_RESILIENCE_RESEARCH_AND_ARCHITECTURE_PROPOSAL.md`
+
+Selected direction:
+
+```text
+cloud-native Gemini/OpenAI realtime primary
+        |
+        | deterministic JARVIS resilience policy
+        v
+public LiveKit AgentSession handoff
+        |
+        v
+validated local pipeline fallback
+  STT -> local LLM -> TTS
+        |
+        v
+same JARVIS canonical conversation/context/memory/authority owners
+```
+
+Technology decisions:
+
+- keep the existing JARVIS single-provider/config authority;
+- keep native realtime as the primary experience;
+- adapt public LiveKit `AgentSession.update_agent()` for controlled realtime-to-fallback handoff;
+- use LiveKit STT/LLM/TTS fallback adapters inside pipeline mode where their mechanics fit, not as the top-level JARVIS authority;
+- first local LLM runtime candidate: Ollama through LiveKit's official `openai.LLM.with_ollama` integration;
+- first owner-machine model bake-off: Qwen3.5 4B Q4_K_M vs Gemma 4 E2B QAT, sequentially;
+- full-offline STT/TTS selection remains later in Step 5; researched first candidates are Qwen3-ASR-0.6B and local Kokoro-FastAPI respectively;
+- do not build a new generic provider router or depend on private/young realtime-fallback internals.
+
+No local model/runtime is selected for production before owner-machine evidence.
 
 ---
 
-## Non-goals for the current stage
+## Proposed Step-5 slices
+
+### 5.1 — Resilience contracts + simulated handoff
+
+First implementation slice after owner approval. No local model installation required.
+
+Implement only:
+
+- deterministic resilience/runtime-mode state;
+- provider/session failure observations and transitions;
+- partial-output/retry semantics;
+- provider-independent agent-factory/handoff seam around the existing LiveKit boundary;
+- canonical bounded handoff-context construction;
+- capability-aware degraded-mode description;
+- fake/local test doubles for outage simulation;
+- preflight resilience seam without falsely declaring offline fallback healthy;
+- privacy-safe state-transition observability/tests.
+
+### 5.2 — Owner-machine local LLM bake-off + bounded local brain
+
+- install/evaluate Ollama separately from the JARVIS Python dependency set;
+- freeze multilingual/persona/tool/latency/resource gates before scoring;
+- benchmark Qwen3.5 4B Q4_K_M and Gemma 4 E2B QAT sequentially;
+- integrate only the evidence-backed winner through LiveKit's Ollama boundary;
+- validate controlled cloud-realtime -> local-pipeline handoff.
+
+### 5.3 — Full network-offline spoken conversation
+
+- benchmark/select local STT and TTS;
+- first researched candidates: Qwen3-ASR-0.6B and Kokoro-FastAPI;
+- preserve English/Hindi/Hinglish voice interaction, interruption, truthfulness, and canonical-state continuity;
+- only after this is accepted may preflight treat a proven healthy local stack as sufficient when cloud credentials/network are unavailable.
+
+### 5.4 — Cloud-to-cloud failover, only if still valuable
+
+Any later Gemini/OpenAI failover must reuse the same resilience policy/handoff contract. It must not create a second provider router.
+
+---
+
+## Non-goals before 5.1 approval
 
 Do not yet:
 
-- install a local LLM runtime;
-- choose a local model from popularity alone;
+- install Ollama or a local LLM;
+- install local STT/TTS;
 - modify production provider routing;
 - add cross-provider automatic failover;
-- add local STT/TTS merely because they exist;
-- rewrite the accepted LiveKit voice path;
+- change accepted Torch/CUDA dependencies;
+- rewrite the LiveKit voice path;
 - start Step 6 knowledge/source routing;
 - revive Phase 4.5E memory injection;
 - build a generic agent framework.
@@ -127,8 +186,10 @@ Do not yet:
 
 ## Immediate Next Action
 
-**Complete Step-5 repository inspection + fresh technology research, then freeze the smallest useful resilience architecture for owner approval.**
+**OWNER APPROVAL OF THE PROPOSED STEP 5 ARCHITECTURE / 5.1 BOUNDARY.**
 
-Required lifecycle:
+After approval, create a fresh implementation branch from the reconciled protected-main planning state and implement **5.1 only**. Do not install a local model until the 5.1 contracts and simulated outage behavior are accepted.
 
-`requirements -> research -> technology decision -> architecture -> owner approval -> implementation -> automated validation -> owner outage acceptance -> protected-main merge`.
+Required lifecycle from this point:
+
+`owner architecture approval -> 5.1 implementation -> automated validation -> simulated outage acceptance -> documentation/merge -> 5.2 benchmark design`.
