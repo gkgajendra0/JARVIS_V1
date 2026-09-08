@@ -206,9 +206,7 @@ async def test_openai_never_acknowledges_pending_safety_check() -> None:
             SimpleNamespace(
                 type="computer_call",
                 call_id="call-1",
-                pending_safety_checks=[
-                    SimpleNamespace(message="Confirmation needed")
-                ],
+                pending_safety_checks=[SimpleNamespace(message="Confirmation needed")],
                 action=SimpleNamespace(
                     type="click",
                     x=1,
@@ -239,8 +237,7 @@ class ExplodingProvider:
 
 
 @pytest.mark.asyncio
-async def test_service_returns_truthful_failure_instead_of_raising_provider_error(
-) -> None:
+async def test_service_returns_truthful_failure() -> None:
     service = ComputerUseService(
         provider=ExplodingProvider(),
         executor=FakeExecutor(),

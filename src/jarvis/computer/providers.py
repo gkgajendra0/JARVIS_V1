@@ -301,9 +301,7 @@ def _openai_action(
         elif button == "wheel":
             action_type = "middle_click"
         elif button not in {"left"}:
-            raise ComputerUseProviderError(
-                f"unsupported OpenAI click button: {button}"
-            )
+            raise ComputerUseProviderError(f"unsupported OpenAI click button: {button}")
     elif action_type == "drag":
         resolved_path = []
         for point in payload.get("path", []):
