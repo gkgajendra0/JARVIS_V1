@@ -3,7 +3,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from jarvis.config import JarvisConfig
-from jarvis.memory.context_shadow import MemoryContextShadowRuntime
 from jarvis.voice import production_runtime
 
 
@@ -24,6 +23,27 @@ class FakeController:
     def __init__(self, *args, **kwargs) -> None:
         self.args = args
         self.kwargs = kwargs
+
+
+class FakeContextShadowRuntime:
+    def __init__(
+        self,
+        *,
+        retrieval,
+        embedding_store,
+        query_encoder,
+        reranker,
+    ) -> None:
+        self.retrieval = retrieval
+        self.embedding_store = embedding_store
+        self.query_encoder = query_encoder
+        self.reranker = reranker
+
+    def observe_turn(self, turn) -> None:
+        del turn
+
+    def close(self) -> None:
+        return None
 
 
 def test_production_context_shadow_uses_shared_models_and_session_local_runtime(
@@ -70,6 +90,11 @@ def test_production_context_shadow_uses_shared_models_and_session_local_runtime(
     )
     monkeypatch.setattr(
         production_runtime,
+        "MemoryContextShadowRuntime",
+        FakeContextShadowRuntime,
+    )
+    monkeypatch.setattr(
+        production_runtime,
         "CanonicalActiveSpeakerRuntimeController",
         FakeController,
     )
@@ -100,14 +125,14 @@ def test_production_context_shadow_uses_shared_models_and_session_local_runtime(
         assert len(bridge.close_observers) == 1
         observe = bridge.accepted_turn_observers[0]
         close = bridge.close_observers[0]
-        assert isinstance(observe.__self__, MemoryContextShadowRuntime)
+        assert isinstance(observe.__self__, FakeContextShadowRuntime)
         assert close.__self__ is observe.__self__
         shadows.append(observe.__self__)
 
     assert shadows[0] is not shadows[1]
-    assert shadows[0]._retrieval is retrieval
-    assert shadows[0]._embedding_store is embedding_store
-    assert shadows[0]._query_encoder is encoder
-    assert shadows[0]._reranker is reranker
-    assert shadows[1]._query_encoder is encoder
-    assert shadows[1]._reranker is reranker
+    assert shadows[0].retrieval is retrieval
+    assert shadows[0].embedding_store is embedding_store
+    assert shadows[0].query_encoder is encoder
+    assert shadows[0].reranker is reranker
+    assert shadows[1].query_encoder is encoder
+    assert shadows[1].reranker is reranker
