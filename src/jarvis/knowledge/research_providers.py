@@ -46,12 +46,19 @@ def _research_instructions(mode: ResearchMode) -> str:
 class GeminiWebResearchProvider:
     provider_name = "gemini"
 
-    def __init__(self, *, model: str, api_key: str) -> None:
+    def __init__(self, *, model: str) -> None:
         self.model_name = model
-        self._client = genai.Client(api_key=api_key)
+        self._client: genai.Client | None = None
+
+    def _get_client(self) -> genai.Client:
+        if self._client is None:
+            self._client = genai.Client(
+                api_key=require_provider_api_key("gemini", purpose="web research")
+            )
+        return self._client
 
     def research(self, query: str, mode: ResearchMode) -> ProviderResearchEvidence:
-        interaction = self._client.interactions.create(
+        interaction = self._get_client().interactions.create(
             model=self.model_name,
             input=f"{_research_instructions(mode)}\n\nUSER QUESTION:\n{query}",
             tools=[{"type": "google_search"}],
@@ -64,20 +71,30 @@ class GeminiWebResearchProvider:
         )
 
     def close(self) -> None:
+        if self._client is None:
+            return
         close = getattr(self._client, "close", None)
         if callable(close):
             close()
+        self._client = None
 
 
 class OpenAIWebResearchProvider:
     provider_name = "openai"
 
-    def __init__(self, *, model: str, api_key: str) -> None:
+    def __init__(self, *, model: str) -> None:
         self.model_name = model
-        self._client = OpenAI(api_key=api_key)
+        self._client: OpenAI | None = None
+
+    def _get_client(self) -> OpenAI:
+        if self._client is None:
+            self._client = OpenAI(
+                api_key=require_provider_api_key("openai", purpose="web research")
+            )
+        return self._client
 
     def research(self, query: str, mode: ResearchMode) -> ProviderResearchEvidence:
-        response = self._client.responses.create(
+        response = self._get_client().responses.create(
             model=self.model_name,
             instructions=_research_instructions(mode),
             input=query,
@@ -93,7 +110,9 @@ class OpenAIWebResearchProvider:
         )
 
     def close(self) -> None:
-        self._client.close()
+        if self._client is not None:
+            self._client.close()
+            self._client = None
 
 
 def build_current_research_service(
@@ -106,10 +125,9 @@ def build_current_research_service(
     resolved_model = (model or DEFAULT_RESEARCH_MODELS[normalized]).strip()
     if not resolved_model:
         raise ValueError("research model must not be empty")
-    api_key = require_provider_api_key(normalized, purpose="web research")
     adapter: ResearchProvider
     if normalized == "gemini":
-        adapter = GeminiWebResearchProvider(model=resolved_model, api_key=api_key)
+        adapter = GeminiWebResearchProvider(model=resolved_model)
     else:
-        adapter = OpenAIWebResearchProvider(model=resolved_model, api_key=api_key)
+        adapter = OpenAIWebResearchProvider(model=resolved_model)
     return CurrentResearchService(adapter, timeout_seconds=timeout_seconds)
