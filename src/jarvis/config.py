@@ -111,6 +111,7 @@ class JarvisConfig:
     memory_candidate_extraction_enabled: bool = False
     memory_candidate_extraction_model: str | None = None
     memory_semantic_recall_model: str | None = None
+    memory_context_shadow_enabled: bool = False
     vision_enabled: bool = False
     vision_head_model_path: str | None = None
     speaker_shadow_enabled: bool = False
@@ -163,6 +164,10 @@ class JarvisConfig:
         if self.memory_semantic_recall_model is not None and not self.memory_enabled:
             raise ValueError(
                 "JARVIS_MEMORY_SEMANTIC_RECALL_MODEL requires JARVIS_MEMORY_ENABLED"
+            )
+        if self.memory_context_shadow_enabled and not self.memory_enabled:
+            raise ValueError(
+                "JARVIS_MEMORY_CONTEXT_SHADOW_ENABLED requires JARVIS_MEMORY_ENABLED"
             )
 
         for name in (
@@ -286,6 +291,9 @@ class JarvisConfig:
             ),
             memory_semantic_recall_model=_configured_optional_text(
                 "JARVIS_MEMORY_SEMANTIC_RECALL_MODEL", machine
+            ),
+            memory_context_shadow_enabled=_configured_bool(
+                "JARVIS_MEMORY_CONTEXT_SHADOW_ENABLED", False, machine
             ),
             vision_enabled=_configured_bool("JARVIS_VISION_ENABLED", False, machine),
             vision_head_model_path=_configured_optional_text(
