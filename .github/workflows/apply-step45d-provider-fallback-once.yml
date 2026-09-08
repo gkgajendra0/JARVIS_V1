@@ -28,6 +28,27 @@ jobs:
       - name: Install development dependencies
         run: python -m pip install -e ".[dev]"
 
+      - name: Correct one-shot plan anchor
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("tools/research/_apply_step45d_provider_fallback_patch.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''replace_once(
+              "docs/CURRENT_PLAN.md",
+              "## Step-5 boundary\\n",
+              "## Reopened bounded 4.5D fallback\\n\\nThe owner authorized a pragmatic provider-assisted recall path on 2026-09-08. The strict independent semantic guard remains unresolved; this does not rewrite the failed research evidence. The bounded fallback uses the active `JARVIS_AI_PROVIDER` for both structured query interpretation and a second structured semantic `ALLOW/ABSTAIN` verification around JARVIS-owned exact canonical lookup. It is opt-in through `JARVIS_MEMORY_SEMANTIC_RECALL_MODEL`, fail-closed on all provider/validation errors, and never releases `local_only` or secret-prohibited memory to the cloud provider. See `docs/research/STEP_4_PHASE_4_5D_PROVIDER_ASSISTED_FALLBACK.md`.\\n\\nStep 5 remains explicitly not started until this fallback is integrated and the owner separately authorizes Step 5.\\n\\n---\\n\\n## Step-5 boundary\\n",
+          )'''
+          new = '''replace_once(
+              "docs/CURRENT_PLAN.md",
+              "## Immediate Next Action\\n",
+              "## Reopened bounded 4.5D fallback\\n\\nThe owner authorized a pragmatic provider-assisted recall path on 2026-09-08. The strict independent semantic guard remains unresolved; this does not rewrite the failed research evidence. The bounded fallback uses the active `JARVIS_AI_PROVIDER` for both structured query interpretation and a second structured semantic `ALLOW/ABSTAIN` verification around JARVIS-owned exact canonical lookup. It is opt-in through `JARVIS_MEMORY_SEMANTIC_RECALL_MODEL`, fail-closed on all provider/validation errors, and never releases `local_only` or secret-prohibited memory to the cloud provider. See `docs/research/STEP_4_PHASE_4_5D_PROVIDER_ASSISTED_FALLBACK.md`.\\n\\nStep 5 remains explicitly not started until this fallback is integrated and the owner separately authorizes Step 5.\\n\\n---\\n\\n## Immediate Next Action\\n",
+          )'''
+          if old not in text:
+              raise SystemExit("expected stale CURRENT_PLAN patch block not found")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Apply bounded provider fallback patch
         run: python tools/research/_apply_step45d_provider_fallback_patch.py
 
