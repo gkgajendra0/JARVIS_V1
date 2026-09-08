@@ -12,7 +12,7 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 | 2.5 | Vision Sensor & Active Target Tracking Foundation | Camera/PTZ boundaries, local person detection/tracking, deterministic target lock, active following | DONE |
 | 3 | Identity, Graduated Trust, Authority, and Observability Foundation | CAP-004, CAP-034, CAP-035, CAP-036, CAP-037 | DONE |
 | 4 | Live Context and Personal Memory | CAP-008 through CAP-013 | DONE (BOUNDED; provider-assisted 4.5D recall accepted; strict independent verifier + 4.5E deferred) |
-| 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | PLANNED — AWAITING OWNER START |
+| 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | ACTIVE — REQUIREMENTS/RESEARCH COMPLETE; ARCHITECTURE PROPOSED; OWNER APPROVAL REQUIRED |
 | 6 | Knowledge, Current Research, and Truthfulness | CAP-014 through CAP-017 | PLANNED |
 | 7 | Governed Capability Runtime + Local Files/System/Project Safe Reads | CAP-018, CAP-021, CAP-022, CAP-032 | PLANNED |
 | 8 | Notes, Tasks, Reminders, and Scheduling | CAP-027, CAP-028 | PLANNED |
@@ -168,6 +168,21 @@ Earlier research-backed independent 4.5D approaches failed the frozen zero-unsaf
 Historical strict-deferral evidence: `docs/research/STEP_4_PHASE_4_5D_DEFERRED_CLOSURE.md`.
 
 Accepted fallback evidence: `docs/research/STEP_4_PHASE_4_5D_PROVIDER_ASSISTED_FALLBACK.md`.
+
+## Step 5 - Local/Offline Survival and Provider Resilience
+
+Step 5 is now the active roadmap slice after explicit owner authorization to move beyond the deliberately deferred Phase-4.5E problem.
+
+Requirements and current-technology research are complete, and a bounded architecture has been proposed for owner approval before implementation. The intended sequence is:
+
+- first establish deterministic provider-health/resilience state and controlled handoff contracts around the existing canonical JARVIS conversation/session owners;
+- then benchmark a bounded local conversational fallback on the owner Windows/RTX machine;
+- then add full network-offline STT/TTS only if the measured local stack is useful and resource-safe;
+- consider cloud-to-cloud failover only after the local-survival boundary exists and only if it remains valuable.
+
+Step 5 must not rewrite the accepted LiveKit/audio foundation, create a duplicate provider router, or claim cloud capability parity while operating in a reduced local mode.
+
+Detailed active planning and technology decisions belong in `CURRENT_PLAN.md` and `docs/research/STEP_5_RESILIENCE_RESEARCH_AND_ARCHITECTURE_PROPOSAL.md`.
 
 ## Final Target - Personal Intelligence Runtime
 
