@@ -10,14 +10,47 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from typing import Any
 
+from jarvis.config import JarvisConfig
+from jarvis.conversation import ConversationSession
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_shadow import EnrolledSpeakerShadowObserver
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
+from jarvis.memory.runtime import MemoryRuntime
+from jarvis.voice.livekit_session import create_voice_session
+from jarvis.voice.memory_tools import MemoryAgentTools
 from jarvis.voice.runtime import VoiceRuntimeController
 
 LOGGER = logging.getLogger(__name__)
+
+
+class _SessionToolBundle:
+    """Combine existing vision tools with per-session explicit memory tools."""
+
+    def __init__(
+        self,
+        vision_tools: Any | None,
+        memory_runtime: MemoryRuntime,
+        conversation_getter: Callable[[], ConversationSession | None],
+    ) -> None:
+        self._vision_tools = vision_tools
+        self._memory_runtime = memory_runtime
+        self._conversation_getter = conversation_getter
+
+    @property
+    def tools(self) -> list:
+        tools = list(self._vision_tools.tools) if self._vision_tools is not None else []
+        conversation = self._conversation_getter()
+        if conversation is not None:
+            tools.extend(
+                MemoryAgentTools(
+                    self._memory_runtime.service,
+                    conversation,
+                ).tools
+            )
+        return tools
 
 
 class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
@@ -27,10 +60,42 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self,
         *args: Any,
         speaker_shadow_observer: EnrolledSpeakerShadowObserver | None = None,
+        memory_runtime: MemoryRuntime | None = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(*args, **kwargs)
+        original_session_factory = kwargs.pop("session_factory", create_voice_session)
+        self._memory_conversation: ConversationSession | None = None
+
+        def capture_session(config: JarvisConfig):
+            session, bridge = original_session_factory(config)
+            self._memory_conversation = bridge.conversation
+            return session, bridge
+
+        super().__init__(*args, session_factory=capture_session, **kwargs)
         self._speaker_shadow_observer = speaker_shadow_observer
+        self._memory_runtime = memory_runtime
+        if memory_runtime is not None:
+            self._vision_tools = _SessionToolBundle(
+                self._vision_tools,
+                memory_runtime,
+                lambda: self._memory_conversation,
+            )
+
+    async def run(self) -> None:
+        memory_runtime = self._memory_runtime
+        if memory_runtime is None:
+            await super().run()
+            return
+
+        await memory_runtime.start()
+        LOGGER.info(
+            "JARVIS explicit persistent memory is active; implicit admission remains disabled"
+        )
+        try:
+            await super().run()
+        finally:
+            self._memory_conversation = None
+            await memory_runtime.close()
 
     async def _score_enrolled_speaker(
         self,

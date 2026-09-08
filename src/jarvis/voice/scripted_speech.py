@@ -9,6 +9,7 @@ from livekit.agents import tts
 from livekit.agents.voice import io
 from livekit.plugins import google, openai
 
+from jarvis.ai_provider import require_provider_api_key
 from jarvis.config import JarvisConfig
 
 
@@ -61,21 +62,25 @@ class LiveKitScriptedSpeech:
 
 
 def build_scripted_speech(config: JarvisConfig) -> LiveKitScriptedSpeech:
-    """Select a scripted TTS adapter without coupling supervisor policy to a provider."""
+    """Build scripted TTS inside the single active cloud-AI provider family."""
+
     instructions = (
         "Speak like JARVIS: calm, concise, professional, and authoritative. "
         "Do not add, remove, or paraphrase words from the supplied script."
     )
-    if config.realtime_provider == "gemini":
+    api_key = require_provider_api_key(config.ai_provider, purpose="scripted speech")
+    if config.ai_provider == "gemini":
         engine = google.beta.GeminiTTS(
             model="gemini-3.1-flash-tts-preview",
             voice_name=config.gemini_realtime_voice,
+            api_key=api_key,
             instructions=instructions,
         )
     else:
         engine = openai.TTS(
             model="gpt-4o-mini-tts",
             voice=config.realtime_voice,
+            api_key=api_key,
             instructions=instructions,
         )
     return LiveKitScriptedSpeech(engine)

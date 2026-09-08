@@ -27,7 +27,7 @@ def test_preflight_reports_all_core_checks_without_opening_devices(
 
     checks = preflight.run_startup_preflight(
         JarvisConfig(
-            realtime_provider="gemini",
+            ai_provider="gemini",
             wake_model_path=str(wake),
             audio_input_device="name:Osmo|hostapi:Windows WASAPI",
             audio_output_device="name:TV|hostapi:Windows WASAPI",
@@ -37,7 +37,7 @@ def test_preflight_reports_all_core_checks_without_opening_devices(
     assert all(check.ok for check in checks)
     assert {check.label for check in checks} >= {
         "Wake model",
-        "Realtime credentials",
+        "Cloud AI credentials",
         "Conversation microphone",
         "Conversation speaker",
     }
@@ -54,7 +54,7 @@ def test_preflight_allows_audio_only_speaker_shadow(
 
     checks = preflight.run_startup_preflight(
         JarvisConfig(
-            realtime_provider="gemini",
+            ai_provider="gemini",
             wake_model_path=str(wake),
             audio_input_device="name:Osmo|hostapi:Windows WASAPI",
             audio_output_device="name:TV|hostapi:Windows WASAPI",
@@ -82,7 +82,7 @@ def test_preflight_still_requires_vision_for_active_speaker_shadow(
 
     checks = preflight.run_startup_preflight(
         JarvisConfig(
-            realtime_provider="gemini",
+            ai_provider="gemini",
             wake_model_path=str(wake),
             audio_input_device="name:Osmo|hostapi:Windows WASAPI",
             audio_output_device="name:TV|hostapi:Windows WASAPI",
@@ -111,7 +111,7 @@ def test_require_preflight_fails_once_after_aggregating_failures(
         lambda _config: [PreflightCheck("Conversation speaker", False, "not found")],
     )
     config = JarvisConfig(
-        realtime_provider="openai",
+        ai_provider="openai",
         wake_model_path=None,
         audio_input_device="name:Osmo|hostapi:Windows WASAPI",
         audio_output_device="name:TV|hostapi:Windows WASAPI",
@@ -122,5 +122,5 @@ def test_require_preflight_fails_once_after_aggregating_failures(
 
     output = capsys.readouterr().out
     assert "Wake model" in output
-    assert "Realtime credentials" in output
+    assert "Cloud AI credentials" in output
     assert "Conversation speaker" in output

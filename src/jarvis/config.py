@@ -6,10 +6,10 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from jarvis.ai_provider import configured_ai_provider, normalize_ai_provider
 from jarvis.machine_config import configured_text, load_machine_settings
 
 VALID_LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})
-VALID_REALTIME_PROVIDERS = frozenset({"gemini", "openai"})
 TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 FALSE_VALUES = frozenset({"0", "false", "no", "off"})
 
@@ -47,6 +47,20 @@ def _configured_float(
     return parsed
 
 
+def _configured_int(
+    name: str,
+    default: int,
+    machine_settings: Mapping[str, str],
+) -> int:
+    value = configured_text(name, machine_settings)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise ValueError(f"Unsupported {name}: {value!r}") from exc
+
+
 def _configured_optional_text(
     name: str,
     machine_settings: Mapping[str, str],
@@ -71,7 +85,7 @@ def _configured_required_text(
 @dataclass(frozen=True, slots=True)
 class JarvisConfig:
     log_level: str = "INFO"
-    realtime_provider: str = "openai"
+    ai_provider: str = "openai"
     realtime_model: str = "gpt-realtime"
     realtime_voice: str = "marin"
     gemini_realtime_model: str = "gemini-3.1-flash-live-preview"
@@ -92,6 +106,10 @@ class JarvisConfig:
     initial_request_timeout_seconds: float = 8.0
     follow_up_timeout_seconds: float = 15.0
     max_utterance_seconds: float = 15.0
+    live_context_recent_turns: int = 24
+    memory_enabled: bool = False
+    memory_candidate_extraction_enabled: bool = False
+    memory_candidate_extraction_model: str | None = None
     vision_enabled: bool = False
     vision_head_model_path: str | None = None
     speaker_shadow_enabled: bool = False
@@ -104,12 +122,7 @@ class JarvisConfig:
             raise ValueError(f"Unsupported JARVIS_LOG_LEVEL: {self.log_level!r}")
         object.__setattr__(self, "log_level", normalized)
 
-        provider = str(self.realtime_provider).strip().lower()
-        if provider not in VALID_REALTIME_PROVIDERS:
-            raise ValueError(
-                f"Unsupported JARVIS_REALTIME_PROVIDER: {self.realtime_provider!r}"
-            )
-        object.__setattr__(self, "realtime_provider", provider)
+        object.__setattr__(self, "ai_provider", normalize_ai_provider(self.ai_provider))
 
         for name in (
             "realtime_model",
@@ -126,11 +139,24 @@ class JarvisConfig:
             "wake_model_path",
             "vision_head_model_path",
             "active_speaker_model_path",
+            "memory_candidate_extraction_model",
         ):
             value = getattr(self, name)
             if value is not None:
                 normalized_value = str(value).strip()
                 object.__setattr__(self, name, normalized_value or None)
+
+        if self.memory_candidate_extraction_enabled:
+            if not self.memory_enabled:
+                raise ValueError(
+                    "JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED requires "
+                    "JARVIS_MEMORY_ENABLED"
+                )
+            if self.memory_candidate_extraction_model is None:
+                raise ValueError(
+                    "JARVIS_MEMORY_CANDIDATE_EXTRACTION_MODEL is required when "
+                    "candidate extraction is enabled"
+                )
 
         for name in (
             "audio_input_device",
@@ -156,26 +182,35 @@ class JarvisConfig:
             value = getattr(self, name)
             if not math.isfinite(value) or value <= 0:
                 raise ValueError(f"{name} must be a positive finite number")
+        if isinstance(self.live_context_recent_turns, bool) or not isinstance(
+            self.live_context_recent_turns, int
+        ):
+            raise TypeError("live_context_recent_turns must be an integer")
+        if self.live_context_recent_turns <= 0:
+            raise ValueError("live_context_recent_turns must be greater than zero")
         if not math.isfinite(self.audio_pre_roll_seconds):
             raise ValueError("audio_pre_roll_seconds must be finite")
         if not 0 <= self.audio_pre_roll_seconds <= self.audio_ring_buffer_seconds:
             raise ValueError("audio pre-roll must fit inside the ring buffer")
+
+    @property
+    def realtime_provider(self) -> str:
+        """Deprecated read-only alias for the single active cloud-AI provider."""
+
+        return self.ai_provider
 
     @classmethod
     def from_environment(cls) -> JarvisConfig:
         """Load persisted machine settings, then apply environment overrides.
 
         The method name is retained for compatibility. Environment variables are
-        intentionally higher priority so diagnostics can override one setting
-        without editing the machine profile.
+        intentionally higher priority only in explicit diagnostic override mode.
         """
 
         machine = load_machine_settings()
         return cls(
             log_level=_configured_required_text("JARVIS_LOG_LEVEL", "INFO", machine),
-            realtime_provider=_configured_required_text(
-                "JARVIS_REALTIME_PROVIDER", "openai", machine
-            ),
+            ai_provider=configured_ai_provider(machine),
             realtime_model=_configured_required_text(
                 "JARVIS_REALTIME_MODEL", "gpt-realtime", machine
             ),
@@ -227,6 +262,16 @@ class JarvisConfig:
             ),
             max_utterance_seconds=_configured_float(
                 "JARVIS_MAX_UTTERANCE_SECONDS", 15.0, machine
+            ),
+            live_context_recent_turns=_configured_int(
+                "JARVIS_LIVE_CONTEXT_RECENT_TURNS", 24, machine
+            ),
+            memory_enabled=_configured_bool("JARVIS_MEMORY_ENABLED", False, machine),
+            memory_candidate_extraction_enabled=_configured_bool(
+                "JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED", False, machine
+            ),
+            memory_candidate_extraction_model=_configured_optional_text(
+                "JARVIS_MEMORY_CANDIDATE_EXTRACTION_MODEL", machine
             ),
             vision_enabled=_configured_bool("JARVIS_VISION_ENABLED", False, machine),
             vision_head_model_path=_configured_optional_text(

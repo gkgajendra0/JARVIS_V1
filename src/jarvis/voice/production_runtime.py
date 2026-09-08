@@ -30,11 +30,15 @@ from jarvis.identity.speaker_shadow import (
 )
 from jarvis.identity.speech_region import LiveKitSileroSpeechRegionDetector
 from jarvis.logging_config import configure_logging
+from jarvis.memory.candidate_runtime import MemoryCandidateSessionRuntime
+from jarvis.memory.extractors import build_memory_candidate_extractor
+from jarvis.memory.runtime import build_default_memory_runtime
 from jarvis.preflight import StartupPreflightError, require_startup_preflight
 from jarvis.vision.service import build_default_vision_service
 from jarvis.voice.canonical_active_speaker_runtime import (
     CanonicalActiveSpeakerRuntimeController,
 )
+from jarvis.voice.livekit_session import create_voice_session
 from jarvis.voice.media_devices_audio import MediaDevicesConversationRuntime
 from jarvis.voice.wakeword import LiveKitWakeDetector, load_livekit_predictor
 
@@ -142,6 +146,34 @@ def build_production_voice_runtime(
         else None
     )
 
+    memory_runtime = build_default_memory_runtime() if config.memory_enabled else None
+
+    candidate_extractor = None
+    if config.memory_candidate_extraction_enabled:
+        assert config.memory_candidate_extraction_model is not None
+        candidate_extractor = build_memory_candidate_extractor(
+            provider=config.ai_provider,
+            model=config.memory_candidate_extraction_model,
+        )
+        LOGGER.info(
+            "Phase-4.4 memory candidate extraction shadow is configured: "
+            "active_provider=%s model=%s quarantine=session_local "
+            "durable_admission=False",
+            config.ai_provider,
+            config.memory_candidate_extraction_model,
+        )
+
+    def production_session_factory(session_config: JarvisConfig):
+        session, bridge = create_voice_session(session_config)
+        if candidate_extractor is not None:
+            candidate_runtime = MemoryCandidateSessionRuntime(
+                conversation=bridge.conversation,
+                extractor=candidate_extractor,
+            )
+            bridge.add_accepted_turn_observer(candidate_runtime.observe_turn)
+            bridge.add_close_observer(candidate_runtime.close)
+        return session, bridge
+
     if config.audio_output_wasapi_device is not None:
         LOGGER.info(
             "JARVIS_AUDIO_OUTPUT_WASAPI_DEVICE is historical only; production uses "
@@ -157,6 +189,8 @@ def build_production_voice_runtime(
         active_speaker_provider=active_speaker_provider,
         speech_region_detector=speech_region_detector,
         speaker_shadow_observer=speaker_shadow_observer,
+        memory_runtime=memory_runtime,
+        session_factory=production_session_factory,
     )
 
 

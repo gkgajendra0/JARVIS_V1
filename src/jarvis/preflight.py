@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from jarvis.ai_provider import credential_environment_name, provider_api_key
 from jarvis.config import JarvisConfig
 from jarvis.voice.audio import DEVICE_CHANNELS, DEVICE_SAMPLE_RATE, LocalAudioRuntime
 
@@ -48,16 +48,18 @@ def _check_file(label: str, value: str | None) -> PreflightCheck:
 
 
 def _credential_check(config: JarvisConfig) -> PreflightCheck:
-    if config.realtime_provider == "gemini":
-        name = "GOOGLE_API_KEY"
-    else:
-        name = "OPENAI_API_KEY"
-    if os.getenv(name):
-        return PreflightCheck("Realtime credentials", True, f"{name} is available")
+    name = credential_environment_name(config.ai_provider)
+    if provider_api_key(config.ai_provider) is not None:
+        return PreflightCheck(
+            "Cloud AI credentials",
+            True,
+            f"active provider={config.ai_provider}; {name} is available",
+        )
     return PreflightCheck(
-        "Realtime credentials",
+        "Cloud AI credentials",
         False,
-        f"{name} is missing from the process/Windows user environment",
+        f"active provider={config.ai_provider}; {name} is missing from the "
+        "process/Windows user environment",
     )
 
 

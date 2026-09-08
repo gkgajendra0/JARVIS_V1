@@ -1,0 +1,3 @@
+# Research-only dependency for the Step 4 self-knowledge/SBOM spike.
+# Kept outside the production runtime dependency set.
+cyclonedx-bom==7.3.1

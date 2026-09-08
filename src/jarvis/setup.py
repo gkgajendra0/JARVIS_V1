@@ -7,6 +7,11 @@ import os
 from pathlib import Path
 from typing import Any
 
+from jarvis.ai_provider import (
+    AI_PROVIDER_SETTING,
+    LEGACY_REALTIME_PROVIDER_SETTING,
+    configured_ai_provider,
+)
 from jarvis.config import FALSE_VALUES, TRUE_VALUES, JarvisConfig
 from jarvis.identity.active_speaker_assets import ensure_lr_asd_model
 from jarvis.machine_config import (
@@ -201,12 +206,10 @@ def _build_settings(existing: dict[str, str]) -> dict[str, str]:
         if value is not None:
             settings[name] = value.strip()
 
-    provider = configured_text("JARVIS_REALTIME_PROVIDER", existing, "gemini")
-    provider = (provider or "gemini").strip().casefold()
-    if provider not in {"gemini", "openai"}:
-        provider = "gemini"
-    settings["JARVIS_REALTIME_PROVIDER"] = provider
-    print(f"Realtime provider: {provider}")
+    provider = configured_ai_provider(existing, default="gemini")
+    settings[AI_PROVIDER_SETTING] = provider
+    settings.pop(LEGACY_REALTIME_PROVIDER_SETTING, None)
+    print(f"Active cloud AI provider: {provider}")
 
     wake_current = configured_text("JARVIS_WAKE_MODEL_PATH", existing)
     wake_path = _existing_file_or_prompt("Wake model", wake_current, required=True)
