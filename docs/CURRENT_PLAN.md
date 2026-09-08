@@ -1,170 +1,127 @@
 # JARVIS V1 Current Plan
 
-## Active Step
+## Active Work
 
-**Step 6 — Knowledge, Current Research, and Truthfulness (CAP-014 through CAP-017) — REQUIREMENTS / RESEARCH NEXT.**
+**Step 6 — Knowledge, Current Research, and Truthfulness (CAP-014 through CAP-017) — OWNER ACCEPTED / FINAL MERGE GATE.**
 
-Step 5 is now **bounded complete** after owner-machine acceptance of the deliberately reduced provider-resilience foundation. Full local/offline conversation remains explicitly deferred and is not claimed implemented.
+After the Step-6 protected-main merge, the next work is a **bounded Step-2 voice-session robustness correction** discovered during Step-6 acceptance. Step 7 remains planned and must not start until that regression is fixed and owner-tested.
 
 ## Current Stage
 
-**STEP 4 BOUNDED COMPLETE — PHASE 4.5E AUTOMATIC MEMORY INFLUENCE DEFERRED — STEP 5 BOUNDED COMPLETE / MINIMAL PROVIDER RESILIENCE ACCEPTED — FULL OFFLINE STEP-5 EXTENSIONS DEFERRED — STEP 6 NEXT**
+**STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 OWNER ACCEPTED — FINAL EXACT-HEAD CI / PROTECTED-MAIN MERGE — THEN STEP-2 LONG-UTTERANCE CORRECTION.**
 
-This file is the operational source of truth. `PRODUCT.md` owns permanent product intent, `ROADMAP.md` owns sequence, accepted architecture belongs in `CURRENT_ARCHITECTURE.md`, and detailed evidence belongs in `docs/research/`.
-
----
-
-## Step 4 closure carried forward
-
-Accepted production behavior remains:
-
-- bounded live session context and deterministic `ContextAssembler`;
-- encrypted canonical durable memory with provenance/lifecycle/correction/supersession/physical forget;
-- explicit governed `remember`, `inspect`, `correct`, and `forget`;
-- structured memory-candidate quarantine with no implicit durable admission;
-- accepted Qwen3 Embedding + FTS5/dense/RRF retrieval foundation;
-- accepted Qwen3 Reranker over already-eligible canonical records;
-- accepted opt-in provider-assisted explicit `recall_memory` fallback;
-- deterministic lifecycle/security/sensitivity authority ahead of learned components.
-
-Still deferred / disabled:
-
-- strict independent 4.5D semantic release verifier;
-- Phase-4.5E automatic semantic memory influence/injection;
-- unaccepted 4.5E shadow-runtime production wiring;
-- remaining unstarted Step-4 extensions.
-
-Durable closure evidence:
-
-- `docs/research/STEP_4_PHASE_4_5D_PROVIDER_ASSISTED_FALLBACK.md`
-- `docs/research/STEP_4_PHASE_4_5E_DEFERRED_CLOSURE.md`
-
-Automatic memory injection remains disabled. No failed 4.5D/4.5E learned component is promoted.
+This file is the operational source of truth. `PRODUCT.md` owns permanent product intent, `ROADMAP.md` owns sequence, accepted architecture belongs in `CURRENT_ARCHITECTURE.md`, and detailed research/evidence belongs in `docs/research/`.
 
 ---
 
-## Step 5 bounded closure — ACCEPTED
+## Accepted foundations carried forward
 
-The owner deliberately reduced Step 5 to the resilience foundation that is useful now instead of blocking roadmap progress on a full local/offline conversational stack.
+Step 4 remains bounded complete with encrypted canonical memory, explicit remember/inspect/correct/forget, accepted FTS5 + Qwen retrieval/reranking, and bounded provider-assisted `recall_memory`. The strict independent 4.5D verifier and Phase-4.5E automatic semantic-memory injection remain deferred.
 
-### Accepted production behavior
+Step 5 remains bounded complete with deterministic terminal provider-failure diagnosis, Windows-local truthful status speech, safe failed-session closure, and return toward wake/idle. Full local/offline conversation remains deferred.
 
-JARVIS now owns deterministic terminal realtime-provider failure diagnosis for bounded classes including:
+---
 
-- quota exhaustion;
-- rate limiting;
-- authentication failure;
-- permission denial;
-- model/request rejection;
-- provider 5xx/service unavailable;
-- timeout;
-- network/connection loss;
-- unknown terminal provider failure.
+## Step 6 — accepted bounded outcome
 
-For an unrecoverable realtime-provider failure:
+Step 6 now provides the accepted source-aware web-research foundation:
 
 ```text
-LiveKit realtime ErrorEvent
- -> JARVIS deterministic failure classification
- -> ProviderResilienceState = DEGRADED
- -> bounded privacy-safe reason/status metadata
- -> Windows-local deterministic status speech
- -> explicit failed-session close
- -> existing VoiceRuntimeController returns toward wake/idle lifecycle
+latest canonical USER request
+        |
+        v
+active conversational brain
+Gemini / OpenAI / future replacement
+        |
+        | decides research is useful/required
+        | forms bounded supporting search queries
+        v
+JARVIS search_web tool
+        |
+        v
+CurrentResearchService
+        |
+        v
+replaceable live-web retrieval adapter
+        |
+        +-> accepted first adapter: Exa Search
+        |
+        v
+normalized real source evidence
+URLs + titles + domains + excerpts + timestamps
+        |
+        v
+JARVIS truth/source sufficiency policy
+        |
+        v
+active brain synthesizes the spoken answer
 ```
 
-Important boundaries:
+Accepted boundaries:
 
-- provider/model output does not decide the failure class or recovery authority;
-- raw provider payloads are not spoken or copied into normal bounded status logs;
-- the failure announcement does not depend on Gemini/OpenAI TTS;
-- Windows `System.Speech` synthesizes a fixed JARVIS-owned status message locally;
-- local status PCM is played through the already-selected JARVIS audio output;
-- no second cloud provider is silently selected;
-- no local LLM is loaded;
-- no canonical conversation, memory, identity, or authority ownership is duplicated;
-- a later healthy realtime session marks provider health recovered.
+- `JARVIS_AI_PROVIDER` remains the conversational-brain selector;
+- live-web retrieval is independent of the active brain and replaceable behind a JARVIS contract;
+- JARVIS owns canonical turn anchoring, provenance normalization, truth/research status, source sufficiency, privacy-safe logs, and fail-closed behavior;
+- retrieved webpages are untrusted evidence and gain no memory/identity/permission/file/device/execution authority;
+- stable model-knowledge questions are blocked from unnecessary network research by a deterministic warrant gate;
+- explicit search/research/current requests can use live evidence;
+- `fact_check` requires multiple source domains before returning success;
+- `authoritative` requires a bounded curated official/primary-source signal;
+- provider/search failure is reported as unavailable rather than silently presented as freshly verified;
+- automatic Phase-4.5E memory injection remains disabled.
 
-### Automated acceptance
+Acceptance evidence:
 
-Final implementation branch includes unit coverage for classification, state transitions, terminal/recoverable error handling, safe close behavior, and local status PCM playback.
+- `docs/research/STEP_6_KNOWLEDGE_TRUTHFULNESS_RESEARCH_AND_ARCHITECTURE.md`
+- `docs/research/STEP_6_KNOWLEDGE_TRUTHFULNESS_ACCEPTANCE.md`
 
-Exact-head Code Quality before documentation reconciliation passed:
+Owner-machine evidence on 2026-09-08 included:
 
-- Ruff format/lint;
-- full pytest;
-- Windows DPAPI;
-- Windows Hello helper.
+- real-network Exa smoke: `multi_source_researched`, 8 real sources, `PASS`;
+- stable SQL JOIN question answered without a web-research completion event;
+- explicit current Google/Gemini request: Exa `authoritative_source_present`, 8 sources, `explicit_research_request` warrant;
+- source follow-up named only observed official Google source families;
+- explicit owner acceptance of Step 6 as complete.
 
-### Owner-machine acceptance
+Deferred Step-6 extensions remain:
 
-Owner-machine smoke on 2026-09-08 used the real configured output:
-
-`24'TV (NVIDIA High Definition Audio) @ 48000 Hz`
-
-Command:
-
-`python tools\research\step5_provider_resilience_owner_smoke.py`
-
-Observed result:
-
-`STEP5_SMOKE_STATUS: PASS`
-
-The owner explicitly confirmed hearing the deterministic local quota-exhaustion message through the real speaker.
-
-Detailed accepted behavior is implemented on PR #23. The smoke harness remains a bounded reproducible owner/regression diagnostic under `tools/research/`.
-
-### Explicitly deferred Step-5 work
-
-The following are **not required for the current bounded Step-5 closure** and remain future work only if they become valuable:
-
-- Ollama/local LLM selection or installation;
-- cloud-realtime -> local-LLM automatic handoff;
-- local/offline STT;
-- local/offline conversational TTS;
-- full network-offline spoken conversation;
-- cloud-to-cloud automatic failover;
-- startup without cloud credentials based on a validated local intelligence stack.
-
-Research already completed for these future options remains in:
-
-- `docs/research/STEP_5_RESILIENCE_RESEARCH_AND_ARCHITECTURE_PROPOSAL.md`
-
-Nothing in the bounded closure claims those deferred capabilities are implemented.
+- multi-minute/background Deep Research agents;
+- browser automation;
+- Step-7 local project/file knowledge;
+- universal trusted-domain classification;
+- proactive/background recurring research;
+- automatic semantic-memory injection;
+- simultaneous multi-search-backend routing without measured need.
 
 ---
 
-## Step 6 — next major development slice
+## Reopened Step-2 robustness defect — next bounded work
 
-Step 6 owns **Knowledge, Current Research, and Truthfulness (CAP-014 through CAP-017)**.
+Step-6 voice acceptance exposed a pre-existing Step-2 defect: long spoken requests can be cut off and the active session can return to wake/idle before the realtime provider commits the user turn.
 
-The next lifecycle begins from current protected `main` after the bounded Step-5 merge:
+Fresh research identified the architecture mismatch:
 
-```text
-recover Step-6 requirements
- -> inspect current repo/provider/tool boundaries
- -> fresh current-technology web research
- -> compare mature source/search/research/verification approaches
- -> architecture proposal
- -> owner approval
- -> implementation slices
-```
+- production `AgentSession` currently passes `vad=None`, explicitly opting out of LiveKit VAD;
+- JARVIS inactivity timers rely on `user_state_changed` to know that the user is actively speaking;
+- LiveKit documents `user_state_changed` as VAD-driven;
+- the initial timer is 8 seconds and follow-up timer is 15 seconds;
+- therefore a long utterance can remain invisible to the outer inactivity policy until its final provider commit, allowing the inactivity timer to end the session mid-speech.
 
-The research-first rule remains mandatory: do not build a custom search/research stack before comparing mature current solutions and the capabilities already available through the active provider/framework ecosystem.
+Approved correction direction after Step-6 merge:
 
-Step 6 must preserve the foundations already accepted:
+1. branch from the new protected `main`;
+2. retain Gemini/OpenAI realtime-provider native turn completion;
+3. restore LiveKit bundled VAD as the local speaking/listening activity signal rather than as a second turn authority;
+4. when user state becomes `speaking`, cancel the inactivity shutdown timer instead of arming a 15-second utterance kill timer;
+5. when the user becomes inactive/listening, arm the appropriate initial/follow-up inactivity timeout;
+6. keep `max_utterance_seconds` only where it is genuinely a bounded diagnostic audio-buffer limit unless a separate evidence-backed user-turn safety policy is later required;
+7. add regression tests proving continuous speech is not terminated by the old max-utterance timeout;
+8. owner-test a deliberately long research/fact-check sentence plus normal short queries and barge-in behavior.
 
-- one canonical JARVIS conversation/context authority;
-- one active production cloud-AI provider policy;
-- explicit source/provenance boundaries;
-- current/high-risk claims must not be presented as known without appropriate fresh evidence;
-- provider/search output is evidence, not canonical personal truth or execution authority;
-- Step 6 must not revive automatic Phase-4.5E memory injection as a shortcut.
+Research references are the current LiveKit turn/session/VAD documentation and Gemini Live automatic activity-detection documentation reviewed on 2026-09-08.
 
 ---
 
 ## Immediate Next Action
 
-**Finish final exact-head CI for the bounded Step-5 documentation reconciliation, squash-merge PR #23 into protected `main`, then begin Step-6 requirements recovery + fresh research on a new branch.**
-
-No local model/offline-stack work should interrupt Step 6 unless the owner deliberately reopens the deferred Step-5 scope.
+**FINAL EXACT-HEAD STEP-6 CI -> SQUASH MERGE PR #24 -> CREATE FRESH STEP-2 ROBUSTNESS BRANCH -> IMPLEMENT + TEST THE LONG-UTTERANCE FIX.**

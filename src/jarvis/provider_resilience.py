@@ -139,14 +139,30 @@ def _error_chain(error: object) -> tuple[object, ...]:
     return tuple(chain)
 
 
+def _status_from_object(value: object | None) -> int | None:
+    if value is None:
+        return None
+    for attribute in ("status_code", "status", "code"):
+        candidate = getattr(value, attribute, None)
+        if (
+            isinstance(candidate, int)
+            and not isinstance(candidate, bool)
+            and 100 <= candidate <= 599
+        ):
+            return candidate
+    return None
+
+
 def _status_code(chain: tuple[object, ...]) -> int | None:
     for item in chain:
-        value = getattr(item, "status_code", None)
-        if isinstance(value, int) and value >= 0:
-            return value
-        value = getattr(item, "status", None)
-        if isinstance(value, int) and value >= 0:
-            return value
+        status = _status_from_object(item)
+        if status is not None:
+            return status
+        # requests/httpx-style HTTP exceptions commonly keep the authoritative
+        # status on ``exception.response`` rather than on the exception itself.
+        status = _status_from_object(getattr(item, "response", None))
+        if status is not None:
+            return status
     return None
 
 
@@ -174,6 +190,10 @@ def _classification_text(chain: tuple[object, ...]) -> str:
                 parts.append(str(body))
             except Exception:  # noqa: BLE001 - diagnostic evidence is best effort only
                 parts.append(type(body).__name__)
+        response = getattr(item, "response", None)
+        reason = getattr(response, "reason", None)
+        if isinstance(reason, str) and reason:
+            parts.append(reason)
     return " ".join(parts).casefold()
 
 
