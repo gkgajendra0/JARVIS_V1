@@ -165,9 +165,7 @@ def _confusion(
         precision = tp / (tp + fp) if tp + fp else 0.0
         recall = tp / (tp + fn) if tp + fn else 0.0
         f1 = (
-            2 * precision * recall / (precision + recall)
-            if precision + recall
-            else 0.0
+            2 * precision * recall / (precision + recall) if precision + recall else 0.0
         )
         metrics[label] = {
             "precision": round(precision, 6),
@@ -221,9 +219,7 @@ def _calibrate(
                     steering_threshold,
                 )
                 evaluation = _confusion(cases, scores, thresholds)
-                essential_recall = float(
-                    evaluation["metrics"]["ESSENTIAL"]["recall"]
-                )
+                essential_recall = float(evaluation["metrics"]["ESSENTIAL"]["recall"])
                 helpful_recall = float(evaluation["metrics"]["HELPFUL"]["recall"])
                 objective = (
                     float(evaluation["unsafe_false_influence"]),
@@ -299,12 +295,8 @@ def _latency_probe(
         for name, prompt in PROMPTS.items():
             started = time.perf_counter_ns()
             model.predict(pairs, prompt=prompt, show_progress_bar=False)
-            prompt_samples[name].append(
-                (time.perf_counter_ns() - started) / 1_000_000
-            )
-        combined_samples.append(
-            (time.perf_counter_ns() - combined_started) / 1_000_000
-        )
+            prompt_samples[name].append((time.perf_counter_ns() - started) / 1_000_000)
+        combined_samples.append((time.perf_counter_ns() - combined_started) / 1_000_000)
 
     def summarize(samples: list[float]) -> dict[str, float]:
         ordered = sorted(samples)
@@ -350,13 +342,10 @@ def main() -> None:
     load_seconds = time.perf_counter() - load_started
 
     scores = {
-        name: _predict_scores(model, cases, prompt)
-        for name, prompt in PROMPTS.items()
+        name: _predict_scores(model, cases, prompt) for name, prompt in PROMPTS.items()
     }
 
-    calibration_cases, calibration_scores = _slice_scores(
-        cases, scores, "calibration"
-    )
+    calibration_cases, calibration_scores = _slice_scores(cases, scores, "calibration")
     holdout_cases, holdout_scores = _slice_scores(cases, scores, "holdout")
     thresholds, calibration_eval = _calibrate(
         calibration_cases,
