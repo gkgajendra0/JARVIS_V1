@@ -260,7 +260,9 @@ async def test_shadow_retrieval_observes_only_user_turns_with_cloud_policy() -> 
 
 
 @pytest.mark.asyncio
-async def test_shadow_reuses_current_derived_vectors_without_document_reencoding() -> None:
+async def test_shadow_reuses_current_derived_vectors_without_document_reencoding() -> (
+    None
+):
     candidates = (_candidate("a", "alpha", 1),)
     encoder = FakeEncoder()
     embedding_store = FakeEmbeddingStore({"a"})
@@ -271,7 +273,9 @@ async def test_shadow_reuses_current_derived_vectors_without_document_reencoding
         reranker=FakeReranker(),
     )
 
-    runtime.observe_turn(ConversationTurn(role=ConversationRole.USER, text="Recall alpha"))
+    runtime.observe_turn(
+        ConversationTurn(role=ConversationRole.USER, text="Recall alpha")
+    )
     await runtime.wait_idle()
 
     assert encoder.document_calls == []
