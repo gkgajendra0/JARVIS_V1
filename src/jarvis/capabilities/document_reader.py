@@ -225,7 +225,9 @@ def _probe_sidecar(python_path: pathlib.Path) -> dict[str, str]:
     try:
         payload = json.loads(probe.stdout)
     except json.JSONDecodeError as exc:
-        raise DocumentReaderError("document-reader validation returned invalid output") from exc
+        raise DocumentReaderError(
+            "document-reader validation returned invalid output"
+        ) from exc
     required = ("markitdown", "numpy", "onnxruntime", "converter")
     if not isinstance(payload, dict) or not all(
         isinstance(payload.get(name), str) and payload[name] for name in required
