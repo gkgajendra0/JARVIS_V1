@@ -29,19 +29,18 @@ from jarvis.capabilities.models import (
 _MAX_TEXT_BYTES = 1_000_000
 _MAX_DOCUMENT_BYTES = 25_000_000
 _MAX_RETURN_CHARS = 40_000
-_MAX_LIST_RESULTS = 500
 _MAX_SEARCH_RESULTS = 50
 _DOCUMENT_SUFFIXES = {".pdf", ".docx", ".pptx", ".xls", ".xlsx"}
 _SENSITIVE_EXACT = {
     ".env",
-    "id_rsa",
-    "id_ed25519",
     "credentials",
     "credentials.json",
+    "id_ed25519",
+    "id_rsa",
     "secrets",
     "secrets.json",
 }
-_SENSITIVE_SUFFIXES = {".pem", ".key", ".pfx", ".p12", ".kdbx"}
+_SENSITIVE_SUFFIXES = {".kdbx", ".key", ".p12", ".pem", ".pfx"}
 _SECRET_PATTERNS = (
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
@@ -80,7 +79,36 @@ def _parse_extra_roots(raw: str | None) -> dict[str, pathlib.Path]:
     return roots
 
 
+def _is_sensitive(path: pathlib.Path) -> bool:
+    name = path.name.casefold()
+    if name in _SENSITIVE_EXACT:
+        return True
+    if name.startswith(".env.") and not name.endswith(
+        (".example", ".sample", ".template")
+    ):
+        return True
+    if name.startswith("credentials") or name.startswith("secrets"):
+        return True
+    return path.suffix.casefold() in _SENSITIVE_SUFFIXES
+
+
+def _contains_secret(text: str) -> bool:
+    return any(pattern.search(text) for pattern in _SECRET_PATTERNS)
+
+
+def _bounded_text(text: str) -> tuple[str, bool]:
+    if len(text) <= _MAX_RETURN_CHARS:
+        return text, False
+    return text[:_MAX_RETURN_CHARS], True
+
+
+def _path_hash(relative: pathlib.Path) -> str:
+    return hashlib.sha256(relative.as_posix().encode("utf-8")).hexdigest()[:16]
+
+
 class ApprovedRootPolicy:
+    """Resolve only relative paths that remain inside explicitly approved roots."""
+
     def __init__(
         self,
         *,
@@ -89,8 +117,7 @@ class ApprovedRootPolicy:
     ) -> None:
         project = pathlib.Path(project_root or default_project_root()).resolve()
         roots: dict[str, pathlib.Path] = {"project": project}
-        configured = _parse_extra_roots(os.getenv("JARVIS_LOCAL_READ_ROOTS"))
-        roots.update(configured)
+        roots.update(_parse_extra_roots(os.getenv("JARVIS_LOCAL_READ_ROOTS")))
         for alias, value in (extra_roots or {}).items():
             normalized_alias = str(alias).strip().casefold()
             if not re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", normalized_alias):
@@ -114,7 +141,11 @@ class ApprovedRootPolicy:
         except KeyError as exc:
             raise LocalReadValidationError("unknown approved local read root") from exc
 
-    def resolve(self, alias: str, relative_path: str = "") -> tuple[pathlib.Path, pathlib.Path]:
+    def resolve(
+        self,
+        alias: str,
+        relative_path: str = "",
+    ) -> tuple[pathlib.Path, pathlib.Path]:
         root = self.root(alias)
         raw = str(relative_path or "").strip()
         candidate = pathlib.PurePath(raw)
@@ -124,40 +155,20 @@ class ApprovedRootPolicy:
             raise LocalReadValidationError("parent path traversal is not allowed")
         target = (root / raw).resolve()
         try:
-            target.relative_to(root)
+            relative = target.relative_to(root)
         except ValueError as exc:
-            raise LocalReadValidationError("local read target escapes approved root") from exc
-        relative = target.relative_to(root)
+            raise LocalReadValidationError(
+                "local read target escapes approved root"
+            ) from exc
         if ".git" in {part.casefold() for part in relative.parts}:
-            raise LocalReadValidationError("Git internals are not readable through Step 7")
+            raise LocalReadValidationError(
+                "Git internals are not readable through Step 7"
+            )
         if _is_sensitive(relative):
-            raise LocalReadValidationError("sensitive credential/secret path is blocked")
+            raise LocalReadValidationError(
+                "sensitive credential/secret path is blocked"
+            )
         return root, target
-
-
-def _is_sensitive(path: pathlib.Path) -> bool:
-    name = path.name.casefold()
-    if name in _SENSITIVE_EXACT:
-        return True
-    if name.startswith(".env.") and not name.endswith((".example", ".sample", ".template")):
-        return True
-    if name.startswith("credentials") or name.startswith("secrets"):
-        return True
-    return path.suffix.casefold() in _SENSITIVE_SUFFIXES
-
-
-def _contains_secret(text: str) -> bool:
-    return any(pattern.search(text) for pattern in _SECRET_PATTERNS)
-
-
-def _bounded_text(text: str, limit: int = _MAX_RETURN_CHARS) -> tuple[str, bool]:
-    if len(text) <= limit:
-        return text, False
-    return text[:limit], True
-
-
-def _path_hash(relative: pathlib.Path) -> str:
-    return hashlib.sha256(relative.as_posix().encode("utf-8")).hexdigest()[:16]
 
 
 class LocalProjectReadExecutor:
@@ -197,7 +208,10 @@ class LocalProjectReadExecutor:
         root_alias = str(params.get("root") or "project").strip().casefold()
         relative_path = str(params.get("path") or "").strip()
         root, target = self.roots.resolve(root_alias, relative_path)
-        if request.operation in {"read_file", "read_document", "file_info"} and not relative_path:
+        if (
+            request.operation in {"read_file", "read_document", "file_info"}
+            and not relative_path
+        ):
             raise LocalReadValidationError("this operation requires a relative path")
         if request.operation == "search_project":
             query = str(params.get("query") or "").strip()
@@ -207,22 +221,21 @@ class LocalProjectReadExecutor:
                 raise LocalReadValidationError("search query is too long")
             params["query"] = query
         max_results = int(params.get("max_results", 20))
-        if max_results < 1 or max_results > _MAX_SEARCH_RESULTS:
+        if not 1 <= max_results <= _MAX_SEARCH_RESULTS:
             raise LocalReadValidationError(
                 f"max_results must be between 1 and {_MAX_SEARCH_RESULTS}"
             )
         params["max_results"] = max_results
         params["root"] = root_alias
-        params["path"] = target.relative_to(root).as_posix()
         relative = target.relative_to(root)
-        target_view = {
-            "root_alias": root_alias,
-            "relative_path_hash": _path_hash(relative),
-            "scope": request.operation,
-        }
+        params["path"] = relative.as_posix()
         return PreparedCapability(
             request=request,
-            target=target_view,
+            target={
+                "root_alias": root_alias,
+                "relative_path_hash": _path_hash(relative),
+                "scope": request.operation,
+            },
             parameters=params,
             material_summary=(
                 f"Read approved local {root_alias} resource for {request.operation}: "
@@ -247,14 +260,13 @@ class LocalProjectReadExecutor:
                 data, truncated, provenance = self._file_info(target, relative)
             elif operation == "list_directory":
                 data, truncated, provenance = self._list_directory(
-                    target,
-                    prepared.parameters["max_results"],
+                    target, int(prepared.parameters["max_results"])
                 )
             elif operation == "list_project_files":
                 data, truncated, provenance = self._list_project_files(
                     root,
                     target,
-                    prepared.parameters["max_results"],
+                    int(prepared.parameters["max_results"]),
                 )
             elif operation == "search_project":
                 data, truncated, provenance = self._search_project(
@@ -315,7 +327,10 @@ class LocalProjectReadExecutor:
         )
 
     @staticmethod
-    def _assert_regular_file(target: pathlib.Path, max_bytes: int) -> os.stat_result:
+    def _assert_regular_file(
+        target: pathlib.Path,
+        max_bytes: int,
+    ) -> os.stat_result:
         if not target.is_file():
             raise LocalReadValidationError("target is not a regular file")
         stat = target.stat()
@@ -323,8 +338,8 @@ class LocalProjectReadExecutor:
             raise LocalReadValidationError("file exceeds Step-7 read size limit")
         return stat
 
+    @staticmethod
     def _file_info(
-        self,
         target: pathlib.Path,
         relative: str,
     ) -> tuple[dict[str, Any], bool, tuple[str, ...]]:
@@ -344,31 +359,31 @@ class LocalProjectReadExecutor:
             ("pathlib",),
         )
 
+    @staticmethod
     def _list_directory(
-        self,
         target: pathlib.Path,
         max_results: int,
     ) -> tuple[dict[str, Any], bool, tuple[str, ...]]:
         if not target.is_dir():
             raise LocalReadValidationError("target is not a directory")
-        items = []
+        entries: list[dict[str, str]] = []
         truncated = False
         for child in sorted(target.iterdir(), key=lambda item: item.name.casefold()):
             if child.name.startswith(".") or _is_sensitive(pathlib.Path(child.name)):
                 continue
-            if len(items) >= max_results:
+            if len(entries) >= max_results:
                 truncated = True
                 break
-            items.append(
+            entries.append(
                 {
                     "name": child.name,
                     "kind": "directory" if child.is_dir() else "file",
                 }
             )
-        return {"entries": items}, truncated, ("pathlib",)
+        return {"entries": entries}, truncated, ("pathlib",)
 
+    @staticmethod
     def _list_project_files(
-        self,
         root: pathlib.Path,
         target: pathlib.Path,
         max_results: int,
@@ -395,7 +410,7 @@ class LocalProjectReadExecutor:
             )
             if completed.returncode == 0:
                 prefix = target.relative_to(root).as_posix().rstrip("/")
-                names = []
+                names: list[str] = []
                 for raw in completed.stdout.split(b"\0"):
                     if not raw:
                         continue
@@ -403,9 +418,9 @@ class LocalProjectReadExecutor:
                     if prefix and not name.startswith(prefix + "/"):
                         continue
                     path = pathlib.PurePosixPath(name)
-                    if any(part.startswith(".") for part in path.parts) or _is_sensitive(
-                        pathlib.Path(path.name)
-                    ):
+                    if any(
+                        part.startswith(".") for part in path.parts
+                    ) or _is_sensitive(pathlib.Path(path.name)):
                         continue
                     names.append(name)
                     if len(names) > max_results:
@@ -421,7 +436,9 @@ class LocalProjectReadExecutor:
             if not path.is_file():
                 continue
             relative = path.relative_to(root)
-            if any(part.startswith(".") for part in relative.parts) or _is_sensitive(relative):
+            if any(part.startswith(".") for part in relative.parts) or _is_sensitive(
+                relative
+            ):
                 continue
             names.append(relative.as_posix())
             if len(names) >= max_results:
@@ -429,8 +446,8 @@ class LocalProjectReadExecutor:
                 break
         return {"files": sorted(names)}, truncated, ("pathlib fallback",)
 
+    @staticmethod
     def _search_project(
-        self,
         root: pathlib.Path,
         target: pathlib.Path,
         query: str,
@@ -440,73 +457,104 @@ class LocalProjectReadExecutor:
             raise LocalReadValidationError("search target is not a directory")
         rg = shutil.which("rg")
         if rg:
-            completed = subprocess.run(
-                [
-                    rg,
-                    "--json",
-                    "--fixed-strings",
-                    "--no-messages",
-                    "--max-filesize",
-                    "2M",
-                    query,
-                    str(target),
-                ],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=10.0,
-                check=False,
-                shell=False,
+            result = LocalProjectReadExecutor._search_with_ripgrep(
+                rg,
+                root,
+                target,
+                query,
+                max_results,
             )
-            if completed.returncode in {0, 1}:
-                matches = []
-                for line in completed.stdout.splitlines():
-                    try:
-                        item = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    if item.get("type") != "match":
-                        continue
-                    data = item.get("data", {})
-                    path_text = str(data.get("path", {}).get("text", ""))
-                    try:
-                        relative = pathlib.Path(path_text).resolve().relative_to(root)
-                    except (OSError, ValueError):
-                        continue
-                    if _is_sensitive(relative) or any(
-                        part.startswith(".") for part in relative.parts
-                    ):
-                        continue
-                    line_text = str(data.get("lines", {}).get("text", "")).strip()
-                    if _contains_secret(line_text):
-                        line_text = "[redacted: secret-like content]"
-                    line_number = None
-                    submatches = data.get("submatches")
-                    if isinstance(submatches, list) and submatches:
-                        line_number = data.get("line_number")
-                    matches.append(
-                        {
-                            "path": relative.as_posix(),
-                            "line": line_number,
-                            "text": line_text[:500],
-                        }
-                    )
-                    if len(matches) >= max_results:
-                        break
-                return (
-                    {"query": query, "matches": matches},
-                    len(matches) >= max_results,
-                    ("ripgrep",),
-                )
-        matches = []
+            if result is not None:
+                return result
+        return LocalProjectReadExecutor._search_with_python(
+            root,
+            target,
+            query,
+            max_results,
+        )
+
+    @staticmethod
+    def _search_with_ripgrep(
+        rg: str,
+        root: pathlib.Path,
+        target: pathlib.Path,
+        query: str,
+        max_results: int,
+    ) -> tuple[dict[str, Any], bool, tuple[str, ...]] | None:
+        completed = subprocess.run(
+            [
+                rg,
+                "--json",
+                "--fixed-strings",
+                "--no-messages",
+                "--max-filesize",
+                "2M",
+                query,
+                str(target),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10.0,
+            check=False,
+            shell=False,
+        )
+        if completed.returncode not in {0, 1}:
+            return None
+        matches: list[dict[str, Any]] = []
+        for line in completed.stdout.splitlines():
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if item.get("type") != "match":
+                continue
+            data = item.get("data", {})
+            path_text = str(data.get("path", {}).get("text", ""))
+            try:
+                relative = pathlib.Path(path_text).resolve().relative_to(root)
+            except (OSError, ValueError):
+                continue
+            if _is_sensitive(relative) or any(
+                part.startswith(".") for part in relative.parts
+            ):
+                continue
+            line_text = str(data.get("lines", {}).get("text", "")).strip()
+            if _contains_secret(line_text):
+                line_text = "[redacted: secret-like content]"
+            matches.append(
+                {
+                    "path": relative.as_posix(),
+                    "line": data.get("line_number"),
+                    "text": line_text[:500],
+                }
+            )
+            if len(matches) >= max_results:
+                break
+        return (
+            {"query": query, "matches": matches},
+            len(matches) >= max_results,
+            ("ripgrep",),
+        )
+
+    @staticmethod
+    def _search_with_python(
+        root: pathlib.Path,
+        target: pathlib.Path,
+        query: str,
+        max_results: int,
+    ) -> tuple[dict[str, Any], bool, tuple[str, ...]]:
+        matches: list[dict[str, Any]] = []
         for path in target.rglob("*"):
             if len(matches) >= max_results:
                 break
             if not path.is_file():
                 continue
             relative = path.relative_to(root)
-            if any(part.startswith(".") for part in relative.parts) or _is_sensitive(relative):
+            if any(part.startswith(".") for part in relative.parts) or _is_sensitive(
+                relative
+            ):
                 continue
             try:
                 if path.stat().st_size > 2_000_000:
@@ -517,7 +565,11 @@ class LocalProjectReadExecutor:
             for line_number, line in enumerate(text.splitlines(), start=1):
                 if query.casefold() not in line.casefold():
                     continue
-                snippet = "[redacted: secret-like content]" if _contains_secret(line) else line[:500]
+                snippet = (
+                    "[redacted: secret-like content]"
+                    if _contains_secret(line)
+                    else line[:500]
+                )
                 matches.append(
                     {
                         "path": relative.as_posix(),
@@ -541,10 +593,14 @@ class LocalProjectReadExecutor:
         self._assert_regular_file(target, _MAX_TEXT_BYTES)
         raw = target.read_bytes()
         if b"\x00" in raw[:8192]:
-            raise LocalReadValidationError("binary file requires a supported document reader")
+            raise LocalReadValidationError(
+                "binary file requires a supported document reader"
+            )
         text = raw.decode("utf-8")
         if _contains_secret(text):
-            raise LocalReadValidationError("secret-like content detected; release blocked")
+            raise LocalReadValidationError(
+                "secret-like content detected; release blocked"
+            )
         text, truncated = _bounded_text(text)
         return {"path": relative, "text": text}, truncated, ("direct utf-8 read",)
 
@@ -569,8 +625,12 @@ class LocalProjectReadExecutor:
             result = converter.convert_local(str(target))
         except Exception as exc:
             raise CapabilityExecutionError("document conversion failed") from exc
-        text = str(getattr(result, "text_content", "") or getattr(result, "markdown", ""))
+        text = str(
+            getattr(result, "text_content", "") or getattr(result, "markdown", "")
+        )
         if _contains_secret(text):
-            raise LocalReadValidationError("secret-like content detected; release blocked")
+            raise LocalReadValidationError(
+                "secret-like content detected; release blocked"
+            )
         text, truncated = _bounded_text(text)
         return {"path": relative, "text": text}, truncated, ("Microsoft MarkItDown",)
