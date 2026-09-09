@@ -119,7 +119,10 @@ class CapabilityRuntime:
                 started,
                 "capability is discovery-only or execution-disabled in Step 7",
             )
-        if request.operation not in descriptor.operations or request.operation not in executor.operations:
+        if (
+            request.operation not in descriptor.operations
+            or request.operation not in executor.operations
+        ):
             return self._failure(
                 request,
                 CapabilityStatus.INVALID,
