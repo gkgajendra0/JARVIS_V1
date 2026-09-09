@@ -79,6 +79,17 @@ class FakeStrongApproval:
         )
 
 
+class FakeDocumentReader:
+    def __init__(self, text: str, *, truncated: bool = False) -> None:
+        self.text = text
+        self.truncated = truncated
+        self.calls: list[Path] = []
+
+    def convert_local(self, target: Path) -> tuple[str, bool]:
+        self.calls.append(target)
+        return self.text, self.truncated
+
+
 def build_runtime(*executors):
     builtins = tuple(executor.descriptor for executor in executors)
     authority = FakeAuthority()
@@ -223,25 +234,16 @@ def test_secret_like_content_is_never_released(tmp_path: Path) -> None:
     assert "secret-like" in (result.reason or "")
 
 
-def test_document_conversion_uses_local_markitdown_and_is_bounded(
+def test_document_conversion_uses_isolated_markitdown_and_is_bounded(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     document = tmp_path / "report.pdf"
     document.write_bytes(b"fake-pdf")
-    called: list[str] = []
-
-    class FakeConverter:
-        def convert_local(self, path: str):
-            called.append(path)
-            return types.SimpleNamespace(text_content="safe converted document")
-
-    fake_module = types.SimpleNamespace(MarkItDown=FakeConverter)
-    monkeypatch.setattr(
-        "jarvis.capabilities.local_reads.importlib.import_module",
-        lambda name: fake_module if name == "markitdown" else None,
+    reader = FakeDocumentReader("safe converted document")
+    executor = LocalProjectReadExecutor(
+        ApprovedRootPolicy(project_root=tmp_path),
+        document_reader=reader,
     )
-    executor = LocalProjectReadExecutor(ApprovedRootPolicy(project_root=tmp_path))
     runtime, _ = build_runtime(executor)
 
     result = runtime.execute_operation(
@@ -252,8 +254,8 @@ def test_document_conversion_uses_local_markitdown_and_is_bounded(
 
     assert result.status is CapabilityStatus.SUCCEEDED
     assert result.data["text"] == "safe converted document"
-    assert called == [str(document.resolve())]
-    assert result.provenance == ("Microsoft MarkItDown",)
+    assert reader.calls == [document.resolve()]
+    assert result.provenance == ("Microsoft MarkItDown isolated sidecar",)
 
 
 def test_system_status_is_routine_and_process_list_is_private() -> None:
