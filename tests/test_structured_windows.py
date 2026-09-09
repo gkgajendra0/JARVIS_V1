@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from jarvis.computer.structured_smoke import _fresh_editor_is_blank
 from jarvis.computer.structured_windows import (
     AllowlistedWindowsLauncher,
     StructuredWindowsError,
@@ -121,6 +122,12 @@ def test_send_text_is_bounded_and_targets_winapp_send_input(
 
     with pytest.raises(ValueError, match="exceeds structured automation limit"):
         backend.send_text("notepad", "x" * 501)
+
+
+def test_fresh_blank_editor_accepts_only_empty_or_winapp_name_fallback() -> None:
+    assert _fresh_editor_is_blank({"text": ""}) is True
+    assert _fresh_editor_is_blank({"text": "Text editor"}) is True
+    assert _fresh_editor_is_blank({"text": "restored user content"}) is False
 
 
 def test_winapp_error_is_fail_closed(
