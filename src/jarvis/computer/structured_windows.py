@@ -256,7 +256,9 @@ class AllowlistedWindowsLauncher:
         monotonic: Callable[[], float] = time.perf_counter,
     ) -> None:
         if platform.system() != "Windows":
-            raise StructuredWindowsError("Windows app launch currently requires Windows")
+            raise StructuredWindowsError(
+                "Windows app launch currently requires Windows"
+            )
         self._popen = popen
         self._monotonic = monotonic
 
