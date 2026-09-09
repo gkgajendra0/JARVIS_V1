@@ -1,4 +1,4 @@
-"""Generic governed capability runtime for local reads and bounded hands."""
+"""Generic governed capability runtime for local reads and JARVIS Hands."""
 
 from __future__ import annotations
 
@@ -27,7 +27,15 @@ from jarvis.capabilities.windows_control import (
     VisualDesktopControlExecutor,
     WindowsStructuredControlExecutor,
 )
+from jarvis.capabilities.windows_native import (
+    AppLifecycleExecutor,
+    ClipboardExecutor,
+    MediaPlaybackExecutor,
+    SystemAudioExecutor,
+    WindowManagementExecutor,
+)
 from jarvis.capabilities.windows_sources import WinAppCliSchemaSource, WindowsOdrSource
+from jarvis.hands.registry import HandsCapabilityRegistry
 
 
 class AuthorityBroker(Protocol):
@@ -55,12 +63,14 @@ class CapabilityRuntime:
         executors: tuple[CapabilityExecutor, ...],
         resolver: CapabilityResolver,
         authority: AuthorityBroker,
+        hands_registry: HandsCapabilityRegistry | None = None,
     ) -> None:
         self._executors = {executor.capability_key: executor for executor in executors}
         if len(self._executors) != len(executors):
             raise ValueError("capability executor keys must be unique")
         self._resolver = resolver
         self._authority = authority
+        self._hands_registry = hands_registry or HandsCapabilityRegistry.default()
         self._catalog: CapabilityCatalog | None = None
 
     def refresh_catalog(self) -> CapabilityCatalog:
@@ -70,6 +80,10 @@ class CapabilityRuntime:
     @property
     def catalog(self) -> CapabilityCatalog:
         return self._catalog or self.refresh_catalog()
+
+    @property
+    def hands_registry(self) -> HandsCapabilityRegistry:
+        return self._hands_registry
 
     def capability_for_operation(self, operation: str) -> str | None:
         normalized = str(operation).strip()
@@ -118,12 +132,19 @@ class CapabilityRuntime:
                 "capability is not present in the current catalog",
             )
         executor = self._executors.get(request.capability_key)
-        if executor is None or not descriptor.execution_enabled:
+        if executor is None:
             return self._failure(
                 request,
                 CapabilityStatus.DENIED,
                 started,
                 "capability is discovery-only or execution-disabled",
+            )
+        if not descriptor.execution_enabled:
+            return self._failure(
+                request,
+                CapabilityStatus.UNAVAILABLE,
+                started,
+                "capability executor is unavailable on this machine",
             )
         if (
             request.operation not in descriptor.operations
@@ -202,6 +223,11 @@ def build_default_capability_runtime(
 ) -> CapabilityRuntime:
     project = LocalProjectReadExecutor()
     system = SystemReadExecutor()
+    audio = SystemAudioExecutor()
+    media = MediaPlaybackExecutor()
+    clipboard = ClipboardExecutor()
+    windows = WindowManagementExecutor()
+    app_lifecycle = AppLifecycleExecutor()
     structured_control = WindowsStructuredControlExecutor()
     visual_control = VisualDesktopControlExecutor(
         provider_name=ai_provider or os.getenv("JARVIS_AI_PROVIDER", "gemini"),
@@ -210,6 +236,11 @@ def build_default_capability_runtime(
     executors: tuple[CapabilityExecutor, ...] = (
         project,
         system,
+        audio,
+        media,
+        clipboard,
+        windows,
+        app_lifecycle,
         structured_control,
         visual_control,
     )
@@ -222,4 +253,5 @@ def build_default_capability_runtime(
         executors=executors,
         resolver=resolver,
         authority=CapabilityAuthorityBroker(),
+        hands_registry=HandsCapabilityRegistry.default(),
     )
