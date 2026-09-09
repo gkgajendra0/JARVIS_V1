@@ -15,6 +15,7 @@ from typing import Any
 
 from livekit.agents import AgentStateChangedEvent, UserStateChangedEvent
 
+from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.identity.speaker_identity import assess_speaker_segment
@@ -23,6 +24,7 @@ from jarvis.identity.speaker_turn import SpeakerTurnAudio
 from jarvis.knowledge.research import CurrentResearchService
 from jarvis.memory.provider_verified_query import ProviderVerifiedMemoryQueryCoordinator
 from jarvis.memory.runtime import MemoryRuntime
+from jarvis.voice.capability_tools import LocalReadAgentTools
 from jarvis.voice.livekit_session import create_voice_session
 from jarvis.voice.memory_tools import MemoryAgentTools
 from jarvis.voice.research_tools import ResearchAgentTools
@@ -32,7 +34,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class _SessionToolBundle:
-    """Combine vision with per-session memory and research tool surfaces."""
+    """Combine vision with per-session memory, research, and local-read tools."""
 
     def __init__(
         self,
@@ -42,12 +44,14 @@ class _SessionToolBundle:
         memory_runtime: MemoryRuntime | None,
         memory_query_coordinator: ProviderVerifiedMemoryQueryCoordinator | None,
         research_service: CurrentResearchService | None,
+        capability_runtime: CapabilityRuntime | None,
     ) -> None:
         self._vision_tools = vision_tools
         self._conversation_getter = conversation_getter
         self._memory_runtime = memory_runtime
         self._memory_query_coordinator = memory_query_coordinator
         self._research_service = research_service
+        self._capability_runtime = capability_runtime
 
     @property
     def tools(self) -> list:
@@ -65,6 +69,10 @@ class _SessionToolBundle:
             )
         if self._research_service is not None:
             tools.extend(ResearchAgentTools(self._research_service, conversation).tools)
+        if self._capability_runtime is not None:
+            tools.extend(
+                LocalReadAgentTools(self._capability_runtime, conversation).tools
+            )
         return tools
 
 
@@ -78,6 +86,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         memory_runtime: MemoryRuntime | None = None,
         memory_query_coordinator: ProviderVerifiedMemoryQueryCoordinator | None = None,
         research_service: CurrentResearchService | None = None,
+        capability_runtime: CapabilityRuntime | None = None,
         **kwargs: Any,
     ) -> None:
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
@@ -156,13 +165,19 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             )
         self._memory_query_coordinator = memory_query_coordinator
         self._research_service = research_service
-        if memory_runtime is not None or research_service is not None:
+        self._capability_runtime = capability_runtime
+        if (
+            memory_runtime is not None
+            or research_service is not None
+            or capability_runtime is not None
+        ):
             self._vision_tools = _SessionToolBundle(
                 self._vision_tools,
                 lambda: self._session_conversation,
                 memory_runtime=memory_runtime,
                 memory_query_coordinator=memory_query_coordinator,
                 research_service=research_service,
+                capability_runtime=capability_runtime,
             )
 
     def _arm_timeout(self, seconds: float) -> None:
@@ -201,6 +216,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
     async def run(self) -> None:
         memory_runtime = self._memory_runtime
+        capability_runtime = self._capability_runtime
         if memory_runtime is not None:
             await memory_runtime.start()
             LOGGER.info(
@@ -219,12 +235,19 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 "active_brain_independent=True",
                 self._research_service.provider_name,
             )
+        if capability_runtime is not None:
+            LOGGER.info(
+                "Step-7 governed local reads are active | read_only=True | "
+                "desktop_control=False | browser_control=False"
+            )
         try:
             await super().run()
         finally:
             self._session_ready_for_inactivity = False
             self._user_is_speaking = False
             self._session_conversation = None
+            if capability_runtime is not None:
+                capability_runtime.close()
             if self._research_service is not None:
                 await self._research_service.close()
             if memory_runtime is not None:
