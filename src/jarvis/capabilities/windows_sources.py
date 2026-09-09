@@ -9,7 +9,6 @@ import subprocess
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 from .models import (
     CapabilityDescriptor,
@@ -112,20 +111,20 @@ class WinAppCliSchemaSource:
     @classmethod
     def _parse_ui_capability(
         cls,
-        schema: Any,
+        schema: object,
         executable: str,
     ) -> CapabilityDescriptor:
         if not isinstance(schema, dict):
-            raise ValueError("root must be an object")
+            raise TypeError("root must be an object")
         subcommands = schema.get("subcommands")
         if not isinstance(subcommands, dict):
-            raise ValueError("missing subcommands")
+            raise TypeError("missing subcommands")
         ui = subcommands.get("ui")
         if not isinstance(ui, dict):
-            raise ValueError("missing ui command family")
+            raise TypeError("missing ui command family")
         ui_subcommands = ui.get("subcommands")
         if not isinstance(ui_subcommands, dict):
-            raise ValueError("ui command family has no subcommands")
+            raise TypeError("ui command family has no subcommands")
 
         operations = [
             name
@@ -246,7 +245,7 @@ class WindowsOdrSource:
         for index, item in enumerate(decoded):
             try:
                 capabilities.append(self._descriptor(item, index=index))
-            except ValueError:
+            except (TypeError, ValueError):
                 ignored += 1
 
         state = DiscoveryState.DEGRADED if ignored else DiscoveryState.AVAILABLE
@@ -260,9 +259,9 @@ class WindowsOdrSource:
         )
 
     @classmethod
-    def _descriptor(cls, item: Any, *, index: int) -> CapabilityDescriptor:
+    def _descriptor(cls, item: object, *, index: int) -> CapabilityDescriptor:
         if not isinstance(item, dict):
-            raise ValueError("ODR entry must be an object")
+            raise TypeError("ODR entry must be an object")
         manifest = item.get("manifest")
         manifest = manifest if isinstance(manifest, dict) else {}
         manifest_server = manifest.get("server")
