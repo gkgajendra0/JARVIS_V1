@@ -151,10 +151,14 @@ class WindowsOdrSource:
         try:
             payload = json.loads(completed.stdout or "[]")
         except json.JSONDecodeError as exc:
-            raise discovery.CapabilityDiscoveryError("ODR inventory returned invalid JSON") from exc
+            raise discovery.CapabilityDiscoveryError(
+                "ODR inventory returned invalid JSON"
+            ) from exc
         entries = payload if isinstance(payload, list) else payload.get("servers", [])
         if not isinstance(entries, list):
-            raise discovery.CapabilityDiscoveryError("ODR inventory shape is unsupported")
+            raise discovery.CapabilityDiscoveryError(
+                "ODR inventory shape is unsupported"
+            )
         capabilities: list[models.CapabilityDescriptor] = []
         for index, entry in enumerate(entries):
             if not isinstance(entry, dict):
@@ -169,7 +173,9 @@ class WindowsOdrSource:
                     source_id=self.source_id,
                     kind=models.CapabilityKind.SEMANTIC_CONNECTOR,
                     name=name,
-                    description=str(entry.get("description") or "Registered Windows MCP server"),
+                    description=str(
+                        entry.get("description") or "Registered Windows MCP server"
+                    ),
                     metadata={"registry_entry": name},
                     execution_enabled=False,
                 )
