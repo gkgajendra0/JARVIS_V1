@@ -5,8 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.authority.types import ActionAttributes
+from jarvis.authority.types import (
+    ActionAttributes,
+    AuthorityEffect,
+    TrustTier,
+)
+from jarvis.capabilities.authority_bridge import CapabilityAuthorityBroker
 from jarvis.capabilities.discovery import CapabilityResolver
+from jarvis.capabilities.execution import PreparedCapability
 from jarvis.capabilities.local_reads import (
     ApprovedRootPolicy,
     LocalProjectReadExecutor,
@@ -40,6 +46,37 @@ class FakeAuthority:
 
     def close(self) -> None:
         self.events.append("close")
+
+
+class FakeCanonicalAuthority:
+    def __init__(self) -> None:
+        self.evaluations: list[tuple[object, object, str | None]] = []
+        self.consumed: list[tuple[str, object, object]] = []
+
+    def evaluate(self, *, proposal, context, approval_id=None):
+        self.evaluations.append((proposal, context, approval_id))
+        return types.SimpleNamespace(
+            effect=AuthorityEffect.ALLOW,
+            execution_permit=types.SimpleNamespace(permit_id="permit-1"),
+            reason_codes=(),
+        )
+
+    def revalidate_and_consume(self, *, permit_id, proposal, context):
+        self.consumed.append((permit_id, proposal, context))
+        return object()
+
+
+class FakeStrongApproval:
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, str]] = []
+
+    def verify_and_resolve(self, *, proposal, session_id):
+        self.calls.append((proposal, session_id))
+        return types.SimpleNamespace(
+            granted=True,
+            approval=types.SimpleNamespace(approval_id="approval-1"),
+            verification=types.SimpleNamespace(reason_codes=()),
+        )
 
 
 def build_runtime(*executors):
@@ -97,6 +134,40 @@ def test_runtime_refuses_discovery_only_capability() -> None:
 
     assert result.status is CapabilityStatus.DENIED
     assert "execution-disabled" in (result.reason or "")
+
+
+def test_private_read_authority_bridge_escalates_to_strong_owner() -> None:
+    request = CapabilityRequest(
+        session_id="session-1",
+        capability_key="local:project.read",
+        operation="read_file",
+        parameters={"root": "project", "path": "docs/ROADMAP.md"},
+    )
+    prepared = PreparedCapability(
+        request=request,
+        target={"root_alias": "project", "relative_path_hash": "abc"},
+        parameters=dict(request.parameters),
+        material_summary="Read approved project file",
+        attributes=ActionAttributes(private_read=True),
+        execution_payload={},
+    )
+    canonical = FakeCanonicalAuthority()
+    strong = FakeStrongApproval()
+    broker = CapabilityAuthorityBroker()
+    broker._authority = canonical
+    broker._strong = strong
+
+    authorized = broker.authorize(prepared)
+    broker.consume(authorized)
+
+    assert len(strong.calls) == 1
+    proposal, context, approval_id = canonical.evaluations[0]
+    assert proposal.attributes.private_read is True
+    assert context.trust_tier is TrustTier.VERIFIED_OWNER
+    assert context.actor_unambiguous is True
+    assert approval_id == "approval-1"
+    assert canonical.consumed[0][0] == "permit-1"
+    assert canonical.consumed[0][1].fingerprint == proposal.fingerprint
 
 
 def test_approved_root_blocks_parent_and_symlink_escape(tmp_path: Path) -> None:
