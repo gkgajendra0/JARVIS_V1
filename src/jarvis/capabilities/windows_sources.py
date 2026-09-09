@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import collections.abc
 import json
 import pathlib
 import platform
 import shutil
 import subprocess
 import time
+from collections import abc
 
 from jarvis.capabilities.models import (
     CapabilityDescriptor,
@@ -18,8 +18,8 @@ from jarvis.capabilities.models import (
 )
 
 
-Runner = collections.abc.Callable[..., subprocess.CompletedProcess[str]]
-Clock = collections.abc.Callable[[], float]
+Runner = abc.Callable[..., subprocess.CompletedProcess[str]]
+Clock = abc.Callable[[], float]
 
 
 class WinAppCliSchemaSource:
