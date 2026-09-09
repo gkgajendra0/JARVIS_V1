@@ -180,7 +180,9 @@ def test_odr_unavailable_is_truthful(
     assert "not available" in (snapshot.reason or "")
 
 
-def test_resolver_isolates_declared_source_failure_and_keeps_other_capabilities() -> None:
+def test_resolver_isolates_declared_source_failure_and_keeps_other_capabilities() -> (
+    None
+):
     capability = CapabilityDescriptor.create(
         capability_id="safe.read",
         source_id="source.good",
