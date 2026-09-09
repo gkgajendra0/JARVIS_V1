@@ -35,7 +35,8 @@ def main() -> int:
         }
         print("JARVIS Step-7 owner acceptance smoke")
         print(
-            "No file writes, app control, browser control, or arbitrary commands are allowed."
+            "No user/project mutation, app control, browser control, or arbitrary "
+            "commands are allowed. Canonical authority auditing remains enabled."
         )
         print("[discovery]")
         print(json.dumps(discovery, indent=2, ensure_ascii=False))
