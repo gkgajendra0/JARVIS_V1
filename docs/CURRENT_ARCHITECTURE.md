@@ -2,99 +2,80 @@
 
 ## Status
 
-**STEP 3 COMPLETE + MERGED. STEP 4 IS BOUNDED COMPLETE. PHASES 4.0A–4.5C ARE ACCEPTED, AND THE OWNER-AUTHORIZED PROVIDER-ASSISTED 4.5D `recall_memory` FALLBACK IS ACCEPTED. THE ORIGINAL STRICT INDEPENDENT 4.5D SEMANTIC VERIFIER REMAINS DEFERRED / UNRESOLVED. PHASE 4.5E AUTOMATIC CONVERSATIONAL SEMANTIC-MEMORY INJECTION REMAINS DEFERRED. STEP 5 IS BOUNDED COMPLETE WITH MINIMAL PROVIDER-FAILURE DIAGNOSIS + WINDOWS-LOCAL TRUTHFUL STATUS SPEECH ACCEPTED; FULL LOCAL/OFFLINE CONVERSATION REMAINS DEFERRED. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 REMAINS DISABLED.**
+**STEPS 0–3 ARE COMPLETE. STEP 4 IS BOUNDED COMPLETE. STEP 5 IS BOUNDED COMPLETE. STEP 6 IS BOUNDED COMPLETE. STEP 7 — GOVERNED CAPABILITY RUNTIME + LOCAL FILES/SYSTEM/PROJECT SAFE READS — IS OWNER ACCEPTED AND AT THE FINAL DOCUMENTATION/PROTECTED-MAIN MERGE GATE. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 `CORROBORATED_OWNER` REMAINS DISABLED.**
 
-This file describes architecture that actually exists and has passed the accepted lifecycle. Detailed experiments/evidence belong in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; durable decisions belong in `docs/decisions/`.
+This file describes architecture that actually exists and has passed the accepted lifecycle. Detailed experiments and acceptance evidence belong in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; durable design decisions belong in `docs/decisions/`.
 
 ---
 
 ## Accepted top-level architecture
 
 ```text
-                               JARVIS V1
-                                   |
-                 one active cloud-AI provider/account
-                    (Gemini OR OpenAI, never both
-                      as production dependencies)
-                                   |
-          +------------------------+------------------------+
-          |                        |                        |
-        VOICE                    VISION                  AUTHORITY
-          |                        |                        |
-Pocket3 microphone          Pocket3 video            typed evidence
-          |                        |                        |
-LiveKit MediaDevices        OpenCV camera            deterministic trust
-AEC + NS + HPF + AGC             |                        |
-          |                 RF-DETR + OC-SORT          proposal/risk/policy
-          |                        |                        |
-active-provider realtime    head/face/liveness       approvals / Windows Hello
-          |                        |                        |
-NVIDIA 48 kHz -> TV          OWNER context                 |
-          |                        |                        |
-          +---- CAM++ speaker shadow ----+                 |
-          |                              |                 |
-          +---- LR-ASD active speaker ---+--- evidence ----+
+                                  JARVIS V1
+                                      |
+                     one active cloud-AI provider
+                      Gemini / OpenAI / replacement
+                                      |
+        +-----------------------------+-----------------------------+
+        |                             |                             |
+      VOICE                         VISION                       AUTHORITY
+        |                             |                             |
+Pocket3 microphone             Pocket3 video                 typed evidence
+        |                             |                             |
+LiveKit MediaDevices           OpenCV camera                 deterministic trust
+AEC + NS + HPF + AGC                |                             |
+        |                       RF-DETR + OC-SORT              proposal/risk/policy
+        |                             |                             |
+active-provider realtime       head/face/liveness            approvals / Windows Hello
+        |                             |                             |
+NVIDIA 48 kHz -> TV             OWNER context                       |
+        |                             |                             |
+        +----- CAM++ speaker shadow --+                             |
+        +----- LR-ASD active speaker -+--------- evidence ----------+
 
-accepted USER turns
+accepted canonical USER turns
         |
-        +-> LiveContext (RAM/session/TTL)
+        +-> LiveContext
         |
-        +-> explicit MemoryAgentTools
-        |     -> deterministic authorization/grounding/secret policy
-        |     -> MemoryService
-        |     -> MemoryLifecycleService
-        |     -> SQLCipher canonical store + FTS5
+        +-> explicit durable Memory tools
+        |     -> MemoryService / lifecycle
+        |     -> SQLCipher + FTS5
         |
-        +-> Phase-4.4 candidate extraction [ACCEPTED, opt-in]
-        |     -> exact canonical USER turn
-        |     -> deterministic pre-provider gates
-        |     -> active-provider structured proposal
-        |     -> deterministic JARVIS proposal policy
-        |     -> typed session-local quarantine
-        |     -> physical disposal on session close
-        |     X no durable admission
+        +-> bounded provider-assisted recall_memory
         |
-        +-> Phase-4.5A–4.5C derived retrieval foundation [ACCEPTED]
-        |     -> eligible canonical records only
-        |     -> FTS5 lexical rank + Qwen dense rank
-        |     -> equal-weight RRF
-        |     -> Qwen reranker
-        |     X does not establish truth
+        +-> source-aware search_web
+        |     -> CurrentResearchService
+        |     -> replaceable retrieval adapter (accepted: Exa)
+        |     -> JARVIS-owned provenance/truth/source policy
         |
-        +-> provider-assisted recall_memory [ACCEPTED, opt-in]
-        |     -> latest accepted USER question
-        |     -> active-provider structured facet selection
-        |     -> provider returns numbered eligible-facet index only
-        |     -> JARVIS reconstructs exact canonical facet
-        |     -> deterministic grounding/query policy
-        |     -> one exact cloud-safe current assertion
-        |     -> second same-provider structured semantic verifier
-        |     -> RELEASE current-value/current-comparison only
-        |     -> otherwise/error/quota/conflict => ABSTAIN
-        |
-        +-> ContextAssembler
-              -> bounded evidence-rich provider context
-              -> X no automatic Phase-4.5E semantic-memory injection
+        +-> governed inspect_local
+              -> CapabilityResolver / CapabilityRuntime
+              -> canonical AuthorityService
+              -> bounded read executor
+              -> structured result + provenance + audit
 ```
 
-Permanent rules:
+The conversational model may reason about which mature capability is useful, but provider/model output does not own JARVIS identity, durable truth, authority, permissions, capability registration, execution policy, or deployment.
 
-- identity/perception evidence is not execution permission;
-- provider/model output does not establish canonical personal truth;
-- `MemoryService` is the sole durable memory mutation facade;
-- `ContextAssembler` is the sole owner of ordinary Step-4 provider-context assembly;
-- production JARVIS has exactly one active cloud-AI provider/account at a time;
-- production subsystems may use capability-specific models inside that provider family but may not independently select a second cloud-AI provider;
-- local model/checkpoint inference does not gain canonical truth or authority merely because it is local;
-- retrieval ranks already-eligible canonical records and cannot establish, modify, resurrect, or forget truth;
-- implicit memory candidates have no durable authority;
-- the accepted provider-assisted `recall_memory` tool is a bounded explicit tool path, not automatic context injection;
-- automatic semantic memory injection through `ContextAssembler` remains disabled;
-- provider failure on semantic recall fails closed to abstention and never silently switches cloud providers;
-- unrecoverable realtime-provider failures are diagnosed by JARVIS-owned deterministic policy, not by an LLM prompt;
-- a terminal realtime failure may produce a fixed Windows-local status announcement before the failed session closes, without changing canonical conversation/memory/identity/authority ownership.
+---
 
-Decision: ADR-015 governs cloud-provider ownership.
+## Permanent architecture rules
+
+- JARVIS identity/state/truth/authority/capabilities remain provider-neutral and JARVIS-owned.
+- Production has exactly one active cloud-AI provider/account at a time.
+- Provider-specific SDKs stay behind narrow adapters.
+- Identity/perception evidence is not execution permission.
+- T2 `CORROBORATED_OWNER` remains disabled until separately validated.
+- Windows Hello/T3 remains the accepted strong-verification path.
+- CAM++ and LR-ASD remain diagnostic/shadow evidence only and have no authority effect.
+- `ConversationSession` owns canonical accepted conversational truth.
+- `MemoryService` is the sole durable memory mutation facade.
+- Provider/model output cannot directly create canonical personal truth.
+- Retrieved web/local content is untrusted evidence/data and gains no memory, policy, identity, or tool authority.
+- `AuthorityService` remains the single canonical action-permission path; later capabilities must not invent parallel permissions.
+- One-time execution permits are proposal-bound and revalidated immediately before execution.
+- No raw discovered CLI/MCP command surface is exposed as arbitrary model-controlled shell authority.
+- Later browser/app/device/file-write/coding features must build on the shared capability/authority boundaries rather than bypassing them.
 
 ---
 
@@ -106,106 +87,20 @@ Production cloud intelligence is selected once through `JARVIS_AI_PROVIDER`.
 JARVIS_AI_PROVIDER
        |
        +-> realtime conversation
-       +-> scripted cloud TTS
+       +-> scripted cloud TTS where used
        +-> structured memory-candidate extraction
-       +-> provider-assisted semantic memory planning/verifying when configured
-       +-> future cloud reasoning/tool roles
+       +-> provider-assisted semantic recall when configured
+       +-> source-aware research reasoning
+       +-> capability/tool planning
 ```
 
-Current active provider is Gemini. Realtime conversation, candidate extraction, and semantic recall may use different Gemini model IDs because their capability surfaces differ. This does not create a second provider account.
+Current production provider is Gemini. Different model IDs may be used for capability-specific roles inside that same provider family where the provider surfaces differ.
 
-Provider-specific SDKs remain confined to narrow adapters. `JARVIS_REALTIME_PROVIDER` is migration-only compatibility; new configuration uses `JARVIS_AI_PROVIDER`.
+Production does not silently switch to a second cloud provider when the active provider lacks a feature or reaches quota/rate limits.
 
-Production never silently falls back to another cloud-AI provider when the active provider lacks a capability or hits a quota/rate limit.
+Local checkpoint/model inference remains allowed behind JARVIS-owned boundaries but gains no truth or authority merely because it is local.
 
-Local model/checkpoint downloads and local inference are outside ADR-015 but remain bounded by JARVIS deterministic authority and truth rules.
-
----
-
-## Step 5 bounded minimal provider resilience — ACCEPTED
-
-The currently accepted Step-5 scope does **not** implement a local conversational brain. It adds a deterministic failure boundary around the existing realtime-provider session so cloud failure becomes diagnosable and truthful rather than opaque.
-
-```text
-LiveKit realtime ErrorEvent
-        |
-        v
-JARVIS classify_provider_failure()
-        |
-        +-> quota_exhausted
-        +-> rate_limited
-        +-> authentication_failed / permission_denied
-        +-> model_unavailable / request_rejected
-        +-> provider_server_error / service_unavailable
-        +-> timeout / connection_lost / unknown
-        |
-        v
-ProviderResilienceState = DEGRADED
-        |
-        v
-WindowsLocalStatusSpeech
-(System.Speech -> temporary mono PCM WAV)
-        |
-        v
-existing JARVIS selected AudioOutput
-        |
-        v
-explicit failed AgentSession close
-        |
-        v
-existing VoiceRuntimeController returns toward wake/idle
-```
-
-Accepted properties:
-
-- terminal failure classification is bounded deterministic JARVIS code;
-- recoverable realtime errors remain recoverable and do not trigger the terminal announcement path;
-- raw provider payloads are not copied into spoken messages or normal bounded status logs;
-- status speech does not depend on Gemini/OpenAI TTS and therefore remains available when that provider conversation path is dead;
-- the local speaker path reuses the existing selected JARVIS output rather than opening an unrelated production microphone/conversation owner;
-- only the failed session is closed; canonical memory, identity, authority, and durable truth ownership are unchanged;
-- no second cloud provider is selected automatically;
-- no local LLM, local STT, or local conversational TTS is accepted;
-- a subsequent healthy realtime agent state returns `ProviderResilienceState` to healthy.
-
-Owner-machine acceptance used the configured `24'TV (NVIDIA High Definition Audio) @ 48000 Hz` endpoint. The synthetic quota-exhaustion smoke returned `STEP5_SMOKE_STATUS: PASS`, and the owner explicitly confirmed hearing the fixed local status message.
-
-Acceptance evidence: `docs/research/STEP_5_MINIMAL_PROVIDER_RESILIENCE_ACCEPTANCE.md`.
-
-Full local/offline survival research remains preserved but unimplemented in `docs/research/STEP_5_RESILIENCE_RESEARCH_AND_ARCHITECTURE_PROPOSAL.md`.
-
----
-
-## Machine configuration and startup
-
-Normal startup remains machine-profile driven:
-
-```text
-%LOCALAPPDATA%\JARVIS\machine.json
-        +
-Windows environment for the active provider secret
-        -> startup preflight
-        -> jarvis-voice
-```
-
-Accepted machine roles include:
-
-- Pocket3 microphone selected by stable Windows WASAPI identity;
-- NVIDIA `24'TV` conversation output at 48 kHz;
-- local wake model path persisted;
-- one active cloud-AI provider persisted as `JARVIS_AI_PROVIDER`;
-- provider-specific model IDs explicitly configured where needed;
-- LR-ASD/CAM++ assets locally managed;
-- vision/speaker/active-speaker switches persisted;
-- persistent memory controlled by `JARVIS_MEMORY_ENABLED`;
-- candidate extraction controlled separately by `JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED` plus explicit model ID;
-- bounded provider-assisted semantic recall enabled only when `JARVIS_MEMORY_SEMANTIC_RECALL_MODEL` is configured.
-
-API keys remain outside normal machine-profile state. Startup preflight checks only the credential required by the selected active provider.
-
-Fail-closed hardware behavior remains accepted: if the configured Pocket3 device is absent, startup does not silently choose a random microphone.
-
-The bounded Step-5 closure does not yet allow startup without valid active-provider credentials, because no local conversational intelligence stack has been accepted.
+Decision: ADR-015 governs cloud-provider ownership.
 
 ---
 
@@ -224,6 +119,10 @@ Pocket3 microphone @ 48 kHz mono
 ```
 
 LiveKit MediaDevices remains the only production Pocket3 microphone owner. Speaker/active-speaker diagnostics reuse canonical PCM and never gain permission authority.
+
+The accepted Step-2 long-utterance correction keeps provider-native realtime turn completion authoritative while using local user speech activity only to prevent the outer lifecycle from expiring during active speech or provider/session initialization.
+
+Acceptance evidence: `docs/research/STEP_2_LONG_UTTERANCE_ACTIVITY_ACCEPTANCE.md`.
 
 Decisions: ADR-011, ADR-013, ADR-014.
 
@@ -252,7 +151,9 @@ OWNER visual evidence remains freshness/session/track-bound evidence, not permis
 
 CAM++ uses canonical LiveKit PCM, bounded turn capture, local speech/quality gating, encrypted OWNER prototypes, and diagnostic similarity only.
 
-LR-ASD combines canonical LiveKit user PCM with timestamped normal Vision OWNER/head frames. No production threshold is selected. `active_speaker_confirmed` remains false and prototype admission remains disabled.
+LR-ASD combines canonical LiveKit user PCM with timestamped normal Vision OWNER/head frames. No production admission threshold is selected. `active_speaker_confirmed` remains false and prototype admission remains disabled.
+
+Observed meeting-audio false USER turns during Step-7 acceptance are therefore a known voice/identity admission residual. They do not alter capability authority. Step-7 local-read grounding separately rejects ambiguous turns that do not explicitly warrant local inspection.
 
 Neither CAM++ nor LR-ASD changes authority.
 
@@ -281,11 +182,24 @@ Accepted trust vocabulary:
 
 **T2 remains disabled.** Windows Hello remains the accepted strong-verification path.
 
+For Step-7 private local reads, JARVIS intentionally escalates to T3 rather than weakening the existing T2 floor.
+
+Accepted authority properties:
+
+- risk is determined from semantic action/target/effect, not merely a primitive operation name;
+- approvals are proposal/fingerprint bound;
+- permits are one-time and revalidated immediately before execution;
+- authority/audit failure withholds consequential results;
+- stronger verification may satisfy lower required trust floors;
+- provider/model output never directly grants authority.
+
+Acceptance evidence: `docs/research/STEP_3_CLOSURE_ACCEPTANCE.md`.
+
 ---
 
-# Step 4 accepted bounded architecture
+## Step 4 — accepted bounded memory/context architecture
 
-## Ownership model
+### Ownership model
 
 ```text
 ConversationSession
@@ -312,256 +226,387 @@ FTS5
 MemoryCandidateSessionRuntime
     = non-durable semantic shadow/quarantine
 
-Derived vector index / retrieval stack
+Derived retrieval stack
     = rebuildable ranking data over already-eligible canonical records
 
 ProviderVerifiedMemoryQueryCoordinator
     = bounded opt-in semantic recall coordinator; no mutation authority
 ```
 
-Provider history/caches are never canonical JARVIS memory.
+Accepted durable storage/security properties include SQLCipher, Windows DPAPI user-scope key protection, no plaintext fallback when memory is enabled, explicit remember/inspect/correct/forget, canonical temporal lifecycle, and physical forgetting of canonical/derived data.
 
-### Provenance and canonical conversation truth
+Phase-4.4 candidate extraction remains session-local quarantine with no implicit durable admission.
 
-Accepted turns carry stable JARVIS `session_id`, `turn_id`, and aware UTC `accepted_at`. Provider IDs remain external metadata. Assistant output cannot establish durable personal truth.
+Accepted derived retrieval uses FTS5 lexical retrieval plus Qwen dense retrieval/reranking only over already-eligible canonical records. Retrieval cannot establish, modify, resurrect, or forget truth.
 
-### LiveContext
+The owner-authorized provider-assisted `recall_memory` path remains bounded and explicit. It exposes only eligible cloud-safe facets, reconstructs canonical data inside JARVIS, performs deterministic grounding checks, and abstains on ambiguity/provider failure.
 
-The accepted runtime maintains bounded in-memory accepted-turn tail, active goal/topic/entities/unresolved work/interaction state, monotonic TTL, and no automatic durable dump. Session disposal does not persist raw conversation state.
-
-### ContextAssembler
-
-`ContextAssembler` applies deterministic precedence, sensitivity release filtering, strict local budget, and immutable JARVIS provenance. It remains the sole owner of ordinary context released toward realtime providers.
-
-Phase-4.5A–4.5C ranked retrieval results are **not** automatically released through `ContextAssembler` merely because they can be ranked. The accepted 4.5D fallback is instead an explicit zero-argument `recall_memory` tool invoked for the latest accepted user question.
+The original strict independent semantic release verifier and automatic Phase-4.5E conversational semantic-memory injection remain deferred.
 
 ---
 
-## Canonical encrypted memory kernel — ACCEPTED
+## Step 5 — accepted bounded provider resilience
+
+The accepted Step-5 scope does **not** implement a local conversational brain. It adds a deterministic failure boundary around the realtime-provider session.
 
 ```text
-MemoryService
- -> MemoryLifecycleService
- -> serialized SQLCipher writer / dedicated reader
- -> ordered checksum-validated migrations
- -> canonical temporal relational assertions
- -> FTS5 derived lexical index
+LiveKit realtime terminal error
+        |
+        v
+JARVIS classify_provider_failure()
+        |
+        +-> quota/rate/auth/permission/model/server
+        +-> timeout/connection/unknown
+        |
+        v
+ProviderResilienceState = DEGRADED
+        |
+        v
+WindowsLocalStatusSpeech
+        |
+        v
+existing selected JARVIS output
+        |
+        v
+explicit failed session close
+        |
+        v
+outer lifecycle returns toward wake/idle
 ```
 
-Accepted storage/security properties:
+Accepted properties:
 
-- SQLCipher 4.17.0 Community;
-- accepted SQLite baseline 3.53.3;
-- random 32-byte DB key;
-- Windows DPAPI user-scope protection + purpose binding;
-- no plaintext key file;
-- no plaintext SQLite fallback when memory is enabled;
-- physical forget removes canonical and derived data;
-- exact current queries are deterministic;
-- database/key material lives under the approved local machine boundary, normally `%LOCALAPPDATA%\JARVIS\memory.db` plus protected key material.
+- terminal failure classification is bounded deterministic JARVIS code;
+- local truthful status speech does not depend on the failed cloud TTS path;
+- no second cloud provider is silently selected;
+- no local LLM/STT/conversational TTS stack is claimed;
+- later healthy provider state marks recovery.
+
+Acceptance evidence: `docs/research/STEP_5_MINIMAL_PROVIDER_RESILIENCE_ACCEPTANCE.md`.
 
 ---
 
-## Phase 4.3 explicit durable memory operations — ACCEPTED
-
-Normal voice sessions may expose four governed mutation/inspection memory tools when persistent memory is enabled:
+## Step 6 — accepted bounded source-aware research
 
 ```text
-remember
-inspect
-correct
-forget
+latest canonical USER request
+        |
+        v
+active conversational brain
+        |
+        | decides current research is warranted
+        v
+search_web
+        |
+        v
+CurrentResearchService
+        |
+        v
+replaceable retrieval adapter
+accepted first adapter: Exa
+        |
+        v
+normalized source evidence
+URL/title/domain/excerpt/timestamp
+        |
+        v
+JARVIS truth/source sufficiency policy
+        |
+        v
+active brain synthesizes answer
 ```
 
-The durable path is:
+Accepted properties:
+
+- retrieval is independent of the active conversational-brain provider;
+- JARVIS owns research warrant, provenance normalization, truth/research status, source sufficiency, and fail-closed behavior;
+- stable knowledge questions can be blocked from unnecessary network retrieval;
+- explicit/current/fact-check/authoritative requests may require stronger live evidence;
+- web evidence gains no memory/identity/authority/file/device power;
+- search/provider failure is reported as unavailable rather than silently described as freshly verified.
+
+Acceptance evidence: `docs/research/STEP_6_KNOWLEDGE_TRUTHFULNESS_ACCEPTANCE.md`.
+
+---
+
+## Step 7 — accepted governed capability runtime + safe reads
+
+Step 7 establishes the first shared execution contract without turning JARVIS into a giant universal agent framework.
+
+### End-state routing principle
 
 ```text
-latest canonical accepted USER turn
- -> LiveKit memory function tool
- -> explicit-action authorization
- -> predicate/value grounding
- -> secret/sensitivity policy
- -> OWNER_EXPLICIT provenance/authority
- -> MemoryService
- -> encrypted canonical lifecycle
+User goal
+   |
+   v
+JARVIS brain
+   |
+   v
+Capability Resolver
+   |
+   v
+canonical AuthorityService
+   |
+   v
+best mature bounded execution substrate
+   |
+   +-> semantic/native capability when available
+   +-> structured specialist automation when assigned to that roadmap step
+   +-> visual computer use as later fallback
+   |
+   v
+verification / structured result / audit
 ```
 
-Accepted invariants include:
+Operational rule:
 
-- latest canonical USER turn must authorize the matching operation;
-- model-proposed predicate/value must be grounded in that turn;
-- obvious credentials/authentication secrets are rejected;
-- mutation source and authority must be `OWNER_EXPLICIT`;
-- source/store sensitivity must agree;
-- `local_only` values are not released through provider-facing inspect;
-- mutation results do not echo stored values;
-- exact zero/ambiguous targets fail closed;
-- no implicit ordinary statement becomes durable memory.
+**JARVIS decides WHAT. AuthorityService decides WHETHER. Mature execution technology decides HOW.**
 
----
+Step 7 activates only the read subset of this architecture.
 
-## Phase 4.4 candidate extraction / quarantine — ACCEPTED
+### Capability discovery
+
+`CapabilityResolver` merges deterministic built-in capabilities with dynamic discovery sources.
+
+Accepted discovery sources:
+
+- `WinAppCliSchemaSource` executes only Microsoft `winapp --cli-schema` with `shell=False`, bounded timeout, JSON parsing, and imports only the UI schema family;
+- `WindowsOdrSource` executes only `odr list` when available, parses registered server metadata, never launches a server or MCP tool, and truthfully reports `UNAVAILABLE` when ODR is absent.
+
+Discovered metadata is explicitly untrusted/non-authoritative.
+
+Duplicate source IDs or duplicate capability identities fail closed.
+
+Unexpected programming errors are not hidden as normal discovery degradation.
+
+On the accepted owner machine:
+
+- `windows.winapp` was `AVAILABLE`;
+- `windows.odr` was `UNAVAILABLE` and did not block the catalog;
+- `windows.winapp:desktop.ui` surfaced semantic UI operations but remained `execution_enabled=false`.
+
+### Generic execution contract
 
 ```text
-exact accepted canonical USER turn
- -> explicit-memory-control exclusion
- -> deterministic obvious-secret prefilter
- -> active-provider structured-output adapter
- -> Gemini 3.5 Flash-Lite
- -> Pydantic MemoryExtractionProposal
- -> deterministic proposal policy
- -> session/process-local quarantine
- -> physical disposal on session close
+CapabilityRequest
+       |
+       v
+resolve one enabled capability
+       |
+       v
+executor.prepare()
+ -> bounded validated parameters
+ -> semantic target/effect summary
+ -> ActionAttributes
+       |
+       v
+CapabilityAuthorityBroker
+ -> canonical ActionProposal
+ -> canonical AuthorityService
+ -> Windows Hello/T3 for private reads
+ -> one-time permit
+       |
+       v
+revalidate_and_consume()
+       |
+       v
+executor.execute()
+       |
+       v
+CapabilityResult
+ -> status/data/reason
+ -> elapsed/truncated/provenance
+       |
+       v
+privacy-aware audit
 ```
 
-Accepted invariants:
+Only executable Step-7 descriptors are registered with execution adapters. Discovery-only surfaces cannot execute merely because they appear in the catalog.
 
-- extraction runs off the conversation response path;
-- exact accepted USER turn object is used;
-- provider/model proposes semantic evidence only;
-- JARVIS owns provenance and authority metadata;
-- no confidence threshold grants truth;
-- no candidate writes `MemoryService`, SQLCipher, FTS, or embeddings;
-- no implicit durable admission exists;
-- quarantine is physically discarded with the session;
-- extraction uses the same active cloud-AI provider selected for JARVIS production.
+### Accepted executable operations
 
-Detailed measured evidence remains in `docs/research/STEP_4_PHASE_4_4_*`.
+Local system read capability:
 
----
+- `system_status`
+- `list_processes`
 
-## Phase 4.5A–4.5C derived semantic retrieval foundation — ACCEPTED
+Local project/file read capability:
 
-The accepted derived stack operates only over records that have already passed canonical lifecycle/security/sensitivity eligibility.
+- `file_info`
+- `list_directory`
+- `list_project_files`
+- `search_project`
+- `read_file`
+- `read_document`
 
-### Embedding
+### Routine system metadata
 
-`Qwen/Qwen3-Embedding-0.6B`
+`system_status` uses bounded local `psutil`, `platform`, and datetime evidence for CPU/RAM/disk/uptime/machine/timezone status.
 
-- revision `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3`;
-- normalized 256-dimensional embedding contract;
-- exact local cosine comparison;
-- derived vectors remain rebuildable and non-canonical.
+This routine machine metadata uses the bounded T0 authority path.
 
-### First-stage retrieval
+Process-list inspection is treated as private local read rather than routine metadata.
+
+### Approved-root local reads
+
+Local project/file reads operate only beneath configured approved root aliases.
+
+Accepted protection rules:
+
+- root/path values are normalized and validated;
+- absolute paths and parent traversal are rejected where not explicitly part of the approved-root contract;
+- resolved paths must remain beneath the resolved approved root;
+- symlink/junction escapes are rejected by resolved containment;
+- `.git`/hidden and credential-like sensitive paths are excluded from normal project discovery/read surfaces;
+- file/document sizes and result counts are bounded;
+- direct text reads reject binary content;
+- secret-like released content is blocked/redacted according to the read surface;
+- Git is preferred for project inventory when present;
+- ripgrep is preferred for text search when present, with a bounded Python fallback.
+
+### Isolated document reader
+
+Supported document conversion types:
+
+- PDF
+- DOCX
+- PPTX
+- XLS
+- XLSX
+
+Microsoft MarkItDown `0.1.7` is retained as the accepted mature document-conversion technology, but it is **not** installed in the main JARVIS environment.
+
+Owner testing exposed a Windows dependency conflict: MarkItDown/Magika selected ONNX Runtime `1.20.1`, while the accepted JARVIS vision stack requires ONNX Runtime `1.29.0`.
+
+The accepted architecture therefore uses a disposable sidecar virtual environment:
 
 ```text
-eligible canonical records
-       +-> SQLite FTS5 lexical rank
-       +-> Qwen dense rank
-       -> equal-weight reciprocal-rank fusion (k=60)
+main JARVIS venv
+ -> ONNX Runtime 1.29.0
+ -> vision/wake/inference stack unchanged
+
+isolated MarkItDown sidecar
+ -> MarkItDown 0.1.7
+ -> NumPy 2.4.6 on accepted owner machine
+ -> ONNX Runtime 1.20.1 on accepted owner machine
 ```
 
-### Reranking
+`jarvis-setup-document-reader` recreates the sidecar cleanly and provisions it with Python isolated mode plus pip isolated mode.
 
-`Qwen/Qwen3-Reranker-0.6B`
+The sidecar strips inherited Python/pip environment state and common secret-bearing environment variables, executes with `shell=False`, bounded timeout, bounded JSON output, and validates MarkItDown/NumPy/ONNX/converter imports before reporting ready.
 
-- revision `e61197ed45024b0ed8a2d74b80b4d909f1255473`;
-- BF16 accepted owner path;
-- deterministic tie handling.
+Converted content is still treated as untrusted local data and passes JARVIS release/secret checks after conversion.
 
-Accepted owner stack:
+### Voice-facing local-read tool
 
-- Torch `2.13.0+cu132`;
-- Torchvision `0.28.0+cu132`;
-- Transformers `5.16.1`;
-- SentenceTransformers `6.0.1`;
-- NVIDIA GeForce RTX 5060 Ti 8 GB.
+Production voice exposes one generic `inspect_local` function-tool rather than one model tool per user task.
 
-This stack answers **which eligible records are related/rank highly**. It does not itself decide whether a record is semantically sufficient for the exact user question.
+Before any local read, the tool checks the latest accepted canonical USER turn for a bounded local-read warrant. If the current turn does not explicitly support local machine/project inspection, the tool returns/raises a grounding refusal rather than executing.
+
+This guard was exercised during owner acceptance when unrelated meeting audio caused an attempted local inspection; JARVIS rejected it with `user turn does not explicitly authorize inspect`.
+
+Private local/project operations then pass through canonical authority and may trigger exact-action Windows Hello verification.
+
+Returned local data is explicitly marked untrusted and must not be followed as instructions.
+
+### Step-7 explicit non-capabilities
+
+Step 7 intentionally does **not** enable:
+
+- file/document writes;
+- arbitrary shell or PowerShell;
+- desktop/application/device control;
+- browser execution;
+- installation or deletion;
+- coding/project mutation;
+- external communication;
+- calendar/email actions;
+- ODR/MCP server tool invocation;
+- Windows App Actions execution;
+- Playwright browser control;
+- plugin/skill lifecycle extensibility.
+
+Those remain later roadmap steps.
+
+### Owner acceptance
+
+Owner acceptance on 2026-09-09 proved:
+
+- dynamic discovery;
+- real routine system telemetry;
+- positive private project read through Windows Hello + canonical authority;
+- explicit Windows Hello cancellation failed closed with zero private content returned;
+- one transient Windows Hello helper timeout also failed closed before execution;
+- immediate retry succeeded;
+- real XLSX content was extracted by the isolated MarkItDown sidecar with expected marker/provenance;
+- production voice used `system_status` and `read_file` successfully;
+- ambiguous meeting speech did not gain local-inspection authority.
+
+Acceptance evidence: `docs/research/STEP_7_GOVERNED_CAPABILITY_RUNTIME_ACCEPTANCE.md`.
 
 ---
 
-## Phase 4.5D strict independent semantic verifier — DEFERRED / UNRESOLVED
+## Machine configuration and startup
 
-The original target was an independent learned/deterministic boundary able to decide semantic sufficiency across current-value, reason, provenance, history, replacement, related-record, external-source, broad-recall, and advice requests with zero unsafe releases under the frozen multilingual acceptance gates.
-
-The tested generic QA, NLI-abstention, frozen-embedding classifier, and zero-shot question-role approaches did not meet those requirements. Their failure evidence remains authoritative and retired under `docs/research/`.
-
-No failed model is promoted, no exposed corpus is reused for tuning, and the original strict verifier is not claimed solved.
-
-Historical closure rationale: `docs/research/STEP_4_PHASE_4_5D_DEFERRED_CLOSURE.md`.
-
----
-
-## Phase 4.5D provider-assisted `recall_memory` fallback — ACCEPTED / BOUNDED
-
-The owner subsequently authorized a pragmatic same-provider fallback.
+Normal startup remains machine-profile driven:
 
 ```text
-latest accepted USER question
- -> cloud-safe eligible facet catalog (no values)
- -> same-provider structured semantic selection
- -> provider returns one eligible facet index
- -> JARVIS reconstructs canonical facet
- -> deterministic grounding/query policy
- -> exact current canonical lookup
- -> exactly one eligible assertion
- -> same-provider structured release judgement
- -> JARVIS allows only directly-supported current value/comparison
- -> otherwise ABSTAIN
- -> recall_memory result to realtime model
+%LOCALAPPDATA%\JARVIS\machine.json
+        +
+Windows environment for the active provider secret
+        -> startup preflight
+        -> jarvis-voice
 ```
 
-Important design properties:
+Accepted machine roles include:
 
-- `recall_memory` is zero-argument from the realtime model's perspective;
-- the realtime model cannot nominate a predicate or canonical key;
-- provider facet selection is only an index into a JARVIS-owned sorted catalog;
-- canonical `subject_scope`, `subject`, and `predicate` are reconstructed by JARVIS;
-- only `RetrievalEligibility.cloud_context()` records are eligible, excluding `local_only` and `secret_prohibited` memory;
-- the provider never writes or changes memory;
-- the provider verifier receives only the one already-eligible canonical current fact selected after deterministic checks;
-- only `current_value` and `current_value_comparison` with `directly_supported=true` can release;
-- all provider errors, malformed output, semantic vetoes, ambiguity, conflicts, stale facts, HTTP failures, quota failures, and rate limits become ABSTAIN;
-- no automatic cross-provider fallback occurs.
+- Pocket3 microphone selected by stable Windows WASAPI identity;
+- NVIDIA `24'TV` conversation output at 48 kHz;
+- local wake model path persisted;
+- one active cloud-AI provider persisted as `JARVIS_AI_PROVIDER`;
+- provider-specific model IDs explicitly configured where needed;
+- LR-ASD/CAM++ assets locally managed;
+- vision/speaker/active-speaker switches persisted;
+- persistent memory controlled by `JARVIS_MEMORY_ENABLED`;
+- candidate extraction controlled separately by its explicit configuration;
+- bounded provider-assisted semantic recall enabled only when configured;
+- Step-7 OPA binary and Windows Hello helper supplied through the accepted authority configuration;
+- MarkItDown document conversion provisioned separately with `jarvis-setup-document-reader`.
 
-Owner acceptance used Gemini `gemini-3.5-flash` on exact code SHA `bd95734032e2f936945fa02e16bb002ac6b478ea`. The owner live smoke released the stored current value, released a direct comparison, abstained safely on a `why` question without inventing a reason, and physically forgot the disposable test memory. Full Code Quality run `34190011723` passed all normal gates.
+API keys remain outside normal machine-profile state. Startup preflight checks only the credential required by the selected active provider.
 
-The prior `gemini-3.8-flash` owner attempt reached the final verifier but hit provider HTTP 500/429 quota errors; the coordinator abstained with `provider_memory_release_guard_unavailable`. That is accepted fail-closed behavior and demonstrates the remaining provider-availability dependency.
+Fail-closed hardware behavior remains accepted: if the configured Pocket3 device is absent, startup does not silently choose a random microphone.
 
-Detailed acceptance: `docs/research/STEP_4_PHASE_4_5D_PROVIDER_ASSISTED_FALLBACK.md`.
-
----
-
-## Phase 4.5E and remaining Step-4 extensions — DEFERRED
-
-Automatic semantic memory injection through normal `ContextAssembler` assembly remains disabled. The accepted provider-assisted fallback does not change this: semantic recall is a governed tool path only.
-
-The remaining unstarted Step-4 extensions are deferred with the bounded closure so later roadmap steps can proceed without pretending they are implemented.
+The bounded Step-5 closure still does not allow normal conversational startup without valid active-provider credentials because no full local conversational intelligence stack has been accepted.
 
 ---
 
-## Privacy / observability boundary
+## Known accepted residuals through Step 7
 
-- raw biometric audio/video is memory-only by default;
-- raw full conversation transcripts/provider payloads are not archived merely because available;
-- bounded encrypted biometric templates exist only through explicit enrollment;
-- secrets/tokens are not normal logs/model context or durable memory;
-- successful memory mutations log bounded operation metadata rather than values;
-- candidate shadow logs bounded outcomes/reasons/counts rather than candidate values;
-- semantic recall logs release/abstain metadata and predicate identifiers, not arbitrary provider payload archives;
-- Step-5 terminal provider failures log bounded provider/kind/status/retryability metadata, not arbitrary raw provider payload archives;
-- diagnostic model outputs cannot silently change authority;
-- failures and insufficient evidence remain explicit.
+The following are intentionally **not** claimed as solved:
+
+- T2 `CORROBORATED_OWNER` production promotion;
+- CAM++ owner-speaker threshold promotion;
+- LR-ASD active-speaker admission threshold promotion;
+- ambient meeting/other-speaker false USER-turn elimination;
+- replay/deepfake-complete biometric defense;
+- automatic Phase-4.5E semantic memory injection;
+- strict independent semantic recall verifier;
+- full local/offline conversation;
+- automatic cloud-provider failover;
+- browser/app/device/file-write/coding authority;
+- Windows ODR availability on the accepted owner OS;
+- generic MCP/App Actions/Playwright execution;
+- proactive/background automation;
+- plugin/skill lifecycle;
+- self-modification/self-repair authority.
+
+These remain assigned to later roadmap work or previously documented bounded deferrals. They must not be inferred from the existence of the Step-7 capability runtime.
 
 ---
 
-## Explicitly not accepted / deferred
+## Next architecture work
 
-The following are not current production behavior:
+After Step 7 merges to protected `main`, Step 8 — Notes, Tasks, Reminders, and Scheduling — must begin research-first.
 
-- a proof-quality independent 4.5D answerability/semantic-role verifier;
-- automatic Phase-4.5E semantic memory injection into normal conversation context;
-- implicit durable candidate admission;
-- autonomous episodic/reflection learning;
-- production self-knowledge registry/aggregation;
-- portable memory disaster recovery/export;
-- automatic provider chat-history synchronization;
-- full local/offline conversational LLM fallback;
-- local/offline STT and conversational TTS;
-- automatic cloud-to-local or cloud-to-cloud provider failover;
-- startup without cloud credentials based on a validated local intelligence stack;
-- autonomous diagnosis/repair/self-modification.
-
-Any future replacement of the bounded provider-assisted recall gate must preserve all accepted authority, sensitivity, lifecycle, provider, and canonical-truth boundaries and must not reuse retired exposed corpora for fresh model tuning/scoring.
+Step 8 must reuse canonical conversation truth, durable memory boundaries, `AuthorityService`, and the Step-7 capability/runtime patterns rather than building a parallel task/reminder brain or permission system.
