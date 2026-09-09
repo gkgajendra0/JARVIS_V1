@@ -87,7 +87,7 @@ def _is_sensitive(path: pathlib.Path) -> bool:
         (".example", ".sample", ".template")
     ):
         return True
-    if name.startswith("credentials") or name.startswith("secrets"):
+    if name.startswith(("credentials", "secrets")):
         return True
     return path.suffix.casefold() in _SENSITIVE_SUFFIXES
 
