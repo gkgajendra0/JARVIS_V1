@@ -30,6 +30,21 @@ text = str(getattr(result, "text_content", "") or getattr(result, "markdown", ""
 payload = {"text": text[:limit], "truncated": len(text) > limit}
 sys.stdout.write(json.dumps(payload, ensure_ascii=False))
 """.strip()
+_PROBE_SCRIPT = r"""
+import importlib.metadata
+import json
+import numpy
+import onnxruntime
+from markitdown import MarkItDown
+
+payload = {
+    "markitdown": importlib.metadata.version("markitdown"),
+    "numpy": numpy.__version__,
+    "onnxruntime": onnxruntime.__version__,
+    "converter": MarkItDown.__name__,
+}
+print(json.dumps(payload))
+""".strip()
 
 
 class DocumentReaderError(RuntimeError):
@@ -57,12 +72,17 @@ def sidecar_python_path(root: pathlib.Path | None = None) -> pathlib.Path:
 
 
 def _sanitized_environment() -> dict[str, str]:
-    blocked_tokens = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
-    return {
-        name: value
-        for name, value in os.environ.items()
-        if not any(token in name.upper() for token in blocked_tokens)
-    }
+    blocked_secret_tokens = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
+    blocked_exact = {"PYTHONHOME", "PYTHONPATH", "VIRTUAL_ENV"}
+    environment: dict[str, str] = {}
+    for name, value in os.environ.items():
+        upper = name.upper()
+        if upper in blocked_exact or upper.startswith("PIP_"):
+            continue
+        if any(token in upper for token in blocked_secret_tokens):
+            continue
+        environment[name] = value
+    return environment
 
 
 class MarkItDownSidecar:
@@ -145,20 +165,28 @@ def install_sidecar(
     root: pathlib.Path | None = None,
     installer_runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> pathlib.Path:
-    """Explicitly provision the isolated document-reader environment."""
+    """Explicitly provision a clean, hermetic document-reader environment."""
 
     target_root = (root or default_sidecar_root()).expanduser()
     environment_dir = target_root / "venv"
     python_path = sidecar_python_path(target_root)
     target_root.mkdir(parents=True, exist_ok=True)
+
+    # Recreate the disposable sidecar every setup run. This prevents a previous
+    # partial install from being treated as healthy and keeps dependency closure
+    # independent from whichever JARVIS virtualenv happens to be active.
+    venv.EnvBuilder(with_pip=True, clear=True).create(environment_dir)
     if not python_path.is_file():
-        venv.EnvBuilder(with_pip=True, clear=False).create(environment_dir)
+        raise DocumentReaderError("document-reader virtual environment was not created")
+
     try:
         completed = installer_runner(
             [
                 str(python_path),
+                "-I",
                 "-m",
                 "pip",
+                "--isolated",
                 "install",
                 "--disable-pip-version-check",
                 _MARKITDOWN_SPEC,
@@ -176,18 +204,10 @@ def install_sidecar(
     return python_path
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    del argv
+def _probe_sidecar(python_path: pathlib.Path) -> dict[str, str]:
     try:
-        python_path = install_sidecar()
-        reader = MarkItDownSidecar(python_path)
         probe = subprocess.run(
-            [
-                str(reader.python_path),
-                "-I",
-                "-c",
-                "import importlib.metadata; print(importlib.metadata.version('markitdown'))",
-            ],
+            [str(python_path), "-I", "-c", _PROBE_SCRIPT],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -198,14 +218,35 @@ def main(argv: Sequence[str] | None = None) -> int:
             env=_sanitized_environment(),
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-        if probe.returncode != 0:
-            raise DocumentReaderError("document-reader validation failed")
+    except OSError as exc:
+        raise DocumentReaderError("document-reader validation could not start") from exc
+    if probe.returncode != 0:
+        raise DocumentReaderError("document-reader validation failed")
+    try:
+        payload = json.loads(probe.stdout)
+    except json.JSONDecodeError as exc:
+        raise DocumentReaderError("document-reader validation returned invalid output") from exc
+    required = ("markitdown", "numpy", "onnxruntime", "converter")
+    if not isinstance(payload, dict) or not all(
+        isinstance(payload.get(name), str) and payload[name] for name in required
+    ):
+        raise DocumentReaderError("document-reader validation returned invalid output")
+    return {name: str(payload[name]) for name in required}
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    del argv
+    try:
+        python_path = install_sidecar()
+        versions = _probe_sidecar(python_path)
     except (DocumentReaderError, OSError) as exc:
         print(f"JARVIS document-reader setup failed: {exc}")
         return 2
     print("JARVIS isolated document reader is ready.")
     print(f"Python: {python_path}")
-    print(f"MarkItDown: {probe.stdout.strip()}")
+    print(f"MarkItDown: {versions['markitdown']}")
+    print(f"NumPy: {versions['numpy']}")
+    print(f"Document ONNX Runtime: {versions['onnxruntime']}")
     print("JARVIS main ONNX Runtime was not modified by this setup.")
     return 0
 
