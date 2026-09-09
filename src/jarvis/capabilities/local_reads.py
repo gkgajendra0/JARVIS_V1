@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import importlib
 import json
 import os
 import pathlib
@@ -14,6 +13,7 @@ import time
 from typing import Any
 
 from jarvis.authority.types import ActionAttributes
+from jarvis.capabilities.document_reader import DocumentReaderError, MarkItDownSidecar
 from jarvis.capabilities.execution import (
     CapabilityExecutionError,
     PreparedCapability,
@@ -182,8 +182,13 @@ class LocalProjectReadExecutor:
         "search_project",
     )
 
-    def __init__(self, roots: ApprovedRootPolicy | None = None) -> None:
+    def __init__(
+        self,
+        roots: ApprovedRootPolicy | None = None,
+        document_reader: MarkItDownSidecar | None = None,
+    ) -> None:
         self.roots = roots or ApprovedRootPolicy()
+        self._document_reader = document_reader or MarkItDownSidecar()
 
     @property
     def descriptor(self) -> CapabilityDescriptor:
@@ -615,22 +620,16 @@ class LocalProjectReadExecutor:
                 "read_document supports PDF, DOCX, PPTX, XLS and XLSX"
             )
         try:
-            module = importlib.import_module("markitdown")
-        except ImportError as exc:
-            raise CapabilityExecutionError(
-                "MarkItDown document support is unavailable; reinstall JARVIS dependencies"
-            ) from exc
-        converter = module.MarkItDown()
-        try:
-            result = converter.convert_local(str(target))
-        except Exception as exc:
-            raise CapabilityExecutionError("document conversion failed") from exc
-        text = str(
-            getattr(result, "text_content", "") or getattr(result, "markdown", "")
-        )
+            text, sidecar_truncated = self._document_reader.convert_local(target)
+        except DocumentReaderError as exc:
+            raise CapabilityExecutionError(str(exc)) from exc
         if _contains_secret(text):
             raise LocalReadValidationError(
                 "secret-like content detected; release blocked"
             )
-        text, truncated = _bounded_text(text)
-        return {"path": relative, "text": text}, truncated, ("Microsoft MarkItDown",)
+        text, local_truncated = _bounded_text(text)
+        return (
+            {"path": relative, "text": text},
+            sidecar_truncated or local_truncated,
+            ("Microsoft MarkItDown isolated sidecar",),
+        )
