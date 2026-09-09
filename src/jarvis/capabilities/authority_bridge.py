@@ -1,4 +1,4 @@
-"""Canonical Step-3 authority binding for Step-7 capability execution."""
+"""Canonical Step-3 authority binding for governed capability execution."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from jarvis.authority.types import (
     AttentionState,
     AuthorityEffect,
     InteractionContext,
+    RiskClass,
     TrustTier,
 )
 from jarvis.authority.verifier import WindowsHelloVerifier
@@ -46,7 +47,12 @@ def _default_audit_path() -> pathlib.Path:
 
 
 class CapabilityAuthorityBroker:
-    """Lazy OPA + Windows Hello bridge using the canonical AuthorityService."""
+    """Lazy OPA + Windows Hello bridge using the canonical AuthorityService.
+
+    T2 CORROBORATED_OWNER remains intentionally unavailable. Any governed capability
+    whose deterministic hard-floor risk is above ROUTINE therefore escalates to the
+    already accepted exact-action Windows Hello/T3 path rather than weakening policy.
+    """
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
@@ -55,6 +61,7 @@ class CapabilityAuthorityBroker:
         self._approvals: ApprovalService | None = None
         self._strong: StrongApprovalService | None = None
         self._audit: SqliteAuditEventStore | None = None
+        self._risk_classifier = RiskClassifier()
 
     def _ensure_started(self) -> None:
         with self._lock:
@@ -78,7 +85,7 @@ class CapabilityAuthorityBroker:
                 verifier=WindowsHelloVerifier(),
             )
             self._authority = AuthorityService(
-                risk_classifier=RiskClassifier(),
+                risk_classifier=self._risk_classifier,
                 policy_engine=OpaPolicyEngine(endpoint=opa.endpoint),
                 approvals=approvals,
                 audit_store=audit,
@@ -110,8 +117,9 @@ class CapabilityAuthorityBroker:
             origin=prepared.request.origin,
             ttl_seconds=120.0,
         )
+        assessment = self._risk_classifier.classify(prepared.attributes)
         approval_id: str | None = None
-        if prepared.attributes.private_read:
+        if assessment.risk_class is not RiskClass.ROUTINE:
             outcome = strong.verify_and_resolve(
                 proposal=proposal,
                 session_id=prepared.request.session_id,
