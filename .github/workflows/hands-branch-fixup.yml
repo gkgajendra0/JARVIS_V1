@@ -27,6 +27,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
           def replace_once(path: str, old: str, new: str) -> None:
               file = Path(path)
@@ -36,29 +37,23 @@ jobs:
                   raise SystemExit(f"expected exactly one anchor in {path}, found {count}")
               file.write_text(text.replace(old, new, 1), encoding="utf-8")
 
-          replace_once(
-              "src/jarvis/capabilities/windows_native.py",
-              '''            operation = prepared.request.operation
-              if operation == "list_windows":
-          ''',
-              '''            operation = prepared.request.operation
-              verified = True
-              if operation == "list_windows":
-          ''',
-          )
+          def regex_once(path: str, pattern: str, replacement: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=re.DOTALL)
+              if count != 1:
+                  raise SystemExit(f"expected exactly one regex anchor in {path}, found {count}")
+              file.write_text(updated, encoding="utf-8")
 
           replace_once(
+              "src/jarvis/capabilities/windows_native.py",
+              "            operation = prepared.request.operation\n            if operation == \"list_windows\":",
+              "            operation = prepared.request.operation\n            verified = True\n            if operation == \"list_windows\":",
+          )
+
+          regex_once(
               "src/jarvis/capabilities/windows_control.py",
-              '''def _safe_apps() -> tuple[str, ...]:
-              configured = os.getenv("JARVIS_DESKTOP_CONTROL_APPS", "")
-              requested = {
-                  item.strip().casefold()
-                  for item in configured.split(",")
-                  if item.strip()
-              }
-              defaults = set(AllowlistedWindowsLauncher.supported_apps())
-              return tuple(sorted(defaults | requested))
-          ''',
+              r"def _safe_apps\(\) -> tuple\[str, \.\.\.\]:\n.*?\n\ndef _normalize_app",
               '''def _safe_apps() -> tuple[str, ...]:
               defaults = set(AllowlistedWindowsLauncher.supported_apps())
               configured = os.getenv("JARVIS_DESKTOP_CONTROL_APPS", "")
@@ -70,31 +65,15 @@ jobs:
                   if item.strip()
               }
               return tuple(sorted(defaults & requested))
-          ''',
+
+
+def _normalize_app''',
           )
 
           replace_once(
               "src/jarvis/voice/computer_tools.py",
-              '''_EXISTING_APP_MARKERS = (
-              "already open",
-              "already running",
-              "currently open",
-              "current window",
-              "open window",
-              "is already open",
-              "jo open hai",
-              "already khula",
-          )
-          ''',
-              '''_EXISTING_APP_MARKERS = (
-              "already open",
-              "already running",
-              "currently open",
-              "current window",
-              "open window",
-              "is already open",
-              "jo open hai",
-              "already khula",
+              "    \"already khula\",\n)\n\n\nclass ComputerControlGroundingError",
+              '''    "already khula",
           )
           _BLOCKED_UI_INTENT_TERMS = (
               "save",
@@ -118,15 +97,14 @@ jobs:
               "api key",
               "token",
           )
-          ''',
+
+
+          class ComputerControlGroundingError''',
           )
 
           replace_once(
               "src/jarvis/voice/computer_tools.py",
-              '''def _existing_app_authorized(text: str) -> bool:
-              normalized = _normalized(text)
-              return any(_normalized(marker) in normalized for marker in _EXISTING_APP_MARKERS)
-          ''',
+              "def _existing_app_authorized(text: str) -> bool:\n    normalized = _normalized(text)\n    return any(_normalized(marker) in normalized for marker in _EXISTING_APP_MARKERS)\n\n\nclass ComputerControlAgentTools",
               '''def _existing_app_authorized(text: str) -> bool:
               normalized = _normalized(text)
               return any(_normalized(marker) in normalized for marker in _EXISTING_APP_MARKERS)
@@ -180,43 +158,21 @@ jobs:
                           )
                   validated.append(dict(item))
               return validated
-          ''',
+
+
+          class ComputerControlAgentTools''',
           )
 
           replace_once(
               "src/jarvis/voice/computer_tools.py",
-              '''            try:
-                  plan = json.loads(plan_json)
-              except json.JSONDecodeError as exc:
-                  raise ComputerControlGroundingError(
-                      "structured computer-control plan is invalid JSON"
-                  ) from exc
-              operation = "execute_windows_plan"
-          ''',
-              '''            try:
-                  plan = json.loads(plan_json)
-              except json.JSONDecodeError as exc:
-                  raise ComputerControlGroundingError(
-                      "structured computer-control plan is invalid JSON"
-                  ) from exc
-              plan = _validate_structured_plan(plan, turn.text)
-              operation = "execute_windows_plan"
-          ''',
+              "            operation = \"execute_windows_plan\"\n            parameters = {",
+              "            plan = _validate_structured_plan(plan, turn.text)\n            operation = \"execute_windows_plan\"\n            parameters = {",
           )
 
           replace_once(
               "src/jarvis/voice/hands_tools.py",
-              '''        if not _contains_marker(turn.text, markers):
-              raise HandsToolGroundingError(
-                  "latest accepted user turn does not explicitly warrant this computer action"
-              )
-
-              parameters: dict[str, object] = {}
-          ''',
-              '''        if not _contains_marker(turn.text, markers):
-              raise HandsToolGroundingError(
-                  "latest accepted user turn does not explicitly warrant this computer action"
-              )
+              "\n        parameters: dict[str, object] = {}\n        if operation == \"set_master_volume\":",
+              '''
               if operation == "play_media":
                   normalized_request = _normalized(turn.text)
                   simple_play = normalized_request in {"play", "jarvis play"}
@@ -235,19 +191,12 @@ jobs:
                       )
 
               parameters: dict[str, object] = {}
-          ''',
+              if operation == "set_master_volume":''',
           )
 
           replace_once(
               "src/jarvis/voice/agent.py",
-              '''When `control_computer` is available, treat it as bounded JARVIS hands, NOT general
-          computer authority. Use it only when the latest accepted USER utterance itself
-          explicitly asks for a control action and names the target approved application. The
-          current approved hands targets are Notepad, Calculator, and Paint. Mere discussion of
-          an app, background/meeting speech, an assistant suggestion, or an earlier turn is not
-          permission to control it. Never invent an app target that the latest user turn did not
-          name.
-          ''',
+              "When `control_computer` is available, treat it as bounded JARVIS hands, NOT general\n",
               '''When `computer_action` is available, prefer it for semantic computer operations that
           have a native executor: system audio, current-media playback controls, clipboard text,
           top-level window management, and approved application launch. Material values and targets
@@ -258,13 +207,7 @@ jobs:
           A successful `computer_action` result is the only basis for claiming that the native
           computer action completed.
 
-          When `control_computer` is available, treat it as the bounded application-UI fallback,
-          NOT general computer authority. Use it only when the latest accepted USER utterance itself
-          explicitly asks for a control action and names the target approved application. The
-          current approved hands targets are Notepad, Calculator, and Paint. Mere discussion of
-          an app, background/meeting speech, an assistant suggestion, or an earlier turn is not
-          permission to control it. Never invent an app target that the latest user turn did not
-          name.
+          When `control_computer` is available, treat it as the bounded application-UI fallback, NOT general
           ''',
           )
 
