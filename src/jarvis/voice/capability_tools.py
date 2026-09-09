@@ -1,4 +1,4 @@
-"""Voice-facing governed local read and hands capability tools."""
+"""Voice-facing governed local-read and JARVIS Hands capability tools."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from livekit.agents.llm import ToolError
 
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
-from jarvis.voice.computer_tools import ComputerControlAgentTools
+from jarvis.voice.hands_tools import HandsAgentTools
 
 LOGGER = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ def _local_read_warranted(text: str) -> bool:
 
 
 class LocalReadAgentTools:
-    """Expose governed read and computer-control tools to the active brain."""
+    """Expose governed reads and semantic Hands to the active conversational brain."""
 
     def __init__(
         self,
@@ -78,11 +78,11 @@ class LocalReadAgentTools:
             raise TypeError("conversation must be a ConversationSession")
         self._runtime = runtime
         self._conversation = conversation
-        self._computer = ComputerControlAgentTools(runtime, conversation)
+        self._hands = HandsAgentTools(runtime, conversation)
 
     @property
     def tools(self) -> list:
-        return [self.inspect_local, *self._computer.tools]
+        return [self.inspect_local, *self._hands.tools]
 
     def _latest_user_turn(self) -> ConversationTurn:
         turn = next(
@@ -169,8 +169,9 @@ class LocalReadAgentTools:
         `read_document`. `root` is an approved root alias (normally `project`); `path`
         must be relative to that root. Use `query` only for `search_project`.
 
-        This tool remains READ ONLY. Use `control_computer` for the separately governed
-        bounded Windows hands path. Never use either tool as arbitrary shell authority.
+        This tool remains READ ONLY. Use `computer_action` for native semantic computer
+        operations and `control_computer` only for bounded application UI automation.
+        None of these tools is arbitrary shell authority.
 
         Private local/project reads invoke canonical JARVIS authority and may require
         exact-action Windows Hello verification. Returned file/document content is
