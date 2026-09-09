@@ -38,6 +38,19 @@ def _extract_text(payload: dict[str, object]) -> str:
     return ""
 
 
+def _fresh_editor_is_blank(payload: dict[str, object]) -> bool:
+    """Recognize winapp's empty-control Name fallback after creating a new tab.
+
+    winapp get-value falls back from TextPattern/ValuePattern to the UIA Name.
+    For a genuinely blank Notepad document that fallback is "Text editor".
+    This relaxation is intentionally valid only after JARVIS has itself invoked
+    Notepad's New tab action; restored/existing content remains strict.
+    """
+
+    text = _extract_text(payload)
+    return text in {"", _EDITOR_SELECTOR}
+
+
 def _run_notepad_type() -> int:
     if platform.system() != "Windows":
         print("This smoke requires Windows.", file=sys.stderr)
@@ -94,18 +107,21 @@ def _run_notepad_type() -> int:
             print(f"[blank] New tab invoked in {created.elapsed_ms:.1f} ms")
 
             fresh = ui.get_value("notepad", _EDITOR_SELECTOR)
-            fresh_text = _extract_text(fresh.payload)
             blank_target_ms = (time.perf_counter() - blank_started) * 1000
             print(
                 f"[blank] fresh editor verified in {fresh.elapsed_ms:.1f} ms "
                 f"({blank_target_ms:.1f} ms total)"
             )
-            if fresh_text:
+            if not _fresh_editor_is_blank(fresh.payload):
                 print(
                     "SAFETY STOP: fresh Notepad target is not blank; nothing was typed.",
                     file=sys.stderr,
                 )
                 return 3
+            if _extract_text(fresh.payload) == _EDITOR_SELECTOR:
+                print(
+                    "[blank] accepted winapp's documented empty-editor Name fallback."
+                )
 
         typed = ui.send_text(
             "notepad",
