@@ -201,3 +201,22 @@ async def test_current_window_requires_recent_user_grounded_app(
 
     with pytest.raises(HandsToolGroundingError, match="no recent user-grounded app"):
         await tools.execute(operation="maximize_window", app="notepad")
+
+
+@pytest.mark.asyncio
+async def test_unrelated_meeting_speech_cannot_authorize_native_hands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cap_runtime = runtime()
+    monkeypatch.setattr(
+        cap_runtime,
+        "execute_operation",
+        lambda **kwargs: pytest.fail(f"unexpected execution: {kwargs}"),
+    )
+    tools = HandsAgentTools(
+        cap_runtime,
+        conversation("The job run report still has a bit of a performance issue"),
+    )
+
+    with pytest.raises(HandsToolGroundingError, match="does not explicitly warrant"):
+        await tools.execute(operation="pause_media")
