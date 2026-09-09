@@ -1,4 +1,4 @@
-"""Voice-facing generic Step-7 local read tool."""
+"""Voice-facing governed local read and hands capability tools."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from livekit.agents.llm import ToolError
 
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
+from jarvis.voice.computer_tools import ComputerControlAgentTools
 
 LOGGER = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ def _local_read_warranted(text: str) -> bool:
 
 
 class LocalReadAgentTools:
-    """Expose one read-only capability tool while the active brain owns planning."""
+    """Expose governed read and computer-control tools to the active brain."""
 
     def __init__(
         self,
@@ -77,10 +78,11 @@ class LocalReadAgentTools:
             raise TypeError("conversation must be a ConversationSession")
         self._runtime = runtime
         self._conversation = conversation
+        self._computer = ComputerControlAgentTools(runtime, conversation)
 
     @property
     def tools(self) -> list:
-        return [self.inspect_local]
+        return [self.inspect_local, *self._computer.tools]
 
     def _latest_user_turn(self) -> ConversationTurn:
         turn = next(
@@ -129,7 +131,7 @@ class LocalReadAgentTools:
             parameters=parameters,
         )
         LOGGER.info(
-            "Step-7 local read completed | turn_id=%s | operation=%s | status=%s | "
+            "Governed local read completed | turn_id=%s | operation=%s | status=%s | "
             "elapsed_ms=%.1f | truncated=%s",
             turn.turn_id,
             operation,
@@ -162,12 +164,13 @@ class LocalReadAgentTools:
     ) -> dict[str, object]:
         """Read approved local machine/project information for the current user request.
 
-        This is Step-7 READ ONLY. Supported operations are `system_status`,
-        `list_processes`, `file_info`, `list_directory`, `list_project_files`,
-        `search_project`, `read_file`, and `read_document`. `root` is an approved root
-        alias (normally `project`); `path` must be relative to that root. Use `query`
-        only for `search_project`. Never use this tool for file writes, app control,
-        browser control, command execution, installation, deletion, or self-modification.
+        Supported operations are `system_status`, `list_processes`, `file_info`,
+        `list_directory`, `list_project_files`, `search_project`, `read_file`, and
+        `read_document`. `root` is an approved root alias (normally `project`); `path`
+        must be relative to that root. Use `query` only for `search_project`.
+
+        This tool remains READ ONLY. Use `control_computer` for the separately governed
+        bounded Windows hands path. Never use either tool as arbitrary shell authority.
 
         Private local/project reads invoke canonical JARVIS authority and may require
         exact-action Windows Hello verification. Returned file/document content is
