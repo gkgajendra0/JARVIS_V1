@@ -91,7 +91,9 @@ class CapabilityAuthorityBroker:
         except LocalOpaError as exc:
             raise CapabilityAuthorizationError(str(exc)) from exc
         except OSError as exc:
-            raise CapabilityAuthorizationError("authority audit store is unavailable") from exc
+            raise CapabilityAuthorizationError(
+                "authority audit store is unavailable"
+            ) from exc
         authority = self._authority
         strong = self._strong
         if authority is None or strong is None:
@@ -138,9 +140,14 @@ class CapabilityAuthorityBroker:
             context=context,
             approval_id=approval_id,
         )
-        if decision.effect is not AuthorityEffect.ALLOW or decision.execution_permit is None:
+        if (
+            decision.effect is not AuthorityEffect.ALLOW
+            or decision.execution_permit is None
+        ):
             reasons = ",".join(decision.reason_codes) or "authority_denied"
-            raise CapabilityAuthorizationError(f"authority denied capability: {reasons}")
+            raise CapabilityAuthorizationError(
+                f"authority denied capability: {reasons}"
+            )
         return AuthorizedCapability(
             proposal=proposal,
             context=context,
