@@ -13,6 +13,10 @@ from .models import (
 )
 
 
+class CapabilityDiscoverySourceError(RuntimeError):
+    """Declared source failure that the resolver may isolate truthfully."""
+
+
 class CapabilityDiscoverySource(Protocol):
     """Read-only source of capability metadata."""
 
@@ -42,7 +46,7 @@ class CapabilityResolver:
         for source in self._sources:
             try:
                 snapshot = source.discover()
-            except Exception as exc:
+            except CapabilityDiscoverySourceError as exc:
                 snapshot = DiscoverySnapshot(
                     source_id=source.source_id,
                     state=DiscoveryState.FAILED,
