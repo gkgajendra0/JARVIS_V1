@@ -281,8 +281,7 @@ class WindowsOdrSource:
             raw_name = f"registered-server-{index + 1}"
         name = raw_name.strip()
         safe_id = "".join(
-            character.lower() if character.isalnum() else "."
-            for character in name
+            character.lower() if character.isalnum() else "." for character in name
         ).strip(".")
         safe_id = ".".join(part for part in safe_id.split(".") if part)
         if not safe_id:
