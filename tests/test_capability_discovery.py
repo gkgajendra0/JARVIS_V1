@@ -7,6 +7,7 @@ import pytest
 
 from jarvis.capabilities import (
     CapabilityDescriptor,
+    CapabilityDiscoverySourceError,
     CapabilityKind,
     CapabilityResolver,
     DiscoverySnapshot,
@@ -179,7 +180,7 @@ def test_odr_unavailable_is_truthful(
     assert "not available" in (snapshot.reason or "")
 
 
-def test_resolver_isolates_source_failure_and_keeps_other_capabilities() -> None:
+def test_resolver_isolates_declared_source_failure_and_keeps_other_capabilities() -> None:
     capability = CapabilityDescriptor.create(
         capability_id="safe.read",
         source_id="source.good",
@@ -203,7 +204,7 @@ def test_resolver_isolates_source_failure_and_keeps_other_capabilities() -> None
         source_id = "source.broken"
 
         def discover(self) -> DiscoverySnapshot:
-            raise RuntimeError("boom")
+            raise CapabilityDiscoverySourceError("boom")
 
     catalog = CapabilityResolver((BrokenSource(), GoodSource())).refresh()
 
@@ -214,6 +215,17 @@ def test_resolver_isolates_source_failure_and_keeps_other_capabilities() -> None
         "source.good": DiscoveryState.AVAILABLE,
     }
     assert catalog.search("read") == (capability,)
+
+
+def test_resolver_does_not_hide_programming_errors() -> None:
+    class BrokenSource:
+        source_id = "source.programming-bug"
+
+        def discover(self) -> DiscoverySnapshot:
+            raise RuntimeError("unexpected bug")
+
+    with pytest.raises(RuntimeError, match="unexpected bug"):
+        CapabilityResolver((BrokenSource(),)).refresh()
 
 
 def test_resolver_rejects_duplicate_source_ids() -> None:
