@@ -7,8 +7,9 @@ import platform
 import shutil
 import subprocess
 import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, Sequence
+from typing import Any, ClassVar
 
 
 class StructuredWindowsError(RuntimeError):
@@ -245,7 +246,7 @@ class AllowlistedWindowsLauncher:
     capability instead of arbitrary process execution.
     """
 
-    _COMMANDS: dict[str, tuple[str, ...]] = {
+    _COMMANDS: ClassVar[dict[str, tuple[str, ...]]] = {
         "notepad": ("notepad.exe",),
     }
 
