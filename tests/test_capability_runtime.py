@@ -7,7 +7,6 @@ import pytest
 
 from jarvis.authority.types import ActionAttributes
 from jarvis.capabilities.discovery import CapabilityResolver
-from jarvis.capabilities.execution import PreparedCapability
 from jarvis.capabilities.local_reads import (
     ApprovedRootPolicy,
     LocalProjectReadExecutor,
@@ -17,7 +16,6 @@ from jarvis.capabilities.models import (
     CapabilityDescriptor,
     CapabilityKind,
     CapabilityRequest,
-    CapabilityResult,
     CapabilityStatus,
 )
 from jarvis.capabilities.runtime import CapabilityRuntime
@@ -58,9 +56,7 @@ def build_runtime(*executors):
 def test_runtime_authorizes_consumes_then_executes_and_audits(tmp_path: Path) -> None:
     path = tmp_path / "note.txt"
     path.write_text("hello", encoding="utf-8")
-    executor = LocalProjectReadExecutor(
-        ApprovedRootPolicy(project_root=tmp_path)
-    )
+    executor = LocalProjectReadExecutor(ApprovedRootPolicy(project_root=tmp_path))
     runtime, authority = build_runtime(executor)
 
     result = runtime.execute_operation(
