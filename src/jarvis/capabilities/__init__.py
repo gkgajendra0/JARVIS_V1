@@ -16,7 +16,10 @@ from jarvis.capabilities.models import (
     DiscoverySnapshot,
     DiscoveryState,
 )
-from jarvis.capabilities.runtime import CapabilityRuntime, build_default_capability_runtime
+from jarvis.capabilities.runtime import (
+    CapabilityRuntime,
+    build_default_capability_runtime,
+)
 from jarvis.capabilities.system_reads import SystemReadExecutor
 from jarvis.capabilities.windows_sources import WinAppCliSchemaSource, WindowsOdrSource
 
