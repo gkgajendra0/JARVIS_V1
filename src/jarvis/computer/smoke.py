@@ -14,8 +14,11 @@ import sys
 
 from jarvis.ai_provider import configured_ai_provider
 from jarvis.computer import (
+    ActionExecutionResult,
+    ComputerAction,
     ComputerUseService,
     MssPyAutoGuiExecutor,
+    ScreenFrame,
     build_computer_use_provider,
 )
 from jarvis.machine_config import load_machine_settings
@@ -32,6 +35,39 @@ _SMOKE_TASKS = {
         "setting. Stop when the Bluetooth & devices page is visible."
     ),
 }
+
+
+class _TracingExecutor:
+    """Owner-smoke wrapper that exposes progress without changing production core."""
+
+    def __init__(self, inner: MssPyAutoGuiExecutor) -> None:
+        self._inner = inner
+        self._capture_count = 0
+        self._action_count = 0
+
+    def capture_screen(self) -> ScreenFrame:
+        self._capture_count += 1
+        print(f"[capture {self._capture_count}] Capturing desktop state...", flush=True)
+        frame = self._inner.capture_screen()
+        print(
+            "[capture "
+            f"{self._capture_count}] OK {frame.width}x{frame.height} "
+            f"at ({frame.left},{frame.top})",
+            flush=True,
+        )
+        return frame
+
+    def execute(self, action: ComputerAction) -> ActionExecutionResult:
+        self._action_count += 1
+        intent = f" intent={action.intent!r}" if action.intent else ""
+        print(
+            f"[action {self._action_count}] {action.name} "
+            f"args={action.arguments!r}{intent}",
+            flush=True,
+        )
+        result = self._inner.execute(action)
+        print(f"[action {self._action_count}] {result.detail}", flush=True)
+        return result
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -81,13 +117,15 @@ async def _run(args: argparse.Namespace) -> int:
         print("Smoke canceled; no desktop action executed.")
         return 2
 
-    executor = MssPyAutoGuiExecutor()
+    executor = _TracingExecutor(MssPyAutoGuiExecutor())
     service = ComputerUseService(
         provider=provider,
         executor=executor,
         max_steps=args.max_steps,
     )
+    print("[provider] Starting computer-use action loop...", flush=True)
     result = await service.execute(task)
+    print("[provider] Action loop finished.", flush=True)
     print(result.to_tool_payload())
     return 0 if result.ok else 3
 
