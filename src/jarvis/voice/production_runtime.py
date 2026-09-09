@@ -198,7 +198,9 @@ def build_production_voice_runtime(
         research_service.provider_name,
     )
 
-    capability_runtime = build_default_capability_runtime(ai_provider=config.ai_provider)
+    capability_runtime = build_default_capability_runtime(
+        ai_provider=config.ai_provider
+    )
     capability_catalog = capability_runtime.refresh_catalog()
     structured_hands = capability_catalog.by_key("windows:desktop.control")
     visual_hands = capability_catalog.by_key("visual:desktop.control")

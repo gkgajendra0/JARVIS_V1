@@ -50,9 +50,7 @@ class FakeUi:
         return self._result("inspect", {"exit_code": 0, "tree": []})
 
     def search(self, app: str, query: str, *, max_results: int = 10):
-        self.calls.append(
-            ("search", (app, query), {"max_results": max_results})
-        )
+        self.calls.append(("search", (app, query), {"max_results": max_results}))
         return self._result("search", {"exit_code": 0, "results": []})
 
     def get_value(self, app: str, selector: str):
@@ -158,7 +156,11 @@ def test_structured_hands_launch_type_and_verify() -> None:
     assert result.status is CapabilityStatus.SUCCEEDED
     assert result.data["verification_passed"] is True
     assert launcher.calls == ["notepad"]
-    assert ("send_text", ("notepad", "hello"), {"target_selector": "Text editor"}) in ui.calls
+    assert (
+        "send_text",
+        ("notepad", "hello"),
+        {"target_selector": "Text editor"},
+    ) in ui.calls
 
 
 def test_structured_hands_verification_mismatch_fails() -> None:

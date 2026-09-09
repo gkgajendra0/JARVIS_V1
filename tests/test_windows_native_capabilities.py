@@ -92,9 +92,7 @@ class FakeWindows:
 
     def focus(self, app: str):
         del app
-        self.state = WindowSnapshot(
-            **{**self.state.__dict__, "foreground": True}
-        )
+        self.state = WindowSnapshot(**{**self.state.__dict__, "foreground": True})
         return self.state
 
     def show(self, app: str, state: str):
@@ -143,9 +141,7 @@ def test_audio_read_is_routine_but_mutation_is_reversible() -> None:
     executor = SystemAudioExecutor(FakeAudio())
 
     read = executor.prepare(request(executor, "get_master_volume"))
-    mutation = executor.prepare(
-        request(executor, "set_master_volume", {"percent": 25})
-    )
+    mutation = executor.prepare(request(executor, "set_master_volume", {"percent": 25}))
 
     assert read.attributes == ActionAttributes()
     assert mutation.attributes.reversible_local_change is True
@@ -154,9 +150,7 @@ def test_audio_read_is_routine_but_mutation_is_reversible() -> None:
 def test_audio_set_verifies_final_volume() -> None:
     backend = FakeAudio()
     executor = SystemAudioExecutor(backend)
-    prepared = executor.prepare(
-        request(executor, "set_master_volume", {"percent": 25})
-    )
+    prepared = executor.prepare(request(executor, "set_master_volume", {"percent": 25}))
 
     result = executor.execute(prepared)
 

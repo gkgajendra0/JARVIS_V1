@@ -104,14 +104,14 @@ _SECRET_LIKE = re.compile(
 
 
 def _safe_apps() -> tuple[str, ...]:
-    configured = os.getenv("JARVIS_DESKTOP_CONTROL_APPS", "")
-    requested = {
-        item.strip().casefold()
-        for item in configured.split(",")
-        if item.strip()
-    }
     defaults = set(AllowlistedWindowsLauncher.supported_apps())
-    return tuple(sorted(defaults | requested))
+    configured = os.getenv("JARVIS_DESKTOP_CONTROL_APPS", "")
+    if not configured.strip():
+        return tuple(sorted(defaults))
+    requested = {
+        item.strip().casefold() for item in configured.split(",") if item.strip()
+    }
+    return tuple(sorted(defaults & requested))
 
 
 def _normalize_app(value: object) -> str:
@@ -179,7 +179,9 @@ def _normalize_plan(raw: object) -> tuple[dict[str, Any], ...]:
             raise TypeError(f"plan step {index} must be an object")
         action = str(item.get("action", "")).strip().casefold()
         if action not in _ALLOWED_STRUCTURED_ACTIONS:
-            raise ValueError(f"unsupported structured desktop action: {action or '<empty>'}")
+            raise ValueError(
+                f"unsupported structured desktop action: {action or '<empty>'}"
+            )
         step: dict[str, Any] = {"action": action}
         if action in {
             "inspect",
@@ -193,9 +195,7 @@ def _normalize_plan(raw: object) -> tuple[dict[str, Any], ...]:
             "wait_for",
         }:
             selector = item.get("selector")
-            if action == "inspect" and selector in {None, ""}:
-                step["selector"] = None
-            elif action == "send_text" and selector in {None, ""}:
+            if action == "inspect" and selector in {None, ""} or action == "send_text" and selector in {None, ""}:
                 step["selector"] = None
             else:
                 step["selector"] = _bounded_string(
@@ -322,7 +322,9 @@ class WindowsStructuredControlExecutor:
         allow_existing_app = _bool(request.parameters.get("allow_existing_app"))
         mutating = any(step["action"] in _MUTATING_STRUCTURED_ACTIONS for step in plan)
         if not mutating:
-            raise ValueError("desktop control plan must contain at least one control action")
+            raise ValueError(
+                "desktop control plan must contain at least one control action"
+            )
         reads_private_state = any(
             step["action"] in _READ_STRUCTURED_ACTIONS for step in plan
         )

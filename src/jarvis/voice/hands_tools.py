@@ -153,11 +153,27 @@ class HandsAgentTools:
                 "latest accepted user turn does not explicitly warrant this computer action"
             )
 
+        if operation == "play_media":
+            normalized_request = _normalized(turn.text)
+            simple_play = normalized_request in {"play", "jarvis play"}
+            resume_markers = (
+                "resume",
+                "resume it",
+                "continue",
+                "continue it",
+                "play it",
+                "play again",
+            )
+            if not simple_play and not _contains_marker(turn.text, resume_markers):
+                raise HandsToolGroundingError(
+                    "play_media only resumes the current media session; selecting a named song "
+                    "or source requires a dedicated integration or app UI capability"
+                )
+
         parameters: dict[str, object] = {}
         if operation == "set_master_volume":
             numbers = [
-                float(value)
-                for value in re.findall(r"\b\d+(?:\.\d+)?\b", turn.text)
+                float(value) for value in re.findall(r"\b\d+(?:\.\d+)?\b", turn.text)
             ]
             if percent is None or not any(
                 abs(value - float(percent)) < 0.001 for value in numbers

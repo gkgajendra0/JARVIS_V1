@@ -177,7 +177,9 @@ async def test_existing_app_control_requires_explicit_latest_turn_wording(
 
 
 @pytest.mark.asyncio
-async def test_model_cannot_switch_user_named_app(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_model_cannot_switch_user_named_app(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cap_runtime = runtime()
     monkeypatch.setattr(
         cap_runtime,
@@ -200,7 +202,9 @@ async def test_model_cannot_switch_user_named_app(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
-async def test_visual_strategy_uses_exact_user_task(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_visual_strategy_uses_exact_user_task(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cap_runtime = runtime()
     user_text = "Open Paint and select the pencil tool"
     captured: dict[str, object] = {}

@@ -7,7 +7,7 @@ import platform
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 from jarvis.authority.types import ActionAttributes
 from jarvis.capabilities.execution import PreparedCapability
@@ -170,10 +170,13 @@ class SystemAudioExecutor:
 
         verified = True
         if operation == "set_master_volume":
-            verified = abs(
-                float(state["volume_percent"])
-                - float(prepared.execution_payload["percent"])
-            ) <= 1.0
+            verified = (
+                abs(
+                    float(state["volume_percent"])
+                    - float(prepared.execution_payload["percent"])
+                )
+                <= 1.0
+            )
         elif operation == "mute_master_volume":
             verified = bool(state["muted"])
         elif operation == "unmute_master_volume":
@@ -276,7 +279,7 @@ class MediaPlaybackExecutor:
         "stop_media",
         "toggle_media_playback",
     )
-    _ACTIONS = {
+    _ACTIONS: ClassVar[dict[str, str]] = {
         "next_media": "next",
         "pause_media": "pause",
         "play_media": "play",
@@ -431,9 +434,13 @@ class ClipboardExecutor:
         elif request.operation == "set_clipboard_text":
             text = str(request.parameters.get("text", ""))
             if not text or len(text) > _MAX_CLIPBOARD_CHARS:
-                raise ValueError("clipboard text must be non-empty and at most 10000 chars")
+                raise ValueError(
+                    "clipboard text must be non-empty and at most 10000 chars"
+                )
             if _contains_secret(text):
-                raise ValueError("credential-like text cannot be placed on the clipboard")
+                raise ValueError(
+                    "credential-like text cannot be placed on the clipboard"
+                )
             params["text"] = text
         return PreparedCapability(
             request=request,
@@ -473,7 +480,9 @@ class ClipboardExecutor:
         verified = (
             text == expected
             if operation == "set_clipboard_text"
-            else text == "" if operation == "clear_clipboard" else True
+            else text == ""
+            if operation == "clear_clipboard"
+            else True
         )
         return _result(
             prepared,
@@ -620,7 +629,7 @@ class PyWin32WindowBackend:
         target_index = (source_index + 1) % len(monitors)
         source_info = win32api.GetMonitorInfo(handles[source_index])
         target_info = win32api.GetMonitorInfo(handles[target_index])
-        sx1, sy1, sx2, sy2 = source_info["Work"]
+        sx1, sy1, _sx2, _sy2 = source_info["Work"]
         tx1, ty1, tx2, ty2 = target_info["Work"]
         left, top, right, bottom = current.rect
         width = max(200, min(right - left, tx2 - tx1))
@@ -694,6 +703,7 @@ class WindowManagementExecutor:
         started = time.monotonic()
         try:
             operation = prepared.request.operation
+            verified = True
             if operation == "list_windows":
                 windows = [item.payload() for item in self._backend.list_windows()]
                 data = {"windows": windows, "verification_passed": True}
@@ -811,13 +821,21 @@ class AppLifecycleExecutor:
             data = backend.open(str(prepared.execution_payload["app"]))
             verified = bool(data.get("running"))
             data["verification_passed"] = verified
-        except (NativeWindowsError, StructuredWindowsError, OSError, RuntimeError) as exc:
+        except (
+            NativeWindowsError,
+            StructuredWindowsError,
+            OSError,
+            RuntimeError,
+        ) as exc:
             return _result(
                 prepared,
                 CapabilityStatus.UNAVAILABLE,
                 started,
                 reason=str(exc),
-                provenance=("JARVIS shell-free allowlisted launcher", "Microsoft winapp"),
+                provenance=(
+                    "JARVIS shell-free allowlisted launcher",
+                    "Microsoft winapp",
+                ),
             )
         return _result(
             prepared,

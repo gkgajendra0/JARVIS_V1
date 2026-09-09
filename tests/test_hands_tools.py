@@ -60,7 +60,9 @@ async def test_volume_percentage_is_bound_to_latest_user_turn(
         return success("set_master_volume")
 
     monkeypatch.setattr(cap_runtime, "execute_operation", execute_operation)
-    tools = HandsAgentTools(cap_runtime, conversation("Jarvis set volume to 25 percent"))
+    tools = HandsAgentTools(
+        cap_runtime, conversation("Jarvis set volume to 25 percent")
+    )
 
     result = await tools.execute(operation="set_master_volume", percent=25)
 
@@ -79,7 +81,9 @@ async def test_model_cannot_change_user_volume_percentage(
         "execute_operation",
         lambda **kwargs: pytest.fail(f"unexpected execution: {kwargs}"),
     )
-    tools = HandsAgentTools(cap_runtime, conversation("Jarvis set volume to 25 percent"))
+    tools = HandsAgentTools(
+        cap_runtime, conversation("Jarvis set volume to 25 percent")
+    )
 
     with pytest.raises(HandsToolGroundingError, match="latest user request"):
         await tools.execute(operation="set_master_volume", percent=50)

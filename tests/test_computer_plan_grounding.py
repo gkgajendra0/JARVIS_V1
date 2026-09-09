@@ -9,7 +9,10 @@ from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capabilities.windows_control import _safe_apps
 from jarvis.conversation import ConversationRole, ConversationSession
-from jarvis.voice.computer_tools import ComputerControlAgentTools, ComputerControlGroundingError
+from jarvis.voice.computer_tools import (
+    ComputerControlAgentTools,
+    ComputerControlGroundingError,
+)
 
 
 class NoopAuthority:
@@ -127,7 +130,9 @@ async def test_persistent_ui_intent_is_blocked_even_inside_approved_app(
         conversation("Open Notepad and type hello"),
     )
 
-    with pytest.raises(ComputerControlGroundingError, match="outside the bounded app UI scope"):
+    with pytest.raises(
+        ComputerControlGroundingError, match="outside the bounded app UI scope"
+    ):
         await tools.control(
             app="notepad",
             plan_json=json.dumps(
