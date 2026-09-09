@@ -81,7 +81,9 @@ class MarkItDownSidecar:
             raise ValueError("document-reader timeout must be positive")
         if output_chars < 1 or output_chars > 200_000:
             raise ValueError("document-reader output limit is invalid")
-        self._python_path = pathlib.Path(python_path) if python_path else sidecar_python_path()
+        self._python_path = (
+            pathlib.Path(python_path) if python_path else sidecar_python_path()
+        )
         self._runner = runner
         self._timeout_seconds = timeout_seconds
         self._output_chars = output_chars
@@ -126,7 +128,9 @@ class MarkItDownSidecar:
         try:
             payload = json.loads(completed.stdout)
         except json.JSONDecodeError as exc:
-            raise DocumentReaderError("document sidecar returned invalid output") from exc
+            raise DocumentReaderError(
+                "document sidecar returned invalid output"
+            ) from exc
         if not isinstance(payload, dict):
             raise DocumentReaderError("document sidecar returned invalid output")
         text = payload.get("text")
@@ -161,9 +165,12 @@ def install_sidecar(
             ],
             check=False,
             shell=False,
+            env=_sanitized_environment(),
         )
     except OSError as exc:
-        raise DocumentReaderError("document-reader dependency installation failed") from exc
+        raise DocumentReaderError(
+            "document-reader dependency installation failed"
+        ) from exc
     if completed.returncode != 0:
         raise DocumentReaderError("document-reader dependency installation failed")
     return python_path
