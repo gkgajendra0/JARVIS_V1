@@ -21,6 +21,8 @@ dependencies = [
     "cryptography==50.0.1",
     "number-parser==0.3.2",
     "pydantic==2.13.5",
+    "psutil==7.2.2",
+    "markitdown[docx,pdf,pptx,xls,xlsx]==0.1.7",
 ]
 
 [project.scripts]
@@ -41,6 +43,7 @@ jarvis-speaker-enroll = "jarvis.identity.speaker_enrollment:main"
 jarvis-active-speaker-benchmark = "jarvis.identity.active_speaker_benchmark_guided:main"
 jarvis-computer-smoke = "jarvis.computer.smoke:main"
 jarvis-structured-smoke = "jarvis.computer.structured_smoke:main"
+jarvis-step7-smoke = "jarvis.capabilities.smoke:main"
 
 [project.optional-dependencies]
 vision = [
