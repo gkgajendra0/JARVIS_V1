@@ -34,7 +34,9 @@ def main() -> int:
             ],
         }
         print("JARVIS Step-7 owner acceptance smoke")
-        print("No file writes, app control, browser control, or arbitrary commands are allowed.")
+        print(
+            "No file writes, app control, browser control, or arbitrary commands are allowed."
+        )
         print("[discovery]")
         print(json.dumps(discovery, indent=2, ensure_ascii=False))
 
