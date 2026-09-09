@@ -14,6 +14,8 @@ from .structured_windows import (
 )
 
 _EXPECTED_TEXT = "JARVIS structured automation smoke test"
+_EDITOR_SELECTOR = "Text editor"
+_NEW_TAB_SELECTOR = "New tab"
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -70,6 +72,7 @@ def _run_notepad_type() -> int:
         return 2
 
     total_started = time.perf_counter()
+    blank_target_ms = 0.0
     try:
         launch = launcher.launch("notepad")
         print(f"[launch] request returned in {launch.elapsed_ms:.1f} ms")
@@ -77,25 +80,41 @@ def _run_notepad_type() -> int:
         ready = ui.wait_until_running("notepad", timeout_seconds=6.0)
         print(f"[ready] winapp attached in {ready.elapsed_ms:.1f} ms")
 
-        initial = ui.get_value("notepad", "Text editor")
+        initial = ui.get_value("notepad", _EDITOR_SELECTOR)
         initial_text = _extract_text(initial.payload)
         print(f"[inspect] editor read in {initial.elapsed_ms:.1f} ms")
+
         if initial_text:
             print(
-                "SAFETY STOP: Notepad opened with existing text/session content; "
-                "nothing was typed.",
-                file=sys.stderr,
+                "[blank] restored session content detected; requesting a fresh blank "
+                "Notepad tab through UI Automation..."
             )
-            return 3
+            blank_started = time.perf_counter()
+            created = ui.invoke("notepad", _NEW_TAB_SELECTOR)
+            print(f"[blank] New tab invoked in {created.elapsed_ms:.1f} ms")
+
+            fresh = ui.get_value("notepad", _EDITOR_SELECTOR)
+            fresh_text = _extract_text(fresh.payload)
+            blank_target_ms = (time.perf_counter() - blank_started) * 1000
+            print(
+                f"[blank] fresh editor verified in {fresh.elapsed_ms:.1f} ms "
+                f"({blank_target_ms:.1f} ms total)"
+            )
+            if fresh_text:
+                print(
+                    "SAFETY STOP: fresh Notepad target is not blank; nothing was typed.",
+                    file=sys.stderr,
+                )
+                return 3
 
         typed = ui.send_text(
             "notepad",
             _EXPECTED_TEXT,
-            target_selector="Text editor",
+            target_selector=_EDITOR_SELECTOR,
         )
         print(f"[type] winapp delivered text in {typed.elapsed_ms:.1f} ms")
 
-        verified = ui.get_value("notepad", "Text editor")
+        verified = ui.get_value("notepad", _EDITOR_SELECTOR)
         actual = _extract_text(verified.payload)
         print(f"[verify] editor read in {verified.elapsed_ms:.1f} ms")
     except StructuredWindowsError as exc:
@@ -115,6 +134,7 @@ def _run_notepad_type() -> int:
             "total_ms": round(total_ms, 1),
             "launch_ms": round(launch.elapsed_ms, 1),
             "ready_ms": round(ready.elapsed_ms, 1),
+            "blank_target_ms": round(blank_target_ms, 1),
             "type_ms": round(typed.elapsed_ms, 1),
             "verify_ms": round(verified.elapsed_ms, 1),
             "cloud_model_calls": 0,
