@@ -14,8 +14,8 @@ The sequence is dependency-driven. Lower-level trust, capability, knowledge, and
 | 4 | Live Context and Personal Memory | CAP-008 through CAP-013 | DONE (BOUNDED; provider-assisted 4.5D recall accepted; strict independent verifier + 4.5E deferred) |
 | 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | DONE (BOUNDED; minimal provider-failure diagnosis + local truthful status accepted; full local/offline stack deferred) |
 | 6 | Knowledge, Current Research, and Truthfulness | CAP-014 through CAP-017 | DONE (BOUNDED; provider-neutral source-aware web research + truth/provenance policy accepted) |
-| 7 | Governed Capability Runtime + Local Files/System/Project Safe Reads | CAP-018, CAP-021, CAP-022, CAP-032 | ACTIVE NEXT — REQUIREMENTS / RESEARCH |
-| 8 | Notes, Tasks, Reminders, and Scheduling | CAP-027, CAP-028 | PLANNED |
+| 7 | Governed Capability Runtime + Local Files/System/Project Safe Reads | CAP-018, CAP-021, CAP-022, CAP-032 | DONE — OWNER ACCEPTED 2026-09-09 |
+| 8 | Notes, Tasks, Reminders, and Scheduling | CAP-027, CAP-028 | ACTIVE NEXT — REQUIREMENTS / RESEARCH |
 | 9 | Computer, Application, and Device Control | CAP-023, CAP-024 | PLANNED |
 | 10 | Browser and Web Interaction | CAP-025 | PLANNED |
 | 11 | Calendar, Email, and External Communication | CAP-029, CAP-030 | PLANNED |
@@ -39,24 +39,15 @@ Step 2.5 does **not** itself grant identity, authentication, permission, passive
 
 After Step 2.5 acceptance and before Step 3 implementation, the development workflow received one bounded infrastructure improvement: `jarvis-dev`.
 
-This is **not** a product step and does not change roadmap numbering. It:
-
-- watches protected `origin/main`;
-- never pulls/restarts without explicit owner approval;
-- asks through JARVIS voice using fixed scripted TTS;
-- keeps approval interpretation deterministic and outside model authority;
-- performs clean child shutdown and restart;
-- verifies restarted-child readiness through the authenticated local control channel;
-- restores the previous last-known-good revision if the updated child fails readiness;
-- relies on protected `main` PR flow with required quality gates.
+This is **not** a product step and does not change roadmap numbering. It watches protected `origin/main`, never pulls/restarts without explicit owner approval, performs clean child shutdown/restart, verifies readiness through the authenticated local control channel, and restores the previous last-known-good revision if the updated child fails readiness.
 
 The normal user-facing runtime does not gain Git/self-update authority merely because this development supervisor exists.
 
 ## Why CAP-032 Moves To Step 7
 
-The old JARVIS learned that useful reads/actions should not each invent a separate router, policy path, result shape, or execution boundary. A **minimal governed capability runtime** therefore arrives with the first real safe-read expansion, before notes, apps, browser, calendar, email, files, or device actions.
+The old JARVIS learned that useful reads/actions should not each invent a separate router, policy path, result shape, or execution boundary. A **minimal governed capability runtime** therefore arrived with the first real safe-read expansion, before notes, apps, browser, calendar, email, files, or device actions.
 
-This does **not** mean building a giant universal agent framework in Step 7. It means defining the smallest common contract needed by real capabilities at that point: capability identity/description, bounded input, policy/authority check, execution adapter boundary, structured result, and truthful failure state. Extensibility/plugin lifecycle remains later at Step 16.
+Step 7 did **not** build a giant universal agent framework. It established the smallest common contract needed by real capabilities: capability identity/discovery, bounded input, canonical authority binding, execution adapter boundary, structured result, provenance, verification, audit, and truthful failure state. Extensibility/plugin lifecycle remains later at Step 16.
 
 ## Universal Step Lifecycle
 
@@ -94,167 +85,87 @@ Research for future steps is intentionally deferred until those steps become act
 8. **Governed Learning and Improvement** — Steps 18-20.
 9. **Personal Intelligence Runtime** — the integrated end state after the mature capabilities above work together coherently.
 
-## Step 0 - Clean Foundation
+## Completed Outcomes Through Step 7
 
-Completed baseline:
+### Step 0 — Clean Foundation
 
-- clean repository separate from old JARVIS;
-- modern Python `src` layout;
-- minimal `JarvisApp` lifecycle;
-- environment configuration;
-- console logging;
-- import/lifecycle safety tests;
-- no voice, model, network, audio, memory, or capability side effects at import time.
+Accepted clean repository, modern Python `src` layout, minimal app lifecycle, environment configuration, logging, baseline tests, and import/lifecycle safety.
 
-## Step 1 - Natural Conversational Core
+### Step 1 — Natural Conversational Core
 
-Completed outcome: manual realtime conversation, multilingual English/Hindi/Hinglish use, contextual follow-ups/corrections, provider-backed interruption support where available, canonical accepted conversation state, and real human acceptance.
+Accepted manual realtime conversation, multilingual English/Hindi/Hinglish use, contextual follow-ups/corrections, provider-backed interruption support where available, canonical accepted conversation state, and real human acceptance.
 
-## Step 2 - Wake, Voice Session, and Audio Robustness
+### Step 2 — Wake, Voice Session, and Audio Robustness
 
-Completed outcome: local wake detection, one JARVIS-owned audio path, preserved wake tail, realtime follow-up conversation, explicit return to idle, and clean re-wake work on the target Windows system. Extended endurance and device-failure trials were explicitly waived and remain recorded as residual risks.
+Accepted local wake detection, one JARVIS-owned audio path, preserved wake tail, realtime follow-up conversation, explicit return to idle, and clean re-wake work on the target Windows system. A later owner-accepted correction prevents long utterances from being killed by the outer inactivity lifecycle while preserving provider-native turn completion.
 
-A bounded robustness correction was reopened and owner-accepted on 2026-09-08 after Step-6 testing exposed a long-utterance lifecycle race. The accepted correction preserves provider-native realtime turn completion, restores local speech activity evidence for the outer lifecycle, suppresses inactivity timing during realtime-session initialization, cancels inactivity shutdown while the user is actively speaking, and preserves normal idle timeout/follow-up/barge-in behavior. Acceptance evidence: `docs/research/STEP_2_LONG_UTTERANCE_ACTIVITY_ACCEPTANCE.md`.
+Acceptance evidence: `docs/research/STEP_2_LONG_UTTERANCE_ACTIVITY_ACCEPTANCE.md`.
 
-## Step 2.5 - Vision Sensor & Active Target Tracking Foundation
+### Step 2.5 — Vision Sensor & Active Target Tracking Foundation
 
-Completed outcome: one JARVIS-owned Pocket 3 camera path, replaceable detector/tracker/PTZ boundaries, RF-DETR Nano person detection, OC-SORT tracking, head-first framing evidence, deterministic target locking, safe pan/tilt/adaptive-zoom follow, canonical visual state, and real Windows + RTX 5060 Ti + Pocket 3 human acceptance.
+Accepted one JARVIS-owned Pocket 3 camera path, replaceable detector/tracker/PTZ boundaries, RF-DETR Nano person detection, OC-SORT tracking, head-first framing evidence, deterministic target locking, and safe pan/tilt/adaptive-zoom follow.
 
-## Step 3 - Identity, Graduated Trust, Authority, and Observability
+### Step 3 — Identity, Graduated Trust, Authority, and Observability
 
-Completed outcome: the minimum trustworthy governance/identity foundation required before later capabilities may act. Step 3 established deterministic trust/risk/proposal/approval/audit contracts, Windows-session invalidation, Windows Hello strong verification, encrypted OWNER face/voice profile boundaries, accepted face/liveness evidence, a single-microphone LiveKit production audio path, and non-authoritative CAM++/LR-ASD speaker diagnostics.
+Accepted deterministic trust/risk/proposal/approval/audit contracts, Windows-session invalidation, Windows Hello strong verification, encrypted OWNER face/voice profile boundaries, accepted face/liveness evidence, a single-microphone production audio path, and non-authoritative CAM++/LR-ASD speaker diagnostics.
 
-Step 3 deliberately closes with T2 `CORROBORATED_OWNER` disabled and biometric speaker/active-speaker thresholds unpromoted. Known overlap, replay/deepfake, non-owner calibration, short-turn continuity, and attention improvements are deferred until a later product capability makes them necessary. This preserves the rule that identity evidence never directly grants consequential execution permission.
+T2 `CORROBORATED_OWNER` remains disabled and CAM++/LR-ASD remain shadow evidence only.
 
-Closure evidence: `docs/research/STEP_3_CLOSURE_ACCEPTANCE.md`.
+Acceptance evidence: `docs/research/STEP_3_CLOSURE_ACCEPTANCE.md`.
 
-## Step 4 - Live Context and Personal Memory
+### Step 4 — Live Context and Personal Memory
 
-Step 4 is **bounded complete**. The accepted outcome provides a coherent privacy-aware memory/context foundation plus a pragmatic governed semantic-recall tool, without pretending that the original proof-quality independent semantic verifier or automatic context injection is solved.
+Bounded complete with encrypted canonical durable memory, explicit remember/inspect/correct/forget, candidate quarantine, FTS5 + Qwen derived retrieval/reranking, and bounded provider-assisted semantic recall. Strict independent semantic verification and automatic conversational semantic-memory injection remain deferred.
 
-Accepted foundation:
+### Step 5 — Local/Offline Survival and Provider Resilience
 
-- bounded live session/task context;
-- encrypted canonical durable facts/preferences/rules with provenance and temporal lifecycle;
-- governed explicit remember/inspect/correct/forget;
-- correction, supersession, and physical forgetting;
-- structured memory-candidate generation with session-local quarantine and no implicit durable admission;
-- encrypted derived embedding lifecycle;
-- FTS5 + Qwen dense first-stage retrieval with RRF;
-- Qwen reranking over already-eligible canonical records;
-- deterministic security/sensitivity/lifecycle boundaries ahead of learned ranking.
+Bounded complete with deterministic terminal provider-failure diagnosis, Windows-local truthful status speech, safe failed-session closure, and provider health recovery state. Full local/offline conversation remains deferred.
 
-Accepted bounded 4.5D provider-assisted recall:
+Acceptance evidence: `docs/research/STEP_5_MINIMAL_PROVIDER_RESILIENCE_ACCEPTANCE.md`.
 
-- opt-in zero-argument `recall_memory` tool reads the latest accepted USER question;
-- active provider receives only a cloud-safe eligible facet catalog for structured semantic selection;
-- the provider returns a numbered facet index rather than owning canonical keys;
-- JARVIS reconstructs and deterministically validates the canonical facet;
-- one exact current assertion must resolve;
-- the same active provider performs a second structured semantic check;
-- JARVIS releases only directly-supported current-value/current-comparison requests;
-- provider errors, malformed output, unsafe semantic roles, ambiguity, conflicts, rate limits, and quota failures all abstain;
-- `local_only` / secret-prohibited memory cannot cross the cloud recall boundary;
-- the provider never gains mutation or canonical-truth authority.
+### Step 6 — Knowledge, Current Research, and Truthfulness
 
-Owner acceptance on exact code SHA `bd95734032e2f936945fa02e16bb002ac6b478ea` used Gemini `gemini-3.5-flash`. The live smoke successfully recalled `test_color = purple`, confirmed a direct comparison, abstained on a `why` question without inventing a reason, and physically forgot the disposable memory. Full Code Quality run `34190011723` passed all normal gates.
+Bounded complete with provider-neutral live-web research, Exa as the accepted first replaceable retrieval adapter, JARVIS-owned evidence/provenance/truth status, deterministic research-warrant gating, and fail-closed source sufficiency.
 
-Still deliberately deferred:
+Acceptance evidence: `docs/research/STEP_6_KNOWLEDGE_TRUTHFULNESS_ACCEPTANCE.md`.
 
-- the original strict independent Phase-4.5D semantic answerability/release verifier;
-- Phase 4.5E automatic semantic memory injection through ordinary conversation context assembly;
-- remaining unstarted Step-4 extensions.
+### Step 7 — Governed Capability Runtime + Local Files/System/Project Safe Reads
 
-Historical strict-deferral evidence: `docs/research/STEP_4_PHASE_4_5D_DEFERRED_CLOSURE.md`.
-
-Accepted fallback evidence: `docs/research/STEP_4_PHASE_4_5D_PROVIDER_ASSISTED_FALLBACK.md`.
-
-## Step 5 - Local/Offline Survival and Provider Resilience
-
-Step 5 is **bounded complete**.
-
-The accepted subset is the minimal resilience foundation needed now:
-
-- JARVIS deterministically classifies terminal realtime-provider failures into bounded reason classes such as quota exhaustion, rate limiting, auth/permission errors, server/service errors, timeouts, connection loss, and unknown failure;
-- provider health becomes an explicit degraded state rather than an opaque crash;
-- terminal failures are announced with a fixed JARVIS-owned Windows-local `System.Speech` path that does not depend on the failed Gemini/OpenAI TTS service;
-- the local PCM announcement is played through the existing selected JARVIS output;
-- the failed session closes explicitly and the existing outer voice lifecycle returns toward wake/idle;
-- a later healthy realtime session marks provider health recovered;
-- canonical conversation, memory, identity, and authority ownership are not duplicated;
-- no second cloud provider is silently selected.
-
-Owner-machine acceptance on 2026-09-08 passed through the configured `24'TV (NVIDIA High Definition Audio) @ 48000 Hz` output, and the owner explicitly confirmed hearing the local quota-exhaustion status message. Acceptance evidence is recorded in `docs/research/STEP_5_MINIMAL_PROVIDER_RESILIENCE_ACCEPTANCE.md`.
-
-Deliberately deferred:
-
-- Ollama/local LLM selection or installation;
-- cloud-to-local conversational handoff;
-- local/offline STT;
-- local/offline conversational TTS;
-- full network-offline spoken conversation;
-- cloud-to-cloud automatic failover;
-- startup without cloud credentials based on a validated local intelligence stack.
-
-The earlier research proposal remains preserved for future reopening: `docs/research/STEP_5_RESILIENCE_RESEARCH_AND_ARCHITECTURE_PROPOSAL.md`.
-
-## Step 6 - Knowledge, Current Research, and Truthfulness
-
-Step 6 is **bounded complete**.
+Owner accepted on 2026-09-09.
 
 Accepted outcome:
 
-- the active conversational brain may decide that research is useful and formulate bounded supporting web queries;
-- JARVIS exposes a provider-neutral `search_web`/current-research boundary rather than tying research architecture to Gemini or OpenAI;
-- Exa is the accepted first replaceable live-web retrieval adapter;
-- returned webpages are normalized into JARVIS-owned source evidence with titles, URLs, domains, excerpts and research timestamps;
-- JARVIS owns truth/research status, provenance, deterministic research-warrant gating, source sufficiency, and fail-closed behavior;
-- stable model-knowledge questions are blocked from unnecessary network retrieval;
-- explicit/current/freshness requests can require live research;
-- fact-check mode requires multiple source domains;
-- authoritative mode requires a bounded official/primary-source signal;
-- search/provider failure is reported as unavailable rather than silently presented as freshly verified;
-- research evidence gains no memory, identity, authority, permission, file, device, or execution power.
+- provider-neutral capability discovery/resolution/runtime;
+- Microsoft `winapp` semantic schema discovery while desktop execution remains disabled;
+- truthful Windows ODR unavailability/degradation when not present;
+- bounded `system_status` and process inspection;
+- approved-root file/project metadata, listing, search, text read, and document read;
+- Git/ripgrep preferred mature project primitives with bounded fallback;
+- canonical `ActionProposal -> AuthorityService -> Windows Hello/T3 -> one-time permit` for private reads;
+- path/symlink/sensitive/secret release protections;
+- Microsoft MarkItDown isolated sidecar for PDF/DOCX/PPTX/XLS/XLSX conversion without downgrading the accepted JARVIS vision ONNX runtime;
+- production voice `inspect_local` tool with deterministic current-user-request grounding;
+- no file writes, arbitrary shell, browser execution, desktop/app/device control, installation, deletion, or coding mutation.
 
-Owner-machine evidence included a real Exa smoke returning 8 sources and a live voice research request returning official Google documentation among its source set. Acceptance evidence is recorded in `docs/research/STEP_6_KNOWLEDGE_TRUTHFULNESS_ACCEPTANCE.md`.
+Owner-machine acceptance proved positive private reads, explicit Windows Hello cancel/fail-closed behavior, a real XLSX read through the isolated sidecar, routine live system telemetry, and live voice private project reading. During unrelated meeting audio, an ambiguous local-inspection attempt was rejected because the current user turn did not explicitly authorize inspection.
 
-Still deliberately deferred:
+Acceptance evidence: `docs/research/STEP_7_GOVERNED_CAPABILITY_RUNTIME_ACCEPTANCE.md`.
 
-- multi-minute/background deep-research agents;
-- browser automation;
-- Step-7 local project/file knowledge;
-- universal trusted-domain classification;
-- proactive/background recurring research;
-- automatic semantic-memory injection;
-- simultaneous multi-search-backend routing without measured need.
+Ambient-meeting false USER-turn admission remains a separate voice/identity residual because CAM++/LR-ASD thresholds are still intentionally unpromoted.
 
-## Step 7 - Governed Capability Runtime + Local Files/System/Project Safe Reads
+## Step 8 — Notes, Tasks, Reminders, and Scheduling
 
-Step 7 is the **next active roadmap slice after the Step-2 correction merge**.
+Step 8 becomes the next active slice **only after Step 7 merges to protected `main`**.
 
-It begins with requirements recovery and fresh research for CAP-018, CAP-021, CAP-022 and CAP-032. The implementation goal is not a giant universal agent framework: it is the smallest governed capability contract required by real safe-read capabilities, plus trustworthy local project/file/system read paths that reuse existing conversation, truth, provenance and authority foundations.
-
-Step 7 must remain read-focused. Browser automation, file writes, computer/device control, external communication, and coding/project mutation remain assigned to later roadmap steps.
+It must begin with requirements recovery and fresh research for CAP-027 and CAP-028. It must reuse the existing conversation, memory, authority, and Step-7 capability-runtime foundations rather than inventing parallel scheduling truth, execution, or permission paths.
 
 Detailed active planning belongs in `CURRENT_PLAN.md`.
 
-## Final Target - Personal Intelligence Runtime
+## Final Target — Personal Intelligence Runtime
 
 The roadmap is not complete merely because all steps have code. The final target is one coherent personal intelligence runtime in which mature capabilities cooperate under shared conversation, context, memory, truthfulness, authority, observability, and execution boundaries.
 
-At that point JARVIS should be able to:
-
-- converse naturally and remain present across sessions;
-- know approved personal/project context and correct it when the user corrects JARVIS;
-- choose whether a request needs model reasoning, fresh external information, trusted sources, memory, local project evidence, or a capability;
-- verify current/high-risk claims appropriately;
-- perform routine daily computer, file, browser, device, note, calendar, email, and project workflows with proportional consent;
-- monitor explicitly selected topics/conditions and do bounded background work;
-- coordinate mature capabilities without creating an uncontrolled second brain;
-- degrade truthfully when cloud/provider/network/device capability is unavailable;
-- expose understandable state through the HUD/workspace;
-- diagnose faults and eventually propose/apply only governed, reversible, auditable improvements;
-- remain replaceable at provider boundaries rather than becoming permanently coupled to one model/framework/provider.
+At that point JARVIS should be able to converse naturally, know approved personal/project context, choose the right evidence/capability source, perform governed daily workflows, monitor explicitly selected conditions, degrade truthfully, expose understandable state, and eventually propose/apply only governed and auditable improvements while remaining replaceable at provider boundaries.
 
 ## Roadmap Change Rule
 
