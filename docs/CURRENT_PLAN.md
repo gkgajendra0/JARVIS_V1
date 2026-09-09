@@ -2,15 +2,15 @@
 
 ## Active Work
 
-**Step 7 — Governed Capability Runtime + Local Files/System/Project Safe Reads — OWNER ACCEPTED / DOCUMENTATION RECONCILIATION / FINAL MERGE GATE.**
+**Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027, CAP-028) — REQUIREMENTS / RESEARCH.**
 
-Step 7 implementation and owner-machine acceptance are complete. The remaining lifecycle work is documentation reconciliation, final exact-head CI, and protected-main merge.
+Step 7 — Governed Capability Runtime + Local Files/System/Project Safe Reads — is **DONE and merged to protected `main`** at merge SHA `faa9905ece742a037b75abbe0dda69cad6a86422` after owner-machine acceptance and final exact-head CI.
 
-After that merge, **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027, CAP-028)** becomes the next roadmap slice and must begin research-first from the newly merged `main`.
+Step 8 implementation is **not yet authorized**. The active work is requirements recovery, repository inspection, fresh research, technology selection, and architecture proposal.
 
 ## Current Stage
 
-**STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 BOUNDED COMPLETE — STEP 7 OWNER ACCEPTED — DOCUMENTATION RECONCILIATION / FINAL EXACT-HEAD CI / PROTECTED-MAIN MERGE — THEN STEP 8 REQUIREMENTS + RESEARCH.**
+**STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 BOUNDED COMPLETE — STEP 7 DONE + MERGED — STEP 8 REQUIREMENTS / RESEARCH.**
 
 This file is the operational source of truth. `PRODUCT.md` owns permanent product intent, `ROADMAP.md` owns sequence, accepted architecture belongs in `CURRENT_ARCHITECTURE.md`, and detailed research/evidence belongs in `docs/research/`.
 
@@ -26,9 +26,11 @@ Step 5 remains bounded complete with deterministic terminal provider-failure dia
 
 Step 6 remains bounded complete with provider-neutral source-aware web research, accepted Exa retrieval, JARVIS-owned evidence/provenance/truth status, deterministic research-warrant gating, and fail-closed source sufficiency behavior.
 
+Step 7 is complete with provider-neutral capability discovery/resolution/runtime, canonical AuthorityService binding, approved-root system/project/file/document reads, isolated MarkItDown document conversion, and production voice `inspect_local` integration.
+
 ---
 
-## Step 7 — accepted outcome
+## Step 7 — accepted merged outcome
 
 The accepted Step-7 path is:
 
@@ -156,24 +158,26 @@ The meeting-audio false-turn observation remains a voice/identity admission issu
 
 ---
 
-## Next roadmap slice after merge
+## Step 8 — active requirements / research slice
 
 **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027, CAP-028).**
 
-The next work slice must start research-first from the newly merged protected `main`:
+The active slice must start research-first from the newly merged protected `main`:
 
-1. recover Step-8 requirements from `PRODUCT.md`, accepted decisions, and prior lessons;
-2. inspect merged conversation/memory/authority/capability-runtime boundaries before designing scheduling state;
-3. research current mature note/task/reminder/scheduling technologies and platform APIs;
-4. prefer mature existing technology over custom infrastructure where it fits;
-5. reuse Step-7 capability/authority patterns instead of inventing parallel execution or permissions;
-6. define the smallest provider-neutral Step-8 architecture;
-7. obtain owner architecture approval before implementation.
+1. recover CAP-027/CAP-028 product requirements and any durable scheduling/privacy/authority constraints from `PRODUCT.md` and accepted decisions;
+2. inspect the merged conversation, memory, authority, capability-runtime, and lifecycle boundaries before designing task/reminder state;
+3. research current mature note/task/reminder/scheduling technologies, Windows/platform APIs, scheduling libraries, persistence patterns, and notification options;
+4. prefer mature existing technology over custom infrastructure where it fits JARVIS requirements;
+5. decide what belongs to canonical JARVIS task/reminder truth versus provider reasoning or platform scheduling state;
+6. reuse Step-7 capability and AuthorityService contracts rather than inventing parallel execution or permission paths;
+7. define bounded failure/recovery, timezone, recurrence, edit/cancel, acknowledgement, and audit semantics;
+8. propose the smallest provider-neutral Step-8 architecture;
+9. obtain owner architecture approval before implementation.
 
-Step 8 must not quietly pull browser automation, desktop control, email/calendar integration, or file-write/coding authority forward from their assigned roadmap steps.
+Step 8 must not quietly pull browser automation, desktop control, email/calendar integration, or general file-write/coding authority forward from their assigned roadmap steps.
 
 ---
 
 ## Immediate Next Action
 
-**FINAL EXACT-HEAD CI FOR PR #28 -> PROTECTED-MAIN MERGE -> MARK STEP 7 DONE -> START STEP 8 REQUIREMENTS / RESEARCH FROM NEW `main`.**
+**STEP 8 REQUIREMENTS RECOVERY -> FRESH RESEARCH -> TECHNOLOGY DECISION -> ARCHITECTURE PROPOSAL -> OWNER APPROVAL BEFORE IMPLEMENTATION.**

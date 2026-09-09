@@ -2,7 +2,7 @@
 
 ## Status
 
-**STEPS 0–3 ARE COMPLETE. STEP 4 IS BOUNDED COMPLETE. STEP 5 IS BOUNDED COMPLETE. STEP 6 IS BOUNDED COMPLETE. STEP 7 — GOVERNED CAPABILITY RUNTIME + LOCAL FILES/SYSTEM/PROJECT SAFE READS — IS OWNER ACCEPTED AND AT THE FINAL DOCUMENTATION/PROTECTED-MAIN MERGE GATE. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 `CORROBORATED_OWNER` REMAINS DISABLED.**
+**STEPS 0–3 ARE COMPLETE. STEP 4 IS BOUNDED COMPLETE. STEP 5 IS BOUNDED COMPLETE. STEP 6 IS BOUNDED COMPLETE. STEP 7 — GOVERNED CAPABILITY RUNTIME + LOCAL FILES/SYSTEM/PROJECT SAFE READS — IS DONE + MERGED TO PROTECTED `main`. STEP 8 IS THE ACTIVE REQUIREMENTS / RESEARCH SLICE. CAM++ AND LR-ASD REMAIN SHADOW EVIDENCE ONLY; T2 `CORROBORATED_OWNER` REMAINS DISABLED.**
 
 This file describes architecture that actually exists and has passed the accepted lifecycle. Detailed experiments and acceptance evidence belong in `docs/research/`; active work order belongs in `docs/CURRENT_PLAN.md`; durable design decisions belong in `docs/decisions/`.
 
@@ -605,8 +605,10 @@ These remain assigned to later roadmap work or previously documented bounded def
 
 ---
 
-## Next architecture work
+## Active architecture work — Step 8 research only
 
-After Step 7 merges to protected `main`, Step 8 — Notes, Tasks, Reminders, and Scheduling — must begin research-first.
+Step 8 — Notes, Tasks, Reminders, and Scheduling — is now the active requirements/research slice.
 
-Step 8 must reuse canonical conversation truth, durable memory boundaries, `AuthorityService`, and the Step-7 capability/runtime patterns rather than building a parallel task/reminder brain or permission system.
+No Step-8 implementation architecture is accepted yet. The next architecture work must recover requirements and research mature scheduling/task/reminder technology before proposing a provider-neutral design.
+
+Any Step-8 design must reuse canonical conversation truth, durable memory boundaries, `AuthorityService`, and the accepted Step-7 capability/runtime patterns rather than building a parallel task/reminder brain or permission system.
