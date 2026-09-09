@@ -1,6 +1,10 @@
 """JARVIS governed capability discovery foundation."""
 
-from .discovery import CapabilityDiscoverySource, CapabilityResolver
+from .discovery import (
+    CapabilityDiscoverySource,
+    CapabilityDiscoverySourceError,
+    CapabilityResolver,
+)
 from .models import (
     CapabilityCatalog,
     CapabilityDescriptor,
@@ -14,6 +18,7 @@ __all__ = [
     "CapabilityCatalog",
     "CapabilityDescriptor",
     "CapabilityDiscoverySource",
+    "CapabilityDiscoverySourceError",
     "CapabilityKind",
     "CapabilityResolver",
     "DiscoverySnapshot",
