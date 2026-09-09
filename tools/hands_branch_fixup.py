@@ -27,6 +27,21 @@ replace_once(
     '            operation = prepared.request.operation\n            if operation == "list_windows":',
     '            operation = prepared.request.operation\n            verified = True\n            if operation == "list_windows":',
 )
+replace_once(
+    "src/jarvis/capabilities/windows_native.py",
+    "from typing import Any, Protocol",
+    "from typing import Any, ClassVar, Protocol",
+)
+replace_once(
+    "src/jarvis/capabilities/windows_native.py",
+    "    _ACTIONS = {",
+    "    _ACTIONS: ClassVar[dict[str, str]] = {",
+)
+replace_once(
+    "src/jarvis/capabilities/windows_native.py",
+    '        sx1, sy1, sx2, sy2 = source_info["Work"]',
+    '        sx1, sy1, _sx2, _sy2 = source_info["Work"]',
+)
 
 regex_once(
     "src/jarvis/capabilities/windows_control.py",
