@@ -14,6 +14,7 @@ import os
 import sys
 from pathlib import Path
 
+from jarvis.capabilities.runtime import build_default_capability_runtime
 from jarvis.config import JarvisConfig
 from jarvis.identity.active_speaker import (
     ActiveSpeakerVisualBuffer,
@@ -78,8 +79,6 @@ def build_production_voice_runtime(
         debounce_seconds=config.wake_debounce_seconds,
     )
 
-    # LiveKit MediaDevices is the only Pocket3 microphone owner. The selected
-    # physical output must accept 48 kHz; the runtime fails closed otherwise.
     audio = MediaDevicesConversationRuntime(
         detector,
         input_device_name=config.audio_input_device,
@@ -98,8 +97,6 @@ def build_production_voice_runtime(
                 speaker_shadow_observer.template.prototype_count,
             )
         except SpeakerShadowRuntimeError as exc:
-            # Speaker shadow is diagnostic. Missing enrollment/model/dependency must
-            # never make ordinary JARVIS conversation unavailable.
             LOGGER.warning(
                 "Enrolled speaker shadow is unavailable and will stay disabled: %s",
                 exc,
@@ -127,16 +124,10 @@ def build_production_voice_runtime(
             "canonical LiveKit user PCM + timestamped Vision track/head frames"
         )
 
-    # Speaker identity needs clean voiced regions even when LR-ASD is disabled.
-    # This detector runs only inside the already-background shadow turn task.
     speech_region_detector = (
         LiveKitSileroSpeechRegionDetector() if config.speaker_shadow_enabled else None
     )
 
-    # Integrated desktop Vision is observable by default. The observer renders
-    # the same canonical tracks/heads/target/follow/framing state JARVIS uses,
-    # rather than opening a second camera path. An explicit environment value can
-    # still disable the window for headless/quiet diagnostic runs.
     if config.vision_enabled:
         os.environ.setdefault("JARVIS_VISION_PREVIEW", "true")
 
@@ -207,6 +198,14 @@ def build_production_voice_runtime(
         research_service.provider_name,
     )
 
+    capability_runtime = build_default_capability_runtime()
+    capability_catalog = capability_runtime.refresh_catalog()
+    LOGGER.info(
+        "Step-7 governed capability runtime configured: capabilities=%s "
+        "read_executors=2 desktop_execution=False browser_execution=False",
+        len(capability_catalog.capabilities),
+    )
+
     provider_resilience_state = ProviderResilienceState()
     local_status_speech = build_local_status_speech()
     LOGGER.info(
@@ -252,6 +251,7 @@ def build_production_voice_runtime(
         memory_runtime=memory_runtime,
         memory_query_coordinator=memory_query_coordinator,
         research_service=research_service,
+        capability_runtime=capability_runtime,
         session_factory=production_session_factory,
     )
 
