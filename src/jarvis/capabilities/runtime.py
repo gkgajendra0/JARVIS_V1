@@ -1,7 +1,8 @@
-"""Generic governed Step-7 capability runtime."""
+"""Generic governed capability runtime for local reads and bounded hands."""
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Protocol
 
@@ -22,6 +23,10 @@ from jarvis.capabilities.models import (
     CapabilityStatus,
 )
 from jarvis.capabilities.system_reads import SystemReadExecutor
+from jarvis.capabilities.windows_control import (
+    VisualDesktopControlExecutor,
+    WindowsStructuredControlExecutor,
+)
 from jarvis.capabilities.windows_sources import WinAppCliSchemaSource, WindowsOdrSource
 
 
@@ -90,7 +95,7 @@ class CapabilityRuntime:
                 capability_key="unresolved",
                 operation=str(operation),
                 data={},
-                reason="operation does not resolve to exactly one enabled Step-7 capability",
+                reason="operation does not resolve to exactly one governed capability",
             )
         return self.execute(
             CapabilityRequest(
@@ -118,7 +123,7 @@ class CapabilityRuntime:
                 request,
                 CapabilityStatus.DENIED,
                 started,
-                "capability is discovery-only or execution-disabled in Step 7",
+                "capability is discovery-only or execution-disabled",
             )
         if (
             request.operation not in descriptor.operations
@@ -187,16 +192,34 @@ class CapabilityRuntime:
         self._authority.close()
 
 
-def build_default_capability_runtime() -> CapabilityRuntime:
+def _env_enabled(name: str) -> bool:
+    return os.getenv(name, "").strip().casefold() in {"1", "true", "yes", "on"}
+
+
+def build_default_capability_runtime(
+    *,
+    ai_provider: str | None = None,
+) -> CapabilityRuntime:
     project = LocalProjectReadExecutor()
     system = SystemReadExecutor()
-    builtins = (project.descriptor, system.descriptor)
+    structured_control = WindowsStructuredControlExecutor()
+    visual_control = VisualDesktopControlExecutor(
+        provider_name=ai_provider or os.getenv("JARVIS_AI_PROVIDER", "gemini"),
+        enabled=_env_enabled("JARVIS_VISUAL_COMPUTER_USE_ENABLED"),
+    )
+    executors: tuple[CapabilityExecutor, ...] = (
+        project,
+        system,
+        structured_control,
+        visual_control,
+    )
+    builtins = tuple(executor.descriptor for executor in executors)
     resolver = CapabilityResolver(
         (WinAppCliSchemaSource(), WindowsOdrSource()),
         builtins=builtins,
     )
     return CapabilityRuntime(
-        executors=(project, system),
+        executors=executors,
         resolver=resolver,
         authority=CapabilityAuthorityBroker(),
     )
