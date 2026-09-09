@@ -40,6 +40,7 @@ jarvis-speaker-benchmark = "jarvis.identity.speaker_benchmark:main"
 jarvis-speaker-enroll = "jarvis.identity.speaker_enrollment:main"
 jarvis-active-speaker-benchmark = "jarvis.identity.active_speaker_benchmark_guided:main"
 jarvis-computer-smoke = "jarvis.computer.smoke:main"
+jarvis-structured-smoke = "jarvis.computer.structured_smoke:main"
 
 [project.optional-dependencies]
 vision = [

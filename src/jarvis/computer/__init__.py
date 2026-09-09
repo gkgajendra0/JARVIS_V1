@@ -20,9 +20,16 @@ from .providers import (
     build_computer_use_provider,
 )
 from .service import ComputerUseService
+from .structured_windows import (
+    AllowlistedWindowsLauncher,
+    StructuredCommandResult,
+    StructuredWindowsError,
+    WinAppCliBackend,
+)
 
 __all__ = [
     "ActionExecutionResult",
+    "AllowlistedWindowsLauncher",
     "ComputerAction",
     "ComputerExecutor",
     "ComputerExecutorError",
@@ -35,5 +42,8 @@ __all__ = [
     "MssPyAutoGuiExecutor",
     "OpenAIComputerUseProvider",
     "ScreenFrame",
+    "StructuredCommandResult",
+    "StructuredWindowsError",
+    "WinAppCliBackend",
     "build_computer_use_provider",
 ]
