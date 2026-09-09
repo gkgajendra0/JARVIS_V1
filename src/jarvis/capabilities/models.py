@@ -12,6 +12,8 @@ from jarvis.authority.types import ActionOrigin
 
 
 class CapabilityKind(str, Enum):
+    """Execution substrate represented by capability metadata."""
+
     SEMANTIC_CONNECTOR = "semantic_connector"
     STRUCTURED_AUTOMATION = "structured_automation"
     NATIVE_API = "native_api"
@@ -20,6 +22,8 @@ class CapabilityKind(str, Enum):
 
 
 class DiscoveryState(str, Enum):
+    """Truthful availability state for one discovery source."""
+
     AVAILABLE = "available"
     DEGRADED = "degraded"
     UNAVAILABLE = "unavailable"
@@ -27,6 +31,8 @@ class DiscoveryState(str, Enum):
 
 
 class CapabilityStatus(str, Enum):
+    """Normalized Step-7 execution result state."""
+
     SUCCEEDED = "succeeded"
     PARTIAL = "partial"
     DENIED = "denied"
@@ -56,7 +62,7 @@ def _metadata_json(value: dict[str, Any] | None) -> str:
 
 @dataclass(frozen=True, slots=True)
 class CapabilityDescriptor:
-    """Normalized capability metadata; discovery itself never grants authority."""
+    """Normalized metadata describing one available or built-in capability."""
 
     capability_id: str
     source_id: str
@@ -90,11 +96,19 @@ class CapabilityDescriptor:
             )
         )
         return cls(
-            capability_id=_clean(capability_id, field="capability_id", max_length=180),
+            capability_id=_clean(
+                capability_id,
+                field="capability_id",
+                max_length=180,
+            ),
             source_id=_clean(source_id, field="source_id", max_length=120),
             kind=kind,
             name=_clean(name, field="name", max_length=180),
-            description=_clean(description, field="description", max_length=1000),
+            description=_clean(
+                description,
+                field="description",
+                max_length=1000,
+            ),
             operations=normalized_operations,
             metadata_json=_metadata_json(metadata),
             execution_enabled=bool(execution_enabled),
@@ -123,6 +137,8 @@ class CapabilityDescriptor:
 
 @dataclass(frozen=True, slots=True)
 class DiscoverySnapshot:
+    """One source's read-only discovery result."""
+
     source_id: str
     state: DiscoveryState
     capabilities: tuple[CapabilityDescriptor, ...] = ()
@@ -138,15 +154,17 @@ class DiscoverySnapshot:
 
 @dataclass(frozen=True, slots=True)
 class CapabilityCatalog:
+    """Merged discovery snapshot across all configured sources."""
+
     sources: tuple[DiscoverySnapshot, ...]
     capabilities: tuple[CapabilityDescriptor, ...]
 
     def by_key(self, key: str) -> CapabilityDescriptor | None:
         normalized = str(key).strip()
-        return next(
-            (item for item in self.capabilities if item.key == normalized),
-            None,
-        )
+        for capability in self.capabilities:
+            if capability.key == normalized:
+                return capability
+        return None
 
     def search(self, query: str) -> tuple[CapabilityDescriptor, ...]:
         tokens = tuple(token for token in str(query).casefold().split() if token)
@@ -172,7 +190,7 @@ class CapabilityRequest:
         _clean(self.capability_key, field="capability_key", max_length=300)
         _clean(self.operation, field="operation", max_length=120)
         if not isinstance(self.parameters, dict):
-            raise ValueError("capability parameters must be an object")
+            raise TypeError("capability parameters must be an object")
 
 
 @dataclass(frozen=True, slots=True)
