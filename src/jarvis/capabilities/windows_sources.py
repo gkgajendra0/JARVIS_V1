@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import collections.abc
 import json
+import pathlib
 import platform
 import shutil
 import subprocess
 import time
-from collections.abc import Callable
-from pathlib import Path
 
 from .models import (
     CapabilityDescriptor,
@@ -18,8 +18,8 @@ from .models import (
 )
 
 
-Runner = Callable[..., subprocess.CompletedProcess[str]]
-Clock = Callable[[], float]
+Runner = collections.abc.Callable[..., subprocess.CompletedProcess[str]]
+Clock = collections.abc.Callable[[], float]
 
 
 class WinAppCliSchemaSource:
@@ -149,7 +149,7 @@ class WinAppCliSchemaSource:
                 "provider": "Microsoft",
                 "schema_version": str(schema.get("schemaVersion") or "unknown"),
                 "winapp_version": version,
-                "executable_name": Path(executable).name,
+                "executable_name": pathlib.Path(executable).name,
                 "discovery_command": "winapp --cli-schema",
                 "metadata_is_untrusted": True,
             },
