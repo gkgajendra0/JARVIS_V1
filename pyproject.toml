@@ -22,11 +22,11 @@ dependencies = [
     "number-parser==0.3.2",
     "pydantic==2.13.5",
     "psutil==7.2.2",
-    "markitdown[docx,pdf,pptx,xls,xlsx]==0.1.7",
 ]
 
 [project.scripts]
 jarvis-setup = "jarvis.setup:main"
+jarvis-setup-document-reader = "jarvis.capabilities.document_reader:main"
 jarvis-voice = "jarvis.voice.production_runtime:main"
 jarvis-dev = "jarvis.dev_supervisor:main"
 jarvis-vision-preview = "jarvis.vision.preview:main"
