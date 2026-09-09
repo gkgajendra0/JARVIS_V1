@@ -198,12 +198,17 @@ def build_production_voice_runtime(
         research_service.provider_name,
     )
 
-    capability_runtime = build_default_capability_runtime()
+    capability_runtime = build_default_capability_runtime(ai_provider=config.ai_provider)
     capability_catalog = capability_runtime.refresh_catalog()
+    structured_hands = capability_catalog.by_key("windows:desktop.control")
+    visual_hands = capability_catalog.by_key("visual:desktop.control")
     LOGGER.info(
-        "Step-7 governed capability runtime configured: capabilities=%s "
-        "read_executors=2 desktop_execution=False browser_execution=False",
+        "Governed capability runtime configured: capabilities=%s read_executors=2 "
+        "structured_desktop_control=%s visual_fallback=%s browser_control=False "
+        "raw_shell=False",
         len(capability_catalog.capabilities),
+        bool(structured_hands and structured_hands.execution_enabled),
+        bool(visual_hands and visual_hands.execution_enabled),
     )
 
     provider_resilience_state = ProviderResilienceState()
