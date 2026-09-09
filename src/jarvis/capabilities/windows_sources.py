@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import time
 
-from .models import (
+from jarvis.capabilities.models import (
     CapabilityDescriptor,
     CapabilityKind,
     DiscoverySnapshot,
