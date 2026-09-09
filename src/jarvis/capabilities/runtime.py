@@ -5,11 +5,12 @@ from __future__ import annotations
 import time
 from typing import Protocol
 
+from jarvis.authority.audit import AuditError
 from jarvis.authority.types import ActionOrigin
 from jarvis.capabilities.authority_bridge import (
     AuthorizedCapability,
-    CapabilityAuthorizationError,
     CapabilityAuthorityBroker,
+    CapabilityAuthorizationError,
 )
 from jarvis.capabilities.discovery import CapabilityResolver
 from jarvis.capabilities.execution import CapabilityExecutor
@@ -155,7 +156,7 @@ class CapabilityRuntime:
                 authorized=authorized,
                 result=result,
             )
-        except Exception:
+        except AuditError:
             return CapabilityResult(
                 status=CapabilityStatus.FAILED,
                 capability_key=result.capability_key,
