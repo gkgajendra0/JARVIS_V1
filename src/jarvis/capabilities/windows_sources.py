@@ -9,8 +9,7 @@ import shutil
 import subprocess
 import time
 
-import jarvis.capabilities.discovery as discovery
-import jarvis.capabilities.models as models
+from jarvis.capabilities import discovery, models
 
 
 class WinAppCliSchemaSource:
