@@ -25,7 +25,8 @@ class CapabilityDiscoverySource(Protocol):
 class CapabilityResolver:
     def __init__(
         self,
-        sources: tuple[CapabilityDiscoverySource, ...] | list[CapabilityDiscoverySource],
+        sources: tuple[CapabilityDiscoverySource, ...]
+        | list[CapabilityDiscoverySource],
         *,
         builtins: tuple[CapabilityDescriptor, ...] = (),
     ) -> None:
