@@ -36,6 +36,12 @@ class HandsCapabilityRegistry:
                 native,
             ),
             HandsOperation(
+                "list_processes",
+                HandsDomain.SYSTEM_STATUS,
+                "List bounded local process names and states.",
+                native_then_human,
+            ),
+            HandsOperation(
                 "get_master_volume",
                 HandsDomain.SYSTEM_AUDIO,
                 "Read the current Windows master output volume and mute state.",
@@ -173,19 +179,21 @@ class HandsCapabilityRegistry:
                 "Use screenshot-based Computer Use only as an explicit fallback.",
                 (ExecutionSubstrate.VISUAL_FALLBACK, ExecutionSubstrate.HUMAN),
             ),
-            HandsOperation(
-                "read_file",
-                HandsDomain.FILES_READ,
-                "Read bounded approved local text content.",
-                native,
-            ),
-            HandsOperation(
-                "read_document",
-                HandsDomain.FILES_READ,
-                "Read an approved local document through the isolated reader.",
-                native,
-            ),
         ]
+        for operation, description in (
+            ("file_info", "Read bounded metadata for one approved local path."),
+            ("list_directory", "List one approved local directory."),
+            ("list_project_files", "List bounded files below an approved local root."),
+            ("read_file", "Read bounded approved local text content."),
+            (
+                "read_document",
+                "Read an approved local document through the isolated reader.",
+            ),
+            ("search_project", "Search bounded text content below an approved local root."),
+        ):
+            operations.append(
+                HandsOperation(operation, HandsDomain.FILES_READ, description, native)
+            )
         for operation, description in (
             (
                 "create_text_file",
@@ -227,6 +235,73 @@ class HandsCapabilityRegistry:
             operations.append(
                 HandsOperation(
                     operation, HandsDomain.DOCUMENTS, description, semantic_edit
+                )
+            )
+        operations.append(
+            HandsOperation(
+                "execute_browser_plan",
+                HandsDomain.BROWSER,
+                "Execute bounded Playwright browser steps using semantic locators.",
+                ui_fallback,
+            )
+        )
+        for operation, description in (
+            ("list_displays", "List Windows displays visible to the brightness backend."),
+            ("get_display_brightness", "Read brightness for a Windows display."),
+            ("set_display_brightness", "Set explicit Windows display brightness."),
+            (
+                "list_bluetooth_devices",
+                "List discoverable Windows Bluetooth devices and pairing state.",
+            ),
+            (
+                "pair_bluetooth_device",
+                "Pair one uniquely named Windows Bluetooth device.",
+            ),
+            (
+                "unpair_bluetooth_device",
+                "Unpair one uniquely named Windows Bluetooth device.",
+            ),
+            ("lock_workstation", "Lock the local Windows workstation."),
+            ("sleep_workstation", "Request native Windows sleep."),
+            ("sign_out", "Request native Windows sign-out."),
+            ("restart_workstation", "Request native Windows restart."),
+            ("shutdown_workstation", "Request native Windows shutdown."),
+        ):
+            operations.append(
+                HandsOperation(operation, HandsDomain.DEVICES, description, native_then_human)
+            )
+        for operation, description in (
+            ("search_software", "Search bounded package names through Microsoft WinGet."),
+            (
+                "list_installed_software",
+                "List matching installed software through Microsoft WinGet.",
+            ),
+            ("install_package", "Install one exact WinGet package ID."),
+            ("uninstall_package", "Uninstall one exact WinGet package ID."),
+        ):
+            operations.append(
+                HandsOperation(operation, HandsDomain.SOFTWARE, description, native_then_human)
+            )
+        for operation, description in (
+            ("git_status", "Read Git status for one approved development repository."),
+            (
+                "git_active_branch",
+                "Read the active branch for one approved development repository.",
+            ),
+            (
+                "git_create_branch",
+                "Create one bounded branch in an approved development repository.",
+            ),
+            (
+                "git_stage_paths",
+                "Stage explicit bounded paths in an approved development repository.",
+            ),
+            ("git_commit", "Commit staged changes with an explicit bounded message."),
+            ("git_push_current", "Push the current branch of an approved repository."),
+        ):
+            operations.append(
+                HandsOperation(
+                    operation, HandsDomain.DEVELOPMENT, description, native_then_human
                 )
             )
         return cls(tuple(operations))
