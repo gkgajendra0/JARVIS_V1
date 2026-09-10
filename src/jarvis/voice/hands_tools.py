@@ -67,6 +67,100 @@ _CURRENT_WINDOW_MARKERS = (
     "isko",
     "ise",
 )
+_MUTATING_OPERATIONS = {
+    "set_master_volume",
+    "mute_master_volume",
+    "unmute_master_volume",
+    "play_media",
+    "pause_media",
+    "toggle_media_playback",
+    "next_media",
+    "previous_media",
+    "stop_media",
+    "set_clipboard_text",
+    "clear_clipboard",
+    "focus_window",
+    "maximize_window",
+    "minimize_window",
+    "restore_window",
+    "move_window_to_next_monitor",
+    "open_app",
+}
+_ACTION_STARTS: dict[str, tuple[str, ...]] = {
+    "set_master_volume": (
+        "set volume",
+        "set the volume",
+        "change volume",
+        "change the volume",
+        "adjust volume",
+        "adjust the volume",
+        "increase volume",
+        "decrease volume",
+        "raise volume",
+        "lower volume",
+        "turn volume",
+        "turn the volume",
+    ),
+    "mute_master_volume": ("mute", "turn sound off", "turn the sound off"),
+    "unmute_master_volume": ("unmute", "turn sound on", "turn the sound on"),
+    "play_media": ("play", "resume", "continue"),
+    "pause_media": ("pause",),
+    "toggle_media_playback": ("toggle", "toggle playback"),
+    "next_media": ("next", "skip", "skip to next"),
+    "previous_media": ("previous", "go back", "back track"),
+    "stop_media": ("stop",),
+    "set_clipboard_text": ("copy", "put on clipboard", "put this on clipboard"),
+    "clear_clipboard": ("clear clipboard", "empty clipboard"),
+    "focus_window": ("focus", "bring", "switch to", "go to"),
+    "maximize_window": ("maximize", "maximise", "make full screen"),
+    "minimize_window": ("minimize", "minimise"),
+    "restore_window": ("restore",),
+    "move_window_to_next_monitor": ("move",),
+    "open_app": ("open", "launch", "start"),
+}
+_REQUEST_PREFIXES = (
+    "hey jarvis",
+    "okay jarvis",
+    "ok jarvis",
+    "jarvis",
+    "please",
+    "can you",
+    "could you",
+    "would you",
+    "will you",
+)
+_HINGLISH_REQUEST_SUFFIXES = (
+    "kar do",
+    "karo",
+    "karna",
+    "chala do",
+    "chalao",
+    "kholo",
+    "band karo",
+    "band kar do",
+    "kam kar do",
+    "kam karo",
+    "badha do",
+    "badhao",
+    "bada do",
+    "set kar do",
+    "set karo",
+    "copy kar do",
+    "copy karo",
+)
+_NON_COMMAND_SECOND_TOKENS = {
+    "is",
+    "was",
+    "means",
+    "should",
+    "would",
+    "could",
+    "can",
+    "might",
+    "feature",
+    "button",
+    "command",
+}
 
 
 class HandsToolGroundingError(ValueError):
@@ -80,6 +174,44 @@ def _normalized(value: str) -> str:
 def _contains_marker(text: str, markers: tuple[str, ...]) -> bool:
     normalized = f" {_normalized(text)} "
     return any(f" {_normalized(marker)} " in normalized for marker in markers)
+
+
+def _strip_request_prefixes(text: str) -> str:
+    value = _normalized(text)
+    changed = True
+    while value and changed:
+        changed = False
+        for prefix in _REQUEST_PREFIXES:
+            normalized_prefix = _normalized(prefix)
+            if value == normalized_prefix:
+                return ""
+            if value.startswith(f"{normalized_prefix} "):
+                value = value[len(normalized_prefix) :].strip()
+                changed = True
+                break
+    return value
+
+
+def _explicit_action_request(text: str, operation: str) -> bool:
+    if operation not in _MUTATING_OPERATIONS:
+        return True
+    body = _strip_request_prefixes(text)
+    if not body:
+        return False
+
+    for start in _ACTION_STARTS.get(operation, ()):
+        normalized_start = _normalized(start)
+        if body == normalized_start or body.startswith(f"{normalized_start} "):
+            remainder = body[len(normalized_start) :].strip()
+            second = remainder.split(maxsplit=1)[0] if remainder else ""
+            if second in _NON_COMMAND_SECOND_TOKENS:
+                continue
+            return True
+
+    return any(
+        body == suffix or body.endswith(f" {suffix}")
+        for suffix in _HINGLISH_REQUEST_SUFFIXES
+    )
 
 
 def _named_app(text: str) -> str | None:
@@ -151,6 +283,10 @@ class HandsAgentTools:
         if not _contains_marker(turn.text, markers):
             raise HandsToolGroundingError(
                 "latest accepted user turn does not explicitly warrant this computer action"
+            )
+        if not _explicit_action_request(turn.text, operation):
+            raise HandsToolGroundingError(
+                "latest accepted user turn mentions the action but is not an explicit action request"
             )
 
         if operation == "play_media":
@@ -295,8 +431,10 @@ class HandsAgentTools:
         Current operations include master volume/mute, current media and playback
         controls, clipboard text, top-level window management, and approved app launch.
 
-        Never invent the target or material parameters. Volume percentages must appear
-        in the latest USER utterance. Clipboard text must be present in that utterance.
+        Never invent the target or material parameters. Mutating operations require the
+        latest accepted USER utterance to be an explicit action request, not merely a
+        statement that happens to mention the same action/value. Volume percentages must
+        appear in that utterance. Clipboard text must be present in that utterance.
         App/window targets must be explicitly user-named or, for phrases such as "this
         window", recoverable from recent canonical USER context. The tool revalidates
         these constraints independently of model reasoning.
