@@ -8,16 +8,16 @@ Owner-machine acceptance is representative, not exhaustive. We do not manually c
 
 Representative owner scenarios:
 
-1. `jarvis-hands-smoke --readiness`
+1. `jarvis-hands-smoke --readiness` — PASSED
    - read-only platform/dependency/resolver readiness
    - zero mutations
    - zero cloud model calls
    - no Windows Hello prompt
-2. `jarvis-hands-smoke`
+2. `jarvis-hands-smoke` — PASSED
    - representative structured application-UI execution through Microsoft `winapp`
    - exact Notepad text write + readback verification
    - proves structured UI + launcher + canonical authority + permit + verification
-3. `jarvis-hands-smoke --native --volume 30`
+3. `jarvis-hands-smoke --native --volume 30` — PASSED
    - one combined representative native Windows scenario
    - approved Calculator launch
    - Calculator maximize
@@ -25,14 +25,10 @@ Representative owner scenarios:
    - clipboard set to `JARVIS native clipboard acceptance`
    - proves app lifecycle + Win32 window management + Core Audio + clipboard through the governed runtime
    - this does NOT imply separate owner runs for minimize/restore/focus/mute/unmute/clear-clipboard/etc.; those belong in automated coverage
-4. `jarvis-hands-smoke --media`
-   - one representative Windows media-session scenario
-   - requires one active media session
-   - reads current state, changes play/pause state once, then restores the original state
-   - does not skip tracks
-   - next/previous/stop and malformed/no-session cases remain automated tests rather than separate owner runs
-5. Live `jarvis-voice` acceptance
-   - one natural-language end-to-end session that exercises semantic native routing and structured app UI
+4. Final live `jarvis-voice` representative scenario — PENDING
+   - one natural-language end-to-end session exercising semantic native routing, current-media control, and structured app UI
+   - media acceptance is folded into this final live session rather than requiring a separate mandatory `--media` owner run
+   - `jarvis-hands-smoke --media` remains available only as a diagnostic if live media behavior fails or needs isolation
    - no authority from unrelated/ambient meeting speech
    - success claims must match verified tool state
 
@@ -46,6 +42,7 @@ Future Hands families follow the same rule: add automated operation coverage bro
 - A regression now exercises the same condition with a fake pywin32 GUI module that deliberately has no `IsZoomed` attribute.
 - The second native H1 run proved `open_app` and `maximize_window`, then exposed a pycaw adapter assumption: the returned `AudioDevice` on the owner machine has no `volume_percent` convenience property.
 - Current pycaw examples and the Windows Core Audio contract use the endpoint-volume interface. The adapter now reads `EndpointVolume.GetMasterVolumeLevelScalar()` and writes `EndpointVolume.SetMasterVolumeLevelScalar()` with normalized values, avoiding the unsupported convenience property. A contract regression exercises an AudioDevice shape with only `FriendlyName` and `EndpointVolume`.
+- The corrected native representative run then PASSED all four governed actions on the owner machine: Calculator launch, Calculator maximize, master volume to 30%, and fixed clipboard marker. All four returned `status=succeeded` and `verification_passed=true`; summary reported `actions_completed=4/4`, `cloud_model_calls=0`, and `raw_shell=false`.
 
 ## Approval rule
 
@@ -55,4 +52,4 @@ Human-facing Windows Hello summaries must identify the material action being app
 
 ## Completion rule
 
-H1 is not owner accepted until the representative readiness, structured UI, native core, media, and live voice scenarios pass on the owner Windows machine. PR #30 stays draft and unmerged until owner acceptance, documentation reconciliation, and final exact-head CI are complete.
+H1 is not owner accepted until the representative readiness, structured UI, native core, and final live voice scenario pass on the owner Windows machine. PR #30 stays draft and unmerged until owner acceptance, documentation reconciliation, and final exact-head CI are complete.
