@@ -1,0 +1,42 @@
+name: Hands maturity integration
+
+on:
+  push:
+    branches:
+      - feat/governed-jarvis-hands-v1
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/governed-jarvis-hands-v1
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply Hands maturity integration
+        run: python scripts/hands_maturity_finish_patch.py
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev,hands]"
+      - name: Format and lint
+        run: |
+          python -m ruff format src/jarvis/hands/contracts.py src/jarvis/hands/planner.py src/jarvis/hands/entities.py src/jarvis/hands/orchestrator.py src/jarvis/voice/hands_goal_tools.py src/jarvis/capabilities/runtime.py src/jarvis/config.py src/jarvis/voice/production_runtime.py src/jarvis/voice/capability_tools.py src/jarvis/voice/agent.py tests/test_hands_goal_tools.py tests/test_production_hands_voice_wiring.py
+          python -m ruff check src/jarvis/hands/contracts.py src/jarvis/hands/planner.py src/jarvis/hands/entities.py src/jarvis/hands/orchestrator.py src/jarvis/voice/hands_goal_tools.py src/jarvis/capabilities/runtime.py src/jarvis/config.py src/jarvis/voice/production_runtime.py src/jarvis/voice/capability_tools.py src/jarvis/voice/agent.py tests/test_hands_goal_tools.py tests/test_production_hands_voice_wiring.py
+      - name: Import smoke
+        run: python -c "from jarvis.hands.orchestrator import HandsOrchestrator; from jarvis.voice.hands_goal_tools import HandsGoalAgentTools; from jarvis.hands.contracts import PlannerTurn"
+      - name: Run existing focused regressions
+        run: python -m pytest -q tests/test_hands_registry.py tests/test_hands_authority.py tests/test_hands_goal_tools.py tests/test_production_hands_voice_wiring.py
+      - name: Commit maturity integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/jarvis/hands/contracts.py src/jarvis/hands/planner.py src/jarvis/voice/hands_goal_tools.py src/jarvis/capabilities/runtime.py src/jarvis/config.py src/jarvis/voice/production_runtime.py src/jarvis/voice/capability_tools.py src/jarvis/voice/agent.py tests/test_hands_goal_tools.py tests/test_production_hands_voice_wiring.py
+          git diff --cached --quiet && exit 0
+          git commit -m "Integrate mature Hands semantic orchestrator"
+          git push origin HEAD:feat/governed-jarvis-hands-v1
