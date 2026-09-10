@@ -25,6 +25,7 @@ _REQUIRED_NATIVE_MODULES = {
     "pycaw": "Windows Core Audio",
     "win32clipboard": "Win32 clipboard",
     "win32gui": "Win32 window management",
+    "winrt.windows.foundation": "Windows Runtime Foundation",
     "winrt.windows.media.control": "Windows media sessions",
 }
 _H1_OPERATIONS = (

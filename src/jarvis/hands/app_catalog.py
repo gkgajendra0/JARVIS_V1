@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import platform
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 _APPS_FOLDER = "shell:::{4234d49b-0245-4df3-b780-3893943456e1}"
 _MAX_APP_NAME = 160
@@ -151,7 +152,9 @@ class WindowsAppsFolderCatalog:
         except AppCatalogError:
             raise
         except Exception as exc:  # COM failures surface through pywin32-specific types.
-            raise AppCatalogError(f"Windows AppsFolder enumeration failed: {exc}") from exc
+            raise AppCatalogError(
+                f"Windows AppsFolder enumeration failed: {exc}"
+            ) from exc
 
         discovered: dict[tuple[str, str], InstalledApp] = {}
         for item in items:

@@ -168,7 +168,9 @@ class HandsGoalAgentTools:
         if not normalized_app:
             return False
         for turn in reversed(self._conversation.turns[-8:]):
-            if turn.role is ConversationRole.USER and normalized_app in _normalized(turn.text):
+            if turn.role is ConversationRole.USER and normalized_app in _normalized(
+                turn.text
+            ):
                 return True
         return False
 
@@ -185,9 +187,12 @@ class HandsGoalAgentTools:
             return
         if normalized_app in apps_opened_in_plan:
             return
-        if allow_context and _contains_marker(user_text, _CURRENT_TARGET_MARKERS):
-            if self._recently_grounded_app(app):
-                return
+        if (
+            allow_context
+            and _contains_marker(user_text, _CURRENT_TARGET_MARKERS)
+            and self._recently_grounded_app(app)
+        ):
+            return
         raise HandsGoalGroundingError(
             "model-selected app target is not grounded in the current or recent user request"
         )
@@ -208,13 +213,13 @@ class HandsGoalAgentTools:
             raise HandsGoalGroundingError(
                 f"operation is not yet exposed through goal-oriented Hands: {operation}"
             )
-        if not _contains_marker(user_text, markers):
-            if operation != "get_current_media" or not _contains_marker(
-                user_text, _MEDIA_CONTEXT_MARKERS
-            ):
-                raise HandsGoalGroundingError(
-                    f"latest user request does not warrant Hands operation: {operation}"
-                )
+        if not _contains_marker(user_text, markers) and (
+            operation != "get_current_media"
+            or not _contains_marker(user_text, _MEDIA_CONTEXT_MARKERS)
+        ):
+            raise HandsGoalGroundingError(
+                f"latest user request does not warrant Hands operation: {operation}"
+            )
 
         raw_parameters = raw.get("parameters", {})
         if not isinstance(raw_parameters, dict):
@@ -224,8 +229,7 @@ class HandsGoalAgentTools:
         if operation == "set_master_volume":
             percent = float(parameters.get("percent"))
             requested_numbers = [
-                float(value)
-                for value in re.findall(r"\b\d+(?:\.\d+)?\b", user_text)
+                float(value) for value in re.findall(r"\b\d+(?:\.\d+)?\b", user_text)
             ]
             if not any(abs(percent - value) < 0.001 for value in requested_numbers):
                 raise HandsGoalGroundingError(
@@ -278,20 +282,28 @@ class HandsGoalAgentTools:
             parameters = {}
 
         if semantic.operation != operation:
-            raise HandsGoalGroundingError("Hands registry returned an inconsistent operation")
+            raise HandsGoalGroundingError(
+                "Hands registry returned an inconsistent operation"
+            )
         return HandsWorkflowStep(operation=operation, parameters=parameters)
 
-    def _parse_plan(self, plan_json: str, user_text: str) -> tuple[HandsWorkflowStep, ...]:
+    def _parse_plan(
+        self, plan_json: str, user_text: str
+    ) -> tuple[HandsWorkflowStep, ...]:
         if not isinstance(plan_json, str) or not plan_json.strip():
             raise HandsGoalGroundingError("Hands goal plan must be non-empty JSON")
         if len(plan_json) > _MAX_PLAN_JSON_CHARS:
-            raise HandsGoalGroundingError("Hands goal plan exceeds the bounded input limit")
+            raise HandsGoalGroundingError(
+                "Hands goal plan exceeds the bounded input limit"
+            )
         try:
             decoded = json.loads(plan_json)
         except json.JSONDecodeError as exc:
             raise HandsGoalGroundingError("Hands goal plan is invalid JSON") from exc
         if not isinstance(decoded, list) or not decoded:
-            raise HandsGoalGroundingError("Hands goal plan must be a non-empty JSON array")
+            raise HandsGoalGroundingError(
+                "Hands goal plan must be a non-empty JSON array"
+            )
         if len(decoded) > self._runner.MAX_STEPS:
             raise HandsGoalGroundingError(
                 f"Hands goal plan exceeds {self._runner.MAX_STEPS} semantic steps"

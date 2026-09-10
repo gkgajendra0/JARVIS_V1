@@ -11,7 +11,7 @@ from livekit.agents.llm import ToolError
 
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
-from jarvis.voice.hands_tools import HandsAgentTools
+from jarvis.voice.hands_goal_tools import HandsGoalAgentTools
 
 LOGGER = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ class LocalReadAgentTools:
             raise TypeError("conversation must be a ConversationSession")
         self._runtime = runtime
         self._conversation = conversation
-        self._hands = HandsAgentTools(runtime, conversation)
+        self._hands = HandsGoalAgentTools(runtime, conversation)
 
     @property
     def tools(self) -> list:

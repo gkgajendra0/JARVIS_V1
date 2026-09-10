@@ -35,6 +35,7 @@ from jarvis.capabilities.windows_native import (
     WindowManagementExecutor,
 )
 from jarvis.capabilities.windows_sources import WinAppCliSchemaSource, WindowsOdrSource
+from jarvis.hands.models import ExecutionSubstrate
 from jarvis.hands.registry import HandsCapabilityRegistry
 
 
@@ -87,12 +88,44 @@ class CapabilityRuntime:
 
     def capability_for_operation(self, operation: str) -> str | None:
         normalized = str(operation).strip()
-        candidates = sorted(
+        candidates = tuple(
             key
             for key, executor in self._executors.items()
             if normalized in executor.operations
         )
-        return candidates[0] if len(candidates) == 1 else None
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+
+        semantic = self._hands_registry.operation(normalized)
+        if semantic is None:
+            return None
+        kind_to_substrate = {
+            "semantic_connector": ExecutionSubstrate.DEDICATED_INTEGRATION,
+            "native_api": ExecutionSubstrate.NATIVE_API,
+            "structured_automation": ExecutionSubstrate.STRUCTURED_AUTOMATION,
+            "visual_fallback": ExecutionSubstrate.VISUAL_FALLBACK,
+            "local_read": ExecutionSubstrate.NATIVE_API,
+        }
+        preference = {
+            substrate: index
+            for index, substrate in enumerate(semantic.preferred_substrates)
+        }
+        ranked: list[tuple[int, str]] = []
+        for key in candidates:
+            descriptor = self.catalog.by_key(key)
+            if descriptor is None or not descriptor.execution_enabled:
+                continue
+            substrate = kind_to_substrate.get(descriptor.kind.value)
+            if substrate in preference:
+                ranked.append((preference[substrate], key))
+        if not ranked:
+            return None
+        ranked.sort()
+        best_rank = ranked[0][0]
+        best = [key for rank, key in ranked if rank == best_rank]
+        return best[0] if len(best) == 1 else None
 
     def execute_operation(
         self,

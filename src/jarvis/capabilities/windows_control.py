@@ -32,6 +32,7 @@ from jarvis.computer.structured_windows import (
     StructuredWindowsError,
     WinAppCliBackend,
 )
+from jarvis.hands.app_catalog import validate_app_name
 
 _MAX_TASK_CHARACTERS = 1_500
 _MAX_PLAN_STEPS = 12
@@ -63,6 +64,36 @@ _READ_STRUCTURED_ACTIONS = {
     "search",
     "get_value",
     "verify_value",
+}
+_STRUCTURED_BLOCKED_UI_TERMS = (
+    "save",
+    "save as",
+    "print",
+    "share",
+    "send",
+    "delete",
+    "remove",
+    "open file",
+    "open dialog",
+    "install",
+    "uninstall",
+    "download",
+    "upload",
+    "security",
+    "permission",
+    "settings",
+    "password",
+    "credential",
+    "api key",
+    "token",
+)
+_STRUCTURED_BROWSER_APP_NAMES = {
+    "chrome",
+    "google chrome",
+    "edge",
+    "microsoft edge",
+    "firefox",
+    "mozilla firefox",
 }
 _VISUAL_BLOCKED_TERMS = (
     "browser",
@@ -115,15 +146,7 @@ def _safe_apps() -> tuple[str, ...]:
 
 
 def _normalize_app(value: object) -> str:
-    app = str(value).strip().casefold()
-    if not app or len(app) > 80:
-        raise ValueError("desktop-control app must be a bounded non-empty name")
-    allowed = _safe_apps()
-    if app not in allowed:
-        raise ValueError(
-            f"desktop-control app is not approved: {app}; approved={','.join(allowed)}"
-        )
-    return app
+    return validate_app_name(value)
 
 
 def _normalize_task(value: object) -> str:
@@ -256,6 +279,51 @@ def _normalize_plan(raw: object) -> tuple[dict[str, Any], ...]:
     return tuple(normalized)
 
 
+def _normalized_grounding(value: object) -> str:
+    return " ".join(re.sub(r"[^\w]+", " ", str(value).casefold()).split())
+
+
+def _validate_plan_against_task(
+    plan: tuple[dict[str, Any], ...],
+    task: str,
+) -> None:
+    normalized_task = _normalized_grounding(task)
+    grounded_values: set[str] = set()
+    for step in plan:
+        action = str(step["action"])
+        for field in ("selector", "query"):
+            value = step.get(field)
+            normalized = _normalized_grounding(value) if value is not None else ""
+            if normalized and any(
+                _normalized_grounding(term) in normalized
+                for term in _STRUCTURED_BLOCKED_UI_TERMS
+            ):
+                raise ValueError(
+                    "structured app UI plan crosses a blocked persistent/high-risk intent"
+                )
+        if action == "search":
+            query = _normalized_grounding(step.get("query", ""))
+            if not query or query not in normalized_task:
+                raise ValueError(
+                    "structured app UI search content is not grounded in the user goal"
+                )
+        if action in {"send_text", "set_value"}:
+            material = _normalized_grounding(step.get("text", ""))
+            if not material or material not in normalized_task:
+                raise ValueError(
+                    "structured app UI material text is not grounded in the user goal"
+                )
+            grounded_values.add(material)
+        if action == "verify_value":
+            expected = _normalized_grounding(step.get("expected", ""))
+            if not expected or (
+                expected not in normalized_task and expected not in grounded_values
+            ):
+                raise ValueError(
+                    "structured app UI verification value is not grounded in the user goal"
+                )
+
+
 def _extract_value(payload: dict[str, Any]) -> str:
     for key in ("text", "value", "name"):
         value = payload.get(key)
@@ -306,7 +374,8 @@ class WindowsStructuredControlExecutor:
             operations=self.operations,
             metadata={
                 "backend": "Microsoft winapp UI Automation",
-                "approved_apps": list(_safe_apps()),
+                "generic_running_apps": True,
+                "legacy_nested_launch_apps": list(_safe_apps()),
                 "raw_shell": False,
                 "browser_control": False,
             },
@@ -319,15 +388,23 @@ class WindowsStructuredControlExecutor:
         app = _normalize_app(request.parameters.get("app"))
         task = _normalize_task(request.parameters.get("task"))
         plan = _normalize_plan(request.parameters.get("plan"))
+        if _normalized_grounding(app) in _STRUCTURED_BROWSER_APP_NAMES:
+            raise ValueError(
+                "browser UI interaction belongs to the dedicated browser capability"
+            )
+        _validate_plan_against_task(plan, task)
         allow_existing_app = _bool(request.parameters.get("allow_existing_app"))
         mutating = any(step["action"] in _MUTATING_STRUCTURED_ACTIONS for step in plan)
-        if not mutating:
-            raise ValueError(
-                "desktop control plan must contain at least one control action"
-            )
         reads_private_state = any(
             step["action"] in _READ_STRUCTURED_ACTIONS for step in plan
         )
+        if not mutating and not reads_private_state:
+            raise ValueError("structured app UI plan has no executable action")
+        if any(step["action"] == "launch" for step in plan) and app not in _safe_apps():
+            raise ValueError(
+                "generic application launch belongs to app.lifecycle; nested UI launch "
+                "is retained only for legacy bounded smoke targets"
+            )
         return PreparedCapability(
             request=request,
             target={
@@ -344,7 +421,7 @@ class WindowsStructuredControlExecutor:
             material_summary=f"Control {app} to perform: {task}",
             attributes=ActionAttributes(
                 private_read=reads_private_state,
-                reversible_local_change=True,
+                reversible_local_change=mutating,
                 scope=ActionScope.LIMITED,
             ),
             execution_payload={
@@ -603,11 +680,11 @@ class VisualDesktopControlExecutor:
         task = str(prepared.execution_payload["task"])
         try:
             ui = WinAppCliBackend()
-            launcher = AllowlistedWindowsLauncher()
             existing = ui.status(app, check=False)
             if int(existing.payload.get("exit_code", 1)) != 0:
-                launcher.launch(app)
-                ui.wait_until_running(app, timeout_seconds=6.0)
+                raise CapabilityExecutionError(
+                    "visual app UI target is not running; launch through app.lifecycle first"
+                )
             provider = self._provider_factory(self._provider_name)
             executor = self._executor_factory()
             service = ComputerUseService(

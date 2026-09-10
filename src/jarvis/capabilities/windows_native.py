@@ -18,10 +18,13 @@ from jarvis.capabilities.models import (
     CapabilityResult,
     CapabilityStatus,
 )
-from jarvis.computer.structured_windows import (
-    AllowlistedWindowsLauncher,
-    StructuredWindowsError,
-    WinAppCliBackend,
+from jarvis.computer.structured_windows import StructuredWindowsError, WinAppCliBackend
+from jarvis.hands.app_catalog import (
+    AppCatalog,
+    AppCatalogError,
+    InstalledApp,
+    WindowsAppsFolderCatalog,
+    validate_app_name,
 )
 
 _SECRET_PATTERNS = (
@@ -804,33 +807,48 @@ class WindowManagementExecutor:
 
 
 class AppLifecycleBackend(Protocol):
-    def open(self, app: str) -> dict[str, Any]: ...
+    def open(self, app: InstalledApp) -> dict[str, Any]: ...
 
 
-class AllowlistedAppLifecycleBackend:
-    """Shell-free app launch plus structured running-state verification."""
+class _InjectedBackendCatalog:
+    """Identity shim used only when tests/custom code inject an executor backend."""
 
-    def __init__(self) -> None:
-        try:
-            self._launcher = AllowlistedWindowsLauncher()
-            self._ui = WinAppCliBackend()
-        except StructuredWindowsError as exc:
-            raise NativeWindowsError(str(exc)) from exc
+    def entries(self) -> tuple[InstalledApp, ...]:
+        return ()
 
-    def open(self, app: str) -> dict[str, Any]:
-        status = self._ui.status(app, check=False)
+    def resolve(self, query: str) -> InstalledApp:
+        name = validate_app_name(query)
+        return InstalledApp(display_name=name, app_id=name, source="injected_backend")
+
+    def launch(self, app: InstalledApp) -> None:
+        raise AppCatalogError(
+            f"injected backend catalogue cannot launch {app.display_name}"
+        )
+
+
+class CatalogAppLifecycleBackend:
+    """Launch one resolved Windows AppsFolder identity and verify it with winapp."""
+
+    def __init__(
+        self,
+        catalog: AppCatalog,
+        *,
+        ui_factory=WinAppCliBackend,
+    ) -> None:
+        self._catalog = catalog
+        self._ui_factory = ui_factory
+
+    def open(self, app: InstalledApp) -> dict[str, Any]:
+        ui = self._ui_factory()
+        status = ui.status(app.ui_target, check=False)
         launched = False
         if int(status.payload.get("exit_code", 1)) != 0:
-            launch = self._launcher.launch(app)
+            self._catalog.launch(app)
             launched = True
-            launch_payload = launch.to_payload()
-        else:
-            launch_payload = None
-        ready = self._ui.wait_until_running(app, timeout_seconds=8.0)
+        ready = ui.wait_until_running(app.ui_target, timeout_seconds=10.0)
         return {
-            "app": app,
+            "app": app.payload(),
             "launched": launched,
-            "launch": launch_payload,
             "running": int(ready.payload.get("exit_code", 1)) == 0,
         }
 
@@ -839,17 +857,32 @@ class AppLifecycleExecutor:
     capability_key = "app:lifecycle"
     operations = ("open_app",)
 
-    def __init__(self, backend: AppLifecycleBackend | None = None) -> None:
+    def __init__(
+        self,
+        backend: AppLifecycleBackend | None = None,
+        *,
+        catalog: AppCatalog | None = None,
+    ) -> None:
         self._backend = backend
+        self._catalog = catalog or (
+            _InjectedBackendCatalog()
+            if backend is not None
+            else WindowsAppsFolderCatalog()
+        )
         self.descriptor = CapabilityDescriptor.create(
             capability_id="lifecycle",
             source_id="app",
             kind=CapabilityKind.NATIVE_API,
-            name="Approved application lifecycle",
-            description="Shell-free launch and running-state verification for approved apps.",
+            name="Windows installed application lifecycle",
+            description=(
+                "Resolve Start-menu applications dynamically through Windows AppsFolder, "
+                "launch the resolved Shell item, and verify the application is running."
+            ),
             operations=list(self.operations),
             metadata={
-                "approved_apps": list(AllowlistedWindowsLauncher.supported_apps()),
+                "catalog": "Windows Shell AppsFolder",
+                "dynamic_installed_apps": True,
+                "model_supplied_executable": False,
                 "raw_shell": False,
             },
             execution_enabled=_execution_enabled() or backend is not None,
@@ -858,26 +891,39 @@ class AppLifecycleExecutor:
     def prepare(self, request: CapabilityRequest) -> PreparedCapability:
         if request.operation != "open_app":
             raise ValueError("unsupported application lifecycle operation")
-        app = str(request.parameters.get("app", "")).strip().casefold()
-        if app not in AllowlistedWindowsLauncher.supported_apps():
-            raise ValueError(f"application is not approved for launch: {app}")
+        query = validate_app_name(request.parameters.get("app", ""))
+        try:
+            app = self._catalog.resolve(query)
+        except AppCatalogError as exc:
+            raise ValueError(str(exc)) from exc
         return PreparedCapability(
             request=request,
-            target={"app": app, "domain": "app.lifecycle"},
-            parameters={"app": app},
-            material_summary=f"Open approved Windows application: {app}",
+            target={
+                "app_id": app.app_id,
+                "display_name": app.display_name,
+                "domain": "app.lifecycle",
+            },
+            parameters={"app": app.payload()},
+            material_summary=f"Open Windows application: {app.display_name}",
             attributes=ActionAttributes(reversible_local_change=True),
-            execution_payload={"app": app},
+            execution_payload={"app": app.payload()},
         )
 
     def execute(self, prepared: PreparedCapability) -> CapabilityResult:
         started = time.monotonic()
+        payload = dict(prepared.execution_payload["app"])
+        app = InstalledApp(
+            display_name=str(payload["display_name"]),
+            app_id=str(payload["app_id"]),
+            source=str(payload.get("source", "windows_apps_folder")),
+        )
         try:
-            backend = self._backend or AllowlistedAppLifecycleBackend()
-            data = backend.open(str(prepared.execution_payload["app"]))
+            backend = self._backend or CatalogAppLifecycleBackend(self._catalog)
+            data = backend.open(app)
             verified = bool(data.get("running"))
             data["verification_passed"] = verified
         except (
+            AppCatalogError,
             NativeWindowsError,
             StructuredWindowsError,
             OSError,
@@ -888,10 +934,7 @@ class AppLifecycleExecutor:
                 CapabilityStatus.UNAVAILABLE,
                 started,
                 reason=str(exc),
-                provenance=(
-                    "JARVIS shell-free allowlisted launcher",
-                    "Microsoft winapp",
-                ),
+                provenance=("Windows Shell AppsFolder", "Microsoft winapp"),
             )
         return _result(
             prepared,
@@ -899,5 +942,5 @@ class AppLifecycleExecutor:
             started,
             data=data,
             reason=None if verified else "application launch verification failed",
-            provenance=("JARVIS shell-free allowlisted launcher", "Microsoft winapp"),
+            provenance=("Windows Shell AppsFolder", "Microsoft winapp"),
         )
