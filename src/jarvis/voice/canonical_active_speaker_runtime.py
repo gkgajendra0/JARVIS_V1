@@ -17,7 +17,11 @@ from livekit.agents import AgentStateChangedEvent, UserStateChangedEvent
 
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.config import JarvisConfig
-from jarvis.conversation import ConversationRole, ConversationSession, ConversationStatus
+from jarvis.conversation import (
+    ConversationRole,
+    ConversationSession,
+    ConversationStatus,
+)
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_shadow import EnrolledSpeakerShadowObserver
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
