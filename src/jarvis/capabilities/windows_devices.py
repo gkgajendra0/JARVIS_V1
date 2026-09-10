@@ -6,7 +6,9 @@ import asyncio
 import ctypes
 import platform
 import time
-from typing import Any, Protocol
+from collections.abc import Callable, Coroutine
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Protocol, TypeVar
 
 from jarvis.authority.types import ActionAttributes
 from jarvis.capabilities.execution import PreparedCapability
@@ -19,12 +21,33 @@ from jarvis.capabilities.models import (
 )
 
 
+_T = TypeVar("_T")
+
+
 class WindowsDeviceValidationError(ValueError):
     pass
 
 
 def _windows_enabled() -> bool:
     return platform.system() == "Windows"
+
+
+def _run_async(factory: Callable[[], Coroutine[Any, Any, _T]]) -> _T:
+    """Run a WinRT coroutine from synchronous capability code.
+
+    Capability executors are synchronous, but production voice runs them while an
+    asyncio event loop is already active. Creating a fresh loop in that thread via
+    asyncio.run() is illegal, so use a short-lived worker thread in that case. The
+    coroutine is created inside the worker to keep WinRT objects on the same thread.
+    """
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(factory())
+
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="jarvis-winrt") as pool:
+        return pool.submit(lambda: asyncio.run(factory())).result()
 
 
 def _result(
@@ -243,7 +266,7 @@ class WinRtBluetoothBackend:
                 )
             return result
 
-        return asyncio.run(run())
+        return _run_async(run)
 
     def pair(self, name: str) -> dict[str, Any]:
         async def run():
@@ -267,7 +290,7 @@ class WinRtBluetoothBackend:
                 "pairing_status": status,
             }
 
-        return asyncio.run(run())
+        return _run_async(run)
 
     def unpair(self, name: str) -> dict[str, Any]:
         async def run():
@@ -287,7 +310,7 @@ class WinRtBluetoothBackend:
                 "unpairing_status": status,
             }
 
-        return asyncio.run(run())
+        return _run_async(run)
 
 
 class BluetoothControlExecutor:
