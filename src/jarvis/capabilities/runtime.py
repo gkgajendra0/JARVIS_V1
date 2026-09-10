@@ -86,6 +86,12 @@ class CapabilityRuntime:
         self._executors = {executor.capability_key: executor for executor in executors}
         if len(self._executors) != len(executors):
             raise ValueError("capability executor keys must be unique")
+        for executor in executors:
+            descriptor = getattr(executor, "descriptor", None)
+            if descriptor is None or descriptor.key != executor.capability_key:
+                raise ValueError(
+                    "capability executor key must exactly match its descriptor identity"
+                )
         self._resolver = resolver
         self._authority = authority
         self._hands_registry = hands_registry or HandsCapabilityRegistry.default()
