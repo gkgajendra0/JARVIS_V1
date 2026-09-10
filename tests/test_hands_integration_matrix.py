@@ -149,7 +149,10 @@ class FakeSoftwareBackend:
 class FakeGitBackend:
     def __init__(self) -> None:
         self.branch = "main"
+        self.head = "a" * 40
         self.created: list[str] = []
+        self.branch_oids: dict[str, str] = {"main": self.head}
+        self.remote_oids: dict[str, str] = {"main": self.head}
 
     def status(self, repo: Path) -> dict[str, Any]:
         del repo
@@ -159,9 +162,18 @@ class FakeGitBackend:
         del repo
         return self.branch
 
+    def head_oid(self, repo: Path) -> str:
+        del repo
+        return self.head
+
+    def branch_oid(self, repo: Path, branch: str) -> str | None:
+        del repo
+        return self.branch_oids.get(branch)
+
     def create_branch(self, repo: Path, branch: str) -> None:
         del repo
         self.created.append(branch)
+        self.branch_oids[branch] = self.head
         self.branch = branch
 
     def stage(self, repo: Path, paths: list[str]) -> None:
@@ -169,11 +181,16 @@ class FakeGitBackend:
 
     def commit(self, repo: Path, message: str) -> str:
         del repo, message
-        return "abc123"
+        return self.head
 
     def push_current(self, repo: Path) -> dict[str, Any]:
         del repo
+        self.remote_oids[self.branch] = self.head
         return {"branch": self.branch, "remote": "origin"}
+
+    def remote_branch_oid(self, repo: Path, branch: str) -> str | None:
+        del repo
+        return self.remote_oids.get(branch)
 
 
 def test_h2_h5_representative_operations_flow_through_one_runtime(
