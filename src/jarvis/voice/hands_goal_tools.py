@@ -6,6 +6,7 @@ import asyncio
 import json
 import re
 from typing import Any
+from urllib.parse import urlparse
 
 from livekit.agents import RunContext, function_tool
 from livekit.agents.llm import ToolError
@@ -83,6 +84,50 @@ _OPERATION_INTENT_MARKERS: dict[str, tuple[str, ...]] = {
         "use",
     ),
     "execute_visual_desktop_task": ("visual", "screen", "look at", "computer use"),
+    "create_text_file": ("create file", "make file", "new file", "write file"),
+    "replace_text_file": ("replace file", "overwrite file", "replace text"),
+    "append_text_file": ("append", "add to file", "add text"),
+    "make_directory": ("create folder", "make folder", "create directory"),
+    "copy_path": ("copy file", "copy folder", "copy path", "copy"),
+    "move_path": ("move file", "move folder", "move path"),
+    "rename_path": ("rename",),
+    "trash_path": ("delete file", "delete folder", "trash", "recycle bin"),
+    "create_docx": ("docx", "word document", "word file"),
+    "append_docx_paragraph": ("docx", "word document", "word file", "paragraph"),
+    "create_xlsx": ("xlsx", "excel", "spreadsheet"),
+    "set_xlsx_cell": ("xlsx", "excel", "spreadsheet", "cell"),
+    "create_pptx": ("pptx", "powerpoint", "presentation"),
+    "add_pptx_text_slide": ("pptx", "powerpoint", "presentation", "slide"),
+    "execute_browser_plan": (
+        "browser",
+        "website",
+        "web page",
+        "navigate",
+        "go to",
+        "download",
+        "upload",
+    ),
+    "list_displays": ("display", "monitor", "screen"),
+    "get_display_brightness": ("brightness", "display", "monitor"),
+    "set_display_brightness": ("brightness", "display", "monitor"),
+    "list_bluetooth_devices": ("bluetooth",),
+    "pair_bluetooth_device": ("bluetooth", "pair"),
+    "unpair_bluetooth_device": ("bluetooth", "unpair", "forget device"),
+    "lock_workstation": ("lock", "computer", "pc", "workstation"),
+    "sleep_workstation": ("sleep", "computer", "pc", "workstation"),
+    "sign_out": ("sign out", "log out", "logout"),
+    "restart_workstation": ("restart", "reboot"),
+    "shutdown_workstation": ("shutdown", "shut down", "turn off"),
+    "search_software": ("software", "app", "package", "winget", "install"),
+    "list_installed_software": ("installed", "software", "app", "package", "winget"),
+    "install_package": ("install", "package", "winget"),
+    "uninstall_package": ("uninstall", "remove", "package", "winget"),
+    "git_status": ("git", "repo", "repository", "status"),
+    "git_active_branch": ("git", "repo", "repository", "branch"),
+    "git_create_branch": ("git", "repo", "repository", "branch"),
+    "git_stage_paths": ("git", "repo", "repository", "stage"),
+    "git_commit": ("git", "repo", "repository", "commit"),
+    "git_push_current": ("git", "repo", "repository", "push"),
 }
 _APP_OPERATIONS = {
     "open_app",
@@ -101,6 +146,198 @@ _WINDOW_OPERATIONS = {
     "restore_window",
     "move_window_to_next_monitor",
 }
+_FILE_WRITE_OPERATIONS = {
+    "create_text_file",
+    "replace_text_file",
+    "append_text_file",
+    "make_directory",
+    "copy_path",
+    "move_path",
+    "rename_path",
+    "trash_path",
+}
+_DOCUMENT_OPERATIONS = {
+    "create_docx",
+    "append_docx_paragraph",
+    "create_xlsx",
+    "set_xlsx_cell",
+    "create_pptx",
+    "add_pptx_text_slide",
+}
+_DISPLAY_OPERATIONS = {
+    "list_displays",
+    "get_display_brightness",
+    "set_display_brightness",
+}
+_BLUETOOTH_OPERATIONS = {
+    "list_bluetooth_devices",
+    "pair_bluetooth_device",
+    "unpair_bluetooth_device",
+}
+_POWER_OPERATIONS = {
+    "lock_workstation",
+    "sleep_workstation",
+    "sign_out",
+    "restart_workstation",
+    "shutdown_workstation",
+}
+_SOFTWARE_OPERATIONS = {
+    "search_software",
+    "list_installed_software",
+    "install_package",
+    "uninstall_package",
+}
+_DEVELOPMENT_OPERATIONS = {
+    "git_status",
+    "git_active_branch",
+    "git_create_branch",
+    "git_stage_paths",
+    "git_commit",
+    "git_push_current",
+}
+_MUTATING_OPERATIONS = {
+    "set_master_volume",
+    "mute_master_volume",
+    "unmute_master_volume",
+    "play_media",
+    "pause_media",
+    "toggle_media_playback",
+    "next_media",
+    "previous_media",
+    "stop_media",
+    "set_clipboard_text",
+    "clear_clipboard",
+    "focus_window",
+    "maximize_window",
+    "minimize_window",
+    "restore_window",
+    "move_window_to_next_monitor",
+    "open_app",
+    "execute_windows_plan",
+    "execute_visual_desktop_task",
+    *_FILE_WRITE_OPERATIONS,
+    *_DOCUMENT_OPERATIONS,
+    "execute_browser_plan",
+    "set_display_brightness",
+    "pair_bluetooth_device",
+    "unpair_bluetooth_device",
+    *_POWER_OPERATIONS,
+    "install_package",
+    "uninstall_package",
+    "git_create_branch",
+    "git_stage_paths",
+    "git_commit",
+    "git_push_current",
+}
+_ACTION_STARTS = (
+    "set",
+    "change",
+    "adjust",
+    "increase",
+    "decrease",
+    "raise",
+    "lower",
+    "mute",
+    "unmute",
+    "play",
+    "resume",
+    "continue",
+    "pause",
+    "toggle",
+    "next",
+    "skip",
+    "previous",
+    "stop",
+    "copy",
+    "clear",
+    "focus",
+    "bring",
+    "switch",
+    "go",
+    "maximize",
+    "maximise",
+    "minimize",
+    "minimise",
+    "restore",
+    "move",
+    "open",
+    "launch",
+    "start",
+    "use",
+    "create",
+    "make",
+    "write",
+    "replace",
+    "overwrite",
+    "append",
+    "add",
+    "rename",
+    "delete",
+    "trash",
+    "navigate",
+    "search",
+    "find",
+    "type",
+    "enter",
+    "click",
+    "press",
+    "choose",
+    "select",
+    "download",
+    "upload",
+    "pair",
+    "unpair",
+    "forget",
+    "lock",
+    "sleep",
+    "sign out",
+    "log out",
+    "logout",
+    "restart",
+    "reboot",
+    "shutdown",
+    "shut down",
+    "turn off",
+    "install",
+    "uninstall",
+    "stage",
+    "commit",
+    "push",
+)
+_REQUEST_PREFIXES = (
+    "hey jarvis",
+    "okay jarvis",
+    "ok jarvis",
+    "jarvis",
+    "please",
+    "can you",
+    "could you",
+    "would you",
+    "will you",
+)
+_HINGLISH_REQUEST_SUFFIXES = (
+    "kar do",
+    "karo",
+    "karna",
+    "chala do",
+    "chalao",
+    "kholo",
+    "band karo",
+    "band kar do",
+    "bana do",
+    "banao",
+    "likh do",
+    "likho",
+    "copy kar do",
+    "copy karo",
+    "move kar do",
+    "rename kar do",
+    "delete kar do",
+    "install kar do",
+    "uninstall kar do",
+    "restart kar do",
+    "shutdown kar do",
+)
 
 
 class HandsGoalGroundingError(ValueError):
@@ -119,6 +356,66 @@ def _contains_marker(text: str, markers: tuple[str, ...]) -> bool:
 def _material_in_text(value: object, text: str) -> bool:
     material = _normalized(value)
     return bool(material) and material in _normalized(text)
+
+
+def _strip_request_prefixes(text: str) -> str:
+    value = _normalized(text)
+    changed = True
+    while value and changed:
+        changed = False
+        for prefix in _REQUEST_PREFIXES:
+            normalized_prefix = _normalized(prefix)
+            if value == normalized_prefix:
+                return ""
+            if value.startswith(f"{normalized_prefix} "):
+                value = value[len(normalized_prefix) :].strip()
+                changed = True
+                break
+    return value
+
+
+def _explicit_action_request(text: str) -> bool:
+    body = _strip_request_prefixes(text)
+    if not body:
+        return False
+    if any(body == start or body.startswith(f"{start} ") for start in _ACTION_STARTS):
+        return True
+    return any(body == suffix or body.endswith(f" {suffix}") for suffix in _HINGLISH_REQUEST_SUFFIXES)
+
+
+def _require_material(value: object, user_text: str, field: str) -> str:
+    text = str(value or "").strip()
+    if not text or not _material_in_text(text, user_text):
+        raise HandsGoalGroundingError(
+            f"{field} must be explicitly grounded in the latest user request"
+        )
+    return text
+
+
+def _url_grounded(value: object, user_text: str) -> bool:
+    url = str(value or "").strip()
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").removeprefix("www.")
+    if host and _material_in_text(host, user_text):
+        return True
+    return _material_in_text(url, user_text)
+
+
+def _browser_warranted(user_text: str) -> bool:
+    if _contains_marker(user_text, _OPERATION_INTENT_MARKERS["execute_browser_plan"]):
+        return True
+    return bool(re.search(r"\b(?:https?://)?(?:www\.)?[a-z0-9-]+\.[a-z]{2,}\b", user_text, re.I))
+
+
+def _repo_grounded(repo: str, user_text: str) -> bool:
+    if _material_in_text(repo, user_text):
+        return True
+    if repo.casefold() != "jarvis":
+        return False
+    return _contains_marker(
+        user_text,
+        ("your repo", "your repository", "this repo", "current repo", "the repo"),
+    )
 
 
 def _bounded_app(value: object) -> str:
@@ -197,6 +494,187 @@ class HandsGoalAgentTools:
             "model-selected app target is not grounded in the current or recent user request"
         )
 
+    @staticmethod
+    def _ground_file_parameters(
+        operation: str, parameters: dict[str, Any], user_text: str
+    ) -> dict[str, Any]:
+        if operation in {"copy_path", "move_path"}:
+            return {
+                "source_root": _require_material(
+                    parameters.get("source_root"), user_text, "source root"
+                ).casefold(),
+                "source_path": _require_material(
+                    parameters.get("source_path"), user_text, "source path"
+                ),
+                "dest_root": _require_material(
+                    parameters.get("dest_root"), user_text, "destination root"
+                ).casefold(),
+                "dest_path": _require_material(
+                    parameters.get("dest_path"), user_text, "destination path"
+                ),
+                "overwrite": bool(parameters.get("overwrite", False)),
+            }
+        if operation == "rename_path":
+            return {
+                "root": _require_material(parameters.get("root"), user_text, "root").casefold(),
+                "path": _require_material(parameters.get("path"), user_text, "path"),
+                "new_path": _require_material(
+                    parameters.get("new_path"), user_text, "new path"
+                ),
+                "overwrite": bool(parameters.get("overwrite", False)),
+            }
+        grounded: dict[str, Any] = {
+            "root": _require_material(parameters.get("root"), user_text, "root").casefold(),
+            "path": _require_material(parameters.get("path"), user_text, "path"),
+        }
+        if operation in {"create_text_file", "replace_text_file", "append_text_file"}:
+            grounded["text"] = _require_material(parameters.get("text"), user_text, "text")
+        return grounded
+
+    @staticmethod
+    def _ground_document_parameters(
+        operation: str, parameters: dict[str, Any], user_text: str
+    ) -> dict[str, Any]:
+        grounded: dict[str, Any] = {
+            "root": _require_material(parameters.get("root"), user_text, "root").casefold(),
+            "path": _require_material(parameters.get("path"), user_text, "document path"),
+        }
+        if operation in {"create_docx", "append_docx_paragraph"}:
+            grounded["text"] = _require_material(parameters.get("text"), user_text, "document text")
+        elif operation in {"create_pptx", "add_pptx_text_slide"}:
+            grounded["title"] = _require_material(parameters.get("title"), user_text, "slide title")
+            body = str(parameters.get("body") or "")
+            if body:
+                grounded["body"] = _require_material(body, user_text, "slide body")
+            else:
+                grounded["body"] = ""
+        elif operation == "create_xlsx":
+            sheet = str(parameters.get("sheet") or "").strip()
+            if sheet:
+                grounded["sheet"] = _require_material(sheet, user_text, "worksheet name")
+        elif operation == "set_xlsx_cell":
+            sheet = str(parameters.get("sheet") or "").strip()
+            if sheet:
+                grounded["sheet"] = _require_material(sheet, user_text, "worksheet name")
+            grounded["cell"] = _require_material(parameters.get("cell"), user_text, "cell")
+            value = parameters.get("value")
+            if value is None:
+                if not _contains_marker(user_text, ("clear", "empty", "blank")):
+                    raise HandsGoalGroundingError(
+                        "clearing a spreadsheet cell must be explicit in the latest user request"
+                    )
+            elif not _material_in_text(value, user_text):
+                raise HandsGoalGroundingError(
+                    "spreadsheet cell value must be grounded in the latest user request"
+                )
+            grounded["value"] = value
+        return grounded
+
+    @staticmethod
+    def _ground_browser_parameters(
+        parameters: dict[str, Any], user_text: str
+    ) -> dict[str, Any]:
+        raw_plan = parameters.get("plan")
+        if not isinstance(raw_plan, list) or not raw_plan:
+            raise HandsGoalGroundingError("browser Hands requires a non-empty plan")
+        plan: list[dict[str, Any]] = []
+        for raw_step in raw_plan:
+            if not isinstance(raw_step, dict):
+                raise HandsGoalGroundingError("browser plan steps must be objects")
+            step = dict(raw_step)
+            action = str(step.get("action") or "").strip().casefold()
+            if action == "navigate" and not _url_grounded(step.get("url"), user_text):
+                raise HandsGoalGroundingError(
+                    "browser URL must be grounded in the latest user request"
+                )
+            if action == "fill":
+                _require_material(step.get("text"), user_text, "browser fill text")
+            if action in {"download", "upload"}:
+                step["root"] = _require_material(
+                    step.get("root"), user_text, "browser file root"
+                ).casefold()
+                step["path"] = _require_material(
+                    step.get("path"), user_text, "browser file path"
+                )
+            plan.append(step)
+        return {"plan": plan}
+
+    @staticmethod
+    def _ground_device_parameters(
+        operation: str, parameters: dict[str, Any], user_text: str
+    ) -> dict[str, Any]:
+        if operation == "set_display_brightness":
+            percent = int(parameters.get("percent"))
+            requested = [int(value) for value in re.findall(r"\b\d+\b", user_text)]
+            if percent not in requested:
+                raise HandsGoalGroundingError(
+                    "brightness percentage must come directly from the latest user request"
+                )
+            grounded: dict[str, Any] = {"percent": percent}
+            display = str(parameters.get("display") or "").strip()
+            if display:
+                grounded["display"] = _require_material(
+                    display, user_text, "display target"
+                )
+            return grounded
+        if operation == "get_display_brightness":
+            display = str(parameters.get("display") or "").strip()
+            return (
+                {"display": _require_material(display, user_text, "display target")}
+                if display
+                else {}
+            )
+        if operation in {"pair_bluetooth_device", "unpair_bluetooth_device"}:
+            return {
+                "name": _require_material(
+                    parameters.get("name"), user_text, "Bluetooth device name"
+                )
+            }
+        return {}
+
+    @staticmethod
+    def _ground_software_parameters(
+        operation: str, parameters: dict[str, Any], user_text: str
+    ) -> dict[str, Any]:
+        if operation in {"search_software", "list_installed_software"}:
+            return {
+                "query": _require_material(
+                    parameters.get("query"), user_text, "software query"
+                )
+            }
+        return {
+            "package_id": _require_material(
+                parameters.get("package_id"), user_text, "exact WinGet package ID"
+            )
+        }
+
+    @staticmethod
+    def _ground_development_parameters(
+        operation: str, parameters: dict[str, Any], user_text: str
+    ) -> dict[str, Any]:
+        repo = str(parameters.get("repo") or "").strip().casefold()
+        if not repo or not _repo_grounded(repo, user_text):
+            raise HandsGoalGroundingError(
+                "development repository must be grounded in the latest user request"
+            )
+        grounded: dict[str, Any] = {"repo": repo}
+        if operation == "git_create_branch":
+            grounded["branch"] = _require_material(
+                parameters.get("branch"), user_text, "Git branch name"
+            )
+        elif operation == "git_stage_paths":
+            paths = parameters.get("paths")
+            if not isinstance(paths, list) or not paths:
+                raise HandsGoalGroundingError("Git stage requires explicit paths")
+            grounded["paths"] = [
+                _require_material(path, user_text, "Git path") for path in paths
+            ]
+        elif operation == "git_commit":
+            grounded["message"] = _require_material(
+                parameters.get("message"), user_text, "Git commit message"
+            )
+        return grounded
+
     def _normalize_step(
         self,
         raw: object,
@@ -213,12 +691,21 @@ class HandsGoalAgentTools:
             raise HandsGoalGroundingError(
                 f"operation is not yet exposed through goal-oriented Hands: {operation}"
             )
-        if not _contains_marker(user_text, markers) and (
+        warranted = (
+            _browser_warranted(user_text)
+            if operation == "execute_browser_plan"
+            else _contains_marker(user_text, markers)
+        )
+        if not warranted and (
             operation != "get_current_media"
             or not _contains_marker(user_text, _MEDIA_CONTEXT_MARKERS)
         ):
             raise HandsGoalGroundingError(
                 f"latest user request does not warrant Hands operation: {operation}"
+            )
+        if operation in _MUTATING_OPERATIONS and not _explicit_action_request(user_text):
+            raise HandsGoalGroundingError(
+                f"latest user request mentions {operation} but is not an explicit action request"
             )
 
         raw_parameters = raw.get("parameters", {})
@@ -278,6 +765,24 @@ class HandsGoalAgentTools:
                 parameters = {"app": app, "task": user_text}
             else:
                 parameters = {"app": app}
+        elif operation in _FILE_WRITE_OPERATIONS:
+            parameters = self._ground_file_parameters(operation, parameters, user_text)
+        elif operation in _DOCUMENT_OPERATIONS:
+            parameters = self._ground_document_parameters(
+                operation, parameters, user_text
+            )
+        elif operation == "execute_browser_plan":
+            parameters = self._ground_browser_parameters(parameters, user_text)
+        elif operation in _DISPLAY_OPERATIONS or operation in _BLUETOOTH_OPERATIONS:
+            parameters = self._ground_device_parameters(operation, parameters, user_text)
+        elif operation in _POWER_OPERATIONS:
+            parameters = {}
+        elif operation in _SOFTWARE_OPERATIONS:
+            parameters = self._ground_software_parameters(operation, parameters, user_text)
+        elif operation in _DEVELOPMENT_OPERATIONS:
+            parameters = self._ground_development_parameters(
+                operation, parameters, user_text
+            )
         else:
             parameters = {}
 
@@ -361,23 +866,28 @@ class HandsGoalAgentTools:
         ask them to choose a capability or executor. Build a short semantic JSON-array
         plan and let JARVIS route each step to the best available governed executor.
 
-        Each item is {"operation": "...", "parameters": {...}}. Current semantic
-        operations cover application launch, app UI, window management, system audio,
-        current Windows media playback, and clipboard. Application names are not a
-        hard-coded tool list: use the app name from the USER request and app.lifecycle
-        resolves it against the Windows installed-app catalogue. To operate app UI,
-        use `execute_windows_plan` with an `app` plus a bounded `plan`; do not include
-        a nested `launch` action because launch belongs to app.lifecycle.
+        Each item is {"operation": "...", "parameters": {...}}. Semantic operations
+        cover apps/windows/audio/media/clipboard plus governed files and documents,
+        structured Playwright browser work, display/Bluetooth/power controls, bounded
+        WinGet software management and Dulwich Git development work.
+
+        Material parameters must come from the current USER request: file/document
+        roots and paths, written content, browser URLs/form values/file transfers,
+        brightness percentages, Bluetooth names, software queries/exact package IDs,
+        repository aliases, Git paths/branches and commit messages. Never invent these.
+        Browser semantic selectors may be inferred as implementation details, but the
+        executor blocks high-consequence generic clicks and arbitrary JavaScript.
+
+        WinGet install/uninstall requires an exact package ID explicitly grounded in the
+        USER turn. A friendly package name may be searched first; never guess an ID from
+        search intent. JARVIS-repository Git mutations remain self-modification and are
+        classified by canonical authority, not ordinary development work.
 
         Prefer native semantic operations over UI. Use app UI only for interaction that
-        has no better native capability. UI intermediate selectors may be inferred as
-        implementation details, but material text/values must remain grounded in the
-        USER goal and high-consequence/persistent UI actions remain blocked by the
-        executor. Visual computer use is only an owner-enabled fallback.
-
-        Every semantic step independently passes through CapabilityRuntime,
-        AuthorityService, one-time permit revalidation, execution and verification.
-        Tool results, not attempted actions, are the only basis for claiming success.
+        has no better native capability. Visual computer use is owner-enabled fallback.
+        Every step independently passes through CapabilityRuntime, AuthorityService,
+        one-time permit revalidation, execution and verification. Only tool results are
+        a basis for claiming success.
         """
         del context
         try:
