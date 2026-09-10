@@ -10,6 +10,23 @@ from typing import Any, Callable, Protocol
 _APPS_FOLDER = "shell:::{4234d49b-0245-4df3-b780-3893943456e1}"
 _MAX_APP_NAME = 160
 _MAX_CATALOG_ITEMS = 2_000
+_RESERVED_HIGH_RISK_APPS = {
+    "cmd",
+    "command prompt",
+    "powershell",
+    "powershell ise",
+    "registry editor",
+    "regedit",
+    "terminal",
+    "windows powershell",
+    "windows terminal",
+    "windows terminal preview",
+}
+_RESERVED_HIGH_RISK_PREFIXES = (
+    "powershell ",
+    "windows powershell ",
+    "windows terminal ",
+)
 
 
 class AppCatalogError(RuntimeError):
@@ -47,15 +64,29 @@ class AppCatalog(Protocol):
     def launch(self, app: InstalledApp) -> None: ...
 
 
-def _normalized(value: str) -> str:
+def _normalized(value: object) -> str:
     return " ".join(re.sub(r"[^\w]+", " ", str(value).casefold()).split())
 
 
-def _bounded_query(value: str) -> str:
-    query = " ".join(str(value).split())
-    if not query or len(query) > _MAX_APP_NAME:
+def validate_app_name(value: object) -> str:
+    """Validate a user-facing app name without turning it into executable authority."""
+
+    app = " ".join(str(value).split())
+    if not app or len(app) > _MAX_APP_NAME:
         raise ValueError("application name must be a non-empty bounded string")
-    return query
+    normalized = _normalized(app)
+    if normalized in _RESERVED_HIGH_RISK_APPS or any(
+        normalized.startswith(prefix) for prefix in _RESERVED_HIGH_RISK_PREFIXES
+    ):
+        raise ValueError(
+            "application belongs to a reserved shell/admin domain and requires a "
+            "separate higher-risk capability"
+        )
+    return app
+
+
+def _bounded_query(value: object) -> str:
+    return validate_app_name(value)
 
 
 def _score(query: str, app: InstalledApp) -> int:
@@ -137,7 +168,11 @@ class WindowsAppsFolderCatalog:
     def resolve(self, query: str) -> InstalledApp:
         bounded = _bounded_query(query)
         ranked = sorted(
-            ((score, app) for app in self.entries() if (score := _score(bounded, app)) >= 0),
+            (
+                (score, app)
+                for app in self.entries()
+                if (score := _score(bounded, app)) >= 0
+            ),
             key=lambda pair: (-pair[0], pair[1].display_name.casefold()),
         )
         if not ranked:
