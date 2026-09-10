@@ -37,7 +37,9 @@ jobs:
           python-version: "3.11"
 
       - name: Install JARVIS test dependencies
-        run: python -m pip install -e ".[dev,phase45d-acceptance]"
+        run: >-
+          python -m pip install -e
+          ".[dev,phase45d-acceptance,hands-files,hands-documents,browser-hands,development-hands]"
 
       - name: Run unit tests
         run: python -m pytest -q
@@ -152,12 +154,14 @@ jobs:
           python-version: "3.11"
 
       - name: Install JARVIS Windows test dependencies
-        run: python -m pip install -e ".[dev,windows-hands]"
+        run: python -m pip install -e ".[dev,windows-hands,device-hands]"
 
       - name: Probe Windows Hands Python dependencies
         run: >-
           python -c "import pycaw; import win32clipboard; import win32gui;
           import winrt.windows.foundation; import winrt.windows.media.control;
+          import winrt.windows.devices.enumeration; import winrt.windows.devices.bluetooth;
+          import screen_brightness_control;
           print('Windows Hands Python dependencies ready')"
 
       - name: Run Windows DPAPI smoke test
