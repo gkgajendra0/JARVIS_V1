@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from jarvis.ai_provider import credential_environment_name, provider_api_key
+from jarvis.authority.tooling import authority_tool_readiness
 from jarvis.config import JarvisConfig
 from jarvis.voice.audio import DEVICE_CHANNELS, DEVICE_SAMPLE_RATE, LocalAudioRuntime
 
@@ -149,11 +151,30 @@ def _audio_checks(config: JarvisConfig) -> list[PreflightCheck]:
     return checks
 
 
+def _authority_checks() -> list[PreflightCheck]:
+    if os.name != "nt":
+        return []
+    checks: list[PreflightCheck] = []
+    for readiness in authority_tool_readiness():
+        detail = readiness.detail
+        if readiness.path is not None:
+            detail = f"{readiness.path} | {detail}"
+        checks.append(
+            PreflightCheck(
+                readiness.label,
+                readiness.ok,
+                detail,
+            )
+        )
+    return checks
+
+
 def run_startup_preflight(config: JarvisConfig) -> list[PreflightCheck]:
     checks = [
         _check_file("Wake model", config.wake_model_path),
         _credential_check(config),
         *_audio_checks(config),
+        *_authority_checks(),
     ]
 
     if config.speaker_shadow_enabled:
