@@ -6,6 +6,7 @@ import os
 import time
 from typing import Protocol
 
+from jarvis.ai_provider import configured_ai_provider
 from jarvis.authority.audit import AuditError
 from jarvis.authority.types import ActionOrigin
 from jarvis.capabilities.authority_bridge import (
@@ -18,7 +19,6 @@ from jarvis.capabilities.development_git import (
     DevelopmentGitError,
     DevelopmentGitExecutor,
 )
-from jarvis.capabilities.discovery import CapabilityResolver
 from jarvis.capabilities.document_edits import DocumentEditExecutor
 from jarvis.capabilities.execution import CapabilityExecutor
 from jarvis.capabilities.local_reads import LocalProjectReadExecutor
@@ -54,6 +54,7 @@ from jarvis.capabilities.windows_native import (
 from jarvis.capabilities.windows_sources import WinAppCliSchemaSource, WindowsOdrSource
 from jarvis.hands.models import ExecutionSubstrate
 from jarvis.hands.registry import HandsCapabilityRegistry
+from jarvis.machine_config import load_machine_settings
 
 
 class AuthorityBroker(Protocol):
@@ -307,8 +308,9 @@ def build_default_capability_runtime(
     windows = WindowManagementExecutor()
     app_lifecycle = AppLifecycleExecutor()
     structured_control = WindowsStructuredControlExecutor()
+    visual_provider = ai_provider or configured_ai_provider(load_machine_settings())
     visual_control = VisualDesktopControlExecutor(
-        provider_name=ai_provider or os.getenv("JARVIS_AI_PROVIDER", "gemini"),
+        provider_name=visual_provider,
         enabled=_env_enabled("JARVIS_VISUAL_COMPUTER_USE_ENABLED"),
     )
     display = DisplayControlExecutor()
