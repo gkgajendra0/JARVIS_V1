@@ -10,18 +10,16 @@ from livekit.agents.llm import ToolError
 
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
-from jarvis.hands.orchestrator import (
-    HandsGoalSuperseded,
-    HandsOrchestrationError,
-    HandsOrchestrator,
-)
+from jarvis.hands.orchestrator import HandsOrchestrationError, HandsOrchestrator
 from jarvis.hands.planner import HandsPlanningError
+from jarvis.voice.hands_transaction import (
+    HandsGoalSuperseded,
+    LeaseAwareCapabilityRuntime,
+    LeaseAwareHandsPlanner,
+)
 
 LOGGER = logging.getLogger(__name__)
 
-# Realtime providers may decide to call a tool before their final user transcript has
-# propagated through LiveKit.  Hands waits briefly for JARVIS's canonical turn rather
-# than acting against an older utterance.
 _TRANSCRIPT_WAIT_SECONDS = 4.0
 _TRANSCRIPT_POLL_SECONDS = 0.02
 
@@ -114,7 +112,7 @@ class HandsGoalAgentTools:
         ]
         return tuple(users[-6:])
 
-    def _get_orchestrator(self) -> HandsOrchestrator:
+    def _build_orchestrator(self, is_current) -> HandsOrchestrator:
         if self._orchestrator is not None:
             return self._orchestrator
         planner = self._runtime.hands_planner
@@ -122,8 +120,10 @@ class HandsGoalAgentTools:
             raise HandsOrchestrationError(
                 "JARVIS Hands semantic planner is not configured"
             )
-        self._orchestrator = HandsOrchestrator(self._runtime, planner)
-        return self._orchestrator
+        return HandsOrchestrator(
+            LeaseAwareCapabilityRuntime(self._runtime, is_current),
+            LeaseAwareHandsPlanner(planner, is_current),
+        )
 
     async def execute_goal(self) -> dict[str, object]:
         turn, generation = await self._claim_current_user_turn()
@@ -147,11 +147,10 @@ class HandsGoalAgentTools:
                     "canonical_user_turn_id": turn.turn_id,
                 }
             try:
-                result = await self._get_orchestrator().execute_goal(
+                result = await self._build_orchestrator(is_current).execute_goal(
                     session_id=self._conversation.session_id,
                     goal=turn.text,
                     recent_user_turns=self._recent_user_turns(turn),
-                    is_current=is_current,
                 )
             except HandsGoalSuperseded as exc:
                 LOGGER.info(
@@ -183,8 +182,9 @@ class HandsGoalAgentTools:
         A realtime provider may call this before its final transcript is emitted. JARVIS
         therefore binds the call to the current speech generation and waits for the canonical
         transcript. A newer USER utterance supersedes stale planning before another action may
-        execute. If the result status is ``superseded``, do not report the older goal as a
-        failure; continue with the newer USER request.
+        start. An atomic local action that already started is allowed to finish safely. If the
+        result status is ``superseded``, do not report the older goal as a failure; continue
+        with the newer USER request.
 
         If the result has status ``clarification_required``, ask the returned clarification
         question. Otherwise treat the tool result as authoritative and never claim success
