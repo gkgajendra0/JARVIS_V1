@@ -1,7 +1,7 @@
 """Turn-safe transactional wrappers for voice-driven JARVIS Hands.
 
 Realtime voice providers may call tools before their final transcript is available and
-may overlap tool calls across adjacent user turns.  This module binds Hands planning and
+may overlap tool calls across adjacent user turns. This module binds Hands planning and
 execution to one canonical voice-generation lease without interrupting an atomic local
 mutation that has already begun.
 """
@@ -17,6 +17,8 @@ from jarvis.hands.orchestrator import HandsOrchestrationError
 from jarvis.hands.planner import HandsRouteGroup
 
 _UIA_OBSERVATION_ACTIONS = frozenset({"inspect", "search", "get_value", "verify_value"})
+_VISUAL_OPERATION = "execute_visual_desktop_task"
+_STRUCTURED_UI_OPERATION = "execute_windows_plan"
 
 
 class HandsGoalSuperseded(HandsOrchestrationError):
@@ -34,13 +36,13 @@ def _normalize_read_observation(result: CapabilityResult) -> CapabilityResult:
     """Mark a successful UIA read plan as verified evidence, never a mutation.
 
     The structured Windows executor intentionally reports mutation verification only
-    when it ran an explicit verify step.  For a purely observational plan, however,
-    successful inspect/search/get-value output *is* the requested evidence.  Promoting
+    when it ran an explicit verify step. For a purely observational plan, however,
+    successful inspect/search/get-value output *is* the requested evidence. Promoting
     only all-read plans keeps mutation truth strict while letting generic UI questions
     complete from live accessibility state.
     """
 
-    if result.operation != "execute_windows_plan" or not result.ok:
+    if result.operation != _STRUCTURED_UI_OPERATION or not result.ok:
         return result
     if bool(result.data.get("verification_passed")):
         return result
@@ -70,11 +72,12 @@ def _normalize_read_observation(result: CapabilityResult) -> CapabilityResult:
 
 
 class LeaseAwareHandsPlanner:
-    """Check a voice-turn lease at every cloud-planning boundary."""
+    """Check a voice-turn lease and enforce structured-first desktop recovery."""
 
     def __init__(self, planner: Any, is_current: Callable[[], bool]) -> None:
         self._planner = planner
         self._is_current = is_current
+        self._hybrid_app_ui = False
 
     @property
     def provider_name(self) -> str:
@@ -99,18 +102,18 @@ class LeaseAwareHandsPlanner:
         )
         _require_current(self._is_current, stage="accepting the Hands route")
 
-        # Desktop GUI work is a hybrid substrate. Keep screenshot computer-use
-        # available to the planner whenever app UI was selected and the visual
-        # executor is actually enabled, while still preferring UIA in planner policy.
         available_keys = {group.key for group in route_groups}
-        expanded = list(selected)
-        if (
-            "app_ui" in selected
-            and "visual_fallback" in available_keys
-            and "visual_fallback" not in expanded
-        ):
-            expanded.append("visual_fallback")
-        return tuple(expanded)
+        self._hybrid_app_ui = (
+            "app_ui" in selected and "visual_fallback" in available_keys
+        )
+        if not self._hybrid_app_ui or "visual_fallback" in selected:
+            return selected
+
+        # Make the generic visual substrate reachable for this goal, but next_action
+        # withholds it until JARVIS has obtained at least one live UIA observation.
+        # This gives arbitrary desktop apps a deterministic native/UIA-first path
+        # without hard-coding app names or permanently trapping the planner in UIA.
+        return (*selected, "visual_fallback")
 
     async def next_action(
         self,
@@ -121,10 +124,24 @@ class LeaseAwareHandsPlanner:
         observations: tuple[dict[str, Any], ...],
     ):
         _require_current(self._is_current, stage="Hands planning")
+
+        visible_candidates = candidate_operations
+        if self._hybrid_app_ui:
+            has_structured_observation = any(
+                str(item.get("operation", "")) == _STRUCTURED_UI_OPERATION
+                for item in observations
+            )
+            if not has_structured_observation:
+                visible_candidates = tuple(
+                    item
+                    for item in candidate_operations
+                    if item.operation != _VISUAL_OPERATION
+                )
+
         decision = await self._planner.next_action(
             goal=goal,
             recent_user_turns=recent_user_turns,
-            candidate_operations=candidate_operations,
+            candidate_operations=visible_candidates,
             observations=observations,
         )
         _require_current(self._is_current, stage="accepting the Hands plan")
