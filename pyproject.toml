@@ -115,6 +115,8 @@ hands = [
     "winrt-Windows.Foundation==3.2.1; platform_system == 'Windows'",
     "winrt-Windows.Foundation.Collections==3.2.1; platform_system == 'Windows'",
     "winrt-Windows.Media.Control==3.2.1; platform_system == 'Windows'",
+    "mss==10.2.0; platform_system == 'Windows'",
+    "pyautogui==0.9.54; platform_system == 'Windows'",
     "Send2Trash==2.1.0",
     "python-docx==1.2.0",
     "openpyxl==3.1.5",
