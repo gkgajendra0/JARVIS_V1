@@ -13,9 +13,18 @@ from pathlib import Path
 from typing import Any
 
 from jarvis.authority.tooling import authority_tool_readiness
-from jarvis.capabilities.development_git import ApprovedRepositoryPolicy, DevelopmentGitError
-from jarvis.capabilities.local_writes import ApprovedWriteRootPolicy, LocalWriteValidationError
-from jarvis.capabilities.runtime import CapabilityRuntime, build_default_capability_runtime
+from jarvis.capabilities.development_git import (
+    ApprovedRepositoryPolicy,
+    DevelopmentGitError,
+)
+from jarvis.capabilities.local_writes import (
+    ApprovedWriteRootPolicy,
+    LocalWriteValidationError,
+)
+from jarvis.capabilities.runtime import (
+    CapabilityRuntime,
+    build_default_capability_runtime,
+)
 from jarvis.capabilities.software_management import WinGetBackend
 from jarvis.computer.structured_windows import StructuredWindowsError, WinAppCliBackend
 from jarvis.hands.registry import HandsCapabilityRegistry
@@ -58,14 +67,17 @@ def _dependency_checks(
     required = dict(_REQUIRED_MODULES)
     if platform.system() == "Windows":
         required.update(_WINDOWS_REQUIRED_MODULES)
-    return tuple(
-        AcceptanceCheck(
-            name=f"Hands dependency: {label}",
-            ok=finder(module),
-            detail=module if finder(module) else f"missing Python module: {module}",
+    checks: list[AcceptanceCheck] = []
+    for module, label in required.items():
+        available = finder(module)
+        checks.append(
+            AcceptanceCheck(
+                name=f"Hands dependency: {label}",
+                ok=available,
+                detail=module if available else f"missing Python module: {module}",
+            )
         )
-        for module, label in required.items()
-    )
+    return tuple(checks)
 
 
 def _required_operation_names() -> tuple[str, ...]:
@@ -129,7 +141,9 @@ def collect_integrated_readiness() -> tuple[AcceptanceCheck, ...]:
         AcceptanceCheck(
             "Microsoft WinGet",
             winget,
-            "winget executable available" if winget else "winget executable unavailable",
+            "winget executable available"
+            if winget
+            else "winget executable unavailable",
         )
     )
 
@@ -220,6 +234,10 @@ def _representative_actions(
 ) -> tuple[tuple[str, str, dict[str, Any]], ...]:
     paths = _acceptance_paths(run_id)
     return (
+        ("h1_system", "system_status", {}),
+        ("h1_audio", "get_master_volume", {}),
+        ("h1_windows", "list_windows", {}),
+        ("h1_app", "open_app", {"app": "calculator"}),
         (
             "h2_text_file",
             "create_text_file",
@@ -307,10 +325,13 @@ def run_integrated_acceptance() -> int:
     print("JARVIS consolidated governed Hands H1-H5 owner acceptance")
     print(f"write_root={write_root}")
     print(f"acceptance_folder={paths['folder']}")
+    print("h1_mutation=approved Calculator launch only")
     print("browser_target=https://example.com")
     print("software_action=read-only WinGet search for PowerToys")
     print("development_action=read-only Git status for the JARVIS repository")
-    print("power_session_mutations=False bluetooth_pairing=False package_mutations=False")
+    print(
+        "power_session_mutations=False bluetooth_pairing=False package_mutations=False"
+    )
     print("JARVIS_self_modification=False cloud_model_calls=0 raw_shell=False")
 
     runtime = build_default_capability_runtime(
@@ -355,5 +376,7 @@ def run_integrated_acceptance() -> int:
     print(json.dumps(summary, indent=2))
     if ok:
         root_path: Path = policy.root(write_root)
-        print(f"Acceptance artifacts left for inspection at: {root_path / paths['folder']}")
+        print(
+            f"Acceptance artifacts left for inspection at: {root_path / paths['folder']}"
+        )
     return 0 if ok else 3
