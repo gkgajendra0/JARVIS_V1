@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 
 from livekit.agents import RunContext, function_tool
@@ -12,6 +13,7 @@ from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.hands.orchestrator import HandsOrchestrationError, HandsOrchestrator
 from jarvis.hands.planner import HandsPlanningError
+from jarvis.voice.hands_orchestrator import VoiceHandsOrchestrator
 from jarvis.voice.hands_transaction import (
     HandsGoalSuperseded,
     LeaseAwareCapabilityRuntime,
@@ -22,10 +24,69 @@ LOGGER = logging.getLogger(__name__)
 
 _TRANSCRIPT_WAIT_SECONDS = 4.0
 _TRANSCRIPT_POLL_SECONDS = 0.02
+_VOICE_RESULT_DATA_CHARACTERS = 4_000
 
 # Compatibility alias for older imports/tests while the implementation is no longer a
 # phrase/keyword grounding parser.
 HandsGoalGroundingError = HandsOrchestrationError
+
+
+def _bounded_voice_data(value: object) -> object:
+    """Keep useful final evidence without injecting the full Hands trace into Realtime."""
+
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    if len(encoded) <= _VOICE_RESULT_DATA_CHARACTERS:
+        return value
+    return {
+        "truncated": True,
+        "preview": encoded[:_VOICE_RESULT_DATA_CHARACTERS],
+    }
+
+
+def _compact_voice_result(result: dict[str, object]) -> dict[str, object]:
+    """Return only decision-relevant Hands evidence to the conversational model.
+
+    The full orchestration trace remains available to JARVIS logs/tests. Sending every
+    UIA observation and intermediate result back into a Realtime session needlessly
+    consumes token bandwidth and can trigger provider token-rate limits. The voice model
+    needs status, clarification/failure context and the final observed machine state.
+    """
+
+    compact: dict[str, object] = {}
+    for key in (
+        "ok",
+        "status",
+        "completed_steps",
+        "failed_operation",
+        "reason",
+        "clarification_question",
+        "canonical_user_turn_id",
+    ):
+        if key in result and result[key] is not None:
+            compact[key] = result[key]
+
+    results = result.get("results")
+    if isinstance(results, list) and results:
+        final = results[-1]
+        if isinstance(final, dict):
+            compact["final_result"] = {
+                key: _bounded_voice_data(value) if key == "data" else value
+                for key, value in final.items()
+                if key in {"ok", "status", "operation", "capability", "data", "reason"}
+                and value is not None
+            }
+
+    observations = result.get("observations")
+    if isinstance(observations, list) and observations:
+        final_observation = observations[-1]
+        if isinstance(final_observation, dict):
+            compact["final_observation"] = {
+                key: _bounded_voice_data(value) if key == "data" else value
+                for key, value in final_observation.items()
+                if key in {"operation", "status", "ok", "verified", "reason", "data"}
+                and value is not None
+            }
+    return compact
 
 
 class HandsGoalAgentTools:
@@ -120,7 +181,7 @@ class HandsGoalAgentTools:
             raise HandsOrchestrationError(
                 "JARVIS Hands semantic planner is not configured"
             )
-        return HandsOrchestrator(
+        return VoiceHandsOrchestrator(
             LeaseAwareCapabilityRuntime(self._runtime, is_current),
             LeaseAwareHandsPlanner(planner, is_current),
         )
@@ -181,7 +242,12 @@ class HandsGoalAgentTools:
     async def use_computer(self, context: RunContext) -> dict[str, object]:
         """Hand the current accepted USER computer goal to JARVIS Hands.
 
-        Call this whenever the USER asks JARVIS to operate or inspect the local computer.
+        Call this whenever the USER asks JARVIS to operate OR inspect the local computer.
+        Questions about what is visible, open, written, selected, listed or displayed
+        inside a desktop app/window/screen belong here. Do not refuse those questions
+        because the Pocket3 camera cannot read the monitor; physical-camera vision and
+        desktop UI inspection are separate capabilities.
+
         Do not construct capability names, operation plans, selectors, app IDs, package IDs,
         or execution parameters yourself. This tool takes no plan arguments: JARVIS Hands
         internally performs semantic routing, canonical entity resolution, strongly typed
@@ -200,7 +266,7 @@ class HandsGoalAgentTools:
         """
         del context
         try:
-            return await self.execute_goal()
+            return _compact_voice_result(await self.execute_goal())
         except (
             HandsOrchestrationError,
             HandsPlanningError,
