@@ -145,6 +145,7 @@ def test_audio_read_is_routine_but_mutation_is_reversible() -> None:
 
     assert read.attributes == ActionAttributes()
     assert mutation.attributes.reversible_local_change is True
+    assert mutation.material_summary == "Set Windows master volume to 25%"
 
 
 def test_audio_set_verifies_final_volume() -> None:
@@ -174,6 +175,7 @@ def test_media_read_is_private_and_pause_is_reversible() -> None:
 
     assert read.attributes.private_read is True
     assert pause.attributes.reversible_local_change is True
+    assert pause.material_summary == "Pause the current Windows media session"
 
 
 def test_media_pause_verifies_playback_state() -> None:
@@ -198,6 +200,8 @@ def test_clipboard_set_is_verified() -> None:
     assert result.status is CapabilityStatus.SUCCEEDED
     assert result.data["text"] == "BMW service tomorrow"
     assert result.data["verification_passed"] is True
+    assert "BMW service tomorrow" in prepared.material_summary
+    assert "20 chars" in prepared.material_summary
 
 
 def test_clipboard_blocks_credential_like_text_before_execution() -> None:
@@ -222,6 +226,7 @@ def test_window_management_verifies_monitor_move() -> None:
     result = executor.execute(prepared)
 
     assert prepared.attributes.reversible_local_change is True
+    assert prepared.material_summary == "Move to next monitor Windows app window: notepad"
     assert result.status is CapabilityStatus.SUCCEEDED
     assert result.data["from_monitor_index"] == 0
     assert result.data["to_monitor_index"] == 1
@@ -245,6 +250,7 @@ def test_app_lifecycle_uses_allowlist_and_verifies_running() -> None:
     result = executor.execute(prepared)
 
     assert prepared.attributes.reversible_local_change is True
+    assert prepared.material_summary == "Open approved Windows application: notepad"
     assert result.status is CapabilityStatus.SUCCEEDED
     assert result.data["running"] is True
 
