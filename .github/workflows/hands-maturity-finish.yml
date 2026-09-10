@@ -21,12 +21,15 @@ jobs:
         with:
           python-version: '3.11'
       - name: Apply Hands maturity integration
-        run: python scripts/hands_maturity_finish_patch.py
+        run: |
+          python scripts/hands_maturity_finish_patch.py
+          python scripts/hands_maturity_lint_fix.py
       - name: Install dependencies
         run: python -m pip install -e ".[dev,hands]"
       - name: Format and lint
         run: |
           python -m ruff format src/jarvis/hands/contracts.py src/jarvis/hands/planner.py src/jarvis/hands/entities.py src/jarvis/hands/orchestrator.py src/jarvis/voice/hands_goal_tools.py src/jarvis/capabilities/runtime.py src/jarvis/config.py src/jarvis/voice/production_runtime.py src/jarvis/voice/capability_tools.py src/jarvis/voice/agent.py tests/test_hands_goal_tools.py tests/test_production_hands_voice_wiring.py
+          python -m ruff check --fix src/jarvis/hands/contracts.py src/jarvis/hands/planner.py src/jarvis/hands/entities.py src/jarvis/hands/orchestrator.py src/jarvis/voice/hands_goal_tools.py src/jarvis/capabilities/runtime.py src/jarvis/config.py src/jarvis/voice/production_runtime.py src/jarvis/voice/capability_tools.py src/jarvis/voice/agent.py tests/test_hands_goal_tools.py tests/test_production_hands_voice_wiring.py
           python -m ruff check src/jarvis/hands/contracts.py src/jarvis/hands/planner.py src/jarvis/hands/entities.py src/jarvis/hands/orchestrator.py src/jarvis/voice/hands_goal_tools.py src/jarvis/capabilities/runtime.py src/jarvis/config.py src/jarvis/voice/production_runtime.py src/jarvis/voice/capability_tools.py src/jarvis/voice/agent.py tests/test_hands_goal_tools.py tests/test_production_hands_voice_wiring.py
       - name: Import smoke
         run: python -c "from jarvis.hands.orchestrator import HandsOrchestrator; from jarvis.voice.hands_goal_tools import HandsGoalAgentTools; from jarvis.hands.contracts import PlannerTurn"
