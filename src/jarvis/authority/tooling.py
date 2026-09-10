@@ -141,15 +141,16 @@ def probe_opa_binary(path: str | Path, *, timeout_seconds: float = 5.0) -> str:
             text=True,
             check=False,
             timeout=timeout_seconds,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise AuthorityToolError(f"OPA version probe failed: {candidate}") from exc
     output = "\n".join(part for part in (completed.stdout, completed.stderr) if part)
-    if completed.returncode != 0 or "version" not in output.casefold():
+    first_line = next((line.strip() for line in output.splitlines() if line.strip()), "")
+    if completed.returncode != 0 or not first_line.casefold().startswith("version:"):
         raise AuthorityToolError(
             f"OPA executable did not satisfy the version probe: {candidate}"
         )
-    first_line = next((line.strip() for line in output.splitlines() if line.strip()), "OPA")
     return first_line
 
 
