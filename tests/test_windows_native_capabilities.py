@@ -8,10 +8,53 @@ from jarvis.capabilities.windows_native import (
     AppLifecycleExecutor,
     ClipboardExecutor,
     MediaPlaybackExecutor,
+    PycawAudioBackend,
     SystemAudioExecutor,
     WindowManagementExecutor,
     WindowSnapshot,
 )
+
+
+class _FakeEndpointVolume:
+    def __init__(self) -> None:
+        self.scalar = 0.5
+        self.muted = False
+
+    def GetMasterVolumeLevelScalar(self):
+        return self.scalar
+
+    def SetMasterVolumeLevelScalar(self, value, _context):
+        self.scalar = float(value)
+
+    def GetMute(self):
+        return self.muted
+
+    def SetMute(self, muted, _context):
+        self.muted = bool(muted)
+
+
+class _FakeAudioDevice:
+    def __init__(self) -> None:
+        self.FriendlyName = "Fake speakers"
+        self.EndpointVolume = _FakeEndpointVolume()
+
+
+class _ContractPycawBackend(PycawAudioBackend):
+    device = _FakeAudioDevice()
+
+    @staticmethod
+    def _device():
+        return _ContractPycawBackend.device
+
+
+def test_pycaw_backend_uses_endpoint_scalar_contract_not_audio_device_convenience_property() -> (
+    None
+):
+    backend = _ContractPycawBackend()
+
+    assert backend.state()["volume_percent"] == 50.0
+    backend.set_volume(30.0)
+    assert backend.state()["volume_percent"] == 30.0
 
 
 class FakeAudio:

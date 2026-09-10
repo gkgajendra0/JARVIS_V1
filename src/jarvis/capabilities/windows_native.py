@@ -141,15 +141,18 @@ class PycawAudioBackend:
 
     def state(self) -> dict[str, Any]:
         device = self._device()
+        endpoint = device.EndpointVolume
         return {
             "device": str(device.FriendlyName),
-            "volume_percent": round(float(device.volume_percent), 1),
-            "muted": bool(device.EndpointVolume.GetMute()),
+            "volume_percent": round(
+                float(endpoint.GetMasterVolumeLevelScalar()) * 100.0, 1
+            ),
+            "muted": bool(endpoint.GetMute()),
         }
 
     def set_volume(self, percent: float) -> None:
-        device = self._device()
-        device.volume_percent = float(percent)
+        endpoint = self._device().EndpointVolume
+        endpoint.SetMasterVolumeLevelScalar(float(percent) / 100.0, None)
 
     def set_mute(self, muted: bool) -> None:
         self._device().EndpointVolume.SetMute(bool(muted), None)
