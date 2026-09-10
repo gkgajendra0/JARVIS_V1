@@ -223,7 +223,12 @@ class BluetoothBackend(Protocol):
 
 class WinRtBluetoothBackend:
     @staticmethod
-    async def _devices():
+    async def _enumerate_with_aqs(bluetooth_device_type, device_information_type):
+        selector = bluetooth_device_type.get_device_selector()
+        return list(await device_information_type.find_all_async_aqs_filter(selector))
+
+    @classmethod
+    async def _devices(cls):
         try:
             from winrt.windows.devices.bluetooth import BluetoothDevice
             from winrt.windows.devices.enumeration import DeviceInformation
@@ -231,8 +236,7 @@ class WinRtBluetoothBackend:
             raise WindowsDeviceValidationError(
                 "Bluetooth Hands requires the jarvis[device-hands] extra"
             ) from exc
-        selector = BluetoothDevice.get_device_selector()
-        return list(await DeviceInformation.find_all_async(selector))
+        return await cls._enumerate_with_aqs(BluetoothDevice, DeviceInformation)
 
     @classmethod
     async def _find_unique(cls, name: str):

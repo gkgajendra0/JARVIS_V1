@@ -110,6 +110,35 @@ def test_bluetooth_pairing_is_persistent_and_verified() -> None:
     assert result.data["verification_passed"] is True
 
 
+def test_winrt_bluetooth_uses_named_aqs_overload() -> None:
+    calls: list[str] = []
+
+    class BluetoothDevice:
+        @staticmethod
+        def get_device_selector() -> str:
+            return "bluetooth-aqs"
+
+    class DeviceInformation:
+        @staticmethod
+        async def find_all_async_aqs_filter(selector: str):
+            calls.append(selector)
+            return ["device"]
+
+        @staticmethod
+        async def find_all_async(*_args):
+            raise AssertionError("zero-argument projection overload must not be used")
+
+    result = asyncio.run(
+        WinRtBluetoothBackend._enumerate_with_aqs(
+            BluetoothDevice,
+            DeviceInformation,
+        )
+    )
+
+    assert result == ["device"]
+    assert calls == ["bluetooth-aqs"]
+
+
 def test_bluetooth_listing_is_private_read() -> None:
     executor = BluetoothControlExecutor(FakeBluetooth())
     prepared = executor.prepare(request(executor, "list_bluetooth_devices"))
