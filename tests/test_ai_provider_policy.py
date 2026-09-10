@@ -12,6 +12,7 @@ from jarvis.ai_provider import (
     configured_ai_provider,
     credential_environment_name,
     require_provider_api_key,
+    resolve_ai_role_model,
 )
 from jarvis.config import JarvisConfig
 
@@ -70,6 +71,87 @@ def test_jarvis_config_has_exactly_one_active_ai_provider_field() -> None:
     ]
 
     assert provider_fields == ["ai_provider"]
+
+
+@pytest.mark.parametrize(
+    ("role", "stale_model", "expected_openai", "expected_gemini"),
+    [
+        (
+            "hands_planner",
+            "gemini-3.5-flash",
+            "gpt-5.6-terra",
+            "gemini-3.5-flash",
+        ),
+        (
+            "memory_candidate_extraction",
+            "gemini-3.5-flash-lite",
+            "gpt-5.6-terra",
+            "gemini-3.5-flash-lite",
+        ),
+        (
+            "memory_semantic_recall",
+            "gemini-3.8-flash",
+            "gpt-5.6-terra",
+            "gemini-3.8-flash",
+        ),
+    ],
+)
+def test_switching_to_openai_replaces_stale_gemini_role_models(
+    role: str,
+    stale_model: str,
+    expected_openai: str,
+    expected_gemini: str,
+) -> None:
+    assert (
+        resolve_ai_role_model("openai", role, configured_model=stale_model)
+        == expected_openai
+    )
+    assert (
+        resolve_ai_role_model("gemini", role, configured_model=stale_model)
+        == expected_gemini
+    )
+
+
+@pytest.mark.parametrize(
+    ("role", "stale_model", "expected_gemini"),
+    [
+        ("hands_planner", "gpt-5.6-terra", "gemini-3.5-flash"),
+        (
+            "memory_candidate_extraction",
+            "gpt-5.6-terra",
+            "gemini-3.5-flash-lite",
+        ),
+        ("memory_semantic_recall", "gpt-5.6-terra", "gemini-3.8-flash"),
+    ],
+)
+def test_switching_back_to_gemini_replaces_stale_openai_role_models(
+    role: str,
+    stale_model: str,
+    expected_gemini: str,
+) -> None:
+    assert (
+        resolve_ai_role_model("gemini", role, configured_model=stale_model)
+        == expected_gemini
+    )
+
+
+def test_same_provider_custom_role_model_is_preserved() -> None:
+    assert (
+        resolve_ai_role_model(
+            "openai",
+            "hands_planner",
+            configured_model="gpt-5.6-luna",
+        )
+        == "gpt-5.6-luna"
+    )
+    assert (
+        resolve_ai_role_model(
+            "gemini",
+            "hands_planner",
+            configured_model="gemini-3.6-flash",
+        )
+        == "gemini-3.6-flash"
+    )
 
 
 def test_production_source_has_one_provider_selector_and_one_credential_owner() -> None:
