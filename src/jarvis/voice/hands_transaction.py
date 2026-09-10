@@ -16,7 +16,12 @@ from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.hands.orchestrator import HandsOrchestrationError
 from jarvis.hands.planner import HandsRouteGroup
 
-_UIA_OBSERVATION_ACTIONS = frozenset({"inspect", "search", "get_value", "verify_value"})
+_UIA_OBSERVATION_ACTIONS = frozenset(
+    {"inspect", "search", "get_value", "verify_value", "wait_for"}
+)
+_UIA_MUTATION_ACTIONS = frozenset(
+    {"launch", "focus", "click", "invoke", "send_text", "set_value"}
+)
 _VISUAL_OPERATION = "execute_visual_desktop_task"
 _STRUCTURED_UI_OPERATION = "execute_windows_plan"
 
@@ -32,33 +37,22 @@ def _require_current(is_current: Callable[[], bool], *, stage: str) -> None:
         )
 
 
-def _normalize_read_observation(result: CapabilityResult) -> CapabilityResult:
-    """Mark a successful UIA read plan as verified evidence, never a mutation.
+def _step_succeeded(step: dict[str, Any]) -> bool:
+    payload = step.get("payload")
+    if not isinstance(payload, dict):
+        return True
+    exit_code = payload.get("exit_code")
+    return not isinstance(exit_code, int) or exit_code == 0
 
-    The structured Windows executor intentionally reports mutation verification only
-    when it ran an explicit verify step. For a purely observational plan, however,
-    successful inspect/search/get-value output *is* the requested evidence. Promoting
-    only all-read plans keeps mutation truth strict while letting generic UI questions
-    complete from live accessibility state.
-    """
 
-    if result.operation != _STRUCTURED_UI_OPERATION or not result.ok:
-        return result
-    if bool(result.data.get("verification_passed")):
-        return result
-    steps = result.data.get("steps")
-    if not isinstance(steps, list) or not steps:
-        return result
-    actions = {
-        str(step.get("action", "")).casefold()
-        for step in steps
-        if isinstance(step, dict)
-    }
-    if not actions or not actions.issubset(_UIA_OBSERVATION_ACTIONS):
-        return result
+def _with_verification(
+    result: CapabilityResult,
+    *,
+    basis: str,
+) -> CapabilityResult:
     data = dict(result.data)
     data["verification_passed"] = True
-    data["verification_basis"] = "successful_read_observation"
+    data["verification_basis"] = basis
     return CapabilityResult(
         status=result.status,
         capability_key=result.capability_key,
@@ -71,6 +65,44 @@ def _normalize_read_observation(result: CapabilityResult) -> CapabilityResult:
     )
 
 
+def _normalize_read_observation(result: CapabilityResult) -> CapabilityResult:
+    """Promote successful UIA observation into bounded verification evidence.
+
+    A purely observational plan is verified by the observation itself. A mutating UIA
+    micro-plan is only promoted when at least one successful observation follows its
+    final mutation in the same local plan. The semantic planner still decides whether
+    that evidence proves the USER goal; this merely avoids another redundant UIA round
+    trip solely to establish that post-action state was actually observed.
+    """
+
+    if result.operation != _STRUCTURED_UI_OPERATION or not result.ok:
+        return result
+    if bool(result.data.get("verification_passed")):
+        return result
+    steps = result.data.get("steps")
+    if not isinstance(steps, list) or not steps:
+        return result
+    typed_steps = [step for step in steps if isinstance(step, dict)]
+    if len(typed_steps) != len(steps) or not all(_step_succeeded(step) for step in typed_steps):
+        return result
+
+    actions = [str(step.get("action", "")).casefold() for step in typed_steps]
+    if actions and all(action in _UIA_OBSERVATION_ACTIONS for action in actions):
+        return _with_verification(result, basis="successful_read_observation")
+
+    mutation_indexes = [
+        index for index, action in enumerate(actions) if action in _UIA_MUTATION_ACTIONS
+    ]
+    if not mutation_indexes:
+        return result
+    trailing_actions = actions[mutation_indexes[-1] + 1 :]
+    if trailing_actions and all(
+        action in _UIA_OBSERVATION_ACTIONS for action in trailing_actions
+    ):
+        return _with_verification(result, basis="post_mutation_observation")
+    return result
+
+
 class LeaseAwareHandsPlanner:
     """Check a voice-turn lease and enforce structured-first desktop recovery."""
 
@@ -78,6 +110,7 @@ class LeaseAwareHandsPlanner:
         self._planner = planner
         self._is_current = is_current
         self._hybrid_app_ui = False
+        self._selected_operation_names: frozenset[str] | None = None
 
     @property
     def provider_name(self) -> str:
@@ -102,17 +135,26 @@ class LeaseAwareHandsPlanner:
         )
         _require_current(self._is_current, stage="accepting the Hands route")
 
-        available_keys = {group.key for group in route_groups}
+        by_key = {group.key: group for group in route_groups}
+        available_keys = set(by_key)
         self._hybrid_app_ui = (
             "app_ui" in selected and "visual_fallback" in available_keys
         )
+
+        selected_for_operations = list(selected)
+        if self._hybrid_app_ui and "visual_fallback" not in selected_for_operations:
+            selected_for_operations.append("visual_fallback")
+        self._selected_operation_names = frozenset(
+            operation.operation
+            for key in selected_for_operations
+            for operation in by_key.get(key, HandsRouteGroup.__new__(HandsRouteGroup)).operations
+        ) if selected_for_operations else frozenset()
+
         if not self._hybrid_app_ui or "visual_fallback" in selected:
             return selected
 
         # Make the generic visual substrate reachable for this goal, but next_action
         # withholds it until JARVIS has obtained at least one live UIA observation.
-        # This gives arbitrary desktop apps a deterministic native/UIA-first path
-        # without hard-coding app names or permanently trapping the planner in UIA.
         return (*selected, "visual_fallback")
 
     async def next_action(
@@ -126,6 +168,12 @@ class LeaseAwareHandsPlanner:
         _require_current(self._is_current, stage="Hands planning")
 
         visible_candidates = candidate_operations
+        if self._selected_operation_names is not None:
+            visible_candidates = tuple(
+                item
+                for item in visible_candidates
+                if item.operation in self._selected_operation_names
+            )
         if self._hybrid_app_ui:
             has_structured_observation = any(
                 str(item.get("operation", "")) == _STRUCTURED_UI_OPERATION
@@ -134,9 +182,14 @@ class LeaseAwareHandsPlanner:
             if not has_structured_observation:
                 visible_candidates = tuple(
                     item
-                    for item in candidate_operations
+                    for item in visible_candidates
                     if item.operation != _VISUAL_OPERATION
                 )
+
+        if not visible_candidates:
+            raise HandsOrchestrationError(
+                "Hands routing produced no explicitly selected executable operations"
+            )
 
         decision = await self._planner.next_action(
             goal=goal,
