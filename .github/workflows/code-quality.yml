@@ -151,8 +151,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install JARVIS test dependencies
-        run: python -m pip install -e ".[dev]"
+      - name: Install JARVIS Windows test dependencies
+        run: python -m pip install -e ".[dev,windows-hands]"
+
+      - name: Probe Windows Hands Python dependencies
+        run: >-
+          python -c "import pycaw; import win32clipboard; import win32gui;
+          import winrt.windows.media.control;
+          print('Windows Hands Python dependencies ready')"
 
       - name: Run Windows DPAPI smoke test
         run: python -m pytest -q tests/test_windows_dpapi.py
