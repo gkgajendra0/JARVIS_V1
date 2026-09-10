@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import platform
 import shutil
@@ -33,7 +32,9 @@ def _windows_runtime_identifier() -> str:
         return "win-x64"
     if machine in {"arm64", "aarch64"}:
         return "win-arm64"
-    raise AuthorityToolError(f"unsupported Windows architecture for Hello helper: {machine}")
+    raise AuthorityToolError(
+        f"unsupported Windows architecture for Hello helper: {machine}"
+    )
 
 
 def _valid_opa(candidate: Path | None) -> Path | None:
@@ -121,7 +122,9 @@ def _publish_command(
 
 def ensure_managed_windows_hello_helper() -> Path:
     if os.name != "nt":
-        raise AuthorityToolError("Windows Hello helper can only be provisioned on Windows")
+        raise AuthorityToolError(
+            "Windows Hello helper can only be provisioned on Windows"
+        )
 
     destination = managed_windows_hello_helper_path()
     if destination.is_file():
