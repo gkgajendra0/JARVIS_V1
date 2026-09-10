@@ -88,8 +88,8 @@ class HandsGoalAgentTools:
             turn = self._turn_for_generation(generation)
             if turn is not None:
                 if generation in self._claimed_user_generations:
-                    raise HandsOrchestrationError(
-                        "JARVIS Hands already accepted this USER utterance"
+                    raise HandsGoalSuperseded(
+                        "duplicate Hands tool call for this USER utterance was ignored"
                     )
                 self._claimed_user_generations.add(generation)
                 LOGGER.info(
@@ -125,8 +125,20 @@ class HandsGoalAgentTools:
             LeaseAwareHandsPlanner(planner, is_current),
         )
 
+    @staticmethod
+    def _superseded_result(reason: str) -> dict[str, object]:
+        return {
+            "ok": False,
+            "status": "superseded",
+            "reason": reason,
+        }
+
     async def execute_goal(self) -> dict[str, object]:
-        turn, generation = await self._claim_current_user_turn()
+        try:
+            turn, generation = await self._claim_current_user_turn()
+        except HandsGoalSuperseded as exc:
+            LOGGER.info("Hands voice lease ignored before claim: %s", exc)
+            return self._superseded_result(str(exc))
 
         def is_current() -> bool:
             return self._conversation.user_utterance_generation == generation
@@ -139,13 +151,12 @@ class HandsGoalAgentTools:
                     generation,
                     turn.turn_id,
                 )
-                return {
-                    "ok": False,
-                    "status": "superseded",
-                    "goal": turn.text,
-                    "reason": "a newer USER utterance replaced this computer goal",
-                    "canonical_user_turn_id": turn.turn_id,
-                }
+                result = self._superseded_result(
+                    "a newer USER utterance replaced this computer goal"
+                )
+                result["goal"] = turn.text
+                result["canonical_user_turn_id"] = turn.turn_id
+                return result
             try:
                 result = await self._build_orchestrator(is_current).execute_goal(
                     session_id=self._conversation.session_id,
@@ -159,13 +170,10 @@ class HandsGoalAgentTools:
                     generation,
                     turn.turn_id,
                 )
-                return {
-                    "ok": False,
-                    "status": "superseded",
-                    "goal": turn.text,
-                    "reason": str(exc),
-                    "canonical_user_turn_id": turn.turn_id,
-                }
+                result = self._superseded_result(str(exc))
+                result["goal"] = turn.text
+                result["canonical_user_turn_id"] = turn.turn_id
+                return result
         result["canonical_user_turn_id"] = turn.turn_id
         return result
 
