@@ -164,15 +164,6 @@ def test_git_commit_requires_grounded_repo_and_commit_message() -> None:
         )
 
 
-def test_declarative_power_statement_does_not_authorize_restart() -> None:
-    with pytest.raises(HandsGoalGroundingError, match="not an explicit action request"):
-        parse(
-            tools("The computer restart feature is useful"),
-            "restart_workstation",
-            {},
-        )
-
-
 def test_live_voice_aliases_and_transcription_fillers_are_canonicalized() -> None:
     tool = tools("Javis open calculator and set my master volume to 90 percent")
     plan = json.dumps(
@@ -297,18 +288,6 @@ def test_voice_embedded_polite_request_authorizes_named_game_launch() -> None:
     assert grounded == {"app": "FIFA"}
 
 
-def test_app_launch_request_does_not_warrant_software_discovery() -> None:
-    with pytest.raises(
-        HandsGoalGroundingError,
-        match="does not warrant Hands operation: search_software",
-    ):
-        parse(
-            tools("Jarvis please open Spotify app"),
-            "search_software",
-            {"query": "Spotify"},
-        )
-
-
 def test_explicit_software_discovery_is_still_warranted() -> None:
     grounded = parse(
         tools("Jarvis search software for Spotify"),
@@ -316,3 +295,53 @@ def test_explicit_software_discovery_is_still_warranted() -> None:
         {"query": "Spotify"},
     )
     assert grounded == {"query": "Spotify"}
+
+
+@pytest.mark.parametrize(
+    "utterance",
+    [
+        "Jarvis, fire up FIFA for me.",
+        "Could we get FIFA going?",
+        "FIFA chala do.",
+        "I would like FIFA running, please.",
+        "Can you get FIFA started?",
+        "Let's launch FIFA.",
+    ],
+)
+def test_semantic_app_grounding_is_not_tied_to_designated_command_phrases(
+    utterance: str,
+) -> None:
+    grounded = parse(tools(utterance), "open_app", {"app": "FIFA"})
+    assert grounded == {"app": "FIFA"}
+
+
+def test_phrase_independence_does_not_allow_model_to_substitute_app_target() -> None:
+    with pytest.raises(HandsGoalGroundingError, match="model-selected app target"):
+        parse(
+            tools("Could we get FIFA going?"),
+            "open_app",
+            {"app": "Calculator"},
+        )
+
+
+def test_open_app_can_resolve_recent_conversation_target_from_pronoun() -> None:
+    conversation = ConversationSession(session_id="hands-contextual-app")
+    conversation.start()
+    conversation.accept_turn(ConversationRole.USER, "I want to play FIFA.")
+    conversation.accept_turn(ConversationRole.USER, "Could you start it?")
+    tool = HandsGoalAgentTools(runtime(), conversation)
+    plan = json.dumps([{"operation": "open_app", "parameters": {"app": "FIFA"}}])
+    step = tool._parse_plan(plan, tool._latest_user_turn().text)[0]
+    assert step.parameters == {"app": "FIFA"}
+
+
+def test_use_computer_schema_is_generated_from_canonical_registry() -> None:
+    from jarvis.hands.registry import HandsCapabilityRegistry
+    from jarvis.voice.hands_goal_tools import _USE_COMPUTER_RAW_SCHEMA
+
+    plan = _USE_COMPUTER_RAW_SCHEMA["parameters"]["properties"]["plan"]
+    operation_schema = plan["items"]["properties"]["operation"]
+    assert set(operation_schema["enum"]) == {
+        item.operation for item in HandsCapabilityRegistry.default().operations
+    }
+    assert plan["maxItems"] == 8

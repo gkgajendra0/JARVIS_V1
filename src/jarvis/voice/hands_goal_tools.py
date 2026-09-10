@@ -14,10 +14,81 @@ from livekit.agents.llm import ToolError
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.hands.models import HandsWorkflowStep
+from jarvis.hands.registry import HandsCapabilityRegistry
 from jarvis.hands.workflow import HandsWorkflowRunner
 
 _MAX_PLAN_JSON_CHARS = 20_000
 _MAX_APP_CHARS = 160
+
+
+def _build_use_computer_schema() -> dict[str, object]:
+    """Build the voice tool contract from the canonical Hands registry.
+
+    The language model owns semantic interpretation of the user's goal. The schema
+    constrains it to canonical JARVIS operation names; deterministic code below owns
+    target/material grounding and canonical AuthorityService owns permission.
+    """
+
+    registry = HandsCapabilityRegistry.default()
+    operations = list(registry.operations)
+    operation_names = [item.operation for item in operations]
+    operation_guide = "\n".join(
+        f"- {item.operation}: {item.description}" for item in operations
+    )
+    return {
+        "type": "function",
+        "name": "use_computer",
+        "description": (
+            "Accomplish the latest USER computer goal through JARVIS Hands. "
+            "Use this tool when the USER is asking JARVIS to operate the computer, "
+            "regardless of conversational wording, language style, politeness, or word order. "
+            "Do not call it for hypothetical discussion, explanations, capability questions, "
+            "or a mere mention of an action. Translate the requested outcome into a short "
+            "bounded semantic plan. Prefer native/semantic operations over UI, structured UI "
+            "over visual fallback, and never invent material values. Available operations:\n"
+            + operation_guide
+            + "\nTo start/open/play a named installed local application or game, use open_app. "
+            "Use search_software only for software/WinGet discovery or as a discovery step "
+            "inside an explicit install request. Named songs/playlists/controls inside an app "
+            "belong to execute_windows_plan; browser goals belong to execute_browser_plan."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "plan": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": HandsWorkflowRunner.MAX_STEPS,
+                    "description": "Bounded semantic operations required to achieve the latest USER goal.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "operation": {
+                                "type": "string",
+                                "enum": operation_names,
+                                "description": "Canonical JARVIS Hands operation name.",
+                            },
+                            "parameters": {
+                                "type": "object",
+                                "description": (
+                                    "Operation parameters. Material targets and values must come "
+                                    "from the USER request or bounded conversation context; only "
+                                    "implementation details such as semantic UI selectors may be inferred."
+                                ),
+                            },
+                        },
+                        "required": ["operation", "parameters"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+            "required": ["plan"],
+            "additionalProperties": False,
+        },
+    }
+
+
+_USE_COMPUTER_RAW_SCHEMA = _build_use_computer_schema()
 _OPERATION_ALIASES = {
     "set_volume": "set_master_volume",
     "get_volume": "get_master_volume",
@@ -42,127 +113,6 @@ _CURRENT_TARGET_MARKERS = (
     "already open",
     "already running",
 )
-_MEDIA_CONTEXT_MARKERS = (
-    "music",
-    "song",
-    "track",
-    "media",
-    "playing",
-    "play",
-    "pause",
-    "resume",
-    "next",
-    "previous",
-    "stop",
-)
-_OPERATION_INTENT_MARKERS: dict[str, tuple[str, ...]] = {
-    "get_master_volume": ("volume", "sound level", "audio level"),
-    "set_master_volume": ("volume", "sound", "audio"),
-    "mute_master_volume": ("mute", "silent", "volume off"),
-    "unmute_master_volume": ("unmute", "sound on", "volume on"),
-    "get_current_media": _MEDIA_CONTEXT_MARKERS,
-    "play_media": ("resume", "continue", "play it", "play again"),
-    "pause_media": ("pause",),
-    "toggle_media_playback": ("play pause", "toggle playback"),
-    "next_media": ("next", "next song", "next track"),
-    "previous_media": ("previous", "previous song", "previous track", "back track"),
-    "stop_media": ("stop", "stop music", "stop playback"),
-    "get_clipboard_text": ("clipboard", "what did i copy", "what's copied"),
-    "set_clipboard_text": ("clipboard", "copy"),
-    "clear_clipboard": ("clear clipboard", "empty clipboard"),
-    "list_windows": ("windows", "open apps", "open windows"),
-    "focus_window": ("focus", "bring", "switch to", "go to"),
-    "maximize_window": ("maximize", "maximise", "full screen"),
-    "minimize_window": ("minimize", "minimise"),
-    "restore_window": ("restore",),
-    "move_window_to_next_monitor": (
-        "other monitor",
-        "second monitor",
-        "next monitor",
-        "other screen",
-    ),
-    "open_app": ("open", "launch", "start", "play"),
-    "close_app": ("close", "quit", "exit", "band"),
-    "execute_windows_plan": (
-        "open",
-        "play",
-        "search",
-        "find",
-        "type",
-        "write",
-        "enter",
-        "click",
-        "press",
-        "choose",
-        "select",
-        "control",
-        "use",
-    ),
-    "execute_visual_desktop_task": ("visual", "screen", "look at", "computer use"),
-    "create_text_file": (
-        "create file",
-        "create a file",
-        "create text file",
-        "create a text file",
-        "make file",
-        "new file",
-        "write file",
-    ),
-    "replace_text_file": ("replace file", "overwrite file", "replace text"),
-    "append_text_file": ("append", "add to file", "add text"),
-    "make_directory": ("create folder", "make folder", "create directory"),
-    "copy_path": ("copy file", "copy folder", "copy path", "copy"),
-    "move_path": ("move file", "move folder", "move path"),
-    "rename_path": ("rename",),
-    "trash_path": ("delete file", "delete folder", "trash", "recycle bin"),
-    "create_docx": ("docx", "word document", "word file"),
-    "append_docx_paragraph": ("docx", "word document", "word file", "paragraph"),
-    "create_xlsx": ("xlsx", "excel", "spreadsheet"),
-    "set_xlsx_cell": ("xlsx", "excel", "spreadsheet", "cell"),
-    "create_pptx": ("pptx", "powerpoint", "presentation"),
-    "add_pptx_text_slide": ("pptx", "powerpoint", "presentation", "slide"),
-    "execute_browser_plan": (
-        "browser",
-        "website",
-        "web page",
-        "navigate",
-        "go to",
-        "download",
-        "upload",
-    ),
-    "list_displays": ("display", "monitor", "screen"),
-    "get_display_brightness": ("brightness", "display", "monitor"),
-    "set_display_brightness": ("brightness", "display", "monitor"),
-    "list_bluetooth_devices": ("bluetooth",),
-    "pair_bluetooth_device": ("bluetooth", "pair"),
-    "unpair_bluetooth_device": ("bluetooth", "unpair", "forget device"),
-    "lock_workstation": ("lock", "computer", "pc", "workstation"),
-    "sleep_workstation": ("sleep", "computer", "pc", "workstation"),
-    "sign_out": ("sign out", "log out", "logout"),
-    "restart_workstation": ("restart", "reboot"),
-    "shutdown_workstation": ("shutdown", "shut down", "turn off"),
-    "search_software": (
-        "winget",
-        "win get",
-        "wing it",
-        "search software",
-        "search package",
-        "find software",
-        "find package",
-        "look for software",
-        "look for package",
-        "install",
-    ),
-    "list_installed_software": ("installed", "software", "app", "package", "winget"),
-    "install_package": ("install", "package", "winget"),
-    "uninstall_package": ("uninstall", "remove", "package", "winget"),
-    "git_status": ("git", "repo", "repository", "status"),
-    "git_active_branch": ("git", "repo", "repository", "branch"),
-    "git_create_branch": ("git", "repo", "repository", "branch"),
-    "git_stage_paths": ("git", "repo", "repository", "stage"),
-    "git_commit": ("git", "repo", "repository", "commit"),
-    "git_push_current": ("git", "repo", "repository", "push"),
-}
 _APP_OPERATIONS = {
     "open_app",
     "close_app",
@@ -231,178 +181,6 @@ _DEVELOPMENT_OPERATIONS = {
     "git_commit",
     "git_push_current",
 }
-_MUTATING_OPERATIONS = {
-    "set_master_volume",
-    "mute_master_volume",
-    "unmute_master_volume",
-    "play_media",
-    "pause_media",
-    "toggle_media_playback",
-    "next_media",
-    "previous_media",
-    "stop_media",
-    "set_clipboard_text",
-    "clear_clipboard",
-    "focus_window",
-    "maximize_window",
-    "minimize_window",
-    "restore_window",
-    "move_window_to_next_monitor",
-    "open_app",
-    "close_app",
-    "execute_windows_plan",
-    "execute_visual_desktop_task",
-    *_FILE_WRITE_OPERATIONS,
-    *_DOCUMENT_OPERATIONS,
-    "execute_browser_plan",
-    "set_display_brightness",
-    "pair_bluetooth_device",
-    "unpair_bluetooth_device",
-    *_POWER_OPERATIONS,
-    "install_package",
-    "uninstall_package",
-    "git_create_branch",
-    "git_stage_paths",
-    "git_commit",
-    "git_push_current",
-}
-_ACTION_STARTS = (
-    "set",
-    "change",
-    "adjust",
-    "increase",
-    "decrease",
-    "reduce",
-    "raise",
-    "lower",
-    "mute",
-    "unmute",
-    "play",
-    "resume",
-    "continue",
-    "pause",
-    "toggle",
-    "next",
-    "skip",
-    "previous",
-    "stop",
-    "copy",
-    "clear",
-    "focus",
-    "bring",
-    "switch",
-    "go",
-    "maximize",
-    "maximise",
-    "minimize",
-    "minimise",
-    "restore",
-    "move",
-    "close",
-    "quit",
-    "exit",
-    "open",
-    "launch",
-    "start",
-    "use",
-    "create",
-    "make",
-    "write",
-    "replace",
-    "overwrite",
-    "append",
-    "add",
-    "rename",
-    "delete",
-    "trash",
-    "navigate",
-    "search",
-    "find",
-    "type",
-    "enter",
-    "click",
-    "press",
-    "choose",
-    "select",
-    "download",
-    "upload",
-    "pair",
-    "unpair",
-    "forget",
-    "lock",
-    "sleep",
-    "sign out",
-    "log out",
-    "logout",
-    "restart",
-    "reboot",
-    "shutdown",
-    "shut down",
-    "turn off",
-    "install",
-    "uninstall",
-    "stage",
-    "commit",
-    "push",
-)
-_REQUEST_PREFIXES = (
-    "hey jarvis",
-    "okay jarvis",
-    "ok jarvis",
-    "jarvis",
-    "hey javis",
-    "okay javis",
-    "ok javis",
-    "javis",
-    "yeah",
-    "yes",
-    "okay",
-    "ok",
-    "so",
-    "alright",
-    "all right",
-    "please",
-    "can you",
-    "could you",
-    "would you",
-    "will you",
-)
-_NATURAL_ACTION_LEADS = (
-    "i want to",
-    "i d like to",
-    "i would like to",
-    "i would love to",
-    "can you",
-    "could you",
-    "would you",
-    "will you",
-    "please",
-)
-
-
-_HINGLISH_REQUEST_SUFFIXES = (
-    "kar do",
-    "karo",
-    "karna",
-    "chala do",
-    "chalao",
-    "kholo",
-    "band karo",
-    "band kar do",
-    "bana do",
-    "banao",
-    "likh do",
-    "likho",
-    "copy kar do",
-    "copy karo",
-    "move kar do",
-    "rename kar do",
-    "delete kar do",
-    "install kar do",
-    "uninstall kar do",
-    "restart kar do",
-    "shutdown kar do",
-)
 
 
 class HandsGoalGroundingError(ValueError):
@@ -440,49 +218,6 @@ def _material_in_text(value: object, text: str) -> bool:
     return bool(spoken_material) and spoken_material in normalized_text
 
 
-def _strip_request_prefixes(text: str) -> str:
-    value = _normalized(text)
-    changed = True
-    while value and changed:
-        changed = False
-        for prefix in _REQUEST_PREFIXES:
-            normalized_prefix = _normalized(prefix)
-            if value == normalized_prefix:
-                return ""
-            if value.startswith(f"{normalized_prefix} "):
-                value = value[len(normalized_prefix) :].strip()
-                changed = True
-                break
-    return value
-
-
-def _starts_with_action(value: str) -> bool:
-    return any(
-        value == start or value.startswith(f"{start} ") for start in _ACTION_STARTS
-    )
-
-
-def _explicit_action_request(text: str) -> bool:
-    body = _strip_request_prefixes(text)
-    if not body:
-        return False
-    if _starts_with_action(body):
-        return True
-    for lead in _NATURAL_ACTION_LEADS:
-        match = re.search(rf"(?:^| ){re.escape(lead)}(?: |$)", body)
-        if match is None:
-            continue
-        remainder = body[match.end() :].strip()
-        if remainder.startswith("please "):
-            remainder = remainder[len("please ") :].strip()
-        if _starts_with_action(remainder):
-            return True
-    return any(
-        body == suffix or body.endswith(f" {suffix}")
-        for suffix in _HINGLISH_REQUEST_SUFFIXES
-    )
-
-
 def _require_material(value: object, user_text: str, field: str) -> str:
     text = str(value or "").strip()
     if not text or not _material_in_text(text, user_text):
@@ -499,18 +234,6 @@ def _url_grounded(value: object, user_text: str) -> bool:
     if host and _material_in_text(host, user_text):
         return True
     return _material_in_text(url, user_text)
-
-
-def _browser_warranted(user_text: str) -> bool:
-    if _contains_marker(user_text, _OPERATION_INTENT_MARKERS["execute_browser_plan"]):
-        return True
-    return bool(
-        re.search(
-            r"\b(?:https?://)?(?:www\.)?[a-z0-9-]+\.[a-z]{2,}\b",
-            user_text,
-            re.IGNORECASE,
-        )
-    )
 
 
 def _repo_grounded(repo: str, user_text: str) -> bool:
@@ -813,29 +536,11 @@ class HandsGoalAgentTools:
         requested_operation = str(raw.get("operation", "")).strip().casefold()
         operation = _OPERATION_ALIASES.get(requested_operation, requested_operation)
         semantic = self._runtime.hands_registry.require(operation)
-        markers = _OPERATION_INTENT_MARKERS.get(operation)
-        if markers is None:
-            raise HandsGoalGroundingError(
-                f"operation is not yet exposed through goal-oriented Hands: {operation}"
-            )
-        warranted = (
-            _browser_warranted(user_text)
-            if operation == "execute_browser_plan"
-            else _contains_marker(user_text, markers)
-        )
-        if not warranted and (
-            operation != "get_current_media"
-            or not _contains_marker(user_text, _MEDIA_CONTEXT_MARKERS)
-        ):
-            raise HandsGoalGroundingError(
-                f"latest user request does not warrant Hands operation: {operation}"
-            )
-        if operation in _MUTATING_OPERATIONS and not _explicit_action_request(
-            user_text
-        ):
-            raise HandsGoalGroundingError(
-                f"latest user request mentions {operation} but is not an explicit action request"
-            )
+        # The active model establishes semantic action intent by choosing use_computer
+        # for the latest accepted USER turn. Do not re-parse natural language here with
+        # a keyword/verb allow-list. This boundary validates canonical operation identity,
+        # target/material grounding and bounded conversational references; canonical
+        # AuthorityService independently owns risk, approval, permits and audit.
 
         raw_parameters = raw.get("parameters", {})
         if not isinstance(raw_parameters, dict):
@@ -865,7 +570,9 @@ class HandsGoalAgentTools:
                 app=app,
                 user_text=user_text,
                 apps_opened_in_plan=apps_opened_in_plan,
-                allow_context=operation in _WINDOW_OPERATIONS,
+                allow_context=(
+                    operation in _WINDOW_OPERATIONS or operation == "open_app"
+                ),
             )
             if operation == "open_app":
                 parameters = {"app": app}
@@ -987,63 +694,18 @@ class HandsGoalAgentTools:
             "canonical_user_turn_id": turn.turn_id,
         }
 
-    @function_tool()
+    @function_tool(raw_schema=_USE_COMPUTER_RAW_SCHEMA)
     async def use_computer(
         self,
+        raw_arguments: dict[str, object],
         context: RunContext,
-        plan_json: str,
     ) -> dict[str, object]:
-        """Accomplish the latest USER computer goal through JARVIS Hands.
-
-            This is the single computer-action boundary. The USER states an outcome; never
-            ask them to choose a capability or executor. Build a short semantic JSON-array
-            plan and let JARVIS route each step to the best available governed executor.
-
-            Each item is {"operation": "...", "parameters": {...}}. Use canonical
-            operation names, not friendly synonyms. In particular: `open_app`, `close_app`,
-            `get_master_volume`, `set_master_volume`, `mute_master_volume`,
-            `unmute_master_volume`, `create_text_file`, `replace_text_file`,
-            `append_text_file`, `make_directory`, `create_docx`, `create_xlsx`,
-            `create_pptx`, `execute_browser_plan`, `list_displays`,
-            `get_display_brightness`, `set_display_brightness`,
-            `list_bluetooth_devices`, `pair_bluetooth_device`,
-            `unpair_bluetooth_device`, `search_software`, `list_installed_software`,
-            `install_package`, `uninstall_package`, `git_status`, `git_active_branch`,
-            `git_create_branch`, `git_stage_paths`, `git_commit`, and
-            `git_push_current`. Do not invent names such as `set_volume` or
-            `create_file`; compatibility aliases are only a fail-safe at the boundary.
-
-            Material parameters must come from the current USER request: file/document
-            roots and paths, written content, browser URLs/form values/file transfers,
-            brightness percentages, Bluetooth names, software queries/exact package IDs,
-            repository aliases, Git paths/branches and commit messages. Never invent these.
-            Browser semantic selectors may be inferred as implementation details, but the
-            executor blocks high-consequence generic clicks and arbitrary JavaScript.
-
-            WinGet install/uninstall requires an exact package ID explicitly grounded in the
-            USER turn. A friendly package name may be searched first; never guess an ID from
-            search intent. JARVIS-repository Git mutations remain self-modification and are
-            classified by canonical authority, not ordinary development work.
-
-            Prefer native semantic operations over UI. To start/open/play a named installed local
-        application or game, use `open_app` directly; `open_app` already resolves against
-        the Windows installed-app catalogue. Never use `search_software` merely to locate
-        something the USER asked to launch. `search_software` is for explicit WinGet/software
-        discovery, or as the discovery step of an explicit install request. Generic
-        play/pause/next/previous/stop for the already-active Windows media session should use
-        the media operations.
-            Selecting named content inside a local desktop app (for example a playlist,
-            song, search result, menu, or control in Apple Music/Spotify) belongs to
-            `execute_windows_plan`, not `execute_browser_plan`. If that local app is not
-            open yet, emit `open_app` first and then `execute_windows_plan`. Use
-            `execute_browser_plan` only when the latest USER request actually grounds a
-            browser/website/web-page/URL goal. Visual computer use is owner-enabled fallback.
-            Every step independently passes through CapabilityRuntime, AuthorityService,
-            one-time permit revalidation, execution and verification. Only tool results are
-            a basis for claiming success.
-        """
+        """Execute a schema-constrained semantic Hands plan for the latest USER goal."""
         del context
         try:
-            return await self.execute_goal(plan_json=plan_json)
+            plan = raw_arguments.get("plan")
+            if not isinstance(plan, list):
+                raise HandsGoalGroundingError("Hands tool plan must be an array")
+            return await self.execute_goal(plan_json=json.dumps(plan))
         except (HandsGoalGroundingError, TypeError, ValueError) as exc:
             raise ToolError(str(exc)) from exc
