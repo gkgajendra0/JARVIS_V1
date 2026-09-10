@@ -13,19 +13,33 @@ from jarvis.capabilities.authority_bridge import (
     CapabilityAuthorityBroker,
     CapabilityAuthorizationError,
 )
+from jarvis.capabilities.browser_playwright import BrowserPlanExecutor
+from jarvis.capabilities.development_git import DevelopmentGitError, DevelopmentGitExecutor
 from jarvis.capabilities.discovery import CapabilityResolver
+from jarvis.capabilities.document_edits import DocumentEditExecutor
 from jarvis.capabilities.execution import CapabilityExecutor
 from jarvis.capabilities.local_reads import LocalProjectReadExecutor
+from jarvis.capabilities.local_writes import (
+    ApprovedWriteRootPolicy,
+    LocalFileWriteExecutor,
+    LocalWriteValidationError,
+)
 from jarvis.capabilities.models import (
     CapabilityCatalog,
     CapabilityRequest,
     CapabilityResult,
     CapabilityStatus,
 )
+from jarvis.capabilities.software_management import SoftwareManagementExecutor
 from jarvis.capabilities.system_reads import SystemReadExecutor
 from jarvis.capabilities.windows_control import (
     VisualDesktopControlExecutor,
     WindowsStructuredControlExecutor,
+)
+from jarvis.capabilities.windows_devices import (
+    BluetoothControlExecutor,
+    DisplayControlExecutor,
+    PowerSessionExecutor,
 )
 from jarvis.capabilities.windows_native import (
     AppLifecycleExecutor,
@@ -243,7 +257,17 @@ class CapabilityRuntime:
         )
 
     def close(self) -> None:
-        self._authority.close()
+        try:
+            for executor in self._executors.values():
+                close = getattr(executor, "close", None)
+                if not callable(close):
+                    continue
+                try:
+                    close()
+                except Exception:  # noqa: BLE001 - shutdown must continue across adapters
+                    pass
+        finally:
+            self._authority.close()
 
 
 def _env_enabled(name: str) -> bool:
@@ -266,7 +290,12 @@ def build_default_capability_runtime(
         provider_name=ai_provider or os.getenv("JARVIS_AI_PROVIDER", "gemini"),
         enabled=_env_enabled("JARVIS_VISUAL_COMPUTER_USE_ENABLED"),
     )
-    executors: tuple[CapabilityExecutor, ...] = (
+    display = DisplayControlExecutor()
+    bluetooth = BluetoothControlExecutor()
+    power = PowerSessionExecutor()
+    software = SoftwareManagementExecutor()
+
+    executors: list[CapabilityExecutor] = [
         project,
         system,
         audio,
@@ -276,14 +305,39 @@ def build_default_capability_runtime(
         app_lifecycle,
         structured_control,
         visual_control,
-    )
-    builtins = tuple(executor.descriptor for executor in executors)
+        display,
+        bluetooth,
+        power,
+        software,
+    ]
+
+    write_roots: ApprovedWriteRootPolicy | None = None
+    try:
+        write_roots = ApprovedWriteRootPolicy()
+    except LocalWriteValidationError:
+        pass
+    if write_roots is not None:
+        executors.extend(
+            (
+                LocalFileWriteExecutor(write_roots),
+                DocumentEditExecutor(write_roots),
+            )
+        )
+    executors.append(BrowserPlanExecutor(write_roots=write_roots))
+
+    try:
+        executors.append(DevelopmentGitExecutor())
+    except DevelopmentGitError:
+        pass
+
+    executor_tuple = tuple(executors)
+    builtins = tuple(executor.descriptor for executor in executor_tuple)
     resolver = CapabilityResolver(
         (WinAppCliSchemaSource(), WindowsOdrSource()),
         builtins=builtins,
     )
     return CapabilityRuntime(
-        executors=executors,
+        executors=executor_tuple,
         resolver=resolver,
         authority=CapabilityAuthorityBroker(),
         hands_registry=HandsCapabilityRegistry.default(),
