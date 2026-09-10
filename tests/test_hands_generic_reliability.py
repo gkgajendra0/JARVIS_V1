@@ -89,7 +89,9 @@ def test_voice_semantic_grounding_does_not_relax_high_risk_install_evidence() ->
 
 
 def test_voice_prompt_routes_desktop_screen_inspection_to_hands_not_camera() -> None:
-    assert "desktop UI/screen inspection is Hands, not Pocket3 camera vision" in INSTRUCTIONS
+    assert (
+        "desktop UI/screen inspection is Hands, not Pocket3 camera vision" in INSTRUCTIONS
+    )
     assert "MUST call `use_computer` before answering" in INSTRUCTIONS
 
 
@@ -118,7 +120,9 @@ class RouteRecordingPlanner:
 
 
 @pytest.mark.asyncio
-async def test_voice_route_does_not_reinflate_unselected_related_operation_groups() -> None:
+async def test_voice_route_does_not_reinflate_unselected_related_operation_groups() -> (
+    None
+):
     planner = RouteRecordingPlanner()
     wrapped = LeaseAwareHandsPlanner(planner, lambda: True)
     groups = (
@@ -204,8 +208,7 @@ def test_voice_hands_result_compaction_keeps_final_evidence_not_full_trace() -> 
         "status": "succeeded",
         "completed_steps": 5,
         "results": [
-            {"operation": f"old-{index}", "data": {"blob": huge}}
-            for index in range(4)
+            {"operation": f"old-{index}", "data": {"blob": huge}} for index in range(4)
         ]
         + [
             {
@@ -217,8 +220,7 @@ def test_voice_hands_result_compaction_keeps_final_evidence_not_full_trace() -> 
             }
         ],
         "observations": [
-            {"operation": f"old-{index}", "data": {"blob": huge}}
-            for index in range(4)
+            {"operation": f"old-{index}", "data": {"blob": huge}} for index in range(4)
         ]
         + [
             {
@@ -305,7 +307,9 @@ def test_focus_verification_polls_eventual_foreground_state() -> None:
     assert backend.focus_requests == 1
 
 
-def test_focus_verification_does_not_claim_success_when_foreground_never_arrives() -> None:
+def test_focus_verification_does_not_claim_success_when_foreground_never_arrives() -> (
+    None
+):
     backend = SequencedFocusBackend([False])
 
     state = backend.focus("Apple Music")
