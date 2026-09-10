@@ -25,9 +25,9 @@ from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.hands.app_catalog import AppCatalog, WindowsAppsFolderCatalog
 from jarvis.hands.contracts import PlannedAction, PlannerTurn
-from jarvis.hands.entities import AppEntityResolver, EntityResolutionError
+from jarvis.hands.entities import AppEntityResolver
 from jarvis.hands.models import HandsOperation
-from jarvis.hands.planner import HandsPlanningError, HandsRouteGroup
+from jarvis.hands.planner import HandsRouteGroup
 
 LOGGER = logging.getLogger(__name__)
 
@@ -309,11 +309,7 @@ def _require_material(
     latest_only: bool = False,
 ) -> str:
     text = str(value or "").strip()
-    sources = (
-        (context.latest_user_text,)
-        if latest_only
-        else context.all_texts
-    )
+    sources = (context.latest_user_text,) if latest_only else context.all_texts
     if not text or not any(_material_in_text(text, source) for source in sources):
         raise HandsOrchestrationError(
             f"{field} is not grounded in the accepted USER conversation"
@@ -342,7 +338,9 @@ def _numeric_values(text: str) -> tuple[float, ...]:
 
 
 def _number_grounded(value: float, text: str) -> bool:
-    return any(abs(float(value) - candidate) < 0.001 for candidate in _numeric_values(text))
+    return any(
+        abs(float(value) - candidate) < 0.001 for candidate in _numeric_values(text)
+    )
 
 
 def _url_grounded(value: object, context: GroundingContext) -> bool:
@@ -400,7 +398,9 @@ class HandsOrchestrator:
         self._runtime = runtime
         self._planner = planner
         self._registry = runtime.hands_registry
-        self._app_resolver = AppEntityResolver(app_catalog or WindowsAppsFolderCatalog())
+        self._app_resolver = AppEntityResolver(
+            app_catalog or WindowsAppsFolderCatalog()
+        )
 
     def _available_operations(self) -> tuple[HandsOperation, ...]:
         available: list[HandsOperation] = []
@@ -516,13 +516,17 @@ class HandsOrchestrator:
             params["source_root"] = str(params["source_root"]).casefold()
             params["dest_root"] = str(params["dest_root"]).casefold()
         elif operation == "rename_path":
-            params["root"] = _require_material(params.get("root"), context, "root").casefold()
+            params["root"] = _require_material(
+                params.get("root"), context, "root"
+            ).casefold()
             params["path"] = _require_material(params.get("path"), context, "path")
             params["new_path"] = _require_material(
                 params.get("new_path"), context, "new path"
             )
         else:
-            params["root"] = _require_material(params.get("root"), context, "root").casefold()
+            params["root"] = _require_material(
+                params.get("root"), context, "root"
+            ).casefold()
             params["path"] = _require_material(params.get("path"), context, "path")
             if operation in {
                 "create_text_file",
@@ -538,7 +542,9 @@ class HandsOrchestrator:
         context: GroundingContext,
     ) -> NormalizedAction:
         params = dict(action.parameters)
-        params["root"] = _require_material(params.get("root"), context, "root").casefold()
+        params["root"] = _require_material(
+            params.get("root"), context, "root"
+        ).casefold()
         params["path"] = _require_material(params.get("path"), context, "document path")
         operation = action.operation
         if operation in {"create_docx", "append_docx_paragraph"}:
@@ -583,7 +589,9 @@ class HandsOrchestrator:
             if not isinstance(step, dict):
                 raise HandsOrchestrationError("browser plan step is invalid")
             step_action = str(step.get("action") or "").casefold()
-            if step_action == "navigate" and not _url_grounded(step.get("url"), context):
+            if step_action == "navigate" and not _url_grounded(
+                step.get("url"), context
+            ):
                 raise HandsOrchestrationError(
                     "browser URL is not grounded in the accepted USER conversation"
                 )
@@ -641,7 +649,9 @@ class HandsOrchestrator:
             params: dict[str, Any] = {"percent": percent}
             display = action.parameters.get("display")
             if display:
-                params["display"] = _require_material(display, context, "display target")
+                params["display"] = _require_material(
+                    display, context, "display target"
+                )
             return NormalizedAction(action.operation, params)
         if action.operation == "get_display_brightness":
             display = action.parameters.get("display")
@@ -713,7 +723,9 @@ class HandsOrchestrator:
             root = str(action.parameters.get("root") or "project").casefold()
             if root != "project":
                 root = _require_material(root, context, "read root").casefold()
-            path = _require_material(action.parameters.get("path"), context, "read path")
+            path = _require_material(
+                action.parameters.get("path"), context, "read path"
+            )
             return NormalizedAction(action.operation, {"root": root, "path": path})
         if action.operation in {"list_directory", "list_project_files"}:
             root = str(action.parameters.get("root") or "project").casefold()
@@ -778,24 +790,27 @@ class HandsOrchestrator:
     ) -> dict[str, object]:
         latest = str(goal).strip()
         if not latest:
-            raise HandsOrchestrationError("Hands requires a non-empty accepted USER goal")
+            raise HandsOrchestrationError(
+                "Hands requires a non-empty accepted USER goal"
+            )
         context = GroundingContext(latest, recent_user_turns)
         available = self._available_operations()
         route_groups = self._route_groups(available)
         if not route_groups:
-            raise HandsOrchestrationError("no executable Hands capabilities are available")
-
-        try:
-            selected = await self._planner.route(
-                goal=latest,
-                recent_user_turns=recent_user_turns,
-                route_groups=route_groups,
+            raise HandsOrchestrationError(
+                "no executable Hands capabilities are available"
             )
-        except HandsPlanningError:
-            raise
+
+        selected = await self._planner.route(
+            goal=latest,
+            recent_user_turns=recent_user_turns,
+            route_groups=route_groups,
+        )
         candidates = self._candidate_operations(selected, route_groups)
         if not candidates:
-            raise HandsOrchestrationError("Hands routing produced no executable operations")
+            raise HandsOrchestrationError(
+                "Hands routing produced no executable operations"
+            )
 
         LOGGER.info(
             "Hands semantic route | provider=%s | model=%s | groups=%s | candidates=%s",
@@ -831,6 +846,12 @@ class HandsOrchestrator:
                 if not results:
                     raise HandsOrchestrationError(
                         "planner claimed goal completion without any verified execution"
+                    )
+                latest_result = results[-1]
+                latest_observation = observations[-1]
+                if not latest_result.ok or not bool(latest_observation.get("verified")):
+                    raise HandsOrchestrationError(
+                        "planner claimed goal completion without a successful latest execution"
                     )
                 return {
                     "ok": True,
@@ -897,10 +918,17 @@ class HandsOrchestrator:
 
             if result.ok:
                 continue
-            if result.status in {CapabilityStatus.INVALID, CapabilityStatus.UNAVAILABLE}:
+            if result.status in {
+                CapabilityStatus.INVALID,
+                CapabilityStatus.UNAVAILABLE,
+            }:
                 if "app_ui" in selected:
                     visual = next(
-                        (group for group in route_groups if group.key == "visual_fallback"),
+                        (
+                            group
+                            for group in route_groups
+                            if group.key == "visual_fallback"
+                        ),
                         None,
                     )
                     if visual is not None and all(

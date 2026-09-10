@@ -12,7 +12,9 @@ from jarvis.hands.registry import HandsCapabilityRegistry
 
 
 def test_typed_contracts_cover_every_canonical_hands_operation() -> None:
-    operations = {item.operation for item in HandsCapabilityRegistry.default().operations}
+    operations = {
+        item.operation for item in HandsCapabilityRegistry.default().operations
+    }
     validate_contract_coverage(operations)
 
 

@@ -142,7 +142,9 @@ def runtime_for(executor: RecordingExecutor) -> CapabilityRuntime:
 
 
 @pytest.mark.asyncio
-async def test_apple_music_style_goal_resolves_entity_and_runs_act_observe_loop() -> None:
+async def test_apple_music_style_goal_resolves_entity_and_runs_act_observe_loop() -> (
+    None
+):
     executor = RecordingExecutor(("open_app", "execute_windows_plan"))
     planner = ScriptedPlanner(
         ("app_ui",),
@@ -195,7 +197,9 @@ async def test_apple_music_style_goal_resolves_entity_and_runs_act_observe_loop(
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_rejects_model_target_substitution_before_execution() -> None:
+async def test_orchestrator_rejects_model_target_substitution_before_execution() -> (
+    None
+):
     executor = RecordingExecutor(("open_app",))
     planner = ScriptedPlanner(
         ("app_lifecycle",),
@@ -237,7 +241,9 @@ async def test_display_route_does_not_expose_power_mutations_to_planner() -> Non
             PlannerTurn(goal_complete=True),
         ],
     )
-    orchestrator = HandsOrchestrator(runtime_for(executor), planner, app_catalog=FakeCatalog())
+    orchestrator = HandsOrchestrator(
+        runtime_for(executor), planner, app_catalog=FakeCatalog()
+    )
 
     result = await orchestrator.execute_goal(
         session_id="display-isolation",
@@ -265,7 +271,9 @@ async def test_development_read_route_does_not_expose_commit_or_push() -> None:
             PlannerTurn(goal_complete=True),
         ],
     )
-    orchestrator = HandsOrchestrator(runtime_for(executor), planner, app_catalog=FakeCatalog())
+    orchestrator = HandsOrchestrator(
+        runtime_for(executor), planner, app_catalog=FakeCatalog()
+    )
 
     result = await orchestrator.execute_goal(
         session_id="git-read-isolation",
@@ -277,7 +285,9 @@ async def test_development_read_route_does_not_expose_commit_or_push() -> None:
 
 
 @pytest.mark.asyncio
-async def test_planner_cannot_claim_completion_immediately_after_failed_action() -> None:
+async def test_planner_cannot_claim_completion_immediately_after_failed_action() -> (
+    None
+):
     executor = RecordingExecutor(
         ("open_app",), statuses={"open_app": CapabilityStatus.UNAVAILABLE}
     )

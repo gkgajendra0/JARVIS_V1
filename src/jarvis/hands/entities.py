@@ -97,7 +97,9 @@ class AppEntityResolver:
     def __init__(self, catalog: AppCatalog) -> None:
         self._catalog = catalog
 
-    def _mentioned_apps(self, texts: tuple[str, ...]) -> list[tuple[int, InstalledApp, str]]:
+    def _mentioned_apps(
+        self, texts: tuple[str, ...]
+    ) -> list[tuple[int, InstalledApp, str]]:
         entries = self._catalog.entries()
         ranked: list[tuple[int, InstalledApp, str]] = []
         for recency, text in enumerate(texts):
@@ -117,7 +119,9 @@ class AppEntityResolver:
             return None
         best_score = ranked[0][0]
         best = [item for item in ranked if item[0] == best_score]
-        identities = {(item[1].app_id, item[1].display_name.casefold()) for item in best}
+        identities = {
+            (item[1].app_id, item[1].display_name.casefold()) for item in best
+        }
         if len(identities) != 1:
             return None
         return best[0][1], best[0][2]
@@ -139,7 +143,9 @@ class AppEntityResolver:
             for text in (latest_user_text, *reversed(recent_user_texts))
             if str(text).strip()
         )
-        query_is_grounded = any(_literal_grounded(bounded_query, text) for text in texts)
+        query_is_grounded = any(
+            _literal_grounded(bounded_query, text) for text in texts
+        )
         proposed: InstalledApp | None = None
         try:
             proposed = self._catalog.resolve(bounded_query)
@@ -185,8 +191,10 @@ class AppEntityResolver:
             recent = self._unique_best(recent_ranked)
             if recent is not None:
                 app, grounded_from = recent
-                if proposed is None or proposed.app_id == app.app_id or _alias_related(
-                    bounded_query, app.display_name
+                if (
+                    proposed is None
+                    or proposed.app_id == app.app_id
+                    or _alias_related(bounded_query, app.display_name)
                 ):
                     return ResolvedAppRef(
                         app_id=app.app_id,
