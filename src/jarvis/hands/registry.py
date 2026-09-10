@@ -168,6 +168,12 @@ class HandsCapabilityRegistry:
                 native_then_human,
             ),
             HandsOperation(
+                "close_app",
+                HandsDomain.APP_LIFECYCLE,
+                "Request normal non-forced closure of an explicitly named local application.",
+                native_then_human,
+            ),
+            HandsOperation(
                 "execute_windows_plan",
                 HandsDomain.APP_UI,
                 "Perform bounded structured UI actions in an approved Windows app.",

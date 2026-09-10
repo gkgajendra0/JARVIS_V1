@@ -584,6 +584,8 @@ class WindowBackend(Protocol):
 
     def show(self, app: str, state: str) -> WindowSnapshot: ...
 
+    def close(self, app: str) -> dict[str, Any]: ...
+
     def move_next_monitor(self, app: str) -> dict[str, Any]: ...
 
 
@@ -670,6 +672,38 @@ class PyWin32WindowBackend:
             raise NativeWindowsError(f"unsupported window state: {state}")
         win32gui.ShowWindow(current.hwnd, command)
         return self.snapshot(app)
+
+    def close(self, app: str) -> dict[str, Any]:
+        """Request normal window closure without terminating the process."""
+        _, _, win32con, win32gui, _ = self._modules()
+        needle = str(app).strip().casefold()
+        if not needle:
+            raise NativeWindowsError("window target app must not be empty")
+
+        def matches() -> list[WindowSnapshot]:
+            return [
+                item
+                for item in self.list_windows()
+                if needle in item.process.casefold() or needle in item.title.casefold()
+            ]
+
+        targets = matches()
+        if not targets:
+            raise NativeWindowsError(f"no visible window matched application: {app}")
+        for item in targets:
+            win32gui.PostMessage(item.hwnd, win32con.WM_CLOSE, 0, 0)
+
+        deadline = time.monotonic() + 5.0
+        remaining = matches()
+        while remaining and time.monotonic() < deadline:
+            time.sleep(0.05)
+            remaining = matches()
+        return {
+            "closed": not remaining,
+            "requested_windows": len(targets),
+            "remaining_windows": [item.payload() for item in remaining],
+            "forced_process_termination": False,
+        }
 
     def move_next_monitor(self, app: str) -> dict[str, Any]:
         _, win32api, win32con, win32gui, _ = self._modules()
@@ -809,6 +843,8 @@ class WindowManagementExecutor:
 class AppLifecycleBackend(Protocol):
     def open(self, app: InstalledApp) -> dict[str, Any]: ...
 
+    def close(self, app: InstalledApp) -> dict[str, Any]: ...
+
 
 class _InjectedBackendCatalog:
     """Identity shim used only when tests/custom code inject an executor backend."""
@@ -834,9 +870,11 @@ class CatalogAppLifecycleBackend:
         catalog: AppCatalog,
         *,
         ui_factory=WinAppCliBackend,
+        window_backend_factory=PyWin32WindowBackend,
     ) -> None:
         self._catalog = catalog
         self._ui_factory = ui_factory
+        self._window_backend_factory = window_backend_factory
 
     def open(self, app: InstalledApp) -> dict[str, Any]:
         ui = self._ui_factory()
@@ -852,10 +890,15 @@ class CatalogAppLifecycleBackend:
             "running": int(ready.payload.get("exit_code", 1)) == 0,
         }
 
+    def close(self, app: InstalledApp) -> dict[str, Any]:
+        data = self._window_backend_factory().close(app.display_name)
+        data["app"] = app.payload()
+        return data
+
 
 class AppLifecycleExecutor:
     capability_key = "app:lifecycle"
-    operations = ("open_app",)
+    operations = ("close_app", "open_app")
 
     def __init__(
         self,
@@ -876,7 +919,7 @@ class AppLifecycleExecutor:
             name="Windows installed application lifecycle",
             description=(
                 "Resolve Start-menu applications dynamically through Windows AppsFolder, "
-                "launch the resolved Shell item, and verify the application is running."
+                "launch them, or request normal non-forced window closure, with verification."
             ),
             operations=list(self.operations),
             metadata={
@@ -889,7 +932,7 @@ class AppLifecycleExecutor:
         )
 
     def prepare(self, request: CapabilityRequest) -> PreparedCapability:
-        if request.operation != "open_app":
+        if request.operation not in self.operations:
             raise ValueError("unsupported application lifecycle operation")
         query = validate_app_name(request.parameters.get("app", ""))
         try:
@@ -904,7 +947,11 @@ class AppLifecycleExecutor:
                 "domain": "app.lifecycle",
             },
             parameters={"app": app.payload()},
-            material_summary=f"Open Windows application: {app.display_name}",
+            material_summary=(
+                f"Open Windows application: {app.display_name}"
+                if request.operation == "open_app"
+                else f"Close Windows application gracefully: {app.display_name}"
+            ),
             attributes=ActionAttributes(reversible_local_change=True),
             execution_payload={"app": app.payload()},
         )
@@ -919,8 +966,12 @@ class AppLifecycleExecutor:
         )
         try:
             backend = self._backend or CatalogAppLifecycleBackend(self._catalog)
-            data = backend.open(app)
-            verified = bool(data.get("running"))
+            if prepared.request.operation == "open_app":
+                data = backend.open(app)
+                verified = bool(data.get("running"))
+            else:
+                data = backend.close(app)
+                verified = bool(data.get("closed"))
             data["verification_passed"] = verified
         except (
             AppCatalogError,
@@ -941,6 +992,10 @@ class AppLifecycleExecutor:
             CapabilityStatus.SUCCEEDED if verified else CapabilityStatus.FAILED,
             started,
             data=data,
-            reason=None if verified else "application launch verification failed",
-            provenance=("Windows Shell AppsFolder", "Microsoft winapp"),
+            reason=(None if verified else "application lifecycle verification failed"),
+            provenance=(
+                "Windows Shell AppsFolder",
+                "Microsoft winapp",
+                "Win32 WM_CLOSE (non-forced)",
+            ),
         )

@@ -235,3 +235,45 @@ def test_voice_winget_transcription_variant_warrants_non_mutating_search() -> No
         "search_software",
     ]
     assert steps[1].parameters == {"query": "PowerToys"}
+
+
+def test_voice_reduce_is_an_explicit_volume_action() -> None:
+    grounded = parse(
+        tools("Jarvis reduce the master volume to 25% again."),
+        "set_master_volume",
+        {"percent": 25},
+    )
+    assert grounded == {"percent": 25.0}
+
+
+def test_voice_close_app_is_a_grounded_lifecycle_action() -> None:
+    tool = tools("Jarvis close calculator")
+    plan = json.dumps([{"operation": "close_app", "parameters": {"app": "calculator"}}])
+    step = tool._parse_plan(plan, tool._latest_user_turn().text)[0]
+    assert step.operation == "close_app"
+    assert step.parameters == {"app": "calculator"}
+
+
+def test_named_playlist_in_local_app_uses_structured_windows_plan() -> None:
+    tool = tools("Okay. Jarvis, play Bhakti playlist on Apple Music app.")
+    plan = json.dumps(
+        [
+            {
+                "operation": "execute_windows_plan",
+                "parameters": {
+                    "app": "Apple Music",
+                    "plan": [
+                        {"action": "search", "query": "Bhakti"},
+                        {"action": "click", "selector": "Bhakti"},
+                        {"action": "click", "selector": "Play"},
+                    ],
+                },
+            }
+        ]
+    )
+    step = tool._parse_plan(plan, tool._latest_user_turn().text)[0]
+    assert step.operation == "execute_windows_plan"
+    assert step.parameters["app"] == "Apple Music"
+    assert step.parameters["task"] == tool._latest_user_turn().text
+    assert step.parameters["allow_existing_app"] is True
+    assert step.parameters["plan"][0] == {"action": "search", "query": "Bhakti"}

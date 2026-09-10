@@ -170,6 +170,9 @@ class FakeAppLifecycle:
     def open(self, app: str):
         return {"app": app, "launched": True, "running": True}
 
+    def close(self, app: str):
+        return {"app": app, "closed": True, "forced_process_termination": False}
+
 
 def request(executor, operation: str, parameters: dict | None = None):
     return CapabilityRequest(
@@ -382,3 +385,19 @@ def test_pywin32_window_snapshot_uses_get_window_placement_not_iszoomed(
     assert windows[0].iconic is False
     assert windows[0].zoomed is True
     assert windows[0].foreground is True
+
+
+def test_app_lifecycle_close_is_graceful_and_verified() -> None:
+    executor = AppLifecycleExecutor(FakeAppLifecycle())
+    prepared = executor.prepare(request(executor, "close_app", {"app": "calculator"}))
+
+    result = executor.execute(prepared)
+
+    assert prepared.attributes.reversible_local_change is True
+    assert (
+        prepared.material_summary == "Close Windows application gracefully: calculator"
+    )
+    assert result.status is CapabilityStatus.SUCCEEDED
+    assert result.data["closed"] is True
+    assert result.data["forced_process_termination"] is False
+    assert result.data["verification_passed"] is True

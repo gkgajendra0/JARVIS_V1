@@ -82,6 +82,7 @@ _OPERATION_INTENT_MARKERS: dict[str, tuple[str, ...]] = {
         "other screen",
     ),
     "open_app": ("open", "launch", "start"),
+    "close_app": ("close", "quit", "exit", "band"),
     "execute_windows_plan": (
         "open",
         "play",
@@ -163,6 +164,7 @@ _OPERATION_INTENT_MARKERS: dict[str, tuple[str, ...]] = {
 }
 _APP_OPERATIONS = {
     "open_app",
+    "close_app",
     "focus_window",
     "maximize_window",
     "minimize_window",
@@ -172,6 +174,7 @@ _APP_OPERATIONS = {
     "execute_visual_desktop_task",
 }
 _WINDOW_OPERATIONS = {
+    "close_app",
     "focus_window",
     "maximize_window",
     "minimize_window",
@@ -245,6 +248,7 @@ _MUTATING_OPERATIONS = {
     "restore_window",
     "move_window_to_next_monitor",
     "open_app",
+    "close_app",
     "execute_windows_plan",
     "execute_visual_desktop_task",
     *_FILE_WRITE_OPERATIONS,
@@ -267,6 +271,7 @@ _ACTION_STARTS = (
     "adjust",
     "increase",
     "decrease",
+    "reduce",
     "raise",
     "lower",
     "mute",
@@ -292,6 +297,9 @@ _ACTION_STARTS = (
     "minimise",
     "restore",
     "move",
+    "close",
+    "quit",
+    "exit",
     "open",
     "launch",
     "start",
@@ -963,7 +971,7 @@ class HandsGoalAgentTools:
         plan and let JARVIS route each step to the best available governed executor.
 
         Each item is {"operation": "...", "parameters": {...}}. Use canonical
-        operation names, not friendly synonyms. In particular: `open_app`,
+        operation names, not friendly synonyms. In particular: `open_app`, `close_app`,
         `get_master_volume`, `set_master_volume`, `mute_master_volume`,
         `unmute_master_volume`, `create_text_file`, `replace_text_file`,
         `append_text_file`, `make_directory`, `create_docx`, `create_xlsx`,
@@ -988,8 +996,14 @@ class HandsGoalAgentTools:
         search intent. JARVIS-repository Git mutations remain self-modification and are
         classified by canonical authority, not ordinary development work.
 
-        Prefer native semantic operations over UI. Use app UI only for interaction that
-        has no better native capability. Visual computer use is owner-enabled fallback.
+        Prefer native semantic operations over UI. Generic play/pause/next/previous/stop
+        for the already-active Windows media session should use the media operations.
+        Selecting named content inside a local desktop app (for example a playlist,
+        song, search result, menu, or control in Apple Music/Spotify) belongs to
+        `execute_windows_plan`, not `execute_browser_plan`. If that local app is not
+        open yet, emit `open_app` first and then `execute_windows_plan`. Use
+        `execute_browser_plan` only when the latest USER request actually grounds a
+        browser/website/web-page/URL goal. Visual computer use is owner-enabled fallback.
         Every step independently passes through CapabilityRuntime, AuthorityService,
         one-time permit revalidation, execution and verification. Only tool results are
         a basis for claiming success.
