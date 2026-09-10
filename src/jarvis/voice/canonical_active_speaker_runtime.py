@@ -17,7 +17,7 @@ from livekit.agents import AgentStateChangedEvent, UserStateChangedEvent
 
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.config import JarvisConfig
-from jarvis.conversation import ConversationRole, ConversationSession
+from jarvis.conversation import ConversationRole, ConversationSession, ConversationStatus
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_shadow import EnrolledSpeakerShadowObserver
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
@@ -124,7 +124,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     event.new_state,
                 )
                 if event.new_state == "speaking":
-                    bridge.conversation.begin_user_utterance()
+                    if bridge.conversation.status is ConversationStatus.ACTIVE:
+                        bridge.conversation.begin_user_utterance()
                     self._user_is_speaking = True
                     self._cancel_timeout()
                     return
