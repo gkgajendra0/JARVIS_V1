@@ -127,19 +127,23 @@ def ensure_managed_windows_hello_helper() -> Path:
         )
 
     destination = managed_windows_hello_helper_path()
+    existing_valid = False
     if destination.is_file():
         try:
             probe_windows_hello_helper_contract(destination)
-            return destination
+            existing_valid = True
         except AuthorityToolError:
-            pass
+            existing_valid = False
 
     dotnet = shutil.which("dotnet")
     if not dotnet:
+        if existing_valid:
+            return destination
         raise AuthorityToolError(
             ".NET 9 SDK is required once to publish the self-contained Windows Hello "
             "helper; install it and rerun jarvis-setup"
         )
+
     project = _hello_project_path()
     if not project.is_file():
         raise AuthorityToolError(f"Windows Hello helper project is missing: {project}")
