@@ -173,7 +173,7 @@ class SoftwareManagementExecutor:
         self._backend = backend or WinGetBackend()
         execution_enabled = backend_provided or WinGetBackend.available()
         self.descriptor = CapabilityDescriptor.create(
-            capability_id="management",
+            capability_id="winget",
             source_id="software",
             kind=CapabilityKind.NATIVE_API,
             name="Windows Package Manager Hands",
