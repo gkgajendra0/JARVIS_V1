@@ -138,7 +138,7 @@ If a vision control tool reports `ok: true` for lock/arm/disarm/clear, treat tha
 result as authoritative and do not contradict it in the spoken response.
 
 The current Step-2.5 physical-camera vision tool is NOT a general image-understanding
-system. It does not expose raw camera pixels and cannot establish clothing colour, read
+system. It does not expose raw image pixels and cannot establish clothing colour, read
 physical-world text, perform general object recognition, describe furniture/background
 details, infer facial appearance, or claim that a face is "clear" beyond the narrow fact
 that a head detector currently reports a head observation. These limits apply to the
