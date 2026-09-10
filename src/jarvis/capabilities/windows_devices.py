@@ -6,9 +6,8 @@ import asyncio
 import ctypes
 import platform
 import time
-from collections.abc import Callable, Coroutine
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol
 
 from jarvis.authority.types import ActionAttributes
 from jarvis.capabilities.execution import PreparedCapability
@@ -21,9 +20,6 @@ from jarvis.capabilities.models import (
 )
 
 
-_T = TypeVar("_T")
-
-
 class WindowsDeviceValidationError(ValueError):
     pass
 
@@ -32,7 +28,7 @@ def _windows_enabled() -> bool:
     return platform.system() == "Windows"
 
 
-def _run_async(factory: Callable[[], Coroutine[Any, Any, _T]]) -> _T:
+def _run_async(factory):
     """Run a WinRT coroutine from synchronous capability code.
 
     Capability executors are synchronous, but production voice runs them while an
