@@ -12,7 +12,7 @@ import hashlib
 import operator
 from dataclasses import dataclass
 from functools import reduce
-from typing import Annotated, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
@@ -172,7 +172,7 @@ class BrowserReadPage(StrictContract):
     action: Literal["read_page"]
 
 
-BrowserAction = Annotated[
+BrowserAction = (
     BrowserNavigate
     | BrowserClick
     | BrowserFill
@@ -180,9 +180,8 @@ BrowserAction = Annotated[
     | BrowserWaitFor
     | BrowserDownload
     | BrowserUpload
-    | BrowserReadPage,
-    Field(discriminator="action"),
-]
+    | BrowserReadPage
+)
 
 
 class BrowserPlanParams(StrictContract):
@@ -252,7 +251,7 @@ class WindowsWaitUntilRunning(StrictContract):
     timeout_seconds: float = Field(default=6.0, ge=0.5, le=15.0)
 
 
-WindowsAction = Annotated[
+WindowsAction = (
     WindowsInspect
     | WindowsSearch
     | WindowsGetValue
@@ -263,9 +262,8 @@ WindowsAction = Annotated[
     | WindowsSendText
     | WindowsSetValue
     | WindowsWaitFor
-    | WindowsWaitUntilRunning,
-    Field(discriminator="action"),
-]
+    | WindowsWaitUntilRunning
+)
 
 
 class WindowsPlanParams(AppParams):
@@ -415,8 +413,7 @@ def build_action_response_model(
     if len(call_models) == 1:
         action_type: Any = call_models[0]
     else:
-        union_type = reduce(operator.or_, call_models)
-        action_type = Annotated[union_type, Field(discriminator="operation")]
+        action_type = reduce(operator.or_, call_models)
 
     digest = hashlib.sha1("|".join(names).encode("utf-8")).hexdigest()[:10]
     return create_model(
