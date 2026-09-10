@@ -72,7 +72,9 @@ def _ensure_playwright_chromium(
     """Provision the fixed Playwright Chromium payload when Browser Hands is selected."""
 
     if not package_available():
-        print("Browser Hands extra is not installed; skipping Playwright Chromium setup.")
+        print(
+            "Browser Hands extra is not installed; skipping Playwright Chromium setup."
+        )
         return False
 
     executable = browser_probe()

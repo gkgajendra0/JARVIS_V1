@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -40,6 +41,10 @@ class SoftwareBackend(Protocol):
 
 
 class WinGetBackend:
+    @staticmethod
+    def available() -> bool:
+        return os.name == "nt" and shutil.which("winget") is not None
+
     @staticmethod
     def _exe() -> str:
         path = shutil.which("winget")
@@ -164,7 +169,9 @@ class SoftwareManagementExecutor:
     )
 
     def __init__(self, backend: SoftwareBackend | None = None) -> None:
+        backend_provided = backend is not None
         self._backend = backend or WinGetBackend()
+        execution_enabled = backend_provided or WinGetBackend.available()
         self.descriptor = CapabilityDescriptor.create(
             capability_id="management",
             source_id="software",
@@ -175,8 +182,12 @@ class SoftwareManagementExecutor:
                 "arbitrary command arguments are never exposed."
             ),
             operations=list(self.operations),
-            metadata={"backend": "Microsoft WinGet", "shell": False},
-            execution_enabled=True,
+            metadata={
+                "backend": "Microsoft WinGet",
+                "shell": False,
+                "available": execution_enabled,
+            },
+            execution_enabled=execution_enabled,
         )
 
     def prepare(self, request: CapabilityRequest) -> PreparedCapability:

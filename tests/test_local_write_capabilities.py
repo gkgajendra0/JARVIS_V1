@@ -48,6 +48,25 @@ def test_write_policy_rejects_project_tree(tmp_path: Path) -> None:
         )
 
 
+def test_write_policy_skips_only_overlapping_default_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    documents = tmp_path / "Documents"
+    documents.mkdir()
+    downloads = tmp_path / "Downloads"
+    downloads.mkdir()
+    jarvis = documents / "JARVIS_V1"
+    jarvis.mkdir()
+    monkeypatch.setattr(
+        "jarvis.capabilities.local_writes._default_write_roots",
+        lambda: {"documents": documents, "downloads": downloads},
+    )
+
+    policy = ApprovedWriteRootPolicy(jarvis_root=jarvis)
+
+    assert policy.aliases == ("downloads",)
+
+
 def test_write_policy_blocks_traversal_and_secret_paths(tmp_path: Path) -> None:
     policy = roots(tmp_path)
 

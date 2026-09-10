@@ -112,22 +112,22 @@ class ApprovedWriteRootPolicy:
         jarvis_root: str | pathlib.Path | None = None,
         include_user_defaults: bool = True,
     ) -> None:
-        configured: dict[str, pathlib.Path] = (
-            _default_write_roots() if include_user_defaults else {}
-        )
-        configured.update(_parse_extra_roots(os.getenv("JARVIS_LOCAL_WRITE_ROOTS")))
+        protected = pathlib.Path(jarvis_root or default_project_root()).resolve()
+        defaults = _default_write_roots() if include_user_defaults else {}
+        configured = {
+            alias: root
+            for alias, root in defaults.items()
+            if not (_is_within(root, protected) or _is_within(protected, root))
+        }
+
+        explicit = _parse_extra_roots(os.getenv("JARVIS_LOCAL_WRITE_ROOTS"))
         for alias, value in (roots or {}).items():
             normalized = str(alias).strip().casefold()
             if not re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", normalized):
                 raise LocalWriteValidationError("invalid local write root alias")
-            configured[normalized] = pathlib.Path(value).expanduser().resolve()
+            explicit[normalized] = pathlib.Path(value).expanduser().resolve()
 
-        protected = pathlib.Path(jarvis_root or default_project_root()).resolve()
-        if not configured:
-            raise LocalWriteValidationError(
-                "no approved local write roots are configured"
-            )
-        for alias, root in configured.items():
+        for alias, root in explicit.items():
             if not root.is_dir():
                 raise LocalWriteValidationError(
                     f"approved local write root does not exist: {alias}"
@@ -136,6 +136,12 @@ class ApprovedWriteRootPolicy:
                 raise LocalWriteValidationError(
                     "JARVIS project/source tree cannot be an ordinary local write root"
                 )
+            configured[alias] = root
+
+        if not configured:
+            raise LocalWriteValidationError(
+                "no approved local write roots are configured"
+            )
         self._roots = configured
 
     @property
