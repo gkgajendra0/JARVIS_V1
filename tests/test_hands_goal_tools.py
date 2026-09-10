@@ -69,7 +69,9 @@ async def test_voice_hands_handoff_uses_exact_latest_user_goal_without_plan_json
 
 
 @pytest.mark.asyncio
-async def test_voice_hands_waits_for_current_transcript_instead_of_using_old_turn() -> None:
+async def test_voice_hands_waits_for_current_transcript_instead_of_using_old_turn() -> (
+    None
+):
     conversation = ConversationSession(session_id="hands-wait")
     conversation.start()
     old = conversation.accept_turn(ConversationRole.USER, "Set volume to 35 percent")
@@ -96,7 +98,9 @@ async def test_voice_hands_waits_for_current_transcript_instead_of_using_old_tur
 
 
 @pytest.mark.asyncio
-async def test_newer_voice_generation_supersedes_call_waiting_for_old_transcript() -> None:
+async def test_newer_voice_generation_supersedes_call_waiting_for_old_transcript() -> (
+    None
+):
     conversation = ConversationSession(session_id="hands-supersede-pending")
     conversation.start()
     conversation.begin_user_utterance()
