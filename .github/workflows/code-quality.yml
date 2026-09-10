@@ -172,11 +172,11 @@ jobs:
       - name: Probe Windows Hands Python dependencies
         run: >-
           python -c "import pycaw; import win32clipboard; import win32gui;
-          import winrt.windows.foundation; import winrt.windows.media.control;
-          import winrt.windows.devices.enumeration; import winrt.windows.devices.bluetooth;
-          import screen_brightness_control; import send2trash; import docx; import openpyxl;
-          import pptx; import playwright; import dulwich;
-          print('Unified Windows Hands Python dependencies ready')"
+          import winrt.windows.foundation; import winrt.windows.foundation.collections;
+          import winrt.windows.media.control; import winrt.windows.devices.enumeration;
+          import winrt.windows.devices.bluetooth; import screen_brightness_control;
+          import send2trash; import docx; import openpyxl; import pptx; import playwright;
+          import dulwich; print('Unified Windows Hands Python dependencies ready')"
 
       - name: Run Windows DPAPI smoke test
         run: python -m pytest -q tests/test_windows_dpapi.py
