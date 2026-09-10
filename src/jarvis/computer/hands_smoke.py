@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
-import os
 import platform
 import sys
 from collections.abc import Callable
@@ -18,6 +17,7 @@ from jarvis.capabilities.runtime import (
     build_default_capability_runtime,
 )
 from jarvis.computer.structured_windows import StructuredWindowsError, WinAppCliBackend
+from jarvis.config import JarvisConfig
 
 _EXPECTED_TEXT = "JARVIS governed hands acceptance"
 _CLIPBOARD_MARKER = "JARVIS native clipboard acceptance"
@@ -130,7 +130,7 @@ def collect_readiness() -> tuple[ReadinessCheck, ...]:
     runtime: CapabilityRuntime | None = None
     try:
         runtime = build_default_capability_runtime(
-            ai_provider=os.getenv("JARVIS_AI_PROVIDER", "gemini")
+            ai_provider=JarvisConfig.from_environment().ai_provider
         )
         checks.extend(_operation_resolution_checks(runtime))
     except Exception as exc:  # noqa: BLE001 - readiness must report optional boundary failures.
@@ -257,7 +257,7 @@ def run_notepad_acceptance() -> int:
     print("Windows Hello should authorize the exact bounded Notepad task once.")
 
     runtime = build_default_capability_runtime(
-        ai_provider=os.getenv("JARVIS_AI_PROVIDER", "gemini")
+        ai_provider=JarvisConfig.from_environment().ai_provider
     )
     try:
         result = runtime.execute_operation(
@@ -331,7 +331,7 @@ def run_native_core_acceptance(volume_percent: float) -> int:
     print("Expect one Windows Hello approval for each exact reversible action.")
 
     runtime = build_default_capability_runtime(
-        ai_provider=os.getenv("JARVIS_AI_PROVIDER", "gemini")
+        ai_provider=JarvisConfig.from_environment().ai_provider
     )
     results: list[dict[str, Any]] = []
     try:
@@ -389,7 +389,7 @@ def run_media_acceptance() -> int:
     )
 
     runtime = build_default_capability_runtime(
-        ai_provider=os.getenv("JARVIS_AI_PROVIDER", "gemini")
+        ai_provider=JarvisConfig.from_environment().ai_provider
     )
     results: list[dict[str, Any]] = []
     try:
