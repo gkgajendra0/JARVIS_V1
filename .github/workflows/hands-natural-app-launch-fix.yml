@@ -23,37 +23,25 @@ jobs:
       - name: Patch natural app-launch grounding
         shell: python
         run: |
+          import re
           from pathlib import Path
-
-          def once(text: str, old: str, new: str, label: str) -> str:
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{label}: expected one anchor, found {count}")
-              return text.replace(old, new, 1)
 
           path = Path("src/jarvis/voice/hands_goal_tools.py")
           text = path.read_text(encoding="utf-8")
 
-          text = once(
-              text,
-              '    "open_app": ("open", "launch", "start"),\n',
+          old = '    "open_app": ("open", "launch", "start"),\n'
+          if text.count(old) != 1:
+              raise SystemExit("open app intent anchor mismatch")
+          text = text.replace(
+              old,
               '    "open_app": ("open", "launch", "start", "play"),\n',
-              "open app play intent",
+              1,
           )
 
-          old_search = '''    "search_software": (
-              "software",
-              "app",
-              "package",
-              "winget",
-              "win get",
-              "wing it",
-              "search software",
-              "search package",
-              "install",
-          ),
-          '''
-          new_search = '''    "search_software": (
+          software_pattern = re.compile(
+              r'    "search_software": \(\n(?:        "[^"]+",\n)+    \),'
+          )
+          software_replacement = '''    "search_software": (
               "winget",
               "win get",
               "wing it",
@@ -64,13 +52,12 @@ jobs:
               "look for software",
               "look for package",
               "install",
-          ),
-          '''
-          text = once(text, old_search, new_search, "software discovery intent")
+          ),'''
+          text, count = software_pattern.subn(software_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f"software discovery intent anchor mismatch: {count}")
 
-          anchor = '''_HINGLISH_REQUEST_SUFFIXES = (
-          '''
-          insertion = '''_NATURAL_ACTION_LEADS = (
+          natural_leads = '''_NATURAL_ACTION_LEADS = (
               "i want to",
               "i d like to",
               "i would like to",
@@ -84,20 +71,16 @@ jobs:
 
 
           '''
-          text = once(text, anchor, insertion + anchor, "natural action leads")
+          marker = "_HINGLISH_REQUEST_SUFFIXES = (\n"
+          if text.count(marker) != 1:
+              raise SystemExit("natural action lead anchor mismatch")
+          text = text.replace(marker, natural_leads + marker, 1)
 
-          old_fn = '''def _explicit_action_request(text: str) -> bool:
-              body = _strip_request_prefixes(text)
-              if not body:
-                  return False
-              if any(body == start or body.startswith(f"{start} ") for start in _ACTION_STARTS):
-                  return True
-              return any(
-                  body == suffix or body.endswith(f" {suffix}")
-                  for suffix in _HINGLISH_REQUEST_SUFFIXES
-              )
-          '''
-          new_fn = '''def _starts_with_action(value: str) -> bool:
+          function_pattern = re.compile(
+              r'def _explicit_action_request\(text: str\) -> bool:\n.*?\n\n\ndef _require_material',
+              re.DOTALL,
+          )
+          function_replacement = '''def _starts_with_action(value: str) -> bool:
               return any(
                   value == start or value.startswith(f"{start} ")
                   for start in _ACTION_STARTS
@@ -123,13 +106,18 @@ jobs:
                   body == suffix or body.endswith(f" {suffix}")
                   for suffix in _HINGLISH_REQUEST_SUFFIXES
               )
-          '''
-          text = once(text, old_fn, new_fn, "natural explicit action grammar")
 
-          old_guidance = '''        Prefer native semantic operations over UI. Generic play/pause/next/previous/stop
-              for the already-active Windows media session should use the media operations.
-          '''
-          new_guidance = '''        Prefer native semantic operations over UI. To start/open/play a named installed local
+
+          def _require_material'''
+          text, count = function_pattern.subn(function_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f"explicit action grammar anchor mismatch: {count}")
+
+          guidance_pattern = re.compile(
+              r'        Prefer native semantic operations over UI\. Generic play/pause/next/previous/stop\n'
+              r'        for the already-active Windows media session should use the media operations\.\n'
+          )
+          guidance_replacement = '''        Prefer native semantic operations over UI. To start/open/play a named installed local
               application or game, use `open_app` directly; `open_app` already resolves against
               the Windows installed-app catalogue. Never use `search_software` merely to locate
               something the USER asked to launch. `search_software` is for explicit WinGet/software
@@ -137,12 +125,16 @@ jobs:
               play/pause/next/previous/stop for the already-active Windows media session should use
               the media operations.
           '''
-          text = once(text, old_guidance, new_guidance, "app launch routing guidance")
+          text, count = guidance_pattern.subn(guidance_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f"app launch guidance anchor mismatch: {count}")
           path.write_text(text, encoding="utf-8")
 
           test_path = Path("tests/test_hands_goal_tools.py")
           tests = test_path.read_text(encoding="utf-8")
-          addition = '''
+          if "test_voice_natural_desire_form_authorizes_named_game_launch" in tests:
+              raise SystemExit("natural app launch regressions already present")
+          tests += '''
 
           def test_voice_natural_desire_form_authorizes_named_game_launch() -> None:
               grounded = parse(
@@ -182,10 +174,7 @@ jobs:
               )
               assert grounded == {"query": "Spotify"}
           '''
-          addition = "\n".join(line[10:] if line.startswith("          ") else line for line in addition.splitlines())
-          if "test_voice_natural_desire_form_authorizes_named_game_launch" in tests:
-              raise SystemExit("natural app launch regressions already present")
-          test_path.write_text(tests.rstrip() + addition + "\n", encoding="utf-8")
+          test_path.write_text(tests, encoding="utf-8")
       - name: Install targeted dependencies
         run: python -m pip install -e ".[dev,hands]"
       - name: Format and lint
