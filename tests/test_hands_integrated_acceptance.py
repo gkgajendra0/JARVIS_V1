@@ -19,6 +19,27 @@ def test_integrated_dependency_checks_report_missing_specialist() -> None:
     assert len(calls) == len(set(calls))
 
 
+def test_integrated_windows_readiness_requires_winrt_foundation_collections(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(acceptance.platform, "system", lambda: "Windows")
+    seen: list[str] = []
+
+    def finder(name: str) -> bool:
+        seen.append(name)
+        return name != "winrt.windows.foundation.collections"
+
+    checks = acceptance._dependency_checks(finder=finder)
+    by_name = {check.name: check for check in checks}
+    missing = by_name["Hands dependency: Windows Runtime Foundation Collections"]
+
+    assert missing.ok is False
+    assert missing.detail == (
+        "missing Python module: winrt.windows.foundation.collections"
+    )
+    assert "winrt.windows.foundation.collections" in seen
+
+
 def test_integrated_operation_map_excludes_only_owner_enabled_visual_fallback() -> None:
     operations = acceptance._required_operation_names()
 

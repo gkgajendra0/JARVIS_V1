@@ -42,6 +42,7 @@ _REQUIRED_MODULES = {
 }
 _WINDOWS_REQUIRED_MODULES = {
     "screen_brightness_control": "Windows display control",
+    "winrt.windows.foundation.collections": "Windows Runtime Foundation Collections",
     "winrt.windows.devices.enumeration": "Windows device enumeration",
     "winrt.windows.devices.bluetooth": "Windows Bluetooth control",
 }
