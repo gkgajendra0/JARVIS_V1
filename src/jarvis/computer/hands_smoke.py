@@ -20,6 +20,7 @@ from jarvis.capabilities.runtime import (
 from jarvis.computer.structured_windows import StructuredWindowsError, WinAppCliBackend
 
 _EXPECTED_TEXT = "JARVIS governed hands acceptance"
+_CLIPBOARD_MARKER = "JARVIS native clipboard acceptance"
 _REQUIRED_NATIVE_MODULES = {
     "pycaw": "Windows Core Audio",
     "win32clipboard": "Win32 clipboard",
@@ -159,6 +160,61 @@ def _readiness_payload(checks: tuple[ReadinessCheck, ...]) -> dict[str, Any]:
     }
 
 
+def _readiness_or_exit() -> tuple[bool, tuple[ReadinessCheck, ...]]:
+    readiness = collect_readiness()
+    payload = _readiness_payload(readiness)
+    print(json.dumps(payload, indent=2))
+    if payload["ok"] is not True:
+        print(
+            "PRECHECK FAILED: fix readiness failures before governed mutation testing.",
+            file=sys.stderr,
+        )
+        return False, readiness
+    return True, readiness
+
+
+def _result_payload(label: str, result) -> dict[str, Any]:
+    return {
+        "label": label,
+        "ok": result.ok,
+        "operation": result.operation,
+        "capability": result.capability_key,
+        "status": result.status.value,
+        "verification_passed": result.data.get("verification_passed", False),
+        "reason": result.reason,
+        "elapsed_ms": round(result.elapsed_ms, 1),
+        "provenance": list(result.provenance),
+    }
+
+
+def _native_core_actions(
+    volume_percent: float,
+) -> tuple[tuple[str, str, dict[str, object]], ...]:
+    if not 5.0 <= float(volume_percent) <= 80.0:
+        raise ValueError("native acceptance volume must be between 5 and 80 percent")
+    return (
+        ("open_calculator", "open_app", {"app": "calculator"}),
+        ("maximize_calculator", "maximize_window", {"app": "calculator"}),
+        ("set_master_volume", "set_master_volume", {"percent": float(volume_percent)}),
+        (
+            "set_clipboard_marker",
+            "set_clipboard_text",
+            {"text": _CLIPBOARD_MARKER},
+        ),
+    )
+
+
+def _media_transition_plan(status: str) -> tuple[str, str] | None:
+    normalized = str(status).strip().casefold()
+    if "playing" in normalized:
+        return ("pause_media", "play_media")
+    if "paused" in normalized:
+        return ("play_media", "pause_media")
+    if "stopped" in normalized:
+        return ("play_media", "stop_media")
+    return None
+
+
 def run_readiness() -> int:
     if platform.system() != "Windows":
         print("JARVIS hands readiness requires Windows.", file=sys.stderr)
@@ -173,14 +229,8 @@ def run_notepad_acceptance() -> int:
         print("JARVIS hands smoke requires Windows.", file=sys.stderr)
         return 2
 
-    readiness = collect_readiness()
-    readiness_payload = _readiness_payload(readiness)
-    print(json.dumps(readiness_payload, indent=2))
-    if readiness_payload["ok"] is not True:
-        print(
-            "PRECHECK FAILED: fix readiness failures before governed mutation testing.",
-            file=sys.stderr,
-        )
+    ready, _ = _readiness_or_exit()
+    if not ready:
         return 2
 
     try:
@@ -257,17 +307,173 @@ def run_notepad_acceptance() -> int:
     return 0 if result.ok and payload["verification_passed"] is True else 3
 
 
+def run_native_core_acceptance(volume_percent: float) -> int:
+    if platform.system() != "Windows":
+        print("JARVIS native hands smoke requires Windows.", file=sys.stderr)
+        return 2
+    try:
+        actions = _native_core_actions(volume_percent)
+    except ValueError as exc:
+        print(f"PRECHECK FAILED: {exc}", file=sys.stderr)
+        return 2
+
+    ready, _ = _readiness_or_exit()
+    if not ready:
+        return 2
+
+    print("JARVIS native H1 owner acceptance")
+    print("actions=app lifecycle + window management + Core Audio + clipboard")
+    print("authority=canonical ActionProposal + OPA + Windows Hello + one-time permit")
+    print(f"final_volume_percent={float(volume_percent):g}")
+    print(f"final_clipboard_text={_CLIPBOARD_MARKER!r}")
+    print("Calculator is intentionally left open and maximized for owner inspection.")
+    print("Expect one Windows Hello approval for each exact reversible action.")
+
+    runtime = build_default_capability_runtime(
+        ai_provider=os.getenv("JARVIS_AI_PROVIDER", "gemini")
+    )
+    results: list[dict[str, Any]] = []
+    try:
+        for label, operation, parameters in actions:
+            result = runtime.execute_operation(
+                session_id="governed-hands-native-owner-acceptance",
+                operation=operation,
+                parameters=parameters,
+            )
+            payload = _result_payload(label, result)
+            results.append(payload)
+            print(json.dumps(payload, indent=2))
+            if not result.ok or payload["verification_passed"] is not True:
+                break
+    finally:
+        runtime.close()
+
+    ok = len(results) == len(actions) and all(item["ok"] for item in results)
+    summary = {
+        "ok": ok,
+        "operation": "governed_native_h1_owner_acceptance",
+        "actions_completed": len(results),
+        "actions_expected": len(actions),
+        "verification_passed": ok
+        and all(item["verification_passed"] is True for item in results),
+        "cloud_model_calls": 0,
+        "raw_shell": False,
+        "final_side_effects": {
+            "calculator": "open and maximized",
+            "master_volume_percent": float(volume_percent),
+            "clipboard_text": _CLIPBOARD_MARKER,
+        },
+        "results": results,
+    }
+    print(json.dumps(summary, indent=2))
+    return 0 if summary["ok"] and summary["verification_passed"] else 3
+
+
+def run_media_acceptance() -> int:
+    if platform.system() != "Windows":
+        print("JARVIS media hands smoke requires Windows.", file=sys.stderr)
+        return 2
+
+    ready, _ = _readiness_or_exit()
+    if not ready:
+        return 2
+
+    print("JARVIS native media owner acceptance")
+    print("precondition=one Windows media session is active (playing, paused, or stopped)")
+    print("The test will read the session, change playback state, then restore it.")
+    print("Expect Windows Hello for the private read and for each exact media mutation.")
+
+    runtime = build_default_capability_runtime(
+        ai_provider=os.getenv("JARVIS_AI_PROVIDER", "gemini")
+    )
+    results: list[dict[str, Any]] = []
+    try:
+        current = runtime.execute_operation(
+            session_id="governed-hands-media-owner-acceptance",
+            operation="get_current_media",
+            parameters={},
+        )
+        current_payload = _result_payload("read_current_media", current)
+        if current.ok:
+            current_payload["state"] = current.data.get("state", {})
+        results.append(current_payload)
+        print(json.dumps(current_payload, indent=2))
+        if not current.ok:
+            return 3
+
+        state = current.data.get("state", {})
+        transition = _media_transition_plan(str(state.get("playback_status", "")))
+        if transition is None:
+            print(
+                "MEDIA PRECONDITION FAILED: current playback state is not playing, paused, or stopped.",
+                file=sys.stderr,
+            )
+            return 2
+
+        for index, operation in enumerate(transition, start=1):
+            result = runtime.execute_operation(
+                session_id="governed-hands-media-owner-acceptance",
+                operation=operation,
+                parameters={},
+            )
+            payload = _result_payload(f"media_transition_{index}", result)
+            if result.ok:
+                payload["state"] = result.data.get("state", {})
+            results.append(payload)
+            print(json.dumps(payload, indent=2))
+            if not result.ok or payload["verification_passed"] is not True:
+                break
+    finally:
+        runtime.close()
+
+    ok = len(results) == 3 and all(item["ok"] for item in results)
+    summary = {
+        "ok": ok,
+        "operation": "governed_media_owner_acceptance",
+        "verification_passed": ok
+        and all(item["verification_passed"] is True for item in results),
+        "final_playback_state_restored": ok,
+        "cloud_model_calls": 0,
+        "results": results,
+    }
+    print(json.dumps(summary, indent=2))
+    return 0 if summary["ok"] and summary["verification_passed"] else 3
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Validate governed JARVIS Hands on the owner Windows machine"
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--readiness",
         action="store_true",
         help="probe dependencies and operation resolution without authorizing mutations",
     )
+    mode.add_argument(
+        "--native",
+        action="store_true",
+        help="run governed native H1 acceptance for app/window/audio/clipboard",
+    )
+    mode.add_argument(
+        "--media",
+        action="store_true",
+        help="run governed Windows media-session acceptance and restore playback state",
+    )
+    parser.add_argument(
+        "--volume",
+        type=float,
+        default=30.0,
+        help="final master-volume percentage for --native (safe acceptance range: 5-80)",
+    )
     args = parser.parse_args()
-    return run_readiness() if args.readiness else run_notepad_acceptance()
+    if args.readiness:
+        return run_readiness()
+    if args.native:
+        return run_native_core_acceptance(args.volume)
+    if args.media:
+        return run_media_acceptance()
+    return run_notepad_acceptance()
 
 
 if __name__ == "__main__":
