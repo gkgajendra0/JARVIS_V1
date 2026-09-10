@@ -26,6 +26,7 @@ dependencies = [
 
 [project.scripts]
 jarvis-setup = "jarvis.setup:main"
+jarvis-provider = "jarvis.provider_cli:main"
 jarvis-setup-document-reader = "jarvis.capabilities.document_reader:main"
 jarvis-voice = "jarvis.voice.production_runtime:main"
 jarvis-dev = "jarvis.dev_supervisor:main"
