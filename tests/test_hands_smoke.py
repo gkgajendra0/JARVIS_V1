@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from jarvis.computer import hands_smoke
 
 
@@ -54,3 +56,39 @@ def test_readiness_payload_fails_when_any_check_fails() -> None:
     )
 
     assert payload["ok"] is False
+
+
+def test_native_core_acceptance_plan_is_bounded_and_explicit() -> None:
+    actions = hands_smoke._native_core_actions(30)
+
+    assert [operation for _, operation, _ in actions] == [
+        "open_app",
+        "maximize_window",
+        "set_master_volume",
+        "set_clipboard_text",
+    ]
+    assert actions[0][2] == {"app": "calculator"}
+    assert actions[1][2] == {"app": "calculator"}
+    assert actions[2][2] == {"percent": 30.0}
+    assert actions[3][2] == {"text": hands_smoke._CLIPBOARD_MARKER}
+
+
+def test_native_core_acceptance_rejects_extreme_volume() -> None:
+    with pytest.raises(ValueError, match="between 5 and 80"):
+        hands_smoke._native_core_actions(100)
+
+
+def test_media_transition_plan_restores_common_playback_states() -> None:
+    assert hands_smoke._media_transition_plan("playing") == (
+        "pause_media",
+        "play_media",
+    )
+    assert hands_smoke._media_transition_plan("paused") == (
+        "play_media",
+        "pause_media",
+    )
+    assert hands_smoke._media_transition_plan("stopped") == (
+        "play_media",
+        "stop_media",
+    )
+    assert hands_smoke._media_transition_plan("closed") is None
