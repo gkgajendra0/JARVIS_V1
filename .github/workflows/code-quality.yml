@@ -37,9 +37,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install JARVIS test dependencies
-        run: >-
-          python -m pip install -e
-          ".[dev,phase45d-acceptance,hands-files,hands-documents,browser-hands,development-hands]"
+        run: python -m pip install -e ".[dev,phase45d-acceptance,hands]"
 
       - name: Provision Playwright Chromium
         run: python -m playwright install --with-deps chromium
@@ -168,16 +166,17 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install JARVIS Windows test dependencies
-        run: python -m pip install -e ".[dev,windows-hands,device-hands]"
+      - name: Install unified JARVIS Hands test dependencies
+        run: python -m pip install -e ".[dev,hands]"
 
       - name: Probe Windows Hands Python dependencies
         run: >-
           python -c "import pycaw; import win32clipboard; import win32gui;
           import winrt.windows.foundation; import winrt.windows.media.control;
           import winrt.windows.devices.enumeration; import winrt.windows.devices.bluetooth;
-          import screen_brightness_control;
-          print('Windows Hands Python dependencies ready')"
+          import screen_brightness_control; import send2trash; import docx; import openpyxl;
+          import pptx; import playwright; import dulwich;
+          print('Unified Windows Hands Python dependencies ready')"
 
       - name: Run Windows DPAPI smoke test
         run: python -m pytest -q tests/test_windows_dpapi.py
