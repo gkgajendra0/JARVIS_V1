@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import platform
 import uuid
 from collections.abc import Callable
@@ -27,6 +26,7 @@ from jarvis.capabilities.runtime import (
 )
 from jarvis.capabilities.software_management import WinGetBackend
 from jarvis.computer.structured_windows import StructuredWindowsError, WinAppCliBackend
+from jarvis.config import JarvisConfig
 from jarvis.hands.registry import HandsCapabilityRegistry
 from jarvis.setup import _probe_playwright_chromium
 
@@ -177,7 +177,7 @@ def collect_integrated_readiness() -> tuple[AcceptanceCheck, ...]:
     runtime: CapabilityRuntime | None = None
     try:
         runtime = build_default_capability_runtime(
-            ai_provider=os.getenv("JARVIS_AI_PROVIDER", "gemini")
+            ai_provider=JarvisConfig.from_environment().ai_provider
         )
         checks.extend(_operation_resolution_checks(runtime))
     except Exception as exc:  # noqa: BLE001 - readiness reports optional boundary failures
@@ -336,7 +336,7 @@ def run_integrated_acceptance() -> int:
     print("JARVIS_self_modification=False cloud_model_calls=0 raw_shell=False")
 
     runtime = build_default_capability_runtime(
-        ai_provider=os.getenv("JARVIS_AI_PROVIDER", "gemini")
+        ai_provider=JarvisConfig.from_environment().ai_provider
     )
     results: list[dict[str, Any]] = []
     try:
