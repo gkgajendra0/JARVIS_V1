@@ -83,7 +83,9 @@ def _normalize_read_observation(result: CapabilityResult) -> CapabilityResult:
     if not isinstance(steps, list) or not steps:
         return result
     typed_steps = [step for step in steps if isinstance(step, dict)]
-    if len(typed_steps) != len(steps) or not all(_step_succeeded(step) for step in typed_steps):
+    if len(typed_steps) != len(steps) or not all(
+        _step_succeeded(step) for step in typed_steps
+    ):
         return result
 
     actions = [str(step.get("action", "")).casefold() for step in typed_steps]
@@ -144,11 +146,15 @@ class LeaseAwareHandsPlanner:
         selected_for_operations = list(selected)
         if self._hybrid_app_ui and "visual_fallback" not in selected_for_operations:
             selected_for_operations.append("visual_fallback")
-        self._selected_operation_names = frozenset(
-            operation.operation
-            for key in selected_for_operations
-            for operation in by_key.get(key, HandsRouteGroup.__new__(HandsRouteGroup)).operations
-        ) if selected_for_operations else frozenset()
+        selected_operation_names: set[str] = set()
+        for key in selected_for_operations:
+            group = by_key.get(key)
+            if group is None:
+                continue
+            selected_operation_names.update(
+                operation.operation for operation in group.operations
+            )
+        self._selected_operation_names = frozenset(selected_operation_names)
 
         if not self._hybrid_app_ui or "visual_fallback" in selected:
             return selected
