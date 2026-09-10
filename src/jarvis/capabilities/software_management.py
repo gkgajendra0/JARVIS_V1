@@ -44,11 +44,15 @@ class WinGetBackend:
     def _exe() -> str:
         path = shutil.which("winget")
         if not path:
-            raise SoftwareManagementError("Windows Package Manager (winget) is unavailable")
+            raise SoftwareManagementError(
+                "Windows Package Manager (winget) is unavailable"
+            )
         return path
 
     @classmethod
-    def _run(cls, args: list[str], *, timeout: int = 90) -> subprocess.CompletedProcess[str]:
+    def _run(
+        cls, args: list[str], *, timeout: int = 90
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [cls._exe(), *args],
             shell=False,
@@ -74,21 +78,47 @@ class WinGetBackend:
 
     def search(self, query: str) -> dict[str, Any]:
         result = self._run(
-            ["search", "--query", query, "--count", "20", "--accept-source-agreements", "--disable-interactivity"]
+            [
+                "search",
+                "--query",
+                query,
+                "--count",
+                "20",
+                "--accept-source-agreements",
+                "--disable-interactivity",
+            ]
         )
         return self._payload(result)
 
     def list_installed(self, query: str) -> dict[str, Any]:
         result = self._run(
-            ["list", "--query", query, "--count", "20", "--accept-source-agreements", "--disable-interactivity"]
+            [
+                "list",
+                "--query",
+                query,
+                "--count",
+                "20",
+                "--accept-source-agreements",
+                "--disable-interactivity",
+            ]
         )
         return self._payload(result)
 
     def is_installed(self, package_id: str) -> bool:
         result = self._run(
-            ["list", "--id", package_id, "--exact", "--accept-source-agreements", "--disable-interactivity"]
+            [
+                "list",
+                "--id",
+                package_id,
+                "--exact",
+                "--accept-source-agreements",
+                "--disable-interactivity",
+            ]
         )
-        return result.returncode == 0 and package_id.casefold() in (result.stdout or "").casefold()
+        return (
+            result.returncode == 0
+            and package_id.casefold() in (result.stdout or "").casefold()
+        )
 
     def install(self, package_id: str) -> dict[str, Any]:
         result = self._run(
@@ -126,7 +156,12 @@ class WinGetBackend:
 
 class SoftwareManagementExecutor:
     capability_key = "software:winget"
-    operations = ("install_package", "list_installed_software", "search_software", "uninstall_package")
+    operations = (
+        "install_package",
+        "list_installed_software",
+        "search_software",
+        "uninstall_package",
+    )
 
     def __init__(self, backend: SoftwareBackend | None = None) -> None:
         self._backend = backend or WinGetBackend()
@@ -152,14 +187,20 @@ class SoftwareManagementExecutor:
         if operation in {"search_software", "list_installed_software"}:
             query = " ".join(str(request.parameters.get("query") or "").split())
             if not query or len(query) > _MAX_QUERY:
-                raise SoftwareManagementError("software query is empty or exceeds the bounded limit")
+                raise SoftwareManagementError(
+                    "software query is empty or exceeds the bounded limit"
+                )
             params["query"] = query
-            attributes = ActionAttributes(private_read=operation == "list_installed_software")
+            attributes = ActionAttributes(
+                private_read=operation == "list_installed_software"
+            )
             summary = f"{operation.replace('_', ' ')}: {query}"
         else:
             package_id = str(request.parameters.get("package_id") or "").strip()
             if not _PACKAGE_ID.fullmatch(package_id):
-                raise SoftwareManagementError("software mutation requires one exact bounded package ID")
+                raise SoftwareManagementError(
+                    "software mutation requires one exact bounded package ID"
+                )
             params["package_id"] = package_id
             attributes = ActionAttributes(
                 persistent_write=True,
@@ -183,16 +224,22 @@ class SoftwareManagementExecutor:
                 data = self._backend.search(str(prepared.execution_payload["query"]))
                 verified = data.get("returncode") == 0
             elif operation == "list_installed_software":
-                data = self._backend.list_installed(str(prepared.execution_payload["query"]))
+                data = self._backend.list_installed(
+                    str(prepared.execution_payload["query"])
+                )
                 verified = data.get("returncode") == 0
             elif operation == "install_package":
                 package_id = str(prepared.execution_payload["package_id"])
                 data = self._backend.install(package_id)
-                verified = data.get("returncode") == 0 and self._backend.is_installed(package_id)
+                verified = data.get("returncode") == 0 and self._backend.is_installed(
+                    package_id
+                )
             else:
                 package_id = str(prepared.execution_payload["package_id"])
                 data = self._backend.uninstall(package_id)
-                verified = data.get("returncode") == 0 and not self._backend.is_installed(package_id)
+                verified = data.get(
+                    "returncode"
+                ) == 0 and not self._backend.is_installed(package_id)
         except (SoftwareManagementError, OSError, subprocess.SubprocessError) as exc:
             return CapabilityResult(
                 status=CapabilityStatus.UNAVAILABLE,

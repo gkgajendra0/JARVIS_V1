@@ -36,7 +36,9 @@ def _parse_roots(raw: str | None) -> dict[str, pathlib.Path]:
         if not entry.strip():
             continue
         if "=" not in entry:
-            raise DevelopmentGitError("JARVIS_DEV_REPOSITORIES entries must use alias=path")
+            raise DevelopmentGitError(
+                "JARVIS_DEV_REPOSITORIES entries must use alias=path"
+            )
         alias, value = entry.split("=", 1)
         key = alias.strip().casefold()
         if not re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", key):
@@ -56,12 +58,16 @@ class ApprovedRepositoryPolicy:
         self.jarvis_root = pathlib.Path(jarvis_root or default_project_root()).resolve()
         configured = _parse_roots(os.getenv("JARVIS_DEV_REPOSITORIES"))
         for alias, path in (roots or {}).items():
-            configured[str(alias).strip().casefold()] = pathlib.Path(path).expanduser().resolve()
+            configured[str(alias).strip().casefold()] = (
+                pathlib.Path(path).expanduser().resolve()
+            )
         if include_jarvis_read_target:
             configured.setdefault("jarvis", self.jarvis_root)
         for alias, path in configured.items():
             if not path.is_dir() or not (path / ".git").exists():
-                raise DevelopmentGitError(f"development root is not a Git repository: {alias}")
+                raise DevelopmentGitError(
+                    f"development root is not a Git repository: {alias}"
+                )
         self._roots = configured
 
     @property
@@ -72,7 +78,9 @@ class ApprovedRepositoryPolicy:
         try:
             return self._roots[str(alias).strip().casefold()]
         except KeyError as exc:
-            raise DevelopmentGitError("unknown approved development repository") from exc
+            raise DevelopmentGitError(
+                "unknown approved development repository"
+            ) from exc
 
     def is_jarvis(self, path: pathlib.Path) -> bool:
         return path.resolve() == self.jarvis_root
@@ -94,7 +102,9 @@ class ApprovedRepositoryPolicy:
         for part in relative.parts:
             cursor /= part
             if cursor.exists() and cursor.is_symlink():
-                raise DevelopmentGitError("symlink paths are blocked from Git Hands mutations")
+                raise DevelopmentGitError(
+                    "symlink paths are blocked from Git Hands mutations"
+                )
         return relative.as_posix()
 
 
@@ -165,7 +175,9 @@ class DulwichGitBackend:
             raise DevelopmentGitError("repository has no origin remote") from exc
         remote_url = self._decode(remote)
         ref = f"refs/heads/{branch}:refs/heads/{branch}"
-        result = self._porcelain().push(str(repo), remote_location=remote_url, refspecs=ref)
+        result = self._porcelain().push(
+            str(repo), remote_location=remote_url, refspecs=ref
+        )
         return {"branch": branch, "remote": "origin", "result": str(result)}
 
 
@@ -197,7 +209,11 @@ class DevelopmentGitExecutor:
                 "JARVIS self-modification remains restricted by canonical authority."
             ),
             operations=list(self.operations),
-            metadata={"backend": "Dulwich", "repo_aliases": list(self.policy.aliases), "shell": False},
+            metadata={
+                "backend": "Dulwich",
+                "repo_aliases": list(self.policy.aliases),
+                "shell": False,
+            },
             execution_enabled=True,
         )
 
@@ -209,12 +225,21 @@ class DevelopmentGitExecutor:
         repo = self.policy.resolve(alias)
         params: dict[str, Any] = {"repo": alias}
         payload: dict[str, Any] = {"repo_path": str(repo)}
-        mutating = operation in {"git_commit", "git_create_branch", "git_push_current", "git_stage_paths"}
+        mutating = operation in {
+            "git_commit",
+            "git_create_branch",
+            "git_push_current",
+            "git_stage_paths",
+        }
         external = operation == "git_push_current"
 
         if operation == "git_create_branch":
             branch = str(request.parameters.get("branch") or "").strip()
-            if not _BRANCH_RE.fullmatch(branch) or ".." in branch or branch.endswith(("/", ".lock")):
+            if (
+                not _BRANCH_RE.fullmatch(branch)
+                or ".." in branch
+                or branch.endswith(("/", ".lock"))
+            ):
                 raise DevelopmentGitError("Git branch name is invalid")
             params["branch"] = payload["branch"] = branch
         elif operation == "git_stage_paths":
@@ -235,7 +260,9 @@ class DevelopmentGitExecutor:
             persistent_write=mutating,
             external_side_effect=external,
             self_modification=mutating and self.policy.is_jarvis(repo),
-            scope=ActionScope.LIMITED if operation in {"git_stage_paths", "git_push_current"} else ActionScope.SINGLE,
+            scope=ActionScope.LIMITED
+            if operation in {"git_stage_paths", "git_push_current"}
+            else ActionScope.SINGLE,
         )
         return PreparedCapability(
             request=request,
@@ -252,9 +279,15 @@ class DevelopmentGitExecutor:
         repo = pathlib.Path(str(prepared.execution_payload["repo_path"]))
         try:
             if operation == "git_status":
-                data = {"status": self._backend.status(repo), "verification_passed": True}
+                data = {
+                    "status": self._backend.status(repo),
+                    "verification_passed": True,
+                }
             elif operation == "git_active_branch":
-                data = {"branch": self._backend.active_branch(repo), "verification_passed": True}
+                data = {
+                    "branch": self._backend.active_branch(repo),
+                    "verification_passed": True,
+                }
             elif operation == "git_create_branch":
                 branch = str(prepared.execution_payload["branch"])
                 self._backend.create_branch(repo, branch)
@@ -269,12 +302,14 @@ class DevelopmentGitExecutor:
                 status = self._backend.status(repo)
                 data = {"paths": paths, "status": status, "verification_passed": True}
             elif operation == "git_commit":
-                commit_id = self._backend.commit(repo, str(prepared.execution_payload["message"]))
+                commit_id = self._backend.commit(
+                    repo, str(prepared.execution_payload["message"])
+                )
                 data = {"commit": commit_id, "verification_passed": bool(commit_id)}
             else:
                 data = self._backend.push_current(repo)
                 data["verification_passed"] = True
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - executor boundary contains backend faults
             return CapabilityResult(
                 status=CapabilityStatus.FAILED,
                 capability_key=self.capability_key,

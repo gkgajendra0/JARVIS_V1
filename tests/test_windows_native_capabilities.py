@@ -295,7 +295,7 @@ def test_app_lifecycle_uses_allowlist_and_verifies_running() -> None:
     result = executor.execute(prepared)
 
     assert prepared.attributes.reversible_local_change is True
-    assert prepared.material_summary == "Open approved Windows application: notepad"
+    assert prepared.material_summary == "Open Windows application: notepad"
     assert result.status is CapabilityStatus.SUCCEEDED
     assert result.data["running"] is True
 
@@ -303,7 +303,7 @@ def test_app_lifecycle_uses_allowlist_and_verifies_running() -> None:
 def test_app_lifecycle_rejects_unapproved_application() -> None:
     executor = AppLifecycleExecutor(FakeAppLifecycle())
 
-    with pytest.raises(ValueError, match="not approved"):
+    with pytest.raises(ValueError, match="reserved shell/admin domain"):
         executor.prepare(request(executor, "open_app", {"app": "powershell"}))
 
 

@@ -48,10 +48,14 @@ class BrowserValidationError(ValueError):
 def _validate_url(value: object) -> str:
     url = str(value or "").strip()
     if not url or len(url) > _MAX_URL:
-        raise BrowserValidationError("browser URL is empty or exceeds the bounded limit")
+        raise BrowserValidationError(
+            "browser URL is empty or exceeds the bounded limit"
+        )
     parsed = urlparse(url)
     if parsed.scheme.casefold() not in {"http", "https"} or not parsed.netloc:
-        raise BrowserValidationError("browser navigation allows only explicit http/https URLs")
+        raise BrowserValidationError(
+            "browser navigation allows only explicit http/https URLs"
+        )
     if parsed.username or parsed.password:
         raise BrowserValidationError("credentials embedded in browser URLs are blocked")
     return url
@@ -83,9 +87,13 @@ class BrowserBackend(Protocol):
 
     def wait_for(self, selector: dict[str, str]) -> dict[str, Any]: ...
 
-    def download(self, selector: dict[str, str], destination: pathlib.Path) -> dict[str, Any]: ...
+    def download(
+        self, selector: dict[str, str], destination: pathlib.Path
+    ) -> dict[str, Any]: ...
 
-    def upload(self, selector: dict[str, str], source: pathlib.Path) -> dict[str, Any]: ...
+    def upload(
+        self, selector: dict[str, str], source: pathlib.Path
+    ) -> dict[str, Any]: ...
 
     def close(self) -> None: ...
 
@@ -172,7 +180,9 @@ class PlaywrightBrowserBackend:
         self._locator(page, selector).wait_for(state="visible", timeout=10_000)
         return {"visible": True, "url": page.url}
 
-    def download(self, selector: dict[str, str], destination: pathlib.Path) -> dict[str, Any]:
+    def download(
+        self, selector: dict[str, str], destination: pathlib.Path
+    ) -> dict[str, Any]:
         page = self._ensure_page()
         with page.expect_download(timeout=20_000) as info:
             self._locator(page, selector).click(timeout=10_000)
@@ -233,7 +243,7 @@ class BrowserPlanExecutor:
         if not isinstance(raw, list) or not 1 <= len(raw) <= _MAX_STEPS:
             raise BrowserValidationError("browser plan must contain 1-12 bounded steps")
         plan: list[dict[str, Any]] = []
-        has_click = has_upload = has_download = has_fill = False
+        has_click = has_upload = has_download = False
         for item in raw:
             if not isinstance(item, dict):
                 raise BrowserValidationError("browser plan steps must be objects")
@@ -241,9 +251,18 @@ class BrowserPlanExecutor:
             step: dict[str, Any] = {"action": action}
             if action == "navigate":
                 step["url"] = _validate_url(item.get("url"))
-            elif action in {"click", "fill", "read_text", "wait_for", "download", "upload"}:
+            elif action in {
+                "click",
+                "fill",
+                "read_text",
+                "wait_for",
+                "download",
+                "upload",
+            }:
                 selector = _selector(item)
-                if action in {"click", "download"} and _dangerous_selector(selector["value"]):
+                if action in {"click", "download"} and _dangerous_selector(
+                    selector["value"]
+                ):
                     raise BrowserValidationError(
                         "high-consequence browser click is outside the generic H3 plan"
                     )
@@ -251,18 +270,23 @@ class BrowserPlanExecutor:
                 if action == "fill":
                     text = str(item.get("text") or "")
                     if not text or len(text) > _MAX_TEXT or _contains_secret(text):
-                        raise BrowserValidationError("browser fill text is invalid or credential-like")
+                        raise BrowserValidationError(
+                            "browser fill text is invalid or credential-like"
+                        )
                     step["text"] = text
-                    has_fill = True
                 elif action in {"download", "upload"}:
                     if self._write_roots is None:
-                        raise BrowserValidationError("browser file transfer needs approved user file roots")
+                        raise BrowserValidationError(
+                            "browser file transfer needs approved user file roots"
+                        )
                     root = str(item.get("root") or "").strip().casefold()
                     path = str(item.get("path") or "").strip()
                     _, target, relative = self._write_roots.resolve(root, path)
                     if action == "upload" and not target.is_file():
                         raise BrowserValidationError("upload source does not exist")
-                    step.update(root=root, path=relative.as_posix(), resolved_path=str(target))
+                    step.update(
+                        root=root, path=relative.as_posix(), resolved_path=str(target)
+                    )
                     has_upload |= action == "upload"
                     has_download |= action == "download"
                 has_click |= action == "click"
@@ -284,7 +308,12 @@ class BrowserPlanExecutor:
         return PreparedCapability(
             request=request,
             target={"domain": "browser.navigation_execution", "steps": len(plan)},
-            parameters={"plan": [{k: v for k, v in step.items() if k != "resolved_path"} for step in plan]},
+            parameters={
+                "plan": [
+                    {k: v for k, v in step.items() if k != "resolved_path"}
+                    for step in plan
+                ]
+            },
             material_summary=f"Execute bounded Playwright browser plan with {len(plan)} step(s)",
             attributes=attributes,
             execution_payload={"plan": plan},
@@ -309,13 +338,17 @@ class BrowserPlanExecutor:
                 elif action == "wait_for":
                     data = self._backend.wait_for(step["selector"])
                 elif action == "download":
-                    data = self._backend.download(step["selector"], pathlib.Path(step["resolved_path"]))
+                    data = self._backend.download(
+                        step["selector"], pathlib.Path(step["resolved_path"])
+                    )
                 elif action == "upload":
-                    data = self._backend.upload(step["selector"], pathlib.Path(step["resolved_path"]))
+                    data = self._backend.upload(
+                        step["selector"], pathlib.Path(step["resolved_path"])
+                    )
                 else:
                     raise BrowserValidationError("unsupported prepared browser action")
                 results.append({"action": action, "data": data})
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - executor boundary contains backend faults
             return CapabilityResult(
                 status=CapabilityStatus.FAILED,
                 capability_key=self.capability_key,

@@ -6,7 +6,10 @@ import pytest
 
 from jarvis.authority.risk import RiskClassifier
 from jarvis.authority.types import RiskClass
-from jarvis.capabilities.browser_playwright import BrowserPlanExecutor, BrowserValidationError
+from jarvis.capabilities.browser_playwright import (
+    BrowserPlanExecutor,
+    BrowserValidationError,
+)
 from jarvis.capabilities.local_writes import ApprovedWriteRootPolicy
 from jarvis.capabilities.models import CapabilityRequest, CapabilityStatus
 
@@ -74,10 +77,14 @@ def test_browser_rejects_non_http_and_credential_urls() -> None:
     executor = BrowserPlanExecutor(FakeBrowser())
 
     with pytest.raises(BrowserValidationError, match="http/https"):
-        executor.prepare(request(executor, [{"action": "navigate", "url": "file:///tmp/a"}]))
+        executor.prepare(
+            request(executor, [{"action": "navigate", "url": "file:///tmp/a"}])
+        )
     with pytest.raises(BrowserValidationError, match="credentials"):
         executor.prepare(
-            request(executor, [{"action": "navigate", "url": "https://u:p@example.com"}])
+            request(
+                executor, [{"action": "navigate", "url": "https://u:p@example.com"}]
+            )
         )
 
 
@@ -90,7 +97,11 @@ def test_browser_rejects_dangerous_generic_click() -> None:
                 executor,
                 [
                     {"action": "navigate", "url": "https://example.com"},
-                    {"action": "click", "selector_kind": "role", "selector": "button:Buy now"},
+                    {
+                        "action": "click",
+                        "selector_kind": "role",
+                        "selector": "button:Buy now",
+                    },
                 ],
             )
         )
@@ -129,10 +140,15 @@ def test_browser_external_click_gets_persistent_external_risk() -> None:
     )
 
     assert prepared.attributes.external_side_effect is True
-    assert RiskClassifier().classify(prepared.attributes).risk_class is RiskClass.PERSISTENT_OR_EXTERNAL
+    assert (
+        RiskClassifier().classify(prepared.attributes).risk_class
+        is RiskClass.PERSISTENT_OR_EXTERNAL
+    )
 
 
-def test_browser_plan_executes_with_semantic_locators_and_returns_untrusted_data() -> None:
+def test_browser_plan_executes_with_semantic_locators_and_returns_untrusted_data() -> (
+    None
+):
     backend = FakeBrowser()
     executor = BrowserPlanExecutor(backend)
     prepared = executor.prepare(

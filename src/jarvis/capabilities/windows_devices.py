@@ -76,7 +76,9 @@ class ScreenBrightnessBackend:
                     "model": str(item.get("model") or ""),
                     "serial": str(item.get("serial") or ""),
                     "manufacturer": str(item.get("manufacturer") or ""),
-                    "method": getattr(item.get("method"), "__name__", str(item.get("method") or "")),
+                    "method": getattr(
+                        item.get("method"), "__name__", str(item.get("method") or "")
+                    ),
                 }
             )
         return result
@@ -104,7 +106,10 @@ class DisplayControlExecutor:
             name="Windows display control",
             description="Monitor inventory and hardware-supported brightness control.",
             operations=list(self.operations),
-            metadata={"backend": "screen-brightness-control", "hardware_dependent": True},
+            metadata={
+                "backend": "screen-brightness-control",
+                "hardware_dependent": True,
+            },
             execution_enabled=_windows_enabled() or backend is not None,
         )
 
@@ -120,7 +125,9 @@ class DisplayControlExecutor:
         if request.operation == "set_display_brightness":
             percent = int(request.parameters.get("percent"))
             if not 0 <= percent <= 100:
-                raise WindowsDeviceValidationError("brightness percent must be between 0 and 100")
+                raise WindowsDeviceValidationError(
+                    "brightness percent must be between 0 and 100"
+                )
             params["percent"] = percent
             attributes = ActionAttributes(reversible_local_change=True)
             summary = f"Set display brightness to {percent}%"
@@ -129,7 +136,10 @@ class DisplayControlExecutor:
             summary = "Read Windows monitor/brightness state"
         return PreparedCapability(
             request=request,
-            target={"domain": "system.display", "display": params.get("display", "default/all")},
+            target={
+                "domain": "system.display",
+                "display": params.get("display", "default/all"),
+            },
             parameters=params,
             material_summary=summary,
             attributes=attributes,
@@ -142,7 +152,10 @@ class DisplayControlExecutor:
             operation = prepared.request.operation
             display = prepared.execution_payload.get("display")
             if operation == "list_displays":
-                data = {"displays": self._backend.list_monitors(), "verification_passed": True}
+                data = {
+                    "displays": self._backend.list_monitors(),
+                    "verification_passed": True,
+                }
             elif operation == "get_display_brightness":
                 data = {
                     "brightness": self._backend.get_brightness(display),
@@ -151,7 +164,9 @@ class DisplayControlExecutor:
             else:
                 percent = int(prepared.execution_payload["percent"])
                 values = self._backend.set_brightness(percent, display)
-                verified = bool(values) and all(abs(value - percent) <= 2 for value in values)
+                verified = bool(values) and all(
+                    abs(value - percent) <= 2 for value in values
+                )
                 if not verified:
                     return _result(
                         prepared,
@@ -162,7 +177,7 @@ class DisplayControlExecutor:
                         provenance=("screen-brightness-control",),
                     )
                 data = {"brightness": values, "verification_passed": True}
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - executor boundary contains OS/backend faults
             return _result(
                 prepared,
                 CapabilityStatus.UNAVAILABLE,
@@ -204,7 +219,9 @@ class WinRtBluetoothBackend:
     async def _find_unique(cls, name: str):
         devices = await cls._devices()
         needle = name.strip().casefold()
-        matches = [item for item in devices if str(item.name).strip().casefold() == needle]
+        matches = [
+            item for item in devices if str(item.name).strip().casefold() == needle
+        ]
         if not matches:
             raise WindowsDeviceValidationError(f"Bluetooth device not found: {name}")
         if len(matches) != 1:
@@ -232,9 +249,15 @@ class WinRtBluetoothBackend:
         async def run():
             item = await self._find_unique(name)
             if item.pairing.is_paired:
-                return {"name": str(item.name), "is_paired": True, "already_paired": True}
+                return {
+                    "name": str(item.name),
+                    "is_paired": True,
+                    "already_paired": True,
+                }
             if not item.pairing.can_pair:
-                raise WindowsDeviceValidationError("device reports that it cannot be paired")
+                raise WindowsDeviceValidationError(
+                    "device reports that it cannot be paired"
+                )
             result = await item.pairing.pair_async()
             status = str(getattr(result.status, "name", result.status)).casefold()
             refreshed = await self._find_unique(name)
@@ -250,7 +273,11 @@ class WinRtBluetoothBackend:
         async def run():
             item = await self._find_unique(name)
             if not item.pairing.is_paired:
-                return {"name": str(item.name), "is_paired": False, "already_unpaired": True}
+                return {
+                    "name": str(item.name),
+                    "is_paired": False,
+                    "already_unpaired": True,
+                }
             result = await item.pairing.unpair_async()
             status = str(getattr(result.status, "name", result.status)).casefold()
             refreshed = await self._find_unique(name)
@@ -265,7 +292,11 @@ class WinRtBluetoothBackend:
 
 class BluetoothControlExecutor:
     capability_key = "device:bluetooth"
-    operations = ("list_bluetooth_devices", "pair_bluetooth_device", "unpair_bluetooth_device")
+    operations = (
+        "list_bluetooth_devices",
+        "pair_bluetooth_device",
+        "unpair_bluetooth_device",
+    )
 
     def __init__(self, backend: BluetoothBackend | None = None) -> None:
         self._backend = backend or WinRtBluetoothBackend()
@@ -290,7 +321,9 @@ class BluetoothControlExecutor:
         else:
             name = str(request.parameters.get("name") or "").strip()
             if not name or len(name) > 200:
-                raise WindowsDeviceValidationError("Bluetooth mutation requires a bounded device name")
+                raise WindowsDeviceValidationError(
+                    "Bluetooth mutation requires a bounded device name"
+                )
             params["name"] = name
             attributes = ActionAttributes(persistent_write=True)
             summary = f"{request.operation.replace('_', ' ')}: {name}"
@@ -307,7 +340,10 @@ class BluetoothControlExecutor:
         started = time.monotonic()
         try:
             if prepared.request.operation == "list_bluetooth_devices":
-                data = {"devices": self._backend.list_devices(), "verification_passed": True}
+                data = {
+                    "devices": self._backend.list_devices(),
+                    "verification_passed": True,
+                }
             elif prepared.request.operation == "pair_bluetooth_device":
                 data = self._backend.pair(str(prepared.execution_payload["name"]))
                 data["verification_passed"] = bool(data.get("is_paired"))
@@ -323,7 +359,7 @@ class BluetoothControlExecutor:
                     reason="Bluetooth post-action verification failed",
                     provenance=("Windows WinRT device enumeration/pairing",),
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - executor boundary contains OS/backend faults
             return _result(
                 prepared,
                 CapabilityStatus.UNAVAILABLE,
@@ -353,25 +389,55 @@ class PowerBackend(Protocol):
 
 
 class Win32PowerBackend:
+    @staticmethod
+    def _enable_shutdown_privilege() -> None:
+        try:
+            import win32api
+            import win32con
+            import win32security
+        except ImportError as exc:
+            raise WindowsDeviceValidationError(
+                "Windows power/session control requires pywin32"
+            ) from exc
+        token = win32security.OpenProcessToken(
+            win32api.GetCurrentProcess(),
+            win32con.TOKEN_ADJUST_PRIVILEGES | win32con.TOKEN_QUERY,
+        )
+        privilege = win32security.LookupPrivilegeValue(None, "SeShutdownPrivilege")
+        win32security.AdjustTokenPrivileges(
+            token,
+            False,
+            [(privilege, win32con.SE_PRIVILEGE_ENABLED)],
+        )
+
     def lock(self) -> bool:
         return bool(ctypes.windll.user32.LockWorkStation())
 
     def sleep(self) -> bool:
-        return bool(ctypes.windll.powrprof.SetSuspendState(False, True, False))
+        self._enable_shutdown_privilege()
+        return bool(ctypes.windll.powrprof.SetSuspendState(False, False, False))
 
     def sign_out(self) -> bool:
         return bool(ctypes.windll.user32.ExitWindowsEx(0x00000000, 0))
 
     def restart(self) -> bool:
+        self._enable_shutdown_privilege()
         return bool(ctypes.windll.user32.ExitWindowsEx(0x00000002, 0))
 
     def shutdown(self) -> bool:
-        return bool(ctypes.windll.user32.ExitWindowsEx(0x00000001, 0))
+        self._enable_shutdown_privilege()
+        return bool(ctypes.windll.user32.ExitWindowsEx(0x00000008, 0))
 
 
 class PowerSessionExecutor:
     capability_key = "system:power_session"
-    operations = ("lock_workstation", "restart_workstation", "shutdown_workstation", "sign_out", "sleep_workstation")
+    operations = (
+        "lock_workstation",
+        "restart_workstation",
+        "shutdown_workstation",
+        "sign_out",
+        "sleep_workstation",
+    )
 
     def __init__(self, backend: PowerBackend | None = None) -> None:
         self._backend = backend or Win32PowerBackend()
@@ -415,7 +481,7 @@ class PowerSessionExecutor:
         }[prepared.request.operation]
         try:
             initiated = bool(method())
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - executor boundary contains OS/backend faults
             return _result(
                 prepared,
                 CapabilityStatus.UNAVAILABLE,
@@ -428,6 +494,8 @@ class PowerSessionExecutor:
             CapabilityStatus.SUCCEEDED if initiated else CapabilityStatus.FAILED,
             started,
             data={"request_initiated": initiated, "verification_passed": initiated},
-            reason=None if initiated else "Windows rejected the requested power/session action",
+            reason=None
+            if initiated
+            else "Windows rejected the requested power/session action",
             provenance=("native Windows power/session API",),
         )

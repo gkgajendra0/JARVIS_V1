@@ -32,7 +32,14 @@ class FakeBluetooth:
         self.paired = False
 
     def list_devices(self):
-        return [{"name": "Headphones", "id": "1", "is_paired": self.paired, "can_pair": True}]
+        return [
+            {
+                "name": "Headphones",
+                "id": "1",
+                "is_paired": self.paired,
+                "can_pair": True,
+            }
+        ]
 
     def pair(self, name: str):
         self.paired = True
@@ -90,7 +97,10 @@ def test_bluetooth_pairing_is_persistent_and_verified() -> None:
     )
 
     assert prepared.attributes.persistent_write is True
-    assert RiskClassifier().classify(prepared.attributes).risk_class is RiskClass.PERSISTENT_OR_EXTERNAL
+    assert (
+        RiskClassifier().classify(prepared.attributes).risk_class
+        is RiskClass.PERSISTENT_OR_EXTERNAL
+    )
     result = executor.execute(prepared)
     assert result.status is CapabilityStatus.SUCCEEDED
     assert result.data["is_paired"] is True
@@ -109,12 +119,16 @@ def test_power_lock_is_reversible_but_shutdown_is_critical() -> None:
     shutdown = executor.prepare(request(executor, "shutdown_workstation"))
 
     assert lock.attributes.reversible_local_change is True
-    assert RiskClassifier().classify(shutdown.attributes).risk_class is RiskClass.CRITICAL
+    assert (
+        RiskClassifier().classify(shutdown.attributes).risk_class is RiskClass.CRITICAL
+    )
 
 
 def test_power_backend_result_is_reported_as_initiated_not_final_state() -> None:
     executor = PowerSessionExecutor(FakePower())
-    result = executor.execute(executor.prepare(request(executor, "restart_workstation")))
+    result = executor.execute(
+        executor.prepare(request(executor, "restart_workstation"))
+    )
 
     assert result.status is CapabilityStatus.SUCCEEDED
     assert result.data == {"request_initiated": True, "verification_passed": True}

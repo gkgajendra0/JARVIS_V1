@@ -34,15 +34,21 @@ class DocumentEditValidationError(ValueError):
 def _bounded_text(value: object, *, limit: int = _MAX_TEXT) -> str:
     text = str(value or "")
     if not text.strip() or len(text) > limit:
-        raise DocumentEditValidationError("document text is empty or exceeds the bounded limit")
+        raise DocumentEditValidationError(
+            "document text is empty or exceeds the bounded limit"
+        )
     if _contains_secret(text):
-        raise DocumentEditValidationError("credential-like content is blocked from document edits")
+        raise DocumentEditValidationError(
+            "credential-like content is blocked from document edits"
+        )
     return text
 
 
 def _atomic_save(target: pathlib.Path, saver) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
-    fd, name = tempfile.mkstemp(prefix=".jarvis-doc-", suffix=target.suffix, dir=target.parent)
+    fd, name = tempfile.mkstemp(
+        prefix=".jarvis-doc-", suffix=target.suffix, dir=target.parent
+    )
     os.close(fd)
     temp = pathlib.Path(name)
     try:
@@ -91,7 +97,13 @@ class DocumentEditExecutor:
         path = str(params.get("path") or "").strip()
         _, target, relative = self.roots.resolve(root_alias, path)
         extension = target.suffix.casefold()
-        expected_ext = ".docx" if "docx" in operation else ".xlsx" if "xlsx" in operation else ".pptx"
+        expected_ext = (
+            ".docx"
+            if "docx" in operation
+            else ".xlsx"
+            if "xlsx" in operation
+            else ".pptx"
+        )
         if extension != expected_ext:
             raise DocumentEditValidationError(
                 f"{operation} requires a {expected_ext} target"
@@ -107,7 +119,9 @@ class DocumentEditExecutor:
             title = _bounded_text(params.get("title"), limit=500)
             body = str(params.get("body") or "")
             if len(body) > _MAX_TEXT or _contains_secret(body):
-                raise DocumentEditValidationError("slide body exceeds limit or looks credential-like")
+                raise DocumentEditValidationError(
+                    "slide body exceeds limit or looks credential-like"
+                )
             normalized.update(title=title, body=body)
             payload.update(title=title, body=body)
         elif operation == "set_xlsx_cell":
@@ -119,10 +133,14 @@ class DocumentEditExecutor:
             import re
 
             if not re.fullmatch(r"[A-Z]{1,3}[1-9][0-9]{0,5}", cell):
-                raise DocumentEditValidationError("cell must be a bounded A1-style address")
+                raise DocumentEditValidationError(
+                    "cell must be a bounded A1-style address"
+                )
             if isinstance(value, str):
                 if len(value) > _MAX_CELL_TEXT or _contains_secret(value):
-                    raise DocumentEditValidationError("cell text exceeds limit or looks credential-like")
+                    raise DocumentEditValidationError(
+                        "cell text exceeds limit or looks credential-like"
+                    )
             elif value is not None and not isinstance(value, (int, float, bool)):
                 raise DocumentEditValidationError("cell value type is not supported")
             normalized.update(sheet=sheet, cell=cell, value=value)
@@ -137,7 +155,11 @@ class DocumentEditExecutor:
         summary = f"{operation.replace('_', ' ')} {root_alias}:{relative.as_posix()}"
         return PreparedCapability(
             request=request,
-            target={"domain": "documents.edit", "root": root_alias, "path": relative.as_posix()},
+            target={
+                "domain": "documents.edit",
+                "root": root_alias,
+                "path": relative.as_posix(),
+            },
             parameters=normalized,
             material_summary=summary,
             attributes=ActionAttributes(persistent_write=True),
@@ -148,7 +170,12 @@ class DocumentEditExecutor:
         started = time.monotonic()
         try:
             data = self._execute(prepared.request.operation, prepared.execution_payload)
-        except (DocumentEditValidationError, LocalWriteValidationError, OSError, ImportError) as exc:
+        except (
+            DocumentEditValidationError,
+            LocalWriteValidationError,
+            OSError,
+            ImportError,
+        ) as exc:
             return CapabilityResult(
                 status=CapabilityStatus.FAILED,
                 capability_key=self.capability_key,
@@ -163,7 +190,9 @@ class DocumentEditExecutor:
             operation=prepared.request.operation,
             data={**data, "verification_passed": True},
             elapsed_ms=(time.monotonic() - started) * 1000.0,
-            provenance=("python-docx/openpyxl/python-pptx semantic document libraries",),
+            provenance=(
+                "python-docx/openpyxl/python-pptx semantic document libraries",
+            ),
         )
 
     @staticmethod
@@ -183,7 +212,9 @@ class DocumentEditExecutor:
             document.add_paragraph(str(payload["text"]))
             _atomic_save(target, document.save)
             check = Document(target)
-            if not check.paragraphs or check.paragraphs[-1].text != str(payload["text"]):
+            if not check.paragraphs or check.paragraphs[-1].text != str(
+                payload["text"]
+            ):
                 raise OSError("DOCX post-write verification failed")
             return {"path_exists": True, "paragraphs": len(check.paragraphs)}
 
@@ -229,7 +260,9 @@ class DocumentEditExecutor:
                 slide.placeholders[1].text = str(payload["body"])
             _atomic_save(target, presentation.save)
             check = Presentation(target)
-            if not check.slides or check.slides[-1].shapes.title.text != str(payload["title"]):
+            if not check.slides or check.slides[-1].shapes.title.text != str(
+                payload["title"]
+            ):
                 raise OSError("PPTX post-write verification failed")
             return {"path_exists": True, "slides": len(check.slides)}
 

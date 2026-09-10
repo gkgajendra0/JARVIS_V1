@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from jarvis.authority.risk import RiskClassifier
 from jarvis.authority.types import RiskClass
 from jarvis.capabilities.document_edits import DocumentEditExecutor
 from jarvis.capabilities.local_writes import (
@@ -12,7 +13,6 @@ from jarvis.capabilities.local_writes import (
     LocalWriteValidationError,
 )
 from jarvis.capabilities.models import CapabilityRequest, CapabilityStatus
-from jarvis.authority.risk import RiskClassifier
 
 
 def request(executor, operation: str, parameters: dict) -> CapabilityRequest:
@@ -58,7 +58,8 @@ def test_write_policy_blocks_traversal_and_secret_paths(tmp_path: Path) -> None:
 
 
 def test_create_replace_append_text_are_verified(tmp_path: Path) -> None:
-    executor = LocalFileWriteExecutor(roots(tmp_path))
+    policy = roots(tmp_path)
+    executor = LocalFileWriteExecutor(policy)
 
     created = executor.execute(
         executor.prepare(
@@ -93,7 +94,7 @@ def test_create_replace_append_text_are_verified(tmp_path: Path) -> None:
         )
     )
     assert appended.status is CapabilityStatus.SUCCEEDED
-    assert (roots(tmp_path).root("test") / "note.txt").read_text() == "second + third"
+    assert (policy.root("test") / "note.txt").read_text() == "second + third"
 
 
 def test_persistent_file_write_has_canonical_persistent_risk(tmp_path: Path) -> None:
@@ -107,10 +108,15 @@ def test_persistent_file_write_has_canonical_persistent_risk(tmp_path: Path) -> 
     )
 
     assert prepared.attributes.persistent_write is True
-    assert RiskClassifier().classify(prepared.attributes).risk_class is RiskClass.PERSISTENT_OR_EXTERNAL
+    assert (
+        RiskClassifier().classify(prepared.attributes).risk_class
+        is RiskClass.PERSISTENT_OR_EXTERNAL
+    )
 
 
-def test_copy_and_rename_require_explicit_non_overwrite_by_default(tmp_path: Path) -> None:
+def test_copy_and_rename_require_explicit_non_overwrite_by_default(
+    tmp_path: Path,
+) -> None:
     policy = roots(tmp_path)
     source = policy.root("test") / "a.txt"
     source.write_text("payload")

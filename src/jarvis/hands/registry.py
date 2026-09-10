@@ -187,28 +187,47 @@ class HandsCapabilityRegistry:
             ),
         ]
         for operation, description in (
-            ("create_text_file", "Create a bounded UTF-8 text file in an approved write root."),
-            ("replace_text_file", "Atomically replace an existing bounded UTF-8 text file."),
+            (
+                "create_text_file",
+                "Create a bounded UTF-8 text file in an approved write root.",
+            ),
+            (
+                "replace_text_file",
+                "Atomically replace an existing bounded UTF-8 text file.",
+            ),
             ("append_text_file", "Append bounded text using atomic replacement."),
             ("make_directory", "Create a directory below an approved user write root."),
-            ("copy_path", "Copy one bounded file or directory between approved write roots."),
+            (
+                "copy_path",
+                "Copy one bounded file or directory between approved write roots.",
+            ),
             ("move_path", "Move one bounded path between approved write roots."),
             ("rename_path", "Rename one path inside an approved write root."),
-            ("trash_path", "Move one approved path to the operating-system recycle bin."),
+            (
+                "trash_path",
+                "Move one approved path to the operating-system recycle bin.",
+            ),
         ):
             operations.append(
-                HandsOperation(operation, HandsDomain.FILES_WRITE, description, native_then_human)
+                HandsOperation(
+                    operation, HandsDomain.FILES_WRITE, description, native_then_human
+                )
             )
         for operation, description in (
             ("create_docx", "Create a DOCX with explicit bounded text."),
-            ("append_docx_paragraph", "Append one explicit paragraph to an existing DOCX."),
+            (
+                "append_docx_paragraph",
+                "Append one explicit paragraph to an existing DOCX.",
+            ),
             ("create_xlsx", "Create an XLSX workbook with one named sheet."),
             ("set_xlsx_cell", "Set one explicit cell value in an XLSX workbook."),
             ("create_pptx", "Create a PPTX with one explicit title/body slide."),
             ("add_pptx_text_slide", "Add one explicit title/body slide to a PPTX."),
         ):
             operations.append(
-                HandsOperation(operation, HandsDomain.DOCUMENTS, description, semantic_edit)
+                HandsOperation(
+                    operation, HandsDomain.DOCUMENTS, description, semantic_edit
+                )
             )
         return cls(tuple(operations))
 

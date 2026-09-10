@@ -89,7 +89,9 @@ def _default_write_roots() -> dict[str, pathlib.Path]:
         "documents": home / "Documents",
         "downloads": home / "Downloads",
     }
-    return {alias: path.resolve() for alias, path in candidates.items() if path.is_dir()}
+    return {
+        alias: path.resolve() for alias, path in candidates.items() if path.is_dir()
+    }
 
 
 def _is_within(candidate: pathlib.Path, parent: pathlib.Path) -> bool:
@@ -122,7 +124,9 @@ class ApprovedWriteRootPolicy:
 
         protected = pathlib.Path(jarvis_root or default_project_root()).resolve()
         if not configured:
-            raise LocalWriteValidationError("no approved local write roots are configured")
+            raise LocalWriteValidationError(
+                "no approved local write roots are configured"
+            )
         for alias, root in configured.items():
             if not root.is_dir():
                 raise LocalWriteValidationError(
@@ -143,7 +147,9 @@ class ApprovedWriteRootPolicy:
         try:
             return self._roots[normalized]
         except KeyError as exc:
-            raise LocalWriteValidationError("unknown approved local write root") from exc
+            raise LocalWriteValidationError(
+                "unknown approved local write root"
+            ) from exc
 
     def resolve(
         self,
@@ -156,11 +162,15 @@ class ApprovedWriteRootPolicy:
         raw = str(relative_path or "").strip()
         pure = pathlib.PurePath(raw)
         if pure.is_absolute() or pathlib.PureWindowsPath(raw).is_absolute():
-            raise LocalWriteValidationError("absolute local write paths are not allowed")
+            raise LocalWriteValidationError(
+                "absolute local write paths are not allowed"
+            )
         if any(part == ".." for part in pure.parts):
             raise LocalWriteValidationError("parent path traversal is not allowed")
         if any(part.casefold() == ".git" for part in pure.parts):
-            raise LocalWriteValidationError("Git internals are blocked from local write actions")
+            raise LocalWriteValidationError(
+                "Git internals are blocked from local write actions"
+            )
         if any(_is_sensitive_name(part) for part in pure.parts):
             raise LocalWriteValidationError("credential/secret-like paths are blocked")
 
@@ -168,15 +178,21 @@ class ApprovedWriteRootPolicy:
         try:
             relative = target.relative_to(root)
         except ValueError as exc:
-            raise LocalWriteValidationError("local write target escapes approved root") from exc
+            raise LocalWriteValidationError(
+                "local write target escapes approved root"
+            ) from exc
         if not allow_root and not relative.parts:
-            raise LocalWriteValidationError("write action requires a path below the root")
+            raise LocalWriteValidationError(
+                "write action requires a path below the root"
+            )
 
         cursor = root
         for part in relative.parts:
             cursor = cursor / part
             if cursor.exists() and cursor.is_symlink():
-                raise LocalWriteValidationError("symlink paths are blocked from local writes")
+                raise LocalWriteValidationError(
+                    "symlink paths are blocked from local writes"
+                )
         return root, target, relative
 
 
@@ -239,7 +255,10 @@ class LocalFileWriteExecutor:
                 "the JARVIS source tree is excluded."
             ),
             operations=list(self.operations),
-            metadata={"root_aliases": list(self.roots.aliases), "delete_mode": "recycle_bin"},
+            metadata={
+                "root_aliases": list(self.roots.aliases),
+                "delete_mode": "recycle_bin",
+            },
             execution_enabled=True,
         )
 
@@ -285,8 +304,12 @@ class LocalFileWriteExecutor:
             _, dest, dest_rel = self.roots.resolve(root_alias, new_path)
             overwrite = bool(params.get("overwrite", False))
             if source == dest:
-                raise LocalWriteValidationError("rename source and destination must differ")
-            payload.update(source=str(source), destination=str(dest), overwrite=overwrite)
+                raise LocalWriteValidationError(
+                    "rename source and destination must differ"
+                )
+            payload.update(
+                source=str(source), destination=str(dest), overwrite=overwrite
+            )
             params = {
                 "root": root_alias,
                 "path": source_rel.as_posix(),
@@ -302,13 +325,21 @@ class LocalFileWriteExecutor:
             _, target, relative = self.roots.resolve(root_alias, path)
             payload["target"] = str(target)
             params = {"root": root_alias, "path": relative.as_posix()}
-            if operation in {"create_text_file", "replace_text_file", "append_text_file"}:
+            if operation in {
+                "create_text_file",
+                "replace_text_file",
+                "append_text_file",
+            }:
                 text = str(request.parameters.get("text") or "")
                 encoded = text.encode("utf-8")
                 if not text or len(encoded) > _MAX_TEXT_BYTES:
-                    raise LocalWriteValidationError("text payload is empty or exceeds size limit")
+                    raise LocalWriteValidationError(
+                        "text payload is empty or exceeds size limit"
+                    )
                 if _contains_secret(text):
-                    raise LocalWriteValidationError("credential-like text is blocked from file writes")
+                    raise LocalWriteValidationError(
+                        "credential-like text is blocked from file writes"
+                    )
                 params["text"] = text
                 payload["text"] = text
                 summary = (
@@ -320,9 +351,10 @@ class LocalFileWriteExecutor:
             else:
                 summary = f"Move to recycle bin {root_alias}:{relative.as_posix()}"
 
+        destructive = operation == "trash_path" or bool(params.get("overwrite", False))
         attributes = ActionAttributes(
             persistent_write=True,
-            destructive=operation == "trash_path",
+            destructive=destructive,
         )
         return PreparedCapability(
             request=request,
@@ -353,7 +385,9 @@ class LocalFileWriteExecutor:
             provenance=("pathlib/shutil atomic filesystem operations",),
         )
 
-    def _execute_operation(self, operation: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _execute_operation(
+        self, operation: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         if operation in {"copy_path", "move_path", "rename_path"}:
             source = pathlib.Path(str(payload["source"]))
             dest = pathlib.Path(str(payload["destination"]))
@@ -361,14 +395,24 @@ class LocalFileWriteExecutor:
             if not source.exists() or source.is_symlink():
                 raise LocalWriteValidationError("source does not exist or is a symlink")
             if source.is_file() and source.stat().st_size > _MAX_COPY_BYTES:
-                raise LocalWriteValidationError("source exceeds bounded file-operation limit")
+                raise LocalWriteValidationError(
+                    "source exceeds bounded file-operation limit"
+                )
             if dest.exists() and not overwrite:
-                raise LocalWriteValidationError("destination exists and overwrite was not explicit")
+                raise LocalWriteValidationError(
+                    "destination exists and overwrite was not explicit"
+                )
+            if dest.exists() and dest.is_dir() and overwrite:
+                raise LocalWriteValidationError(
+                    "directory overwrite is blocked; choose a new destination or trash it explicitly"
+                )
             dest.parent.mkdir(parents=True, exist_ok=True)
             if operation == "copy_path":
                 if source.is_dir():
                     if dest.exists():
-                        raise LocalWriteValidationError("directory copy cannot overwrite a destination")
+                        raise LocalWriteValidationError(
+                            "directory copy cannot overwrite a destination"
+                        )
                     shutil.copytree(source, dest)
                 else:
                     shutil.copy2(source, dest)
@@ -376,10 +420,7 @@ class LocalFileWriteExecutor:
                     raise OSError("copy verification failed")
                 return {"destination_exists": True, "source_exists": True}
             if dest.exists():
-                if dest.is_dir():
-                    shutil.rmtree(dest)
-                else:
-                    dest.unlink()
+                dest.unlink()
             shutil.move(str(source), str(dest))
             if source.exists() or not dest.exists():
                 raise OSError("move/rename verification failed")
@@ -398,15 +439,25 @@ class LocalFileWriteExecutor:
             text = str(payload["text"])
             if operation == "create_text_file" and target.exists():
                 raise LocalWriteValidationError("file already exists")
-            if operation in {"replace_text_file", "append_text_file"} and not target.is_file():
+            if (
+                operation in {"replace_text_file", "append_text_file"}
+                and not target.is_file()
+            ):
                 raise LocalWriteValidationError("target file does not exist")
             final_text = text
             if operation == "append_text_file":
                 if target.stat().st_size > _MAX_TEXT_BYTES:
-                    raise LocalWriteValidationError("existing text file exceeds append limit")
+                    raise LocalWriteValidationError(
+                        "existing text file exceeds append limit"
+                    )
                 existing = target.read_text(encoding="utf-8")
-                if len(existing.encode("utf-8")) + len(text.encode("utf-8")) > _MAX_TEXT_BYTES:
-                    raise LocalWriteValidationError("appended file would exceed text size limit")
+                if (
+                    len(existing.encode("utf-8")) + len(text.encode("utf-8"))
+                    > _MAX_TEXT_BYTES
+                ):
+                    raise LocalWriteValidationError(
+                        "appended file would exceed text size limit"
+                    )
                 final_text = existing + text
             expected = _sha256_bytes(final_text.encode("utf-8"))
             _atomic_write_text(target, final_text)
@@ -420,7 +471,9 @@ class LocalFileWriteExecutor:
 
         if operation == "trash_path":
             if not target.exists() or target.is_symlink():
-                raise LocalWriteValidationError("trash target does not exist or is a symlink")
+                raise LocalWriteValidationError(
+                    "trash target does not exist or is a symlink"
+                )
             try:
                 from send2trash import send2trash
             except ImportError as exc:

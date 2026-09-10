@@ -232,7 +232,7 @@ def test_structured_hands_existing_app_requires_explicit_authorization() -> None
 def test_structured_hands_rejects_unapproved_app() -> None:
     executor = WindowsStructuredControlExecutor(execution_enabled=True)
 
-    with pytest.raises(ValueError, match="not approved"):
+    with pytest.raises(ValueError, match="reserved shell/admin domain"):
         executor.prepare(
             request(
                 {
