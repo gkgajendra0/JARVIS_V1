@@ -30,9 +30,13 @@ class PollingForegroundWindowBackend(PyWin32WindowBackend):
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         if not 0.1 <= verification_timeout_seconds <= 3.0:
-            raise ValueError("focus verification timeout must be between 0.1 and 3 seconds")
+            raise ValueError(
+                "focus verification timeout must be between 0.1 and 3 seconds"
+            )
         if not 0.01 <= poll_seconds <= 0.25:
-            raise ValueError("focus poll interval must be between 0.01 and 0.25 seconds")
+            raise ValueError(
+                "focus poll interval must be between 0.01 and 0.25 seconds"
+            )
         self._verification_timeout_seconds = float(verification_timeout_seconds)
         self._poll_seconds = float(poll_seconds)
         self._sleeper = sleeper
