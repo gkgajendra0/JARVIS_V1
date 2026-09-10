@@ -10,7 +10,10 @@ from jarvis.capabilities.development_git import (
 )
 from jarvis.capabilities.discovery import CapabilityResolver
 from jarvis.capabilities.document_edits import DocumentEditExecutor
-from jarvis.capabilities.local_writes import ApprovedWriteRootPolicy, LocalFileWriteExecutor
+from jarvis.capabilities.local_writes import (
+    ApprovedWriteRootPolicy,
+    LocalFileWriteExecutor,
+)
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capabilities.software_management import SoftwareManagementExecutor
 from jarvis.capabilities.windows_devices import (
@@ -173,7 +176,9 @@ class FakeGitBackend:
         return {"branch": self.branch, "remote": "origin"}
 
 
-def test_h2_h5_representative_operations_flow_through_one_runtime(tmp_path: Path) -> None:
+def test_h2_h5_representative_operations_flow_through_one_runtime(
+    tmp_path: Path,
+) -> None:
     user_files = tmp_path / "user-files"
     user_files.mkdir()
     jarvis_source = tmp_path / "jarvis-source"
@@ -232,7 +237,11 @@ def test_h2_h5_representative_operations_flow_through_one_runtime(tmp_path: Path
         ("set_display_brightness", {"percent": 42}, "system:display"),
         ("pair_bluetooth_device", {"name": "Test Buds"}, "device:bluetooth"),
         ("lock_workstation", {}, "system:power_session"),
-        ("install_package", {"package_id": "Example.SafePackage"}, "software:management"),
+        (
+            "install_package",
+            {"package_id": "Example.SafePackage"},
+            "software:management",
+        ),
         (
             "git_create_branch",
             {"repo": "testrepo", "branch": "hands-acceptance"},
@@ -253,7 +262,9 @@ def test_h2_h5_representative_operations_flow_through_one_runtime(tmp_path: Path
     finally:
         runtime.close()
 
-    assert (user_files / "acceptance" / "note.txt").read_text(encoding="utf-8") == "hello"
+    assert (user_files / "acceptance" / "note.txt").read_text(
+        encoding="utf-8"
+    ) == "hello"
     assert (user_files / "acceptance" / "data.xlsx").is_file()
     assert browser_backend.closed is True
     for operation, _, _ in cases:
