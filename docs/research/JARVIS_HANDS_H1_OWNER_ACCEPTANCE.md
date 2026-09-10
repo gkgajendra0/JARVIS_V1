@@ -2,34 +2,41 @@
 
 Status: acceptance runbook for draft PR #30. This document does not mark H1 DONE.
 
-## Gate order
+## Acceptance strategy
+
+Owner-machine acceptance is representative, not exhaustive. We do not manually certify every primitive computer operation. Each owner scenario proves an execution substrate/capability family end to end on the real Windows machine; the broader operation matrix is covered by automated unit, contract, authority, grounding, and CI tests.
+
+Representative owner scenarios:
 
 1. `jarvis-hands-smoke --readiness`
-   - read-only
+   - read-only platform/dependency/resolver readiness
    - zero mutations
    - zero cloud model calls
    - no Windows Hello prompt
 2. `jarvis-hands-smoke`
-   - structured Microsoft `winapp` Notepad acceptance
-   - exact text write + readback verification
-   - one exact Windows Hello approval
+   - representative structured application-UI execution through Microsoft `winapp`
+   - exact Notepad text write + readback verification
+   - proves structured UI + launcher + canonical authority + permit + verification
 3. `jarvis-hands-smoke --native --volume 30`
+   - one combined representative native Windows scenario
    - approved Calculator launch
    - Calculator maximize
    - Windows master volume set to 30%
    - clipboard set to `JARVIS native clipboard acceptance`
-   - each reversible action is separately proposed, approved, consumed and verified
-   - Calculator is intentionally left open/maximized, volume remains at the test value, and the clipboard marker remains present
+   - proves app lifecycle + Win32 window management + Core Audio + clipboard through the governed runtime
+   - this does NOT imply separate owner runs for minimize/restore/focus/mute/unmute/clear-clipboard/etc.; those belong in automated coverage
 4. `jarvis-hands-smoke --media`
-   - requires one active Windows media session
-   - reads current media state through the governed runtime
-   - changes playback state once and restores the original state
+   - one representative Windows media-session scenario
+   - requires one active media session
+   - reads current state, changes play/pause state once, then restores the original state
    - does not skip tracks
+   - next/previous/stop and malformed/no-session cases remain automated tests rather than separate owner runs
 5. Live `jarvis-voice` acceptance
-   - natural-language semantic native actions
-   - natural-language structured app UI control
+   - one natural-language end-to-end session that exercises semantic native routing and structured app UI
    - no authority from unrelated/ambient meeting speech
-   - success must match verified tool state
+   - success claims must match verified tool state
+
+Future Hands families follow the same rule: add automated operation coverage broadly, then require only a small representative owner scenario for a genuinely new execution substrate, security boundary, device class, or external side-effect class. We must not create a manual test checklist proportional to the number of operations.
 
 ## Owner-machine findings
 
@@ -37,6 +44,8 @@ Status: acceptance runbook for draft PR #30. This document does not mark H1 DONE
 - The first native H1 run proved `open_app` and then exposed a pywin32 portability defect during Calculator maximize: the installed `win32gui` module does not export `IsZoomed`.
 - Research confirmed `win32gui.GetWindowPlacement()` is the supported pywin32 surface for retrieving `showCmd`; the native window adapter now derives minimized/maximized state from `SW_SHOWMINIMIZED` / `SW_SHOWMAXIMIZED` instead of relying on `IsZoomed`.
 - A regression now exercises the same condition with a fake pywin32 GUI module that deliberately has no `IsZoomed` attribute.
+- The second native H1 run proved `open_app` and `maximize_window`, then exposed a pycaw adapter assumption: the returned `AudioDevice` on the owner machine has no `volume_percent` convenience property.
+- Current pycaw examples and the Windows Core Audio contract use the endpoint-volume interface. The adapter now reads `EndpointVolume.GetMasterVolumeLevelScalar()` and writes `EndpointVolume.SetMasterVolumeLevelScalar()` with normalized values, avoiding the unsupported convenience property. A contract regression exercises an AudioDevice shape with only `FriendlyName` and `EndpointVolume`.
 
 ## Approval rule
 
@@ -46,4 +55,4 @@ Human-facing Windows Hello summaries must identify the material action being app
 
 ## Completion rule
 
-H1 is not owner accepted until readiness, structured UI, native core, media, and live voice tests all pass on the owner Windows machine. PR #30 stays draft and unmerged until owner acceptance, documentation reconciliation, and final exact-head CI are complete.
+H1 is not owner accepted until the representative readiness, structured UI, native core, media, and live voice scenarios pass on the owner Windows machine. PR #30 stays draft and unmerged until owner acceptance, documentation reconciliation, and final exact-head CI are complete.
