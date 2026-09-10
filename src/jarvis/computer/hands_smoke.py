@@ -66,18 +66,21 @@ def _module_available(name: str) -> bool:
 def _native_dependency_checks(
     finder: Callable[[str], bool] = _module_available,
 ) -> tuple[ReadinessCheck, ...]:
-    return tuple(
-        ReadinessCheck(
-            name=f"Native dependency: {label}",
-            ok=finder(module),
-            detail=(
-                module
-                if finder(module)
-                else f"missing {module}; install jarvis[windows-hands]"
-            ),
+    checks: list[ReadinessCheck] = []
+    for module, label in _REQUIRED_NATIVE_MODULES.items():
+        available = finder(module)
+        checks.append(
+            ReadinessCheck(
+                name=f"Native dependency: {label}",
+                ok=available,
+                detail=(
+                    module
+                    if available
+                    else f"missing {module}; install jarvis[windows-hands]"
+                ),
+            )
         )
-        for module, label in _REQUIRED_NATIVE_MODULES.items()
-    )
+    return tuple(checks)
 
 
 def _operation_resolution_checks(
