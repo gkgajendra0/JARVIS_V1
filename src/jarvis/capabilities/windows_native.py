@@ -597,7 +597,7 @@ class PyWin32WindowBackend:
         return psutil, win32api, win32con, win32gui, win32process
 
     def list_windows(self) -> list[WindowSnapshot]:
-        psutil, _, _, win32gui, win32process = self._modules()
+        psutil, _, win32con, win32gui, win32process = self._modules()
         foreground = int(win32gui.GetForegroundWindow())
         windows: list[WindowSnapshot] = []
 
@@ -612,6 +612,8 @@ class PyWin32WindowBackend:
                 process = str(psutil.Process(pid).name())
             except (OSError, psutil.Error):
                 process = "unknown"
+            placement = win32gui.GetWindowPlacement(hwnd)
+            show_cmd = int(placement[1])
             windows.append(
                 WindowSnapshot(
                     hwnd=int(hwnd),
@@ -619,8 +621,8 @@ class PyWin32WindowBackend:
                     process=process,
                     rect=tuple(int(value) for value in win32gui.GetWindowRect(hwnd)),
                     visible=True,
-                    iconic=bool(win32gui.IsIconic(hwnd)),
-                    zoomed=bool(win32gui.IsZoomed(hwnd)),
+                    iconic=show_cmd == win32con.SW_SHOWMINIMIZED,
+                    zoomed=show_cmd == win32con.SW_SHOWMAXIMIZED,
                     foreground=int(hwnd) == foreground,
                 )
             )
