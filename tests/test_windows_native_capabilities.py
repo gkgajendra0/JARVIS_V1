@@ -226,7 +226,9 @@ def test_window_management_verifies_monitor_move() -> None:
     result = executor.execute(prepared)
 
     assert prepared.attributes.reversible_local_change is True
-    assert prepared.material_summary == "Move to next monitor Windows app window: notepad"
+    assert (
+        prepared.material_summary == "Move to next monitor Windows app window: notepad"
+    )
     assert result.status is CapabilityStatus.SUCCEEDED
     assert result.data["from_monitor_index"] == 0
     assert result.data["to_monitor_index"] == 1

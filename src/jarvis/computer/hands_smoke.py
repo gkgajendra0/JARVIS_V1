@@ -379,9 +379,13 @@ def run_media_acceptance() -> int:
         return 2
 
     print("JARVIS native media owner acceptance")
-    print("precondition=one Windows media session is active (playing, paused, or stopped)")
+    print(
+        "precondition=one Windows media session is active (playing, paused, or stopped)"
+    )
     print("The test will read the session, change playback state, then restore it.")
-    print("Expect Windows Hello for the private read and for each exact media mutation.")
+    print(
+        "Expect Windows Hello for the private read and for each exact media mutation."
+    )
 
     runtime = build_default_capability_runtime(
         ai_provider=os.getenv("JARVIS_AI_PROVIDER", "gemini")
