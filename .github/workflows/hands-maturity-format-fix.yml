@@ -1,0 +1,40 @@
+name: Hands maturity format fix
+
+on:
+  push:
+    branches:
+      - feat/governed-jarvis-hands-v1
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/governed-jarvis-hands-v1
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Ruff and test dependencies
+        run: python -m pip install -e ".[dev,hands]"
+      - name: Format and lint maturity files
+        run: |
+          python -m ruff format scripts/hands_maturity_finish_patch.py scripts/hands_maturity_lint_fix.py src/jarvis/hands/entities.py src/jarvis/hands/orchestrator.py tests/test_hands_contracts.py tests/test_hands_orchestrator.py
+          python -m ruff check --fix scripts/hands_maturity_finish_patch.py scripts/hands_maturity_lint_fix.py src/jarvis/hands/entities.py src/jarvis/hands/orchestrator.py tests/test_hands_contracts.py tests/test_hands_orchestrator.py
+          python -m ruff format scripts/hands_maturity_finish_patch.py scripts/hands_maturity_lint_fix.py src/jarvis/hands/entities.py src/jarvis/hands/orchestrator.py tests/test_hands_contracts.py tests/test_hands_orchestrator.py
+          python -m ruff check scripts/hands_maturity_finish_patch.py scripts/hands_maturity_lint_fix.py src/jarvis/hands/entities.py src/jarvis/hands/orchestrator.py tests/test_hands_contracts.py tests/test_hands_orchestrator.py
+      - name: Run Hands maturity architecture tests
+        run: python -m pytest -q tests/test_hands_contracts.py tests/test_hands_entities.py tests/test_hands_orchestrator.py tests/test_hands_goal_tools.py tests/test_hands_authority.py tests/test_hands_registry.py tests/test_production_hands_voice_wiring.py
+      - name: Commit formatted maturity implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/hands_maturity_finish_patch.py scripts/hands_maturity_lint_fix.py src/jarvis/hands/entities.py src/jarvis/hands/orchestrator.py tests/test_hands_contracts.py tests/test_hands_orchestrator.py
+          git diff --cached --quiet && exit 0
+          git commit -m "Format and validate mature Hands orchestrator"
+          git push origin HEAD:feat/governed-jarvis-hands-v1
