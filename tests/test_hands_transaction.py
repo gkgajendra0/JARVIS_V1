@@ -109,7 +109,9 @@ async def test_hybrid_desktop_hides_visual_until_first_structured_observation() 
 
 
 @pytest.mark.asyncio
-async def test_planner_discards_route_if_new_user_turn_arrives_during_cloud_call() -> None:
+async def test_planner_discards_route_if_new_user_turn_arrives_during_cloud_call() -> (
+    None
+):
     current = {"value": True}
 
     def supersede() -> None:
