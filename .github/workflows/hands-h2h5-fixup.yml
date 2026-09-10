@@ -27,10 +27,11 @@ jobs:
           python -m pip install ruff==0.16.5
           ruff format .
           ruff check . --fix
-      - name: Remove temporary fixup files
+      - name: Keep workflow files out of the bot commit
         run: |
+          git checkout -- .github/workflows/code-quality.yml
+          git checkout -- .github/workflows/hands-h2h5-fixup.yml
           rm -f tools/hands_h2h5_fixup.py
-          rm -f .github/workflows/hands-h2h5-fixup.yml
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
