@@ -43,7 +43,7 @@ jarvis-speaker-enroll = "jarvis.identity.speaker_enrollment:main"
 jarvis-active-speaker-benchmark = "jarvis.identity.active_speaker_benchmark_guided:main"
 jarvis-computer-smoke = "jarvis.computer.smoke:main"
 jarvis-structured-smoke = "jarvis.computer.structured_smoke:main"
-jarvis-hands-smoke = "jarvis.computer.hands_smoke:main"
+jarvis-hands-smoke = "jarvis.computer.hands_cli:main"
 jarvis-step7-smoke = "jarvis.capabilities.smoke:main"
 
 [project.optional-dependencies]
@@ -106,6 +106,22 @@ device-hands = [
     "winrt-Windows.Devices.Bluetooth==3.2.1; platform_system == 'Windows'",
 ]
 development-hands = ["dulwich==1.2.12"]
+hands = [
+    "pywin32==312; platform_system == 'Windows'",
+    "pycaw==20251023; platform_system == 'Windows'",
+    "winrt-runtime==3.2.1; platform_system == 'Windows'",
+    "winrt-Windows.Foundation==3.2.1; platform_system == 'Windows'",
+    "winrt-Windows.Media.Control==3.2.1; platform_system == 'Windows'",
+    "Send2Trash==2.1.0",
+    "python-docx==1.2.0",
+    "openpyxl==3.1.5",
+    "python-pptx==1.0.2",
+    "playwright==1.62.0",
+    "screen-brightness-control==0.27.2; platform_system == 'Windows'",
+    "winrt-Windows.Devices.Enumeration==3.2.1; platform_system == 'Windows'",
+    "winrt-Windows.Devices.Bluetooth==3.2.1; platform_system == 'Windows'",
+    "dulwich==1.2.12",
+]
 dev = ["pytest>=8,<10", "pytest-asyncio>=0.23,<2", "ruff==0.16.5"]
 
 [tool.setuptools]
