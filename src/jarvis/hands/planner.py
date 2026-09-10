@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
 
-from jarvis.ai_provider import normalize_ai_provider, require_provider_api_key
+from jarvis.ai_provider import normalize_ai_provider
 from jarvis.hands.contracts import (
     PlannerTurn,
     build_action_response_model,
@@ -17,6 +16,10 @@ from jarvis.hands.contracts import (
     parameter_model_for,
 )
 from jarvis.hands.models import HandsOperation
+from jarvis.hands.provider_adapters import (
+    StructuredOutputClient,
+    build_structured_output_client,
+)
 
 _ROUTER_SYSTEM_PROMPT = """You are the semantic router for JARVIS Hands.
 
@@ -101,112 +104,6 @@ class HandsRouteSelection(BaseModel):
     group_indices: list[int] = Field(min_length=1, max_length=5)
 
 
-class StructuredOutputClient(Protocol):
-    provider_name: str
-    model_name: str
-
-    async def parse(
-        self,
-        *,
-        system_prompt: str,
-        input_payload: dict[str, Any],
-        response_model: type[BaseModel],
-    ) -> BaseModel: ...
-
-
-class OpenAIStructuredOutputClient:
-    provider_name = "openai"
-
-    def __init__(self, *, client: Any, model: str) -> None:
-        responses = getattr(client, "responses", None)
-        if responses is None or not callable(getattr(responses, "parse", None)):
-            raise TypeError("client must expose responses.parse")
-        self._client = client
-        self.model_name = str(model).strip()
-        if not self.model_name:
-            raise ValueError("Hands planner model must not be empty")
-
-    async def parse(
-        self,
-        *,
-        system_prompt: str,
-        input_payload: dict[str, Any],
-        response_model: type[BaseModel],
-    ) -> BaseModel:
-        response = await self._client.responses.parse(
-            model=self.model_name,
-            input=[
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        input_payload,
-                        ensure_ascii=False,
-                        sort_keys=True,
-                        default=str,
-                    ),
-                },
-            ],
-            text_format=response_model,
-            store=False,
-        )
-        parsed = getattr(response, "output_parsed", None)
-        if not isinstance(parsed, response_model):
-            raise HandsPlanningError(
-                "OpenAI returned no validated Hands planner output"
-            )
-        return parsed
-
-
-class GeminiStructuredOutputClient:
-    provider_name = "gemini"
-
-    def __init__(self, *, client: Any, model: str) -> None:
-        aio = getattr(client, "aio", None)
-        interactions = getattr(aio, "interactions", None)
-        if interactions is None or not callable(getattr(interactions, "create", None)):
-            raise TypeError("client must expose aio.interactions.create")
-        self._client = client
-        self.model_name = str(model).strip()
-        if not self.model_name:
-            raise ValueError("Hands planner model must not be empty")
-
-    async def parse(
-        self,
-        *,
-        system_prompt: str,
-        input_payload: dict[str, Any],
-        response_model: type[BaseModel],
-    ) -> BaseModel:
-        response = await self._client.aio.interactions.create(
-            model=self.model_name,
-            input=json.dumps(
-                input_payload,
-                ensure_ascii=False,
-                sort_keys=True,
-                default=str,
-            ),
-            system_instruction=system_prompt,
-            response_format={
-                "type": "text",
-                "mime_type": "application/json",
-                "schema": response_model.model_json_schema(),
-            },
-            store=False,
-        )
-        output_text = getattr(response, "output_text", None)
-        if not isinstance(output_text, str) or not output_text.strip():
-            raise HandsPlanningError(
-                "Gemini returned no structured Hands planner output"
-            )
-        try:
-            return response_model.model_validate_json(output_text)
-        except ValidationError as exc:
-            raise HandsPlanningError(
-                "Gemini returned invalid Hands planner output"
-            ) from exc
-
-
 class HandsSemanticPlanner:
     """Two-stage route-group selection plus typed one-action planning."""
 
@@ -251,7 +148,8 @@ class HandsSemanticPlanner:
             },
             response_model=HandsRouteSelection,
         )
-        assert isinstance(parsed, HandsRouteSelection)
+        if not isinstance(parsed, HandsRouteSelection):
+            raise HandsPlanningError("Hands router returned an unexpected response type")
         selected: list[str] = []
         for index in parsed.group_indices:
             if index < 0 or index >= len(route_groups):
@@ -322,24 +220,8 @@ def build_hands_planner(
         else os.getenv("JARVIS_HANDS_PLANNER_MODEL", "").strip()
         or _default_model(normalized_provider)
     )
-    api_key = require_provider_api_key(
-        normalized_provider,
-        purpose="Hands semantic planning",
+    client = build_structured_output_client(
+        provider=normalized_provider,
+        model=model_name,
     )
-    if normalized_provider == "openai":
-        from openai import AsyncOpenAI
-
-        client: StructuredOutputClient = OpenAIStructuredOutputClient(
-            client=AsyncOpenAI(api_key=api_key),
-            model=model_name,
-        )
-    elif normalized_provider == "gemini":
-        from google import genai
-
-        client = GeminiStructuredOutputClient(
-            client=genai.Client(api_key=api_key),
-            model=model_name,
-        )
-    else:
-        raise AssertionError(f"Unhandled Hands planner provider: {normalized_provider}")
     return HandsSemanticPlanner(client)
