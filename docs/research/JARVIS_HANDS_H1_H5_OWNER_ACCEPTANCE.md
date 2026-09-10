@@ -110,6 +110,19 @@ Automated regression tests prove same-session reuse, expiry, session isolation, 
 
 The owner terminal transcript does not expose Windows Hello UI prompt count, so this document does not infer a popup count from console output. Human-facing prompt frequency remains an explicit UX observation for the final live voice acceptance session.
 
+## Postcondition-verification hardening after representative acceptance
+
+The H5 Git executor was tightened after the representative owner-machine run so mutating Git operations cannot claim success merely because a backend call returned without an exception. The pure-Python Dulwich path remains in place; no Git shell execution was introduced.
+
+Automated failure-injection regressions now require these postconditions:
+
+- branch creation succeeds only when the created local branch ref resolves to the original HEAD OID;
+- staging succeeds only when every requested path no longer remains unstaged or untracked;
+- commit succeeds only when the returned commit OID is the repository HEAD;
+- push succeeds only when the remote branch OID equals local HEAD after the push.
+
+The existing representative integration matrix was updated to model the same Git verification contract. A real owner-repository Git mutation is intentionally not required merely for certification; the owner-machine integrated gate already proved real Dulwich `git status`, while deterministic tests cover mutation postconditions and failure behavior.
+
 ## Safety observations
 
 The representative real-machine test deliberately avoided performing dangerous actions merely for proof. It did not install/uninstall software, pair/unpair Bluetooth, sleep/restart/shutdown/sign out, permanently delete acceptance artifacts, execute arbitrary shell, run arbitrary browser JavaScript, or mutate the JARVIS repository.
