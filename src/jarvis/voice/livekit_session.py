@@ -17,6 +17,8 @@ from livekit.agents import (
 from livekit.agents.llm import ChatMessage
 from livekit.plugins import google, openai
 from openai.types.beta.realtime.session import TurnDetection
+from openai.types.realtime import RealtimeTruncationRetentionRatio
+from openai.types.realtime.realtime_truncation_retention_ratio import TokenLimits
 
 from jarvis.ai_provider import require_provider_api_key
 from jarvis.config import JarvisConfig
@@ -28,6 +30,9 @@ LOGGER = logging.getLogger(__name__)
 
 AcceptedTurnObserver = Callable[[ConversationTurn], None]
 ConversationCloseObserver = Callable[[], None]
+
+_OPENAI_REALTIME_POST_INSTRUCTION_TOKEN_LIMIT = 12_000
+_OPENAI_REALTIME_RETENTION_RATIO = 0.75
 
 
 def _create_realtime_model(config: JarvisConfig):
@@ -63,6 +68,13 @@ def _create_realtime_model(config: JarvisConfig):
         voice=config.realtime_voice,
         api_key=api_key,
         input_audio_noise_reduction="far_field",
+        truncation=RealtimeTruncationRetentionRatio(
+            type="retention_ratio",
+            retention_ratio=_OPENAI_REALTIME_RETENTION_RATIO,
+            token_limits=TokenLimits(
+                post_instructions=_OPENAI_REALTIME_POST_INSTRUCTION_TOKEN_LIMIT
+            ),
+        ),
         turn_detection=TurnDetection(
             type="server_vad",
             threshold=0.8,
