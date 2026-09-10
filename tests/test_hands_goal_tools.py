@@ -277,3 +277,42 @@ def test_named_playlist_in_local_app_uses_structured_windows_plan() -> None:
     assert step.parameters["task"] == tool._latest_user_turn().text
     assert step.parameters["allow_existing_app"] is True
     assert step.parameters["plan"][0] == {"action": "search", "query": "Bhakti"}
+
+
+def test_voice_natural_desire_form_authorizes_named_game_launch() -> None:
+    grounded = parse(
+        tools("Jarvis, I want to play FIFA."),
+        "open_app",
+        {"app": "FIFA"},
+    )
+    assert grounded == {"app": "FIFA"}
+
+
+def test_voice_embedded_polite_request_authorizes_named_game_launch() -> None:
+    grounded = parse(
+        tools("Jarvis, I want to play FIFA. Could you please start it?"),
+        "open_app",
+        {"app": "FIFA"},
+    )
+    assert grounded == {"app": "FIFA"}
+
+
+def test_app_launch_request_does_not_warrant_software_discovery() -> None:
+    with pytest.raises(
+        HandsGoalGroundingError,
+        match="does not warrant Hands operation: search_software",
+    ):
+        parse(
+            tools("Jarvis please open Spotify app"),
+            "search_software",
+            {"query": "Spotify"},
+        )
+
+
+def test_explicit_software_discovery_is_still_warranted() -> None:
+    grounded = parse(
+        tools("Jarvis search software for Spotify"),
+        "search_software",
+        {"query": "Spotify"},
+    )
+    assert grounded == {"query": "Spotify"}

@@ -81,7 +81,7 @@ _OPERATION_INTENT_MARKERS: dict[str, tuple[str, ...]] = {
         "next monitor",
         "other screen",
     ),
-    "open_app": ("open", "launch", "start"),
+    "open_app": ("open", "launch", "start", "play"),
     "close_app": ("close", "quit", "exit", "band"),
     "execute_windows_plan": (
         "open",
@@ -142,14 +142,15 @@ _OPERATION_INTENT_MARKERS: dict[str, tuple[str, ...]] = {
     "restart_workstation": ("restart", "reboot"),
     "shutdown_workstation": ("shutdown", "shut down", "turn off"),
     "search_software": (
-        "software",
-        "app",
-        "package",
         "winget",
         "win get",
         "wing it",
         "search software",
         "search package",
+        "find software",
+        "find package",
+        "look for software",
+        "look for package",
         "install",
     ),
     "list_installed_software": ("installed", "software", "app", "package", "winget"),
@@ -366,6 +367,19 @@ _REQUEST_PREFIXES = (
     "would you",
     "will you",
 )
+_NATURAL_ACTION_LEADS = (
+    "i want to",
+    "i d like to",
+    "i would like to",
+    "i would love to",
+    "can you",
+    "could you",
+    "would you",
+    "will you",
+    "please",
+)
+
+
 _HINGLISH_REQUEST_SUFFIXES = (
     "kar do",
     "karo",
@@ -442,12 +456,27 @@ def _strip_request_prefixes(text: str) -> str:
     return value
 
 
+def _starts_with_action(value: str) -> bool:
+    return any(
+        value == start or value.startswith(f"{start} ") for start in _ACTION_STARTS
+    )
+
+
 def _explicit_action_request(text: str) -> bool:
     body = _strip_request_prefixes(text)
     if not body:
         return False
-    if any(body == start or body.startswith(f"{start} ") for start in _ACTION_STARTS):
+    if _starts_with_action(body):
         return True
+    for lead in _NATURAL_ACTION_LEADS:
+        match = re.search(rf"(?:^| ){re.escape(lead)}(?: |$)", body)
+        if match is None:
+            continue
+        remainder = body[match.end() :].strip()
+        if remainder.startswith("please "):
+            remainder = remainder[len("please ") :].strip()
+        if _starts_with_action(remainder):
+            return True
     return any(
         body == suffix or body.endswith(f" {suffix}")
         for suffix in _HINGLISH_REQUEST_SUFFIXES
@@ -966,47 +995,52 @@ class HandsGoalAgentTools:
     ) -> dict[str, object]:
         """Accomplish the latest USER computer goal through JARVIS Hands.
 
-        This is the single computer-action boundary. The USER states an outcome; never
-        ask them to choose a capability or executor. Build a short semantic JSON-array
-        plan and let JARVIS route each step to the best available governed executor.
+            This is the single computer-action boundary. The USER states an outcome; never
+            ask them to choose a capability or executor. Build a short semantic JSON-array
+            plan and let JARVIS route each step to the best available governed executor.
 
-        Each item is {"operation": "...", "parameters": {...}}. Use canonical
-        operation names, not friendly synonyms. In particular: `open_app`, `close_app`,
-        `get_master_volume`, `set_master_volume`, `mute_master_volume`,
-        `unmute_master_volume`, `create_text_file`, `replace_text_file`,
-        `append_text_file`, `make_directory`, `create_docx`, `create_xlsx`,
-        `create_pptx`, `execute_browser_plan`, `list_displays`,
-        `get_display_brightness`, `set_display_brightness`,
-        `list_bluetooth_devices`, `pair_bluetooth_device`,
-        `unpair_bluetooth_device`, `search_software`, `list_installed_software`,
-        `install_package`, `uninstall_package`, `git_status`, `git_active_branch`,
-        `git_create_branch`, `git_stage_paths`, `git_commit`, and
-        `git_push_current`. Do not invent names such as `set_volume` or
-        `create_file`; compatibility aliases are only a fail-safe at the boundary.
+            Each item is {"operation": "...", "parameters": {...}}. Use canonical
+            operation names, not friendly synonyms. In particular: `open_app`, `close_app`,
+            `get_master_volume`, `set_master_volume`, `mute_master_volume`,
+            `unmute_master_volume`, `create_text_file`, `replace_text_file`,
+            `append_text_file`, `make_directory`, `create_docx`, `create_xlsx`,
+            `create_pptx`, `execute_browser_plan`, `list_displays`,
+            `get_display_brightness`, `set_display_brightness`,
+            `list_bluetooth_devices`, `pair_bluetooth_device`,
+            `unpair_bluetooth_device`, `search_software`, `list_installed_software`,
+            `install_package`, `uninstall_package`, `git_status`, `git_active_branch`,
+            `git_create_branch`, `git_stage_paths`, `git_commit`, and
+            `git_push_current`. Do not invent names such as `set_volume` or
+            `create_file`; compatibility aliases are only a fail-safe at the boundary.
 
-        Material parameters must come from the current USER request: file/document
-        roots and paths, written content, browser URLs/form values/file transfers,
-        brightness percentages, Bluetooth names, software queries/exact package IDs,
-        repository aliases, Git paths/branches and commit messages. Never invent these.
-        Browser semantic selectors may be inferred as implementation details, but the
-        executor blocks high-consequence generic clicks and arbitrary JavaScript.
+            Material parameters must come from the current USER request: file/document
+            roots and paths, written content, browser URLs/form values/file transfers,
+            brightness percentages, Bluetooth names, software queries/exact package IDs,
+            repository aliases, Git paths/branches and commit messages. Never invent these.
+            Browser semantic selectors may be inferred as implementation details, but the
+            executor blocks high-consequence generic clicks and arbitrary JavaScript.
 
-        WinGet install/uninstall requires an exact package ID explicitly grounded in the
-        USER turn. A friendly package name may be searched first; never guess an ID from
-        search intent. JARVIS-repository Git mutations remain self-modification and are
-        classified by canonical authority, not ordinary development work.
+            WinGet install/uninstall requires an exact package ID explicitly grounded in the
+            USER turn. A friendly package name may be searched first; never guess an ID from
+            search intent. JARVIS-repository Git mutations remain self-modification and are
+            classified by canonical authority, not ordinary development work.
 
-        Prefer native semantic operations over UI. Generic play/pause/next/previous/stop
-        for the already-active Windows media session should use the media operations.
-        Selecting named content inside a local desktop app (for example a playlist,
-        song, search result, menu, or control in Apple Music/Spotify) belongs to
-        `execute_windows_plan`, not `execute_browser_plan`. If that local app is not
-        open yet, emit `open_app` first and then `execute_windows_plan`. Use
-        `execute_browser_plan` only when the latest USER request actually grounds a
-        browser/website/web-page/URL goal. Visual computer use is owner-enabled fallback.
-        Every step independently passes through CapabilityRuntime, AuthorityService,
-        one-time permit revalidation, execution and verification. Only tool results are
-        a basis for claiming success.
+            Prefer native semantic operations over UI. To start/open/play a named installed local
+        application or game, use `open_app` directly; `open_app` already resolves against
+        the Windows installed-app catalogue. Never use `search_software` merely to locate
+        something the USER asked to launch. `search_software` is for explicit WinGet/software
+        discovery, or as the discovery step of an explicit install request. Generic
+        play/pause/next/previous/stop for the already-active Windows media session should use
+        the media operations.
+            Selecting named content inside a local desktop app (for example a playlist,
+            song, search result, menu, or control in Apple Music/Spotify) belongs to
+            `execute_windows_plan`, not `execute_browser_plan`. If that local app is not
+            open yet, emit `open_app` first and then `execute_windows_plan`. Use
+            `execute_browser_plan` only when the latest USER request actually grounds a
+            browser/website/web-page/URL goal. Visual computer use is owner-enabled fallback.
+            Every step independently passes through CapabilityRuntime, AuthorityService,
+            one-time permit revalidation, execution and verification. Only tool results are
+            a basis for claiming success.
         """
         del context
         try:
