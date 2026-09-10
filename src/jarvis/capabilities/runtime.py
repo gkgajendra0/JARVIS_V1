@@ -45,12 +45,12 @@ from jarvis.capabilities.windows_devices import (
     DisplayControlExecutor,
     PowerSessionExecutor,
 )
+from jarvis.capabilities.windows_focus import ReliableWindowManagementExecutor
 from jarvis.capabilities.windows_native import (
     AppLifecycleExecutor,
     ClipboardExecutor,
     MediaPlaybackExecutor,
     SystemAudioExecutor,
-    WindowManagementExecutor,
 )
 from jarvis.capabilities.windows_sources import WinAppCliSchemaSource, WindowsOdrSource
 from jarvis.hands.models import ExecutionSubstrate
@@ -306,7 +306,7 @@ def build_default_capability_runtime(
     audio = SystemAudioExecutor()
     media = MediaPlaybackExecutor()
     clipboard = ClipboardExecutor()
-    windows = WindowManagementExecutor()
+    windows = ReliableWindowManagementExecutor()
     app_lifecycle = AppLifecycleExecutor()
     structured_control = WindowsStructuredControlExecutor()
     visual_provider = ai_provider or configured_ai_provider(load_machine_settings())
