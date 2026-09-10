@@ -12,6 +12,7 @@ from jarvis.ai_provider import (
     LEGACY_REALTIME_PROVIDER_SETTING,
     configured_ai_provider,
 )
+from jarvis.authority.tool_setup import configure_authority_tool_settings
 from jarvis.config import FALSE_VALUES, TRUE_VALUES, JarvisConfig
 from jarvis.identity.active_speaker_assets import ensure_lr_asd_model
 from jarvis.machine_config import (
@@ -268,6 +269,7 @@ def _build_settings(existing: dict[str, str]) -> dict[str, str]:
     if head_model and Path(head_model).expanduser().is_file():
         settings["JARVIS_BLAZEFACE_MODEL_PATH"] = str(Path(head_model).expanduser())
 
+    settings.update(configure_authority_tool_settings(existing))
     return settings
 
 
