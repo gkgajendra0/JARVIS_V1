@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from jarvis.authority.risk import RiskClassifier
 from jarvis.authority.types import RiskClass
 from jarvis.capabilities.models import CapabilityRequest, CapabilityStatus
@@ -7,6 +9,7 @@ from jarvis.capabilities.windows_devices import (
     BluetoothControlExecutor,
     DisplayControlExecutor,
     PowerSessionExecutor,
+    WinRtBluetoothBackend,
 )
 
 
@@ -111,6 +114,36 @@ def test_bluetooth_listing_is_private_read() -> None:
     executor = BluetoothControlExecutor(FakeBluetooth())
     prepared = executor.prepare(request(executor, "list_bluetooth_devices"))
     assert prepared.attributes.private_read is True
+
+
+def test_winrt_bluetooth_listing_bridges_running_event_loop(monkeypatch) -> None:
+    class Pairing:
+        is_paired = True
+        can_pair = False
+
+    class Device:
+        name = "Headphones"
+        id = "device-1"
+        pairing = Pairing()
+
+    async def fake_devices():
+        return [Device()]
+
+    monkeypatch.setattr(WinRtBluetoothBackend, "_devices", staticmethod(fake_devices))
+
+    async def invoke():
+        return WinRtBluetoothBackend().list_devices()
+
+    devices = asyncio.run(invoke())
+
+    assert devices == [
+        {
+            "name": "Headphones",
+            "id": "device-1",
+            "is_paired": True,
+            "can_pair": False,
+        }
+    ]
 
 
 def test_power_lock_is_reversible_but_shutdown_is_critical() -> None:
