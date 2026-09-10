@@ -240,7 +240,7 @@ def test_h2_h5_representative_operations_flow_through_one_runtime(
         (
             "install_package",
             {"package_id": "Example.SafePackage"},
-            "software:management",
+            "software:winget",
         ),
         (
             "git_create_branch",
