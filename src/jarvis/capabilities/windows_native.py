@@ -47,6 +47,57 @@ def _execution_enabled() -> bool:
     return platform.system() == "Windows"
 
 
+def _approval_preview(text: str, *, limit: int = 120) -> str:
+    compact = " ".join(str(text).split())
+    preview = compact if len(compact) <= limit else compact[: limit - 3] + "..."
+    return f"{preview!r} ({len(str(text))} chars)"
+
+
+def _audio_summary(operation: str, params: dict[str, Any]) -> str:
+    if operation == "set_master_volume":
+        return f"Set Windows master volume to {float(params['percent']):g}%"
+    if operation == "mute_master_volume":
+        return "Mute Windows master output"
+    if operation == "unmute_master_volume":
+        return "Unmute Windows master output"
+    return "Read Windows master volume and mute state"
+
+
+def _media_summary(operation: str) -> str:
+    labels = {
+        "get_current_media": "Read current Windows media session and metadata",
+        "play_media": "Resume the current Windows media session",
+        "pause_media": "Pause the current Windows media session",
+        "toggle_media_playback": "Toggle play/pause for the current Windows media session",
+        "next_media": "Skip to next item in the current Windows media session",
+        "previous_media": "Return to previous item in the current Windows media session",
+        "stop_media": "Stop the current Windows media session",
+    }
+    return labels[operation]
+
+
+def _clipboard_summary(operation: str, params: dict[str, Any]) -> str:
+    if operation == "set_clipboard_text":
+        return f"Set Windows clipboard text to {_approval_preview(str(params['text']))}"
+    if operation == "clear_clipboard":
+        return "Clear Windows clipboard contents"
+    return "Read bounded Unicode text from the Windows clipboard"
+
+
+def _window_summary(operation: str, params: dict[str, Any]) -> str:
+    if operation == "list_windows":
+        return "List visible top-level Windows application windows"
+    app = str(params["app"])
+    labels = {
+        "focus_window": "Focus",
+        "maximize_window": "Maximize",
+        "minimize_window": "Minimize",
+        "restore_window": "Restore",
+        "move_window_to_next_monitor": "Move to next monitor",
+    }
+    return f"{labels[operation]} Windows app window: {app}"
+
+
 def _result(
     prepared: PreparedCapability,
     status: CapabilityStatus,
@@ -143,7 +194,7 @@ class SystemAudioExecutor:
             request=request,
             target={"device": "default_output", "domain": "system.audio"},
             parameters=params,
-            material_summary=f"Windows audio action: {request.operation}",
+            material_summary=_audio_summary(request.operation, params),
             attributes=attributes,
             execution_payload=params,
         )
@@ -313,7 +364,7 @@ class MediaPlaybackExecutor:
             request=request,
             target={"session": "current", "domain": "media.playback"},
             parameters={},
-            material_summary=f"Windows media action: {request.operation}",
+            material_summary=_media_summary(request.operation),
             attributes=attributes,
             execution_payload={},
         )
@@ -446,7 +497,7 @@ class ClipboardExecutor:
             request=request,
             target={"clipboard": "windows", "format": "unicode_text"},
             parameters=params,
-            material_summary=f"Windows clipboard action: {request.operation}",
+            material_summary=_clipboard_summary(request.operation, params),
             attributes=attributes,
             execution_payload=params,
         )
@@ -694,7 +745,7 @@ class WindowManagementExecutor:
             request=request,
             target={"domain": "window.management", **params},
             parameters=params,
-            material_summary=f"Windows window action: {request.operation}",
+            material_summary=_window_summary(request.operation, params),
             attributes=attributes,
             execution_payload=params,
         )
