@@ -14,7 +14,10 @@ from jarvis.capabilities.authority_bridge import (
     CapabilityAuthorizationError,
 )
 from jarvis.capabilities.browser_playwright import BrowserPlanExecutor
-from jarvis.capabilities.development_git import DevelopmentGitError, DevelopmentGitExecutor
+from jarvis.capabilities.development_git import (
+    DevelopmentGitError,
+    DevelopmentGitExecutor,
+)
 from jarvis.capabilities.discovery import CapabilityResolver
 from jarvis.capabilities.document_edits import DocumentEditExecutor
 from jarvis.capabilities.execution import CapabilityExecutor
@@ -264,7 +267,7 @@ class CapabilityRuntime:
                     continue
                 try:
                     close()
-                except Exception:  # noqa: BLE001 - shutdown must continue across adapters
+                except Exception:  # noqa: BLE001,S110 - shutdown must continue across adapters
                     pass
         finally:
             self._authority.close()

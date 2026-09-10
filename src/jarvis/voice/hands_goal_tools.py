@@ -380,7 +380,10 @@ def _explicit_action_request(text: str) -> bool:
         return False
     if any(body == start or body.startswith(f"{start} ") for start in _ACTION_STARTS):
         return True
-    return any(body == suffix or body.endswith(f" {suffix}") for suffix in _HINGLISH_REQUEST_SUFFIXES)
+    return any(
+        body == suffix or body.endswith(f" {suffix}")
+        for suffix in _HINGLISH_REQUEST_SUFFIXES
+    )
 
 
 def _require_material(value: object, user_text: str, field: str) -> str:
@@ -404,7 +407,13 @@ def _url_grounded(value: object, user_text: str) -> bool:
 def _browser_warranted(user_text: str) -> bool:
     if _contains_marker(user_text, _OPERATION_INTENT_MARKERS["execute_browser_plan"]):
         return True
-    return bool(re.search(r"\b(?:https?://)?(?:www\.)?[a-z0-9-]+\.[a-z]{2,}\b", user_text, re.I))
+    return bool(
+        re.search(
+            r"\b(?:https?://)?(?:www\.)?[a-z0-9-]+\.[a-z]{2,}\b",
+            user_text,
+            re.IGNORECASE,
+        )
+    )
 
 
 def _repo_grounded(repo: str, user_text: str) -> bool:
@@ -516,7 +525,9 @@ class HandsGoalAgentTools:
             }
         if operation == "rename_path":
             return {
-                "root": _require_material(parameters.get("root"), user_text, "root").casefold(),
+                "root": _require_material(
+                    parameters.get("root"), user_text, "root"
+                ).casefold(),
                 "path": _require_material(parameters.get("path"), user_text, "path"),
                 "new_path": _require_material(
                     parameters.get("new_path"), user_text, "new path"
@@ -524,11 +535,15 @@ class HandsGoalAgentTools:
                 "overwrite": bool(parameters.get("overwrite", False)),
             }
         grounded: dict[str, Any] = {
-            "root": _require_material(parameters.get("root"), user_text, "root").casefold(),
+            "root": _require_material(
+                parameters.get("root"), user_text, "root"
+            ).casefold(),
             "path": _require_material(parameters.get("path"), user_text, "path"),
         }
         if operation in {"create_text_file", "replace_text_file", "append_text_file"}:
-            grounded["text"] = _require_material(parameters.get("text"), user_text, "text")
+            grounded["text"] = _require_material(
+                parameters.get("text"), user_text, "text"
+            )
         return grounded
 
     @staticmethod
@@ -536,13 +551,21 @@ class HandsGoalAgentTools:
         operation: str, parameters: dict[str, Any], user_text: str
     ) -> dict[str, Any]:
         grounded: dict[str, Any] = {
-            "root": _require_material(parameters.get("root"), user_text, "root").casefold(),
-            "path": _require_material(parameters.get("path"), user_text, "document path"),
+            "root": _require_material(
+                parameters.get("root"), user_text, "root"
+            ).casefold(),
+            "path": _require_material(
+                parameters.get("path"), user_text, "document path"
+            ),
         }
         if operation in {"create_docx", "append_docx_paragraph"}:
-            grounded["text"] = _require_material(parameters.get("text"), user_text, "document text")
+            grounded["text"] = _require_material(
+                parameters.get("text"), user_text, "document text"
+            )
         elif operation in {"create_pptx", "add_pptx_text_slide"}:
-            grounded["title"] = _require_material(parameters.get("title"), user_text, "slide title")
+            grounded["title"] = _require_material(
+                parameters.get("title"), user_text, "slide title"
+            )
             body = str(parameters.get("body") or "")
             if body:
                 grounded["body"] = _require_material(body, user_text, "slide body")
@@ -551,12 +574,18 @@ class HandsGoalAgentTools:
         elif operation == "create_xlsx":
             sheet = str(parameters.get("sheet") or "").strip()
             if sheet:
-                grounded["sheet"] = _require_material(sheet, user_text, "worksheet name")
+                grounded["sheet"] = _require_material(
+                    sheet, user_text, "worksheet name"
+                )
         elif operation == "set_xlsx_cell":
             sheet = str(parameters.get("sheet") or "").strip()
             if sheet:
-                grounded["sheet"] = _require_material(sheet, user_text, "worksheet name")
-            grounded["cell"] = _require_material(parameters.get("cell"), user_text, "cell")
+                grounded["sheet"] = _require_material(
+                    sheet, user_text, "worksheet name"
+                )
+            grounded["cell"] = _require_material(
+                parameters.get("cell"), user_text, "cell"
+            )
             value = parameters.get("value")
             if value is None:
                 if not _contains_marker(user_text, ("clear", "empty", "blank")):
@@ -703,7 +732,9 @@ class HandsGoalAgentTools:
             raise HandsGoalGroundingError(
                 f"latest user request does not warrant Hands operation: {operation}"
             )
-        if operation in _MUTATING_OPERATIONS and not _explicit_action_request(user_text):
+        if operation in _MUTATING_OPERATIONS and not _explicit_action_request(
+            user_text
+        ):
             raise HandsGoalGroundingError(
                 f"latest user request mentions {operation} but is not an explicit action request"
             )
@@ -774,11 +805,15 @@ class HandsGoalAgentTools:
         elif operation == "execute_browser_plan":
             parameters = self._ground_browser_parameters(parameters, user_text)
         elif operation in _DISPLAY_OPERATIONS or operation in _BLUETOOTH_OPERATIONS:
-            parameters = self._ground_device_parameters(operation, parameters, user_text)
+            parameters = self._ground_device_parameters(
+                operation, parameters, user_text
+            )
         elif operation in _POWER_OPERATIONS:
             parameters = {}
         elif operation in _SOFTWARE_OPERATIONS:
-            parameters = self._ground_software_parameters(operation, parameters, user_text)
+            parameters = self._ground_software_parameters(
+                operation, parameters, user_text
+            )
         elif operation in _DEVELOPMENT_OPERATIONS:
             parameters = self._ground_development_parameters(
                 operation, parameters, user_text

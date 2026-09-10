@@ -59,7 +59,9 @@ def test_file_write_material_is_grounded_in_user_turn() -> None:
 
 
 def test_file_write_cannot_substitute_model_selected_text() -> None:
-    with pytest.raises(HandsGoalGroundingError, match="text must be explicitly grounded"):
+    with pytest.raises(
+        HandsGoalGroundingError, match="text must be explicitly grounded"
+    ):
         parse(
             tools("Jarvis create file notes.txt in Documents with text hello world"),
             "create_text_file",

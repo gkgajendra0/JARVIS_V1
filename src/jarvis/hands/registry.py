@@ -189,7 +189,10 @@ class HandsCapabilityRegistry:
                 "read_document",
                 "Read an approved local document through the isolated reader.",
             ),
-            ("search_project", "Search bounded text content below an approved local root."),
+            (
+                "search_project",
+                "Search bounded text content below an approved local root.",
+            ),
         ):
             operations.append(
                 HandsOperation(operation, HandsDomain.FILES_READ, description, native)
@@ -246,7 +249,10 @@ class HandsCapabilityRegistry:
             )
         )
         for operation, description in (
-            ("list_displays", "List Windows displays visible to the brightness backend."),
+            (
+                "list_displays",
+                "List Windows displays visible to the brightness backend.",
+            ),
             ("get_display_brightness", "Read brightness for a Windows display."),
             ("set_display_brightness", "Set explicit Windows display brightness."),
             (
@@ -268,10 +274,15 @@ class HandsCapabilityRegistry:
             ("shutdown_workstation", "Request native Windows shutdown."),
         ):
             operations.append(
-                HandsOperation(operation, HandsDomain.DEVICES, description, native_then_human)
+                HandsOperation(
+                    operation, HandsDomain.DEVICES, description, native_then_human
+                )
             )
         for operation, description in (
-            ("search_software", "Search bounded package names through Microsoft WinGet."),
+            (
+                "search_software",
+                "Search bounded package names through Microsoft WinGet.",
+            ),
             (
                 "list_installed_software",
                 "List matching installed software through Microsoft WinGet.",
@@ -280,7 +291,9 @@ class HandsCapabilityRegistry:
             ("uninstall_package", "Uninstall one exact WinGet package ID."),
         ):
             operations.append(
-                HandsOperation(operation, HandsDomain.SOFTWARE, description, native_then_human)
+                HandsOperation(
+                    operation, HandsDomain.SOFTWARE, description, native_then_human
+                )
             )
         for operation, description in (
             ("git_status", "Read Git status for one approved development repository."),
