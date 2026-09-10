@@ -47,6 +47,18 @@ def _parse_roots(raw: str | None) -> dict[str, pathlib.Path]:
     return result
 
 
+def _decode_oid(value: object) -> str:
+    if isinstance(value, bytes):
+        return value.decode("ascii", errors="replace")
+    return str(value)
+
+
+def _path_matches(requested: str, observed: str) -> bool:
+    requested = pathlib.PurePosixPath(requested).as_posix().rstrip("/")
+    observed = pathlib.PurePosixPath(observed).as_posix().rstrip("/")
+    return observed == requested or observed.startswith(f"{requested}/")
+
+
 class ApprovedRepositoryPolicy:
     def __init__(
         self,
@@ -113,6 +125,10 @@ class GitBackend(Protocol):
 
     def active_branch(self, repo: pathlib.Path) -> str: ...
 
+    def head_oid(self, repo: pathlib.Path) -> str: ...
+
+    def branch_oid(self, repo: pathlib.Path, branch: str) -> str | None: ...
+
     def create_branch(self, repo: pathlib.Path, branch: str) -> None: ...
 
     def stage(self, repo: pathlib.Path, paths: list[str]) -> None: ...
@@ -120,6 +136,8 @@ class GitBackend(Protocol):
     def commit(self, repo: pathlib.Path, message: str) -> str: ...
 
     def push_current(self, repo: pathlib.Path) -> dict[str, Any]: ...
+
+    def remote_branch_oid(self, repo: pathlib.Path, branch: str) -> str | None: ...
 
 
 class DulwichGitBackend:
@@ -139,6 +157,16 @@ class DulwichGitBackend:
             return value.decode("utf-8", errors="replace")
         return str(value)
 
+    @staticmethod
+    def _repo(repo: pathlib.Path):
+        try:
+            from dulwich.repo import Repo
+        except ImportError as exc:
+            raise DevelopmentGitError(
+                "development Git Hands requires the jarvis[development-hands] extra"
+            ) from exc
+        return Repo(str(repo))
+
     def status(self, repo: pathlib.Path) -> dict[str, Any]:
         status = self._porcelain().status(str(repo))
         staged = {
@@ -154,6 +182,16 @@ class DulwichGitBackend:
     def active_branch(self, repo: pathlib.Path) -> str:
         return self._decode(self._porcelain().active_branch(str(repo)))
 
+    def head_oid(self, repo: pathlib.Path) -> str:
+        return _decode_oid(self._repo(repo).head())
+
+    def branch_oid(self, repo: pathlib.Path, branch: str) -> str | None:
+        ref = f"refs/heads/{branch}".encode("utf-8")
+        try:
+            return _decode_oid(self._repo(repo).refs[ref])
+        except KeyError:
+            return None
+
     def create_branch(self, repo: pathlib.Path, branch: str) -> None:
         self._porcelain().branch_create(str(repo), branch, force=False)
 
@@ -162,23 +200,45 @@ class DulwichGitBackend:
 
     def commit(self, repo: pathlib.Path, message: str) -> str:
         commit_id = self._porcelain().commit(str(repo), message=message.encode("utf-8"))
-        return self._decode(commit_id)
+        return _decode_oid(commit_id)
 
-    def push_current(self, repo: pathlib.Path) -> dict[str, Any]:
-        from dulwich.repo import Repo
-
-        repository = Repo(str(repo))
-        branch = self.active_branch(repo)
+    def _origin_url(self, repo: pathlib.Path) -> str:
+        repository = self._repo(repo)
         try:
             remote = repository.get_config().get((b"remote", b"origin"), b"url")
         except KeyError as exc:
             raise DevelopmentGitError("repository has no origin remote") from exc
-        remote_url = self._decode(remote)
+        return self._decode(remote)
+
+    def push_current(self, repo: pathlib.Path) -> dict[str, Any]:
+        branch = self.active_branch(repo)
+        remote_url = self._origin_url(repo)
         ref = f"refs/heads/{branch}:refs/heads/{branch}"
         result = self._porcelain().push(
             str(repo), remote_location=remote_url, refspecs=ref
         )
-        return {"branch": branch, "remote": "origin", "result": str(result)}
+        return {
+            "branch": branch,
+            "remote": "origin",
+            "remote_url_omitted": True,
+            "ref_status": {
+                self._decode(key): value
+                for key, value in (getattr(result, "ref_status", None) or {}).items()
+            },
+        }
+
+    def remote_branch_oid(self, repo: pathlib.Path, branch: str) -> str | None:
+        try:
+            from dulwich.client import get_transport_and_path
+        except ImportError as exc:
+            raise DevelopmentGitError(
+                "development Git Hands requires the jarvis[development-hands] extra"
+            ) from exc
+        client, remote_path = get_transport_and_path(self._origin_url(repo))
+        refs_result = client.get_refs(remote_path)
+        refs = getattr(refs_result, "refs", refs_result)
+        value = refs.get(f"refs/heads/{branch}".encode("utf-8"))
+        return None if value is None else _decode_oid(value)
 
 
 class DevelopmentGitExecutor:
@@ -273,42 +333,61 @@ class DevelopmentGitExecutor:
             execution_payload=payload,
         )
 
+    @staticmethod
+    def _stage_verified(paths: list[str], status: dict[str, Any]) -> bool:
+        residual = [
+            str(path)
+            for path in [
+                *status.get("unstaged", []),
+                *status.get("untracked", []),
+            ]
+        ]
+        return all(
+            not any(_path_matches(requested, observed) for observed in residual)
+            for requested in paths
+        )
+
     def execute(self, prepared: PreparedCapability) -> CapabilityResult:
         started = time.monotonic()
         operation = prepared.request.operation
         repo = pathlib.Path(str(prepared.execution_payload["repo_path"]))
         try:
+            verified = True
             if operation == "git_status":
-                data = {
-                    "status": self._backend.status(repo),
-                    "verification_passed": True,
-                }
+                data = {"status": self._backend.status(repo)}
             elif operation == "git_active_branch":
-                data = {
-                    "branch": self._backend.active_branch(repo),
-                    "verification_passed": True,
-                }
+                data = {"branch": self._backend.active_branch(repo)}
             elif operation == "git_create_branch":
                 branch = str(prepared.execution_payload["branch"])
+                expected_oid = self._backend.head_oid(repo)
                 self._backend.create_branch(repo, branch)
+                branch_oid = self._backend.branch_oid(repo, branch)
+                verified = bool(branch_oid) and branch_oid == expected_oid
                 data = {
                     "branch": branch,
-                    "created": True,
-                    "verification_passed": True,
+                    "branch_oid": branch_oid,
+                    "created": verified,
                 }
             elif operation == "git_stage_paths":
                 paths = list(prepared.execution_payload["paths"])
                 self._backend.stage(repo, paths)
                 status = self._backend.status(repo)
-                data = {"paths": paths, "status": status, "verification_passed": True}
+                verified = self._stage_verified(paths, status)
+                data = {"paths": paths, "status": status}
             elif operation == "git_commit":
                 commit_id = self._backend.commit(
                     repo, str(prepared.execution_payload["message"])
                 )
-                data = {"commit": commit_id, "verification_passed": bool(commit_id)}
+                head_oid = self._backend.head_oid(repo)
+                verified = bool(commit_id) and head_oid == commit_id
+                data = {"commit": commit_id, "head": head_oid}
             else:
                 data = self._backend.push_current(repo)
-                data["verification_passed"] = True
+                branch = str(data["branch"])
+                local_oid = self._backend.head_oid(repo)
+                remote_oid = self._backend.remote_branch_oid(repo, branch)
+                verified = bool(remote_oid) and remote_oid == local_oid
+                data.update({"local_oid": local_oid, "remote_oid": remote_oid})
         except Exception as exc:  # noqa: BLE001 - executor boundary contains backend faults
             return CapabilityResult(
                 status=CapabilityStatus.FAILED,
@@ -319,11 +398,14 @@ class DevelopmentGitExecutor:
                 elapsed_ms=(time.monotonic() - started) * 1000.0,
                 provenance=("Dulwich pure-Python Git",),
             )
+
+        data["verification_passed"] = verified
         return CapabilityResult(
-            status=CapabilityStatus.SUCCEEDED,
+            status=CapabilityStatus.SUCCEEDED if verified else CapabilityStatus.FAILED,
             capability_key=self.capability_key,
             operation=operation,
             data=data,
+            reason=None if verified else "Git post-action verification failed",
             elapsed_ms=(time.monotonic() - started) * 1000.0,
             provenance=("Dulwich pure-Python Git",),
         )
