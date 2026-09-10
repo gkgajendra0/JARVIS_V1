@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -90,7 +91,7 @@ class ConversationSession:
         self._status = ConversationStatus.CREATED
         self._turns: list[ConversationTurn] = []
         self._user_utterance_generation = 0
-        self._last_accepted_user_generation = 0
+        self._pending_user_generations: deque[int] = deque()
 
     @property
     def session_id(self) -> str:
@@ -106,18 +107,19 @@ class ConversationSession:
 
     @property
     def user_utterance_generation(self) -> int:
-        """Current voice-user generation, including speech whose transcript is pending."""
+        """Newest voice-user generation, including speech with transcript pending."""
 
         return self._user_utterance_generation
 
     def begin_user_utterance(self) -> int:
-        """Advance the generation as soon as LiveKit reports new user speech."""
+        """Advance and queue a generation as soon as LiveKit reports user speech."""
 
         if self._status is not ConversationStatus.ACTIVE:
             raise RuntimeError(
                 f"cannot begin a user utterance in a {self._status.value} conversation"
             )
         self._user_utterance_generation += 1
+        self._pending_user_generations.append(self._user_utterance_generation)
         return self._user_utterance_generation
 
     def start(self) -> None:
@@ -139,10 +141,12 @@ class ConversationSession:
             )
         generation: int | None = None
         if role is ConversationRole.USER:
-            if self._user_utterance_generation <= self._last_accepted_user_generation:
-                self._user_utterance_generation = self._last_accepted_user_generation + 1
-            generation = self._user_utterance_generation
-            self._last_accepted_user_generation = generation
+            if self._pending_user_generations:
+                generation = self._pending_user_generations.popleft()
+            else:
+                # Non-voice callers and unit tests may commit USER turns directly.
+                self._user_utterance_generation += 1
+                generation = self._user_utterance_generation
         turn = ConversationTurn(
             role=role,
             text=text,
