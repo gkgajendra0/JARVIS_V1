@@ -149,7 +149,9 @@ class HandsSemanticPlanner:
             response_model=HandsRouteSelection,
         )
         if not isinstance(parsed, HandsRouteSelection):
-            raise HandsPlanningError("Hands router returned an unexpected response type")
+            raise HandsPlanningError(
+                "Hands router returned an unexpected response type"
+            )
         selected: list[str] = []
         for index in parsed.group_indices:
             if index < 0 or index >= len(route_groups):
