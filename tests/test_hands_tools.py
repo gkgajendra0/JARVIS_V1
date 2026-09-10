@@ -72,6 +72,42 @@ async def test_volume_percentage_is_bound_to_latest_user_turn(
 
 
 @pytest.mark.asyncio
+async def test_hinglish_volume_command_is_explicitly_allowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cap_runtime = runtime()
+    captured: dict[str, object] = {}
+
+    def execute_operation(**kwargs):
+        captured.update(kwargs)
+        return success("set_master_volume")
+
+    monkeypatch.setattr(cap_runtime, "execute_operation", execute_operation)
+    tools = HandsAgentTools(cap_runtime, conversation("Jarvis volume 30 kar do"))
+
+    result = await tools.execute(operation="set_master_volume", percent=30)
+
+    assert result["ok"] is True
+    assert captured["parameters"] == {"percent": 30.0}
+
+
+@pytest.mark.asyncio
+async def test_declarative_volume_statement_cannot_authorize_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cap_runtime = runtime()
+    monkeypatch.setattr(
+        cap_runtime,
+        "execute_operation",
+        lambda **kwargs: pytest.fail(f"unexpected execution: {kwargs}"),
+    )
+    tools = HandsAgentTools(cap_runtime, conversation("The volume is 30 percent"))
+
+    with pytest.raises(HandsToolGroundingError, match="not an explicit action request"):
+        await tools.execute(operation="set_master_volume", percent=30)
+
+
+@pytest.mark.asyncio
 async def test_model_cannot_change_user_volume_percentage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -130,6 +166,45 @@ async def test_pause_current_media_is_semantically_allowed(
     assert result["ok"] is True
     assert captured["operation"] == "pause_media"
     assert captured["parameters"] == {}
+
+
+@pytest.mark.asyncio
+async def test_polite_pause_request_is_semantically_allowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cap_runtime = runtime()
+    captured: dict[str, object] = {}
+
+    def execute_operation(**kwargs):
+        captured.update(kwargs)
+        return success("pause_media")
+
+    monkeypatch.setattr(cap_runtime, "execute_operation", execute_operation)
+    tools = HandsAgentTools(cap_runtime, conversation("Could you pause the music"))
+
+    result = await tools.execute(operation="pause_media")
+
+    assert result["ok"] is True
+    assert captured["operation"] == "pause_media"
+
+
+@pytest.mark.asyncio
+async def test_quoted_pause_discussion_cannot_authorize_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cap_runtime = runtime()
+    monkeypatch.setattr(
+        cap_runtime,
+        "execute_operation",
+        lambda **kwargs: pytest.fail(f"unexpected execution: {kwargs}"),
+    )
+    tools = HandsAgentTools(
+        cap_runtime,
+        conversation("In the meeting they said pause the music before the demo"),
+    )
+
+    with pytest.raises(HandsToolGroundingError, match="not an explicit action request"):
+        await tools.execute(operation="pause_media")
 
 
 @pytest.mark.asyncio
