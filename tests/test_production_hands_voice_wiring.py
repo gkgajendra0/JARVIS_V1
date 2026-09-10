@@ -38,12 +38,10 @@ def _conversation() -> ConversationSession:
 def test_local_read_toolset_includes_hands_goal_boundary() -> None:
     toolset = LocalReadAgentTools(_runtime(), _conversation())
 
-    hands_tools = toolset._hands.tools
     combined_tools = toolset.tools
 
-    assert len(hands_tools) == 1
     assert len(combined_tools) == 2
-    assert combined_tools[1:] == hands_tools
+    assert [tool.id for tool in combined_tools] == ["inspect_local", "use_computer"]
 
 
 def test_production_session_bundle_includes_capability_toolset(monkeypatch) -> None:
