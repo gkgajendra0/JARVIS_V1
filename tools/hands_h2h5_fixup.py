@@ -12,6 +12,15 @@ def replace_once(path: str, old: str, new: str) -> None:
     file.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
+def replace_count(path: str, old: str, new: str, *, expected: int) -> None:
+    file = Path(path)
+    text = file.read_text(encoding="utf-8")
+    count = text.count(old)
+    if count != expected:
+        raise SystemExit(f"expected {expected} anchors in {path}, found {count}")
+    file.write_text(text.replace(old, new), encoding="utf-8")
+
+
 replace_once(
     "tests/test_local_write_capabilities.py",
     "def test_create_replace_append_text_are_verified(tmp_path: Path) -> None:\n    executor = LocalFileWriteExecutor(roots(tmp_path))",
@@ -74,6 +83,33 @@ replace_once(
     '''            if dest.exists():
                 dest.unlink()
             shutil.move(str(source), str(dest))''',
+)
+
+replace_once(
+    "src/jarvis/capabilities/browser_playwright.py",
+    "        has_click = has_upload = has_download = has_fill = False",
+    "        has_click = has_upload = has_download = False",
+)
+replace_once(
+    "src/jarvis/capabilities/browser_playwright.py",
+    "                    has_fill = True\n",
+    "",
+)
+replace_once(
+    "src/jarvis/capabilities/browser_playwright.py",
+    "        except Exception as exc:\n            return CapabilityResult(\n                status=CapabilityStatus.FAILED,",
+    "        except Exception as exc:  # noqa: BLE001 - executor boundary contains backend faults\n            return CapabilityResult(\n                status=CapabilityStatus.FAILED,",
+)
+replace_once(
+    "src/jarvis/capabilities/development_git.py",
+    "        except Exception as exc:\n            return CapabilityResult(\n                status=CapabilityStatus.FAILED,",
+    "        except Exception as exc:  # noqa: BLE001 - executor boundary contains backend faults\n            return CapabilityResult(\n                status=CapabilityStatus.FAILED,",
+)
+replace_count(
+    "src/jarvis/capabilities/windows_devices.py",
+    "        except Exception as exc:\n            return _result(",
+    "        except Exception as exc:  # noqa: BLE001 - executor boundary contains OS/backend faults\n            return _result(",
+    expected=3,
 )
 
 replace_once(
