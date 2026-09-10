@@ -363,7 +363,13 @@ class PlannedAction:
     operation: str
     parameters: dict[str, Any]
     evidence: str
-    continue_after_success: bool
+
+
+@dataclass(frozen=True, slots=True)
+class PlannerTurn:
+    action: PlannedAction | None = None
+    goal_complete: bool = False
+    clarification_question: str | None = None
 
 
 class PlannerResponseError(ValueError):
@@ -373,13 +379,7 @@ class PlannerResponseError(ValueError):
 def build_action_response_model(
     operation_names: tuple[str, ...],
 ) -> type[BaseModel]:
-    """Create a strict one-action planner schema from the current shortlist.
-
-    Each candidate operation becomes a discriminated branch whose ``parameters``
-    property is the operation-specific Pydantic model above.  This prevents the
-    planner from emitting arbitrary operation names or generic untyped parameter
-    bags.
-    """
+    """Create a strict one-action planner schema from the current shortlist."""
 
     names = tuple(dict.fromkeys(str(item).strip() for item in operation_names if item))
     if not names:
@@ -423,7 +423,7 @@ def build_action_response_model(
         f"HandsPlannerTurn_{digest}",
         __base__=StrictContract,
         actions=(list[action_type], Field(default_factory=list, max_length=1)),
-        continue_after_success=(bool, False),
+        goal_complete=(bool, False),
         clarification_question=(
             str | None,
             Field(default=None, min_length=1, max_length=400),
@@ -431,25 +431,36 @@ def build_action_response_model(
     )
 
 
-def materialize_planner_response(response: BaseModel) -> PlannedAction | str:
+def materialize_planner_response(response: BaseModel) -> PlannerTurn:
     actions = getattr(response, "actions", None)
     clarification = getattr(response, "clarification_question", None)
-    continue_after_success = bool(getattr(response, "continue_after_success", False))
+    goal_complete = bool(getattr(response, "goal_complete", False))
+    if not isinstance(actions, list):
+        raise PlannerResponseError("planner actions must be a list")
     if clarification:
+        if actions or goal_complete:
+            raise PlannerResponseError(
+                "planner clarification cannot be combined with action/completion"
+            )
+        return PlannerTurn(clarification_question=str(clarification))
+    if goal_complete:
         if actions:
             raise PlannerResponseError(
-                "planner cannot request clarification and an action simultaneously"
+                "planner completion cannot be combined with another action"
             )
-        return str(clarification)
-    if not isinstance(actions, list) or len(actions) != 1:
-        raise PlannerResponseError("planner must return exactly one action or clarification")
+        return PlannerTurn(goal_complete=True)
+    if len(actions) != 1:
+        raise PlannerResponseError(
+            "planner must return exactly one action, completion, or clarification"
+        )
     action = actions[0]
     parameters_model = getattr(action, "parameters", None)
     if not isinstance(parameters_model, BaseModel):
         raise PlannerResponseError("planner action parameters were not typed")
-    return PlannedAction(
-        operation=str(getattr(action, "operation")),
-        parameters=parameters_model.model_dump(exclude_none=True),
-        evidence=str(getattr(action, "evidence")),
-        continue_after_success=continue_after_success,
+    return PlannerTurn(
+        action=PlannedAction(
+            operation=str(action.operation),
+            parameters=parameters_model.model_dump(exclude_none=True),
+            evidence=str(action.evidence),
+        )
     )

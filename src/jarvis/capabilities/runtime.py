@@ -82,6 +82,7 @@ class CapabilityRuntime:
         resolver: CapabilityResolver,
         authority: AuthorityBroker,
         hands_registry: HandsCapabilityRegistry | None = None,
+        hands_planner=None,
     ) -> None:
         self._executors = {executor.capability_key: executor for executor in executors}
         if len(self._executors) != len(executors):
@@ -95,6 +96,7 @@ class CapabilityRuntime:
         self._resolver = resolver
         self._authority = authority
         self._hands_registry = hands_registry or HandsCapabilityRegistry.default()
+        self._hands_planner = hands_planner
         self._catalog: CapabilityCatalog | None = None
 
     def refresh_catalog(self) -> CapabilityCatalog:
@@ -109,6 +111,10 @@ class CapabilityRuntime:
     def hands_registry(self) -> HandsCapabilityRegistry:
         return self._hands_registry
 
+    @property
+    def hands_planner(self):
+        return self._hands_planner
+
     def capability_for_operation(self, operation: str) -> str | None:
         normalized = str(operation).strip()
         candidates = tuple(
@@ -119,7 +125,12 @@ class CapabilityRuntime:
         if not candidates:
             return None
         if len(candidates) == 1:
-            return candidates[0]
+            descriptor = self.catalog.by_key(candidates[0])
+            return (
+                candidates[0]
+                if descriptor is not None and descriptor.execution_enabled
+                else None
+            )
 
         semantic = self._hands_registry.operation(normalized)
         if semantic is None:
@@ -286,6 +297,7 @@ def _env_enabled(name: str) -> bool:
 def build_default_capability_runtime(
     *,
     ai_provider: str | None = None,
+    hands_planner_model: str | None = None,
 ) -> CapabilityRuntime:
     project = LocalProjectReadExecutor()
     system = SystemReadExecutor()
@@ -345,9 +357,18 @@ def build_default_capability_runtime(
         (WinAppCliSchemaSource(), WindowsOdrSource()),
         builtins=builtins,
     )
+    hands_planner = None
+    if ai_provider is not None:
+        from jarvis.hands.planner import build_hands_planner
+
+        hands_planner = build_hands_planner(
+            provider=ai_provider,
+            model=hands_planner_model,
+        )
     return CapabilityRuntime(
         executors=executor_tuple,
         resolver=resolver,
         authority=CapabilityAuthorityBroker(),
         hands_registry=HandsCapabilityRegistry.default(),
+        hands_planner=hands_planner,
     )

@@ -90,6 +90,7 @@ class JarvisConfig:
     realtime_voice: str = "marin"
     gemini_realtime_model: str = "gemini-3.1-flash-live-preview"
     gemini_realtime_voice: str = "Charon"
+    hands_planner_model: str | None = None
     show_transcript: bool = True
     startup_greeting_enabled: bool = True
     wake_model_path: str | None = None
@@ -142,6 +143,7 @@ class JarvisConfig:
             "active_speaker_model_path",
             "memory_candidate_extraction_model",
             "memory_semantic_recall_model",
+            "hands_planner_model",
         ):
             value = getattr(self, name)
             if value is not None:
@@ -235,6 +237,9 @@ class JarvisConfig:
             ),
             gemini_realtime_voice=_configured_required_text(
                 "JARVIS_GEMINI_REALTIME_VOICE", "Charon", machine
+            ),
+            hands_planner_model=_configured_optional_text(
+                "JARVIS_HANDS_PLANNER_MODEL", machine
             ),
             show_transcript=_configured_bool("JARVIS_SHOW_TRANSCRIPT", True, machine),
             startup_greeting_enabled=_configured_bool(

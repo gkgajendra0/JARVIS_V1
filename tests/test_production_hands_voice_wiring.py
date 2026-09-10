@@ -35,21 +35,16 @@ def _conversation() -> ConversationSession:
     return conversation
 
 
-def test_local_read_toolset_includes_hands_goal_boundary() -> None:
+def test_local_computer_toolset_exposes_only_hands_specialist_boundary() -> None:
     toolset = LocalReadAgentTools(_runtime(), _conversation())
-
-    combined_tools = toolset.tools
-
-    assert len(combined_tools) == 2
-    assert [tool.id for tool in combined_tools] == ["inspect_local", "use_computer"]
+    assert [tool.id for tool in toolset.tools] == ["use_computer"]
 
 
-def test_production_session_bundle_includes_capability_toolset(monkeypatch) -> None:
+def test_production_session_bundle_includes_hands_specialist_tool(monkeypatch) -> None:
     runtime = _runtime()
     conversation = _conversation()
-    sentinel_inspect = object()
     sentinel_hands = object()
-    seen: list[tuple[object, object]] = []
+    seen = []
 
     class FakeLocalReadAgentTools:
         def __init__(self, capability_runtime, session_conversation) -> None:
@@ -57,13 +52,9 @@ def test_production_session_bundle_includes_capability_toolset(monkeypatch) -> N
 
         @property
         def tools(self) -> list[object]:
-            return [sentinel_inspect, sentinel_hands]
+            return [sentinel_hands]
 
-    monkeypatch.setattr(
-        active_runtime,
-        "LocalReadAgentTools",
-        FakeLocalReadAgentTools,
-    )
+    monkeypatch.setattr(active_runtime, "LocalReadAgentTools", FakeLocalReadAgentTools)
     bundle = active_runtime._SessionToolBundle(
         None,
         lambda: conversation,
@@ -73,5 +64,5 @@ def test_production_session_bundle_includes_capability_toolset(monkeypatch) -> N
         capability_runtime=runtime,
     )
 
-    assert bundle.tools == [sentinel_inspect, sentinel_hands]
+    assert bundle.tools == [sentinel_hands]
     assert seen == [(runtime, conversation)]

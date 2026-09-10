@@ -199,20 +199,24 @@ def build_production_voice_runtime(
     )
 
     capability_runtime = build_default_capability_runtime(
-        ai_provider=config.ai_provider
+        ai_provider=config.ai_provider,
+        hands_planner_model=config.hands_planner_model,
     )
     capability_catalog = capability_runtime.refresh_catalog()
     structured_hands = capability_catalog.by_key("windows:desktop.control")
     visual_hands = capability_catalog.by_key("visual:desktop.control")
     browser_hands = capability_catalog.by_key("browser:playwright")
+    hands_planner = capability_runtime.hands_planner
     LOGGER.info(
-        "Governed capability runtime configured: capabilities=%s read_executors=2 "
+        "Governed capability runtime configured: capabilities=%s "
         "structured_desktop_control=%s visual_fallback=%s browser_control=%s "
-        "raw_shell=False",
+        "hands_planner=%s/%s raw_shell=False",
         len(capability_catalog.capabilities),
         bool(structured_hands and structured_hands.execution_enabled),
         bool(visual_hands and visual_hands.execution_enabled),
         bool(browser_hands and browser_hands.execution_enabled),
+        getattr(hands_planner, "provider_name", "none"),
+        getattr(hands_planner, "model_name", "none"),
     )
 
     provider_resilience_state = ProviderResilienceState()

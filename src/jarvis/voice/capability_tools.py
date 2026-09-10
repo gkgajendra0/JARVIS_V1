@@ -82,7 +82,7 @@ class LocalReadAgentTools:
 
     @property
     def tools(self) -> list:
-        return [self.inspect_local, *self._hands.tools]
+        return [*self._hands.tools]
 
     def _latest_user_turn(self) -> ConversationTurn:
         turn = next(
