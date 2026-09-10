@@ -195,7 +195,7 @@ def _normalize_plan(raw: object) -> tuple[dict[str, Any], ...]:
             "wait_for",
         }:
             selector = item.get("selector")
-            if action == "inspect" and selector in {None, ""} or action == "send_text" and selector in {None, ""}:
+            if action in {"inspect", "send_text"} and selector in {None, ""}:
                 step["selector"] = None
             else:
                 step["selector"] = _bounded_string(
