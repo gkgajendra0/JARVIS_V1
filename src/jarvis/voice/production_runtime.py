@@ -172,7 +172,7 @@ def build_production_voice_runtime(
             "structured_release_verifier=True deterministic_core=True "
             "probabilistic_semantic_boundary=True",
             config.ai_provider,
-            query_model,
+            interpreter.model_name,
         )
 
     candidate_extractor = None
@@ -187,7 +187,7 @@ def build_production_voice_runtime(
             "active_provider=%s model=%s quarantine=session_local "
             "durable_admission=False",
             config.ai_provider,
-            config.memory_candidate_extraction_model,
+            candidate_extractor.model_name,
         )
 
     research_service = build_current_research_service()
