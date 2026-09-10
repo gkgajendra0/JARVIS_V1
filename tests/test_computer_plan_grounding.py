@@ -172,6 +172,116 @@ async def test_mutating_click_or_invoke_must_be_user_grounded(
 
 
 @pytest.mark.asyncio
+async def test_declarative_use_of_notepad_cannot_authorize_control(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cap_runtime = runtime()
+    monkeypatch.setattr(
+        cap_runtime,
+        "execute_operation",
+        lambda **kwargs: pytest.fail(f"unexpected execution: {kwargs}"),
+    )
+    tools = ComputerControlAgentTools(
+        cap_runtime,
+        conversation("We use Notepad in training"),
+    )
+
+    result = await tools.control(
+        app="notepad",
+        plan_json=json.dumps([{"action": "launch"}]),
+    )
+
+    assert result["ok"] is False
+    assert result["status"] == "computer_control_not_warranted"
+
+
+@pytest.mark.asyncio
+async def test_quoted_ui_instruction_cannot_authorize_control(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cap_runtime = runtime()
+    monkeypatch.setattr(
+        cap_runtime,
+        "execute_operation",
+        lambda **kwargs: pytest.fail(f"unexpected execution: {kwargs}"),
+    )
+    tools = ComputerControlAgentTools(
+        cap_runtime,
+        conversation("In the meeting they said click New tab in Notepad"),
+    )
+
+    result = await tools.control(
+        app="notepad",
+        plan_json=json.dumps([{"action": "invoke", "selector": "New tab"}]),
+    )
+
+    assert result["ok"] is False
+    assert result["status"] == "computer_control_not_warranted"
+
+
+@pytest.mark.asyncio
+async def test_polite_user_grounded_text_plan_reaches_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cap_runtime = runtime()
+    captured: dict[str, object] = {}
+
+    def execute_operation(**kwargs):
+        captured.update(kwargs)
+        return success()
+
+    monkeypatch.setattr(cap_runtime, "execute_operation", execute_operation)
+    tools = ComputerControlAgentTools(
+        cap_runtime,
+        conversation("Could you open Notepad and type hello there"),
+    )
+    plan = [
+        {"action": "launch"},
+        {"action": "wait_until_running"},
+        {"action": "send_text", "selector": "Text editor", "text": "hello there"},
+        {
+            "action": "verify_value",
+            "selector": "Text editor",
+            "expected": "hello there",
+        },
+    ]
+
+    result = await tools.control(app="notepad", plan_json=json.dumps(plan))
+
+    assert result["ok"] is True
+    assert captured["parameters"]["plan"] == plan
+
+
+@pytest.mark.asyncio
+async def test_hinglish_user_grounded_text_plan_reaches_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cap_runtime = runtime()
+    captured: dict[str, object] = {}
+
+    def execute_operation(**kwargs):
+        captured.update(kwargs)
+        return success()
+
+    monkeypatch.setattr(cap_runtime, "execute_operation", execute_operation)
+    tools = ComputerControlAgentTools(
+        cap_runtime,
+        conversation("Notepad kholo aur hello type kar do"),
+    )
+    plan = [
+        {"action": "launch"},
+        {"action": "wait_until_running"},
+        {"action": "send_text", "selector": "Text editor", "text": "hello"},
+        {"action": "verify_value", "selector": "Text editor", "expected": "hello"},
+    ]
+
+    result = await tools.control(app="notepad", plan_json=json.dumps(plan))
+
+    assert result["ok"] is True
+    assert captured["parameters"]["plan"] == plan
+
+
+@pytest.mark.asyncio
 async def test_legitimate_user_grounded_text_plan_reaches_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
