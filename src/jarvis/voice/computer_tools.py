@@ -15,7 +15,7 @@ from jarvis.conversation import ConversationRole, ConversationSession, Conversat
 
 LOGGER = logging.getLogger(__name__)
 
-_CONTROL_VERBS = (
+_CONTROL_ACTION_STARTS = (
     "open",
     "launch",
     "start",
@@ -30,13 +30,52 @@ _CONTROL_VERBS = (
     "control",
     "operate",
     "use",
-    "khol",
-    "kholo",
-    "likh",
-    "likho",
-    "click karo",
-    "press karo",
+    "calculate",
+    "draw",
+    "create",
+    "new tab",
 )
+_REQUEST_PREFIXES = (
+    "hey jarvis",
+    "okay jarvis",
+    "ok jarvis",
+    "jarvis",
+    "please",
+    "can you",
+    "could you",
+    "would you",
+    "will you",
+)
+_HINGLISH_REQUEST_SUFFIXES = (
+    "kar do",
+    "karo",
+    "karna",
+    "khol do",
+    "kholo",
+    "likh do",
+    "likho",
+    "type kar do",
+    "type karo",
+    "click kar do",
+    "click karo",
+    "press kar do",
+    "press karo",
+    "select kar do",
+    "select karo",
+)
+_NON_COMMAND_SECOND_TOKENS = {
+    "is",
+    "was",
+    "means",
+    "should",
+    "would",
+    "could",
+    "can",
+    "might",
+    "feature",
+    "button",
+    "command",
+}
 _APPROVED_APP_ALIASES = {
     "notepad": ("notepad", "note pad"),
     "calculator": ("calculator", "calc"),
@@ -90,12 +129,44 @@ def _latest_app_is_named(text: str, app: str) -> bool:
     return any(f" {_normalized(alias)} " in normalized for alias in aliases)
 
 
-def _control_warranted(text: str, app: str) -> bool:
-    normalized = f" {_normalized(text)} "
-    verb_present = any(
-        f" {_normalized(marker)} " in normalized for marker in _CONTROL_VERBS
+def _strip_request_prefixes(text: str) -> str:
+    value = _normalized(text)
+    changed = True
+    while value and changed:
+        changed = False
+        for prefix in _REQUEST_PREFIXES:
+            normalized_prefix = _normalized(prefix)
+            if value == normalized_prefix:
+                return ""
+            if value.startswith(f"{normalized_prefix} "):
+                value = value[len(normalized_prefix) :].strip()
+                changed = True
+                break
+    return value
+
+
+def _explicit_control_request(text: str) -> bool:
+    body = _strip_request_prefixes(text)
+    if not body:
+        return False
+
+    for start in _CONTROL_ACTION_STARTS:
+        normalized_start = _normalized(start)
+        if body == normalized_start or body.startswith(f"{normalized_start} "):
+            remainder = body[len(normalized_start) :].strip()
+            second = remainder.split(maxsplit=1)[0] if remainder else ""
+            if second in _NON_COMMAND_SECOND_TOKENS:
+                continue
+            return True
+
+    return any(
+        body == suffix or body.endswith(f" {suffix}")
+        for suffix in _HINGLISH_REQUEST_SUFFIXES
     )
-    return verb_present and _latest_app_is_named(text, app)
+
+
+def _control_warranted(text: str, app: str) -> bool:
+    return _explicit_control_request(text) and _latest_app_is_named(text, app)
 
 
 def _existing_app_authorized(text: str) -> bool:
@@ -208,7 +279,7 @@ class ComputerControlAgentTools:
                 "ok": False,
                 "status": "computer_control_not_warranted",
                 "reason": (
-                    "latest user turn must explicitly request a control action and name "
+                    "latest user turn must be an explicit action request and name "
                     "the approved target application"
                 ),
                 "canonical_user_turn_id": turn.turn_id,
@@ -285,6 +356,8 @@ class ComputerControlAgentTools:
         Prefer `strategy="structured"`. Approved apps in the current bounded hands
         slice are `notepad`, `calculator`, and `paint`. The task itself is NEVER taken
         from tool arguments: JARVIS binds execution to the latest accepted USER turn.
+        The latest turn must itself be an explicit action request; discussion or quoted
+        instructions mentioning the same app/action are not authorization.
 
         For structured execution, provide `plan_json` as a JSON array of bounded UI
         actions. Supported actions are:
@@ -293,9 +366,9 @@ class ComputerControlAgentTools:
         `wait_for`.
 
         Common examples:
-        `[{'action':'launch'},{'action':'wait_until_running'},
-          {'action':'send_text','selector':'Text editor','text':'hello'},
-          {'action':'verify_value','selector':'Text editor','expected':'hello'}]`
+        `[{"action":"launch"},{"action":"wait_until_running"},
+          {"action":"send_text","selector":"Text editor","text":"hello"},
+          {"action":"verify_value","selector":"Text editor","expected":"hello"}]`
 
         JSON must use double quotes. Use plain UI text selectors when a stable selector
         is not known; Microsoft winapp resolves text/AutomationId selectors. Include a
