@@ -204,13 +204,15 @@ def build_production_voice_runtime(
     capability_catalog = capability_runtime.refresh_catalog()
     structured_hands = capability_catalog.by_key("windows:desktop.control")
     visual_hands = capability_catalog.by_key("visual:desktop.control")
+    browser_hands = capability_catalog.by_key("browser:playwright")
     LOGGER.info(
         "Governed capability runtime configured: capabilities=%s read_executors=2 "
-        "structured_desktop_control=%s visual_fallback=%s browser_control=False "
+        "structured_desktop_control=%s visual_fallback=%s browser_control=%s "
         "raw_shell=False",
         len(capability_catalog.capabilities),
         bool(structured_hands and structured_hands.execution_enabled),
         bool(visual_hands and visual_hands.execution_enabled),
+        bool(browser_hands and browser_hands.execution_enabled),
     )
 
     provider_resilience_state = ProviderResilienceState()

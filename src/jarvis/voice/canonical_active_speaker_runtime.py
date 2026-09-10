@@ -228,10 +228,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 self._research_service.provider_name,
             )
         if capability_runtime is not None:
+            capability_catalog = capability_runtime.refresh_catalog()
+            browser_hands = capability_catalog.by_key("browser:playwright")
             LOGGER.info(
                 "Governed local capabilities are active | local_reads=True | "
                 "structured_desktop_control=True | visual_fallback=owner_opt_in | "
-                "browser_control=False | raw_shell=False"
+                "browser_control=%s | raw_shell=False",
+                bool(browser_hands and browser_hands.execution_enabled),
             )
         try:
             await super().run()

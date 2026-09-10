@@ -18,6 +18,20 @@ from jarvis.hands.workflow import HandsWorkflowRunner
 
 _MAX_PLAN_JSON_CHARS = 20_000
 _MAX_APP_CHARS = 160
+_OPERATION_ALIASES = {
+    "set_volume": "set_master_volume",
+    "get_volume": "get_master_volume",
+    "mute_volume": "mute_master_volume",
+    "unmute_volume": "unmute_master_volume",
+    "create_file": "create_text_file",
+    "write_file": "create_text_file",
+    "list_bluetooth": "list_bluetooth_devices",
+    "get_bluetooth_devices": "list_bluetooth_devices",
+    "winget_search": "search_software",
+    "search_winget": "search_software",
+    "software_search": "search_software",
+    "git_repo_status": "git_status",
+}
 _CURRENT_TARGET_MARKERS = (
     "it",
     "this app",
@@ -84,7 +98,15 @@ _OPERATION_INTENT_MARKERS: dict[str, tuple[str, ...]] = {
         "use",
     ),
     "execute_visual_desktop_task": ("visual", "screen", "look at", "computer use"),
-    "create_text_file": ("create file", "make file", "new file", "write file"),
+    "create_text_file": (
+        "create file",
+        "create a file",
+        "create text file",
+        "create a text file",
+        "make file",
+        "new file",
+        "write file",
+    ),
     "replace_text_file": ("replace file", "overwrite file", "replace text"),
     "append_text_file": ("append", "add to file", "add text"),
     "make_directory": ("create folder", "make folder", "create directory"),
@@ -118,7 +140,17 @@ _OPERATION_INTENT_MARKERS: dict[str, tuple[str, ...]] = {
     "sign_out": ("sign out", "log out", "logout"),
     "restart_workstation": ("restart", "reboot"),
     "shutdown_workstation": ("shutdown", "shut down", "turn off"),
-    "search_software": ("software", "app", "package", "winget", "install"),
+    "search_software": (
+        "software",
+        "app",
+        "package",
+        "winget",
+        "win get",
+        "wing it",
+        "search software",
+        "search package",
+        "install",
+    ),
     "list_installed_software": ("installed", "software", "app", "package", "winget"),
     "install_package": ("install", "package", "winget"),
     "uninstall_package": ("uninstall", "remove", "package", "winget"),
@@ -309,6 +341,17 @@ _REQUEST_PREFIXES = (
     "okay jarvis",
     "ok jarvis",
     "jarvis",
+    "hey javis",
+    "okay javis",
+    "ok javis",
+    "javis",
+    "yeah",
+    "yes",
+    "okay",
+    "ok",
+    "so",
+    "alright",
+    "all right",
     "please",
     "can you",
     "could you",
@@ -348,6 +391,19 @@ def _normalized(value: object) -> str:
     return " ".join(re.sub(r"[^\w]+", " ", str(value).casefold()).split())
 
 
+def _spoken_punctuation_normalized(value: object) -> str:
+    text = str(value).casefold()
+    for symbol, spoken in (
+        ("\\", " backslash "),
+        ("/", " slash "),
+        ("_", " underscore "),
+        ("-", " dash "),
+        (".", " dot "),
+    ):
+        text = text.replace(symbol, spoken)
+    return " ".join(re.sub(r"[^\w]+", " ", text).split())
+
+
 def _contains_marker(text: str, markers: tuple[str, ...]) -> bool:
     padded = f" {_normalized(text)} "
     return any(f" {_normalized(marker)} " in padded for marker in markers)
@@ -355,7 +411,11 @@ def _contains_marker(text: str, markers: tuple[str, ...]) -> bool:
 
 def _material_in_text(value: object, text: str) -> bool:
     material = _normalized(value)
-    return bool(material) and material in _normalized(text)
+    normalized_text = _normalized(text)
+    if bool(material) and material in normalized_text:
+        return True
+    spoken_material = _spoken_punctuation_normalized(value)
+    return bool(spoken_material) and spoken_material in normalized_text
 
 
 def _strip_request_prefixes(text: str) -> str:
@@ -713,7 +773,8 @@ class HandsGoalAgentTools:
     ) -> HandsWorkflowStep:
         if not isinstance(raw, dict):
             raise HandsGoalGroundingError("each Hands plan step must be an object")
-        operation = str(raw.get("operation", "")).strip()
+        requested_operation = str(raw.get("operation", "")).strip().casefold()
+        operation = _OPERATION_ALIASES.get(requested_operation, requested_operation)
         semantic = self._runtime.hands_registry.require(operation)
         markers = _OPERATION_INTENT_MARKERS.get(operation)
         if markers is None:
@@ -901,10 +962,19 @@ class HandsGoalAgentTools:
         ask them to choose a capability or executor. Build a short semantic JSON-array
         plan and let JARVIS route each step to the best available governed executor.
 
-        Each item is {"operation": "...", "parameters": {...}}. Semantic operations
-        cover apps/windows/audio/media/clipboard plus governed files and documents,
-        structured Playwright browser work, display/Bluetooth/power controls, bounded
-        WinGet software management and Dulwich Git development work.
+        Each item is {"operation": "...", "parameters": {...}}. Use canonical
+        operation names, not friendly synonyms. In particular: `open_app`,
+        `get_master_volume`, `set_master_volume`, `mute_master_volume`,
+        `unmute_master_volume`, `create_text_file`, `replace_text_file`,
+        `append_text_file`, `make_directory`, `create_docx`, `create_xlsx`,
+        `create_pptx`, `execute_browser_plan`, `list_displays`,
+        `get_display_brightness`, `set_display_brightness`,
+        `list_bluetooth_devices`, `pair_bluetooth_device`,
+        `unpair_bluetooth_device`, `search_software`, `list_installed_software`,
+        `install_package`, `uninstall_package`, `git_status`, `git_active_branch`,
+        `git_create_branch`, `git_stage_paths`, `git_commit`, and
+        `git_push_current`. Do not invent names such as `set_volume` or
+        `create_file`; compatibility aliases are only a fail-safe at the boundary.
 
         Material parameters must come from the current USER request: file/document
         roots and paths, written content, browser URLs/form values/file transfers,

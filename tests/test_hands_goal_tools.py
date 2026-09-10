@@ -171,3 +171,67 @@ def test_declarative_power_statement_does_not_authorize_restart() -> None:
             "restart_workstation",
             {},
         )
+
+
+def test_live_voice_aliases_and_transcription_fillers_are_canonicalized() -> None:
+    tool = tools("Javis open calculator and set my master volume to 90 percent")
+    plan = json.dumps(
+        [
+            {"operation": "open_app", "parameters": {"app": "calculator"}},
+            {"operation": "set_volume", "parameters": {"percent": 90}},
+        ]
+    )
+    steps = tool._parse_plan(plan, tool._latest_user_turn().text)
+    assert [step.operation for step in steps] == [
+        "open_app",
+        "set_master_volume",
+    ]
+    assert steps[1].parameters == {"percent": 90.0}
+
+
+def test_voice_file_alias_accepts_spoken_dot_without_weakening_content_grounding() -> (
+    None
+):
+    tool = tools(
+        "So create a text file in Downloads named voice test dot txt with text hello world"
+    )
+    plan = json.dumps(
+        [
+            {
+                "operation": "create_file",
+                "parameters": {
+                    "root": "downloads",
+                    "path": "voice test.txt",
+                    "text": "hello world",
+                },
+            }
+        ]
+    )
+    step = tool._parse_plan(plan, tool._latest_user_turn().text)[0]
+    assert step.operation == "create_text_file"
+    assert step.parameters == {
+        "root": "downloads",
+        "path": "voice test.txt",
+        "text": "hello world",
+    }
+
+
+def test_voice_winget_transcription_variant_warrants_non_mutating_search() -> None:
+    tool = tools(
+        "Yeah could you list my Bluetooth devices and search Wing It for PowerToys"
+    )
+    plan = json.dumps(
+        [
+            {"operation": "list_bluetooth_devices", "parameters": {}},
+            {
+                "operation": "winget_search",
+                "parameters": {"query": "PowerToys"},
+            },
+        ]
+    )
+    steps = tool._parse_plan(plan, tool._latest_user_turn().text)
+    assert [step.operation for step in steps] == [
+        "list_bluetooth_devices",
+        "search_software",
+    ]
+    assert steps[1].parameters == {"query": "PowerToys"}
