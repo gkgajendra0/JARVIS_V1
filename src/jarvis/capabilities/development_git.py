@@ -186,7 +186,7 @@ class DulwichGitBackend:
         return _decode_oid(self._repo(repo).head())
 
     def branch_oid(self, repo: pathlib.Path, branch: str) -> str | None:
-        ref = f"refs/heads/{branch}".encode("utf-8")
+        ref = f"refs/heads/{branch}".encode()
         try:
             return _decode_oid(self._repo(repo).refs[ref])
         except KeyError:
@@ -237,7 +237,7 @@ class DulwichGitBackend:
         client, remote_path = get_transport_and_path(self._origin_url(repo))
         refs_result = client.get_refs(remote_path)
         refs = getattr(refs_result, "refs", refs_result)
-        value = refs.get(f"refs/heads/{branch}".encode("utf-8"))
+        value = refs.get(f"refs/heads/{branch}".encode())
         return None if value is None else _decode_oid(value)
 
 
