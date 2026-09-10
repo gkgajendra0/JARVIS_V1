@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -15,29 +16,30 @@ from jarvis.hands.contracts import (
     materialize_planner_response,
     parameter_model_for,
 )
-from jarvis.hands.models import HandsDomain, HandsOperation
+from jarvis.hands.models import HandsOperation
 
 
 _ROUTER_SYSTEM_PROMPT = """You are the semantic router for JARVIS Hands.
 
 The latest accepted USER turn has already been handed to the computer specialist. Your
-only job is to choose the smallest set of semantic capability domains that may be needed
-to satisfy that goal. You do not execute tools, answer the user, invent targets, or grant
-authority.
+only job is to choose the smallest set of routing groups that may be needed to satisfy
+that goal. You do not execute tools, answer the user, invent targets, or grant authority.
 
 Rules:
 - Understand ordinary English, Hinglish, indirect-but-clear requests, polite wording,
   pronouns, and natural word order semantically. Do not depend on command phrases.
-- Select every domain needed for a multi-step goal, but avoid unrelated domains.
-- Named local applications/games belong to app.lifecycle; controls/search/content inside
-  a desktop app belong to app.ui; current generic media transport belongs to
-  media.playback; websites belong to browser.
-- Software/WinGet is only for software discovery/install/uninstall, not for launching an
-  already-installed application.
-- Files/documents, devices, development, clipboard, audio and windows remain separate
-  semantic domains.
-- If uncertain between two closely related domains, include both. Never include a risky
-  domain merely as a generic fallback.
+- Select every group needed for a multi-step goal, but avoid unrelated groups.
+- Named local applications/games belong to app_lifecycle; controls/search/content inside
+  a desktop app belong to app_ui; current generic media transport belongs to media;
+  websites belong to browser.
+- software_discovery is only for WinGet/software lookup. software_mutation is only for
+  explicit install/uninstall goals. Never select either merely to launch an app.
+- development_read and development_mutation are separate. A status/read request must not
+  expose commit/push operations.
+- display, bluetooth, and power are separate. A brightness request must not expose
+  restart/shutdown operations.
+- If uncertain between two closely related low-risk groups, include both. Never include
+  a risky mutation group merely as a generic fallback.
 Return only the requested schema.
 """
 
@@ -78,10 +80,25 @@ class HandsPlanningError(RuntimeError):
     pass
 
 
+@dataclass(frozen=True, slots=True)
+class HandsRouteGroup:
+    key: str
+    description: str
+    operations: tuple[HandsOperation, ...]
+
+    def __post_init__(self) -> None:
+        if not self.key.strip():
+            raise ValueError("Hands route group key must not be empty")
+        if not self.description.strip():
+            raise ValueError("Hands route group description must not be empty")
+        if not self.operations:
+            raise ValueError("Hands route group must contain at least one operation")
+
+
 class HandsRouteSelection(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    domain_indices: list[int] = Field(min_length=1, max_length=5)
+    group_indices: list[int] = Field(min_length=1, max_length=5)
 
 
 class StructuredOutputClient(Protocol):
@@ -185,7 +202,7 @@ class GeminiStructuredOutputClient:
 
 
 class HandsSemanticPlanner:
-    """Two-stage router + one-action planner over JARVIS-owned semantic contracts."""
+    """Two-stage route-group selection plus typed one-action planning."""
 
     def __init__(self, client: StructuredOutputClient) -> None:
         self._client = client
@@ -203,48 +220,41 @@ class HandsSemanticPlanner:
         *,
         goal: str,
         recent_user_turns: tuple[str, ...],
-        available_operations: tuple[HandsOperation, ...],
-    ) -> tuple[HandsDomain, ...]:
-        domains: list[HandsDomain] = []
-        for operation in available_operations:
-            if operation.domain not in domains:
-                domains.append(operation.domain)
-        if not domains:
-            raise HandsPlanningError("no executable Hands domains are currently available")
-
-        domain_catalog = []
-        for index, domain in enumerate(domains):
-            members = [item for item in available_operations if item.domain is domain]
-            domain_catalog.append(
-                {
-                    "domain_index": index,
-                    "domain": domain.value,
-                    "operations": [
-                        {"name": item.operation, "description": item.description}
-                        for item in members
-                    ],
-                }
-            )
-
+        route_groups: tuple[HandsRouteGroup, ...],
+    ) -> tuple[str, ...]:
+        if not route_groups:
+            raise HandsPlanningError("no executable Hands route groups are available")
+        catalog = [
+            {
+                "group_index": index,
+                "group": group.key,
+                "description": group.description,
+                "operations": [
+                    {"name": item.operation, "description": item.description}
+                    for item in group.operations
+                ],
+            }
+            for index, group in enumerate(route_groups)
+        ]
         parsed = await self._client.parse(
             system_prompt=_ROUTER_SYSTEM_PROMPT,
             input_payload={
                 "latest_user_goal": goal,
                 "recent_user_turns": list(recent_user_turns),
-                "available_domains": domain_catalog,
+                "available_groups": catalog,
             },
             response_model=HandsRouteSelection,
         )
         assert isinstance(parsed, HandsRouteSelection)
-        selected: list[HandsDomain] = []
-        for index in parsed.domain_indices:
-            if index < 0 or index >= len(domains):
-                raise HandsPlanningError("router selected a domain outside the current catalog")
-            domain = domains[index]
-            if domain not in selected:
-                selected.append(domain)
+        selected: list[str] = []
+        for index in parsed.group_indices:
+            if index < 0 or index >= len(route_groups):
+                raise HandsPlanningError("router selected a group outside the current catalog")
+            key = route_groups[index].key
+            if key not in selected:
+                selected.append(key)
         if not selected:
-            raise HandsPlanningError("router returned no usable Hands domain")
+            raise HandsPlanningError("router returned no usable Hands route group")
         return tuple(selected)
 
     async def next_action(
