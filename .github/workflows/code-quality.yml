@@ -157,7 +157,7 @@ jobs:
       - name: Probe Windows Hands Python dependencies
         run: >-
           python -c "import pycaw; import win32clipboard; import win32gui;
-          import winrt.windows.media.control;
+          import winrt.windows.foundation; import winrt.windows.media.control;
           print('Windows Hands Python dependencies ready')"
 
       - name: Run Windows DPAPI smoke test
