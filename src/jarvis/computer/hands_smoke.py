@@ -13,7 +13,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from jarvis.authority.tooling import authority_tool_readiness
-from jarvis.capabilities.runtime import CapabilityRuntime, build_default_capability_runtime
+from jarvis.capabilities.runtime import (
+    CapabilityRuntime,
+    build_default_capability_runtime,
+)
 from jarvis.computer.structured_windows import StructuredWindowsError, WinAppCliBackend
 
 _EXPECTED_TEXT = "JARVIS governed hands acceptance"
