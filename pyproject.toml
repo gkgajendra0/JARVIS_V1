@@ -102,6 +102,7 @@ hands-documents = [
 browser-hands = ["playwright==1.62.0"]
 device-hands = [
     "screen-brightness-control==0.27.2; platform_system == 'Windows'",
+    "winrt-Windows.Foundation.Collections==3.2.1; platform_system == 'Windows'",
     "winrt-Windows.Devices.Enumeration==3.2.1; platform_system == 'Windows'",
     "winrt-Windows.Devices.Bluetooth==3.2.1; platform_system == 'Windows'",
 ]
@@ -111,6 +112,7 @@ hands = [
     "pycaw==20251023; platform_system == 'Windows'",
     "winrt-runtime==3.2.1; platform_system == 'Windows'",
     "winrt-Windows.Foundation==3.2.1; platform_system == 'Windows'",
+    "winrt-Windows.Foundation.Collections==3.2.1; platform_system == 'Windows'",
     "winrt-Windows.Media.Control==3.2.1; platform_system == 'Windows'",
     "Send2Trash==2.1.0",
     "python-docx==1.2.0",
