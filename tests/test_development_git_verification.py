@@ -101,7 +101,9 @@ def test_create_branch_fails_when_postcondition_does_not_exist(tmp_path) -> None
     assert result.reason == "Git post-action verification failed"
 
 
-def test_create_branch_passes_only_when_branch_points_to_original_head(tmp_path) -> None:
+def test_create_branch_passes_only_when_branch_points_to_original_head(
+    tmp_path,
+) -> None:
     backend = FakeGitBackend()
     backend.branch_oids["feature/verified"] = backend.head
     executor = _executor(tmp_path, backend)
