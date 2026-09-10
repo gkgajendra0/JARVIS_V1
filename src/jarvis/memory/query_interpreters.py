@@ -7,7 +7,11 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from jarvis.ai_provider import normalize_ai_provider, require_provider_api_key
+from jarvis.ai_provider import (
+    normalize_ai_provider,
+    require_provider_api_key,
+    resolve_ai_role_model,
+)
 
 from .query_plan import (
     MemoryFacetCatalog,
@@ -306,9 +310,15 @@ def build_memory_query_interpreter(
 ) -> MemoryQueryInterpreter:
     """Build an adapter for the already-selected active production AI provider."""
 
-    normalized_model = _require_non_empty(model, name="model")
+    configured_model = _require_non_empty(model, name="model")
+    normalized_provider = normalize_ai_provider(provider)
+    normalized_model = resolve_ai_role_model(
+        normalized_provider,
+        "memory_semantic_recall",
+        configured_model=configured_model,
+    )
     normalized_provider, client = build_structured_provider_client(
-        provider=provider,
+        provider=normalized_provider,
         purpose="memory query interpretation",
     )
 
