@@ -88,6 +88,58 @@ jobs:
             throw "Windows Hello helper JSON contract mismatch: $response"
           }
 
+      - name: Publish production Windows Hello helper
+        shell: pwsh
+        run: |
+          $output = Join-Path $env:RUNNER_TEMP "jarvis-hello-publish"
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $output
+          dotnet publish `
+            tools/windows/Jarvis.WindowsHelloVerifier/Jarvis.WindowsHelloVerifier.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --nologo `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:PublishTrimmed=false `
+            -p:DebugType=None `
+            --output $output
+          if ($LASTEXITCODE -ne 0) {
+            throw "Production Windows Hello helper publish failed"
+          }
+          $helper = Join-Path $output "Jarvis.WindowsHelloVerifier.exe"
+          if (-not (Test-Path $helper -PathType Leaf)) {
+            throw "Published Windows Hello helper executable is missing"
+          }
+
+      - name: Probe published Windows Hello helper JSON contract
+        shell: pwsh
+        run: |
+          $helper = Join-Path $env:RUNNER_TEMP "jarvis-hello-publish\Jarvis.WindowsHelloVerifier.exe"
+          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+          $startInfo.FileName = $helper
+          $startInfo.UseShellExecute = $false
+          $startInfo.RedirectStandardInput = $true
+          $startInfo.RedirectStandardOutput = $true
+          $startInfo.RedirectStandardError = $true
+          $process = [System.Diagnostics.Process]::new()
+          $process.StartInfo = $startInfo
+          if (-not $process.Start()) {
+            throw "Failed to start published Windows Hello helper contract probe"
+          }
+          $process.StandardInput.Write('{}')
+          $process.StandardInput.Close()
+          $response = $process.StandardOutput.ReadToEnd()
+          $stderr = $process.StandardError.ReadToEnd()
+          $process.WaitForExit()
+          if ($process.ExitCode -ne 2) {
+            throw "Expected published helper exit code 2, got $($process.ExitCode). stderr=$stderr"
+          }
+          $payload = $response | ConvertFrom-Json
+          if ($payload.status -ne 'error' -or $payload.reason -ne 'invalid_request') {
+            throw "Published Windows Hello helper JSON contract mismatch: $response"
+          }
+
   windows-dpapi:
     runs-on: windows-latest
     steps:
