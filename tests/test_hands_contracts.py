@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -49,6 +51,23 @@ def test_dynamic_planner_schema_only_accepts_shortlisted_operations() -> None:
                 ]
             }
         )
+
+
+def test_provider_facing_hands_schema_contains_no_oneof() -> None:
+    """OpenAI Structured Outputs rejects oneOf; keep the shared schema portable."""
+
+    response_model = build_action_response_model(
+        (
+            "open_app",
+            "set_master_volume",
+            "execute_windows_plan",
+            "execute_browser_plan",
+        )
+    )
+    schema = json.dumps(response_model.model_json_schema(), sort_keys=True)
+
+    assert '"oneOf"' not in schema
+    assert '"anyOf"' in schema
 
 
 def test_typed_volume_schema_rejects_out_of_range_or_extra_arguments() -> None:
