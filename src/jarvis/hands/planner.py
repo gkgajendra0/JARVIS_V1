@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from jarvis.ai_provider import normalize_ai_provider
+from jarvis.ai_provider import normalize_ai_provider, resolve_ai_role_model
 from jarvis.hands.contracts import (
     PlannerTurn,
     build_action_response_model,
@@ -202,25 +201,16 @@ class HandsSemanticPlanner:
         return materialize_planner_response(parsed)
 
 
-def _default_model(provider: str) -> str:
-    if provider == "gemini":
-        return "gemini-3.5-flash"
-    if provider == "openai":
-        return "gpt-5.6-terra"
-    raise AssertionError(f"Unhandled Hands planner provider: {provider}")
-
-
 def build_hands_planner(
     *,
     provider: str,
     model: str | None = None,
 ) -> HandsSemanticPlanner:
     normalized_provider = normalize_ai_provider(provider)
-    model_name = (
-        str(model).strip()
-        if model is not None and str(model).strip()
-        else os.getenv("JARVIS_HANDS_PLANNER_MODEL", "").strip()
-        or _default_model(normalized_provider)
+    model_name = resolve_ai_role_model(
+        normalized_provider,
+        "hands_planner",
+        configured_model=model,
     )
     client = build_structured_output_client(
         provider=normalized_provider,
