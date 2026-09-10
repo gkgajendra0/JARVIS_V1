@@ -19,6 +19,7 @@ from jarvis.capabilities.development_git import (
     DevelopmentGitError,
     DevelopmentGitExecutor,
 )
+from jarvis.capabilities.discovery import CapabilityResolver
 from jarvis.capabilities.document_edits import DocumentEditExecutor
 from jarvis.capabilities.execution import CapabilityExecutor
 from jarvis.capabilities.local_reads import LocalProjectReadExecutor
