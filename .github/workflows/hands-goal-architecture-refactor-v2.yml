@@ -57,6 +57,8 @@ jobs:
           python -m pip install ruff==0.16.5
           ruff format src/jarvis/capabilities/windows_native.py src/jarvis/capabilities/windows_control.py src/jarvis/capabilities/runtime.py src/jarvis/voice/capability_tools.py src/jarvis/voice/agent.py src/jarvis/voice/hands_goal_tools.py src/jarvis/hands/app_catalog.py src/jarvis/computer/hands_smoke.py
           ruff check src/jarvis/capabilities/windows_native.py src/jarvis/capabilities/windows_control.py src/jarvis/capabilities/runtime.py src/jarvis/voice/capability_tools.py src/jarvis/voice/agent.py src/jarvis/voice/hands_goal_tools.py src/jarvis/hands/app_catalog.py src/jarvis/computer/hands_smoke.py --fix
+      - name: Keep permanent CI workflow out of bot-authored refactor commit
+        run: git checkout -- .github/workflows/code-quality.yml
       - name: Remove temporary refactor files
         shell: bash
         run: |
