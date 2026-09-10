@@ -175,6 +175,29 @@ def test_production_source_has_one_provider_selector_and_one_credential_owner() 
     }
 
 
+def test_provider_setting_is_not_read_directly_outside_canonical_owner() -> None:
+    """Subsystems must inherit the provider instead of bypassing machine precedence."""
+
+    forbidden = (
+        'os.getenv("JARVIS_AI_PROVIDER"',
+        "os.getenv('JARVIS_AI_PROVIDER'",
+        'os.environ.get("JARVIS_AI_PROVIDER"',
+        "os.environ.get('JARVIS_AI_PROVIDER'",
+    )
+    violations: list[Path] = []
+    canonical_owner = Path("src/jarvis/ai_provider.py")
+
+    for path in SOURCE_ROOT.rglob("*.py"):
+        relative = path.relative_to(ROOT)
+        if relative == canonical_owner:
+            continue
+        source = path.read_text(encoding="utf-8")
+        if any(pattern in source for pattern in forbidden):
+            violations.append(relative)
+
+    assert violations == []
+
+
 def test_provider_sdk_imports_stay_inside_approved_adapter_boundaries() -> None:
     allowed = {
         Path("src/jarvis/computer/providers.py"),
