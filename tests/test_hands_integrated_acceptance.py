@@ -4,12 +4,19 @@ from jarvis.computer import hands_integrated_acceptance as acceptance
 
 
 def test_integrated_dependency_checks_report_missing_specialist() -> None:
-    checks = acceptance._dependency_checks(finder=lambda name: name != "playwright")
+    calls: list[str] = []
+
+    def finder(name: str) -> bool:
+        calls.append(name)
+        return name != "playwright"
+
+    checks = acceptance._dependency_checks(finder=finder)
     by_name = {check.name: check for check in checks}
 
     missing = by_name["Hands dependency: Playwright structured browser control"]
     assert missing.ok is False
     assert "playwright" in missing.detail
+    assert len(calls) == len(set(calls))
 
 
 def test_integrated_operation_map_excludes_only_owner_enabled_visual_fallback() -> None:
@@ -43,6 +50,10 @@ def test_integrated_owner_plan_is_representative_and_non_destructive() -> None:
     operations = [operation for _, operation, _ in actions]
 
     assert operations == [
+        "system_status",
+        "get_master_volume",
+        "list_windows",
+        "open_app",
         "create_text_file",
         "create_docx",
         "create_xlsx",
@@ -62,12 +73,28 @@ def test_integrated_owner_plan_is_representative_and_non_destructive() -> None:
     assert "git_push_current" not in operations
 
 
+def test_integrated_h1_mutation_is_only_approved_calculator_launch() -> None:
+    actions = acceptance._representative_actions(
+        write_root="downloads",
+        run_id="abc12345",
+    )
+    app = next(
+        parameters for _, operation, parameters in actions if operation == "open_app"
+    )
+
+    assert app == {"app": "calculator"}
+
+
 def test_integrated_browser_scenario_uses_semantic_read_only_page_interaction() -> None:
     actions = acceptance._representative_actions(
         write_root="downloads",
         run_id="abc12345",
     )
-    browser = next(parameters for _, operation, parameters in actions if operation == "execute_browser_plan")
+    browser = next(
+        parameters
+        for _, operation, parameters in actions
+        if operation == "execute_browser_plan"
+    )
 
     assert browser == {
         "plan": [
