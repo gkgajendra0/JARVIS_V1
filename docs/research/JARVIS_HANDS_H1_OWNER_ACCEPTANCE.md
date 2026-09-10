@@ -31,6 +31,13 @@ Status: acceptance runbook for draft PR #30. This document does not mark H1 DONE
    - no authority from unrelated/ambient meeting speech
    - success must match verified tool state
 
+## Owner-machine findings
+
+- Structured Notepad acceptance passed on the owner machine with verified readback.
+- The first native H1 run proved `open_app` and then exposed a pywin32 portability defect during Calculator maximize: the installed `win32gui` module does not export `IsZoomed`.
+- Research confirmed `win32gui.GetWindowPlacement()` is the supported pywin32 surface for retrieving `showCmd`; the native window adapter now derives minimized/maximized state from `SW_SHOWMINIMIZED` / `SW_SHOWMAXIMIZED` instead of relying on `IsZoomed`.
+- A regression now exercises the same condition with a fake pywin32 GUI module that deliberately has no `IsZoomed` attribute.
+
 ## Approval rule
 
 Every non-routine action remains an immutable `ActionProposal` routed through the canonical `AuthorityService`. The current H1 owner machine still uses exact-action Windows Hello/T3 for reversible local changes while T2 admission remains intentionally disabled. One permit cannot authorize a different action or different material parameters.
