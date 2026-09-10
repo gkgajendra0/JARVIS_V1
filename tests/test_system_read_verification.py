@@ -4,7 +4,9 @@ from jarvis.capabilities.models import CapabilityRequest, CapabilityStatus
 from jarvis.capabilities.system_reads import SystemReadExecutor
 
 
-def _request(executor: SystemReadExecutor, operation: str, parameters: dict) -> CapabilityRequest:
+def _request(
+    executor: SystemReadExecutor, operation: str, parameters: dict
+) -> CapabilityRequest:
     return CapabilityRequest(
         session_id="system-read-verification",
         capability_key=executor.capability_key,
