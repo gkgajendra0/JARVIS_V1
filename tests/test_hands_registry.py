@@ -1,6 +1,29 @@
 from __future__ import annotations
 
+from jarvis.capabilities.browser_playwright import BrowserPlanExecutor
+from jarvis.capabilities.development_git import DevelopmentGitExecutor
+from jarvis.capabilities.document_edits import DocumentEditExecutor
+from jarvis.capabilities.local_reads import LocalProjectReadExecutor
+from jarvis.capabilities.local_writes import LocalFileWriteExecutor
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
+from jarvis.capabilities.software_management import SoftwareManagementExecutor
+from jarvis.capabilities.system_reads import SystemReadExecutor
+from jarvis.capabilities.windows_control import (
+    VisualDesktopControlExecutor,
+    WindowsStructuredControlExecutor,
+)
+from jarvis.capabilities.windows_devices import (
+    BluetoothControlExecutor,
+    DisplayControlExecutor,
+    PowerSessionExecutor,
+)
+from jarvis.capabilities.windows_native import (
+    AppLifecycleExecutor,
+    ClipboardExecutor,
+    MediaPlaybackExecutor,
+    SystemAudioExecutor,
+    WindowManagementExecutor,
+)
 from jarvis.hands.models import (
     ExecutionSubstrate,
     HandsDomain,
@@ -49,6 +72,48 @@ def test_registry_prefers_structured_before_visual_for_app_ui() -> None:
         ExecutionSubstrate.VISUAL_FALLBACK,
         ExecutionSubstrate.HUMAN,
     )
+
+
+def test_registry_covers_every_builtin_executor_operation() -> None:
+    registry = HandsCapabilityRegistry.default()
+    executor_types = (
+        LocalProjectReadExecutor,
+        SystemReadExecutor,
+        SystemAudioExecutor,
+        MediaPlaybackExecutor,
+        ClipboardExecutor,
+        WindowManagementExecutor,
+        AppLifecycleExecutor,
+        WindowsStructuredControlExecutor,
+        VisualDesktopControlExecutor,
+        LocalFileWriteExecutor,
+        DocumentEditExecutor,
+        BrowserPlanExecutor,
+        DisplayControlExecutor,
+        BluetoothControlExecutor,
+        PowerSessionExecutor,
+        SoftwareManagementExecutor,
+        DevelopmentGitExecutor,
+    )
+    executor_operations = {
+        operation
+        for executor_type in executor_types
+        for operation in executor_type.operations
+    }
+    registry_operations = {item.operation for item in registry.operations}
+
+    assert executor_operations <= registry_operations
+
+
+def test_new_hands_domains_are_registered() -> None:
+    registry = HandsCapabilityRegistry.default()
+
+    assert registry.require("execute_browser_plan").domain is HandsDomain.BROWSER
+    assert registry.require("set_display_brightness").domain is HandsDomain.DEVICES
+    assert registry.require("install_package").domain is HandsDomain.SOFTWARE
+    assert registry.require("git_status").domain is HandsDomain.DEVELOPMENT
+    assert registry.require("create_docx").domain is HandsDomain.DOCUMENTS
+    assert registry.require("create_text_file").domain is HandsDomain.FILES_WRITE
 
 
 def test_workflow_executes_short_sequence_through_runtime() -> None:
