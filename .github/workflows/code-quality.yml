@@ -41,6 +41,21 @@ jobs:
           python -m pip install -e
           ".[dev,phase45d-acceptance,hands-files,hands-documents,browser-hands,development-hands]"
 
+      - name: Provision Playwright Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Smoke Playwright Chromium
+        run: |
+          python - <<'PY'
+          from playwright.sync_api import sync_playwright
+
+          with sync_playwright() as playwright:
+              executable = playwright.chromium.executable_path
+              browser = playwright.chromium.launch(headless=True)
+              browser.close()
+              print(f"Playwright Chromium launch ready: {executable}")
+          PY
+
       - name: Run unit tests
         run: python -m pytest -q
 
