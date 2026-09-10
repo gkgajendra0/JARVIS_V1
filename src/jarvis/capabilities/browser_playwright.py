@@ -223,7 +223,7 @@ class BrowserPlanExecutor:
         self._backend = backend or PlaywrightBrowserBackend()
         self._write_roots = write_roots
         self.descriptor = CapabilityDescriptor.create(
-            capability_id="navigation.execution",
+            capability_id="playwright",
             source_id="browser",
             kind=CapabilityKind.STRUCTURED_AUTOMATION,
             name="Playwright structured browser Hands",
