@@ -140,7 +140,35 @@ async def test_ungrounded_fast_hint_falls_back_before_execution() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unverified_fast_execution_returns_failure_without_fallback_replay() -> None:
+async def test_wrong_transliterated_number_cannot_enter_fast_path() -> None:
+    orchestrator = _orchestrator()
+    runtime = RecordingRuntime(
+        CapabilityResult(
+            status=CapabilityStatus.SUCCEEDED,
+            capability_key="system:audio",
+            operation="set_master_volume",
+            data={"verification_passed": True},
+        )
+    )
+    orchestrator._runtime = runtime  # type: ignore[assignment]
+
+    result = await execute_fast_hint(
+        orchestrator,
+        session_id="session-1",
+        goal="जार्विस सिस्टम का वॉल्यूम थर्टी परसेंट पर सेट करो।",
+        recent_user_turns=(),
+        operation_hint="set_master_volume",
+        parameters={"percent": 80},
+    )
+
+    assert result is None
+    assert runtime.calls == []
+
+
+@pytest.mark.asyncio
+async def test_unverified_fast_execution_returns_failure_without_fallback_replay() -> (
+    None
+):
     orchestrator = _orchestrator()
     runtime = RecordingRuntime(
         CapabilityResult(
