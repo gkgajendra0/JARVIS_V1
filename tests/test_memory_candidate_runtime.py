@@ -53,6 +53,17 @@ def _conversation() -> ConversationSession:
     return conversation
 
 
+def _runtime(
+    conversation: ConversationSession,
+    extractor: FakeExtractor,
+) -> MemoryCandidateSessionRuntime:
+    return MemoryCandidateSessionRuntime(
+        conversation=conversation,
+        extractor=extractor,
+        defer_seconds=0.0,
+    )
+
+
 @pytest.mark.asyncio
 async def test_runtime_processes_user_turn_in_background_and_quarantines_only(
     caplog: pytest.LogCaptureFixture,
@@ -60,10 +71,7 @@ async def test_runtime_processes_user_turn_in_background_and_quarantines_only(
     conversation = _conversation()
     turn = conversation.accept_turn(ConversationRole.USER, "My home city is Indore.")
     extractor = FakeExtractor()
-    runtime = MemoryCandidateSessionRuntime(
-        conversation=conversation,
-        extractor=extractor,
-    )
+    runtime = _runtime(conversation, extractor)
 
     runtime.observe_turn(turn)
     assert runtime.pending_task_count == 1
@@ -91,10 +99,7 @@ async def test_runtime_ignores_assistant_turns() -> None:
     conversation = _conversation()
     turn = conversation.accept_turn(ConversationRole.ASSISTANT, "Hello.")
     extractor = FakeExtractor()
-    runtime = MemoryCandidateSessionRuntime(
-        conversation=conversation,
-        extractor=extractor,
-    )
+    runtime = _runtime(conversation, extractor)
 
     runtime.observe_turn(turn)
     await asyncio.sleep(0)
@@ -111,10 +116,7 @@ async def test_close_cancels_inflight_extraction_and_physically_drops_quarantine
     conversation = _conversation()
     turn = conversation.accept_turn(ConversationRole.USER, "My home city is Indore.")
     extractor = FakeExtractor(blocked=True)
-    runtime = MemoryCandidateSessionRuntime(
-        conversation=conversation,
-        extractor=extractor,
-    )
+    runtime = _runtime(conversation, extractor)
 
     runtime.observe_turn(turn)
     await extractor.started.wait()
@@ -135,10 +137,7 @@ async def test_closed_runtime_never_schedules_new_extraction() -> None:
     conversation = _conversation()
     turn = conversation.accept_turn(ConversationRole.USER, "My home city is Indore.")
     extractor = FakeExtractor()
-    runtime = MemoryCandidateSessionRuntime(
-        conversation=conversation,
-        extractor=extractor,
-    )
+    runtime = _runtime(conversation, extractor)
     runtime.close()
 
     runtime.observe_turn(turn)
@@ -147,3 +146,14 @@ async def test_closed_runtime_never_schedules_new_extraction() -> None:
     assert extractor.calls == []
     assert runtime.pending_task_count == 0
     assert runtime.quarantine.snapshot() == ()
+
+
+def test_runtime_defaults_to_deferred_background_extraction() -> None:
+    conversation = _conversation()
+    extractor = FakeExtractor()
+    runtime = MemoryCandidateSessionRuntime(
+        conversation=conversation,
+        extractor=extractor,
+    )
+
+    assert runtime.defer_seconds == 5.0
