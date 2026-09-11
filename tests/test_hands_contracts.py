@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from jarvis.hands.contracts import (
     build_action_response_model,
     materialize_planner_response,
+    parameter_model_for,
     validate_contract_coverage,
 )
 from jarvis.hands.registry import HandsCapabilityRegistry
@@ -97,6 +98,23 @@ def test_typed_volume_schema_rejects_out_of_range_or_extra_arguments() -> None:
                     }
                 ]
             }
+        )
+
+
+def test_fast_percent_aliases_canonicalize_without_weakening_contracts() -> None:
+    volume = parameter_model_for("set_master_volume").model_validate(
+        {"volume_percent": 30}
+    )
+    assert volume.model_dump() == {"percent": 30.0}
+
+    brightness = parameter_model_for("set_display_brightness").model_validate(
+        {"brightness_percent": 45}
+    )
+    assert brightness.model_dump(exclude_none=True) == {"percent": 45}
+
+    with pytest.raises(ValidationError):
+        parameter_model_for("set_master_volume").model_validate(
+            {"volume_percent": 30, "shell": "cmd.exe"}
         )
 
 
