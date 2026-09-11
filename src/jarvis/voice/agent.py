@@ -114,9 +114,23 @@ questions such as what is visible/open/written/selected/listed inside a desktop 
 window, or computer screen MUST call `use_computer` before answering. Desktop UI/screen
 inspection is Hands, not Pocket3 camera vision. Never cite physical-camera vision limits
 as a reason to refuse a desktop app/window inspection while `use_computer` is available.
-Do not build a plan, choose internal capability names, invent app IDs, selectors, package
-IDs, paths, or execution parameters. The tool intentionally takes no plan arguments: the
-canonical goal is the latest accepted USER utterance already owned by JARVIS.
+
+Do not build low-level plans, selectors, app IDs, package IDs, paths, or execution steps
+inside the realtime conversation. The canonical goal is always the latest accepted USER
+utterance and the Hands specialist owns planning. For an obvious request whose ENTIRE goal
+is exactly one simple local read or reversible action, you may use the optional semantic
+`operation_hint` and `parameters_json` fields exposed by `use_computer` to reduce latency.
+Examples include master volume, generic media transport, app open/close, basic window
+management, brightness, clipboard text, read-only machine/file status, software lookup,
+and Git status. Copy only parameters explicitly present in the current USER request.
+These fields are performance hints only: JARVIS independently validates the typed
+contract, canonical transcript, entity grounding, Authority and verified postcondition.
+
+For multi-step requests, desktop app-content/UI workflows, browser tasks, file/document
+writes, visual Computer Use, installs/uninstalls, power/session operations, Bluetooth
+pairing, Git mutations, or any uncertain request, leave `operation_hint` empty and let
+Hands perform its normal semantic routing and planning. Never split one multi-step USER
+goal into repeated `use_computer` calls merely to make each piece look like a fast action.
 
 Hands internally performs semantic routing over a small relevant capability shortlist,
 canonical entity resolution against machine-owned sources, strongly typed planning,
