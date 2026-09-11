@@ -1,11 +1,11 @@
 """Generic multilingual grounding for JARVIS Hands.
 
-This module is deliberately independent of applications and languages.  It answers one
+This module is deliberately independent of applications and languages. It answers one
 question: does a provider-suggested material value have enough deterministic evidence in
 the accepted USER conversation to be used by a governed capability?
 
-Grounding never invents machine identity.  Installed-app catalogues, observed UI state,
-paths, URLs and other machine-owned sources remain authoritative.  This layer only proves
+Grounding never invents machine identity. Installed-app catalogues, observed UI state,
+paths, URLs and other machine-owned sources remain authoritative. This layer only proves
 that two human-facing strings are plausibly the same spoken material across scripts.
 """
 
@@ -86,16 +86,19 @@ class GroundingService:
         if spoken and spoken in normalized_source:
             return 1.0, "spoken_punctuation"
 
-        # Identifiers/paths/package IDs remain strict.  Cross-script fuzzy evidence is
+        # Identifiers/paths/package IDs remain strict. Cross-script fuzzy evidence is
         # reserved for human-facing entities, search terms and literal spoken payloads.
         if mode is GroundingMode.IDENTIFIER:
             return 0.0, "identifier_mismatch"
 
         roman_candidate = romanize(candidate)
         roman_source = romanize(source)
-        if roman_candidate and roman_source:
-            if roman_candidate == roman_source or roman_candidate in roman_source:
-                return 0.99, "romanized_literal"
+        if (
+            roman_candidate
+            and roman_source
+            and (roman_candidate == roman_source or roman_candidate in roman_source)
+        ):
+            return 0.99, "romanized_literal"
 
         phonetic = phonetic_phrase_score(candidate, source)
         if phonetic > 0:
