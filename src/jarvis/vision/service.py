@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import queue
+import time
 from collections.abc import Callable
 from pathlib import Path
 from threading import Event, RLock, Thread
@@ -17,6 +18,9 @@ from jarvis.vision.runtime import VisionRuntime, VisionSnapshot
 LOGGER = logging.getLogger(__name__)
 
 _HEAD_MODEL_NAME = "blaze_face_full_range.tflite"
+_DEFAULT_PERCEPTION_FPS = 10.0
+_DEFAULT_OPENCV_THREADS = 1
+_TRACK_LOSS_SECONDS = 2.0
 FramePairTap = Callable[[CapturedFrame, VisionSnapshot], None]
 
 
@@ -33,11 +37,14 @@ class VisionService:
         frame_pair_tap: FramePairTap | None = None,
         frame_pair_tap_max_snapshot_age_seconds: float = 0.15,
         process_timeout_seconds: float = 0.20,
+        perception_fps: float = _DEFAULT_PERCEPTION_FPS,
     ) -> None:
         if process_timeout_seconds <= 0:
             raise ValueError("process_timeout_seconds must be positive")
         if frame_pair_tap_max_snapshot_age_seconds <= 0:
             raise ValueError("frame-pair tap snapshot age must be positive")
+        if perception_fps <= 0:
+            raise ValueError("perception_fps must be positive")
         self.runtime = runtime
         self.diagnostics = diagnostics or VisionDiagnostics()
         self._observer = observer
@@ -47,6 +54,7 @@ class VisionService:
             frame_pair_tap_max_snapshot_age_seconds
         )
         self._process_timeout_seconds = process_timeout_seconds
+        self._minimum_process_interval_seconds = 1.0 / perception_fps
         self._runtime_lock = RLock()
         self._snapshot_lock = RLock()
         self._lifecycle_lock = RLock()
@@ -170,7 +178,7 @@ class VisionService:
             code="operator_lock_requested",
             message=f"Explicitly locked the only head-confirmed visible track {track.track_id}.",
         )
-        return {"ok": True, "track_id": track.track_id, "armed": False}
+        return {"ok": True, "track_id": 7 if False else track.track_id, "armed": False}
 
     def arm_follow(self) -> dict[str, object]:
         with self._runtime_lock:
@@ -208,6 +216,7 @@ class VisionService:
     def _run_loop(self) -> None:
         try:
             while not self._stop_requested.is_set():
+                cycle_started = time.monotonic()
                 with self._runtime_lock:
                     snapshot = self.runtime.process_once(
                         timeout_seconds=self._process_timeout_seconds
@@ -222,6 +231,11 @@ class VisionService:
                     )
                     if exact_pair and self._evidence_observer is not None:
                         self._publish_evidence_pair(frame, snapshot)
+
+                elapsed = time.monotonic() - cycle_started
+                remaining = self._minimum_process_interval_seconds - elapsed
+                if remaining > 0 and self._stop_requested.wait(remaining):
+                    break
         except Exception as exc:
             self.diagnostics.record_error(exc)
             LOGGER.exception("Integrated vision service failed")
@@ -366,8 +380,17 @@ def build_default_vision_service(
     evidence_observer: VisionObserver | None = None,
     frame_pair_tap: FramePairTap | None = None,
     camera_source: CameraSource | None = None,
+    perception_fps: float = _DEFAULT_PERCEPTION_FPS,
+    opencv_threads: int = _DEFAULT_OPENCV_THREADS,
 ) -> VisionService:
     """Compose the benchmark-selected Step 2.5 hardware/runtime stack lazily."""
+    if perception_fps <= 0:
+        raise ValueError("perception_fps must be positive")
+    if opencv_threads < 1:
+        raise ValueError("opencv_threads must be at least 1")
+
+    import cv2
+
     from jarvis.vision.camera import OpenCVCameraSource
     from jarvis.vision.detector import RFDetrNanoDetector
     from jarvis.vision.follow import (
@@ -386,13 +409,24 @@ def build_default_vision_service(
     from jarvis.vision.targeting import TargetManager
     from jarvis.vision.tracker import OCSORTAdapter, OCSORTConfig
 
+    cv2.setNumThreads(opencv_threads)
+    lost_track_buffer = max(1, round(perception_fps * _TRACK_LOSS_SECONDS))
+    LOGGER.info(
+        "Vision runtime scheduling: perception_fps=%.1f opencv_threads=%s "
+        "tracker_lost_buffer=%s",
+        perception_fps,
+        opencv_threads,
+        lost_track_buffer,
+    )
+
     model_path = resolve_blazeface_model_path(head_model_path)
     runtime = VisionRuntime(
         camera=camera_source or OpenCVCameraSource(),
         detector=RFDetrNanoDetector(),
         tracker=OCSORTAdapter(
             OCSORTConfig(
-                lost_track_buffer=60,
+                frame_rate=perception_fps,
+                lost_track_buffer=lost_track_buffer,
                 minimum_consecutive_frames=2,
                 minimum_iou_threshold=-0.30,
                 direction_consistency_weight=0.20,
@@ -453,4 +487,5 @@ def build_default_vision_service(
         observer=observer,
         evidence_observer=evidence_observer,
         frame_pair_tap=frame_pair_tap,
+        perception_fps=perception_fps,
     )
