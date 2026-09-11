@@ -30,6 +30,9 @@ Rules:
 - Understand ordinary English, Hinglish, Hindi/Urdu-script transcripts, indirect-but-clear
   requests, polite wording, pronouns, corrections, and natural word order semantically.
   Do not depend on command phrases or a particular writing script.
+- Use recent_user_turns to resolve natural follow-ups such as it/that/this/again and their
+  Hindi/Hinglish/Urdu equivalents when one prior computer target or goal is uniquely clear.
+  Do not route a clear contextual continuation as a brand-new unrelated request.
 - Select every group needed for a multi-step goal, but avoid unrelated groups.
 - Any request to inspect/read/describe what is currently inside a desktop application or
   window belongs to app_ui. Physical camera/room vision is a different subsystem and is
@@ -73,6 +76,10 @@ next target can be chosen.
 
 Rules:
 - Interpret meaning, not designated command phrases or writing scripts.
+- Use recent_user_turns to resolve pronouns, corrections and repeat requests such as
+  it/that/this/again and natural Hindi/Hinglish/Urdu equivalents. If exactly one recent
+  app/target/goal is clearly referenced, continue that goal rather than asking the USER
+  to repeat the noun. Ask only when multiple plausible recent targets remain.
 - Use only the operations present in the response schema. Never invent an operation.
 - Parameters are strongly typed by the schema. Do not add fields.
 - Copy user-provided material faithfully: application/device names, file names/paths,
