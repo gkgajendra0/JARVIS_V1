@@ -11,9 +11,15 @@ import re
 from dataclasses import dataclass
 
 from jarvis.hands.app_catalog import AppCatalog, AppCatalogError, InstalledApp
+from jarvis.hands.multilingual import (
+    has_contextual_reference,
+    phonetic_alias_related,
+    phonetic_phrase_score,
+)
 
 _GENERIC_APP_WORDS = frozenset({"app", "application", "game", "program", "software"})
-_REFERENCE_WORDS = frozenset({"it", "that", "this", "one"})
+_REFERENCE_WORDS = frozenset({"it", "that", "this", "one", "again", "same"})
+_PHONETIC_GROUNDING_THRESHOLD = 0.90
 
 
 class EntityResolutionError(ValueError):
@@ -59,7 +65,9 @@ def _literal_grounded(value: str, text: str) -> bool:
         return True
     compact_needle = _compact(value)
     compact_haystack = _compact(text)
-    return len(compact_needle) >= 3 and compact_needle in compact_haystack
+    if len(compact_needle) >= 3 and compact_needle in compact_haystack:
+        return True
+    return phonetic_phrase_score(value, text) >= _PHONETIC_GROUNDING_THRESHOLD
 
 
 def _alias_related(query: str, display_name: str) -> bool:
@@ -69,10 +77,11 @@ def _alias_related(query: str, display_name: str) -> bool:
         return True
     left_tokens = _tokens(query)
     right_tokens = _tokens(display_name)
-    if not left_tokens or not right_tokens:
-        return False
-    overlap = len(left_tokens & right_tokens)
-    return overlap > 0 and overlap / min(len(left_tokens), len(right_tokens)) >= 0.5
+    if left_tokens and right_tokens:
+        overlap = len(left_tokens & right_tokens)
+        if overlap > 0 and overlap / min(len(left_tokens), len(right_tokens)) >= 0.5:
+            return True
+    return phonetic_alias_related(query, display_name)
 
 
 def _mention_score(app: InstalledApp, text: str) -> int:
@@ -88,6 +97,11 @@ def _mention_score(app: InstalledApp, text: str) -> int:
     text_tokens = set(normalized_text.split())
     if len(name_tokens) >= 2 and name_tokens.issubset(text_tokens):
         return 850 + len(name_tokens)
+    phonetic = phonetic_phrase_score(app.display_name, text)
+    if phonetic >= _PHONETIC_GROUNDING_THRESHOLD:
+        # Cross-script evidence is strong enough to ground an already Windows-owned
+        # identity, but exact literal mentions still outrank it.
+        return 800 + int(phonetic * 40)
     return -1
 
 
@@ -185,7 +199,9 @@ class AppEntityResolver:
             )
 
         evidence_tokens = set(_normalized(evidence).split())
-        can_use_recent_reference = bool(evidence_tokens & _REFERENCE_WORDS)
+        can_use_recent_reference = bool(evidence_tokens & _REFERENCE_WORDS) or any(
+            has_contextual_reference(value) for value in (latest_user_text, evidence)
+        )
         if can_use_recent_reference and recent_user_texts:
             recent_ranked = self._mentioned_apps(tuple(reversed(recent_user_texts)))
             recent = self._unique_best(recent_ranked)
