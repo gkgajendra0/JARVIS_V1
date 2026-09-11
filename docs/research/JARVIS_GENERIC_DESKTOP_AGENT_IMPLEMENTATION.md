@@ -79,7 +79,8 @@ observe result
     |
     +--> insufficient UIA evidence --> window-scoped visual Computer Use
     |                                  |
-    |                                  v
+    |                           strong owner verification
+    |                                  |
     |                         target-window screenshot
     |                                  |
     |                           bounded input action
@@ -161,15 +162,22 @@ new HWND/rectangle before another input action is accepted.
 
 JARVIS does not ask the model to classify the risk of an unknown visual GUI action.
 
-Generic visual fallback is conservatively classified as **persistent/external** through
-JARVIS-owned `ActionAttributes`, even when a particular visual task might only be a private
-read or reversible local change. This gives the canonical Authority service a deterministic
-hard floor before any provider-backed Computer Use begins.
+`ActionAttributes` now carries a JARVIS-owned `generic_visual_control` attribute. The
+deterministic `RiskClassifier` maps that attribute to **CRITICAL**, regardless of the words
+or language used in the request. This removes the possibility that a transliterated,
+multilingual or unfamiliar GUI request could accidentally receive a lower Authority floor.
 
-That fallback can therefore support ordinary explicitly requested app-local workflows such
-as save, export, send, share, print, upload and download when UIA cannot complete them.
+Strong verification happens once for the bounded generic visual goal, not once for every
+mouse click. After the canonical Authority service issues the one-time permit, the provider
+may perform the bounded app-local Computer Use loop inside the target-window containment
+layer.
 
-The generic visual substrate still rejects critical/destructive domains such as:
+The generic visual substrate can therefore support ordinary explicitly requested workflows
+such as save, export, send, share, print, upload and download when UIA cannot complete them,
+without relying on the model to declare those actions safe.
+
+The generic visual substrate still rejects domains that must use dedicated semantics even
+after strong owner verification:
 
 - arbitrary PowerShell/Terminal/Command Prompt or Registry operation;
 - software installation/uninstallation;
@@ -179,6 +187,9 @@ The generic visual substrate still rejects critical/destructive domains such as:
 - direct browser control, which remains owned by the dedicated Playwright capability;
 - File Explorer and Windows Settings targets, whose broad system reach requires dedicated
   governed semantics rather than generic visual authority.
+
+English critical-intent checks remain as an additional early guard, but they are no longer
+the Authority boundary: the `generic_visual_control` hard floor is language-independent.
 
 ## Verification semantics
 
@@ -230,9 +241,9 @@ this fallback, so a separate computer-use dependency install is not required.
 
 ## Realtime token and latency controls
 
-The voice boundary now returns a compact Hands result to the realtime model rather than the
-full multi-step execution trace. Final useful result/observation evidence is retained while
-older internal trace material stays inside JARVIS.
+The voice boundary returns a compact Hands result to the realtime model rather than the full
+multi-step execution trace. Final useful result/observation evidence is retained while older
+internal trace material stays inside JARVIS.
 
 The OpenAI Realtime adapter also uses the provider's retention-ratio truncation mechanism to
 bound long-session context growth. Provider rate-limit classification recognizes token-rate
@@ -262,9 +273,9 @@ The branch covers these generic invariants in CI:
 - desktop/screen inspection routes to Hands rather than physical Pocket3 camera vision;
 - window-scoped Computer Use captures only the target app rectangle;
 - out-of-window coordinates, stale/moved windows and global app-switch shortcuts fail closed;
-- generic visual fallback is authority-classified persistent/external;
-- ordinary save/export/send-style visual goals are allowed while critical/destructive visual
-  intents remain blocked;
+- generic visual fallback has a language-independent CRITICAL Authority hard floor;
+- ordinary save/export/send-style visual goals are accepted only after that strong boundary,
+  while explicitly critical/destructive visual intents remain blocked;
 - the visual opt-in round-trips through persisted machine configuration;
 - existing provider, authority, Hands, browser, Windows dependency, DPAPI and Windows Hello
   regression suites remain part of the full repository CI.
