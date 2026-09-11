@@ -21,7 +21,9 @@ from jarvis.voice.hands_orchestrator import VoiceHandsOrchestrator
 class GenericGroundedVoiceHandsOrchestrator(VoiceHandsOrchestrator):
     """Voice Hands with one reusable multilingual material-proof layer."""
 
-    def __init__(self, *args, grounding: GroundingService | None = None, **kwargs) -> None:
+    def __init__(
+        self, *args, grounding: GroundingService | None = None, **kwargs
+    ) -> None:
         super().__init__(*args, **kwargs)
         self._grounding = grounding or DEFAULT_GROUNDING
 
@@ -57,7 +59,10 @@ class GenericGroundedVoiceHandsOrchestrator(VoiceHandsOrchestrator):
             plan = params.get("plan")
             if isinstance(plan, list):
                 for step in plan:
-                    if isinstance(step, dict) and str(step.get("action") or "").casefold() == "fill":
+                    if (
+                        isinstance(step, dict)
+                        and str(step.get("action") or "").casefold() == "fill"
+                    ):
                         if step.get("text"):
                             yield step["text"], GroundingMode.LITERAL
             return
@@ -140,4 +145,6 @@ class GenericGroundedVoiceHandsOrchestrator(VoiceHandsOrchestrator):
         action: PlannedAction,
         context: GroundingContext,
     ):
-        return super()._normalize_action(action, self._grounding_context(action, context))
+        return super()._normalize_action(
+            action, self._grounding_context(action, context)
+        )
