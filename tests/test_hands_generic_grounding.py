@@ -1,10 +1,36 @@
 from __future__ import annotations
 
-from jarvis.hands.contracts import PlannedAction
+import pytest
+from pydantic import ValidationError
+
+from jarvis.hands.app_catalog import AppCatalogError, InstalledApp
+from jarvis.hands.contracts import PlannedAction, parameter_model_for
+from jarvis.hands.entities import AppEntityResolver
 from jarvis.hands.grounding import DEFAULT_GROUNDING, GroundingMode
 from jarvis.hands.orchestrator import GroundingContext
 from jarvis.voice.generic_grounded_hands import GenericGroundedVoiceHandsOrchestrator
 from jarvis.voice.hands_fast_path import canonicalize_fast_parameters
+
+
+class _AppCatalog:
+    def __init__(self) -> None:
+        self._entries = (
+            InstalledApp("WhatsApp", "app.whatsapp"),
+            InstalledApp("Calculator", "app.calculator"),
+        )
+
+    def entries(self):
+        return self._entries
+
+    def resolve(self, query: str):
+        normalized = " ".join(query.casefold().split())
+        for app in self._entries:
+            if normalized == app.display_name.casefold():
+                return app
+        raise AppCatalogError(f"not found: {query}")
+
+    def launch(self, app):
+        raise AssertionError("grounding unit tests never launch applications")
 
 
 def _adapter() -> GenericGroundedVoiceHandsOrchestrator:
@@ -56,6 +82,19 @@ def test_identifier_grounding_never_uses_cross_script_fuzzy_equivalence() -> Non
     assert proof.matched is False
 
 
+def test_windows_owned_whatsapp_identity_resolves_from_devanagari_transcript() -> None:
+    resolver = AppEntityResolver(_AppCatalog())
+
+    resolved = resolver.resolve(
+        "WhatsApp",
+        latest_user_text="जार्विस व्हाट्सऐप खोलो और शुभांग टीपी को मैसेज भेजो",
+        evidence="व्हाट्सऐप खोलो",
+    )
+
+    assert resolved.app_id == "app.whatsapp"
+    assert resolved.display_name == "WhatsApp"
+
+
 def test_voice_grounding_context_augments_only_proven_ui_material() -> None:
     orchestrator = _adapter()
     action = PlannedAction(
@@ -101,7 +140,7 @@ def test_voice_grounding_context_does_not_append_unrelated_model_material() -> N
     assert "Calculator" not in augmented.latest_user_text
 
 
-def test_fast_scalar_synonyms_are_canonicalized_without_accepting_unknown_fields() -> None:
+def test_fast_scalar_synonyms_are_canonicalized_without_weakening_contract() -> None:
     assert canonicalize_fast_parameters("set_master_volume", {"level": 35}) == {
         "percent": 35
     }
@@ -113,4 +152,13 @@ def test_fast_scalar_synonyms_are_canonicalized_without_accepting_unknown_fields
         "set_master_volume",
         {"level": 35, "shell": "cmd.exe"},
     )
-    assert unknown == {"percent": 35, "shell": "cmd.exe"}
+    with pytest.raises(ValidationError):
+        parameter_model_for("set_master_volume").model_validate(unknown)
+
+
+def test_conflicting_fast_scalar_synonyms_fail_closed() -> None:
+    with pytest.raises(ValueError, match="conflicting fast-path parameters"):
+        canonicalize_fast_parameters(
+            "set_master_volume",
+            {"percent": 20, "level": 35},
+        )
