@@ -21,7 +21,9 @@ class FakeRegionalExecutor:
         self.captures: list[dict[str, int]] = []
         self.actions: list[ComputerAction] = []
 
-    def capture_region(self, *, left: int, top: int, width: int, height: int) -> ScreenFrame:
+    def capture_region(
+        self, *, left: int, top: int, width: int, height: int
+    ) -> ScreenFrame:
         self.captures.append(
             {"left": left, "top": top, "width": width, "height": height}
         )
@@ -97,9 +99,7 @@ def test_window_scoped_capture_exposes_only_target_window_rectangle() -> None:
     frame = executor.capture_screen()
 
     assert windows.focus_calls == 1
-    assert local.captures == [
-        {"left": 100, "top": 200, "width": 800, "height": 600}
-    ]
+    assert local.captures == [{"left": 100, "top": 200, "width": 800, "height": 600}]
     assert (frame.left, frame.top, frame.width, frame.height) == (100, 200, 800, 600)
 
 
