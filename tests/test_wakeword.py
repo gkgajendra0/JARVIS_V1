@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import numpy as np
 import pytest
 from livekit import rtc
 
-from jarvis.voice.wakeword import LiveKitWakeDetector, load_livekit_predictor
+from jarvis.voice.wakeword import (
+    LiveKitWakeDetector,
+    OpenWakeWordStreamingPredictor,
+    load_livekit_predictor,
+)
 
 
 class FakePredictor:
@@ -37,6 +42,41 @@ def frame(samples: int = 1_280) -> rtc.AudioFrame:
         num_channels=1,
         samples_per_channel=samples,
     )
+
+
+def test_streaming_predictor_reuses_livekit_bundled_feature_models(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import openwakeword.model as openwakeword_model
+
+    captured: dict[str, object] = {}
+
+    class FakeModel:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        def predict(self, _samples: np.ndarray) -> dict[str, float]:
+            return {"jarvis": 0.0}
+
+        def reset(self) -> None:
+            return None
+
+    monkeypatch.setattr(openwakeword_model, "Model", FakeModel)
+    classifier_path = tmp_path / "jarvis.onnx"
+    classifier_path.write_bytes(b"stub")
+
+    OpenWakeWordStreamingPredictor(classifier_path)
+
+    mel_path = Path(str(captured["melspec_model_path"]))
+    embedding_path = Path(str(captured["embedding_model_path"]))
+    assert mel_path.is_file()
+    assert embedding_path.is_file()
+    assert mel_path.name == "melspectrogram.onnx"
+    assert embedding_path.name == "embedding_model.onnx"
+    assert captured["wakeword_models"] == [str(classifier_path)]
+    assert captured["inference_framework"] == "onnx"
+    assert captured["ncpu"] == 1
 
 
 @pytest.mark.asyncio
@@ -97,6 +137,6 @@ async def test_detector_ignores_audio_while_disabled() -> None:
     await detector.aclose()
 
 
-def test_missing_wake_model_fails_truthfully(tmp_path) -> None:
+def test_missing_wake_model_fails_truthfully(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="Wake-word model not found"):
         load_livekit_predictor(tmp_path / "missing.onnx")
