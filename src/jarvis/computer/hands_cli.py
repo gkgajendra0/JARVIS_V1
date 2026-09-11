@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 
-from jarvis.config import JarvisConfig
 from jarvis.computer.hands_integrated_acceptance import (
     run_integrated_acceptance,
     run_integrated_readiness,
@@ -14,6 +13,7 @@ from jarvis.computer.hands_smoke import (
     run_native_core_acceptance,
     run_notepad_acceptance,
 )
+from jarvis.config import JarvisConfig
 from jarvis.machine_config import load_machine_settings, save_machine_settings
 
 _VISUAL_SETTING = "JARVIS_VISUAL_COMPUTER_USE_ENABLED"
