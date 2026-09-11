@@ -184,6 +184,8 @@ jobs:
           python -m pytest -q
           tests/test_hands_entities.py
           tests/test_hands_contracts.py
+          tests/test_hands_generic_grounding.py
+          tests/test_windows_hello_utf8.py
 
       - name: Run Windows DPAPI smoke test
         run: python -m pytest -q tests/test_windows_dpapi.py
