@@ -30,10 +30,6 @@ LOGGER = logging.getLogger(__name__)
 _VOICE_MAX_ACTIONS = 8
 _UIA_UNVERIFIED_BEFORE_VISUAL = 2
 
-# These operations are local reads or reversible local interactions. Relaxing only the
-# free-form planner evidence quote avoids brittle failures when a multilingual model
-# copies/transliterates that quote differently. Target/material fields are still checked
-# by the core orchestrator and canonical entity resolver.
 _SEMANTIC_EVIDENCE_OPERATIONS = frozenset(
     {
         "system_status",
@@ -71,17 +67,11 @@ _SEMANTIC_EVIDENCE_OPERATIONS = frozenset(
     }
 )
 
-# For these bounded reversible controls, the planner schema itself constrains the value.
-# If the speech transcript spelled the spoken number in another script, append the typed
-# value only to the *grounding view* of the current utterance. This does not alter the
-# canonical transcript and does not apply to persistent/high-consequence operations.
 _SEMANTIC_NUMERIC_FIELDS = {
     "set_master_volume": "percent",
     "set_display_brightness": "percent",
 }
 
-# A verified action in one of these single selected route groups completely determines
-# success without another LLM call. Multi-group goals never take this shortcut.
 _TERMINAL_OPERATIONS_BY_GROUP: dict[str, frozenset[str]] = {
     "system_status": frozenset({"system_status", "list_processes"}),
     "audio": frozenset(
@@ -364,8 +354,10 @@ class VoiceHandsOrchestrator(HandsOrchestrator):
                 execute_ms,
             )
 
-            if result.ok and verified and self._verified_terminal(
-                normalized.operation, selected
+            if (
+                result.ok
+                and verified
+                and self._verified_terminal(normalized.operation, selected)
             ):
                 payload = self._success_payload(
                     goal=latest,
@@ -389,7 +381,9 @@ class VoiceHandsOrchestrator(HandsOrchestrator):
                 else:
                     unverified_uia += 1
                     if unverified_uia >= _UIA_UNVERIFIED_BEFORE_VISUAL:
-                        candidates = self._with_visual_candidate(candidates, route_groups)
+                        candidates = self._with_visual_candidate(
+                            candidates, route_groups
+                        )
                         visual_available = any(
                             item.operation == "execute_visual_desktop_task"
                             for item in candidates
@@ -442,8 +436,6 @@ class VoiceHandsOrchestrator(HandsOrchestrator):
 
     @staticmethod
     def _action_fingerprint(operation: str, parameters: dict[str, Any]) -> str:
-        # Import lazily to keep the voice policy bound to the canonical core helper without
-        # exposing it as public API.
         from jarvis.hands.orchestrator import _fingerprint
 
         return _fingerprint(operation, parameters)
