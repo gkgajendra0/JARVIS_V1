@@ -117,7 +117,9 @@ def _runtime(executor: RecordingExecutor) -> CapabilityRuntime:
 
 
 @pytest.mark.asyncio
-async def test_verified_single_route_action_skips_completion_planner_round_trip() -> None:
+async def test_verified_single_route_action_skips_completion_planner_round_trip() -> (
+    None
+):
     executor = RecordingExecutor()
     planner = CountingPlanner()
     orchestrator = VoiceHandsOrchestrator(_runtime(executor), planner)
