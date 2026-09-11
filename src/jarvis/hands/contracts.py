@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from functools import reduce
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, create_model
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, create_model
 
 
 class StrictContract(BaseModel):
@@ -30,7 +30,14 @@ class AppParams(StrictContract):
 
 
 class VolumeParams(StrictContract):
-    percent: float = Field(ge=0.0, le=100.0)
+    # Realtime providers naturally emit either ``percent`` or ``volume_percent``.
+    # Accept the semantic alias at validation time but always model_dump the canonical
+    # ``percent`` key before grounding/Authority/execution.
+    percent: float = Field(
+        validation_alias=AliasChoices("percent", "volume_percent"),
+        ge=0.0,
+        le=100.0,
+    )
 
 
 class ClipboardTextParams(StrictContract):
@@ -98,7 +105,11 @@ class DisplayReadParams(StrictContract):
 
 
 class DisplaySetParams(DisplayReadParams):
-    percent: int = Field(ge=0, le=100)
+    percent: int = Field(
+        validation_alias=AliasChoices("percent", "brightness_percent"),
+        ge=0,
+        le=100,
+    )
 
 
 class BluetoothParams(StrictContract):
