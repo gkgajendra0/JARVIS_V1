@@ -2,14 +2,14 @@
 
 JARVIS must be able to ground a provider-suggested Latin app identity against a USER
 transcript that may contain the same spoken name in Devanagari, Arabic/Urdu, or another
-script.  This module keeps that evidence path local and deterministic:
+script. This module keeps that evidence path local and deterministic:
 
-- ICU provides Unicode script -> Latin transliteration.
+- uroman provides pure-Python universal script -> Latin romanization.
 - Jellyfish provides mature phonetic/string similarity primitives.
 - A conservative consonant skeleton handles common code-mixed loanword spellings such
   as ``Apple Music`` vs ``एप्पल म्यूजिक`` without teaching JARVIS app-specific aliases.
 
-The Windows installed-app catalogue remains the authority for app identity.  These
+The Windows installed-app catalogue remains the authority for app identity. These
 helpers only answer whether two user-facing strings are plausibly the same spoken name;
 ambiguous catalogue matches still fail closed in the entity resolver.
 """
@@ -25,11 +25,10 @@ try:  # Installed by the unified ``hands`` extra; keep base imports graceful.
 except ImportError:  # pragma: no cover - exercised only without the Hands extra.
     jellyfish = None  # type: ignore[assignment]
 
-try:  # ``pyicu-wheels`` exposes the canonical ``icu`` import.
-    from icu import ICUError, Transliterator
+try:  # Pure-Python universal romanization for multilingual voice transcripts.
+    import uroman as uroman_lib
 except ImportError:  # pragma: no cover - exercised only without the Hands extra.
-    ICUError = RuntimeError  # type: ignore[misc,assignment]
-    Transliterator = None  # type: ignore[assignment,misc]
+    uroman_lib = None  # type: ignore[assignment]
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 _REFERENCE_MARKERS = frozenset(
@@ -55,12 +54,10 @@ _REFERENCE_MARKERS = frozenset(
 
 
 @lru_cache(maxsize=1)
-def _latin_transliterator():
-    if Transliterator is None:
+def _romanizer():
+    if uroman_lib is None:
         return None
-    # Any-Latin is ICU's generic script romanizer; Latin-ASCII removes diacritics so
-    # downstream comparison is stable across provider/transcript Unicode variants.
-    return Transliterator.createInstance("Any-Latin; Latin-ASCII")
+    return uroman_lib.Uroman()
 
 
 def _ascii_normalized(value: object) -> str:
@@ -76,9 +73,9 @@ def _ascii_normalized(value: object) -> str:
 def romanize(value: str) -> str:
     """Return a bounded, comparison-oriented Latin representation.
 
-    ASCII text is normalized without ICU.  Non-ASCII text requires the Hands
-    transliteration dependency; if it is unavailable we fail closed by returning an
-    empty string rather than pretending two cross-script strings match.
+    ASCII text is normalized without another library call. Non-ASCII text requires the
+    Hands romanization dependency; if it is unavailable or rejects the input, grounding
+    fails closed by returning an empty string rather than inventing cross-script evidence.
     """
 
     text = str(value or "").strip()
@@ -86,12 +83,12 @@ def romanize(value: str) -> str:
         return ""
     if text.isascii():
         return _ascii_normalized(text)
-    transliterator = _latin_transliterator()
-    if transliterator is None:
+    romanizer = _romanizer()
+    if romanizer is None:
         return ""
     try:
-        transliterated = str(transliterator.transliterate(text))
-    except ICUError:
+        transliterated = str(romanizer.romanize_string(text))
+    except (OSError, TypeError, ValueError):
         return ""
     return _ascii_normalized(transliterated)
 
@@ -164,7 +161,7 @@ def _similarity(left: str, right: str) -> float:
 def phonetic_phrase_score(alias: object, text: object) -> float:
     """Score whether ``text`` contains the same spoken phrase as ``alias``.
 
-    Matching is token-aligned and deliberately conservative.  A single badly matching
+    Matching is token-aligned and deliberately conservative. A single badly matching
     token rejects the window, which prevents one shared brand word from grounding a
     different installed application.
     """
