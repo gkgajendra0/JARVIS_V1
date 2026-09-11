@@ -85,7 +85,8 @@ def test_load_predictor_uses_stable_livekit_wakeword_constructor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import livekit.wakeword as livekit_wakeword
-    import jarvis.voice.wakeword as wakeword
+
+    from jarvis.voice import wakeword
 
     captured: dict[str, object] = {}
 
