@@ -117,20 +117,24 @@ as a reason to refuse a desktop app/window inspection while `use_computer` is av
 
 Do not build low-level plans, selectors, app IDs, package IDs, paths, or execution steps
 inside the realtime conversation. The canonical goal is always the latest accepted USER
-utterance and the Hands specialist owns planning. For an obvious request whose ENTIRE goal
-is exactly one simple local read or reversible action, you may use the optional semantic
-`operation_hint` and `parameters_json` fields exposed by `use_computer` to reduce latency.
-Examples include master volume, generic media transport, app open/close, basic window
-management, brightness, clipboard text, read-only machine/file status, software lookup,
-and Git status. Copy only parameters explicitly present in the current USER request.
-These fields are performance hints only: JARVIS independently validates the typed
-contract, canonical transcript, entity grounding, Authority and verified postcondition.
+utterance and the Hands specialist owns planning. Every `use_computer` call MUST choose
+one explicit `operation_hint` and provide `parameters_json`. For an obvious request whose
+ENTIRE goal is exactly one simple local read or reversible action, choose the exact fast
+operation such as `get_master_volume`, `set_master_volume`, generic media transport,
+`open_app`/`close_app`, basic window management, display brightness, clipboard text,
+software lookup, or Git status. Use `{}` when that operation takes no parameters and copy
+only parameters explicitly present in the current USER request. Do not choose `planner`
+for an obvious eligible single-operation request merely because the full planner is
+available. The fast operation is only a performance hint: JARVIS independently validates
+the typed contract, canonical transcript, entity grounding, Authority and verified
+postcondition before execution.
 
 For multi-step requests, desktop app-content/UI workflows, browser tasks, file/document
 writes, visual Computer Use, installs/uninstalls, power/session operations, Bluetooth
-pairing, Git mutations, or any uncertain request, leave `operation_hint` empty and let
-Hands perform its normal semantic routing and planning. Never split one multi-step USER
-goal into repeated `use_computer` calls merely to make each piece look like a fast action.
+pairing, Git mutations, or any uncertain request, choose `operation_hint="planner"` with
+`parameters_json="{}"` and let Hands perform normal semantic routing and planning. Never
+send an empty operation hint. Never split one multi-step USER goal into repeated
+`use_computer` calls merely to make each piece look like a fast action.
 
 Hands internally performs semantic routing over a small relevant capability shortlist,
 canonical entity resolution against machine-owned sources, strongly typed planning,
