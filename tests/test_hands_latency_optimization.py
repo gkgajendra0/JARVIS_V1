@@ -15,13 +15,19 @@ from jarvis.voice.hands_orchestrator import VoiceHandsOrchestrator
 
 class NoopAuthority:
     def authorize(self, prepared):
-        raise AssertionError("authority should not run in normalization-only construction")
+        raise AssertionError(
+            "authority should not run in normalization-only construction"
+        )
 
     def consume(self, authorized) -> None:
-        raise AssertionError("authority should not run in normalization-only construction")
+        raise AssertionError(
+            "authority should not run in normalization-only construction"
+        )
 
     def audit_result(self, *, session_id, authorized, result) -> None:
-        raise AssertionError("authority should not run in normalization-only construction")
+        raise AssertionError(
+            "authority should not run in normalization-only construction"
+        )
 
     def close(self) -> None:
         pass
