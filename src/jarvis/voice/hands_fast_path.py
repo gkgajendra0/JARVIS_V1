@@ -68,6 +68,47 @@ FAST_PATH_OPERATIONS = frozenset(
     }
 )
 
+# Realtime providers can express the same bounded scalar using different field names.
+# Normalize only known semantic synonyms for known operations; all other keys remain in
+# the payload and are rejected by the operation's strict Pydantic contract.
+_FAST_PARAMETER_ALIASES: dict[str, dict[str, str]] = {
+    "set_master_volume": {
+        "level": "percent",
+        "percentage": "percent",
+        "value": "percent",
+        "volume_percent": "percent",
+    },
+    "set_display_brightness": {
+        "level": "percent",
+        "percentage": "percent",
+        "value": "percent",
+        "brightness_percent": "percent",
+    },
+}
+
+
+def canonicalize_fast_parameters(
+    operation: str,
+    parameters: dict[str, Any],
+) -> dict[str, Any]:
+    """Canonicalize only operation-bounded provider synonyms, failing on conflicts."""
+
+    aliases = _FAST_PARAMETER_ALIASES.get(str(operation).strip(), {})
+    if not aliases:
+        return dict(parameters)
+
+    canonical = dict(parameters)
+    for alias, target in aliases.items():
+        if alias not in canonical:
+            continue
+        alias_value = canonical.pop(alias)
+        if target in canonical and canonical[target] != alias_value:
+            raise ValueError(
+                f"conflicting fast-path parameters for {target}: {target} and {alias}"
+            )
+        canonical[target] = alias_value
+    return canonical
+
 
 async def execute_fast_hint(
     orchestrator: VoiceHandsOrchestrator,
@@ -90,7 +131,8 @@ async def execute_fast_hint(
 
     try:
         parameter_model = parameter_model_for(operation)
-        typed = parameter_model.model_validate(parameters)
+        canonical_parameters = canonicalize_fast_parameters(operation, parameters)
+        typed = parameter_model.model_validate(canonical_parameters)
         action = PlannedAction(
             operation=operation,
             parameters=typed.model_dump(exclude_none=True),
