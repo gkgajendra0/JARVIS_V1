@@ -172,11 +172,13 @@ def probe_windows_hello_helper_contract(
             input="{}",
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="strict",
             check=False,
             timeout=timeout_seconds,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, UnicodeError, subprocess.TimeoutExpired) as exc:
         raise AuthorityToolError(
             f"Windows Hello helper contract probe failed: {candidate}"
         ) from exc
