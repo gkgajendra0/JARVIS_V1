@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -127,9 +126,6 @@ def build_production_voice_runtime(
     speech_region_detector = (
         LiveKitSileroSpeechRegionDetector() if config.speaker_shadow_enabled else None
     )
-
-    if config.vision_enabled:
-        os.environ.setdefault("JARVIS_VISION_PREVIEW", "true")
 
     vision_service = (
         build_default_vision_service(
