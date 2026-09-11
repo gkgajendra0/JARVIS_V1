@@ -19,7 +19,7 @@ from jarvis.capabilities.models import (
     CapabilityStatus,
 )
 from jarvis.capabilities.window_scoped_computer import WindowScopedComputerExecutor
-from jarvis.computer.providers import build_computer_use_provider
+from jarvis.computer.latency_provider import build_latency_computer_use_provider
 from jarvis.computer.service import ComputerUseService
 from jarvis.hands.app_catalog import validate_app_name
 
@@ -113,7 +113,7 @@ class GovernedVisualDesktopExecutor:
         *,
         provider_name: str,
         enabled: bool = False,
-        provider_factory: Callable[..., Any] = build_computer_use_provider,
+        provider_factory: Callable[..., Any] = build_latency_computer_use_provider,
         executor_factory: Callable[[str], Any] = WindowScopedComputerExecutor,
     ) -> None:
         self._provider_name = str(provider_name).strip().casefold()
@@ -208,13 +208,17 @@ class GovernedVisualDesktopExecutor:
             bounded_prompt = (
                 f"Operate only inside the currently authorized Windows application "
                 f"window {app!r}. The local executor will reject input outside that "
-                "window. Complete only the user's stated task. Normal app-local "
-                "persistent or external actions explicitly requested by the user, "
-                "such as save, export, send, share, print, upload, or download, are "
-                "permitted by JARVIS Authority for this goal. Never switch to another "
-                "application and never interact with terminals, registry, Windows "
-                "security/permissions, credentials/secrets, software installation, "
-                f"or destructive deletion. User task: {task}"
+                "window. Complete only the user's stated task. When several safe "
+                "dependent actions are already grounded by the current screenshot, "
+                "batch them in one computer action response when the provider supports "
+                "it rather than pausing for a new model round-trip after every click. "
+                "Normal app-local persistent or external actions explicitly requested "
+                "by the user, such as save, export, send, share, print, upload, or "
+                "download, are permitted by JARVIS Authority for this goal. Never "
+                "switch to another application and never interact with terminals, "
+                "registry, Windows security/permissions, credentials/secrets, software "
+                "installation, or destructive deletion. "
+                f"User task: {task}"
             )
             result = asyncio.run(service.execute(bounded_prompt))
         except Exception as exc:  # noqa: BLE001 - provider/input backend errors vary.
