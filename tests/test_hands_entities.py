@@ -83,6 +83,32 @@ def test_pronoun_followup_can_use_recent_grounded_app_identity() -> None:
     assert resolved.display_name == "Apple Music"
 
 
+def test_hindi_repeat_followup_can_use_recent_grounded_app_identity() -> None:
+    resolver = AppEntityResolver(FakeCatalog())
+
+    resolved = resolver.resolve(
+        "Apple Music",
+        latest_user_text="एक बार फिर से चेक करो",
+        recent_user_texts=("Apple Music is installed.",),
+        evidence="फिर से चेक करो",
+    )
+
+    assert resolved.display_name == "Apple Music"
+    assert resolved.grounded_from == "Apple Music is installed."
+
+
+def test_stale_recent_app_cannot_ground_unrelated_latest_request() -> None:
+    resolver = AppEntityResolver(FakeCatalog())
+
+    with pytest.raises(EntityResolutionError, match="could not be grounded"):
+        resolver.resolve(
+            "Apple Music",
+            latest_user_text="Please check the current system status.",
+            recent_user_texts=("I want Apple Music open.",),
+            evidence="current system status",
+        )
+
+
 def test_devanagari_transliteration_can_ground_windows_owned_app_identity() -> None:
     resolver = AppEntityResolver(FakeCatalog())
 
