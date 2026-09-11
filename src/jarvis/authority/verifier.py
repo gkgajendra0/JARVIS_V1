@@ -118,13 +118,15 @@ class WindowsHelloVerifier:
                 input=request,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="strict",
                 check=False,
                 timeout=self._timeout_seconds,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
         except subprocess.TimeoutExpired:
             return result(StrongVerificationStatus.ERROR, "helper_timeout")
-        except OSError:
+        except (OSError, UnicodeError):
             return result(StrongVerificationStatus.ERROR, "helper_launch_failed")
 
         try:
