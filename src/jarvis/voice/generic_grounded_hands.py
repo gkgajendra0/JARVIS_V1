@@ -98,10 +98,10 @@ class GenericGroundedVoiceHandsOrchestrator(VoiceHandsOrchestrator):
                 yield params["query"], GroundingMode.SEARCH
             return
 
-        if (
-            operation in {"get_display_brightness", "set_display_brightness"}
-            and params.get("display")
-        ):
+        if operation in {
+            "get_display_brightness",
+            "set_display_brightness",
+        } and params.get("display"):
             yield params["display"], GroundingMode.ENTITY
 
     def _grounding_context(
