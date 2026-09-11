@@ -19,7 +19,7 @@ LOGGER = logging.getLogger(__name__)
 
 _GENERIC_APP_WORDS = frozenset({"app", "application", "game", "program", "software"})
 _REFERENCE_WORDS = frozenset({"it", "that", "this", "one", "again", "same"})
-_ENTITY_THRESHOLD = 0.82
+_ENTITY_THRESHOLD = 0.90
 _AMBIGUITY_MARGIN = 15
 
 
