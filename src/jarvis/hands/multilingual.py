@@ -199,10 +199,13 @@ def phonetic_alias_related(left: object, right: object) -> bool:
         return False
     if left_text == right_text:
         return True
-    return max(
-        phonetic_phrase_score(left, right),
-        phonetic_phrase_score(right, left),
-    ) >= 0.90
+    return (
+        max(
+            phonetic_phrase_score(left, right),
+            phonetic_phrase_score(right, left),
+        )
+        >= 0.90
+    )
 
 
 def has_contextual_reference(value: object) -> bool:
