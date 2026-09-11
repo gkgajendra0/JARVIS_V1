@@ -89,10 +89,11 @@ def test_voice_semantic_grounding_does_not_relax_high_risk_install_evidence() ->
 
 
 def test_voice_prompt_routes_desktop_screen_inspection_to_hands_not_camera() -> None:
+    normalized = " ".join(INSTRUCTIONS.split()).casefold()
     assert (
-        "desktop UI/screen inspection is Hands, not Pocket3 camera vision" in INSTRUCTIONS
+        "desktop ui/screen inspection is hands, not pocket3 camera vision" in normalized
     )
-    assert "MUST call `use_computer` before answering" in INSTRUCTIONS
+    assert "must call `use_computer` before answering" in normalized
 
 
 class RouteRecordingPlanner:
