@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 from livekit import rtc
@@ -183,6 +183,20 @@ class WakeDetection:
     detected_at: float
 
 
+def _bounded_wake_session_options() -> Any:
+    """Build low-idle-CPU ONNX options for the exact verifier sessions."""
+    import onnxruntime as ort
+
+    options = ort.SessionOptions()
+    options.intra_op_num_threads = 1
+    options.inter_op_num_threads = 1
+    options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+    options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+    options.add_session_config_entry("session.inter_op.allow_spinning", "0")
+    return options
+
+
 def load_livekit_predictor(model_path: Path) -> WakePredictor:
     """Load the low-CPU streaming proposal + exact LiveKit verifier cascade."""
     if not model_path.is_file():
@@ -191,10 +205,13 @@ def load_livekit_predictor(model_path: Path) -> WakePredictor:
     from livekit.wakeword import WakeWordModel
 
     streaming = OpenWakeWordStreamingPredictor(model_path)
-    verifier = WakeWordModel(models=[model_path])
+    verifier = WakeWordModel(
+        models=[model_path],
+        sess_options=_bounded_wake_session_options(),
+    )
     LOGGER.info(
         "Wake cascade loaded: streaming_pretrigger=%.2f exact_window_ms=2000 "
-        "decision_threshold=outer-detector",
+        "verifier_onnx_threads=1 decision_threshold=outer-detector",
         STREAMING_PRETRIGGER_THRESHOLD,
     )
     return CascadedWakePredictor(streaming, verifier)
