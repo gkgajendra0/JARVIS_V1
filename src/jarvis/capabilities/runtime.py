@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import time
 from typing import Protocol
 
@@ -36,10 +35,8 @@ from jarvis.capabilities.models import (
 )
 from jarvis.capabilities.software_management import SoftwareManagementExecutor
 from jarvis.capabilities.system_reads import SystemReadExecutor
-from jarvis.capabilities.windows_control import (
-    VisualDesktopControlExecutor,
-    WindowsStructuredControlExecutor,
-)
+from jarvis.capabilities.visual_desktop import GovernedVisualDesktopExecutor
+from jarvis.capabilities.windows_control import WindowsStructuredControlExecutor
 from jarvis.capabilities.windows_devices import (
     BluetoothControlExecutor,
     DisplayControlExecutor,
@@ -55,7 +52,9 @@ from jarvis.capabilities.windows_native import (
 from jarvis.capabilities.windows_sources import WinAppCliSchemaSource, WindowsOdrSource
 from jarvis.hands.models import ExecutionSubstrate
 from jarvis.hands.registry import HandsCapabilityRegistry
-from jarvis.machine_config import load_machine_settings
+from jarvis.machine_config import configured_text, load_machine_settings
+
+_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 
 
 class AuthorityBroker(Protocol):
@@ -292,14 +291,19 @@ class CapabilityRuntime:
             self._authority.close()
 
 
-def _env_enabled(name: str) -> bool:
-    return os.getenv(name, "").strip().casefold() in {"1", "true", "yes", "on"}
+def _visual_computer_use_enabled(configured: bool | None) -> bool:
+    if configured is not None:
+        return bool(configured)
+    machine = load_machine_settings()
+    raw = configured_text("JARVIS_VISUAL_COMPUTER_USE_ENABLED", machine, "false")
+    return bool(raw and raw.strip().casefold() in _TRUE_VALUES)
 
 
 def build_default_capability_runtime(
     *,
     ai_provider: str | None = None,
     hands_planner_model: str | None = None,
+    visual_computer_use_enabled: bool | None = None,
 ) -> CapabilityRuntime:
     project = LocalProjectReadExecutor()
     system = SystemReadExecutor()
@@ -310,9 +314,9 @@ def build_default_capability_runtime(
     app_lifecycle = AppLifecycleExecutor()
     structured_control = WindowsStructuredControlExecutor()
     visual_provider = ai_provider or configured_ai_provider(load_machine_settings())
-    visual_control = VisualDesktopControlExecutor(
+    visual_control = GovernedVisualDesktopExecutor(
         provider_name=visual_provider,
-        enabled=_env_enabled("JARVIS_VISUAL_COMPUTER_USE_ENABLED"),
+        enabled=_visual_computer_use_enabled(visual_computer_use_enabled),
     )
     display = DisplayControlExecutor()
     bluetooth = BluetoothControlExecutor()
