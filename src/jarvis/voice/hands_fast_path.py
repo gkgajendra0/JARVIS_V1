@@ -5,7 +5,7 @@ The realtime voice model already performed semantic understanding before it invo
 supply an optional semantic hint. JARVIS never trusts that hint directly: this module
 re-validates the typed parameter contract, canonical USER grounding, entity resolution,
 Authority, one-time permit and executor postcondition. Any unsupported or ungrounded hint
-falls back to the normal semantic Hands planner.
+falls back to the normal semantic Hands planner before local execution begins.
 """
 
 from __future__ import annotations
@@ -78,7 +78,7 @@ async def execute_fast_hint(
     operation_hint: str,
     parameters: dict[str, Any],
 ) -> dict[str, object] | None:
-    """Execute one validated fast hint or return ``None`` for normal planner fallback."""
+    """Execute one validated fast hint or return ``None`` before any local execution."""
 
     operation = str(operation_hint).strip()
     if operation not in FAST_PATH_OPERATIONS:
@@ -134,16 +134,20 @@ async def execute_fast_hint(
         elapsed_ms,
     )
 
-    if not result.ok or not verified:
-        # The hint never bypasses recovery. A failed or unverified attempt returns to the
-        # mature planner, which can re-observe or choose another bounded strategy.
-        return None
+    success = bool(result.ok and verified)
+    reason = result.reason
+    if result.ok and not verified and not reason:
+        reason = "fast-path execution did not produce a verified postcondition"
 
+    # Once local execution has started, the fast path returns that authoritative result.
+    # It never falls through to a second planner-driven execution of the same utterance.
     return {
-        "ok": True,
-        "status": "succeeded",
+        "ok": success,
+        "status": "succeeded" if success else "failed",
         "goal": latest,
-        "completed_steps": 1,
+        "completed_steps": 1 if success else 0,
+        "failed_operation": None if success else normalized.operation,
+        "reason": reason,
         "route_groups": ["voice_fast_path"],
         "results": [orchestrator._result_payload(result)],
         "entity_trace": list(normalized.entity_trace),
