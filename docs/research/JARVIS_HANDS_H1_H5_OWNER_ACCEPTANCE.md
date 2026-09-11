@@ -1,6 +1,6 @@
 # JARVIS Hands H1-H5 owner acceptance
 
-Status: **INTEGRATED OWNER-MACHINE ACCEPTANCE PASSED — LIVE VOICE + GENERIC VISUAL GATE PENDING**
+Status: **INTEGRATED OWNER-MACHINE ACCEPTANCE PASSED — LIVE VOICE + GENERIC VISUAL + LATENCY GATE PENDING**
 
 Date: 2026-09-11
 
@@ -147,6 +147,71 @@ jarvis-hands-smoke --disable-visual
 
 Automated tests cover target-window capture, HWND/geometry enforcement, coordinate containment, global shortcut blocking, the CRITICAL Authority floor, critical-task rejection and persisted configuration.
 
+## Hands latency optimization pass
+
+A dedicated production latency pass was completed after the first OpenAI live Hands run exposed excessive serial cloud-planner work on otherwise simple local actions.
+
+The optimization deliberately preserves the same typed contracts, canonical USER grounding, entity resolution, Authority, one-time permits, executor verification and audit. It does not introduce a second ungoverned execution path.
+
+Implemented latency contract:
+
+- the realtime voice brain may optionally attach one semantic operation hint to the existing `use_computer` handoff when one simple bounded operation fully satisfies the request;
+- the hint is never trusted directly: JARVIS independently validates operation allowlisting, typed parameters, canonical USER grounding and entity resolution before local execution;
+- persistent writes, browser/UI plans, visual Computer Use, package mutation, power/session actions, Bluetooth pairing and development mutation are excluded from the fast path;
+- eligible read/reversible local actions can therefore complete with zero additional Hands routing/planning cloud calls when the hint is valid;
+- pre-execution fast-hint rejection falls back to the normal semantic planner;
+- once a fast-path local action has started, JARVIS never silently falls back and replays that mutation merely because verification was inconclusive;
+- verified single-route terminal actions on the normal Hands planner path complete deterministically instead of requiring a final cloud `goal_complete` round trip;
+- OpenAI structured Hands routing/planning explicitly uses low reasoning effort for the bounded semantic planning role;
+- after two consecutive unverified `execute_windows_plan` attempts, the voice orchestrator stops repeatedly spending structured-UI planner turns and can promote the generic visual candidate when configured;
+- implicit non-durable memory-candidate extraction is deferred by five seconds so background provider work does not compete with the foreground voice/Hands transaction;
+- stage telemetry now records semantic route latency, per-step planner latency, executor latency, fast-path execution latency and total Hands goal latency.
+
+### Multilingual numeric grounding safety correction
+
+CI found an important issue while the fast path was being hardened: the previous voice-only numeric recovery could make a planner-supplied percentage appear grounded by appending that same model value to synthetic grounding text.
+
+That recovery path was removed.
+
+Current contract:
+
+- a numeric mutation such as volume or brightness must still match the canonical USER transcript;
+- ordinary digit/English-number grounding continues through the core deterministic Hands grounding implementation;
+- supported Hindi/Urdu transliterated number words are recovered from the actual transcript text with Unicode-aware matching;
+- a model-supplied `80` cannot validate against a transcript that said `30`, including transliterated speech;
+- if the number cannot be independently recovered from the canonical transcript, the fast hint is rejected before execution and normal planner handling resumes.
+
+### Latency-pass automated certification
+
+Exact implementation head before this documentation-only update:
+
+`0b961eff835368735a37c395f2bd73572f9f4901`
+
+GitHub Actions run:
+
+`34567823631`
+
+Results:
+
+- Ruff format + lint: PASS;
+- full pytest suite: PASS;
+- Playwright Chromium provision/smoke inside the pytest job: PASS;
+- unified Windows Hands dependency install/probe + DPAPI smoke: PASS;
+- Windows Hello normal build + JSON contract probe: PASS;
+- Windows Hello production self-contained publish + JSON contract probe: PASS.
+
+Dedicated regressions cover:
+
+- a grounded reversible voice hint executes locally without invoking the Hands planner;
+- high-risk operations cannot enter the voice fast path;
+- an ungrounded parameter hint is rejected before any local execution;
+- an executed-but-unverified fast action is returned once and is not replayed through planner fallback;
+- OpenAI Hands planning pins low reasoning effort;
+- multilingual/transliterated numeric grounding remains accepted only when the actual spoken value matches;
+- spoken `30` / hinted `80` is rejected before execution.
+
+Automated certification proves the optimized control-flow contracts. It does not claim a real-world millisecond improvement until owner-machine live telemetry is captured; provider/network latency and Windows executor latency must be measured on the production machine.
+
 ## Safety observations
 
 The representative real-machine test deliberately avoided performing dangerous actions merely for proof. It did not install/uninstall software, pair/unpair Bluetooth, sleep/restart/shutdown/sign out, permanently delete acceptance artifacts, execute arbitrary shell, run arbitrary browser JavaScript, or mutate the JARVIS repository.
@@ -155,18 +220,21 @@ Those primitive paths remain covered by deterministic unit/contract/authority/gr
 
 ## Remaining gate
 
-The integrated owner-machine H1-H5 gate is complete. The broader generic desktop fallback still requires live owner-machine acceptance.
+The integrated owner-machine H1-H5 gate is complete. The broader generic desktop fallback and optimized live-voice latency path still require live owner-machine acceptance.
 
 PR #30 must remain draft and unmerged until all of the following are complete:
 
 1. the owner pulls the exact accepted branch head, reinstalls `.[hands]`, enables visual fallback with `jarvis-hands-smoke --enable-visual`, and confirms `--show-visual` reports enabled;
 2. one live `jarvis-voice` multi-capability owner session demonstrates natural-language goal routing through production `HandsGoalAgentTools`;
-3. at least three unrelated desktop applications are exercised so acceptance is not app-specific;
-4. at least one task succeeds entirely through native/UIA semantics and at least one deliberately difficult/custom-rendered task forces UIA -> window-scoped visual fallback;
-5. the visual test confirms only the target application is operated, a strong Windows Hello/T3 challenge occurs for the bounded generic visual goal, and JARVIS returns a truthful failure rather than escaping the target window when containment blocks an action;
-6. rapid correction/supersession is exercised while Hands is planning so an older spoken command cannot start another local action;
-7. success speech matches verified tool results and unrelated/ambient speech does not gain authority;
-8. owner-facing Windows Hello frequency is acceptable under the bounded-session trust model for normal non-critical work and the stronger per-goal visual fallback floor;
-9. final product/architecture/quality-gate documentation is reconciled to the accepted Hands scope;
-10. final exact-head CI is green;
-11. the owner explicitly accepts the Hands release for merge.
+3. simple eligible commands such as volume/media/app-lifecycle are repeated and the logs confirm the optimized path is actually used where appropriate, including `Hands fast path` / latency telemetry and no unnecessary extra Hands planner round trips;
+4. at least one simple command is also allowed to use the normal planner path so deterministic verified-terminal completion and its total latency can be observed;
+5. at least three unrelated desktop applications are exercised so acceptance is not app-specific;
+6. at least one task succeeds entirely through native/UIA semantics and at least one deliberately difficult/custom-rendered task forces UIA -> window-scoped visual fallback;
+7. the visual test confirms only the target application is operated, a strong Windows Hello/T3 challenge occurs for the bounded generic visual goal, and JARVIS returns a truthful failure rather than escaping the target window when containment blocks an action;
+8. rapid correction/supersession is exercised while Hands is planning so an older spoken command cannot start another local action;
+9. success speech matches verified tool results and unrelated/ambient speech does not gain authority;
+10. owner-facing Windows Hello frequency is acceptable under the bounded-session trust model for normal non-critical work and the stronger per-goal visual fallback floor;
+11. captured route/planner/execution/total latency is reviewed before any further optimization so additional work targets measured bottlenecks rather than speculation;
+12. final product/architecture/quality-gate documentation is reconciled to the accepted Hands scope;
+13. final exact-head CI is green;
+14. the owner explicitly accepts the Hands release for merge.
