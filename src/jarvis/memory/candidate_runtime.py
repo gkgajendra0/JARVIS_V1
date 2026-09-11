@@ -13,6 +13,7 @@ from jarvis.memory.candidates import (
 )
 
 LOGGER = logging.getLogger(__name__)
+_DEFAULT_DEFER_SECONDS = 5.0
 
 
 class MemoryCandidateSessionRuntime:
@@ -23,7 +24,7 @@ class MemoryCandidateSessionRuntime:
         *,
         conversation: ConversationSession,
         extractor: MemoryCandidateExtractor,
-        defer_seconds: float = 0.0,
+        defer_seconds: float = _DEFAULT_DEFER_SECONDS,
     ) -> None:
         if not isinstance(conversation, ConversationSession):
             raise TypeError("conversation must be a ConversationSession")
