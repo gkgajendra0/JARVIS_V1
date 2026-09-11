@@ -19,6 +19,17 @@ class FakePredictor:
         return {"jarvis": self.score}
 
 
+class FakeStreamingPredictor(FakePredictor):
+    window_samples = 1_280
+
+    def __init__(self, score: float) -> None:
+        super().__init__(score)
+        self.reset_calls = 0
+
+    def reset(self) -> None:
+        self.reset_calls += 1
+
+
 def frame(samples: int = 1_280) -> rtc.AudioFrame:
     return rtc.AudioFrame(
         data=np.ones(samples, dtype=np.int16).tobytes(),
@@ -47,6 +58,25 @@ async def test_detector_scores_two_second_windows_and_disables_after_wake() -> N
     assert detection.confidence == 0.9
     assert predictor.windows[0].shape == (32_000,)
     assert detector.enabled is False
+    await detector.aclose()
+
+
+@pytest.mark.asyncio
+async def test_detector_uses_streaming_predictor_window() -> None:
+    predictor = FakeStreamingPredictor(0.9)
+    detector = LiveKitWakeDetector(
+        predictor,
+        threshold=0.68,
+        debounce_seconds=2,
+    )
+    detector.enable()
+    detector.feed(frame())
+
+    detection = await asyncio.wait_for(detector.wait_for_detection(), timeout=1)
+
+    assert detection.name == "jarvis"
+    assert predictor.windows[0].shape == (1_280,)
+    assert predictor.reset_calls == 1
     await detector.aclose()
 
 
