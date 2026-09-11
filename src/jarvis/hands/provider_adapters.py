@@ -31,12 +31,21 @@ class StructuredOutputClient(Protocol):
     ) -> BaseModel: ...
 
 
+def _openai_reasoning_effort(response_model: type[BaseModel]) -> str:
+    """Use classification-grade reasoning for routing, low reasoning for planning."""
+
+    if response_model.__name__ == "HandsRouteSelection":
+        return "none"
+    return "low"
+
+
 class OpenAIStructuredOutputClient:
     """OpenAI Responses structured-output adapter for the Hands planner.
 
-    Hands is an interactive voice path, so planning explicitly uses low reasoning effort
-    instead of inheriting the model's medium default. Correctness remains in JARVIS-owned
-    typed contracts, grounding, Authority, execution verification and bounded recovery.
+    Hands is an interactive voice path. Semantic route selection is a bounded
+    classification problem and uses no reasoning; action planning uses low reasoning.
+    Correctness remains in JARVIS-owned typed contracts, grounding, Authority, execution
+    verification and bounded recovery.
     """
 
     provider_name = "openai"
@@ -58,6 +67,7 @@ class OpenAIStructuredOutputClient:
         response_model: type[BaseModel],
     ) -> BaseModel:
         started = time.perf_counter()
+        reasoning_effort = _openai_reasoning_effort(response_model)
         response = await self._client.responses.parse(
             model=self.model_name,
             input=[
@@ -72,15 +82,17 @@ class OpenAIStructuredOutputClient:
                     ),
                 },
             ],
-            reasoning={"effort": "low"},
+            reasoning={"effort": reasoning_effort},
             text_format=response_model,
             store=False,
         )
         elapsed_ms = (time.perf_counter() - started) * 1000
         LOGGER.info(
-            "Hands provider parse | provider=openai | model=%s | schema=%s | elapsed_ms=%.1f",
+            "Hands provider parse | provider=openai | model=%s | schema=%s | "
+            "reasoning=%s | elapsed_ms=%.1f",
             self.model_name,
             response_model.__name__,
+            reasoning_effort,
             elapsed_ms,
         )
         parsed = getattr(response, "output_parsed", None)
