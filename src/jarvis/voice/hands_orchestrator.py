@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from dataclasses import replace
 from typing import Any
@@ -72,6 +73,102 @@ _SEMANTIC_NUMERIC_FIELDS = {
     "set_display_brightness": "percent",
 }
 
+# Speech providers sometimes render English number words phonetically in the detected
+# script. These values come from the canonical transcript itself; they are never supplied
+# by the planner. Native English/Arabic-digit/Hindi parsing remains owned by the core
+# number-parser path, and this table is only a deterministic fallback for common voice
+# transliterations used by Hinglish/Urdu speech recognition.
+_PHONETIC_NUMBER_WORDS: dict[str, int] = {
+    # Devanagari phonetic English and common Hindi forms.
+    "जीरो": 0,
+    "ज़ीरो": 0,
+    "वन": 1,
+    "टू": 2,
+    "थ्री": 3,
+    "फोर": 4,
+    "फोर": 4,
+    "फाइव": 5,
+    "सिक्स": 6,
+    "सेवन": 7,
+    "एट": 8,
+    "नाइन": 9,
+    "टेन": 10,
+    "इलेवन": 11,
+    "ट्वेल्व": 12,
+    "थर्टीन": 13,
+    "फोर्टीन": 14,
+    "फिफ्टीन": 15,
+    "सिक्सटीन": 16,
+    "सेवेंटीन": 17,
+    "एटीन": 18,
+    "नाइन्टीन": 19,
+    "ट्वेंटी": 20,
+    "ट्वेन्टी": 20,
+    "थर्टी": 30,
+    "फोर्टी": 40,
+    "फॉर्टी": 40,
+    "फिफ्टी": 50,
+    "सिक्सटी": 60,
+    "सेवेंटी": 70,
+    "सेवंटी": 70,
+    "एटी": 80,
+    "एइटी": 80,
+    "नाइन्टी": 90,
+    "हंड्रेड": 100,
+    "सौ": 100,
+    "दस": 10,
+    "बीस": 20,
+    "तीस": 30,
+    "चालीस": 40,
+    "पचास": 50,
+    "साठ": 60,
+    "सत्तर": 70,
+    "अस्सी": 80,
+    "नब्बे": 90,
+    "पच्चीस": 25,
+    "पैंतीस": 35,
+    "पैंतालीस": 45,
+    "पचपन": 55,
+    "पैंसठ": 65,
+    "पचहत्तर": 75,
+    "पचासी": 85,
+    "पंचानवे": 95,
+    # Perso-Arabic phonetic English commonly emitted for Urdu/Hinglish speech.
+    "زیرو": 0,
+    "زيرو": 0,
+    "ون": 1,
+    "ٹو": 2,
+    "تو": 2,
+    "تھری": 3,
+    "فور": 4,
+    "فائیو": 5,
+    "فایو": 5,
+    "سکس": 6,
+    "سیون": 7,
+    "ایٹ": 8,
+    "نائن": 9,
+    "ٹین": 10,
+    "الیون": 11,
+    "ٹویلو": 12,
+    "تھرٹین": 13,
+    "فورٹین": 14,
+    "ففٹین": 15,
+    "سکسٹین": 16,
+    "سیونٹین": 17,
+    "ایٹین": 18,
+    "نائنٹین": 19,
+    "ٹوئنٹی": 20,
+    "ٹونٹی": 20,
+    "تھرٹی": 30,
+    "فورٹی": 40,
+    "ففٹی": 50,
+    "سکسٹی": 60,
+    "سیونٹی": 70,
+    "ایٹی": 80,
+    "نائنٹی": 90,
+    "ہنڈرڈ": 100,
+}
+
 _TERMINAL_OPERATIONS_BY_GROUP: dict[str, frozenset[str]] = {
     "system_status": frozenset({"system_status", "list_processes"}),
     "audio": frozenset(
@@ -128,6 +225,46 @@ _TERMINAL_OPERATIONS_BY_GROUP: dict[str, frozenset[str]] = {
 }
 
 
+def _phonetic_numeric_values(text: str) -> tuple[float, ...]:
+    tokens = re.findall(r"\w+", str(text).casefold(), flags=re.UNICODE)
+    values: list[float] = []
+    run: list[int] = []
+
+    def flush() -> None:
+        if not run:
+            return
+        total = 0
+        current = 0
+        for number in run:
+            if number == 100:
+                current = max(current, 1) * 100
+            else:
+                current += number
+        total += current
+        values.append(float(total))
+        run.clear()
+
+    for token in tokens:
+        number = _PHONETIC_NUMBER_WORDS.get(token)
+        if number is None:
+            flush()
+            continue
+        run.append(number)
+    flush()
+    return tuple(values)
+
+
+def _phonetic_number_grounded(value: object, text: str) -> bool:
+    try:
+        expected = float(value)
+    except (TypeError, ValueError):
+        return False
+    return any(
+        abs(expected - candidate) < 0.001
+        for candidate in _phonetic_numeric_values(text)
+    )
+
+
 class VoiceHandsOrchestrator(HandsOrchestrator):
     """Hands orchestrator optimized for realtime speech while preserving Authority."""
 
@@ -147,10 +284,12 @@ class VoiceHandsOrchestrator(HandsOrchestrator):
             if field is None or "percentage is not grounded" not in str(exc):
                 raise
             value = action.parameters.get(field)
-            if value is None:
+            if value is None or not _phonetic_number_grounded(
+                value, context.latest_user_text
+            ):
                 raise
             semantic_context = GroundingContext(
-                latest_user_text=f"{context.latest_user_text} {value}",
+                latest_user_text=f"{context.latest_user_text} {float(value):g}",
                 recent_user_texts=context.recent_user_texts,
             )
             return super()._normalize_action(normalized_action, semantic_context)
