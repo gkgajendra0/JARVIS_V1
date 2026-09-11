@@ -177,9 +177,13 @@ jobs:
           import winrt.windows.devices.bluetooth; import screen_brightness_control;
           import send2trash; import docx; import openpyxl; import pptx; import playwright;
           import dulwich; import icu; import jellyfish;
-          from jarvis.hands.multilingual import phonetic_phrase_score;
-          assert phonetic_phrase_score('Apple Music', '\u090f\u092a\u094d\u092a\u0932 \u092e\u094d\u092f\u0942\u091c\u093f\u0915') >= 0.90;
-          print('Unified Windows Hands Python dependencies and multilingual grounding ready')"
+          print('Unified Windows Hands Python dependencies ready')"
+
+      - name: Run Windows multilingual Hands regressions
+        run: >-
+          python -m pytest -q
+          tests/test_hands_entities.py
+          tests/test_hands_contracts.py
 
       - name: Run Windows DPAPI smoke test
         run: python -m pytest -q tests/test_windows_dpapi.py
