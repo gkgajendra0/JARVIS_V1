@@ -81,3 +81,40 @@ def test_pronoun_followup_can_use_recent_grounded_app_identity() -> None:
     )
 
     assert resolved.display_name == "Apple Music"
+
+
+def test_devanagari_transliteration_can_ground_windows_owned_app_identity() -> None:
+    resolver = AppEntityResolver(FakeCatalog())
+
+    resolved = resolver.resolve(
+        "Apple Music",
+        latest_user_text="जार्विस, एप्पल म्यूजिक ऑन करो और प्लेलिस्ट खोलो।",
+        evidence="एप्पल म्यूजिक",
+    )
+
+    assert resolved.app_id == "app.apple.music"
+    assert resolved.display_name == "Apple Music"
+
+
+def test_urdu_transliteration_can_ground_windows_owned_app_identity() -> None:
+    resolver = AppEntityResolver(FakeCatalog())
+
+    resolved = resolver.resolve(
+        "Apple Music",
+        latest_user_text="جاروس، ایپل میوزک کھولو۔",
+        evidence="ایپل میوزک",
+    )
+
+    assert resolved.app_id == "app.apple.music"
+    assert resolved.display_name == "Apple Music"
+
+
+def test_cross_script_grounding_does_not_allow_unrelated_app_substitution() -> None:
+    resolver = AppEntityResolver(FakeCatalog())
+
+    with pytest.raises(EntityResolutionError, match="conflicts"):
+        resolver.resolve(
+            "Calculator",
+            latest_user_text="जार्विस, एप्पल म्यूजिक खोलो।",
+            evidence="एप्पल म्यूजिक",
+        )
