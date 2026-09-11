@@ -114,7 +114,11 @@ def _phonetic_skeleton(token: str) -> str:
         ("qu", "k"),
     ):
         value = value.replace(source, target)
-    value = value.translate(str.maketrans({"c": "k", "q": "k", "j": "s", "z": "s"}))
+    # Several scripts map the same labial approximant to either Latin v or w. Collapse
+    # that systematic romanization difference here rather than maintaining brand aliases.
+    value = value.translate(
+        str.maketrans({"c": "k", "q": "k", "j": "s", "z": "s", "w": "v"})
+    )
     value = value.replace("x", "ks")
     value = re.sub(r"[aeiouy]", "", value)
     value = re.sub(r"(.)\1+", r"\1", value)
