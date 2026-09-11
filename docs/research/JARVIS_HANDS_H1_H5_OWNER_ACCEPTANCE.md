@@ -1,8 +1,8 @@
 # JARVIS Hands H1-H5 owner acceptance
 
-Status: **INTEGRATED OWNER-MACHINE ACCEPTANCE PASSED — LIVE VOICE GATE PENDING**
+Status: **INTEGRATED OWNER-MACHINE ACCEPTANCE PASSED — LIVE VOICE + GENERIC VISUAL GATE PENDING**
 
-Date: 2026-09-10
+Date: 2026-09-11
 
 PR: #30 (`feat/governed-jarvis-hands-v1` -> `main`)
 
@@ -123,6 +123,30 @@ Automated failure-injection regressions now require these postconditions:
 
 The existing representative integration matrix was updated to model the same Git verification contract. A real owner-repository Git mutation is intentionally not required merely for certification; the owner-machine integrated gate already proved real Dulwich `git status`, while deterministic tests cover mutation postconditions and failure behavior.
 
+## Generic desktop expansion after representative acceptance
+
+The integrated H1-H5 run intentionally did not exercise provider-backed screenshot Computer Use. That substrate has since been hardened and broadened for the final live voice gate.
+
+The new generic fallback contract is:
+
+- UIA remains preferred and can execute bounded multi-action micro-plans after live observation;
+- visual fallback becomes available only after structured UI evidence is insufficient;
+- the provider receives only the resolved target application's active top-level window, not the full desktop;
+- local enforcement binds input to the HWND/rectangle used for the screenshot and rejects stale geometry, out-of-window coordinates and global app-switch shortcuts;
+- generic visual Computer Use has a deterministic `generic_visual_control` CRITICAL risk floor, so strong owner verification is required for each bounded visual goal regardless of wording/language;
+- normal app-local workflows such as save/export/send/share/print/upload/download may use this fallback after authorization;
+- arbitrary shell/terminal, Registry, software installation, security/permission, credential/secret and destructive deletion work remains outside generic visual authority;
+- browser tasks remain on Playwright, while File Explorer and Windows Settings require dedicated governed semantics;
+- the visual substrate is a persisted explicit owner opt-in controlled with:
+
+```powershell
+jarvis-hands-smoke --enable-visual
+jarvis-hands-smoke --show-visual
+jarvis-hands-smoke --disable-visual
+```
+
+Automated tests cover target-window capture, HWND/geometry enforcement, coordinate containment, global shortcut blocking, the CRITICAL Authority floor, critical-task rejection and persisted configuration.
+
 ## Safety observations
 
 The representative real-machine test deliberately avoided performing dangerous actions merely for proof. It did not install/uninstall software, pair/unpair Bluetooth, sleep/restart/shutdown/sign out, permanently delete acceptance artifacts, execute arbitrary shell, run arbitrary browser JavaScript, or mutate the JARVIS repository.
@@ -131,13 +155,18 @@ Those primitive paths remain covered by deterministic unit/contract/authority/gr
 
 ## Remaining gate
 
-The integrated owner-machine H1-H5 gate is complete.
+The integrated owner-machine H1-H5 gate is complete. The broader generic desktop fallback still requires live owner-machine acceptance.
 
 PR #30 must remain draft and unmerged until all of the following are complete:
 
-1. one live `jarvis-voice` multi-capability owner session demonstrates natural-language goal routing through production `HandsGoalAgentTools`;
-2. the live session confirms success speech matches verified tool results and that unrelated/ambient speech does not gain authority;
-3. owner-facing Windows Hello frequency is acceptable under the bounded-session trust model;
-4. permanent product/architecture/quality-gate documentation is reconciled to the final accepted Hands scope;
-5. final exact-head CI is green;
-6. the owner explicitly accepts the Hands release for merge.
+1. the owner pulls the exact accepted branch head, reinstalls `.[hands]`, enables visual fallback with `jarvis-hands-smoke --enable-visual`, and confirms `--show-visual` reports enabled;
+2. one live `jarvis-voice` multi-capability owner session demonstrates natural-language goal routing through production `HandsGoalAgentTools`;
+3. at least three unrelated desktop applications are exercised so acceptance is not app-specific;
+4. at least one task succeeds entirely through native/UIA semantics and at least one deliberately difficult/custom-rendered task forces UIA -> window-scoped visual fallback;
+5. the visual test confirms only the target application is operated, a strong Windows Hello/T3 challenge occurs for the bounded generic visual goal, and JARVIS returns a truthful failure rather than escaping the target window when containment blocks an action;
+6. rapid correction/supersession is exercised while Hands is planning so an older spoken command cannot start another local action;
+7. success speech matches verified tool results and unrelated/ambient speech does not gain authority;
+8. owner-facing Windows Hello frequency is acceptable under the bounded-session trust model for normal non-critical work and the stronger per-goal visual fallback floor;
+9. final product/architecture/quality-gate documentation is reconciled to the accepted Hands scope;
+10. final exact-head CI is green;
+11. the owner explicitly accepts the Hands release for merge.
