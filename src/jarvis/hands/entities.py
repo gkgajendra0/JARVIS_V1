@@ -140,6 +140,18 @@ class AppEntityResolver:
             return None
         return best[0][1], best[0][2]
 
+    @staticmethod
+    def _resolved(
+        app: InstalledApp,
+        grounded_from: str,
+    ) -> ResolvedAppRef:
+        return ResolvedAppRef(
+            app_id=app.app_id,
+            display_name=app.display_name,
+            source=app.source,
+            grounded_from=grounded_from,
+        )
+
     def resolve(
         self,
         query: str,
@@ -152,58 +164,41 @@ class AppEntityResolver:
         if not bounded_query or len(bounded_query) > 160:
             raise EntityResolutionError("app target must be a bounded non-empty name")
 
-        texts = tuple(
-            text
-            for text in (latest_user_text, *reversed(recent_user_texts))
-            if str(text).strip()
-        )
-        query_is_grounded = any(
-            _literal_grounded(bounded_query, text) for text in texts
-        )
+        latest_text = str(latest_user_text or "").strip()
+        recent_texts = tuple(text for text in recent_user_texts if str(text).strip())
         proposed: InstalledApp | None = None
         try:
             proposed = self._catalog.resolve(bounded_query)
         except AppCatalogError:
             pass
 
-        mentioned = self._unique_best(self._mentioned_apps(texts))
-        if query_is_grounded and proposed is not None:
-            grounded_from = next(
-                text for text in texts if _literal_grounded(bounded_query, text)
-            )
-            return ResolvedAppRef(
-                app_id=proposed.app_id,
-                display_name=proposed.display_name,
-                source=proposed.source,
-                grounded_from=grounded_from,
-            )
+        # A target named in the latest USER utterance always outranks conversation
+        # history. This includes cross-script phonetic evidence, but the identity itself
+        # still comes only from the Windows-owned installed-app catalogue.
+        latest_query_grounded = _literal_grounded(bounded_query, latest_text)
+        latest_mentioned = self._unique_best(self._mentioned_apps((latest_text,)))
+        if latest_query_grounded and proposed is not None:
+            return self._resolved(proposed, latest_text)
 
-        if mentioned is not None:
-            app, grounded_from = mentioned
+        if latest_mentioned is not None:
+            app, grounded_from = latest_mentioned
             if proposed is not None and proposed.app_id == app.app_id:
-                return ResolvedAppRef(
-                    app_id=app.app_id,
-                    display_name=app.display_name,
-                    source=app.source,
-                    grounded_from=grounded_from,
-                )
+                return self._resolved(app, grounded_from)
             if _alias_related(bounded_query, app.display_name):
-                return ResolvedAppRef(
-                    app_id=app.app_id,
-                    display_name=app.display_name,
-                    source=app.source,
-                    grounded_from=grounded_from,
-                )
+                return self._resolved(app, grounded_from)
             raise EntityResolutionError(
                 "planner-selected app target conflicts with the app named by the user"
             )
 
+        # Conversation history may ground an app only when the latest utterance actually
+        # references prior context. This prevents stale app mentions from authorizing a
+        # planner-selected target for an unrelated new request.
         evidence_tokens = set(_normalized(evidence).split())
         can_use_recent_reference = bool(evidence_tokens & _REFERENCE_WORDS) or any(
-            has_contextual_reference(value) for value in (latest_user_text, evidence)
+            has_contextual_reference(value) for value in (latest_text, evidence)
         )
-        if can_use_recent_reference and recent_user_texts:
-            recent_ranked = self._mentioned_apps(tuple(reversed(recent_user_texts)))
+        if can_use_recent_reference and recent_texts:
+            recent_ranked = self._mentioned_apps(tuple(reversed(recent_texts)))
             recent = self._unique_best(recent_ranked)
             if recent is not None:
                 app, grounded_from = recent
@@ -212,12 +207,10 @@ class AppEntityResolver:
                     or proposed.app_id == app.app_id
                     or _alias_related(bounded_query, app.display_name)
                 ):
-                    return ResolvedAppRef(
-                        app_id=app.app_id,
-                        display_name=app.display_name,
-                        source=app.source,
-                        grounded_from=grounded_from,
-                    )
+                    return self._resolved(app, grounded_from)
+                raise EntityResolutionError(
+                    "planner-selected app target conflicts with the referenced recent app"
+                )
 
         raise EntityResolutionError(
             "application target could not be grounded to one installed app identity"
