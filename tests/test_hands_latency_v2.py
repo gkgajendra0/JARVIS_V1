@@ -117,4 +117,4 @@ async def test_openai_visual_computer_use_pins_low_reasoning() -> None:
     assert result.ok is True
     assert len(responses.calls) == 1
     assert responses.calls[0]["reasoning"] == {"effort": "low"}
-    assert responses.calls[0]["store"] is False
+    assert "store" not in responses.calls[0]
