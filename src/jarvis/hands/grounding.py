@@ -29,9 +29,12 @@ class GroundingMode(StrEnum):
 
 
 _THRESHOLDS: dict[GroundingMode, float] = {
-    GroundingMode.ENTITY: 0.82,
-    GroundingMode.SEARCH: 0.82,
-    GroundingMode.LITERAL: 0.88,
+    # Human-facing fuzzy evidence is still an authorization boundary. Keep the floor
+    # conservative: exact/romanized literal matches score above this naturally, while
+    # unrelated conversational text must not become a machine target by resemblance.
+    GroundingMode.ENTITY: 0.90,
+    GroundingMode.SEARCH: 0.90,
+    GroundingMode.LITERAL: 0.90,
     GroundingMode.IDENTIFIER: 1.0,
 }
 
