@@ -282,10 +282,9 @@ def _phonetic_numeric_values(text: str) -> tuple[float, ...]:
     for start, end, numeric in matches:
         if last_end is not None:
             separator = source[last_end:start]
-            if any(_unicode_word_char(char) for char in separator):
-                if run:
-                    values.append(_compose_number_run(run))
-                    run = []
+            if run and any(_unicode_word_char(char) for char in separator):
+                values.append(_compose_number_run(run))
+                run = []
         run.append(numeric)
         last_end = end
     if run:
