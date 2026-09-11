@@ -1,25 +1,26 @@
 """Canonical entity resolution for JARVIS Hands.
 
-Entity resolution is deliberately separate from natural-language intent.  The model
-may suggest a user-facing alias, but JARVIS resolves that alias against machine-owned
-identity sources and refuses unrelated target substitution.
+Entity resolution is deliberately separate from natural-language intent. The model may
+suggest a user-facing alias, but JARVIS resolves that alias against machine-owned identity
+sources and refuses unrelated target substitution.
 """
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
 from jarvis.hands.app_catalog import AppCatalog, AppCatalogError, InstalledApp
-from jarvis.hands.multilingual import (
-    has_contextual_reference,
-    phonetic_alias_related,
-    phonetic_phrase_score,
-)
+from jarvis.hands.grounding import DEFAULT_GROUNDING, GroundingMode
+from jarvis.hands.multilingual import has_contextual_reference
+
+LOGGER = logging.getLogger(__name__)
 
 _GENERIC_APP_WORDS = frozenset({"app", "application", "game", "program", "software"})
 _REFERENCE_WORDS = frozenset({"it", "that", "this", "one", "again", "same"})
-_PHONETIC_GROUNDING_THRESHOLD = 0.90
+_ENTITY_THRESHOLD = 0.82
+_AMBIGUITY_MARGIN = 15
 
 
 class EntityResolutionError(ValueError):
@@ -59,15 +60,12 @@ def _tokens(value: object) -> set[str]:
 
 
 def _literal_grounded(value: str, text: str) -> bool:
-    needle = _normalized(value)
-    haystack = _normalized(text)
-    if needle and needle in haystack:
-        return True
-    compact_needle = _compact(value)
-    compact_haystack = _compact(text)
-    if len(compact_needle) >= 3 and compact_needle in compact_haystack:
-        return True
-    return phonetic_phrase_score(value, text) >= _PHONETIC_GROUNDING_THRESHOLD
+    return DEFAULT_GROUNDING.prove(
+        value,
+        (text,),
+        mode=GroundingMode.ENTITY,
+        threshold=_ENTITY_THRESHOLD,
+    ).matched
 
 
 def _alias_related(query: str, display_name: str) -> bool:
@@ -81,7 +79,12 @@ def _alias_related(query: str, display_name: str) -> bool:
         overlap = len(left_tokens & right_tokens)
         if overlap > 0 and overlap / min(len(left_tokens), len(right_tokens)) >= 0.5:
             return True
-    return phonetic_alias_related(query, display_name)
+    return DEFAULT_GROUNDING.related(
+        query,
+        display_name,
+        mode=GroundingMode.ENTITY,
+        threshold=_ENTITY_THRESHOLD,
+    )
 
 
 def _mention_score(app: InstalledApp, text: str) -> int:
@@ -97,11 +100,15 @@ def _mention_score(app: InstalledApp, text: str) -> int:
     text_tokens = set(normalized_text.split())
     if len(name_tokens) >= 2 and name_tokens.issubset(text_tokens):
         return 850 + len(name_tokens)
-    phonetic = phonetic_phrase_score(app.display_name, text)
-    if phonetic >= _PHONETIC_GROUNDING_THRESHOLD:
-        # Cross-script evidence is strong enough to ground an already Windows-owned
-        # identity, but exact literal mentions still outrank it.
-        return 800 + int(phonetic * 40)
+
+    proof = DEFAULT_GROUNDING.prove(
+        app.display_name,
+        (text,),
+        mode=GroundingMode.ENTITY,
+        threshold=_ENTITY_THRESHOLD,
+    )
+    if proof.matched:
+        return 800 + int(proof.score * 100)
     return -1
 
 
@@ -131,14 +138,16 @@ class AppEntityResolver:
     ) -> tuple[InstalledApp, str] | None:
         if not ranked:
             return None
-        best_score = ranked[0][0]
-        best = [item for item in ranked if item[0] == best_score]
-        identities = {
-            (item[1].app_id, item[1].display_name.casefold()) for item in best
-        }
-        if len(identities) != 1:
+        best_score, best_app, best_text = ranked[0]
+        best_identity = (best_app.app_id, best_app.display_name.casefold())
+        peers = [
+            item
+            for item in ranked[1:]
+            if (item[1].app_id, item[1].display_name.casefold()) != best_identity
+        ]
+        if peers and best_score - peers[0][0] < _AMBIGUITY_MARGIN:
             return None
-        return best[0][1], best[0][2]
+        return best_app, best_text
 
     @staticmethod
     def _resolved(
@@ -172,20 +181,28 @@ class AppEntityResolver:
         except AppCatalogError:
             pass
 
-        # A target named in the latest USER utterance always outranks conversation
-        # history. This includes cross-script phonetic evidence, but the identity itself
-        # still comes only from the Windows-owned installed-app catalogue.
+        # First prove the planner's machine-owned candidate directly against the latest
+        # USER turn. This avoids a catalogue-wide fuzzy search winning over a clearly
+        # grounded candidate while still rejecting unrelated model substitutions.
         latest_query_grounded = _literal_grounded(bounded_query, latest_text)
-        latest_mentioned = self._unique_best(self._mentioned_apps((latest_text,)))
         if latest_query_grounded and proposed is not None:
             return self._resolved(proposed, latest_text)
 
+        latest_mentioned = self._unique_best(self._mentioned_apps((latest_text,)))
         if latest_mentioned is not None:
             app, grounded_from = latest_mentioned
             if proposed is not None and proposed.app_id == app.app_id:
                 return self._resolved(app, grounded_from)
             if _alias_related(bounded_query, app.display_name):
                 return self._resolved(app, grounded_from)
+            LOGGER.warning(
+                "Hands app grounding conflict | planner_query=%r | planner_app=%r | "
+                "spoken_app=%r | spoken_app_id=%r",
+                bounded_query,
+                proposed.display_name if proposed is not None else None,
+                app.display_name,
+                app.app_id,
+            )
             raise EntityResolutionError(
                 "planner-selected app target conflicts with the app named by the user"
             )
@@ -208,6 +225,14 @@ class AppEntityResolver:
                     or _alias_related(bounded_query, app.display_name)
                 ):
                     return self._resolved(app, grounded_from)
+                LOGGER.warning(
+                    "Hands recent-app grounding conflict | planner_query=%r | "
+                    "planner_app=%r | recent_app=%r | recent_app_id=%r",
+                    bounded_query,
+                    proposed.display_name if proposed is not None else None,
+                    app.display_name,
+                    app.app_id,
+                )
                 raise EntityResolutionError(
                     "planner-selected app target conflicts with the referenced recent app"
                 )
