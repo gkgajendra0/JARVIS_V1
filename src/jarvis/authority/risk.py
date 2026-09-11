@@ -36,6 +36,8 @@ class RiskClassifier:
             reasons.append("executable_or_system_change")
         if attributes.identity_profile_change:
             reasons.append("identity_profile_change")
+        if attributes.generic_visual_control:
+            reasons.append("generic_visual_control")
         if attributes.destructive:
             reasons.append("destructive")
         if attributes.irreversible:
