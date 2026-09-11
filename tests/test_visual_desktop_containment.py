@@ -165,7 +165,7 @@ def visual_request(task: str, *, app: str = "Notepad") -> CapabilityRequest:
     )
 
 
-def test_visual_fallback_allows_normal_persistent_external_app_work() -> None:
+def test_visual_fallback_allows_normal_app_work_but_gets_strong_risk_floor() -> None:
     executor = GovernedVisualDesktopExecutor(provider_name="openai")
 
     prepared = executor.prepare(
@@ -174,8 +174,10 @@ def test_visual_fallback_allows_normal_persistent_external_app_work() -> None:
 
     assert prepared.attributes.persistent_write is True
     assert prepared.attributes.external_side_effect is True
+    assert prepared.attributes.generic_visual_control is True
     assessment = RiskClassifier().classify(prepared.attributes)
-    assert assessment.risk_class is RiskClass.PERSISTENT_OR_EXTERNAL
+    assert assessment.risk_class is RiskClass.CRITICAL
+    assert "generic_visual_control" in assessment.reason_codes
     assert prepared.target["strategy"] == "window_scoped_visual_fallback"
 
 
