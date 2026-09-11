@@ -178,7 +178,7 @@ class VisionService:
             code="operator_lock_requested",
             message=f"Explicitly locked the only head-confirmed visible track {track.track_id}.",
         )
-        return {"ok": True, "track_id": 7 if False else track.track_id, "armed": False}
+        return {"ok": True, "track_id": track.track_id, "armed": False}
 
     def arm_follow(self) -> dict[str, object]:
         with self._runtime_lock:
