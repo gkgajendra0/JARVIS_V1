@@ -68,7 +68,7 @@ async def test_grounded_reversible_voice_hint_executes_without_hands_planner() -
             data={"percent": 30.0, "verification_passed": True},
         )
     )
-    orchestrator._runtime = runtime  # type: ignore[assignment]  # noqa: SLF001
+    orchestrator._runtime = runtime  # type: ignore[assignment]
 
     result = await execute_fast_hint(
         orchestrator,
@@ -98,7 +98,7 @@ async def test_high_risk_voice_hint_cannot_enter_fast_path() -> None:
             data={"verification_passed": True},
         )
     )
-    orchestrator._runtime = runtime  # type: ignore[assignment]  # noqa: SLF001
+    orchestrator._runtime = runtime  # type: ignore[assignment]
 
     result = await execute_fast_hint(
         orchestrator,
@@ -124,7 +124,7 @@ async def test_ungrounded_fast_hint_falls_back_before_execution() -> None:
             data={"verification_passed": True},
         )
     )
-    orchestrator._runtime = runtime  # type: ignore[assignment]  # noqa: SLF001
+    orchestrator._runtime = runtime  # type: ignore[assignment]
 
     result = await execute_fast_hint(
         orchestrator,
