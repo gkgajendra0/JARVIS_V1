@@ -98,11 +98,11 @@ def _normalized(value: object) -> str:
 class GovernedVisualDesktopExecutor:
     """Last-resort app-window Computer Use behind deterministic Authority.
 
-    Unknown GUI interaction is conservatively classified as persistent/external even
-    when the requested action may ultimately be read-only or reversible. That lets
-    JARVIS support ordinary app workflows such as save/export/send/share/print without
-    asking the model to decide the risk class. Critical/destructive/system/credential
-    intents remain outside this generic substrate and must use dedicated capabilities.
+    Generic visual interaction has unknown side-effect semantics, so JARVIS assigns a
+    deterministic CRITICAL authority floor before the provider sees a screenshot. One
+    strongly authorized visual goal may still execute a bounded sequence of app-local
+    actions. The model never chooses its own risk class. Explicit critical/destructive,
+    system and credential intents remain outside this generic substrate entirely.
     """
 
     capability_key = "visual:desktop.control"
@@ -137,6 +137,7 @@ class GovernedVisualDesktopExecutor:
                 "whole_desktop_control": False,
                 "browser_control": False,
                 "raw_shell": False,
+                "authority_floor": "critical",
             },
             execution_enabled=self._enabled,
         )
@@ -173,6 +174,7 @@ class GovernedVisualDesktopExecutor:
                 private_read=True,
                 persistent_write=True,
                 external_side_effect=True,
+                generic_visual_control=True,
                 scope=ActionScope.LIMITED,
             ),
             execution_payload={"app": app, "task": task},
@@ -221,7 +223,7 @@ class GovernedVisualDesktopExecutor:
                 capability_key=self.capability_key,
                 operation=prepared.request.operation,
                 data={},
-                reason=f"{type(exc).__name__}: {exc}",
+                reason=f"{type(exc).__name__}: visual desktop fallback failed",
                 elapsed_ms=(time.monotonic() - started) * 1000,
             )
 
