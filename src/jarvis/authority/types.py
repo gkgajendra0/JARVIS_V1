@@ -92,6 +92,7 @@ class ActionAttributes:
     security_or_permission_change: bool = False
     executable_or_system_change: bool = False
     identity_profile_change: bool = False
+    generic_visual_control: bool = False
     authority_policy_change: bool = False
     audit_control_change: bool = False
     self_modification: bool = False
@@ -111,6 +112,7 @@ class ActionAttributes:
             "security_or_permission_change": self.security_or_permission_change,
             "executable_or_system_change": self.executable_or_system_change,
             "identity_profile_change": self.identity_profile_change,
+            "generic_visual_control": self.generic_visual_control,
             "authority_policy_change": self.authority_policy_change,
             "audit_control_change": self.audit_control_change,
             "self_modification": self.self_modification,
