@@ -298,9 +298,6 @@ def run_profile(
     print(f"nvidia_smi_available = {gpu_probe.available}")
     print("JARVIS behavior is not modified by this profiler.")
 
-    process.cpu_percent(interval=None)
-    psutil.cpu_percent(interval=None)
-
     samples: list[dict[str, Any]] = []
     for phase in phases:
         print()
@@ -308,6 +305,10 @@ def run_profile(
         print(phase.instruction)
         if prompt:
             input("Press Enter when ready to start this phase... ")
+        # Reset non-blocking CPU counters only after the operator is ready, so the
+        # first sample cannot include time spent waiting at the phase prompt.
+        process.cpu_percent(interval=None)
+        psutil.cpu_percent(interval=None)
         phase_samples = collect_phase(
             process,
             phase,
