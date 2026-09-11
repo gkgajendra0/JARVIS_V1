@@ -80,6 +80,37 @@ def test_streaming_predictor_reuses_livekit_bundled_feature_models(
     assert captured["ncpu"] == 1
 
 
+def test_load_predictor_uses_stable_livekit_wakeword_constructor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import livekit.wakeword as livekit_wakeword
+    import jarvis.voice.wakeword as wakeword
+
+    captured: dict[str, object] = {}
+
+    class FakeWakeWordModel:
+        def __init__(self, *, models: list[Path]) -> None:
+            captured["models"] = models
+
+        def predict(self, _samples: np.ndarray) -> dict[str, float]:
+            return {"jarvis": 0.0}
+
+    monkeypatch.setattr(livekit_wakeword, "WakeWordModel", FakeWakeWordModel)
+    monkeypatch.setattr(
+        wakeword,
+        "OpenWakeWordStreamingPredictor",
+        lambda _path: FakeStreamingPredictor(0.0),
+    )
+    classifier_path = tmp_path / "jarvis.onnx"
+    classifier_path.write_bytes(b"stub")
+
+    predictor = wakeword.load_livekit_predictor(classifier_path)
+
+    assert isinstance(predictor, CascadedWakePredictor)
+    assert captured["models"] == [classifier_path]
+
+
 def test_wake_cascade_uses_exact_verifier_only_after_streaming_pretrigger() -> None:
     streaming = FakeStreamingPredictor(0.20)
     verifier = FakePredictor(0.91)
