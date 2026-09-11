@@ -14,6 +14,7 @@ from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.hands.orchestrator import HandsOrchestrationError, HandsOrchestrator
 from jarvis.hands.planner import HandsPlanningError
+from jarvis.voice.generic_grounded_hands import GenericGroundedVoiceHandsOrchestrator
 from jarvis.voice.hands_fast_path import execute_fast_hint
 from jarvis.voice.hands_orchestrator import VoiceHandsOrchestrator
 from jarvis.voice.hands_transaction import (
@@ -194,7 +195,7 @@ class HandsGoalAgentTools:
             raise HandsOrchestrationError(
                 "JARVIS Hands semantic planner is not configured"
             )
-        return VoiceHandsOrchestrator(
+        return GenericGroundedVoiceHandsOrchestrator(
             LeaseAwareCapabilityRuntime(self._runtime, is_current),
             LeaseAwareHandsPlanner(planner, is_current),
         )
