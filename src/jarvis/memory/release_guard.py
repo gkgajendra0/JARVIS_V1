@@ -8,6 +8,8 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from jarvis.ai_provider import normalize_ai_provider, resolve_ai_role_model
+
 from .assertions import SemanticAssertionRecord
 from .query_interpreters import build_structured_provider_client
 
@@ -218,9 +220,15 @@ def build_memory_release_guard(
 ) -> MemoryReleaseGuard:
     """Build the verifier under the already-selected production provider family."""
 
-    normalized_model = _require_text(model, name="model")
+    configured_model = _require_text(model, name="model")
+    normalized_provider = normalize_ai_provider(provider)
+    normalized_model = resolve_ai_role_model(
+        normalized_provider,
+        "memory_semantic_recall",
+        configured_model=configured_model,
+    )
     normalized_provider, client = build_structured_provider_client(
-        provider=provider,
+        provider=normalized_provider,
         purpose="semantic memory release verification",
     )
 

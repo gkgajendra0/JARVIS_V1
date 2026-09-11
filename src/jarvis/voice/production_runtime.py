@@ -172,7 +172,7 @@ def build_production_voice_runtime(
             "structured_release_verifier=True deterministic_core=True "
             "probabilistic_semantic_boundary=True",
             config.ai_provider,
-            query_model,
+            interpreter.model_name,
         )
 
     candidate_extractor = None
@@ -187,7 +187,7 @@ def build_production_voice_runtime(
             "active_provider=%s model=%s quarantine=session_local "
             "durable_admission=False",
             config.ai_provider,
-            config.memory_candidate_extraction_model,
+            candidate_extractor.model_name,
         )
 
     research_service = build_current_research_service()
@@ -198,12 +198,25 @@ def build_production_voice_runtime(
         research_service.provider_name,
     )
 
-    capability_runtime = build_default_capability_runtime()
+    capability_runtime = build_default_capability_runtime(
+        ai_provider=config.ai_provider,
+        hands_planner_model=config.hands_planner_model,
+    )
     capability_catalog = capability_runtime.refresh_catalog()
+    structured_hands = capability_catalog.by_key("windows:desktop.control")
+    visual_hands = capability_catalog.by_key("visual:desktop.control")
+    browser_hands = capability_catalog.by_key("browser:playwright")
+    hands_planner = capability_runtime.hands_planner
     LOGGER.info(
-        "Step-7 governed capability runtime configured: capabilities=%s "
-        "read_executors=2 desktop_execution=False browser_execution=False",
+        "Governed capability runtime configured: capabilities=%s "
+        "structured_desktop_control=%s visual_fallback=%s browser_control=%s "
+        "hands_planner=%s/%s raw_shell=False",
         len(capability_catalog.capabilities),
+        bool(structured_hands and structured_hands.execution_enabled),
+        bool(visual_hands and visual_hands.execution_enabled),
+        bool(browser_hands and browser_hands.execution_enabled),
+        getattr(hands_planner, "provider_name", "none"),
+        getattr(hands_planner, "model_name", "none"),
     )
 
     provider_resilience_state = ProviderResilienceState()

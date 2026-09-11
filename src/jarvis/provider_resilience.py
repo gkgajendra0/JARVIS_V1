@@ -158,8 +158,6 @@ def _status_code(chain: tuple[object, ...]) -> int | None:
         status = _status_from_object(item)
         if status is not None:
             return status
-        # requests/httpx-style HTTP exceptions commonly keep the authoritative
-        # status on ``exception.response`` rather than on the exception itself.
         status = _status_from_object(getattr(item, "response", None))
         if status is not None:
             return status
@@ -204,22 +202,32 @@ def classify_provider_failure(error: object, *, provider: str) -> ProviderFailur
     status = _status_code(chain)
     retryable = _retryable(chain)
     evidence = _classification_text(chain)
+    quota_markers = (
+        "quota_exceeded",
+        "quota exceeded",
+        "resource_exhausted",
+        "resource exhausted",
+        "insufficient_quota",
+        "daily quota",
+        "billing quota",
+    )
+    rate_markers = (
+        "rate_limit_exceeded",
+        "rate limit exceeded",
+        "rate-limiting",
+        "rate limiting",
+        "too many requests",
+        "tokens per minute",
+        "requests per minute",
+    )
 
-    if status == 429:
-        quota_markers = (
-            "quota_exceeded",
-            "quota exceeded",
-            "resource_exhausted",
-            "resource exhausted",
-            "insufficient_quota",
-            "daily quota",
-            "billing quota",
-        )
-        kind = (
-            ProviderFailureKind.QUOTA_EXHAUSTED
-            if any(marker in evidence for marker in quota_markers)
-            else ProviderFailureKind.RATE_LIMITED
-        )
+    # Realtime SDK errors do not always preserve an HTTP status. Provider error codes
+    # and messages are therefore first-class diagnostic evidence, especially for token
+    # rate limits such as ``response failed: [tokens] rate_limit_exceeded``.
+    if any(marker in evidence for marker in quota_markers):
+        kind = ProviderFailureKind.QUOTA_EXHAUSTED
+    elif status == 429 or any(marker in evidence for marker in rate_markers):
+        kind = ProviderFailureKind.RATE_LIMITED
     elif status == 401:
         kind = ProviderFailureKind.AUTHENTICATION_FAILED
     elif status == 403:

@@ -16,6 +16,24 @@ _PROVIDER_CREDENTIAL_ENV = {
     "openai": "OPENAI_API_KEY",
 }
 
+# Capability-specific models are selected *inside* the one active provider family.
+# These defaults are deliberately centralized so changing JARVIS_AI_PROVIDER cannot
+# leave a Gemini model attached to an OpenAI client (or vice versa).
+_AI_ROLE_MODEL_DEFAULTS: dict[str, dict[str, str]] = {
+    "hands_planner": {
+        "gemini": "gemini-3.5-flash",
+        "openai": "gpt-5.6-terra",
+    },
+    "memory_candidate_extraction": {
+        "gemini": "gemini-3.5-flash-lite",
+        "openai": "gpt-5.6-terra",
+    },
+    "memory_semantic_recall": {
+        "gemini": "gemini-3.8-flash",
+        "openai": "gpt-5.6-terra",
+    },
+}
+
 
 def normalize_ai_provider(value: str) -> str:
     if not isinstance(value, str):
@@ -83,3 +101,43 @@ def require_provider_api_key(provider: str, *, purpose: str = "cloud AI") -> str
             f"{environment_name} is required for active {normalized} {purpose}"
         )
     return api_key
+
+
+def _known_model_provider(model: str) -> str | None:
+    """Identify model families whose provider ownership is unambiguous."""
+
+    normalized = model.strip().casefold()
+    if normalized.startswith("gemini-"):
+        return "gemini"
+    if normalized.startswith(("gpt-", "chatgpt-", "codex-", "o1", "o3", "o4")):
+        return "openai"
+    return None
+
+
+def resolve_ai_role_model(
+    provider: str,
+    role: str,
+    *,
+    configured_model: str | None = None,
+) -> str:
+    """Resolve a role model without allowing a stale cross-provider model to leak.
+
+    Existing generic role-model settings remain usable for compatibility. If a known
+    Gemini model is still configured after switching to OpenAI, or vice versa, JARVIS
+    automatically selects the active provider's role default instead. This keeps
+    ``JARVIS_AI_PROVIDER`` as the only required provider switch.
+    """
+
+    normalized_provider = normalize_ai_provider(provider)
+    normalized_role = str(role).strip().casefold()
+    defaults = _AI_ROLE_MODEL_DEFAULTS.get(normalized_role)
+    if defaults is None:
+        raise ValueError(f"Unsupported cloud-AI role: {role!r}")
+
+    if configured_model is not None and str(configured_model).strip():
+        candidate = str(configured_model).strip()
+        model_provider = _known_model_provider(candidate)
+        if model_provider is None or model_provider == normalized_provider:
+            return candidate
+
+    return defaults[normalized_provider]

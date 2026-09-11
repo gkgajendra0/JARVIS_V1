@@ -42,6 +42,8 @@ class WinAppCliBackend:
     """
 
     MAX_TEXT_CHARACTERS = 500
+    MAX_QUERY_CHARACTERS = 300
+    MAX_STDOUT_CHARACTERS = 100_000
     DEFAULT_TIMEOUT_SECONDS = 10.0
 
     def __init__(
@@ -98,6 +100,10 @@ class WinAppCliBackend:
 
         stdout = (completed.stdout or "").strip()
         stderr = (completed.stderr or "").strip()
+        if len(stdout) > self.MAX_STDOUT_CHARACTERS:
+            raise StructuredWindowsError(
+                f"winapp {operation} exceeded bounded output limit"
+            )
         payload: dict[str, Any] = {}
         if stdout and expect_json:
             try:
@@ -175,6 +181,59 @@ class WinAppCliBackend:
             f"winapp could not attach to {app!r} within {timeout_seconds:.1f}s: {detail}"
         )
 
+    def inspect(
+        self,
+        app: str,
+        *,
+        selector: str | None = None,
+        depth: int = 6,
+        interactive: bool = False,
+    ) -> StructuredCommandResult:
+        target = self._validate_target(app)
+        if not 1 <= int(depth) <= 10:
+            raise ValueError("inspect depth must be between 1 and 10")
+        args = ["ui", "inspect"]
+        if selector is not None:
+            args.append(self._validate_selector(selector))
+        args.extend(["-a", target, "--depth", str(int(depth))])
+        if interactive:
+            args.append("--interactive")
+        args.append("--json")
+        return self._run(
+            args,
+            operation="inspect",
+            timeout=8.0,
+            expect_json=True,
+        )
+
+    def search(
+        self,
+        app: str,
+        query: str,
+        *,
+        max_results: int = 10,
+    ) -> StructuredCommandResult:
+        target = self._validate_target(app)
+        value = self._validate_query(query)
+        if not 1 <= int(max_results) <= 25:
+            raise ValueError("search max_results must be between 1 and 25")
+        return self._run(
+            [
+                "ui",
+                "search",
+                value,
+                "-a",
+                target,
+                "--max",
+                str(int(max_results)),
+                "--json",
+            ],
+            operation="search",
+            timeout=8.0,
+            expect_json=True,
+            check=False,
+        )
+
     def get_value(self, app: str, selector: str) -> StructuredCommandResult:
         target = self._validate_target(app)
         element = self._validate_selector(selector)
@@ -182,6 +241,41 @@ class WinAppCliBackend:
             ["ui", "get-value", element, "-a", target, "--json"],
             operation="get_value",
             timeout=5.0,
+            expect_json=True,
+        )
+
+    def focus(self, app: str, selector: str) -> StructuredCommandResult:
+        target = self._validate_target(app)
+        element = self._validate_selector(selector)
+        return self._run(
+            ["ui", "focus", element, "-a", target, "--json"],
+            operation="focus",
+            timeout=5.0,
+            expect_json=True,
+        )
+
+    def click(
+        self,
+        app: str,
+        selector: str,
+        *,
+        double: bool = False,
+        right: bool = False,
+    ) -> StructuredCommandResult:
+        target = self._validate_target(app)
+        element = self._validate_selector(selector)
+        if double and right:
+            raise ValueError("double and right click cannot be combined")
+        args = ["ui", "click", element, "-a", target]
+        if double:
+            args.append("--double")
+        if right:
+            args.append("--right")
+        args.append("--json")
+        return self._run(
+            args,
+            operation="click",
+            timeout=8.0,
             expect_json=True,
         )
 
@@ -193,15 +287,7 @@ class WinAppCliBackend:
         target_selector: str | None = None,
     ) -> StructuredCommandResult:
         target = self._validate_target(app)
-        value = str(text)
-        if not value:
-            raise ValueError("text must not be empty")
-        if len(value) > self.MAX_TEXT_CHARACTERS:
-            raise ValueError(
-                f"text exceeds structured automation limit of "
-                f"{self.MAX_TEXT_CHARACTERS} characters"
-            )
-
+        value = self._validate_text(text)
         args = ["ui", "send-keys", value, "--verbatim", "--via", "send-input"]
         if target_selector is not None:
             args.extend(["--target", self._validate_selector(target_selector)])
@@ -209,6 +295,22 @@ class WinAppCliBackend:
         return self._run(
             args,
             operation="send_text",
+            timeout=8.0,
+            expect_json=True,
+        )
+
+    def set_value(
+        self,
+        app: str,
+        selector: str,
+        value: str,
+    ) -> StructuredCommandResult:
+        target = self._validate_target(app)
+        element = self._validate_selector(selector)
+        bounded = self._validate_text(value)
+        return self._run(
+            ["ui", "set-value", element, bounded, "-a", target, "--json"],
+            operation="set_value",
             timeout=8.0,
             expect_json=True,
         )
@@ -222,6 +324,67 @@ class WinAppCliBackend:
             timeout=8.0,
             expect_json=True,
         )
+
+    def wait_for(
+        self,
+        app: str,
+        selector: str,
+        *,
+        timeout_seconds: float = 5.0,
+        gone: bool = False,
+    ) -> StructuredCommandResult:
+        target = self._validate_target(app)
+        element = self._validate_selector(selector)
+        if not 0.1 <= float(timeout_seconds) <= 30.0:
+            raise ValueError("wait-for timeout must be between 0.1 and 30 seconds")
+        args = [
+            "ui",
+            "wait-for",
+            element,
+            "-a",
+            target,
+            "--timeout",
+            str(int(float(timeout_seconds) * 1000)),
+        ]
+        if gone:
+            args.append("--gone")
+        args.append("--json")
+        return self._run(
+            args,
+            operation="wait_for",
+            timeout=float(timeout_seconds) + 2.0,
+            expect_json=True,
+            check=False,
+        )
+
+    def list_windows(self, app: str) -> StructuredCommandResult:
+        target = self._validate_target(app)
+        return self._run(
+            ["ui", "list-windows", "-a", target, "--json"],
+            operation="list_windows",
+            timeout=5.0,
+            expect_json=True,
+            check=False,
+        )
+
+    @classmethod
+    def _validate_text(cls, value: str) -> str:
+        text = str(value)
+        if not text:
+            raise ValueError("text must not be empty")
+        if len(text) > cls.MAX_TEXT_CHARACTERS:
+            raise ValueError(
+                "text exceeds structured automation limit of "
+                f"{cls.MAX_TEXT_CHARACTERS} characters"
+            )
+        return text
+
+    @classmethod
+    def _validate_query(cls, value: str) -> str:
+        query = str(value).strip()
+        if not query or len(query) > cls.MAX_QUERY_CHARACTERS:
+            raise ValueError("query must be a non-empty bounded string")
+        return query
 
     @staticmethod
     def _validate_target(value: str) -> str:
@@ -239,15 +402,12 @@ class WinAppCliBackend:
 
 
 class AllowlistedWindowsLauncher:
-    """Minimal shell-free launcher for routine app start.
-
-    This is intentionally not a general command executor. The executable map is
-    explicit and tiny so the JARVIS authority layer can reason about a stable
-    capability instead of arbitrary process execution.
-    """
+    """Minimal shell-free launcher for explicitly supported local apps."""
 
     _COMMANDS: ClassVar[dict[str, tuple[str, ...]]] = {
         "notepad": ("notepad.exe",),
+        "calculator": ("calc.exe",),
+        "paint": ("mspaint.exe",),
     }
 
     def __init__(
@@ -262,6 +422,10 @@ class AllowlistedWindowsLauncher:
             )
         self._popen = popen
         self._monotonic = monotonic
+
+    @classmethod
+    def supported_apps(cls) -> tuple[str, ...]:
+        return tuple(sorted(cls._COMMANDS))
 
     def launch(self, app: str) -> StructuredCommandResult:
         key = str(app).strip().casefold()

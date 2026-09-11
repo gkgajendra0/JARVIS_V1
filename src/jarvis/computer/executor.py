@@ -48,21 +48,60 @@ class MssPyAutoGuiExecutor:
         self._pyautogui.FAILSAFE = True
         self._pyautogui.PAUSE = 0.05
 
-    def capture_screen(self) -> ScreenFrame:
-        with self._mss_module.mss() as capture:
-            monitor = capture.monitors[0]
-            grab = capture.grab(monitor)
+    def _frame_from_grab(
+        self,
+        grab,
+        *,
+        left: int,
+        top: int,
+        width: int,
+        height: int,
+    ) -> ScreenFrame:
         pixels = self._numpy.asarray(grab)
         ok, encoded = self._cv2.imencode(".png", pixels)
         if not ok:
             raise ComputerExecutorError("failed to encode desktop screenshot as PNG")
         return ScreenFrame(
             png_bytes=encoded.tobytes(),
+            left=int(left),
+            top=int(top),
+            width=int(width),
+            height=int(height),
+        )
+
+    def capture_screen(self) -> ScreenFrame:
+        with self._mss_module.mss() as capture:
+            monitor = capture.monitors[0]
+            grab = capture.grab(monitor)
+        return self._frame_from_grab(
+            grab,
             left=int(monitor["left"]),
             top=int(monitor["top"]),
             width=int(monitor["width"]),
             height=int(monitor["height"]),
         )
+
+    def capture_region(
+        self,
+        *,
+        left: int,
+        top: int,
+        width: int,
+        height: int,
+    ) -> ScreenFrame:
+        """Capture one explicit virtual-desktop region instead of the whole desktop."""
+
+        if width <= 0 or height <= 0:
+            raise ComputerExecutorError("capture region dimensions must be positive")
+        region = {
+            "left": int(left),
+            "top": int(top),
+            "width": int(width),
+            "height": int(height),
+        }
+        with self._mss_module.mss() as capture:
+            grab = capture.grab(region)
+        return self._frame_from_grab(grab, **region)
 
     def execute(self, action: ComputerAction) -> ActionExecutionResult:
         name = action.name

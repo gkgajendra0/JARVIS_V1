@@ -26,6 +26,38 @@ def test_session_accepts_ordered_turns_while_active() -> None:
     assert first.turn_id != second.turn_id
     assert first.accepted_at.tzinfo is UTC
     assert second.accepted_at.tzinfo is UTC
+    assert first.user_utterance_generation == 1
+    assert second.user_utterance_generation is None
+
+
+def test_voice_generations_bind_delayed_user_transcripts_fifo() -> None:
+    session = ConversationSession(session_id="voice-generation-test")
+    session.start()
+
+    first_generation = session.begin_user_utterance()
+    second_generation = session.begin_user_utterance()
+    assert session.user_utterance_generation == 2
+
+    first = session.accept_turn(ConversationRole.USER, "First delayed transcript")
+    second = session.accept_turn(ConversationRole.USER, "Second delayed transcript")
+
+    assert first_generation == 1
+    assert second_generation == 2
+    assert first.user_utterance_generation == first_generation
+    assert second.user_utterance_generation == second_generation
+    assert session.user_utterance_generation == 2
+
+
+def test_direct_user_turns_still_receive_monotonic_generations() -> None:
+    session = ConversationSession(session_id="direct-generation-test")
+    session.start()
+
+    first = session.accept_turn(ConversationRole.USER, "one")
+    second = session.accept_turn(ConversationRole.USER, "two")
+
+    assert first.user_utterance_generation == 1
+    assert second.user_utterance_generation == 2
+    assert session.user_utterance_generation == 2
 
 
 def test_session_id_is_stable_and_can_be_supplied_by_jarvis_boundary() -> None:

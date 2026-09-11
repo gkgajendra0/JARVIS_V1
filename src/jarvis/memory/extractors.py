@@ -6,7 +6,11 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from jarvis.ai_provider import normalize_ai_provider, require_provider_api_key
+from jarvis.ai_provider import (
+    normalize_ai_provider,
+    require_provider_api_key,
+    resolve_ai_role_model,
+)
 
 from .candidates import MemoryCandidateExtractor, MemoryExtractionProposal
 
@@ -141,7 +145,12 @@ def build_memory_candidate_extractor(
     """Build an adapter for the already-selected active production AI provider."""
 
     normalized_provider = normalize_ai_provider(provider)
-    normalized_model = _require_non_empty(model, name="model")
+    configured_model = _require_non_empty(model, name="model")
+    normalized_model = resolve_ai_role_model(
+        normalized_provider,
+        "memory_candidate_extraction",
+        configured_model=configured_model,
+    )
     api_key = require_provider_api_key(
         normalized_provider,
         purpose="memory candidate extraction",

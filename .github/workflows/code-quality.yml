@@ -37,7 +37,22 @@ jobs:
           python-version: "3.11"
 
       - name: Install JARVIS test dependencies
-        run: python -m pip install -e ".[dev,phase45d-acceptance]"
+        run: python -m pip install -e ".[dev,phase45d-acceptance,hands]"
+
+      - name: Provision Playwright Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Smoke Playwright Chromium
+        run: |
+          python - <<'PY'
+          from playwright.sync_api import sync_playwright
+
+          with sync_playwright() as playwright:
+              executable = playwright.chromium.executable_path
+              browser = playwright.chromium.launch(headless=True)
+              browser.close()
+              print(f"Playwright Chromium launch ready: {executable}")
+          PY
 
       - name: Run unit tests
         run: python -m pytest -q
@@ -88,6 +103,58 @@ jobs:
             throw "Windows Hello helper JSON contract mismatch: $response"
           }
 
+      - name: Publish production Windows Hello helper
+        shell: pwsh
+        run: |
+          $output = Join-Path $env:RUNNER_TEMP "jarvis-hello-publish"
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $output
+          dotnet publish `
+            tools/windows/Jarvis.WindowsHelloVerifier/Jarvis.WindowsHelloVerifier.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --nologo `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:PublishTrimmed=false `
+            -p:DebugType=None `
+            --output $output
+          if ($LASTEXITCODE -ne 0) {
+            throw "Production Windows Hello helper publish failed"
+          }
+          $helper = Join-Path $output "Jarvis.WindowsHelloVerifier.exe"
+          if (-not (Test-Path $helper -PathType Leaf)) {
+            throw "Published Windows Hello helper executable is missing"
+          }
+
+      - name: Probe published Windows Hello helper JSON contract
+        shell: pwsh
+        run: |
+          $helper = Join-Path $env:RUNNER_TEMP "jarvis-hello-publish\Jarvis.WindowsHelloVerifier.exe"
+          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+          $startInfo.FileName = $helper
+          $startInfo.UseShellExecute = $false
+          $startInfo.RedirectStandardInput = $true
+          $startInfo.RedirectStandardOutput = $true
+          $startInfo.RedirectStandardError = $true
+          $process = [System.Diagnostics.Process]::new()
+          $process.StartInfo = $startInfo
+          if (-not $process.Start()) {
+            throw "Failed to start published Windows Hello helper contract probe"
+          }
+          $process.StandardInput.Write('{}')
+          $process.StandardInput.Close()
+          $response = $process.StandardOutput.ReadToEnd()
+          $stderr = $process.StandardError.ReadToEnd()
+          $process.WaitForExit()
+          if ($process.ExitCode -ne 2) {
+            throw "Expected published helper exit code 2, got $($process.ExitCode). stderr=$stderr"
+          }
+          $payload = $response | ConvertFrom-Json
+          if ($payload.status -ne 'error' -or $payload.reason -ne 'invalid_request') {
+            throw "Published Windows Hello helper JSON contract mismatch: $response"
+          }
+
   windows-dpapi:
     runs-on: windows-latest
     steps:
@@ -99,8 +166,26 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install JARVIS test dependencies
-        run: python -m pip install -e ".[dev]"
+      - name: Install unified JARVIS Hands test dependencies
+        run: python -m pip install -e ".[dev,hands]"
+
+      - name: Probe Windows Hands Python dependencies
+        run: >-
+          python -c "import pycaw; import win32clipboard; import win32gui;
+          import winrt.windows.foundation; import winrt.windows.foundation.collections;
+          import winrt.windows.media.control; import winrt.windows.devices.enumeration;
+          import winrt.windows.devices.bluetooth; import screen_brightness_control;
+          import send2trash; import docx; import openpyxl; import pptx; import playwright;
+          import dulwich; import uroman; import jellyfish;
+          print('Unified Windows Hands Python dependencies ready')"
+
+      - name: Run Windows multilingual Hands regressions
+        run: >-
+          python -m pytest -q
+          tests/test_hands_entities.py
+          tests/test_hands_contracts.py
+          tests/test_hands_generic_grounding.py
+          tests/test_windows_hello_utf8.py
 
       - name: Run Windows DPAPI smoke test
         run: python -m pytest -q tests/test_windows_dpapi.py

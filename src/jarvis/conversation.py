@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -36,6 +37,7 @@ class ConversationTurn:
     turn_id: str = field(default_factory=_new_id)
     accepted_at: datetime = field(default_factory=_utc_now)
     external_item_id: str | None = None
+    user_utterance_generation: int | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.role, ConversationRole):
@@ -60,6 +62,16 @@ class ConversationTurn:
             external_item_id = external_item_id.strip()
             if not external_item_id:
                 raise ValueError("external_item_id must not be empty when provided")
+        generation = self.user_utterance_generation
+        if generation is not None:
+            if isinstance(generation, bool) or not isinstance(generation, int):
+                raise TypeError("user_utterance_generation must be an integer")
+            if generation <= 0:
+                raise ValueError("user_utterance_generation must be positive")
+            if self.role is not ConversationRole.USER:
+                raise ValueError(
+                    "user_utterance_generation is only valid for USER turns"
+                )
         object.__setattr__(self, "text", text)
         object.__setattr__(self, "turn_id", self.turn_id.strip())
         object.__setattr__(self, "accepted_at", self.accepted_at.astimezone(UTC))
@@ -78,6 +90,8 @@ class ConversationSession:
         self._session_id = resolved_session_id
         self._status = ConversationStatus.CREATED
         self._turns: list[ConversationTurn] = []
+        self._user_utterance_generation = 0
+        self._pending_user_generations: deque[int] = deque()
 
     @property
     def session_id(self) -> str:
@@ -90,6 +104,23 @@ class ConversationSession:
     @property
     def turns(self) -> tuple[ConversationTurn, ...]:
         return tuple(self._turns)
+
+    @property
+    def user_utterance_generation(self) -> int:
+        """Newest voice-user generation, including speech with transcript pending."""
+
+        return self._user_utterance_generation
+
+    def begin_user_utterance(self) -> int:
+        """Advance and queue a generation as soon as LiveKit reports user speech."""
+
+        if self._status is not ConversationStatus.ACTIVE:
+            raise RuntimeError(
+                f"cannot begin a user utterance in a {self._status.value} conversation"
+            )
+        self._user_utterance_generation += 1
+        self._pending_user_generations.append(self._user_utterance_generation)
+        return self._user_utterance_generation
 
     def start(self) -> None:
         if self._status is not ConversationStatus.CREATED:
@@ -108,11 +139,20 @@ class ConversationSession:
             raise RuntimeError(
                 f"cannot add a turn to a {self._status.value} conversation"
             )
+        generation: int | None = None
+        if role is ConversationRole.USER:
+            if self._pending_user_generations:
+                generation = self._pending_user_generations.popleft()
+            else:
+                # Non-voice callers and unit tests may commit USER turns directly.
+                self._user_utterance_generation += 1
+                generation = self._user_utterance_generation
         turn = ConversationTurn(
             role=role,
             text=text,
             interrupted=interrupted,
             external_item_id=external_item_id,
+            user_utterance_generation=generation,
         )
         self._turns.append(turn)
         return turn

@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
+import subprocess
+import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +16,7 @@ from jarvis.ai_provider import (
     LEGACY_REALTIME_PROVIDER_SETTING,
     configured_ai_provider,
 )
+from jarvis.authority.tool_setup import configure_authority_tool_settings
 from jarvis.config import FALSE_VALUES, TRUE_VALUES, JarvisConfig
 from jarvis.identity.active_speaker_assets import ensure_lr_asd_model
 from jarvis.machine_config import (
@@ -23,6 +28,74 @@ from jarvis.machine_config import (
 )
 from jarvis.preflight import print_preflight, run_startup_preflight
 from jarvis.voice.audio import DEVICE_CHANNELS, DEVICE_SAMPLE_RATE, LocalAudioRuntime
+
+_PlaywrightProbe = Callable[[], Path | None]
+_CommandRunner = Callable[[tuple[str, ...]], None]
+
+
+def _playwright_package_available() -> bool:
+    return importlib.util.find_spec("playwright") is not None
+
+
+def _probe_playwright_chromium() -> Path | None:
+    """Return Chromium's executable only when a real headless launch succeeds."""
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return None
+
+    try:
+        with sync_playwright() as playwright:
+            executable = Path(playwright.chromium.executable_path).expanduser()
+            if not executable.is_file():
+                return None
+            browser = playwright.chromium.launch(headless=True)
+            try:
+                return executable
+            finally:
+                browser.close()
+    except Exception:  # noqa: BLE001 - browser readiness probe contains backend faults
+        return None
+
+
+def _run_trusted_command(command: tuple[str, ...]) -> None:
+    subprocess.run(command, check=True)
+
+
+def _ensure_playwright_chromium(
+    *,
+    package_available: Callable[[], bool] = _playwright_package_available,
+    browser_probe: _PlaywrightProbe = _probe_playwright_chromium,
+    command_runner: _CommandRunner = _run_trusted_command,
+) -> bool:
+    """Provision the fixed Playwright Chromium payload when Browser Hands is selected."""
+
+    if not package_available():
+        print(
+            "Browser Hands extra is not installed; skipping Playwright Chromium setup."
+        )
+        return False
+
+    executable = browser_probe()
+    if executable is not None:
+        print(f"Playwright Chromium ready: {executable}")
+        return True
+
+    command = (sys.executable, "-m", "playwright", "install", "chromium")
+    print("Provisioning Playwright Chromium for Browser Hands...")
+    try:
+        command_runner(command)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise RuntimeError("Playwright Chromium installation failed") from exc
+
+    executable = browser_probe()
+    if executable is None:
+        raise RuntimeError(
+            "Playwright Chromium is still not launchable after installation"
+        )
+    print(f"Playwright Chromium ready: {executable}")
+    return True
 
 
 def _device_inventory(kind: str) -> list[dict[str, Any]]:
@@ -268,6 +341,7 @@ def _build_settings(existing: dict[str, str]) -> dict[str, str]:
     if head_model and Path(head_model).expanduser().is_file():
         settings["JARVIS_BLAZEFACE_MODEL_PATH"] = str(Path(head_model).expanduser())
 
+    settings.update(configure_authority_tool_settings(existing))
     return settings
 
 
@@ -358,6 +432,7 @@ def run_setup(*, show_only: bool = False) -> int:
     path = save_machine_settings(settings, target)
     _print_saved(path)
     _migrate_legacy_overrides()
+    _ensure_playwright_chromium()
 
     config = JarvisConfig.from_environment()
     checks = run_startup_preflight(config)

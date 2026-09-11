@@ -1,13 +1,15 @@
-"""Canonical Step-3 authority binding for Step-7 capability execution."""
+"""Canonical Step-3 authority binding for governed capability execution."""
 
 from __future__ import annotations
 
 import os
 import pathlib
 import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
-from jarvis.authority.approval import ApprovalService
+from jarvis.authority.approval import ApprovalError, ApprovalService
 from jarvis.authority.audit import AuditEvent, SqliteAuditEventStore
 from jarvis.authority.local_opa import LocalOpaError, ManagedOpaServer
 from jarvis.authority.permit import PermitRegistry
@@ -17,14 +19,21 @@ from jarvis.authority.risk import RiskClassifier
 from jarvis.authority.service import AuthorityError, AuthorityService
 from jarvis.authority.strong_approval import StrongApprovalService
 from jarvis.authority.types import (
+    ActionOrigin,
+    ApprovalMethod,
+    ApprovalRequirement,
     AttentionState,
     AuthorityEffect,
     InteractionContext,
+    RiskClass,
     TrustTier,
 )
 from jarvis.authority.verifier import WindowsHelloVerifier
 from jarvis.capabilities.execution import PreparedCapability
 from jarvis.capabilities.models import CapabilityResult
+
+_TRUSTED_OWNER_TTL_SECONDS = 30.0 * 60.0
+_PROPOSAL_APPROVAL_TTL_SECONDS = 120.0
 
 
 class CapabilityAuthorizationError(RuntimeError):
@@ -46,15 +55,33 @@ def _default_audit_path() -> pathlib.Path:
 
 
 class CapabilityAuthorityBroker:
-    """Lazy OPA + Windows Hello bridge using the canonical AuthorityService."""
+    """Lazy canonical authority bridge with bounded owner-session trust.
 
-    def __init__(self) -> None:
+    A successful direct-user strong verification establishes an in-memory T2 owner
+    trust window for the same JARVIS session. Non-critical direct-user actions may
+    reuse that trust while retaining fresh proposal-bound approval, permit, policy,
+    and audit checks. Critical and restricted actions always require exact-action T3
+    strong verification.
+    """
+
+    def __init__(
+        self,
+        *,
+        trusted_session_ttl_seconds: float = _TRUSTED_OWNER_TTL_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        if trusted_session_ttl_seconds <= 0:
+            raise ValueError("trusted session ttl must be positive")
         self._lock = threading.RLock()
         self._opa: ManagedOpaServer | None = None
         self._authority: AuthorityService | None = None
         self._approvals: ApprovalService | None = None
         self._strong: StrongApprovalService | None = None
         self._audit: SqliteAuditEventStore | None = None
+        self._risk_classifier = RiskClassifier()
+        self._trusted_session_ttl_seconds = float(trusted_session_ttl_seconds)
+        self._clock = clock
+        self._trusted_sessions: dict[str, float] = {}
 
     def _ensure_started(self) -> None:
         with self._lock:
@@ -78,12 +105,64 @@ class CapabilityAuthorityBroker:
                 verifier=WindowsHelloVerifier(),
             )
             self._authority = AuthorityService(
-                risk_classifier=RiskClassifier(),
+                risk_classifier=self._risk_classifier,
                 policy_engine=OpaPolicyEngine(endpoint=opa.endpoint),
                 approvals=approvals,
                 audit_store=audit,
                 permits=PermitRegistry(),
             )
+
+    def _trusted_session_available(self, session_id: str) -> bool:
+        with self._lock:
+            expires_at = self._trusted_sessions.get(session_id)
+            if expires_at is None:
+                return False
+            if self._clock() >= expires_at:
+                self._trusted_sessions.pop(session_id, None)
+                return False
+            return True
+
+    def _remember_trusted_session(self, session_id: str) -> None:
+        with self._lock:
+            self._trusted_sessions[session_id] = (
+                self._clock() + self._trusted_session_ttl_seconds
+            )
+
+    def _grant_trusted_session_approval(
+        self,
+        *,
+        proposal: ActionProposal,
+        risk_class: RiskClass,
+    ) -> str:
+        approvals = self._approvals
+        if approvals is None:
+            raise CapabilityAuthorizationError("approval runtime is unavailable")
+
+        if risk_class is RiskClass.PERSISTENT_OR_EXTERNAL:
+            requirement = ApprovalRequirement.EXPLICIT
+            # A direct-user command is the exact explicit instruction. SPOKEN is the
+            # existing EXPLICIT-level method for direct voice/text owner commands.
+            method = ApprovalMethod.SPOKEN
+        else:
+            requirement = ApprovalRequirement.DIRECT_INTENT
+            method = ApprovalMethod.DIRECT_INTENT
+
+        try:
+            pending = approvals.request(
+                proposal,
+                session_id=proposal.session_id,
+                requirement=requirement,
+                ttl_seconds=_PROPOSAL_APPROVAL_TTL_SECONDS,
+            )
+            granted = approvals.grant(
+                pending.approval_id,
+                proposal=proposal,
+                session_id=proposal.session_id,
+                method=method,
+            )
+        except ApprovalError as exc:
+            raise CapabilityAuthorizationError(str(exc)) from exc
+        return granted.approval_id
 
     def authorize(self, prepared: PreparedCapability) -> AuthorizedCapability:
         try:
@@ -108,13 +187,41 @@ class CapabilityAuthorityBroker:
             material_summary=prepared.material_summary,
             attributes=prepared.attributes,
             origin=prepared.request.origin,
-            ttl_seconds=120.0,
+            ttl_seconds=_PROPOSAL_APPROVAL_TTL_SECONDS,
         )
+        assessment = self._risk_classifier.classify(prepared.attributes)
+        session_id = prepared.request.session_id
+        direct_user = prepared.request.origin is ActionOrigin.DIRECT_USER
+        can_reuse_owner_trust = (
+            direct_user
+            and RiskClass.ROUTINE < assessment.risk_class < RiskClass.CRITICAL
+            and self._trusted_session_available(session_id)
+        )
+
         approval_id: str | None = None
-        if prepared.attributes.private_read:
+        used_strong_verification = False
+        if assessment.risk_class is RiskClass.ROUTINE:
+            context = InteractionContext(
+                session_id=session_id,
+                trust_tier=TrustTier.UNVERIFIED,
+                windows_session_valid=True,
+            )
+        elif can_reuse_owner_trust:
+            approval_id = self._grant_trusted_session_approval(
+                proposal=proposal,
+                risk_class=assessment.risk_class,
+            )
+            context = InteractionContext(
+                session_id=session_id,
+                trust_tier=TrustTier.CORROBORATED_OWNER,
+                attention_state=AttentionState.ATTENTIVE,
+                actor_unambiguous=True,
+                windows_session_valid=True,
+            )
+        else:
             outcome = strong.verify_and_resolve(
                 proposal=proposal,
-                session_id=prepared.request.session_id,
+                session_id=session_id,
             )
             if not outcome.granted:
                 reasons = ",".join(outcome.verification.reason_codes) or "not_verified"
@@ -122,19 +229,15 @@ class CapabilityAuthorityBroker:
                     f"strong owner verification was not granted: {reasons}"
                 )
             approval_id = outcome.approval.approval_id
+            used_strong_verification = True
             context = InteractionContext(
-                session_id=prepared.request.session_id,
+                session_id=session_id,
                 trust_tier=TrustTier.VERIFIED_OWNER,
                 attention_state=AttentionState.ATTENTIVE,
                 actor_unambiguous=True,
                 windows_session_valid=True,
             )
-        else:
-            context = InteractionContext(
-                session_id=prepared.request.session_id,
-                trust_tier=TrustTier.UNVERIFIED,
-                windows_session_valid=True,
-            )
+
         decision = authority.evaluate(
             proposal=proposal,
             context=context,
@@ -148,6 +251,10 @@ class CapabilityAuthorityBroker:
             raise CapabilityAuthorizationError(
                 f"authority denied capability: {reasons}"
             )
+
+        if used_strong_verification and direct_user:
+            self._remember_trusted_session(session_id)
+
         return AuthorizedCapability(
             proposal=proposal,
             context=context,
@@ -197,6 +304,7 @@ class CapabilityAuthorityBroker:
 
     def close(self) -> None:
         with self._lock:
+            self._trusted_sessions.clear()
             if self._opa is not None:
                 self._opa.close()
             if self._audit is not None:

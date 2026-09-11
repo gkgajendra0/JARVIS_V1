@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 import uuid
@@ -9,6 +8,8 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Protocol
+
+from jarvis.authority.tooling import AuthorityToolError, resolve_windows_hello_helper
 
 from .proposal import ActionProposal
 
@@ -67,8 +68,13 @@ class WindowsHelloVerifier:
         *,
         timeout_seconds: float = 60.0,
     ) -> None:
-        configured = helper_path or os.getenv("JARVIS_WINDOWS_HELLO_HELPER")
-        self._helper_path = Path(configured).expanduser() if configured else None
+        if helper_path is not None:
+            self._helper_path = Path(helper_path).expanduser()
+        else:
+            try:
+                self._helper_path = resolve_windows_hello_helper()
+            except (AuthorityToolError, RuntimeError):
+                self._helper_path = None
         self._timeout_seconds = timeout_seconds
 
     def verify(
@@ -112,13 +118,15 @@ class WindowsHelloVerifier:
                 input=request,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="strict",
                 check=False,
                 timeout=self._timeout_seconds,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
         except subprocess.TimeoutExpired:
             return result(StrongVerificationStatus.ERROR, "helper_timeout")
-        except OSError:
+        except (OSError, UnicodeError):
             return result(StrongVerificationStatus.ERROR, "helper_launch_failed")
 
         try:

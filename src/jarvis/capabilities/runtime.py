@@ -1,10 +1,11 @@
-"""Generic governed Step-7 capability runtime."""
+"""Generic governed capability runtime for local reads and JARVIS Hands."""
 
 from __future__ import annotations
 
 import time
 from typing import Protocol
 
+from jarvis.ai_provider import configured_ai_provider
 from jarvis.authority.audit import AuditError
 from jarvis.authority.types import ActionOrigin
 from jarvis.capabilities.authority_bridge import (
@@ -12,17 +13,48 @@ from jarvis.capabilities.authority_bridge import (
     CapabilityAuthorityBroker,
     CapabilityAuthorizationError,
 )
+from jarvis.capabilities.browser_playwright import BrowserPlanExecutor
+from jarvis.capabilities.development_git import (
+    DevelopmentGitError,
+    DevelopmentGitExecutor,
+)
 from jarvis.capabilities.discovery import CapabilityResolver
+from jarvis.capabilities.document_edits import DocumentEditExecutor
 from jarvis.capabilities.execution import CapabilityExecutor
 from jarvis.capabilities.local_reads import LocalProjectReadExecutor
+from jarvis.capabilities.local_writes import (
+    ApprovedWriteRootPolicy,
+    LocalFileWriteExecutor,
+    LocalWriteValidationError,
+)
 from jarvis.capabilities.models import (
     CapabilityCatalog,
     CapabilityRequest,
     CapabilityResult,
     CapabilityStatus,
 )
+from jarvis.capabilities.software_management import SoftwareManagementExecutor
 from jarvis.capabilities.system_reads import SystemReadExecutor
+from jarvis.capabilities.visual_desktop import GovernedVisualDesktopExecutor
+from jarvis.capabilities.windows_control import WindowsStructuredControlExecutor
+from jarvis.capabilities.windows_devices import (
+    BluetoothControlExecutor,
+    DisplayControlExecutor,
+    PowerSessionExecutor,
+)
+from jarvis.capabilities.windows_focus import ReliableWindowManagementExecutor
+from jarvis.capabilities.windows_native import (
+    AppLifecycleExecutor,
+    ClipboardExecutor,
+    MediaPlaybackExecutor,
+    SystemAudioExecutor,
+)
 from jarvis.capabilities.windows_sources import WinAppCliSchemaSource, WindowsOdrSource
+from jarvis.hands.models import ExecutionSubstrate
+from jarvis.hands.registry import HandsCapabilityRegistry
+from jarvis.machine_config import configured_text, load_machine_settings
+
+_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 
 
 class AuthorityBroker(Protocol):
@@ -50,12 +82,22 @@ class CapabilityRuntime:
         executors: tuple[CapabilityExecutor, ...],
         resolver: CapabilityResolver,
         authority: AuthorityBroker,
+        hands_registry: HandsCapabilityRegistry | None = None,
+        hands_planner=None,
     ) -> None:
         self._executors = {executor.capability_key: executor for executor in executors}
         if len(self._executors) != len(executors):
             raise ValueError("capability executor keys must be unique")
+        for executor in executors:
+            descriptor = getattr(executor, "descriptor", None)
+            if descriptor is None or descriptor.key != executor.capability_key:
+                raise ValueError(
+                    "capability executor key must exactly match its descriptor identity"
+                )
         self._resolver = resolver
         self._authority = authority
+        self._hands_registry = hands_registry or HandsCapabilityRegistry.default()
+        self._hands_planner = hands_planner
         self._catalog: CapabilityCatalog | None = None
 
     def refresh_catalog(self) -> CapabilityCatalog:
@@ -66,14 +108,59 @@ class CapabilityRuntime:
     def catalog(self) -> CapabilityCatalog:
         return self._catalog or self.refresh_catalog()
 
+    @property
+    def hands_registry(self) -> HandsCapabilityRegistry:
+        return self._hands_registry
+
+    @property
+    def hands_planner(self):
+        return self._hands_planner
+
     def capability_for_operation(self, operation: str) -> str | None:
         normalized = str(operation).strip()
-        candidates = sorted(
+        candidates = tuple(
             key
             for key, executor in self._executors.items()
             if normalized in executor.operations
         )
-        return candidates[0] if len(candidates) == 1 else None
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            descriptor = self.catalog.by_key(candidates[0])
+            return (
+                candidates[0]
+                if descriptor is not None and descriptor.execution_enabled
+                else None
+            )
+
+        semantic = self._hands_registry.operation(normalized)
+        if semantic is None:
+            return None
+        kind_to_substrate = {
+            "semantic_connector": ExecutionSubstrate.DEDICATED_INTEGRATION,
+            "native_api": ExecutionSubstrate.NATIVE_API,
+            "structured_automation": ExecutionSubstrate.STRUCTURED_AUTOMATION,
+            "visual_fallback": ExecutionSubstrate.VISUAL_FALLBACK,
+            "local_read": ExecutionSubstrate.NATIVE_API,
+        }
+        preference = {
+            substrate: index
+            for index, substrate in enumerate(semantic.preferred_substrates)
+        }
+        ranked: list[tuple[int, str]] = []
+        for key in candidates:
+            descriptor = self.catalog.by_key(key)
+            if descriptor is None or not descriptor.execution_enabled:
+                continue
+            substrate = kind_to_substrate.get(descriptor.kind.value)
+            if substrate in preference:
+                ranked.append((preference[substrate], key))
+        if not ranked:
+            return None
+        ranked.sort()
+        best_rank = ranked[0][0]
+        best = [key for rank, key in ranked if rank == best_rank]
+        return best[0] if len(best) == 1 else None
 
     def execute_operation(
         self,
@@ -90,7 +177,7 @@ class CapabilityRuntime:
                 capability_key="unresolved",
                 operation=str(operation),
                 data={},
-                reason="operation does not resolve to exactly one enabled Step-7 capability",
+                reason="operation does not resolve to exactly one governed capability",
             )
         return self.execute(
             CapabilityRequest(
@@ -113,12 +200,19 @@ class CapabilityRuntime:
                 "capability is not present in the current catalog",
             )
         executor = self._executors.get(request.capability_key)
-        if executor is None or not descriptor.execution_enabled:
+        if executor is None:
             return self._failure(
                 request,
                 CapabilityStatus.DENIED,
                 started,
-                "capability is discovery-only or execution-disabled in Step 7",
+                "capability is discovery-only or execution-disabled",
+            )
+        if not descriptor.execution_enabled:
+            return self._failure(
+                request,
+                CapabilityStatus.UNAVAILABLE,
+                started,
+                "capability executor is unavailable on this machine",
             )
         if (
             request.operation not in descriptor.operations
@@ -184,19 +278,104 @@ class CapabilityRuntime:
         )
 
     def close(self) -> None:
-        self._authority.close()
+        try:
+            for executor in self._executors.values():
+                close = getattr(executor, "close", None)
+                if not callable(close):
+                    continue
+                try:
+                    close()
+                except Exception:  # noqa: BLE001,S110 - shutdown must continue across adapters
+                    pass
+        finally:
+            self._authority.close()
 
 
-def build_default_capability_runtime() -> CapabilityRuntime:
+def _visual_computer_use_enabled(configured: bool | None) -> bool:
+    if configured is not None:
+        return bool(configured)
+    machine = load_machine_settings()
+    raw = configured_text("JARVIS_VISUAL_COMPUTER_USE_ENABLED", machine, "false")
+    return bool(raw and raw.strip().casefold() in _TRUE_VALUES)
+
+
+def build_default_capability_runtime(
+    *,
+    ai_provider: str | None = None,
+    hands_planner_model: str | None = None,
+    visual_computer_use_enabled: bool | None = None,
+) -> CapabilityRuntime:
     project = LocalProjectReadExecutor()
     system = SystemReadExecutor()
-    builtins = (project.descriptor, system.descriptor)
+    audio = SystemAudioExecutor()
+    media = MediaPlaybackExecutor()
+    clipboard = ClipboardExecutor()
+    windows = ReliableWindowManagementExecutor()
+    app_lifecycle = AppLifecycleExecutor()
+    structured_control = WindowsStructuredControlExecutor()
+    visual_provider = ai_provider or configured_ai_provider(load_machine_settings())
+    visual_control = GovernedVisualDesktopExecutor(
+        provider_name=visual_provider,
+        enabled=_visual_computer_use_enabled(visual_computer_use_enabled),
+    )
+    display = DisplayControlExecutor()
+    bluetooth = BluetoothControlExecutor()
+    power = PowerSessionExecutor()
+    software = SoftwareManagementExecutor()
+
+    executors: list[CapabilityExecutor] = [
+        project,
+        system,
+        audio,
+        media,
+        clipboard,
+        windows,
+        app_lifecycle,
+        structured_control,
+        visual_control,
+        display,
+        bluetooth,
+        power,
+        software,
+    ]
+
+    write_roots: ApprovedWriteRootPolicy | None = None
+    try:
+        write_roots = ApprovedWriteRootPolicy()
+    except LocalWriteValidationError:
+        pass
+    if write_roots is not None:
+        executors.extend(
+            (
+                LocalFileWriteExecutor(write_roots),
+                DocumentEditExecutor(write_roots),
+            )
+        )
+    executors.append(BrowserPlanExecutor(write_roots=write_roots))
+
+    try:
+        executors.append(DevelopmentGitExecutor())
+    except DevelopmentGitError:
+        pass
+
+    executor_tuple = tuple(executors)
+    builtins = tuple(executor.descriptor for executor in executor_tuple)
     resolver = CapabilityResolver(
         (WinAppCliSchemaSource(), WindowsOdrSource()),
         builtins=builtins,
     )
+    hands_planner = None
+    if ai_provider is not None:
+        from jarvis.hands.planner import build_hands_planner
+
+        hands_planner = build_hands_planner(
+            provider=ai_provider,
+            model=hands_planner_model,
+        )
     return CapabilityRuntime(
-        executors=(project, system),
+        executors=executor_tuple,
         resolver=resolver,
         authority=CapabilityAuthorityBroker(),
+        hands_registry=HandsCapabilityRegistry.default(),
+        hands_planner=hands_planner,
     )

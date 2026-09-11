@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import socket
 import subprocess
 import time
@@ -9,6 +8,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Self
+
+from jarvis.authority.tooling import AuthorityToolError, resolve_opa_binary
 
 
 class LocalOpaError(RuntimeError):
@@ -24,19 +25,10 @@ def default_step3_policy_path() -> Path:
 
 
 def _resolve_opa_binary() -> Path:
-    configured = os.getenv("JARVIS_OPA_PATH")
-    if configured:
-        path = Path(configured).expanduser()
-        if path.is_file():
-            return path
-        raise LocalOpaError(f"configured OPA binary does not exist: {path}")
-    discovered = shutil.which("opa")
-    if discovered:
-        return Path(discovered)
-    raise LocalOpaError(
-        "OPA is required for authority policy evaluation. Install OPA or set "
-        "JARVIS_OPA_PATH to the opa executable."
-    )
+    try:
+        return resolve_opa_binary()
+    except AuthorityToolError as exc:
+        raise LocalOpaError(str(exc)) from exc
 
 
 def _reserve_loopback_port() -> int:

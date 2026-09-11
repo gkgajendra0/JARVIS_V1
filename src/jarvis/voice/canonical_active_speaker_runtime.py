@@ -17,7 +17,11 @@ from livekit.agents import AgentStateChangedEvent, UserStateChangedEvent
 
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.config import JarvisConfig
-from jarvis.conversation import ConversationRole, ConversationSession
+from jarvis.conversation import (
+    ConversationRole,
+    ConversationSession,
+    ConversationStatus,
+)
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_shadow import EnrolledSpeakerShadowObserver
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
@@ -34,7 +38,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class _SessionToolBundle:
-    """Combine vision with per-session memory, research, and local-read tools."""
+    """Combine vision with per-session memory, research, and governed capabilities."""
 
     def __init__(
         self,
@@ -111,10 +115,6 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 if event.new_state != "listening":
                     return
 
-                # VoiceRuntimeController historically arms the first-request timeout
-                # before await session.start(). That lets provider/VAD startup consume
-                # the user's entire response window. The first real LiveKit listening
-                # state is the boundary at which inactivity timing may begin.
                 self._session_ready_for_inactivity = True
                 if self._user_is_speaking:
                     self._cancel_timeout()
@@ -128,9 +128,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     event.new_state,
                 )
                 if event.new_state == "speaking":
+                    if bridge.conversation.status is ConversationStatus.ACTIVE:
+                        bridge.conversation.begin_user_utterance()
                     self._user_is_speaking = True
-                    # User activity is the opposite of inactivity. Cancel any initial
-                    # or follow-up shutdown timer for as long as local VAD sees speech.
                     self._cancel_timeout()
                     return
                 if event.new_state != "listening":
@@ -150,8 +150,6 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 )
                 self._arm_timeout(timeout)
 
-            # Local VAD is activity evidence only. Realtime Gemini/OpenAI remain the
-            # turn-completion authority configured in livekit_session.py.
             session.on("agent_state_changed", track_agent_state)
             session.on("user_state_changed", track_user_activity)
             return session, bridge
@@ -236,9 +234,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 self._research_service.provider_name,
             )
         if capability_runtime is not None:
+            capability_catalog = capability_runtime.refresh_catalog()
+            browser_hands = capability_catalog.by_key("browser:playwright")
             LOGGER.info(
-                "Step-7 governed local reads are active | read_only=True | "
-                "desktop_control=False | browser_control=False"
+                "Governed local capabilities are active | local_reads=True | "
+                "structured_desktop_control=True | visual_fallback=owner_opt_in | "
+                "browser_control=%s | raw_shell=False",
+                bool(browser_hands and browser_hands.execution_enabled),
             )
         try:
             await super().run()
@@ -296,8 +298,6 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         audio_turn_id: str,
         active_speaker_turn: SpeakerTurnAudio | None = None,
     ) -> None:
-        # Historical paired-audio callers are intentionally ignored in this
-        # production specialization. ADR-013 establishes one Pocket3 mic owner.
         del active_speaker_turn
 
         analysis_turn = turn

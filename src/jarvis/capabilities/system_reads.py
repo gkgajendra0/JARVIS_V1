@@ -82,7 +82,7 @@ class SystemReadExecutor:
                 status=CapabilityStatus.SUCCEEDED,
                 capability_key=self.capability_key,
                 operation=prepared.request.operation,
-                data=data,
+                data={**data, "verification_passed": True},
                 elapsed_ms=(time.monotonic() - started) * 1000.0,
                 provenance=provenance,
             )

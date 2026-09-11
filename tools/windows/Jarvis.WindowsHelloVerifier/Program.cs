@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows.Forms;
@@ -16,6 +17,9 @@ internal static class Program
     [STAThread]
     private static async Task<int> Main()
     {
+        Console.InputEncoding = new UTF8Encoding(false, true);
+        Console.OutputEncoding = new UTF8Encoding(false);
+
         try
         {
             var request = JsonSerializer.Deserialize<VerificationRequest>(
