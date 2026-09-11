@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 import time
+import unicodedata
 from dataclasses import replace
 from typing import Any
 
@@ -74,10 +74,10 @@ _SEMANTIC_NUMERIC_FIELDS = {
 }
 
 # Speech providers sometimes render English number words phonetically in the detected
-# script. These values come from the canonical transcript itself; they are never supplied
-# by the planner. Native English/Arabic-digit/Hindi parsing remains owned by the core
-# number-parser path, and this table is only a deterministic fallback for common voice
-# transliterations used by Hinglish/Urdu speech recognition.
+# script. These values are derived from the canonical transcript itself; they are never
+# supplied by the planner. The core number-parser path remains first choice for ordinary
+# English/digits. This is only a deterministic fallback for common Hinglish/Urdu speech
+# transliterations and common Hindi tens.
 _PHONETIC_NUMBER_WORDS: dict[str, int] = {
     # Devanagari phonetic English and common Hindi forms.
     "जीरो": 0,
@@ -86,7 +86,7 @@ _PHONETIC_NUMBER_WORDS: dict[str, int] = {
     "टू": 2,
     "थ्री": 3,
     "फोर": 4,
-    "फोर": 4,
+    "फ़ोर": 4,
     "फाइव": 5,
     "सिक्स": 6,
     "सेवन": 7,
@@ -225,32 +225,71 @@ _TERMINAL_OPERATIONS_BY_GROUP: dict[str, frozenset[str]] = {
 }
 
 
+def _unicode_word_char(value: str) -> bool:
+    if not value:
+        return False
+    return value.isalpha() or unicodedata.category(value).startswith("M")
+
+
+def _phonetic_number_matches(text: str) -> tuple[tuple[int, int, int], ...]:
+    """Return boundary-safe transcript matches as (start, end, numeric value)."""
+
+    source = str(text).casefold()
+    matches: list[tuple[int, int, int]] = []
+    for word, numeric in _PHONETIC_NUMBER_WORDS.items():
+        offset = 0
+        while True:
+            start = source.find(word, offset)
+            if start < 0:
+                break
+            end = start + len(word)
+            before = source[start - 1] if start > 0 else ""
+            after = source[end] if end < len(source) else ""
+            if not _unicode_word_char(before) and not _unicode_word_char(after):
+                matches.append((start, end, numeric))
+            offset = start + 1
+
+    matches.sort(key=lambda item: (item[0], -(item[1] - item[0])))
+    deduplicated: list[tuple[int, int, int]] = []
+    occupied_until = -1
+    for match in matches:
+        if match[0] < occupied_until:
+            continue
+        deduplicated.append(match)
+        occupied_until = match[1]
+    return tuple(deduplicated)
+
+
+def _compose_number_run(values: list[int]) -> float:
+    current = 0
+    for number in values:
+        if number == 100:
+            current = max(current, 1) * 100
+        else:
+            current += number
+    return float(current)
+
+
 def _phonetic_numeric_values(text: str) -> tuple[float, ...]:
-    tokens = re.findall(r"\w+", str(text).casefold(), flags=re.UNICODE)
+    source = str(text).casefold()
+    matches = _phonetic_number_matches(source)
+    if not matches:
+        return ()
+
     values: list[float] = []
     run: list[int] = []
-
-    def flush() -> None:
-        if not run:
-            return
-        total = 0
-        current = 0
-        for number in run:
-            if number == 100:
-                current = max(current, 1) * 100
-            else:
-                current += number
-        total += current
-        values.append(float(total))
-        run.clear()
-
-    for token in tokens:
-        number = _PHONETIC_NUMBER_WORDS.get(token)
-        if number is None:
-            flush()
-            continue
-        run.append(number)
-    flush()
+    last_end: int | None = None
+    for start, end, numeric in matches:
+        if last_end is not None:
+            separator = source[last_end:start]
+            if any(_unicode_word_char(char) for char in separator):
+                if run:
+                    values.append(_compose_number_run(run))
+                    run = []
+        run.append(numeric)
+        last_end = end
+    if run:
+        values.append(_compose_number_run(run))
     return tuple(values)
 
 
