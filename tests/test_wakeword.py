@@ -8,6 +8,7 @@ import pytest
 from livekit import rtc
 
 from jarvis.voice.wakeword import (
+    CascadedWakePredictor,
     LiveKitWakeDetector,
     OpenWakeWordStreamingPredictor,
     load_livekit_predictor,
@@ -77,6 +78,57 @@ def test_streaming_predictor_reuses_livekit_bundled_feature_models(
     assert captured["wakeword_models"] == [str(classifier_path)]
     assert captured["inference_framework"] == "onnx"
     assert captured["ncpu"] == 1
+
+
+def test_wake_cascade_uses_exact_verifier_only_after_streaming_pretrigger() -> None:
+    streaming = FakeStreamingPredictor(0.20)
+    verifier = FakePredictor(0.91)
+    cascade = CascadedWakePredictor(
+        streaming,
+        verifier,
+        pretrigger_threshold=0.05,
+    )
+    chunk = np.ones(1_280, dtype=np.int16)
+
+    for _ in range(24):
+        assert cascade.predict(chunk) == {"jarvis": 0.0}
+
+    scores = cascade.predict(chunk)
+
+    assert scores == {"jarvis": 0.91}
+    assert len(verifier.windows) == 1
+    assert verifier.windows[0].shape == (32_000,)
+
+
+def test_wake_cascade_suppresses_low_streaming_scores_without_exact_work() -> None:
+    streaming = FakeStreamingPredictor(0.01)
+    verifier = FakePredictor(0.99)
+    cascade = CascadedWakePredictor(
+        streaming,
+        verifier,
+        pretrigger_threshold=0.05,
+    )
+    chunk = np.ones(1_280, dtype=np.int16)
+
+    for _ in range(30):
+        assert cascade.predict(chunk) == {"jarvis": 0.0}
+
+    assert verifier.windows == []
+
+
+def test_wake_cascade_reset_clears_exact_window_history() -> None:
+    streaming = FakeStreamingPredictor(0.20)
+    verifier = FakePredictor(0.91)
+    cascade = CascadedWakePredictor(streaming, verifier)
+    chunk = np.ones(1_280, dtype=np.int16)
+
+    for _ in range(24):
+        cascade.predict(chunk)
+    cascade.reset()
+    assert cascade.predict(chunk) == {"jarvis": 0.0}
+
+    assert verifier.windows == []
+    assert streaming.reset_calls == 1
 
 
 @pytest.mark.asyncio
