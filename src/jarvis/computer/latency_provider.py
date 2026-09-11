@@ -2,8 +2,8 @@
 
 The canonical provider implementations remain the compatibility baseline. This module
 keeps the same action/safety semantics while tuning OpenAI's visual desktop loop for an
-interactive voice path: low reasoning effort, non-stored responses and per-round-trip
-latency telemetry. Correctness and containment stay in the local JARVIS executor.
+interactive voice path: low reasoning effort and per-round-trip latency telemetry.
+Correctness and containment stay in the local JARVIS executor.
 """
 
 from __future__ import annotations
@@ -37,7 +37,6 @@ class LowLatencyOpenAIComputerUseProvider(OpenAIComputerUseProvider):
         response = await asyncio.to_thread(
             client.responses.create,
             reasoning={"effort": "low"},
-            store=False,
             **kwargs,
         )
         LOGGER.info(
