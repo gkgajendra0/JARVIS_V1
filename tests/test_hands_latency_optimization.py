@@ -139,6 +139,35 @@ async def test_ungrounded_fast_hint_falls_back_before_execution() -> None:
     assert runtime.calls == []
 
 
+@pytest.mark.asyncio
+async def test_unverified_fast_execution_returns_failure_without_fallback_replay() -> None:
+    orchestrator = _orchestrator()
+    runtime = RecordingRuntime(
+        CapabilityResult(
+            status=CapabilityStatus.SUCCEEDED,
+            capability_key="system:audio",
+            operation="set_master_volume",
+            data={"percent": 30.0, "verification_passed": False},
+        )
+    )
+    orchestrator._runtime = runtime  # type: ignore[assignment]
+
+    result = await execute_fast_hint(
+        orchestrator,
+        session_id="session-1",
+        goal="Jarvis, set my volume to 30 percent.",
+        recent_user_turns=(),
+        operation_hint="set_master_volume",
+        parameters={"percent": 30},
+    )
+
+    assert result is not None
+    assert result["ok"] is False
+    assert result["status"] == "failed"
+    assert result["failed_operation"] == "set_master_volume"
+    assert len(runtime.calls) == 1
+
+
 class ParsedResponse(BaseModel):
     value: int
 
