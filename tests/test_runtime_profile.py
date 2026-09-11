@@ -55,11 +55,5 @@ def test_build_summary_keeps_phase_boundaries() -> None:
     summary = build_summary(samples)
 
     assert summary["overall"]["process_cpu_task_manager_percent"]["median"] == 20.0
-    assert (
-        summary["by_phase"]["idle_background"]["gpu_util_percent"]["max"]
-        == 5.0
-    )
-    assert (
-        summary["by_phase"]["conversation"]["gpu_util_percent"]["max"]
-        == 25.0
-    )
+    assert summary["by_phase"]["idle_background"]["gpu_util_percent"]["max"] == 5.0
+    assert summary["by_phase"]["conversation"]["gpu_util_percent"]["max"] == 25.0
