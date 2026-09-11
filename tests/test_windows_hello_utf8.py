@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
+import jarvis.authority.verifier as verifier_module
 from jarvis.authority.proposal import ActionProposal
 from jarvis.authority.types import ActionAttributes, ActionOrigin
 from jarvis.authority.verifier import StrongVerificationStatus, WindowsHelloVerifier
-import jarvis.authority.verifier as verifier_module
 
 
 def _proposal(message: str) -> ActionProposal:
