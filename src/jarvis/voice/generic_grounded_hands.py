@@ -62,9 +62,9 @@ class GenericGroundedVoiceHandsOrchestrator(VoiceHandsOrchestrator):
                     if (
                         isinstance(step, dict)
                         and str(step.get("action") or "").casefold() == "fill"
+                        and step.get("text")
                     ):
-                        if step.get("text"):
-                            yield step["text"], GroundingMode.LITERAL
+                        yield step["text"], GroundingMode.LITERAL
             return
 
         if operation in {"create_text_file", "replace_text_file", "append_text_file"}:
@@ -98,9 +98,11 @@ class GenericGroundedVoiceHandsOrchestrator(VoiceHandsOrchestrator):
                 yield params["query"], GroundingMode.SEARCH
             return
 
-        if operation in {"get_display_brightness", "set_display_brightness"}:
-            if params.get("display"):
-                yield params["display"], GroundingMode.ENTITY
+        if (
+            operation in {"get_display_brightness", "set_display_brightness"}
+            and params.get("display")
+        ):
+            yield params["display"], GroundingMode.ENTITY
 
     def _grounding_context(
         self,
