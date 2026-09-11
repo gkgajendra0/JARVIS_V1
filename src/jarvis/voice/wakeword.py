@@ -40,21 +40,36 @@ class OpenWakeWordStreamingPredictor:
 
     def __init__(self, model_path: Path) -> None:
         try:
+            from livekit.wakeword.resources import (
+                get_embedding_model_path,
+                get_mel_model_path,
+            )
             from openwakeword.model import Model
         except ImportError as exc:
             raise RuntimeError(
-                "Streaming wake inference requires openwakeword==0.6.0."
+                "Streaming wake inference requires livekit-wakeword resources and "
+                "openwakeword==0.6.0."
             ) from exc
+
+        mel_model_path = get_mel_model_path()
+        embedding_model_path = get_embedding_model_path()
+        if not mel_model_path.is_file() or not embedding_model_path.is_file():
+            raise RuntimeError(
+                "Bundled LiveKit wake feature models are missing; reinstall the "
+                "livekit-wakeword package before starting JARVIS."
+            )
 
         self._lock = Lock()
         self._model = Model(
             wakeword_models=[str(model_path)],
             inference_framework="onnx",
             ncpu=1,
+            melspec_model_path=str(mel_model_path),
+            embedding_model_path=str(embedding_model_path),
         )
         LOGGER.info(
             "Streaming wake-word frontend loaded via openWakeWord: model=%s "
-            "frame_ms=80 onnx_threads=1",
+            "frame_ms=80 onnx_threads=1 feature_models=livekit-bundled",
             model_path.name,
         )
 
