@@ -176,7 +176,7 @@ jobs:
           import winrt.windows.media.control; import winrt.windows.devices.enumeration;
           import winrt.windows.devices.bluetooth; import screen_brightness_control;
           import send2trash; import docx; import openpyxl; import pptx; import playwright;
-          import dulwich; import icu; import jellyfish;
+          import dulwich; import uroman; import jellyfish;
           print('Unified Windows Hands Python dependencies ready')"
 
       - name: Run Windows multilingual Hands regressions
