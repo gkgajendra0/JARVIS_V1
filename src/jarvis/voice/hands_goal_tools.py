@@ -98,7 +98,7 @@ def _decode_fast_parameters(value: str) -> dict[str, object]:
         return {}
     decoded = json.loads(text)
     if not isinstance(decoded, dict):
-        raise ValueError("Hands fast-path parameters must be a JSON object")
+        raise TypeError("Hands fast-path parameters must be a JSON object")
     return decoded
 
 
