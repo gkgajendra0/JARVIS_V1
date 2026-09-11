@@ -97,7 +97,7 @@ async def execute_fast_hint(
             evidence=latest,
         )
         normalized = await asyncio.to_thread(
-            orchestrator._normalize_action,  # noqa: SLF001 - intentional friend boundary
+            orchestrator._normalize_action,
             action,
             GroundingContext(latest, recent_user_turns),
         )
@@ -111,14 +111,14 @@ async def execute_fast_hint(
 
     started = time.perf_counter()
     result = await asyncio.to_thread(
-        orchestrator._runtime.execute_operation,  # noqa: SLF001 - same governed runtime
+        orchestrator._runtime.execute_operation,
         session_id=session_id,
         operation=normalized.operation,
         parameters=normalized.parameters,
         origin=ActionOrigin.DIRECT_USER,
     )
     elapsed_ms = (time.perf_counter() - started) * 1000
-    observation = orchestrator._observation(  # noqa: SLF001 - canonical observation contract
+    observation = orchestrator._observation(
         normalized,
         result,
         step_number=1,
@@ -145,7 +145,7 @@ async def execute_fast_hint(
         "goal": latest,
         "completed_steps": 1,
         "route_groups": ["voice_fast_path"],
-        "results": [orchestrator._result_payload(result)],  # noqa: SLF001
+        "results": [orchestrator._result_payload(result)],
         "entity_trace": list(normalized.entity_trace),
         "observations": [observation],
         "completion_mode": "voice_fast_hint",
