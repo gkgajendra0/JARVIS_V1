@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ValidationError
 
 from jarvis.ai_provider import normalize_ai_provider, require_provider_api_key
+
+LOGGER = logging.getLogger(__name__)
 
 
 class StructuredOutputError(ValueError):
@@ -28,7 +32,12 @@ class StructuredOutputClient(Protocol):
 
 
 class OpenAIStructuredOutputClient:
-    """OpenAI Responses structured-output adapter for the Hands planner."""
+    """OpenAI Responses structured-output adapter for the Hands planner.
+
+    Hands is an interactive voice path, so planning explicitly uses low reasoning effort
+    instead of inheriting the model's medium default. Correctness remains in JARVIS-owned
+    typed contracts, grounding, Authority, execution verification and bounded recovery.
+    """
 
     provider_name = "openai"
 
@@ -48,6 +57,7 @@ class OpenAIStructuredOutputClient:
         input_payload: dict[str, Any],
         response_model: type[BaseModel],
     ) -> BaseModel:
+        started = time.perf_counter()
         response = await self._client.responses.parse(
             model=self.model_name,
             input=[
@@ -62,8 +72,16 @@ class OpenAIStructuredOutputClient:
                     ),
                 },
             ],
+            reasoning={"effort": "low"},
             text_format=response_model,
             store=False,
+        )
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        LOGGER.info(
+            "Hands provider parse | provider=openai | model=%s | schema=%s | elapsed_ms=%.1f",
+            self.model_name,
+            response_model.__name__,
+            elapsed_ms,
         )
         parsed = getattr(response, "output_parsed", None)
         if not isinstance(parsed, response_model):
@@ -95,6 +113,7 @@ class GeminiStructuredOutputClient:
         input_payload: dict[str, Any],
         response_model: type[BaseModel],
     ) -> BaseModel:
+        started = time.perf_counter()
         response = await self._client.aio.interactions.create(
             model=self.model_name,
             input=json.dumps(
@@ -110,6 +129,13 @@ class GeminiStructuredOutputClient:
                 "schema": response_model.model_json_schema(),
             },
             store=False,
+        )
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        LOGGER.info(
+            "Hands provider parse | provider=gemini | model=%s | schema=%s | elapsed_ms=%.1f",
+            self.model_name,
+            response_model.__name__,
+            elapsed_ms,
         )
         output_text = getattr(response, "output_text", None)
         if not isinstance(output_text, str) or not output_text.strip():
