@@ -26,8 +26,9 @@ except ImportError:  # pragma: no cover - exercised only without the Hands extra
     jellyfish = None  # type: ignore[assignment]
 
 try:  # ``pyicu-wheels`` exposes the canonical ``icu`` import.
-    from icu import Transliterator
+    from icu import ICUError, Transliterator
 except ImportError:  # pragma: no cover - exercised only without the Hands extra.
+    ICUError = RuntimeError  # type: ignore[misc,assignment]
     Transliterator = None  # type: ignore[assignment,misc]
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
@@ -90,7 +91,7 @@ def romanize(value: str) -> str:
         return ""
     try:
         transliterated = str(transliterator.transliterate(text))
-    except Exception:  # ICU errors must not make grounding permissive.
+    except ICUError:
         return ""
     return _ascii_normalized(transliterated)
 
@@ -136,30 +137,27 @@ def _similarity(left: str, right: str) -> float:
 
     scores: list[float] = []
     if jellyfish is not None:
-        try:
-            scores.append(float(jellyfish.jaro_winkler_similarity(left, right)))
-            if left_skeleton and right_skeleton:
-                scores.append(
-                    float(
-                        jellyfish.jaro_winkler_similarity(
-                            left_skeleton,
-                            right_skeleton,
-                        )
+        scores.append(float(jellyfish.jaro_winkler_similarity(left, right)))
+        if left_skeleton and right_skeleton:
+            scores.append(
+                float(
+                    jellyfish.jaro_winkler_similarity(
+                        left_skeleton,
+                        right_skeleton,
                     )
                 )
-            left_metaphone = str(jellyfish.metaphone(left) or "")
-            right_metaphone = str(jellyfish.metaphone(right) or "")
-            if left_metaphone and right_metaphone:
-                scores.append(
-                    float(
-                        jellyfish.jaro_winkler_similarity(
-                            left_metaphone,
-                            right_metaphone,
-                        )
+            )
+        left_metaphone = str(jellyfish.metaphone(left) or "")
+        right_metaphone = str(jellyfish.metaphone(right) or "")
+        if left_metaphone and right_metaphone:
+            scores.append(
+                float(
+                    jellyfish.jaro_winkler_similarity(
+                        left_metaphone,
+                        right_metaphone,
                     )
                 )
-        except Exception:  # Optional similarity assistance must fail closed.
-            pass
+            )
     return max(scores, default=0.0)
 
 
