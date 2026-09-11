@@ -21,6 +21,7 @@ LOGGER = logging.getLogger(__name__)
 WAKE_SAMPLE_RATE = 16_000
 WINDOW_SAMPLES = 32_000
 INFERENCE_STRIDE_SAMPLES = 1_280
+STREAMING_PRETRIGGER_THRESHOLD = 0.05
 
 
 class WakePredictor(Protocol):
@@ -31,6 +32,12 @@ class WakePredictor(Protocol):
     def predict(self, audio_chunk: np.ndarray) -> dict[str, float]: ...
 
     def reset(self) -> None: ...
+
+
+class StatelessWakePredictor(Protocol):
+    """Exact full-window scorer used only after a streaming pre-trigger."""
+
+    def predict(self, audio_chunk: np.ndarray) -> dict[str, float]: ...
 
 
 class OpenWakeWordStreamingPredictor:
@@ -89,6 +96,86 @@ class OpenWakeWordStreamingPredictor:
             self._model.reset()
 
 
+class CascadedWakePredictor:
+    """Cheap streaming proposal stage plus exact LiveKit full-window verifier.
+
+    openWakeWord's streaming frontend is efficient, but upstream documents small
+    numerical differences from whole-clip feature extraction. JARVIS therefore
+    uses the streaming score only as a low-cost proposal signal. A proposal must
+    then pass the original LiveKit stateless 2-second scorer before the outer
+    detector can emit a wake event.
+    """
+
+    window_samples = INFERENCE_STRIDE_SAMPLES
+
+    def __init__(
+        self,
+        streaming_predictor: WakePredictor,
+        verifier: StatelessWakePredictor,
+        *,
+        pretrigger_threshold: float = STREAMING_PRETRIGGER_THRESHOLD,
+    ) -> None:
+        if not 0 < pretrigger_threshold < 1:
+            raise ValueError("wake pretrigger threshold must be between 0 and 1")
+        self._streaming = streaming_predictor
+        self._verifier = verifier
+        self._pretrigger_threshold = pretrigger_threshold
+        self._raw_chunks: deque[np.ndarray] = deque()
+        self._raw_sample_count = 0
+        self._lock = Lock()
+
+    def _append_raw(self, samples: np.ndarray) -> None:
+        self._raw_chunks.append(samples.copy())
+        self._raw_sample_count += samples.size
+        while (
+            self._raw_chunks
+            and self._raw_sample_count - self._raw_chunks[0].size >= WINDOW_SAMPLES
+        ):
+            self._raw_sample_count -= self._raw_chunks.popleft().size
+
+    def _full_window(self) -> np.ndarray:
+        audio = np.concatenate(tuple(self._raw_chunks))
+        return audio[-WINDOW_SAMPLES:].copy()
+
+    def predict(self, audio_chunk: np.ndarray) -> dict[str, float]:
+        samples = np.asarray(audio_chunk, dtype=np.int16).reshape(-1)
+        if samples.size != self.window_samples:
+            raise ValueError(
+                "wake cascade requires exactly "
+                f"{self.window_samples} samples; got {samples.size}"
+            )
+
+        with self._lock:
+            self._append_raw(samples)
+            streaming_scores = self._streaming.predict(samples)
+            suppressed = {name: 0.0 for name in streaming_scores}
+
+            if self._raw_sample_count < WINDOW_SAMPLES:
+                return suppressed
+
+            streaming_peak = max(streaming_scores.values(), default=0.0)
+            if streaming_peak < self._pretrigger_threshold:
+                return suppressed
+
+            exact_scores = {
+                str(name): float(score)
+                for name, score in self._verifier.predict(self._full_window()).items()
+            }
+            exact_peak = max(exact_scores.values(), default=0.0)
+            LOGGER.info(
+                "Wake cascade verifier ran: streaming_peak=%.3f exact_peak=%.3f",
+                streaming_peak,
+                exact_peak,
+            )
+            return exact_scores
+
+    def reset(self) -> None:
+        with self._lock:
+            self._streaming.reset()
+            self._raw_chunks.clear()
+            self._raw_sample_count = 0
+
+
 @dataclass(frozen=True, slots=True)
 class WakeDetection:
     name: str
@@ -97,10 +184,20 @@ class WakeDetection:
 
 
 def load_livekit_predictor(model_path: Path) -> WakePredictor:
-    """Load the LiveKit-trained classifier on the streaming openWakeWord frontend."""
+    """Load the low-CPU streaming proposal + exact LiveKit verifier cascade."""
     if not model_path.is_file():
         raise FileNotFoundError(f"Wake-word model not found: {model_path}")
-    return OpenWakeWordStreamingPredictor(model_path)
+
+    from livekit.wakeword import WakeWordModel
+
+    streaming = OpenWakeWordStreamingPredictor(model_path)
+    verifier = WakeWordModel(models=[model_path])
+    LOGGER.info(
+        "Wake cascade loaded: streaming_pretrigger=%.2f exact_window_ms=2000 "
+        "decision_threshold=outer-detector",
+        STREAMING_PRETRIGGER_THRESHOLD,
+    )
+    return CascadedWakePredictor(streaming, verifier)
 
 
 class LiveKitWakeDetector:
