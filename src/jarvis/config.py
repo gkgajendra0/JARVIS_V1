@@ -91,6 +91,7 @@ class JarvisConfig:
     gemini_realtime_model: str = "gemini-3.1-flash-live-preview"
     gemini_realtime_voice: str = "Charon"
     hands_planner_model: str | None = None
+    visual_computer_use_enabled: bool = False
     show_transcript: bool = True
     startup_greeting_enabled: bool = True
     wake_model_path: str | None = None
@@ -240,6 +241,9 @@ class JarvisConfig:
             ),
             hands_planner_model=_configured_optional_text(
                 "JARVIS_HANDS_PLANNER_MODEL", machine
+            ),
+            visual_computer_use_enabled=_configured_bool(
+                "JARVIS_VISUAL_COMPUTER_USE_ENABLED", False, machine
             ),
             show_transcript=_configured_bool("JARVIS_SHOW_TRANSCRIPT", True, machine),
             startup_greeting_enabled=_configured_bool(
