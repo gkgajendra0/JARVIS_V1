@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 
 from livekit.agents import RunContext, function_tool
 from livekit.agents.llm import ToolError
@@ -13,6 +14,7 @@ from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.hands.orchestrator import HandsOrchestrationError, HandsOrchestrator
 from jarvis.hands.planner import HandsPlanningError
+from jarvis.voice.hands_fast_path import execute_fast_hint
 from jarvis.voice.hands_orchestrator import VoiceHandsOrchestrator
 from jarvis.voice.hands_transaction import (
     HandsGoalSuperseded,
@@ -61,6 +63,7 @@ def _compact_voice_result(result: dict[str, object]) -> dict[str, object]:
         "reason",
         "clarification_question",
         "canonical_user_turn_id",
+        "completion_mode",
     ):
         if key in result and result[key] is not None:
             compact[key] = result[key]
@@ -87,6 +90,16 @@ def _compact_voice_result(result: dict[str, object]) -> dict[str, object]:
                 and value is not None
             }
     return compact
+
+
+def _decode_fast_parameters(value: str) -> dict[str, object]:
+    text = str(value or "").strip()
+    if not text:
+        return {}
+    decoded = json.loads(text)
+    if not isinstance(decoded, dict):
+        raise ValueError("Hands fast-path parameters must be a JSON object")
+    return decoded
 
 
 class HandsGoalAgentTools:
@@ -194,7 +207,13 @@ class HandsGoalAgentTools:
             "reason": reason,
         }
 
-    async def execute_goal(self) -> dict[str, object]:
+    async def execute_goal(
+        self,
+        *,
+        operation_hint: str = "",
+        parameters_json: str = "{}",
+    ) -> dict[str, object]:
+        total_started = time.perf_counter()
         try:
             turn, generation = await self._claim_current_user_turn()
         except HandsGoalSuperseded as exc:
@@ -218,11 +237,40 @@ class HandsGoalAgentTools:
                 result["goal"] = turn.text
                 result["canonical_user_turn_id"] = turn.turn_id
                 return result
+
+            orchestrator = self._build_orchestrator(is_current)
+            recent_user_turns = self._recent_user_turns(turn)
+
+            if operation_hint and isinstance(orchestrator, VoiceHandsOrchestrator):
+                try:
+                    fast_parameters = _decode_fast_parameters(parameters_json)
+                except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                    LOGGER.info(
+                        "Hands fast hint parameters rejected; falling back to planner | reason=%s",
+                        exc,
+                    )
+                else:
+                    fast_result = await execute_fast_hint(
+                        orchestrator,
+                        session_id=self._conversation.session_id,
+                        goal=turn.text,
+                        recent_user_turns=recent_user_turns,
+                        operation_hint=operation_hint,
+                        parameters=fast_parameters,
+                    )
+                    if fast_result is not None:
+                        fast_result["canonical_user_turn_id"] = turn.turn_id
+                        LOGGER.info(
+                            "Hands voice goal latency | path=fast_hint | total_ms=%.1f",
+                            (time.perf_counter() - total_started) * 1000,
+                        )
+                        return fast_result
+
             try:
-                result = await self._build_orchestrator(is_current).execute_goal(
+                result = await orchestrator.execute_goal(
                     session_id=self._conversation.session_id,
                     goal=turn.text,
-                    recent_user_turns=self._recent_user_turns(turn),
+                    recent_user_turns=recent_user_turns,
                 )
             except HandsGoalSuperseded as exc:
                 LOGGER.info(
@@ -235,11 +283,21 @@ class HandsGoalAgentTools:
                 result["goal"] = turn.text
                 result["canonical_user_turn_id"] = turn.turn_id
                 return result
+
         result["canonical_user_turn_id"] = turn.turn_id
+        LOGGER.info(
+            "Hands voice goal latency | path=planner | total_ms=%.1f",
+            (time.perf_counter() - total_started) * 1000,
+        )
         return result
 
     @function_tool()
-    async def use_computer(self, context: RunContext) -> dict[str, object]:
+    async def use_computer(
+        self,
+        context: RunContext,
+        operation_hint: str = "",
+        parameters_json: str = "{}",
+    ) -> dict[str, object]:
         """Hand the current accepted USER computer goal to JARVIS Hands.
 
         Call this whenever the USER asks JARVIS to operate OR inspect the local computer.
@@ -248,25 +306,40 @@ class HandsGoalAgentTools:
         because the Pocket3 camera cannot read the monitor; physical-camera vision and
         desktop UI inspection are separate capabilities.
 
-        Do not construct capability names, operation plans, selectors, app IDs, package IDs,
-        or execution parameters yourself. This tool takes no plan arguments: JARVIS Hands
-        internally performs semantic routing, canonical entity resolution, strongly typed
-        planning, proportional Authority, verified execution, and bounded recovery.
+        For an obvious request whose ENTIRE goal is one simple local read or reversible
+        action, you MAY provide ``operation_hint`` and ``parameters_json`` to reduce voice
+        latency. Examples include master-volume read/set/mute, generic media play/pause/
+        next/previous, app open/close, basic window focus/maximize/minimize, display
+        brightness, clipboard text, local read-only status, software lookup and Git status.
+        ``parameters_json`` must contain only values explicitly grounded in the current
+        USER utterance. This is merely a performance hint: JARVIS independently validates
+        the typed contract, canonical transcript, entity resolution, Authority and result.
+
+        Leave ``operation_hint`` empty for multi-step requests, requests inside an app UI,
+        browser workflows, file/document writes, visual Computer Use, installs/uninstalls,
+        power/session operations, Bluetooth pairing, Git mutations, or whenever you are
+        uncertain that one hinted operation completely satisfies the USER's whole request.
+        Never split a multi-step goal into repeated calls for the same USER utterance.
 
         A realtime provider may call this before its final transcript is emitted. JARVIS
-        therefore binds the call to the current speech generation and waits for the canonical
-        transcript. A newer USER utterance supersedes stale planning before another action may
-        start. An atomic local action that already started is allowed to finish safely. If the
-        result status is ``superseded``, do not report the older goal as a failure; continue
+        binds the call to the current speech generation and waits for the canonical
+        transcript. A newer USER utterance supersedes stale planning before another action
+        may start. An atomic local action that already started is allowed to finish safely.
+        If status is ``superseded``, do not report the older goal as a failure; continue
         with the newer USER request.
 
-        If the result has status ``clarification_required``, ask the returned clarification
-        question. Otherwise treat the tool result as authoritative and never claim success
-        for denied, failed, unavailable, or unverified work.
+        If status is ``clarification_required``, ask the returned clarification question.
+        Otherwise treat the tool result as authoritative and never claim success for denied,
+        failed, unavailable, or unverified work.
         """
         del context
         try:
-            return _compact_voice_result(await self.execute_goal())
+            return _compact_voice_result(
+                await self.execute_goal(
+                    operation_hint=operation_hint,
+                    parameters_json=parameters_json,
+                )
+            )
         except (
             HandsOrchestrationError,
             HandsPlanningError,
