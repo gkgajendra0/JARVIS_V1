@@ -37,11 +37,11 @@ _COORDINATE_ACTIONS = frozenset(
         "scroll_delta",
     }
 )
-_KEYBOARD_ACTIONS = frozenset(
-    {"type", "press_key", "key_down", "key_up", "hotkey"}
-)
-_ALLOWED_ACTIONS = _COORDINATE_ACTIONS | _KEYBOARD_ACTIONS | frozenset(
-    {"drag_and_drop", "drag_path", "take_screenshot", "wait"}
+_KEYBOARD_ACTIONS = frozenset({"type", "press_key", "key_down", "key_up", "hotkey"})
+_ALLOWED_ACTIONS = (
+    _COORDINATE_ACTIONS
+    | _KEYBOARD_ACTIONS
+    | frozenset({"drag_and_drop", "drag_path", "take_screenshot", "wait"})
 )
 _GLOBAL_KEYS = frozenset({"win", "windows", "command", "meta"})
 
@@ -95,7 +95,9 @@ class WindowScopedComputerExecutor:
             )
         left, top, right, bottom = current.rect
         if right <= left or bottom <= top:
-            raise ComputerExecutorError("target application window has invalid geometry")
+            raise ComputerExecutorError(
+                "target application window has invalid geometry"
+            )
         return current
 
     def capture_screen(self) -> ScreenFrame:
