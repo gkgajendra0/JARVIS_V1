@@ -23,10 +23,14 @@ class MemoryCandidateSessionRuntime:
         *,
         conversation: ConversationSession,
         extractor: MemoryCandidateExtractor,
+        defer_seconds: float = 0.0,
     ) -> None:
         if not isinstance(conversation, ConversationSession):
             raise TypeError("conversation must be a ConversationSession")
+        if not 0.0 <= float(defer_seconds) <= 60.0:
+            raise ValueError("memory candidate defer_seconds must be between 0 and 60")
         self._conversation = conversation
+        self._defer_seconds = float(defer_seconds)
         self._quarantine = MemoryCandidateQuarantine(
             session_id=conversation.session_id,
         )
@@ -49,6 +53,10 @@ class MemoryCandidateSessionRuntime:
     def pending_task_count(self) -> int:
         return len(self._tasks)
 
+    @property
+    def defer_seconds(self) -> float:
+        return self._defer_seconds
+
     def observe_turn(self, turn: ConversationTurn) -> None:
         """Schedule candidate extraction without delaying the conversation callback."""
 
@@ -63,6 +71,10 @@ class MemoryCandidateSessionRuntime:
 
     async def _process_turn(self, turn: ConversationTurn) -> None:
         try:
+            if self._defer_seconds > 0:
+                await asyncio.sleep(self._defer_seconds)
+                if self._closed:
+                    return
             result = await self._coordinator.consider_user_turn(
                 self._conversation,
                 turn,
@@ -77,10 +89,11 @@ class MemoryCandidateSessionRuntime:
             return
         LOGGER.info(
             "Memory candidate shadow turn %s | outcome=%s | reason=%s | "
-            "quarantine=session_local | durable_admission=False",
+            "quarantine=session_local | durable_admission=False | defer_seconds=%.1f",
             turn.turn_id,
             result.outcome.value,
             result.reason_code,
+            self._defer_seconds,
         )
 
     def _on_task_done(self, task: asyncio.Task[None]) -> None:
