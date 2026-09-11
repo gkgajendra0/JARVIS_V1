@@ -9,10 +9,11 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import psutil
 
@@ -201,7 +202,7 @@ def sample_process(
     raw_cpu = process.cpu_percent(interval=None)
     memory = process.memory_info()
     sample: dict[str, Any] = {
-        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "captured_at": datetime.now(UTC).isoformat(),
         "phase": phase,
         "process_cpu_raw_percent": raw_cpu,
         "process_cpu_task_manager_percent": raw_cpu / max(logical_cpu_count, 1),
@@ -288,7 +289,7 @@ def run_profile(
     logical_cpu_count = psutil.cpu_count(logical=True) or 1
     physical_cpu_count = psutil.cpu_count(logical=False)
     gpu_probe = NvidiaSmiProbe()
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
 
     print("JARVIS runtime baseline profiler")
     print("--------------------------------")
@@ -339,7 +340,7 @@ def run_profile(
         "schema_version": 1,
         "label": label,
         "started_at": started_at.isoformat(),
-        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "completed_at": datetime.now(UTC).isoformat(),
         "host": {
             "platform": platform.platform(),
             "python": sys.version,
