@@ -130,8 +130,11 @@ def runtime_with_session(
     "text",
     [
         "Go to sleep.",
+        "Go back to sleep.",
         "Ok, Jarvis, go to sleep.",
         "Jarvis, please go to sleep now.",
+        "Jarvis, go back to sleep now.",
+        "Okay, Jarvis, go back to sleep please.",
         "Please end the session.",
         "No, leave it. Go to sleep now.",
         "No, leave it, Jarvis, go to sleep now.",
@@ -166,7 +169,11 @@ async def test_explicit_exit_ends_active_session_and_cleans_up() -> None:
     session.emit(
         "conversation_item_added",
         ConversationItemAddedEvent(
-            item=ChatMessage(id="exit", role="user", content=["Jarvis, go to sleep."])
+            item=ChatMessage(
+                id="exit",
+                role="user",
+                content=["Jarvis, go back to sleep now."],
+            )
         ),
     )
     await asyncio.wait_for(task, timeout=1)
