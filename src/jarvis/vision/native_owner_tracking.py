@@ -140,7 +140,10 @@ class NativeOwnerTrackingObserver:
 
     def _reconnect_due(self, now: float) -> bool:
         attempted = self._last_connect_attempt_at
-        return attempted is None or now - attempted >= self.config.reconnect_backoff_seconds
+        return (
+            attempted is None
+            or now - attempted >= self.config.reconnect_backoff_seconds
+        )
 
 
 def build_default_native_owner_tracking_observer(
