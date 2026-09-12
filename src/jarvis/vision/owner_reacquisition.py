@@ -103,11 +103,13 @@ class OwnerReacquisitionController:
             )
 
         if self.state is ReacquisitionState.LOCKED:
-            # Do not recenter or issue another target merely because 0x89 went quiet.
-            # A fresh negative A5 poll (or transport loss) is the fail-closed signal
-            # that native tracking has actually dropped the subject.
-            if not native.connected or self._fresh_negative_poll(
-                now=now, native=native
+            # 0x89 is the camera's live subject truth. Current Pocket tooling drops
+            # a native lock after sustained 0x89 silence; keep our threshold more
+            # conservative than that implementation to avoid reacting to one lost packet.
+            if (
+                not native.connected
+                or self._fresh_negative_poll(now=now, native=native)
+                or self._subject_push_is_stale(now=now, native=native)
             ):
                 self.state = ReacquisitionState.REACQUIRING
             else:
@@ -184,12 +186,22 @@ class OwnerReacquisitionController:
     ) -> bool:
         if not native.connected:
             return False
-        if native.active:
-            return True
+        pushed_at = native.last_subject_push_at
+        if pushed_at is not None:
+            return 0 <= now - pushed_at <= self.config.subject_push_stale_seconds
+        return native.active
+
+    def _subject_push_is_stale(
+        self,
+        *,
+        now: float,
+        native: NativeTrackingStatus,
+    ) -> bool:
         pushed_at = native.last_subject_push_at
         return bool(
-            pushed_at is not None
-            and 0 <= now - pushed_at <= self.config.subject_push_stale_seconds
+            native.connected
+            and pushed_at is not None
+            and now - pushed_at > self.config.subject_push_stale_seconds
         )
 
     def _fresh_negative_poll(
