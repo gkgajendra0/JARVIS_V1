@@ -115,7 +115,9 @@ async def test_normal_assistant_turn_does_not_invoke_scripted_tts() -> None:
 
 
 @pytest.mark.asyncio
-async def test_interrupted_assistant_turn_never_replays_even_with_silent_quality() -> None:
+async def test_interrupted_assistant_turn_never_replays_even_with_silent_quality() -> (
+    None
+):
     output = FakeOutput(quality(1, rms_dbfs=-20.0, peak_abs=10_000))
     speech = FakeSpeech()
     recovery = SilentRealtimeAudioRecovery(
@@ -138,7 +140,9 @@ async def test_interrupted_assistant_turn_never_replays_even_with_silent_quality
 
 
 @pytest.mark.asyncio
-async def test_scripted_replay_quality_is_consumed_before_the_next_assistant_turn() -> None:
+async def test_scripted_replay_quality_is_consumed_before_the_next_assistant_turn() -> (
+    None
+):
     output = FakeOutput(quality(1, rms_dbfs=-20.0, peak_abs=10_000))
 
     class UpdatingSpeech(FakeSpeech):
