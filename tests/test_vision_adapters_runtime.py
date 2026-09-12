@@ -18,13 +18,15 @@ class FakeRFModel:
     def __init__(self, **kwargs):
         self.kwargs = kwargs
         self.inference_kwargs = None
+        self.include_source_image = None
 
     def inference(self, **kwargs):
         self.inference_kwargs = kwargs
 
-    def predict(self, image, threshold):
+    def predict(self, image, threshold, *, include_source_image):
         assert image.shape == (100, 200, 3)
         assert threshold == 0.1
+        self.include_source_image = include_source_image
         return SimpleNamespace(
             class_id=np.array([1, 2]),
             confidence=np.array([0.9, 0.8]),
@@ -51,6 +53,7 @@ def test_rf_detr_adapter_filters_person_and_normalizes_box():
 
     detections = detector.detect(frame)
 
+    assert model.include_source_image is False
     assert len(detections) == 1
     detection = detections[0]
     assert detection.category == "person"
@@ -65,7 +68,8 @@ def test_rf_detr_adapter_uses_duplicate_suppressor_for_person_candidates():
         def inference(self, **kwargs):
             pass
 
-        def predict(self, image, threshold):
+        def predict(self, image, threshold, *, include_source_image):
+            assert include_source_image is False
             return SimpleNamespace(
                 class_id=np.array([1, 1]),
                 confidence=np.array([0.95, 0.53]),

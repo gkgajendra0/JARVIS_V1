@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import sys
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
 from jarvis.identity.passive_pad import (
     _directional_face_crop,
+    _load_ort_session,
     _probabilities,
     _scaled_face_crop,
 )
@@ -26,6 +30,47 @@ def test_probability_helper_softmaxes_logits() -> None:
 
     assert float(values.sum()) == pytest.approx(1.0)
     assert values[0] > values[1]
+
+
+def test_ort_session_uses_single_thread_and_disables_spinning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeSessionOptions:
+        def __init__(self) -> None:
+            self.intra_op_num_threads = 0
+            self.execution_mode = None
+            self.graph_optimization_level = None
+            self.entries: dict[str, str] = {}
+
+        def add_session_config_entry(self, key: str, value: str) -> None:
+            self.entries[key] = value
+
+    class FakeInferenceSession:
+        def __init__(self, path, *, sess_options, providers) -> None:
+            captured["path"] = path
+            captured["options"] = sess_options
+            captured["providers"] = providers
+
+    fake_ort = SimpleNamespace(
+        SessionOptions=FakeSessionOptions,
+        ExecutionMode=SimpleNamespace(ORT_SEQUENTIAL="sequential"),
+        GraphOptimizationLevel=SimpleNamespace(ORT_ENABLE_ALL="all"),
+        InferenceSession=FakeInferenceSession,
+    )
+    monkeypatch.setitem(sys.modules, "onnxruntime", fake_ort)
+
+    _load_ort_session("mini.onnx")
+
+    options = captured["options"]
+    assert isinstance(options, FakeSessionOptions)
+    assert options.intra_op_num_threads == 1
+    assert options.execution_mode == "sequential"
+    assert options.graph_optimization_level == "all"
+    assert options.entries["session.intra_op.allow_spinning"] == "0"
+    assert options.entries["session.inter_op.allow_spinning"] == "0"
+    assert captured["providers"] == ["CPUExecutionProvider"]
 
 
 def test_scaled_face_crop_stays_inside_source_image() -> None:
