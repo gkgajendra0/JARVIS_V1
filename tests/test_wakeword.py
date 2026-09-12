@@ -117,9 +117,16 @@ def test_bounded_verifier_uses_low_idle_cpu_session_options(
         assert options.intra_op_num_threads == 1
         assert options.inter_op_num_threads == 1
         assert options.execution_mode == ort.ExecutionMode.ORT_SEQUENTIAL
-        assert options.graph_optimization_level == ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        assert options.get_session_config_entry("session.intra_op.allow_spinning") == "0"
-        assert options.get_session_config_entry("session.inter_op.allow_spinning") == "0"
+        assert (
+            options.graph_optimization_level
+            == ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        )
+        assert (
+            options.get_session_config_entry("session.intra_op.allow_spinning") == "0"
+        )
+        assert (
+            options.get_session_config_entry("session.inter_op.allow_spinning") == "0"
+        )
 
 
 def test_bounded_verifier_preserves_livekit_classifier_contract(
