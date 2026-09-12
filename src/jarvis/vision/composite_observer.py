@@ -20,11 +20,11 @@ class CompositeVisionObserver:
             observer.observe(frame, snapshot)
 
     def close(self) -> None:
-        first_error: BaseException | None = None
+        first_error: Exception | None = None
         for observer in reversed(self._observers):
             try:
                 observer.close()
-            except BaseException as exc:
+            except Exception as exc:
                 if first_error is None:
                     first_error = exc
         if first_error is not None:
