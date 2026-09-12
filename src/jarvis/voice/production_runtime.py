@@ -46,8 +46,12 @@ from jarvis.voice.canonical_active_speaker_runtime import (
 )
 from jarvis.voice.livekit_session import create_voice_session
 from jarvis.voice.local_status_speech import build_local_status_speech
-from jarvis.voice.media_devices_audio import MediaDevicesConversationRuntime
+from jarvis.voice.media_devices_audio import (
+    MediaDevicesAudioOutput,
+    MediaDevicesConversationRuntime,
+)
 from jarvis.voice.provider_resilience import ProviderResilienceSessionObserver
+from jarvis.voice.silent_audio_recovery import SilentRealtimeAudioRecovery
 from jarvis.voice.wakeword import LiveKitWakeDetector, load_livekit_predictor
 
 LOGGER = logging.getLogger(__name__)
@@ -224,6 +228,10 @@ def build_production_voice_runtime(
         local_status_speech is not None,
     )
 
+    def media_output() -> MediaDevicesAudioOutput | None:
+        output = audio.output
+        return output if isinstance(output, MediaDevicesAudioOutput) else None
+
     def production_session_factory(session_config: JarvisConfig):
         session, bridge = create_voice_session(session_config)
         ProviderResilienceSessionObserver(
@@ -233,6 +241,12 @@ def build_production_voice_runtime(
             status_speech=local_status_speech,
             output_getter=lambda: audio.output,
         )
+        silent_audio_recovery = SilentRealtimeAudioRecovery(
+            session_config,
+            output_getter=media_output,
+        )
+        bridge.add_accepted_turn_observer(silent_audio_recovery.observe_turn)
+        bridge.add_close_observer(silent_audio_recovery.close)
         if candidate_extractor is not None:
             candidate_runtime = MemoryCandidateSessionRuntime(
                 conversation=bridge.conversation,
