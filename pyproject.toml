@@ -55,6 +55,7 @@ vision = [
     "trackers==2.6.0",
     "mediapipe==1.0.1",
     "onnxruntime==1.29.0",
+    "bleak>=1,<3",
     "duvc-ctl==2.1.0; platform_system == 'Windows'",
 ]
 retrieval = [
