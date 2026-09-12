@@ -171,7 +171,9 @@ def _scan_duml(raw: bytes) -> tuple[dict[str, object], ...]:
     return tuple(frames)
 
 
-def _transport_header(pkt_type: int, payload_len: int, session_id: int, seq: int) -> bytes:
+def _transport_header(
+    pkt_type: int, payload_len: int, session_id: int, seq: int
+) -> bytes:
     total = 8 + payload_len
     header = bytearray()
     header += struct.pack("<H", 0x8000 | (total & 0x3FFF))
@@ -623,14 +625,14 @@ class Pocket3NativeTrackerClient:
             return
         safe_ssid = xml_escape(ssid)
         safe_password = xml_escape(password)
-        profile = f'''<?xml version="1.0"?>
+        profile = f"""<?xml version="1.0"?>
 <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
 <name>{safe_ssid}</name><SSIDConfig><SSID><name>{safe_ssid}</name></SSID></SSIDConfig>
 <connectionType>ESS</connectionType><connectionMode>manual</connectionMode>
 <MSM><security><authEncryption><authentication>WPA2PSK</authentication>
 <encryption>AES</encryption><useOneX>false</useOneX></authEncryption>
 <sharedKey><keyType>passPhrase</keyType><protected>false</protected>
-<keyMaterial>{safe_password}</keyMaterial></sharedKey></security></MSM></WLANProfile>'''
+<keyMaterial>{safe_password}</keyMaterial></sharedKey></security></MSM></WLANProfile>"""
         fd, path = tempfile.mkstemp(prefix="jarvis_pocket3_", suffix=".xml")
         os.close(fd)
         try:
@@ -755,7 +757,9 @@ class Pocket3NativeTrackerClient:
                 continue
             self._ingest_transport(data)
             if len(data) == 34 and data[6] == 0x01:
-                self._transport_seq = (int.from_bytes(data[8:10], "little") + 8) & 0xFFFF
+                self._transport_seq = (
+                    int.from_bytes(data[8:10], "little") + 8
+                ) & 0xFFFF
                 self._send_ack()
                 break
         else:
@@ -832,7 +836,9 @@ class Pocket3NativeTrackerClient:
                 + _ack_group(self._extra_cursor if self._has_extra else self._base_seq)
                 + b"\x00\x00"
             )
-            udp.send(_transport_header(0x04, len(payload), self._session_id, 0) + payload)
+            udp.send(
+                _transport_header(0x04, len(payload), self._session_id, 0) + payload
+            )
 
     def _ingest_transport(self, datagram: bytes) -> None:
         if len(datagram) < 8:
