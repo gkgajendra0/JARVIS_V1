@@ -135,7 +135,9 @@ class BoundedLiveKitWakeVerifier:
         embedding_model_path = get_embedding_model_path()
         for feature_path in (mel_model_path, embedding_model_path, model_path):
             if not feature_path.is_file():
-                raise FileNotFoundError(f"Wake verifier model not found: {feature_path}")
+                raise FileNotFoundError(
+                    f"Wake verifier model not found: {feature_path}"
+                )
 
         self._model_name = model_path.stem
         self._mel_session = _bounded_ort_session(mel_model_path)
