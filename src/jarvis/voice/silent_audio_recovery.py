@@ -40,7 +40,9 @@ class SilentRealtimeAudioRecovery:
         config: JarvisConfig,
         *,
         output_getter: Callable[[], MediaDevicesAudioOutput | None],
-        speech_factory: Callable[[JarvisConfig], ScriptedSpeech] = build_scripted_speech,
+        speech_factory: Callable[
+            [JarvisConfig], ScriptedSpeech
+        ] = build_scripted_speech,
     ) -> None:
         self._config = config
         self._output_getter = output_getter
