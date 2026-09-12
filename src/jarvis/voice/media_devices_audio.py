@@ -236,7 +236,9 @@ class MediaDevicesAudioOutput(io.AudioOutput):
 
             await source.capture_frame(canonical)
             self._current_samples += canonical.samples_per_channel
-            player_buffered, player_active, player_stopped = self._observe_player_state()
+            player_buffered, player_active, player_stopped = (
+                self._observe_player_state()
+            )
             if playback_started_at is not None:
                 LOGGER.info(
                     "Playback diagnostic | segment=%s event=started generation=%s "
@@ -322,7 +324,9 @@ class MediaDevicesAudioOutput(io.AudioOutput):
             rms_dbfs=segment.rms_dbfs,
             interrupted=False,
         )
-        player_buffered, player_active, player_stopped = self._player_state(self._player)
+        player_buffered, player_active, player_stopped = self._player_state(
+            self._player
+        )
         LOGGER.info(
             "Playback diagnostic | segment=%s event=finished generation=%s "
             "position=%.3fs interrupted=False queued=%.3fs "
@@ -350,7 +354,9 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         source = self._source
         queued_before_clear = self._source_queued_duration(source)
         pending = [segment for segment in self._segments if not segment.completed]
-        player_buffered, player_active, player_stopped = self._player_state(self._player)
+        player_buffered, player_active, player_stopped = self._player_state(
+            self._player
+        )
         LOGGER.info(
             "Playback diagnostic | event=clear_buffer generation=%s current_segment=%s "
             "current_samples=%s pending_segments=%s queued_before=%.3fs "
