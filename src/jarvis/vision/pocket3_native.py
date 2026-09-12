@@ -738,7 +738,7 @@ class Pocket3NativeTrackerClient:
             while time.monotonic() < deadline:
                 try:
                     data = udp.recv(65535)
-                except socket.timeout:
+                except TimeoutError:
                     continue
                 self._ingest_transport(data)
                 if len(data) >= 8 and data[6] == 0x00:
@@ -753,7 +753,7 @@ class Pocket3NativeTrackerClient:
         while time.monotonic() < deadline:
             try:
                 data = udp.recv(65535)
-            except socket.timeout:
+            except TimeoutError:
                 continue
             self._ingest_transport(data)
             if len(data) == 34 and data[6] == 0x01:
@@ -870,7 +870,7 @@ class Pocket3NativeTrackerClient:
                 now = time.monotonic()
                 try:
                     data = udp.recv(65535)
-                except socket.timeout:
+                except TimeoutError:
                     data = b""
                 except OSError:
                     if self._stop.is_set():
