@@ -217,9 +217,7 @@ class VisionService:
                     with self._snapshot_lock:
                         self._latest_snapshot = snapshot
                     self.diagnostics.observe(snapshot)
-                    exact_pair = (
-                        frame is not None and frame.frame_id == snapshot.frame_id
-                    )
+                    exact_pair = frame is not None and frame.frame_id == snapshot.frame_id
                     if exact_pair and self._evidence_observer is not None:
                         self._publish_evidence_pair(frame, snapshot)
         except Exception as exc:
@@ -364,11 +362,13 @@ def build_default_vision_service(
     *,
     head_model_path: str | Path | None = None,
     evidence_observer: VisionObserver | None = None,
+    tracking_observer: VisionObserver | None = None,
     frame_pair_tap: FramePairTap | None = None,
     camera_source: CameraSource | None = None,
 ) -> VisionService:
     """Compose the benchmark-selected Step 2.5 hardware/runtime stack lazily."""
     from jarvis.vision.camera import OpenCVCameraSource
+    from jarvis.vision.composite_observer import CompositeVisionObserver
     from jarvis.vision.detector import RFDetrNanoDetector
     from jarvis.vision.follow import (
         FollowConfig,
@@ -442,12 +442,25 @@ def build_default_vision_service(
             body_fallback_tilt_scale=0.45,
         ),
     )
-    observer = (
+    preview_observer = (
         OpenCVVisionObserver()
         if os.environ.get("JARVIS_VISION_PREVIEW", "").strip().lower()
         in {"1", "true", "yes", "on"}
         else None
     )
+    observers = [
+        candidate
+        for candidate in (preview_observer, tracking_observer)
+        if candidate is not None
+    ]
+    observer: VisionObserver | None
+    if not observers:
+        observer = None
+    elif len(observers) == 1:
+        observer = observers[0]
+    else:
+        observer = CompositeVisionObserver(observers)
+
     return VisionService(
         runtime,
         observer=observer,
