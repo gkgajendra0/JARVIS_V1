@@ -722,7 +722,6 @@ class VoiceRuntimeController:
 
         def on_audio_frame(
             frame,
-            *,
             observed_at_monotonic: float,
         ) -> None:
             if turn_capture is None:
