@@ -1,3 +1,4 @@
+from jarvis.vision.models import BoundingBox
 from jarvis.vision.owner_reacquisition import (
     NativeTrackingStatus,
     OwnerReacquisitionController,
@@ -5,7 +6,6 @@ from jarvis.vision.owner_reacquisition import (
     ReacquisitionConfig,
     ReacquisitionState,
 )
-from jarvis.vision.models import BoundingBox
 
 
 OWNER_BOX = BoundingBox(left=0.30, top=0.20, right=0.60, bottom=0.80)
@@ -69,7 +69,7 @@ def test_native_subject_push_confirms_lock_without_repeated_a6() -> None:
     assert locked.action is ReacquisitionAction.NONE
 
 
-def test_missing_push_alone_does_not_false_trigger_reacquisition() -> None:
+def test_short_subject_push_gap_does_not_false_trigger_reacquisition() -> None:
     controller = OwnerReacquisitionController()
     controller.step(
         now=1.0,
@@ -85,13 +85,39 @@ def test_missing_push_alone_does_not_false_trigger_reacquisition() -> None:
     )
 
     waiting = controller.step(
+        now=2.0,
+        owner_bounds=None,
+        owner_observed_at=None,
+        native=native(active=True, poll_at=1.95, push_at=1.1),
+    )
+    assert waiting.state is ReacquisitionState.LOCKED
+    assert waiting.reason == "native_tracking_healthy"
+
+
+def test_stale_subject_push_enters_reacquisition_even_if_a5_stays_active() -> None:
+    controller = OwnerReacquisitionController()
+    controller.step(
+        now=1.0,
+        owner_bounds=OWNER_BOX,
+        owner_observed_at=0.9,
+        native=native(),
+    )
+    controller.step(
+        now=1.2,
+        owner_bounds=OWNER_BOX,
+        owner_observed_at=1.1,
+        native=native(active=True, poll_at=1.15, push_at=1.1),
+    )
+
+    lost = controller.step(
         now=3.0,
         owner_bounds=None,
         owner_observed_at=None,
-        native=native(active=False, poll_at=1.15, push_at=1.1),
+        native=native(active=True, poll_at=2.95, push_at=1.1),
     )
-    assert waiting.state is ReacquisitionState.LOCKED
-    assert waiting.reason == "awaiting_native_loss_confirmation"
+    assert lost.state is ReacquisitionState.REACQUIRING
+    assert lost.action is ReacquisitionAction.NONE
+    assert lost.reason == "fresh_live_owner_not_visible"
 
 
 def test_room_scenario_reacquires_only_when_owner_returns() -> None:
@@ -120,12 +146,13 @@ def test_room_scenario_reacquires_only_when_owner_returns() -> None:
     )
     assert locked.state is ReacquisitionState.LOCKED
 
-    # GK leaves. A fresh negative A5 is the explicit native-loss confirmation.
+    # GK leaves. Stale 0x89 subject pushes are enough to confirm native loss,
+    # even if A5 still reports an active/searching tracker state.
     lost = controller.step(
         now=13.0,
         owner_bounds=None,
         owner_observed_at=None,
-        native=native(active=False, poll_at=12.95, push_at=11.0),
+        native=native(active=True, poll_at=12.95, push_at=11.0),
     )
     assert lost.state is ReacquisitionState.REACQUIRING
     assert lost.action is ReacquisitionAction.NONE
