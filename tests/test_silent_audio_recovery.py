@@ -46,21 +46,20 @@ def quality(
 
 
 def test_recovery_threshold_accepts_observed_silent_yes() -> None:
-    assert needs_scripted_recovery(
-        quality(2, rms_dbfs=-66.2, peak_abs=112)
-    ) is True
+    assert needs_scripted_recovery(quality(2, rms_dbfs=-66.2, peak_abs=112)) is True
 
 
 def test_recovery_threshold_rejects_normal_spoken_reply() -> None:
-    assert needs_scripted_recovery(
-        quality(2, rms_dbfs=-23.7, peak_abs=14_426)
-    ) is False
+    assert needs_scripted_recovery(quality(2, rms_dbfs=-23.7, peak_abs=14_426)) is False
 
 
 def test_recovery_threshold_rejects_interrupted_audio() -> None:
-    assert needs_scripted_recovery(
-        quality(2, rms_dbfs=-70.0, peak_abs=50, interrupted=True)
-    ) is False
+    assert (
+        needs_scripted_recovery(
+            quality(2, rms_dbfs=-70.0, peak_abs=50, interrupted=True)
+        )
+        is False
+    )
 
 
 @pytest.mark.asyncio
