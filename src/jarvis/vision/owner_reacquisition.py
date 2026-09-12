@@ -160,9 +160,7 @@ class OwnerReacquisitionController:
             action=ReacquisitionAction.SET_OWNER_TARGET,
             bounds=owner_bounds,
             reason=(
-                "owner_reacquired"
-                if self._ever_locked
-                else "initial_owner_acquisition"
+                "owner_reacquired" if self._ever_locked else "initial_owner_acquisition"
             ),
         )
 
