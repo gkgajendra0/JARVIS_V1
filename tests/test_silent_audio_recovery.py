@@ -73,7 +73,7 @@ async def test_silent_assistant_turn_replays_exact_text_once() -> None:
     )
     output.last_completed_quality = quality(2, rms_dbfs=-66.2, peak_abs=112)
 
-    await recovery._recover_turn(  # noqa: SLF001
+    await recovery._recover_turn(
         ConversationTurn(role=ConversationRole.ASSISTANT, text="Yes.")
     )
 
@@ -92,7 +92,7 @@ async def test_normal_assistant_turn_does_not_invoke_scripted_tts() -> None:
     )
     output.last_completed_quality = quality(2, rms_dbfs=-23.7, peak_abs=14_426)
 
-    await recovery._recover_turn(  # noqa: SLF001
+    await recovery._recover_turn(
         ConversationTurn(role=ConversationRole.ASSISTANT, text="Normal reply.")
     )
 
