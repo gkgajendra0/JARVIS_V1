@@ -8,6 +8,7 @@ import pytest
 from livekit import rtc
 
 from jarvis.voice.wakeword import (
+    BoundedLiveKitWakeVerifier,
     CascadedWakePredictor,
     LiveKitWakeDetector,
     OpenWakeWordStreamingPredictor,
@@ -80,36 +81,126 @@ def test_streaming_predictor_reuses_livekit_bundled_feature_models(
     assert captured["ncpu"] == 1
 
 
-def test_load_predictor_uses_stable_livekit_wakeword_constructor(
+def test_bounded_verifier_uses_low_idle_cpu_session_options(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import livekit.wakeword as livekit_wakeword
+    import onnxruntime as ort
 
+    captured_options: list[ort.SessionOptions] = []
+
+    class FakeInput:
+        name = "input"
+
+    class FakeSession:
+        def __init__(
+            self,
+            _path: str,
+            *,
+            sess_options: ort.SessionOptions,
+            providers: list[str],
+        ) -> None:
+            captured_options.append(sess_options)
+            assert providers == ["CPUExecutionProvider"]
+
+        def get_inputs(self) -> list[FakeInput]:
+            return [FakeInput()]
+
+    monkeypatch.setattr(ort, "InferenceSession", FakeSession)
+    classifier_path = tmp_path / "jarvis.onnx"
+    classifier_path.write_bytes(b"stub")
+
+    BoundedLiveKitWakeVerifier(classifier_path)
+
+    assert len(captured_options) == 3
+    for options in captured_options:
+        assert options.intra_op_num_threads == 1
+        assert options.inter_op_num_threads == 1
+        assert options.execution_mode == ort.ExecutionMode.ORT_SEQUENTIAL
+        assert options.graph_optimization_level == ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        assert options.get_session_config_entry("session.intra_op.allow_spinning") == "0"
+        assert options.get_session_config_entry("session.inter_op.allow_spinning") == "0"
+
+
+def test_bounded_verifier_preserves_livekit_classifier_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import onnxruntime as ort
+
+    classifier_inputs: list[np.ndarray] = []
+    embedding_inputs: list[np.ndarray] = []
+
+    class FakeInput:
+        name = "input"
+
+    class FakeSession:
+        def __init__(
+            self,
+            path: str,
+            *,
+            sess_options: ort.SessionOptions,
+            providers: list[str],
+        ) -> None:
+            del sess_options, providers
+            self._name = Path(path).name
+
+        def get_inputs(self) -> list[FakeInput]:
+            return [FakeInput()]
+
+        def run(
+            self,
+            _outputs: object,
+            inputs: dict[str, np.ndarray],
+        ) -> list[np.ndarray]:
+            value = next(iter(inputs.values()))
+            if self._name == "melspectrogram.onnx":
+                return [np.zeros((1, 1, 196, 32), dtype=np.float32)]
+            if self._name == "embedding_model.onnx":
+                embedding_inputs.append(value.copy())
+                return [np.zeros((1, 1, 1, 96), dtype=np.float32)]
+            classifier_inputs.append(value.copy())
+            return [np.array([[0.91]], dtype=np.float32)]
+
+    monkeypatch.setattr(ort, "InferenceSession", FakeSession)
+    classifier_path = tmp_path / "jarvis.onnx"
+    classifier_path.write_bytes(b"stub")
+    verifier = BoundedLiveKitWakeVerifier(classifier_path)
+
+    scores = verifier.predict(np.ones(32_000, dtype=np.int16))
+
+    assert scores["jarvis"] == pytest.approx(0.91)
+    assert len(embedding_inputs) == 16
+    assert embedding_inputs[0].shape == (1, 76, 32, 1)
+    assert np.all(embedding_inputs[0] == pytest.approx(2.0))
+    assert classifier_inputs[0].shape == (1, 16, 96)
+
+
+def test_load_predictor_uses_bounded_verifier(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from jarvis.voice import wakeword
 
-    captured: dict[str, object] = {}
+    captured: dict[str, Path] = {}
 
-    class FakeWakeWordModel:
-        def __init__(self, *, models: list[Path]) -> None:
-            captured["models"] = models
+    def build_verifier(path: Path) -> FakePredictor:
+        captured["path"] = path
+        return FakePredictor(0.0)
 
-        def predict(self, _samples: np.ndarray) -> dict[str, float]:
-            return {"jarvis": 0.0}
-
-    monkeypatch.setattr(livekit_wakeword, "WakeWordModel", FakeWakeWordModel)
     monkeypatch.setattr(
         wakeword,
         "OpenWakeWordStreamingPredictor",
         lambda _path: FakeStreamingPredictor(0.0),
     )
+    monkeypatch.setattr(wakeword, "BoundedLiveKitWakeVerifier", build_verifier)
     classifier_path = tmp_path / "jarvis.onnx"
     classifier_path.write_bytes(b"stub")
 
     predictor = wakeword.load_livekit_predictor(classifier_path)
 
     assert isinstance(predictor, CascadedWakePredictor)
-    assert captured["models"] == [classifier_path]
+    assert captured["path"] == classifier_path
 
 
 def test_wake_cascade_uses_exact_verifier_only_after_streaming_pretrigger() -> None:
