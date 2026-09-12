@@ -13,6 +13,8 @@ import logging
 import sys
 from pathlib import Path
 
+from livekit.agents.utils import http_context
+
 from jarvis.capabilities.runtime import build_default_capability_runtime
 from jarvis.config import JarvisConfig
 from jarvis.identity.active_speaker import (
@@ -283,8 +285,9 @@ async def _run_from_configuration() -> None:
     config = JarvisConfig.from_environment()
     configure_logging(config.log_level)
     require_startup_preflight(config)
-    runtime = build_production_voice_runtime(config)
-    await runtime.run()
+    async with http_context.open():
+        runtime = build_production_voice_runtime(config)
+        await runtime.run()
 
 
 def main() -> int:
