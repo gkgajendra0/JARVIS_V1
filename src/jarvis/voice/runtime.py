@@ -89,6 +89,7 @@ class _UpdateApprovalRequest:
 _EXIT_CORES = frozenset(
     {
         "go to sleep",
+        "go back to sleep",
         "end session",
         "end the session",
         "सो जाओ",
@@ -718,6 +719,7 @@ class VoiceRuntimeController:
 
         def on_audio_frame(
             frame,
+            *,
             observed_at_monotonic: float,
         ) -> None:
             if turn_capture is None:
