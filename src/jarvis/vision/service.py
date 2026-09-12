@@ -217,7 +217,9 @@ class VisionService:
                     with self._snapshot_lock:
                         self._latest_snapshot = snapshot
                     self.diagnostics.observe(snapshot)
-                    exact_pair = frame is not None and frame.frame_id == snapshot.frame_id
+                    exact_pair = (
+                        frame is not None and frame.frame_id == snapshot.frame_id
+                    )
                     if exact_pair and self._evidence_observer is not None:
                         self._publish_evidence_pair(frame, snapshot)
         except Exception as exc:
