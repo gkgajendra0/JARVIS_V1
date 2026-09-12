@@ -41,6 +41,9 @@ from jarvis.memory.release_guard import build_memory_release_guard
 from jarvis.memory.runtime import build_default_memory_runtime
 from jarvis.preflight import StartupPreflightError, require_startup_preflight
 from jarvis.provider_resilience import ProviderResilienceState
+from jarvis.vision.native_owner_tracking import (
+    build_default_native_owner_tracking_observer,
+)
 from jarvis.vision.service import build_default_vision_service
 from jarvis.voice.canonical_active_speaker_runtime import (
     CanonicalActiveSpeakerRuntimeController,
@@ -104,9 +107,33 @@ def build_production_voice_runtime(
 
     owner_context_state: OwnerContextState | None = None
     evidence_observer = None
-    if config.vision_enabled and config.speaker_shadow_enabled:
+    owner_context_required = config.vision_enabled and (
+        config.speaker_shadow_enabled or config.pocket3_native_tracking_enabled
+    )
+    if owner_context_required:
         evidence_observer = build_default_owner_context_observer()
         owner_context_state = evidence_observer.state
+
+    tracking_observer = None
+    if config.pocket3_native_tracking_enabled:
+        assert owner_context_state is not None
+        tracking_observer = build_default_native_owner_tracking_observer(
+            owner_context=owner_context_state,
+            ble_name=config.pocket3_ble_name,
+            owner_evidence_max_age_seconds=(
+                config.pocket3_owner_evidence_max_age_seconds
+            ),
+            subject_push_stale_seconds=config.pocket3_subject_push_stale_seconds,
+            lock_pending_timeout_seconds=(
+                config.pocket3_lock_pending_timeout_seconds
+            ),
+            resend_cooldown_seconds=config.pocket3_resend_cooldown_seconds,
+        )
+        LOGGER.info(
+            "Pocket 3 native OWNER tracking is enabled: USB remains canonical "
+            "vision input; DJI ActiveTrack owns continuous gimbal motion; "
+            "JARVIS reacquires only a fresh live OWNER candidate"
+        )
 
     active_speaker_visual_buffer: ActiveSpeakerVisualBuffer | None = None
     active_speaker_provider: LrAsdActiveSpeakerProvider | None = None
@@ -135,6 +162,7 @@ def build_production_voice_runtime(
         build_default_vision_service(
             head_model_path=config.vision_head_model_path,
             evidence_observer=evidence_observer,
+            tracking_observer=tracking_observer,
             frame_pair_tap=(
                 active_speaker_visual_buffer.observe
                 if active_speaker_visual_buffer is not None
