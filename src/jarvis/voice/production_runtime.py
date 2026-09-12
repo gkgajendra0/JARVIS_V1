@@ -124,9 +124,7 @@ def build_production_voice_runtime(
                 config.pocket3_owner_evidence_max_age_seconds
             ),
             subject_push_stale_seconds=config.pocket3_subject_push_stale_seconds,
-            lock_pending_timeout_seconds=(
-                config.pocket3_lock_pending_timeout_seconds
-            ),
+            lock_pending_timeout_seconds=(config.pocket3_lock_pending_timeout_seconds),
             resend_cooldown_seconds=config.pocket3_resend_cooldown_seconds,
         )
         LOGGER.info(
