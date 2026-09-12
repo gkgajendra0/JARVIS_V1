@@ -106,7 +106,9 @@ class OwnerReacquisitionController:
             # Do not recenter or issue another target merely because 0x89 went quiet.
             # A fresh negative A5 poll (or transport loss) is the fail-closed signal
             # that native tracking has actually dropped the subject.
-            if not native.connected or self._fresh_negative_poll(now=now, native=native):
+            if not native.connected or self._fresh_negative_poll(
+                now=now, native=native
+            ):
                 self.state = ReacquisitionState.REACQUIRING
             else:
                 return ReacquisitionDecision(
