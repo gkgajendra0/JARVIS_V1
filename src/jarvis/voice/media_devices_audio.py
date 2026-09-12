@@ -35,6 +35,7 @@ _PLAYBACK_SETTLE_SECONDS = 0.05
 
 @dataclass(slots=True)
 class _PlaybackSegment:
+    sequence: int
     samples: int
     started_at_wall: float
     started_at_monotonic: float
@@ -74,9 +75,20 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         self._current_samples = 0
         self._current_started_at_wall = 0.0
         self._current_started_at_monotonic = 0.0
+        self._current_segment_sequence = 0
+        self._next_segment_sequence = 1
         self._generation = 0
         self._segments: list[_PlaybackSegment] = []
         self._closed = False
+
+    @staticmethod
+    def _source_queued_duration(source: rtc.AudioSource | None) -> float:
+        if source is None:
+            return 0.0
+        try:
+            return float(source.queued_duration)
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            return -1.0
 
     async def start(self) -> None:
         if self._player is not None:
@@ -125,10 +137,19 @@ class MediaDevicesAudioOutput(io.AudioOutput):
             if self._current_samples == 0:
                 self._current_started_at_wall = time.time()
                 self._current_started_at_monotonic = time.monotonic()
+                self._current_segment_sequence = self._next_segment_sequence
+                self._next_segment_sequence += 1
                 playback_started_at = self._current_started_at_wall
             await source.capture_frame(canonical)
             self._current_samples += canonical.samples_per_channel
             if playback_started_at is not None:
+                LOGGER.info(
+                    "Playback diagnostic | segment=%s event=started generation=%s "
+                    "queued=%.3fs",
+                    self._current_segment_sequence,
+                    self._generation,
+                    self._source_queued_duration(source),
+                )
                 self.on_playback_started(created_at=playback_started_at)
 
     def flush(self) -> None:
@@ -140,6 +161,7 @@ class MediaDevicesAudioOutput(io.AudioOutput):
             return
 
         segment = _PlaybackSegment(
+            sequence=self._current_segment_sequence,
             samples=self._current_samples,
             started_at_wall=self._current_started_at_wall,
             started_at_monotonic=self._current_started_at_monotonic,
@@ -149,10 +171,21 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         self._current_samples = 0
         self._current_started_at_wall = 0.0
         self._current_started_at_monotonic = 0.0
+        self._current_segment_sequence = 0
 
         duration = segment.samples / DEVICE_SAMPLE_RATE
         elapsed = max(0.0, time.monotonic() - segment.started_at_monotonic)
         remaining = max(0.01, duration - elapsed + _PLAYBACK_SETTLE_SECONDS)
+        LOGGER.info(
+            "Playback diagnostic | segment=%s event=flush generation=%s "
+            "duration=%.3fs elapsed=%.3fs queued=%.3fs finish_timer=%.3fs",
+            segment.sequence,
+            segment.generation,
+            duration,
+            elapsed,
+            self._source_queued_duration(self._source),
+            remaining,
+        )
         loop.call_later(remaining, self._finish_segment, segment)
 
     def _finish_segment(self, segment: _PlaybackSegment) -> None:
@@ -161,32 +194,60 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         segment.completed = True
         if segment in self._segments:
             self._segments.remove(segment)
+        playback_position = segment.samples / DEVICE_SAMPLE_RATE
+        LOGGER.info(
+            "Playback diagnostic | segment=%s event=finished generation=%s "
+            "position=%.3fs interrupted=False queued=%.3fs",
+            segment.sequence,
+            segment.generation,
+            playback_position,
+            self._source_queued_duration(self._source),
+        )
         self.on_playback_finished(
-            playback_position=segment.samples / DEVICE_SAMPLE_RATE,
+            playback_position=playback_position,
             interrupted=False,
         )
 
     def clear_buffer(self) -> None:
         source = self._source
+        queued_before_clear = self._source_queued_duration(source)
+        pending = [segment for segment in self._segments if not segment.completed]
+        LOGGER.info(
+            "Playback diagnostic | event=clear_buffer generation=%s current_segment=%s "
+            "current_samples=%s pending_segments=%s queued_before=%.3fs",
+            self._generation,
+            self._current_segment_sequence or "none",
+            self._current_samples,
+            len(pending),
+            queued_before_clear,
+        )
         if source is not None:
             source.clear_queue()
 
         had_current = self._current_samples > 0
+        current_sequence = self._current_segment_sequence
         current_position = 0.0
         if had_current:
             duration = self._current_samples / DEVICE_SAMPLE_RATE
             elapsed = max(0.0, time.monotonic() - self._current_started_at_monotonic)
             current_position = min(duration, elapsed)
 
-        pending = [segment for segment in self._segments if not segment.completed]
         self._generation += 1
         self._segments.clear()
         self._current_samples = 0
         self._current_started_at_wall = 0.0
         self._current_started_at_monotonic = 0.0
+        self._current_segment_sequence = 0
 
         if had_current:
             super().flush()
+            LOGGER.info(
+                "Playback diagnostic | segment=%s event=finished position=%.3fs "
+                "interrupted=True reason=clear_buffer queued_after=%.3fs",
+                current_sequence,
+                current_position,
+                self._source_queued_duration(source),
+            )
             self.on_playback_finished(
                 playback_position=current_position,
                 interrupted=True,
@@ -195,8 +256,16 @@ class MediaDevicesAudioOutput(io.AudioOutput):
             segment.completed = True
             duration = segment.samples / DEVICE_SAMPLE_RATE
             elapsed = max(0.0, time.monotonic() - segment.started_at_monotonic)
+            playback_position = min(duration, elapsed)
+            LOGGER.info(
+                "Playback diagnostic | segment=%s event=finished position=%.3fs "
+                "interrupted=True reason=clear_buffer queued_after=%.3fs",
+                segment.sequence,
+                playback_position,
+                self._source_queued_duration(source),
+            )
             self.on_playback_finished(
-                playback_position=min(duration, elapsed),
+                playback_position=playback_position,
                 interrupted=True,
             )
 
