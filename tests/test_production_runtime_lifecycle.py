@@ -93,7 +93,9 @@ async def test_production_runtime_owns_livekit_http_context(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
-async def test_production_runtime_closes_livekit_http_context_on_failure(monkeypatch) -> None:
+async def test_production_runtime_closes_livekit_http_context_on_failure(
+    monkeypatch,
+) -> None:
     events, state = _wire_runtime_lifecycle(
         monkeypatch,
         run_error=RuntimeError("runtime failed"),
