@@ -35,6 +35,17 @@ LOGGER = logging.getLogger(__name__)
 _PLAYBACK_SETTLE_SECONDS = 0.05
 
 
+@dataclass(frozen=True, slots=True)
+class PlaybackQualitySnapshot:
+    """Completed playback evidence exposed to provider-resilience observers."""
+
+    sequence: int
+    duration_seconds: float
+    peak_abs: int
+    rms_dbfs: float
+    interrupted: bool
+
+
 @dataclass(slots=True)
 class _PlaybackSegment:
     sequence: int
@@ -90,7 +101,14 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         self._current_player_stream_active_seen = False
         self._generation = 0
         self._segments: list[_PlaybackSegment] = []
+        self._last_completed_quality: PlaybackQualitySnapshot | None = None
         self._closed = False
+
+    @property
+    def last_completed_quality(self) -> PlaybackQualitySnapshot | None:
+        """Return the most recently completed output segment's energy evidence."""
+
+        return self._last_completed_quality
 
     @staticmethod
     def _source_queued_duration(source: rtc.AudioSource | None) -> float:
@@ -297,6 +315,13 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         if segment in self._segments:
             self._segments.remove(segment)
         playback_position = segment.samples / DEVICE_SAMPLE_RATE
+        self._last_completed_quality = PlaybackQualitySnapshot(
+            sequence=segment.sequence,
+            duration_seconds=playback_position,
+            peak_abs=segment.peak_abs,
+            rms_dbfs=segment.rms_dbfs,
+            interrupted=False,
+        )
         player_buffered, player_active, player_stopped = self._player_state(self._player)
         LOGGER.info(
             "Playback diagnostic | segment=%s event=finished generation=%s "
@@ -344,9 +369,15 @@ class MediaDevicesAudioOutput(io.AudioOutput):
 
         had_current = self._current_samples > 0
         current_sequence = self._current_segment_sequence
+        current_samples = self._current_samples
+        current_peak_abs = self._current_peak_abs
+        current_rms_dbfs = self._rms_dbfs(
+            self._current_sum_squares,
+            self._current_energy_samples,
+        )
         current_position = 0.0
         if had_current:
-            duration = self._current_samples / DEVICE_SAMPLE_RATE
+            duration = current_samples / DEVICE_SAMPLE_RATE
             elapsed = max(0.0, time.monotonic() - self._current_started_at_monotonic)
             current_position = min(duration, elapsed)
 
@@ -360,6 +391,13 @@ class MediaDevicesAudioOutput(io.AudioOutput):
 
         if had_current:
             super().flush()
+            self._last_completed_quality = PlaybackQualitySnapshot(
+                sequence=current_sequence,
+                duration_seconds=current_position,
+                peak_abs=current_peak_abs,
+                rms_dbfs=current_rms_dbfs,
+                interrupted=True,
+            )
             LOGGER.info(
                 "Playback diagnostic | segment=%s event=finished position=%.3fs "
                 "interrupted=True reason=clear_buffer queued_after=%.3fs",
@@ -376,6 +414,13 @@ class MediaDevicesAudioOutput(io.AudioOutput):
             duration = segment.samples / DEVICE_SAMPLE_RATE
             elapsed = max(0.0, time.monotonic() - segment.started_at_monotonic)
             playback_position = min(duration, elapsed)
+            self._last_completed_quality = PlaybackQualitySnapshot(
+                sequence=segment.sequence,
+                duration_seconds=playback_position,
+                peak_abs=segment.peak_abs,
+                rms_dbfs=segment.rms_dbfs,
+                interrupted=True,
+            )
             LOGGER.info(
                 "Playback diagnostic | segment=%s event=finished position=%.3fs "
                 "interrupted=True reason=clear_buffer queued_after=%.3fs",
