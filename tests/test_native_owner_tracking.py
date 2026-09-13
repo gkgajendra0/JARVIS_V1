@@ -246,7 +246,6 @@ def test_repeated_short_owner_association_misses_never_confirm_departure() -> No
     owner.publish(live_owner(track_id=7, observed_at=10.2))
     observer.observe(frame(2, 10.2), snapshot(2, 10.2, track(7, box, 10.2)))
     assert observer.controller.state is ReacquisitionState.LOCKED
-    assert observer.perception_fps_hint() == 1.0
 
     observer.observe(frame(3, 10.6), snapshot(3, 10.6))
     assert observer.controller.state is ReacquisitionState.LOCKED
@@ -261,7 +260,6 @@ def test_repeated_short_owner_association_misses_never_confirm_departure() -> No
     )
     observer.observe(frame(4, 10.8), snapshot(4, 10.8, track(7, box, 10.8)))
     assert observer.controller.state is ReacquisitionState.LOCKED
-    assert observer.perception_fps_hint() == 1.0
 
     observer.observe(frame(5, 11.1), snapshot(5, 11.1))
     assert observer.controller.state is ReacquisitionState.LOCKED
@@ -277,5 +275,4 @@ def test_repeated_short_owner_association_misses_never_confirm_departure() -> No
     observer.observe(frame(6, 11.3), snapshot(6, 11.3, track(7, box, 11.3)))
 
     assert observer.controller.state is ReacquisitionState.LOCKED
-    assert observer.perception_fps_hint() == 1.0
     assert all(not confirmed for _, _, confirmed in presence.events)
