@@ -52,10 +52,7 @@ def run_native_owner_tracking_live(
     print("Software PTZ: SAFE / not armed")
     print(f"Perception rate: {_PERCEPTION_FPS:.1f} FPS")
     print(f"OpenCV threads: {_OPENCV_THREADS}")
-    print(
-        "Tracking-only OWNER evidence window: "
-        f"{_TRACKING_EVIDENCE_WINDOW} samples"
-    )
+    print(f"Tracking-only OWNER evidence window: {_TRACKING_EVIDENCE_WINDOW} samples")
     print("Expected flow:")
     print("  1. JARVIS recognizes live OWNER and sends one A6.")
     print("  2. Pocket 3 native ActiveTrack follows OWNER.")
