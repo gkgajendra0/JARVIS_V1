@@ -198,13 +198,14 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
 
     def _join_windows_wifi(self, ssid: str, password: str) -> None:
         last_error: Exception | None = None
+        recoverable_errors = (TimeoutError, subprocess.SubprocessError, OSError)
         for attempt in range(1, self.recovery_config.wifi_join_attempts + 1):
             if self._status_has_ssid(self._wlan_status(), ssid):
                 return
             try:
                 super()._join_windows_wifi(ssid, password)
                 return
-            except Exception as exc:
+            except recoverable_errors as exc:
                 last_error = exc
                 if attempt >= self.recovery_config.wifi_join_attempts:
                     break
