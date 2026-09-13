@@ -7,19 +7,13 @@ from jarvis.vision.owner_reacquisition import ReacquisitionState
 
 
 class FakeWorkstation:
-    def __init__(self, *, lock_result: bool = True, wake_result: bool = True) -> None:
+    def __init__(self, *, lock_result: bool = True) -> None:
         self.lock_result = lock_result
-        self.wake_result = wake_result
         self.lock_calls = 0
-        self.wake_calls = 0
 
     def lock(self) -> bool:
         self.lock_calls += 1
         return self.lock_result
-
-    def wake_display(self) -> bool:
-        self.wake_calls += 1
-        return self.wake_result
 
 
 def _controller(workstation: FakeWorkstation) -> OwnerWorkstationPresenceController:
@@ -29,6 +23,32 @@ def _controller(workstation: FakeWorkstation) -> OwnerWorkstationPresenceControl
             lock_after_loss_seconds=5.0,
             lock_retry_seconds=2.0,
         ),
+    )
+
+
+def _confirm_owner(controller: OwnerWorkstationPresenceController, now: float) -> None:
+    controller.observe(
+        now=now,
+        tracking_state=ReacquisitionState.LOCKED,
+        owner_present=True,
+    )
+
+
+def _leave_and_lock(
+    controller: OwnerWorkstationPresenceController,
+    *,
+    lost_at: float,
+    lock_at: float,
+) -> WorkstationPresenceAction:
+    controller.observe(
+        now=lost_at,
+        tracking_state=ReacquisitionState.REACQUIRING,
+        owner_present=False,
+    )
+    return controller.observe(
+        now=lock_at,
+        tracking_state=ReacquisitionState.REACQUIRING,
+        owner_present=False,
     )
 
 
@@ -54,11 +74,7 @@ def test_does_not_lock_before_owner_was_ever_confirmed() -> None:
 def test_short_owner_occlusion_never_locks() -> None:
     workstation = FakeWorkstation()
     controller = _controller(workstation)
-    controller.observe(
-        now=0.0,
-        tracking_state=ReacquisitionState.LOCKED,
-        owner_present=True,
-    )
+    _confirm_owner(controller, 0.0)
     controller.observe(
         now=1.0,
         tracking_state=ReacquisitionState.REACQUIRING,
@@ -81,11 +97,7 @@ def test_short_owner_occlusion_never_locks() -> None:
 def test_native_failure_does_not_lock_while_live_owner_is_still_present() -> None:
     workstation = FakeWorkstation()
     controller = _controller(workstation)
-    controller.observe(
-        now=0.0,
-        tracking_state=ReacquisitionState.LOCKED,
-        owner_present=True,
-    )
+    _confirm_owner(controller, 0.0)
     controller.observe(
         now=1.0,
         tracking_state=ReacquisitionState.REACQUIRING,
@@ -104,21 +116,9 @@ def test_native_failure_does_not_lock_while_live_owner_is_still_present() -> Non
 def test_sustained_confirmed_owner_absence_locks_exactly_once() -> None:
     workstation = FakeWorkstation()
     controller = _controller(workstation)
-    controller.observe(
-        now=0.0,
-        tracking_state=ReacquisitionState.LOCKED,
-        owner_present=True,
-    )
-    controller.observe(
-        now=1.0,
-        tracking_state=ReacquisitionState.REACQUIRING,
-        owner_present=False,
-    )
-    action = controller.observe(
-        now=6.1,
-        tracking_state=ReacquisitionState.REACQUIRING,
-        owner_present=False,
-    )
+    _confirm_owner(controller, 0.0)
+
+    action = _leave_and_lock(controller, lost_at=1.0, lock_at=6.1)
     repeated = controller.observe(
         now=20.0,
         tracking_state=ReacquisitionState.REACQUIRING,
@@ -131,24 +131,11 @@ def test_sustained_confirmed_owner_absence_locks_exactly_once() -> None:
     assert controller.auto_lock_issued is True
 
 
-def test_stranger_or_unbound_subject_never_wakes_after_auto_lock() -> None:
+def test_unbound_subject_does_not_complete_auto_lock_cycle() -> None:
     workstation = FakeWorkstation()
     controller = _controller(workstation)
-    controller.observe(
-        now=0.0,
-        tracking_state=ReacquisitionState.LOCKED,
-        owner_present=True,
-    )
-    controller.observe(
-        now=1.0,
-        tracking_state=ReacquisitionState.REACQUIRING,
-        owner_present=False,
-    )
-    controller.observe(
-        now=6.1,
-        tracking_state=ReacquisitionState.REACQUIRING,
-        owner_present=False,
-    )
+    _confirm_owner(controller, 0.0)
+    _leave_and_lock(controller, lost_at=1.0, lock_at=6.1)
 
     action = controller.observe(
         now=8.0,
@@ -157,53 +144,50 @@ def test_stranger_or_unbound_subject_never_wakes_after_auto_lock() -> None:
     )
 
     assert action is WorkstationPresenceAction.NONE
-    assert workstation.wake_calls == 0
+    assert controller.auto_lock_issued is True
+    assert workstation.lock_calls == 1
 
 
-def test_confirmed_owner_return_wakes_once_after_jarvis_auto_lock() -> None:
+def test_confirmed_owner_relock_after_windows_unlock_rearms_policy() -> None:
     workstation = FakeWorkstation()
     controller = _controller(workstation)
-    controller.observe(
-        now=0.0,
-        tracking_state=ReacquisitionState.LOCKED,
-        owner_present=True,
-    )
-    controller.observe(
-        now=1.0,
-        tracking_state=ReacquisitionState.REACQUIRING,
-        owner_present=False,
-    )
-    controller.observe(
-        now=6.1,
-        tracking_state=ReacquisitionState.REACQUIRING,
-        owner_present=False,
-    )
+    _confirm_owner(controller, 0.0)
+    _leave_and_lock(controller, lost_at=1.0, lock_at=6.1)
 
     action = controller.observe(
         now=9.0,
         tracking_state=ReacquisitionState.LOCKED,
         owner_present=True,
     )
-    repeated = controller.observe(
+
+    assert action is WorkstationPresenceAction.NONE
+    assert controller.auto_lock_issued is False
+    assert workstation.lock_calls == 1
+
+
+def test_policy_can_auto_lock_again_after_normal_windows_unlock() -> None:
+    workstation = FakeWorkstation()
+    controller = _controller(workstation)
+    _confirm_owner(controller, 0.0)
+
+    first = _leave_and_lock(controller, lost_at=1.0, lock_at=6.1)
+    controller.observe(
         now=10.0,
         tracking_state=ReacquisitionState.LOCKED,
         owner_present=True,
     )
+    second = _leave_and_lock(controller, lost_at=11.0, lock_at=16.1)
 
-    assert action is WorkstationPresenceAction.WAKE_DISPLAY
-    assert repeated is WorkstationPresenceAction.NONE
-    assert workstation.wake_calls == 1
-    assert controller.auto_lock_issued is False
+    assert first is WorkstationPresenceAction.LOCK_WORKSTATION
+    assert second is WorkstationPresenceAction.LOCK_WORKSTATION
+    assert workstation.lock_calls == 2
+    assert controller.auto_lock_issued is True
 
 
 def test_failed_lock_retries_only_after_cooldown() -> None:
     workstation = FakeWorkstation(lock_result=False)
     controller = _controller(workstation)
-    controller.observe(
-        now=0.0,
-        tracking_state=ReacquisitionState.LOCKED,
-        owner_present=True,
-    )
+    _confirm_owner(controller, 0.0)
     controller.observe(
         now=1.0,
         tracking_state=ReacquisitionState.REACQUIRING,
