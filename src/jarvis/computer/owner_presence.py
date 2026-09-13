@@ -57,9 +57,8 @@ class OwnerWorkstationPresenceController:
 
     Safety invariants:
     - JARVIS must first have observed a healthy native lock *and* a live OWNER.
-    - Native loss alone is insufficient; the live OWNER must also be absent.
-    - Brief/missed OWNER frames are absorbed upstream by the OWNER/native
-      reacquisition policy before this controller sees confirmed REACQUIRING.
+    - Native tracking loss/reacquisition is never proof of OWNER departure.
+    - The upstream OWNER reacquisition policy must explicitly confirm absence.
     - Once confirmed OWNER loss reaches this controller, the default is to lock
       immediately with no additional workstation-delay timer.
     - JARVIS never supplies or injects a Windows credential.
@@ -96,6 +95,7 @@ class OwnerWorkstationPresenceController:
         now: float,
         tracking_state: ReacquisitionState,
         owner_present: bool,
+        owner_absence_confirmed: bool = False,
     ) -> WorkstationPresenceAction:
         if now < 0:
             raise ValueError("now must be non-negative")
@@ -119,6 +119,7 @@ class OwnerWorkstationPresenceController:
             self._ever_confirmed_owner_lock
             and tracking_state is ReacquisitionState.REACQUIRING
             and not owner_present
+            and owner_absence_confirmed
         )
         if not should_count_absence:
             self._absence_started_at = None
