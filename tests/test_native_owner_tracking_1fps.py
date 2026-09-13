@@ -1,4 +1,12 @@
+import time
+
 from jarvis.identity.owner_context import OwnerContextState
+from jarvis.identity.owner_evidence import (
+    OwnerIdentityState,
+    OwnerLivenessBindingAssessment,
+    OwnerLivenessBindingState,
+)
+from jarvis.identity.passive_liveness import PassiveLivenessState
 from jarvis.vision.native_owner_tracking import (
     NativeOwnerTrackingConfig,
     NativeOwnerTrackingObserver,
@@ -31,9 +39,22 @@ class _FakeNativeClient:
         pass
 
 
-def test_locked_state_can_throttle_perception_to_one_fps() -> None:
+def _fresh_owner() -> OwnerLivenessBindingAssessment:
+    return OwnerLivenessBindingAssessment(
+        session_id="session-1",
+        visual_track_id=7,
+        state=OwnerLivenessBindingState.LIVE_OWNER_CANDIDATE,
+        identity_state=OwnerIdentityState.OWNER_CANDIDATE,
+        liveness_state=PassiveLivenessState.LIVE,
+        observed_at_monotonic=time.monotonic(),
+        reason_codes=("test_live_owner",),
+    )
+
+
+def test_locked_state_throttles_only_while_owner_evidence_is_fresh() -> None:
+    owner = OwnerContextState()
     observer = NativeOwnerTrackingObserver(
-        owner_context=OwnerContextState(),
+        owner_context=owner,
         client=_FakeNativeClient(),
         config=NativeOwnerTrackingConfig(
             searching_perception_fps=10.0,
@@ -44,7 +65,13 @@ def test_locked_state_can_throttle_perception_to_one_fps() -> None:
     assert observer.perception_fps_hint() == 10.0
 
     observer.controller.state = ReacquisitionState.LOCKED
+    assert observer.perception_fps_hint() == 10.0
+
+    owner.publish(_fresh_owner())
     assert observer.perception_fps_hint() == 1.0
+
+    owner.invalidate("temporary_track_dropout")
+    assert observer.perception_fps_hint() == 10.0
 
     observer.controller.state = ReacquisitionState.REACQUIRING
     assert observer.perception_fps_hint() == 10.0
