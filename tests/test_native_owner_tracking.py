@@ -66,9 +66,7 @@ class PresenceRecorder:
         owner_absence_confirmed: bool = False,
     ) -> None:
         del now
-        self.events.append(
-            (tracking_state, owner_present, owner_absence_confirmed)
-        )
+        self.events.append((tracking_state, owner_present, owner_absence_confirmed))
 
     def reset(self) -> None:
         pass
