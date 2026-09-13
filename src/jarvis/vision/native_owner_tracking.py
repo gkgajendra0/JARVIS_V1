@@ -17,7 +17,8 @@ from jarvis.vision.owner_reacquisition import (
     ReacquisitionConfig,
     ReacquisitionState,
 )
-from jarvis.vision.pocket3_native import Pocket3NativeConfig, Pocket3NativeTrackerClient
+from jarvis.vision.pocket3_native import Pocket3NativeConfig
+from jarvis.vision.pocket3_recovery import ResilientPocket3NativeOwnerTrackingClient
 from jarvis.vision.runtime import VisionSnapshot
 
 LOGGER = logging.getLogger(__name__)
@@ -54,19 +55,7 @@ class OwnerPresenceObserver(Protocol):
     def reset(self) -> None: ...
 
 
-class Pocket3NativeOwnerTrackingClient(Pocket3NativeTrackerClient):
-    """Pocket transport plus Mimo's native one-shot gimbal recenter command."""
-
-    def recenter_gimbal(self) -> None:
-        if not self.connected:
-            return
-        self._send_command(
-            receiver=0x04,
-            flags=0x40,
-            cmd_set=0x04,
-            cmd_id=0x4C,
-            payload=b"\xfe\x08",
-        )
+Pocket3NativeOwnerTrackingClient = ResilientPocket3NativeOwnerTrackingClient
 
 
 @dataclass(frozen=True, slots=True)
