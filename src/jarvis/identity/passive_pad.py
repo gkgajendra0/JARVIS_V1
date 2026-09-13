@@ -39,8 +39,23 @@ def _load_ort_session(model_path: str | Path) -> Any:
         raise RuntimeError(
             "Passive PAD requires onnxruntime. Install JARVIS with the vision extra."
         ) from exc
+
+    # MiniFAS models are tiny and JARVIS creates two sessions for the accepted
+    # ensemble. ONNX Runtime otherwise gives every CPU session a physical-core-
+    # sized intra-op pool whose workers spin by default while idle. On the owner
+    # PC that can consume nearly the whole CPU even when no face is being scored.
+    # Keep execution sequential, use the calling thread only, and let workers
+    # sleep instead of spinning. Graph optimizations remain fully enabled.
+    session_options = ort.SessionOptions()
+    session_options.intra_op_num_threads = 1
+    session_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+    session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    session_options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+    session_options.add_session_config_entry("session.inter_op.allow_spinning", "0")
+
     return ort.InferenceSession(
         str(model_path),
+        sess_options=session_options,
         providers=["CPUExecutionProvider"],
     )
 
