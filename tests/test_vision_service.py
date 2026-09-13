@@ -103,6 +103,22 @@ def test_service_defaults_to_ten_hz_perception() -> None:
     service = VisionService(runtime)  # type: ignore[arg-type]
 
     assert service._minimum_process_interval_seconds == pytest.approx(0.1)
+    assert service._current_minimum_process_interval_seconds() == pytest.approx(0.1)
+
+
+def test_service_honors_adaptive_rate_and_caps_it_to_configured_maximum() -> None:
+    runtime = _FakeRuntime([_track(7)], {7})
+    requested_fps = [2.0]
+    service = VisionService(
+        runtime,  # type: ignore[arg-type]
+        perception_fps=10.0,
+        perception_fps_provider=lambda: requested_fps[0],
+    )
+
+    assert service._current_minimum_process_interval_seconds() == pytest.approx(0.5)
+
+    requested_fps[0] = 20.0
+    assert service._current_minimum_process_interval_seconds() == pytest.approx(0.1)
 
 
 def test_service_rejects_non_positive_perception_rate() -> None:
