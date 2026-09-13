@@ -63,7 +63,14 @@ class OCSORTConfig:
 
 
 class _RoboflowTrackerAdapter:
-    """Shared translation between canonical JARVIS and supervision detections."""
+    """Shared translation between canonical JARVIS and supervision detections.
+
+    ``trackers>=2.6`` deliberately separates this-frame matches returned from
+    ``update()`` from ``tracked_objects``, which contains every confirmed track
+    that is still alive inside the tracker's lost-track budget. JARVIS keeps
+    those concepts separate too: ``update()`` exposes only freshly observed
+    tracks while ``alive_track_ids()`` exposes continuity through short misses.
+    """
 
     def __init__(
         self,
@@ -79,6 +86,7 @@ class _RoboflowTrackerAdapter:
         self._tracker = tracker
         self._first_seen: dict[int, float] = {}
         self._last_seen: dict[int, float] = {}
+        self._alive_track_ids: tuple[int, ...] = ()
 
     def _update_external(
         self,
@@ -102,6 +110,7 @@ class _RoboflowTrackerAdapter:
         tracked = self._update_external(detections, now=now, frame=frame)
         tracker_ids = getattr(tracked, "tracker_id", None)
         if tracker_ids is None:
+            self._refresh_alive_track_ids(())
             self._prune_track_history(now)
             return []
 
@@ -109,6 +118,7 @@ class _RoboflowTrackerAdapter:
         confidences = np.asarray(tracked.confidence)
         ids = np.asarray(tracker_ids)
         output: list[Track] = []
+        visible_track_ids: list[int] = []
 
         for box, confidence, track_id in zip(xyxy, confidences, ids, strict=True):
             track_id = int(track_id)
@@ -117,6 +127,7 @@ class _RoboflowTrackerAdapter:
             bounds = self._from_external_box(box, frame=frame)
             first_seen = self._first_seen.setdefault(track_id, now)
             self._last_seen[track_id] = now
+            visible_track_ids.append(track_id)
             output.append(
                 Track(
                     track_id=track_id,
@@ -128,8 +139,44 @@ class _RoboflowTrackerAdapter:
                 )
             )
 
+        self._refresh_alive_track_ids(visible_track_ids)
         self._prune_track_history(now)
         return output
+
+    def alive_track_ids(self) -> tuple[int, ...]:
+        """Return confirmed tracker IDs still alive through short misses.
+
+        These IDs are continuity metadata only. They must never be treated as
+        fresh detections or fresh biometric evidence.
+        """
+
+        return self._alive_track_ids
+
+    def _refresh_alive_track_ids(
+        self,
+        fallback_ids: list[int] | tuple[int, ...],
+    ) -> None:
+        alive = getattr(self._tracker, "tracked_objects", None)
+        if alive is None:
+            self._alive_track_ids = tuple(
+                dict.fromkeys(int(value) for value in fallback_ids)
+            )
+            return
+
+        ids = getattr(alive, "tracker_id", None)
+        if ids is None:
+            self._alive_track_ids = tuple(
+                dict.fromkeys(int(value) for value in fallback_ids)
+            )
+            return
+
+        self._alive_track_ids = tuple(
+            dict.fromkeys(
+                int(value)
+                for value in np.asarray(ids).reshape(-1)
+                if int(value) >= 0
+            )
+        )
 
     def _prune_track_history(self, now: float) -> None:
         cutoff = now - _FIRST_SEEN_RETENTION_SECONDS
