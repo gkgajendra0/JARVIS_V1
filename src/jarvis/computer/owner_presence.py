@@ -166,8 +166,7 @@ class OwnerWorkstationPresenceController:
     def _lock_retry_due(self, now: float) -> bool:
         attempted_at = self._last_lock_attempt_at
         return (
-            attempted_at is None
-            or now - attempted_at >= self.config.lock_retry_seconds
+            attempted_at is None or now - attempted_at >= self.config.lock_retry_seconds
         )
 
     def _complete_cycle(self) -> None:
