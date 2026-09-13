@@ -86,7 +86,9 @@ def run_native_owner_tracking_live(
     print("  3. OWNER leaves the frame; JARVIS ramps perception back up and recenters.")
     if workstation_lock:
         print("  4. Sustained confirmed OWNER absence locks the Windows workstation.")
-        print("  5. OWNER returns; JARVIS reacquires, relocks tracking, and wakes display.")
+        print(
+            "  5. OWNER returns; JARVIS reacquires, relocks tracking, and wakes display."
+        )
         print("  6. Windows Hello/Winlogon remains the authentication authority.")
     else:
         print("  4. OWNER returns; JARVIS sends a fresh A6 and Pocket relocks.")
