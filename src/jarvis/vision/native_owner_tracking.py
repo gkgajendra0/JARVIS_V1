@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Protocol
 
 from jarvis.identity.owner_context import OwnerContextState
 from jarvis.identity.owner_evidence import OwnerLivenessBindingState
 from jarvis.vision.camera import CapturedFrame
+from jarvis.vision.models import BoundingBox
 from jarvis.vision.owner_reacquisition import (
+    NativeTrackingStatus,
     OwnerReacquisitionController,
     ReacquisitionAction,
     ReacquisitionConfig,
@@ -18,6 +21,40 @@ from jarvis.vision.pocket3_native import Pocket3NativeConfig, Pocket3NativeTrack
 from jarvis.vision.runtime import VisionSnapshot
 
 LOGGER = logging.getLogger(__name__)
+
+
+class NativeOwnerTrackingClient(Protocol):
+    @property
+    def connected(self) -> bool: ...
+
+    def start(self) -> None: ...
+
+    def status(self) -> NativeTrackingStatus: ...
+
+    def poll_tracking(self) -> None: ...
+
+    def set_target(self, bounds: BoundingBox) -> bool: ...
+
+    def clear_target(self) -> None: ...
+
+    def recenter_gimbal(self) -> None: ...
+
+    def close(self) -> None: ...
+
+
+class Pocket3NativeOwnerTrackingClient(Pocket3NativeTrackerClient):
+    """Pocket transport plus Mimo's native one-shot gimbal recenter command."""
+
+    def recenter_gimbal(self) -> None:
+        if not self.connected:
+            return
+        self._send_command(
+            receiver=0x04,
+            flags=0x40,
+            cmd_set=0x04,
+            cmd_id=0x4C,
+            payload=b"\xFE\x08",
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,18 +70,19 @@ class NativeOwnerTrackingConfig:
 
 
 class NativeOwnerTrackingObserver:
-    """Bridge JARVIS OWNER evidence to one-shot native DJI A6 target selection.
+    """Bridge JARVIS OWNER evidence to native DJI tracking and recovery.
 
-    Healthy native tracking owns continuous gimbal movement. JARVIS only sends a
-    fresh A6 when a live OWNER candidate is visible and the native tracker is not
-    already healthy. Losing the owner never triggers an automatic recenter.
+    Healthy native tracking owns continuous gimbal movement. JARVIS sends a fresh
+    A6 only when a live OWNER candidate is visible and the native tracker is not
+    already healthy. After a confirmed OWNER loss, the controller may clear the
+    stale target and issue Mimo's native recenter before searching from home view.
     """
 
     def __init__(
         self,
         *,
         owner_context: OwnerContextState,
-        client: Pocket3NativeTrackerClient,
+        client: NativeOwnerTrackingClient,
         controller: OwnerReacquisitionController | None = None,
         config: NativeOwnerTrackingConfig | None = None,
     ) -> None:
@@ -115,6 +153,17 @@ class NativeOwnerTrackingObserver:
             )
             self._last_logged_state = decision.state
 
+        if decision.action is ReacquisitionAction.RECENTER_GIMBAL:
+            try:
+                self.client.clear_target()
+                self.client.recenter_gimbal()
+                LOGGER.info(
+                    "Pocket 3 native gimbal recenter sent after confirmed OWNER loss"
+                )
+            except Exception:
+                LOGGER.exception("Pocket 3 native gimbal recenter failed")
+            return
+
         if decision.action is not ReacquisitionAction.SET_OWNER_TARGET:
             return
         assert decision.bounds is not None
@@ -153,6 +202,8 @@ def build_default_native_owner_tracking_observer(
     subject_push_stale_seconds: float = 1.25,
     lock_pending_timeout_seconds: float = 2.5,
     resend_cooldown_seconds: float = 1.0,
+    recenter_after_loss_seconds: float = 1.0,
+    recenter_settle_seconds: float = 0.75,
 ) -> NativeOwnerTrackingObserver:
     controller = OwnerReacquisitionController(
         ReacquisitionConfig(
@@ -160,10 +211,12 @@ def build_default_native_owner_tracking_observer(
             subject_push_stale_seconds=subject_push_stale_seconds,
             lock_pending_timeout_seconds=lock_pending_timeout_seconds,
             resend_cooldown_seconds=resend_cooldown_seconds,
+            recenter_after_loss_seconds=recenter_after_loss_seconds,
+            recenter_settle_seconds=recenter_settle_seconds,
         )
     )
     return NativeOwnerTrackingObserver(
         owner_context=owner_context,
-        client=Pocket3NativeTrackerClient(Pocket3NativeConfig(ble_name=ble_name)),
+        client=Pocket3NativeOwnerTrackingClient(Pocket3NativeConfig(ble_name=ble_name)),
         controller=controller,
     )
