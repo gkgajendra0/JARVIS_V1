@@ -60,7 +60,9 @@ class _UnusedSessionProvider:
         raise AssertionError("session provider should not be polled in this test")
 
 
-def _live_owner_assessment(*, observed_at: float = 1.0) -> OwnerLivenessBindingAssessment:
+def _live_owner_assessment(
+    *, observed_at: float = 1.0
+) -> OwnerLivenessBindingAssessment:
     return OwnerLivenessBindingAssessment(
         session_id="session-1",
         visual_track_id=7,
@@ -72,7 +74,9 @@ def _live_owner_assessment(*, observed_at: float = 1.0) -> OwnerLivenessBindingA
     )
 
 
-def _snapshot(*, frame_id: int, captured_at: float, alive: tuple[int, ...]) -> VisionSnapshot:
+def _snapshot(
+    *, frame_id: int, captured_at: float, alive: tuple[int, ...]
+) -> VisionSnapshot:
     return VisionSnapshot(
         frame_id=frame_id,
         captured_at=captured_at,
@@ -172,7 +176,10 @@ def test_owner_context_fails_closed_after_bound_track_really_expires() -> None:
 
     current = state.snapshot()
     assert current.assessment is None
-    assert current.invalidation_reason == "owner_context_requires_one_head_associated_subject"
+    assert (
+        current.invalidation_reason
+        == "owner_context_requires_one_head_associated_subject"
+    )
     assert observer._track_id is None
     assert identity_window.clear_calls == 1
     assert liveness_window.clear_calls == 1
