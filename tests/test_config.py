@@ -72,6 +72,35 @@ def test_memory_candidate_extraction_is_default_off() -> None:
     assert not hasattr(config, "memory_candidate_extraction_provider")
 
 
+def test_owner_workstation_lock_is_default_off() -> None:
+    config = JarvisConfig()
+
+    assert config.owner_workstation_lock_enabled is False
+    assert config.owner_workstation_lock_delay_seconds == 5.0
+
+
+def test_owner_workstation_lock_requires_native_tracking() -> None:
+    with pytest.raises(ValueError, match="OWNER_WORKSTATION_LOCK_ENABLED"):
+        JarvisConfig(owner_workstation_lock_enabled=True)
+
+
+def test_owner_workstation_lock_accepts_explicit_native_tracking_configuration() -> None:
+    config = JarvisConfig(
+        vision_enabled=True,
+        pocket3_native_tracking_enabled=True,
+        owner_workstation_lock_enabled=True,
+        owner_workstation_lock_delay_seconds=7.5,
+    )
+
+    assert config.owner_workstation_lock_enabled is True
+    assert config.owner_workstation_lock_delay_seconds == 7.5
+
+
+def test_owner_workstation_lock_delay_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="owner_workstation_lock_delay_seconds"):
+        JarvisConfig(owner_workstation_lock_delay_seconds=0.0)
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
