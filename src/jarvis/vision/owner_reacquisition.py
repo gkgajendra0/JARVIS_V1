@@ -113,9 +113,11 @@ class OwnerReacquisitionController:
 
         if owner_fresh:
             self._owner_missing_since = None
-        elif self.state is ReacquisitionState.LOCKED:
-            if self._owner_missing_since is None:
-                self._owner_missing_since = now
+        elif (
+            self.state is ReacquisitionState.LOCKED
+            and self._owner_missing_since is None
+        ):
+            self._owner_missing_since = now
 
         if self.state is ReacquisitionState.LOCK_PENDING and native_healthy:
             self.state = ReacquisitionState.LOCKED
