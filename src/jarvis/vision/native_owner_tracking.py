@@ -61,12 +61,22 @@ class Pocket3NativeOwnerTrackingClient(Pocket3NativeTrackerClient):
 class NativeOwnerTrackingConfig:
     poll_interval_seconds: float = 0.50
     reconnect_backoff_seconds: float = 5.0
+    searching_perception_fps: float = 10.0
+    locked_perception_fps: float = 2.0
 
     def __post_init__(self) -> None:
         if self.poll_interval_seconds <= 0:
             raise ValueError("poll_interval_seconds must be positive")
         if self.reconnect_backoff_seconds <= 0:
             raise ValueError("reconnect_backoff_seconds must be positive")
+        if self.searching_perception_fps <= 0:
+            raise ValueError("searching_perception_fps must be positive")
+        if self.locked_perception_fps <= 0:
+            raise ValueError("locked_perception_fps must be positive")
+        if self.locked_perception_fps > self.searching_perception_fps:
+            raise ValueError(
+                "locked_perception_fps must not exceed searching_perception_fps"
+            )
 
 
 class NativeOwnerTrackingObserver:
@@ -93,6 +103,12 @@ class NativeOwnerTrackingObserver:
         self._last_poll_at: float | None = None
         self._last_connect_attempt_at: float | None = None
         self._last_logged_state: ReacquisitionState | None = None
+
+    def perception_fps_hint(self) -> float:
+        """Return the maximum useful JARVIS perception rate for the current state."""
+        if self.controller.state is ReacquisitionState.LOCKED:
+            return self.config.locked_perception_fps
+        return self.config.searching_perception_fps
 
     def observe(self, frame: CapturedFrame, snapshot: VisionSnapshot) -> None:
         now = frame.captured_at
@@ -204,6 +220,8 @@ def build_default_native_owner_tracking_observer(
     resend_cooldown_seconds: float = 1.0,
     recenter_after_loss_seconds: float = 1.0,
     recenter_settle_seconds: float = 0.75,
+    searching_perception_fps: float = 10.0,
+    locked_perception_fps: float = 2.0,
 ) -> NativeOwnerTrackingObserver:
     controller = OwnerReacquisitionController(
         ReacquisitionConfig(
@@ -219,4 +237,8 @@ def build_default_native_owner_tracking_observer(
         owner_context=owner_context,
         client=Pocket3NativeOwnerTrackingClient(Pocket3NativeConfig(ble_name=ble_name)),
         controller=controller,
+        config=NativeOwnerTrackingConfig(
+            searching_perception_fps=searching_perception_fps,
+            locked_perception_fps=locked_perception_fps,
+        ),
     )
