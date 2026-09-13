@@ -23,6 +23,7 @@ class ReacquisitionState(str, Enum):
 class ReacquisitionAction(str, Enum):
     NONE = "none"
     SET_OWNER_TARGET = "set_owner_target"
+    RECENTER_GIMBAL = "recenter_gimbal"
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +40,8 @@ class ReacquisitionConfig:
     subject_push_stale_seconds: float = 1.25
     lock_pending_timeout_seconds: float = 2.5
     resend_cooldown_seconds: float = 1.0
+    recenter_after_loss_seconds: float = 1.0
+    recenter_settle_seconds: float = 0.75
 
     def __post_init__(self) -> None:
         for name in (
@@ -46,6 +49,8 @@ class ReacquisitionConfig:
             "subject_push_stale_seconds",
             "lock_pending_timeout_seconds",
             "resend_cooldown_seconds",
+            "recenter_after_loss_seconds",
+            "recenter_settle_seconds",
         ):
             if getattr(self, name) <= 0:
                 raise ValueError(f"{name} must be positive")
@@ -67,12 +72,16 @@ class OwnerReacquisitionController:
         self.state = ReacquisitionState.SEARCHING
         self._last_target_sent_at: float | None = None
         self._lock_pending_since: float | None = None
+        self._lost_since: float | None = None
+        self._recenter_sent_at: float | None = None
         self._ever_locked = False
 
     def reset(self) -> None:
         self.state = ReacquisitionState.SEARCHING
         self._last_target_sent_at = None
         self._lock_pending_since = None
+        self._lost_since = None
+        self._recenter_sent_at = None
         self._ever_locked = False
 
     def step(
@@ -96,6 +105,8 @@ class OwnerReacquisitionController:
         if native_healthy:
             self.state = ReacquisitionState.LOCKED
             self._lock_pending_since = None
+            self._lost_since = None
+            self._recenter_sent_at = None
             self._ever_locked = True
             return ReacquisitionDecision(
                 state=self.state,
@@ -103,15 +114,14 @@ class OwnerReacquisitionController:
             )
 
         if self.state is ReacquisitionState.LOCKED:
-            # 0x89 is the camera's live subject truth. Current Pocket tooling drops
-            # a native lock after sustained 0x89 silence; keep our threshold more
-            # conservative than that implementation to avoid reacting to one lost packet.
             if (
                 not native.connected
                 or self._fresh_negative_poll(now=now, native=native)
                 or self._subject_push_is_stale(now=now, native=native)
             ):
                 self.state = ReacquisitionState.REACQUIRING
+                self._lost_since = now
+                self._recenter_sent_at = None
             else:
                 return ReacquisitionDecision(
                     state=self.state,
@@ -134,6 +144,9 @@ class OwnerReacquisitionController:
                 else ReacquisitionState.SEARCHING
             )
             self._lock_pending_since = None
+            if self.state is ReacquisitionState.REACQUIRING and self._lost_since is None:
+                self._lost_since = now
+                self._recenter_sent_at = None
 
         if not native.connected:
             return ReacquisitionDecision(
@@ -141,29 +154,50 @@ class OwnerReacquisitionController:
                 reason="native_transport_unavailable",
             )
 
-        if not owner_fresh:
+        if owner_fresh:
+            if self._recenter_is_settling(now):
+                return ReacquisitionDecision(
+                    state=self.state,
+                    reason="awaiting_recenter_settle",
+                )
+            if not self._resend_allowed(now):
+                return ReacquisitionDecision(
+                    state=self.state,
+                    reason="target_resend_cooldown",
+                )
+
+            assert owner_bounds is not None
+            self.state = ReacquisitionState.LOCK_PENDING
+            self._last_target_sent_at = now
+            self._lock_pending_since = now
             return ReacquisitionDecision(
                 state=self.state,
-                reason="fresh_live_owner_not_visible",
+                action=ReacquisitionAction.SET_OWNER_TARGET,
+                bounds=owner_bounds,
+                reason=(
+                    "owner_reacquired"
+                    if self._ever_locked
+                    else "initial_owner_acquisition"
+                ),
             )
 
-        if not self._resend_allowed(now):
-            return ReacquisitionDecision(
-                state=self.state,
-                reason="target_resend_cooldown",
-            )
+        if self.state is ReacquisitionState.REACQUIRING:
+            if self._recenter_is_settling(now):
+                return ReacquisitionDecision(
+                    state=self.state,
+                    reason="awaiting_recenter_settle",
+                )
+            if self._recenter_is_due(now):
+                self._recenter_sent_at = now
+                return ReacquisitionDecision(
+                    state=self.state,
+                    action=ReacquisitionAction.RECENTER_GIMBAL,
+                    reason="confirmed_owner_loss_recenter",
+                )
 
-        assert owner_bounds is not None
-        self.state = ReacquisitionState.LOCK_PENDING
-        self._last_target_sent_at = now
-        self._lock_pending_since = now
         return ReacquisitionDecision(
             state=self.state,
-            action=ReacquisitionAction.SET_OWNER_TARGET,
-            bounds=owner_bounds,
-            reason=(
-                "owner_reacquired" if self._ever_locked else "initial_owner_acquisition"
-            ),
+            reason="fresh_live_owner_not_visible",
         )
 
     def _owner_is_fresh(
@@ -221,3 +255,18 @@ class OwnerReacquisitionController:
     def _resend_allowed(self, now: float) -> bool:
         sent_at = self._last_target_sent_at
         return sent_at is None or now - sent_at >= self.config.resend_cooldown_seconds
+
+    def _recenter_is_due(self, now: float) -> bool:
+        lost_since = self._lost_since
+        return bool(
+            lost_since is not None
+            and self._recenter_sent_at is None
+            and now - lost_since > self.config.recenter_after_loss_seconds
+        )
+
+    def _recenter_is_settling(self, now: float) -> bool:
+        sent_at = self._recenter_sent_at
+        return bool(
+            sent_at is not None
+            and now - sent_at < self.config.recenter_settle_seconds
+        )
