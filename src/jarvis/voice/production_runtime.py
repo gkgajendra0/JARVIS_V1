@@ -15,11 +15,6 @@ import sys
 from pathlib import Path
 
 from jarvis.capabilities.runtime import build_default_capability_runtime
-from jarvis.computer.owner_presence import (
-    OwnerWorkstationPresenceConfig,
-    OwnerWorkstationPresenceController,
-    WindowsWorkstationControl,
-)
 from jarvis.config import JarvisConfig
 from jarvis.identity.active_speaker import (
     ActiveSpeakerVisualBuffer,
@@ -139,21 +134,6 @@ def build_production_voice_runtime(
     tracking_observer = None
     if config.pocket3_native_tracking_enabled:
         assert owner_context_state is not None
-        owner_presence_observer = None
-        if config.owner_workstation_lock_enabled:
-            owner_presence_observer = OwnerWorkstationPresenceController(
-                WindowsWorkstationControl(),
-                OwnerWorkstationPresenceConfig(
-                    lock_after_loss_seconds=(
-                        config.owner_workstation_lock_delay_seconds
-                    )
-                ),
-            )
-            LOGGER.info(
-                "OWNER workstation auto-lock is armed: confirmed absence delay=%.1fs; "
-                "Windows Hello/PIN/Winlogon remains the unlock authority",
-                config.owner_workstation_lock_delay_seconds,
-            )
         tracking_observer = build_default_native_owner_tracking_observer(
             owner_context=owner_context_state,
             ble_name=config.pocket3_ble_name,
@@ -164,7 +144,6 @@ def build_production_voice_runtime(
             lock_pending_timeout_seconds=(config.pocket3_lock_pending_timeout_seconds),
             resend_cooldown_seconds=config.pocket3_resend_cooldown_seconds,
             locked_perception_fps=1.0,
-            owner_presence_observer=owner_presence_observer,
         )
         LOGGER.info(
             "Pocket 3 native OWNER tracking is enabled: USB remains canonical "
