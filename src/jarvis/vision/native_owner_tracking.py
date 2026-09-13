@@ -50,6 +50,7 @@ class OwnerPresenceObserver(Protocol):
         now: float,
         tracking_state: ReacquisitionState,
         owner_present: bool,
+        owner_absence_confirmed: bool = False,
     ) -> object: ...
 
     def reset(self) -> None: ...
@@ -178,6 +179,7 @@ class NativeOwnerTrackingObserver:
                     now=now,
                     tracking_state=decision.state,
                     owner_present=owner_bounds is not None,
+                    owner_absence_confirmed=decision.owner_absence_confirmed,
                 )
             except Exception:
                 LOGGER.exception("OWNER workstation-presence policy failed")
