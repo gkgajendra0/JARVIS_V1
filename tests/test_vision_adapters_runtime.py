@@ -130,103 +130,242 @@ def test_bytetrack_adapter_preserves_first_seen_timestamp():
         observed_at=10.0,
     )
 
-    first = adapter.update([detection], now=10.0)
-    second = adapter.update([detection], now=11.0)
+    first = adapter.update([detection], now=10.0)[0]
+    second = adapter.update([detection], now=10.1)[0]
 
-    assert first[0].first_seen_at == 10.0
-    assert first[0].last_seen_at == 10.0
-    assert second[0].first_seen_at == 10.0
-    assert second[0].last_seen_at == 11.0
+    assert first.track_id == 4
+    assert first.first_seen_at == 10.0
+    assert second.first_seen_at == 10.0
+    assert second.last_seen_at == 10.1
 
 
-class FakeBoTTracker:
+class FakeBoTSORTTracker:
     def __init__(self, **kwargs):
         self.kwargs = kwargs
+        self.last_frame = None
+        self.last_timestamp = None
 
-    def update(self, detections, frame):
+    def update(self, detections, *, frame, timestamp):
+        self.last_frame = frame
+        self.last_timestamp = timestamp
         output = FakeExternalDetections(
             xyxy=detections.xyxy,
             confidence=detections.confidence,
         )
-        output.tracker_id = np.array([5], dtype=int)
+        output.tracker_id = np.array([9], dtype=int)
         return output
 
 
-def test_botsort_adapter_passes_frame_and_preserves_first_seen_timestamp():
+def test_botsort_adapter_passes_frame_for_camera_motion_compensation():
+    tracker = FakeBoTSORTTracker()
     adapter = BoTSORTAdapter(
-        tracker_factory=FakeBoTTracker,
+        tracker_factory=lambda **_: tracker,
         detections_factory=FakeExternalDetections,
     )
     detection = Detection(
         category="person",
-        confidence=0.91,
+        confidence=0.92,
         bounds=BoundingBox(0.1, 0.2, 0.4, 0.8),
         frame_id=1,
         observed_at=10.0,
     )
-    frame = np.zeros((100, 200, 3), dtype=np.uint8)
+    frame = np.zeros((100, 100, 3), dtype=np.uint8)
 
-    first = adapter.update([detection], now=10.0, frame=frame)
-    second = adapter.update([detection], now=11.0, frame=frame)
+    track = adapter.update([detection], now=10.0, frame=frame)[0]
 
-    assert first[0].first_seen_at == 10.0
-    assert first[0].last_seen_at == 10.0
-    assert second[0].first_seen_at == 10.0
-    assert second[0].last_seen_at == 11.0
+    assert tracker.last_frame is frame
+    assert tracker.last_timestamp == 10.0
+    assert track.track_id == 9
 
 
-def test_follow_controller_uses_horizontal_and_vertical_errors():
-    controller = FollowController()
-    target = SimpleNamespace(
-        visible=True,
-        track=Track(
-            track_id=1,
-            category="person",
-            confidence=0.9,
-            bounds=BoundingBox(0.7, 0.7, 0.9, 0.95),
-            first_seen_at=1.0,
-            last_seen_at=1.0,
-        ),
-    )
-
-    command = controller.command_for(target)
-
-    assert command.pan > 0
-    assert command.tilt > 0
-
-
-def test_follow_controller_returns_idle_for_missing_target():
-    controller = FollowController()
-    assert controller.command_for(None) == FollowCommand()
-
-
-class FakePtzDevice:
+class FakePtzBackend:
     def __init__(self):
-        self.calls = []
+        self.values = {"pan": 0, "tilt": 0}
+        self.writes = []
 
-    def get_range(self, name):
-        if name == "Pan":
-            return PtzAxisRange(minimum=-100, maximum=100, step=1, default=0)
-        if name == "Tilt":
-            return PtzAxisRange(minimum=-50, maximum=50, step=1, default=0)
-        if name == "Zoom":
-            return PtzAxisRange(minimum=100, maximum=400, step=1, default=100)
-        raise KeyError(name)
+    def get_axis_range(self, axis):
+        if axis == "pan":
+            return PtzAxisRange(-35, 215, 1, 0)
+        return PtzAxisRange(-90, 90, 1, 0)
 
-    def get(self, name):
-        return {"Pan": 0, "Tilt": 0, "Zoom": 100}[name]
+    def get_axis_value(self, axis):
+        return self.values[axis]
 
-    def set(self, name, value):
-        self.calls.append((name, value))
+    def set_axis_value(self, axis, value):
+        self.values[axis] = value
+        self.writes.append((axis, value))
 
     def close(self):
         pass
 
 
-def test_duvc_ptz_controller_stays_closed_until_used():
-    device = FakePtzDevice()
-    controller = DuvcPtzController(device_factory=lambda _: device)
+def test_duvc_ptz_maps_normalized_command_and_clamps():
+    backend = FakePtzBackend()
+    ptz = DuvcPtzController(backend=backend)
 
-    controller.close()
+    ptz.move(FollowCommand(pan=0.35, tilt=-0.35))
 
-    assert device.calls == []
+    assert backend.writes == [("pan", 4), ("tilt", -3)]
+
+    backend.values["pan"] = 215
+    ptz.move(FollowCommand(pan=0.35))
+    assert backend.values["pan"] == 215
+
+
+class FakeCamera:
+    def __init__(self, frame):
+        self.frame = frame
+        self.started = False
+        self.closed = False
+
+    def start(self):
+        self.started = True
+
+    def latest(self, *, after_frame_id=None, timeout_seconds=None):
+        if after_frame_id is not None and self.frame.frame_id <= after_frame_id:
+            return None
+        return self.frame
+
+    def close(self):
+        self.closed = True
+
+
+class FakeDetector:
+    def __init__(self, detection):
+        self.detection = detection
+
+    def detect(self, frame):
+        return [self.detection]
+
+
+class MutableFakeTracker:
+    def __init__(self, tracks):
+        self.tracks = list(tracks)
+
+    def update(self, detections, *, now, frame=None):
+        return list(self.tracks)
+
+
+class RecordingPtz:
+    def __init__(self):
+        self.commands = []
+        self.closed = False
+
+    def move(self, command):
+        self.commands.append(command)
+
+    def close(self):
+        self.closed = True
+
+
+def _make_runtime_fixture():
+    frame = CapturedFrame(
+        frame_id=1,
+        captured_at=5.0,
+        image=np.zeros((100, 100, 3), dtype=np.uint8),
+    )
+    detection = Detection(
+        category="person",
+        confidence=0.95,
+        bounds=BoundingBox(0.7, 0.3, 0.9, 0.7),
+        frame_id=1,
+        observed_at=5.0,
+    )
+    track = Track(
+        track_id=3,
+        category="person",
+        confidence=0.95,
+        bounds=detection.bounds,
+        first_seen_at=5.0,
+        last_seen_at=5.0,
+    )
+    camera = FakeCamera(frame)
+    tracker = MutableFakeTracker([track])
+    ptz = RecordingPtz()
+    runtime = VisionRuntime(
+        camera=camera,
+        detector=FakeDetector(detection),
+        tracker=tracker,
+        target_manager=TargetManager(lost_timeout_seconds=0.5),
+        follow_controller=FollowController(),
+        ptz=ptz,
+        config=VisionRuntimeConfig(minimum_ptz_interval_seconds=0.2),
+    )
+    return runtime, camera, tracker, ptz
+
+
+def test_runtime_requires_lock_and_separate_arm_before_movement():
+    runtime, camera, _tracker, ptz = _make_runtime_fixture()
+
+    runtime.start()
+    first = runtime.process_once()
+    assert first is not None
+    assert first.command.is_idle
+    assert not first.armed
+    assert ptz.commands == []
+
+    runtime.lock(3)
+    camera.frame = CapturedFrame(
+        frame_id=2,
+        captured_at=5.1,
+        image=camera.frame.image,
+    )
+    locked = runtime.process_once()
+    assert locked is not None
+    assert locked.target is not None
+    assert locked.command.is_idle
+    assert not runtime.armed
+    assert ptz.commands == []
+
+    runtime.arm_follow()
+    camera.frame = CapturedFrame(
+        frame_id=3,
+        captured_at=5.2,
+        image=camera.frame.image,
+    )
+    armed = runtime.process_once()
+    assert armed is not None
+    assert armed.armed
+    assert armed.command.pan > 0
+    assert len(ptz.commands) == 1
+
+    runtime.close()
+    assert camera.closed
+    assert ptz.closed
+
+
+def test_runtime_rate_limits_ptz_and_disarms_after_target_expires():
+    runtime, camera, tracker, ptz = _make_runtime_fixture()
+
+    runtime.start()
+    runtime.process_once()
+    runtime.lock(3)
+    runtime.arm_follow()
+
+    camera.frame = CapturedFrame(frame_id=2, captured_at=5.1, image=camera.frame.image)
+    runtime.process_once()
+    assert len(ptz.commands) == 1
+
+    camera.frame = CapturedFrame(frame_id=3, captured_at=5.2, image=camera.frame.image)
+    rate_limited = runtime.process_once()
+    assert rate_limited is not None
+    assert rate_limited.command.is_idle
+    assert len(ptz.commands) == 1
+
+    tracker.tracks = []
+    camera.frame = CapturedFrame(frame_id=4, captured_at=5.3, image=camera.frame.image)
+    missing = runtime.process_once()
+    assert missing is not None
+    assert runtime.armed
+    assert missing.command.is_idle
+    assert len(ptz.commands) == 1
+
+    camera.frame = CapturedFrame(frame_id=5, captured_at=5.9, image=camera.frame.image)
+    expired = runtime.process_once()
+    assert expired is not None
+    assert expired.target is None
+    assert not runtime.armed
+    assert expired.command.is_idle
+    assert len(ptz.commands) == 1
+
+    runtime.close()
