@@ -422,6 +422,7 @@ class VoiceHandsOrchestrator(HandsOrchestrator):
         entity_trace: list[dict[str, str]] = []
         attempted: set[str] = set()
         unverified_uia = 0
+        structured_stagnation_escalated = False
 
         for step_number in range(1, _VOICE_MAX_ACTIONS + 1):
             plan_started = time.perf_counter()
@@ -489,6 +490,29 @@ class VoiceHandsOrchestrator(HandsOrchestrator):
                 normalized.operation, normalized.parameters
             )
             if action_fingerprint in attempted:
+                if (
+                    normalized.operation == "execute_windows_plan"
+                    and not structured_stagnation_escalated
+                ):
+                    escalated_candidates = self._with_visual_candidate(
+                        candidates, route_groups
+                    )
+                    visual_available = any(
+                        item.operation == "execute_visual_desktop_task"
+                        for item in escalated_candidates
+                    )
+                    if visual_available:
+                        candidates = tuple(
+                            item
+                            for item in escalated_candidates
+                            if item.operation != "execute_windows_plan"
+                        )
+                        structured_stagnation_escalated = True
+                        LOGGER.info(
+                            "Hands structured UI stagnation | repeated_action=True | "
+                            "structured_ui_removed=True | visual_fallback=True"
+                        )
+                        continue
                 raise HandsOrchestrationError(
                     "planner repeated an identical action instead of making progress"
                 )
