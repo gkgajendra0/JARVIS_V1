@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 
 from jarvis.identity.owner_context import build_default_owner_context_observer
+from jarvis.identity.owner_evidence import OwnerIdentityThresholds
+from jarvis.identity.passive_liveness import PassiveLivenessThresholds
 from jarvis.logging_config import configure_logging
 from jarvis.vision.camera import OpenCVCameraConfig, OpenCVCameraSource
 from jarvis.vision.native_owner_tracking import (
@@ -18,6 +20,10 @@ from jarvis.vision.native_owner_tracking import (
 from jarvis.vision.service import build_default_vision_service
 
 LOGGER = logging.getLogger(__name__)
+
+_TRACKING_EVIDENCE_WINDOW = 5
+_PERCEPTION_FPS = 10.0
+_OPENCV_THREADS = 1
 
 
 def run_native_owner_tracking_live(
@@ -44,6 +50,12 @@ def run_native_owner_tracking_live(
     print(f"USB camera index: {camera_index}")
     print(f"Pocket BLE name: {ble_name}")
     print("Software PTZ: SAFE / not armed")
+    print(f"Perception rate: {_PERCEPTION_FPS:.1f} FPS")
+    print(f"OpenCV threads: {_OPENCV_THREADS}")
+    print(
+        "Tracking-only OWNER evidence window: "
+        f"{_TRACKING_EVIDENCE_WINDOW} samples"
+    )
     print("Expected flow:")
     print("  1. JARVIS recognizes live OWNER and sends one A6.")
     print("  2. Pocket 3 native ActiveTrack follows OWNER.")
@@ -52,7 +64,14 @@ def run_native_owner_tracking_live(
     print("Press Ctrl+C after the leave-and-return scenario is complete.")
     print()
 
-    owner_observer = build_default_owner_context_observer()
+    owner_observer = build_default_owner_context_observer(
+        identity_thresholds=OwnerIdentityThresholds(
+            window_size=_TRACKING_EVIDENCE_WINDOW
+        ),
+        liveness_thresholds=PassiveLivenessThresholds(
+            window_size=_TRACKING_EVIDENCE_WINDOW
+        ),
+    )
     tracking_observer = build_default_native_owner_tracking_observer(
         owner_context=owner_observer.state,
         ble_name=ble_name,
@@ -70,6 +89,8 @@ def run_native_owner_tracking_live(
         evidence_observer=owner_observer,
         tracking_observer=tracking_observer,
         camera_source=camera,
+        perception_fps=_PERCEPTION_FPS,
+        opencv_threads=_OPENCV_THREADS,
     )
 
     try:
