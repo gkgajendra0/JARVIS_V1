@@ -172,9 +172,7 @@ class _RoboflowTrackerAdapter:
 
         self._alive_track_ids = tuple(
             dict.fromkeys(
-                int(value)
-                for value in np.asarray(ids).reshape(-1)
-                if int(value) >= 0
+                int(value) for value in np.asarray(ids).reshape(-1) if int(value) >= 0
             )
         )
 
