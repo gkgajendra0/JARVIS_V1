@@ -101,8 +101,9 @@ def _frame(*, frame_id: int, captured_at: float) -> CapturedFrame:
 def test_adapter_keeps_alive_track_id_separate_from_current_frame_visibility() -> None:
     tracker = _FakeRoboflowTracker()
     adapter = _FakeAdapter(tracker)
+    image = np.zeros((100, 100, 3), dtype=np.uint8)
 
-    visible = adapter.update([], now=1.0)
+    visible = adapter.update([], now=1.0, frame=image)
     assert [track.track_id for track in visible] == [7]
     assert adapter.alive_track_ids() == (7,)
 
@@ -112,7 +113,7 @@ def test_adapter_keeps_alive_track_id_separate_from_current_frame_visibility() -
         tracker_id=np.empty((0,), dtype=int),
     )
 
-    missed = adapter.update([], now=1.1)
+    missed = adapter.update([], now=1.1, frame=image)
     assert missed == []
     assert adapter.alive_track_ids() == (7,)
 
