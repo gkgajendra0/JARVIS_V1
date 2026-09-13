@@ -7,7 +7,6 @@ from jarvis.vision.owner_reacquisition import (
     ReacquisitionState,
 )
 
-
 OWNER_BOX = BoundingBox(left=0.30, top=0.20, right=0.60, bottom=0.80)
 RETURN_BOX = BoundingBox(left=0.55, top=0.20, right=0.85, bottom=0.82)
 
