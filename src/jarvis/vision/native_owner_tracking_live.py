@@ -39,15 +39,15 @@ def run_native_owner_tracking_live(
     head_model_path: str | Path | None = None,
     preview: bool = True,
     workstation_lock: bool = False,
-    workstation_lock_delay_seconds: float = 5.0,
+    workstation_lock_delay_seconds: float = 0.0,
 ) -> int:
     if sys.platform != "win32":
         print("Pocket 3 native OWNER tracking acceptance currently requires Windows.")
         return 2
     if camera_index < 0:
         raise ValueError("camera_index must be non-negative")
-    if workstation_lock_delay_seconds <= 0:
-        raise ValueError("workstation_lock_delay_seconds must be positive")
+    if workstation_lock_delay_seconds < 0:
+        raise ValueError("workstation_lock_delay_seconds must be non-negative")
 
     configure_logging("INFO")
     if preview:
@@ -68,10 +68,16 @@ def run_native_owner_tracking_live(
     print(f"OpenCV threads: {_OPENCV_THREADS}")
     print(f"Tracking-only OWNER evidence window: {_TRACKING_EVIDENCE_WINDOW} samples")
     if workstation_lock:
-        print(
-            "Workstation presence: ARMED; Windows locks after "
-            f"{workstation_lock_delay_seconds:.1f}s of confirmed OWNER absence"
-        )
+        if workstation_lock_delay_seconds == 0:
+            print(
+                "Workstation presence: ARMED; Windows locks immediately after "
+                "confirmed OWNER loss"
+            )
+        else:
+            print(
+                "Workstation presence: ARMED; Windows locks after "
+                f"{workstation_lock_delay_seconds:.1f}s of confirmed OWNER absence"
+            )
         print(
             "Return behavior: Windows Hello/PIN/Winlogon must unlock the session; "
             "JARVIS resumes OWNER tracking afterward"
@@ -85,7 +91,7 @@ def run_native_owner_tracking_live(
     )
     print("  3. OWNER leaves the frame; JARVIS ramps perception back up and recenters.")
     if workstation_lock:
-        print("  4. Sustained confirmed OWNER absence locks the Windows workstation.")
+        print("  4. Confirmed OWNER loss immediately locks the Windows workstation.")
         print("  5. Windows Hello/PIN/Winlogon unlocks the user session.")
         print("  6. JARVIS resumes vision, reacquires OWNER, and sends a fresh A6.")
     else:
@@ -176,15 +182,18 @@ def _parser() -> argparse.ArgumentParser:
         "--workstation-lock",
         action="store_true",
         help=(
-            "ARM real Windows workstation lock after sustained confirmed OWNER "
-            "absence. Windows Hello/PIN/Winlogon remains responsible for unlock."
+            "ARM real Windows workstation lock immediately after confirmed OWNER "
+            "loss. Windows Hello/PIN/Winlogon remains responsible for unlock."
         ),
     )
     parser.add_argument(
         "--workstation-lock-delay",
         type=float,
-        default=5.0,
-        help="Seconds of confirmed OWNER absence before LockWorkStation is requested.",
+        default=0.0,
+        help=(
+            "Optional extra seconds after confirmed OWNER loss before "
+            "LockWorkStation is requested; default is 0 (immediate)."
+        ),
     )
     return parser
 
