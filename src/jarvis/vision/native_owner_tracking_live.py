@@ -9,11 +9,6 @@ import sys
 import time
 from pathlib import Path
 
-from jarvis.computer.owner_presence import (
-    OwnerWorkstationPresenceConfig,
-    OwnerWorkstationPresenceController,
-    WindowsWorkstationControl,
-)
 from jarvis.identity.owner_context import build_default_owner_context_observer
 from jarvis.identity.owner_evidence import OwnerIdentityThresholds
 from jarvis.identity.passive_liveness import PassiveLivenessThresholds
@@ -39,16 +34,12 @@ def run_native_owner_tracking_live(
     ble_name: str = "OsmoPocket3-C36F",
     head_model_path: str | Path | None = None,
     preview: bool = True,
-    workstation_lock: bool = False,
-    workstation_lock_delay_seconds: float = 0.0,
 ) -> int:
     if sys.platform != "win32":
         print("Pocket 3 native OWNER tracking acceptance currently requires Windows.")
         return 2
     if camera_index < 0:
         raise ValueError("camera_index must be non-negative")
-    if workstation_lock_delay_seconds < 0:
-        raise ValueError("workstation_lock_delay_seconds must be non-negative")
 
     configure_logging("INFO")
     if preview:
@@ -68,35 +59,13 @@ def run_native_owner_tracking_live(
     )
     print(f"OpenCV threads: {_OPENCV_THREADS}")
     print(f"Tracking-only OWNER evidence window: {_TRACKING_EVIDENCE_WINDOW} samples")
-    if workstation_lock:
-        if workstation_lock_delay_seconds == 0:
-            print(
-                "Workstation presence: ARMED; Windows locks immediately after "
-                "confirmed OWNER loss"
-            )
-        else:
-            print(
-                "Workstation presence: ARMED; Windows locks after "
-                f"{workstation_lock_delay_seconds:.1f}s of confirmed OWNER absence"
-            )
-        print(
-            "Return behavior: Windows Hello/PIN/Winlogon must unlock the session; "
-            "JARVIS resumes OWNER tracking afterward"
-        )
-    else:
-        print("Workstation presence: SAFE / not armed")
     print("Expected flow:")
     print("  1. JARVIS recognizes live OWNER and sends one A6.")
     print(
         "  2. Pocket 3 native ActiveTrack follows OWNER; JARVIS throttles perception."
     )
     print("  3. OWNER leaves the frame; JARVIS ramps perception back up and recenters.")
-    if workstation_lock:
-        print("  4. Confirmed OWNER loss immediately locks the Windows workstation.")
-        print("  5. Windows Hello/PIN/Winlogon unlocks the user session.")
-        print("  6. JARVIS resumes vision, reacquires OWNER, and sends a fresh A6.")
-    else:
-        print("  4. OWNER returns; JARVIS sends a fresh A6 and Pocket relocks.")
+    print("  4. OWNER returns; JARVIS sends a fresh A6 and Pocket relocks.")
     print("Press Ctrl+C after the leave-and-return scenario is complete.")
     print()
 
@@ -110,20 +79,11 @@ def run_native_owner_tracking_live(
             max_inter_observation_gap_seconds=_TRACKING_EVIDENCE_MAX_GAP_SECONDS,
         ),
     )
-    owner_presence_observer = None
-    if workstation_lock:
-        owner_presence_observer = OwnerWorkstationPresenceController(
-            WindowsWorkstationControl(),
-            OwnerWorkstationPresenceConfig(
-                lock_after_loss_seconds=workstation_lock_delay_seconds
-            ),
-        )
     tracking_observer = build_default_native_owner_tracking_observer(
         owner_context=owner_observer.state,
         ble_name=ble_name,
         searching_perception_fps=_SEARCHING_PERCEPTION_FPS,
         locked_perception_fps=_LOCKED_PERCEPTION_FPS,
-        owner_presence_observer=owner_presence_observer,
     )
     camera = OpenCVCameraSource(
         OpenCVCameraConfig(
@@ -181,23 +141,6 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Disable the OpenCV vision preview window.",
     )
-    parser.add_argument(
-        "--workstation-lock",
-        action="store_true",
-        help=(
-            "ARM real Windows workstation lock immediately after confirmed OWNER "
-            "loss. Windows Hello/PIN/Winlogon remains responsible for unlock."
-        ),
-    )
-    parser.add_argument(
-        "--workstation-lock-delay",
-        type=float,
-        default=0.0,
-        help=(
-            "Optional extra seconds after confirmed OWNER loss before "
-            "LockWorkStation is requested; default is 0 (immediate)."
-        ),
-    )
     return parser
 
 
@@ -208,8 +151,6 @@ def main() -> int:
         ble_name=args.ble_name,
         head_model_path=args.head_model_path,
         preview=not args.no_preview,
-        workstation_lock=args.workstation_lock,
-        workstation_lock_delay_seconds=args.workstation_lock_delay,
     )
 
 
