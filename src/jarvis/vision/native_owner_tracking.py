@@ -109,8 +109,19 @@ class NativeOwnerTrackingObserver:
         self._last_logged_state: ReacquisitionState | None = None
 
     def perception_fps_hint(self) -> float:
-        """Return the maximum useful JARVIS perception rate for the current state."""
-        if self.controller.state is ReacquisitionState.LOCKED:
+        """Return the useful JARVIS perception rate for the current trust state.
+
+        Native ActiveTrack lets JARVIS reduce CPU while an already-authorized OWNER
+        lock is healthy. If fresh live-OWNER evidence disappears, immediately restore
+        full perception even before the tracking state leaves LOCKED. This gives the
+        identity/liveness + local tracker stack enough samples to recover from a
+        transient track-ID dropout instead of allowing the low-rate evidence window
+        to age into a false departure.
+        """
+        if (
+            self.controller.state is ReacquisitionState.LOCKED
+            and self.owner_context.has_fresh_live_owner_candidate()
+        ):
             return self.config.locked_perception_fps
         return self.config.searching_perception_fps
 
