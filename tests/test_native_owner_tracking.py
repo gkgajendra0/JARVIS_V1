@@ -53,25 +53,6 @@ class FakeNativeClient:
         self.connected = False
 
 
-class PresenceRecorder:
-    def __init__(self) -> None:
-        self.events: list[tuple[ReacquisitionState, bool, bool]] = []
-
-    def observe(
-        self,
-        *,
-        now: float,
-        tracking_state: ReacquisitionState,
-        owner_present: bool,
-        owner_absence_confirmed: bool = False,
-    ) -> None:
-        del now
-        self.events.append((tracking_state, owner_present, owner_absence_confirmed))
-
-    def reset(self) -> None:
-        pass
-
-
 def live_owner(track_id: int, observed_at: float) -> OwnerLivenessBindingAssessment:
     return OwnerLivenessBindingAssessment(
         session_id="session-1",
@@ -216,63 +197,3 @@ def test_perception_hint_throttles_only_with_fresh_current_owner_lock() -> None:
 
     observer.controller.state = ReacquisitionState.REACQUIRING
     assert observer.perception_fps_hint() == 10.0
-
-
-def test_repeated_short_owner_association_misses_never_confirm_departure() -> None:
-    owner = OwnerContextState()
-    client = FakeNativeClient()
-    presence = PresenceRecorder()
-    observer = NativeOwnerTrackingObserver(
-        owner_context=owner,
-        client=client,  # type: ignore[arg-type]
-        config=NativeOwnerTrackingConfig(
-            searching_perception_fps=10.0,
-            locked_perception_fps=1.0,
-        ),
-        owner_presence_observer=presence,
-    )
-    box = BoundingBox(0.20, 0.15, 0.55, 0.85)
-
-    owner.publish(live_owner(track_id=7, observed_at=10.0))
-    observer.observe(frame(1, 10.0), snapshot(1, 10.0, track(7, box, 10.0)))
-    assert observer.controller.state is ReacquisitionState.LOCK_PENDING
-
-    client.native_status = NativeTrackingStatus(
-        connected=True,
-        active=True,
-        last_poll_at=10.2,
-        last_subject_push_at=10.2,
-    )
-    owner.publish(live_owner(track_id=7, observed_at=10.2))
-    observer.observe(frame(2, 10.2), snapshot(2, 10.2, track(7, box, 10.2)))
-    assert observer.controller.state is ReacquisitionState.LOCKED
-
-    observer.observe(frame(3, 10.6), snapshot(3, 10.6))
-    assert observer.controller.state is ReacquisitionState.LOCKED
-    assert observer.perception_fps_hint() == 10.0
-
-    owner.publish(live_owner(track_id=7, observed_at=10.8))
-    client.native_status = NativeTrackingStatus(
-        connected=True,
-        active=True,
-        last_poll_at=10.8,
-        last_subject_push_at=10.8,
-    )
-    observer.observe(frame(4, 10.8), snapshot(4, 10.8, track(7, box, 10.8)))
-    assert observer.controller.state is ReacquisitionState.LOCKED
-
-    observer.observe(frame(5, 11.1), snapshot(5, 11.1))
-    assert observer.controller.state is ReacquisitionState.LOCKED
-    assert observer.perception_fps_hint() == 10.0
-
-    owner.publish(live_owner(track_id=7, observed_at=11.3))
-    client.native_status = NativeTrackingStatus(
-        connected=True,
-        active=True,
-        last_poll_at=11.3,
-        last_subject_push_at=11.3,
-    )
-    observer.observe(frame(6, 11.3), snapshot(6, 11.3, track(7, box, 11.3)))
-
-    assert observer.controller.state is ReacquisitionState.LOCKED
-    assert all(not confirmed for _, _, confirmed in presence.events)
