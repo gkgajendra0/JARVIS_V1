@@ -32,7 +32,7 @@ class Pocket3RecoveryConfig:
     saved_wifi_wait_seconds: float = 6.0
     ble_attempts: int = 5
     ble_retry_pause_seconds: float = 1.0
-    ble_provision_timeout_seconds: float = 100.0
+    ble_provision_timeout_seconds: float = 120.0
     wifi_join_attempts: int = 6
     wifi_retry_pause_seconds: float = 1.0
 
@@ -122,7 +122,9 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
         if self._ble_error is not None:
             error = self._ble_error
             self.close()
-            raise RuntimeError("Pocket 3 BLE provisioning failed after retries") from error
+            raise RuntimeError(
+                "Pocket 3 BLE provisioning failed after retries"
+            ) from error
 
         ssid = self._ssid
         password = self._password
