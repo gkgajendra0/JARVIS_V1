@@ -42,12 +42,12 @@ class WindowsWorkstationControl:
 
 @dataclass(frozen=True, slots=True)
 class OwnerWorkstationPresenceConfig:
-    lock_after_loss_seconds: float = 5.0
+    lock_after_loss_seconds: float = 0.0
     lock_retry_seconds: float = 2.0
 
     def __post_init__(self) -> None:
-        if self.lock_after_loss_seconds <= 0:
-            raise ValueError("lock_after_loss_seconds must be positive")
+        if self.lock_after_loss_seconds < 0:
+            raise ValueError("lock_after_loss_seconds must be non-negative")
         if self.lock_retry_seconds <= 0:
             raise ValueError("lock_retry_seconds must be positive")
 
@@ -58,7 +58,10 @@ class OwnerWorkstationPresenceController:
     Safety invariants:
     - JARVIS must first have observed a healthy native lock *and* a live OWNER.
     - Native loss alone is insufficient; the live OWNER must also be absent.
-    - Short occlusions are absorbed by a grace period.
+    - Brief/missed OWNER frames are absorbed upstream by the OWNER/native
+      reacquisition policy before this controller sees confirmed REACQUIRING.
+    - Once confirmed OWNER loss reaches this controller, the default is to lock
+      immediately with no additional workstation-delay timer.
     - JARVIS never supplies or injects a Windows credential.
     - Once Windows Hello/PIN/Winlogon unlocks the user session and JARVIS again
       sees a live OWNER with healthy native tracking, the completed auto-lock cycle
@@ -124,7 +127,6 @@ class OwnerWorkstationPresenceController:
 
         if self._absence_started_at is None:
             self._absence_started_at = now
-            return WorkstationPresenceAction.NONE
 
         if now - self._absence_started_at < self.config.lock_after_loss_seconds:
             return WorkstationPresenceAction.NONE
