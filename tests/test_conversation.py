@@ -97,6 +97,21 @@ def test_session_id_is_stable_and_can_be_supplied_by_jarvis_boundary() -> None:
         ConversationSession(session_id=123)  # type: ignore[arg-type]
 
 
+def test_session_lifecycle_distinguishes_close_and_failure() -> None:
+    closed = ConversationSession()
+    closed.start()
+    closed.close()
+    closed.close()
+    assert closed.status is ConversationStatus.CLOSED
+
+    failed = ConversationSession()
+    failed.start()
+    failed.fail()
+    failed.close()
+    failed.fail()
+    assert failed.status is ConversationStatus.FAILED
+
+
 @pytest.mark.parametrize("status_change", ["none", "close", "fail"])
 def test_turns_are_rejected_outside_active_state(status_change: str) -> None:
     session = ConversationSession()
@@ -114,21 +129,6 @@ def test_session_cannot_start_twice() -> None:
 
     with pytest.raises(RuntimeError):
         session.start()
-
-
-def test_session_lifecycle_distinguishes_close_and_failure() -> None:
-    closed = ConversationSession()
-    closed.start()
-    closed.close()
-    closed.close()
-    assert closed.status is ConversationStatus.CLOSED
-
-    failed = ConversationSession()
-    failed.start()
-    failed.fail()
-    failed.close()
-    failed.fail()
-    assert failed.status is ConversationStatus.FAILED
 
 
 def test_turn_rejects_empty_text_and_invalid_role() -> None:
