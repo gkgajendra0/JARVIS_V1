@@ -14,8 +14,6 @@ def test_machine_config_round_trip(tmp_path: Path) -> None:
         {
             "JARVIS_AI_PROVIDER": "gemini",
             "JARVIS_AUDIO_INPUT_DEVICE": "name:Osmo|hostapi:Windows WASAPI",
-            "JARVIS_OWNER_WORKSTATION_LOCK_ENABLED": "true",
-            "JARVIS_OWNER_WORKSTATION_LOCK_DELAY_SECONDS": "5.0",
         },
         path,
     )
@@ -24,8 +22,6 @@ def test_machine_config_round_trip(tmp_path: Path) -> None:
     assert load_machine_settings(path) == {
         "JARVIS_AI_PROVIDER": "gemini",
         "JARVIS_AUDIO_INPUT_DEVICE": "name:Osmo|hostapi:Windows WASAPI",
-        "JARVIS_OWNER_WORKSTATION_LOCK_ENABLED": "true",
-        "JARVIS_OWNER_WORKSTATION_LOCK_DELAY_SECONDS": "5.0",
     }
 
 
@@ -66,29 +62,6 @@ def test_jarvis_config_uses_machine_profile_by_default(
     assert config.audio_input_device == "name:Osmo|hostapi:Windows WASAPI"
     assert config.audio_output_device == "name:TV|hostapi:Windows WASAPI"
     assert config.vision_enabled is True
-
-
-def test_machine_profile_loads_owner_workstation_lock_settings(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    path = tmp_path / "machine.json"
-    save_machine_settings(
-        {
-            "JARVIS_VISION_ENABLED": "true",
-            "JARVIS_POCKET3_NATIVE_TRACKING_ENABLED": "true",
-            "JARVIS_OWNER_WORKSTATION_LOCK_ENABLED": "true",
-            "JARVIS_OWNER_WORKSTATION_LOCK_DELAY_SECONDS": "7.5",
-        },
-        path,
-    )
-    monkeypatch.setenv("JARVIS_MACHINE_CONFIG", str(path))
-    monkeypatch.delenv("JARVIS_RUNTIME_ENV_OVERRIDES", raising=False)
-
-    config = JarvisConfig.from_environment()
-
-    assert config.owner_workstation_lock_enabled is True
-    assert config.owner_workstation_lock_delay_seconds == 7.5
 
 
 def test_legacy_realtime_provider_machine_setting_migrates_without_breaking_startup(
