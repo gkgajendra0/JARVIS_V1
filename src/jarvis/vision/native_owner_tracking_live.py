@@ -27,6 +27,7 @@ from jarvis.vision.service import build_default_vision_service
 LOGGER = logging.getLogger(__name__)
 
 _TRACKING_EVIDENCE_WINDOW = 5
+_TRACKING_EVIDENCE_MAX_GAP_SECONDS = 2.0
 _SEARCHING_PERCEPTION_FPS = 10.0
 _LOCKED_PERCEPTION_FPS = 1.0
 _OPENCV_THREADS = 1
@@ -101,10 +102,12 @@ def run_native_owner_tracking_live(
 
     owner_observer = build_default_owner_context_observer(
         identity_thresholds=OwnerIdentityThresholds(
-            window_size=_TRACKING_EVIDENCE_WINDOW
+            window_size=_TRACKING_EVIDENCE_WINDOW,
+            max_inter_observation_gap_seconds=_TRACKING_EVIDENCE_MAX_GAP_SECONDS,
         ),
         liveness_thresholds=PassiveLivenessThresholds(
-            window_size=_TRACKING_EVIDENCE_WINDOW
+            window_size=_TRACKING_EVIDENCE_WINDOW,
+            max_inter_observation_gap_seconds=_TRACKING_EVIDENCE_MAX_GAP_SECONDS,
         ),
     )
     owner_presence_observer = None
