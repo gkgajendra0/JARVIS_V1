@@ -29,6 +29,8 @@ from jarvis.identity.owner_context import (
     OwnerContextState,
     build_default_owner_context_observer,
 )
+from jarvis.identity.owner_evidence import OwnerIdentityThresholds
+from jarvis.identity.passive_liveness import PassiveLivenessThresholds
 from jarvis.identity.speaker_shadow import (
     EnrolledSpeakerShadowObserver,
     SpeakerShadowRuntimeError,
@@ -60,6 +62,7 @@ from jarvis.voice.provider_resilience import ProviderResilienceSessionObserver
 from jarvis.voice.wakeword import LiveKitWakeDetector, load_livekit_predictor
 
 LOGGER = logging.getLogger(__name__)
+_NATIVE_TRACKING_EVIDENCE_MAX_GAP_SECONDS = 2.0
 
 
 def build_production_voice_runtime(
@@ -116,7 +119,21 @@ def build_production_voice_runtime(
         config.speaker_shadow_enabled or config.pocket3_native_tracking_enabled
     )
     if owner_context_required:
-        evidence_observer = build_default_owner_context_observer()
+        if config.pocket3_native_tracking_enabled:
+            evidence_observer = build_default_owner_context_observer(
+                identity_thresholds=OwnerIdentityThresholds(
+                    max_inter_observation_gap_seconds=(
+                        _NATIVE_TRACKING_EVIDENCE_MAX_GAP_SECONDS
+                    )
+                ),
+                liveness_thresholds=PassiveLivenessThresholds(
+                    max_inter_observation_gap_seconds=(
+                        _NATIVE_TRACKING_EVIDENCE_MAX_GAP_SECONDS
+                    )
+                ),
+            )
+        else:
+            evidence_observer = build_default_owner_context_observer()
         owner_context_state = evidence_observer.state
 
     tracking_observer = None
@@ -186,6 +203,11 @@ def build_production_voice_runtime(
             frame_pair_tap=(
                 active_speaker_visual_buffer.observe
                 if active_speaker_visual_buffer is not None
+                else None
+            ),
+            perception_fps_provider=(
+                tracking_observer.perception_fps_hint
+                if tracking_observer is not None
                 else None
             ),
         )
