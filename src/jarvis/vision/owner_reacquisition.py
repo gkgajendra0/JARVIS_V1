@@ -144,7 +144,10 @@ class OwnerReacquisitionController:
                 else ReacquisitionState.SEARCHING
             )
             self._lock_pending_since = None
-            if self.state is ReacquisitionState.REACQUIRING and self._lost_since is None:
+            if (
+                self.state is ReacquisitionState.REACQUIRING
+                and self._lost_since is None
+            ):
                 self._lost_since = now
                 self._recenter_sent_at = None
 
@@ -267,6 +270,5 @@ class OwnerReacquisitionController:
     def _recenter_is_settling(self, now: float) -> bool:
         sent_at = self._recenter_sent_at
         return bool(
-            sent_at is not None
-            and now - sent_at < self.config.recenter_settle_seconds
+            sent_at is not None and now - sent_at < self.config.recenter_settle_seconds
         )

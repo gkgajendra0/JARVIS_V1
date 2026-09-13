@@ -53,7 +53,7 @@ class Pocket3NativeOwnerTrackingClient(Pocket3NativeTrackerClient):
             flags=0x40,
             cmd_set=0x04,
             cmd_id=0x4C,
-            payload=b"\xFE\x08",
+            payload=b"\xfe\x08",
         )
 
 
