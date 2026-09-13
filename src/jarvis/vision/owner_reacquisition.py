@@ -120,12 +120,16 @@ class OwnerReacquisitionController:
 
         if owner_fresh:
             self._owner_missing_since = None
-        elif self._ever_locked and self.state in (
-            ReacquisitionState.LOCKED,
-            ReacquisitionState.REACQUIRING,
+        elif (
+            self._ever_locked
+            and self.state
+            in (
+                ReacquisitionState.LOCKED,
+                ReacquisitionState.REACQUIRING,
+            )
+            and self._owner_missing_since is None
         ):
-            if self._owner_missing_since is None:
-                self._owner_missing_since = now
+            self._owner_missing_since = now
 
         owner_absence_confirmed = self._owner_loss_is_confirmed(now)
 
