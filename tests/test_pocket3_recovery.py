@@ -162,7 +162,9 @@ def test_a6_waiter_exists_before_fast_reply_can_arrive(
         event.set()
         return seq
 
-    monkeypatch.setattr(Pocket3NativeTrackerClient, "_send_command", immediate_reply_send)
+    monkeypatch.setattr(
+        Pocket3NativeTrackerClient, "_send_command", immediate_reply_send
+    )
 
     assert client.set_target(BoundingBox(0.2, 0.2, 0.6, 0.8)) is True
     assert client._a6_events == {}

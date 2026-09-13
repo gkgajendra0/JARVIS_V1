@@ -93,7 +93,9 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
     def recover_tracking_session(self) -> None:
         """Rebuild a stale DJI control session using the saved Windows Wi-Fi profile."""
 
-        LOGGER.warning("Pocket 3 rebuilding native tracking session after failed reacquisition")
+        LOGGER.warning(
+            "Pocket 3 rebuilding native tracking session after failed reacquisition"
+        )
         self.close()
         self.start()
 
