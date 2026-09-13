@@ -69,8 +69,6 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
         if os.name != "nt":
             raise RuntimeError("Pocket 3 native tracking currently requires Windows")
 
-        # Fast path: Windows may already be associated after a JARVIS restart, or
-        # may retain the WLAN profile across a full PC/Pocket power cycle.
         if self._try_saved_wifi_fast_path():
             return
 
@@ -91,7 +89,7 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
             if already_connected or self._status_has_ssid(self._wlan_status(), ssid):
                 LOGGER.warning(
                     "Pocket 3 Wi-Fi is associated but the DJI datalink is not ready; "
-                    "a later reconnect attempt will retry without requiring operator action"
+                    "a later reconnect attempt will retry without operator action"
                 )
                 raise
             return False
@@ -219,3 +217,18 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
         raise TimeoutError(
             f"Windows could not associate with Pocket 3 Wi-Fi {ssid!r} after retries"
         ) from last_error
+
+
+class ResilientPocket3NativeOwnerTrackingClient(ResilientPocket3NativeTrackerClient):
+    """Resilient Pocket transport plus the proven native gimbal recenter command."""
+
+    def recenter_gimbal(self) -> None:
+        if not self.connected:
+            return
+        self._send_command(
+            receiver=0x04,
+            flags=0x40,
+            cmd_set=0x04,
+            cmd_id=0x4C,
+            payload=bytes((0xFE, 0x08)),
+        )
