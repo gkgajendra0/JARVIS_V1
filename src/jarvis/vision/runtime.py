@@ -53,6 +53,7 @@ class VisionSnapshot:
     detector_persons: int = 0
     heads: tuple[HeadObservation, ...] = ()
     framing_target: FramingTarget | None = None
+    alive_track_ids: tuple[int, ...] = ()
 
 
 class VisionRuntime:
@@ -76,7 +77,6 @@ class VisionRuntime:
         self.config = config or VisionRuntimeConfig()
         if self.config.require_head_for_lock and head_detector is None:
             raise ValueError("require_head_for_lock needs a configured head detector")
-
         self._camera = camera
         self._detector = detector
         self._tracker = tracker
@@ -241,6 +241,7 @@ class VisionRuntime:
             now=frame.captured_at,
             frame=frame.image,
         )
+        alive_track_ids = self._tracker_alive_track_ids(tracks)
         self._latest_tracks = tracks
         target = self._target_manager.update(tracks, now=frame.captured_at)
         if target is None:
@@ -316,7 +317,14 @@ class VisionRuntime:
             detector_persons=len(detections),
             heads=tuple(heads),
             framing_target=framing_target,
+            alive_track_ids=alive_track_ids,
         )
+
+    def _tracker_alive_track_ids(self, tracks: list[Track]) -> tuple[int, ...]:
+        provider = getattr(self._tracker, "alive_track_ids", None)
+        if callable(provider):
+            return tuple(dict.fromkeys(int(track_id) for track_id in provider()))
+        return tuple(dict.fromkeys(track.track_id for track in tracks))
 
     def _resolve_framing_target(
         self,
