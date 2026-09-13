@@ -22,6 +22,7 @@ _HEAD_MODEL_NAME = "blaze_face_full_range.tflite"
 _DEFAULT_PERCEPTION_FPS = 10.0
 _DEFAULT_OPENCV_THREADS = 1
 _TRACK_LOSS_SECONDS = 2.0
+_TRACKER_REFERENCE_FPS = 30.0
 FramePairTap = Callable[[CapturedFrame, VisionSnapshot], None]
 PerceptionFpsProvider = Callable[[], float]
 
@@ -439,7 +440,13 @@ def build_default_vision_service(
     from jarvis.vision.tracker import OCSORTAdapter, OCSORTConfig
 
     cv2.setNumThreads(opencv_threads)
-    lost_track_buffer = max(1, round(perception_fps * _TRACK_LOSS_SECONDS))
+    # Roboflow's timestamp mode expresses lost_track_buffer in canonical
+    # 30-FPS frame units. JARVIS always passes capture timestamps, so a true
+    # two-second continuity budget is 2 * 30 = 60 regardless of perception FPS.
+    lost_track_buffer = max(
+        1,
+        round(_TRACKER_REFERENCE_FPS * _TRACK_LOSS_SECONDS),
+    )
     LOGGER.info(
         "Vision runtime scheduling: perception_fps=%.1f opencv_threads=%s "
         "tracker_lost_buffer=%s adaptive=%s",

@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 
 from jarvis.identity.owner_context import OwnerContextState
@@ -24,6 +26,8 @@ class FakeNativeClient:
         self.targets: list[BoundingBox] = []
         self.polls = 0
         self.closed = False
+        self.clears = 0
+        self.recenters = 0
 
     def start(self) -> None:
         self.connected = True
@@ -37,6 +41,12 @@ class FakeNativeClient:
     def set_target(self, bounds: BoundingBox) -> bool:
         self.targets.append(bounds)
         return True
+
+    def clear_target(self) -> None:
+        self.clears += 1
+
+    def recenter_gimbal(self) -> None:
+        self.recenters += 1
 
     def close(self) -> None:
         self.closed = True
@@ -159,7 +169,7 @@ def test_observer_never_targets_unconfirmed_visible_person() -> None:
     assert client.targets == []
 
 
-def test_perception_hint_throttles_only_while_native_lock_is_healthy() -> None:
+def test_perception_hint_throttles_only_with_fresh_current_owner_lock() -> None:
     owner = OwnerContextState()
     client = FakeNativeClient()
     observer = NativeOwnerTrackingObserver(
@@ -174,7 +184,16 @@ def test_perception_hint_throttles_only_while_native_lock_is_healthy() -> None:
     assert observer.perception_fps_hint() == 10.0
 
     observer.controller.state = ReacquisitionState.LOCKED
+    assert observer.perception_fps_hint() == 10.0
+
+    owner.publish(live_owner(track_id=7, observed_at=time.monotonic()))
+    assert observer.perception_fps_hint() == 10.0
+
+    observer._owner_observed_in_latest_snapshot = True
     assert observer.perception_fps_hint() == 2.0
+
+    observer._owner_observed_in_latest_snapshot = False
+    assert observer.perception_fps_hint() == 10.0
 
     observer.controller.state = ReacquisitionState.REACQUIRING
     assert observer.perception_fps_hint() == 10.0

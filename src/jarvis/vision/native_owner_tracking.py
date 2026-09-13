@@ -17,7 +17,8 @@ from jarvis.vision.owner_reacquisition import (
     ReacquisitionConfig,
     ReacquisitionState,
 )
-from jarvis.vision.pocket3_native import Pocket3NativeConfig, Pocket3NativeTrackerClient
+from jarvis.vision.pocket3_native import Pocket3NativeConfig
+from jarvis.vision.pocket3_recovery import ResilientPocket3NativeOwnerTrackingClient
 from jarvis.vision.runtime import VisionSnapshot
 
 LOGGER = logging.getLogger(__name__)
@@ -42,19 +43,7 @@ class NativeOwnerTrackingClient(Protocol):
     def close(self) -> None: ...
 
 
-class Pocket3NativeOwnerTrackingClient(Pocket3NativeTrackerClient):
-    """Pocket transport plus Mimo's native one-shot gimbal recenter command."""
-
-    def recenter_gimbal(self) -> None:
-        if not self.connected:
-            return
-        self._send_command(
-            receiver=0x04,
-            flags=0x40,
-            cmd_set=0x04,
-            cmd_id=0x4C,
-            payload=b"\xfe\x08",
-        )
+Pocket3NativeOwnerTrackingClient = ResilientPocket3NativeOwnerTrackingClient
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,10 +92,23 @@ class NativeOwnerTrackingObserver:
         self._last_poll_at: float | None = None
         self._last_connect_attempt_at: float | None = None
         self._last_logged_state: ReacquisitionState | None = None
+        self._owner_observed_in_latest_snapshot = False
 
     def perception_fps_hint(self) -> float:
-        """Return the maximum useful JARVIS perception rate for the current state."""
-        if self.controller.state is ReacquisitionState.LOCKED:
+        """Return the useful JARVIS perception rate for the current trust state.
+
+        Native ActiveTrack lets JARVIS reduce CPU while an already-authorized OWNER
+        lock is healthy. The biometric assessment may intentionally survive a short
+        Roboflow association miss, but such a miss must still trigger full-rate
+        perception so the local tracker can re-associate quickly. Low-rate mode is
+        therefore allowed only while the verified OWNER is also observed in the
+        latest processed snapshot.
+        """
+        if (
+            self.controller.state is ReacquisitionState.LOCKED
+            and self._owner_observed_in_latest_snapshot
+            and self.owner_context.has_fresh_live_owner_candidate()
+        ):
             return self.config.locked_perception_fps
         return self.config.searching_perception_fps
 
@@ -154,6 +156,7 @@ class NativeOwnerTrackingObserver:
             if track is not None:
                 owner_bounds = track.bounds
                 owner_observed_at = assessment.observed_at_monotonic
+        self._owner_observed_in_latest_snapshot = owner_bounds is not None
 
         decision = self.controller.step(
             now=now,
@@ -201,6 +204,7 @@ class NativeOwnerTrackingObserver:
     def close(self) -> None:
         self.client.close()
         self.controller.reset()
+        self._owner_observed_in_latest_snapshot = False
 
     def _reconnect_due(self, now: float) -> bool:
         attempted = self._last_connect_attempt_at
