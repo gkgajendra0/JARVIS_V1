@@ -120,6 +120,12 @@ class OwnerContextObserver:
     It consumes the exact camera frame paired with the canonical VisionSnapshot,
     never opens another camera, never persists biometric material, and publishes
     only the short-lived fused assessment needed by other runtime components.
+
+    A current-frame tracker miss is not an identity revocation. If the Roboflow
+    tracker still reports the already-bound track as alive, the last biometric
+    assessment is held without refreshing its timestamp. This preserves continuity
+    through short association misses while the normal evidence TTL still expires
+    fail-closed if fresh OWNER observations do not return.
     """
 
     def __init__(
@@ -169,11 +175,15 @@ class OwnerContextObserver:
 
         selected = self._select_evidence_target(snapshot)
         if selected is None:
+            if self._bound_track_is_alive(snapshot):
+                return
             self._invalidate("owner_context_requires_one_head_associated_subject")
             return
         target, head = selected
 
         if self._track_id != target.track_id:
+            if self._bound_track_is_alive(snapshot):
+                return
             self._reset_binding(target.track_id)
 
         if (
@@ -286,6 +296,10 @@ class OwnerContextObserver:
         if len(candidates) != 1:
             return None
         return candidates[0]
+
+    def _bound_track_is_alive(self, snapshot: VisionSnapshot) -> bool:
+        track_id = self._track_id
+        return track_id is not None and track_id in snapshot.alive_track_ids
 
     def _reset_binding(self, track_id: int) -> None:
         session_id = self._session_id
