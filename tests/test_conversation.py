@@ -48,6 +48,29 @@ def test_voice_generations_bind_delayed_user_transcripts_fifo() -> None:
     assert session.user_utterance_generation == 2
 
 
+def test_final_empty_voice_generation_can_be_retired_without_reordering() -> None:
+    session = ConversationSession(session_id="empty-voice-generation-test")
+    session.start()
+
+    abandoned_generation = session.begin_user_utterance()
+    real_generation = session.begin_user_utterance()
+
+    retired = session.discard_untranscribed_user_utterance()
+    real_turn = session.accept_turn(ConversationRole.USER, "Set volume to 30 percent")
+
+    assert retired == abandoned_generation
+    assert real_turn.user_utterance_generation == real_generation
+    assert session.user_utterance_generation == real_generation
+
+
+def test_discard_untranscribed_voice_generation_is_noop_when_queue_is_empty() -> None:
+    session = ConversationSession(session_id="empty-generation-queue-test")
+    session.start()
+
+    assert session.discard_untranscribed_user_utterance() is None
+    assert session.user_utterance_generation == 0
+
+
 def test_direct_user_turns_still_receive_monotonic_generations() -> None:
     session = ConversationSession(session_id="direct-generation-test")
     session.start()
@@ -74,21 +97,6 @@ def test_session_id_is_stable_and_can_be_supplied_by_jarvis_boundary() -> None:
         ConversationSession(session_id=123)  # type: ignore[arg-type]
 
 
-def test_session_lifecycle_distinguishes_close_and_failure() -> None:
-    closed = ConversationSession()
-    closed.start()
-    closed.close()
-    closed.close()
-    assert closed.status is ConversationStatus.CLOSED
-
-    failed = ConversationSession()
-    failed.start()
-    failed.fail()
-    failed.close()
-    failed.fail()
-    assert failed.status is ConversationStatus.FAILED
-
-
 @pytest.mark.parametrize("status_change", ["none", "close", "fail"])
 def test_turns_are_rejected_outside_active_state(status_change: str) -> None:
     session = ConversationSession()
@@ -106,6 +114,21 @@ def test_session_cannot_start_twice() -> None:
 
     with pytest.raises(RuntimeError):
         session.start()
+
+
+def test_session_lifecycle_distinguishes_close_and_failure() -> None:
+    closed = ConversationSession()
+    closed.start()
+    closed.close()
+    closed.close()
+    assert closed.status is ConversationStatus.CLOSED
+
+    failed = ConversationSession()
+    failed.start()
+    failed.fail()
+    failed.close()
+    failed.fail()
+    assert failed.status is ConversationStatus.FAILED
 
 
 def test_turn_rejects_empty_text_and_invalid_role() -> None:
