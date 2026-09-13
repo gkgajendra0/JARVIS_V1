@@ -20,7 +20,7 @@ def _controller(workstation: FakeWorkstation) -> OwnerWorkstationPresenceControl
     return OwnerWorkstationPresenceController(
         workstation,
         OwnerWorkstationPresenceConfig(
-            lock_after_loss_seconds=5.0,
+            lock_after_loss_seconds=0.0,
             lock_retry_seconds=2.0,
         ),
     )
@@ -38,15 +38,9 @@ def _leave_and_lock(
     controller: OwnerWorkstationPresenceController,
     *,
     lost_at: float,
-    lock_at: float,
 ) -> WorkstationPresenceAction:
-    controller.observe(
-        now=lost_at,
-        tracking_state=ReacquisitionState.REACQUIRING,
-        owner_present=False,
-    )
     return controller.observe(
-        now=lock_at,
+        now=lost_at,
         tracking_state=ReacquisitionState.REACQUIRING,
         owner_present=False,
     )
@@ -56,11 +50,6 @@ def test_does_not_lock_before_owner_was_ever_confirmed() -> None:
     workstation = FakeWorkstation()
     controller = _controller(workstation)
 
-    controller.observe(
-        now=0.0,
-        tracking_state=ReacquisitionState.REACQUIRING,
-        owner_present=False,
-    )
     action = controller.observe(
         now=10.0,
         tracking_state=ReacquisitionState.REACQUIRING,
@@ -71,26 +60,18 @@ def test_does_not_lock_before_owner_was_ever_confirmed() -> None:
     assert workstation.lock_calls == 0
 
 
-def test_short_owner_occlusion_never_locks() -> None:
+def test_lock_pending_owner_gap_never_locks() -> None:
     workstation = FakeWorkstation()
     controller = _controller(workstation)
     _confirm_owner(controller, 0.0)
-    controller.observe(
+
+    action = controller.observe(
         now=1.0,
-        tracking_state=ReacquisitionState.REACQUIRING,
-        owner_present=False,
-    )
-    controller.observe(
-        now=4.0,
-        tracking_state=ReacquisitionState.REACQUIRING,
-        owner_present=False,
-    )
-    controller.observe(
-        now=4.5,
         tracking_state=ReacquisitionState.LOCK_PENDING,
-        owner_present=True,
+        owner_present=False,
     )
 
+    assert action is WorkstationPresenceAction.NONE
     assert workstation.lock_calls == 0
 
 
@@ -98,13 +79,9 @@ def test_native_failure_does_not_lock_while_live_owner_is_still_present() -> Non
     workstation = FakeWorkstation()
     controller = _controller(workstation)
     _confirm_owner(controller, 0.0)
-    controller.observe(
-        now=1.0,
-        tracking_state=ReacquisitionState.REACQUIRING,
-        owner_present=True,
-    )
+
     action = controller.observe(
-        now=20.0,
+        now=1.0,
         tracking_state=ReacquisitionState.REACQUIRING,
         owner_present=True,
     )
@@ -113,12 +90,12 @@ def test_native_failure_does_not_lock_while_live_owner_is_still_present() -> Non
     assert workstation.lock_calls == 0
 
 
-def test_sustained_confirmed_owner_absence_locks_exactly_once() -> None:
+def test_confirmed_owner_absence_locks_immediately_and_exactly_once() -> None:
     workstation = FakeWorkstation()
     controller = _controller(workstation)
     _confirm_owner(controller, 0.0)
 
-    action = _leave_and_lock(controller, lost_at=1.0, lock_at=6.1)
+    action = _leave_and_lock(controller, lost_at=1.0)
     repeated = controller.observe(
         now=20.0,
         tracking_state=ReacquisitionState.REACQUIRING,
@@ -135,7 +112,7 @@ def test_unbound_subject_does_not_complete_auto_lock_cycle() -> None:
     workstation = FakeWorkstation()
     controller = _controller(workstation)
     _confirm_owner(controller, 0.0)
-    _leave_and_lock(controller, lost_at=1.0, lock_at=6.1)
+    _leave_and_lock(controller, lost_at=1.0)
 
     action = controller.observe(
         now=8.0,
@@ -152,7 +129,7 @@ def test_confirmed_owner_relock_after_windows_unlock_rearms_policy() -> None:
     workstation = FakeWorkstation()
     controller = _controller(workstation)
     _confirm_owner(controller, 0.0)
-    _leave_and_lock(controller, lost_at=1.0, lock_at=6.1)
+    _leave_and_lock(controller, lost_at=1.0)
 
     action = controller.observe(
         now=9.0,
@@ -170,13 +147,13 @@ def test_policy_can_auto_lock_again_after_normal_windows_unlock() -> None:
     controller = _controller(workstation)
     _confirm_owner(controller, 0.0)
 
-    first = _leave_and_lock(controller, lost_at=1.0, lock_at=6.1)
+    first = _leave_and_lock(controller, lost_at=1.0)
     controller.observe(
         now=10.0,
         tracking_state=ReacquisitionState.LOCKED,
         owner_present=True,
     )
-    second = _leave_and_lock(controller, lost_at=11.0, lock_at=16.1)
+    second = _leave_and_lock(controller, lost_at=11.0)
 
     assert first is WorkstationPresenceAction.LOCK_WORKSTATION
     assert second is WorkstationPresenceAction.LOCK_WORKSTATION
@@ -184,28 +161,23 @@ def test_policy_can_auto_lock_again_after_normal_windows_unlock() -> None:
     assert controller.auto_lock_issued is True
 
 
-def test_failed_lock_retries_only_after_cooldown() -> None:
+def test_failed_immediate_lock_retries_only_after_cooldown() -> None:
     workstation = FakeWorkstation(lock_result=False)
     controller = _controller(workstation)
     _confirm_owner(controller, 0.0)
+
     controller.observe(
         now=1.0,
         tracking_state=ReacquisitionState.REACQUIRING,
         owner_present=False,
     )
-
     controller.observe(
-        now=6.1,
+        now=1.9,
         tracking_state=ReacquisitionState.REACQUIRING,
         owner_present=False,
     )
     controller.observe(
-        now=7.0,
-        tracking_state=ReacquisitionState.REACQUIRING,
-        owner_present=False,
-    )
-    controller.observe(
-        now=8.2,
+        now=3.1,
         tracking_state=ReacquisitionState.REACQUIRING,
         owner_present=False,
     )
