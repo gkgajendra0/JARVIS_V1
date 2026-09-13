@@ -65,7 +65,14 @@ class ReacquisitionDecision:
 
 
 class OwnerReacquisitionController:
-    """State machine for initial owner lock and automatic return-to-frame relock."""
+    """State machine for initial owner lock and automatic return-to-frame relock.
+
+    A native DJI tracking signal is not an identity signal. Native tracking may
+    confirm a LOCK_PENDING target that JARVIS selected from fresh live-OWNER
+    evidence, and it may maintain that already-authorized lock while OWNER
+    evidence is only briefly missing. It may never promote SEARCHING or
+    REACQUIRING to LOCKED by itself.
+    """
 
     def __init__(self, config: ReacquisitionConfig | None = None) -> None:
         self.config = config or ReacquisitionConfig()
@@ -74,6 +81,7 @@ class OwnerReacquisitionController:
         self._lock_pending_since: float | None = None
         self._lost_since: float | None = None
         self._recenter_sent_at: float | None = None
+        self._owner_missing_since: float | None = None
         self._ever_locked = False
 
     def reset(self) -> None:
@@ -82,6 +90,7 @@ class OwnerReacquisitionController:
         self._lock_pending_since = None
         self._lost_since = None
         self._recenter_sent_at = None
+        self._owner_missing_since = None
         self._ever_locked = False
 
     def step(
@@ -102,26 +111,45 @@ class OwnerReacquisitionController:
         )
         native_healthy = self._native_is_healthy(now=now, native=native)
 
-        if native_healthy:
+        if owner_fresh:
+            self._owner_missing_since = None
+        elif self.state is ReacquisitionState.LOCKED:
+            if self._owner_missing_since is None:
+                self._owner_missing_since = now
+
+        if self.state is ReacquisitionState.LOCK_PENDING and native_healthy:
             self.state = ReacquisitionState.LOCKED
             self._lock_pending_since = None
             self._lost_since = None
             self._recenter_sent_at = None
+            self._owner_missing_since = None if owner_fresh else now
             self._ever_locked = True
             return ReacquisitionDecision(
                 state=self.state,
-                reason="native_tracking_healthy",
+                reason="authorized_native_tracking_healthy",
             )
 
         if self.state is ReacquisitionState.LOCKED:
-            if (
+            owner_loss_confirmed = self._owner_loss_is_confirmed(now)
+            native_loss_confirmed = (
                 not native.connected
                 or self._fresh_negative_poll(now=now, native=native)
                 or self._subject_push_is_stale(now=now, native=native)
-            ):
+            )
+            if owner_loss_confirmed or native_loss_confirmed:
                 self.state = ReacquisitionState.REACQUIRING
                 self._lost_since = now
                 self._recenter_sent_at = None
+                self._owner_missing_since = None
+            elif native_healthy:
+                return ReacquisitionDecision(
+                    state=self.state,
+                    reason=(
+                        "native_tracking_healthy"
+                        if owner_fresh
+                        else "awaiting_owner_loss_confirmation"
+                    ),
+                )
             else:
                 return ReacquisitionDecision(
                     state=self.state,
@@ -214,6 +242,13 @@ class OwnerReacquisitionController:
             return False
         age = now - owner_observed_at
         return 0 <= age <= self.config.owner_evidence_max_age_seconds
+
+    def _owner_loss_is_confirmed(self, now: float) -> bool:
+        missing_since = self._owner_missing_since
+        return bool(
+            missing_since is not None
+            and now - missing_since >= self.config.owner_evidence_max_age_seconds
+        )
 
     def _native_is_healthy(
         self,
