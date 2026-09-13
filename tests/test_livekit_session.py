@@ -10,6 +10,7 @@ from livekit.agents import (
     CloseReason,
     ConversationItemAddedEvent,
     ErrorEvent,
+    UserInputTranscribedEvent,
 )
 from livekit.agents.llm import ChatMessage
 
@@ -93,6 +94,62 @@ def test_committed_items_write_once_and_preserve_repeated_text() -> None:
     assert all(turn.turn_id != turn.external_item_id for turn in turns)
     assert turns[0].turn_id != turns[1].turn_id
     assert bridge.live_context.recent_turns == turns
+
+
+def test_final_empty_transcript_retires_only_its_pending_voice_generation() -> None:
+    livekit, bridge = active_bridge()
+    abandoned_generation = bridge.conversation.begin_user_utterance()
+
+    livekit.emit(
+        "user_input_transcribed",
+        UserInputTranscribedEvent(transcript="", is_final=True, item_id="empty-one"),
+    )
+
+    real_generation = bridge.conversation.begin_user_utterance()
+    livekit.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=message("real-one", "user", "Set volume to 30 percent")
+        ),
+    )
+
+    assert abandoned_generation == 1
+    assert real_generation == 2
+    assert bridge.conversation.turns[0].user_utterance_generation == real_generation
+
+
+def test_interim_empty_transcript_does_not_retire_pending_voice_generation() -> None:
+    livekit, bridge = active_bridge()
+    generation = bridge.conversation.begin_user_utterance()
+
+    livekit.emit(
+        "user_input_transcribed",
+        UserInputTranscribedEvent(transcript="", is_final=False),
+    )
+    livekit.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(item=message("real-one", "user", "Open calculator")),
+    )
+
+    assert bridge.conversation.turns[0].user_utterance_generation == generation
+
+
+def test_nonempty_final_transcript_preserves_existing_fifo_assignment() -> None:
+    livekit, bridge = active_bridge()
+    generation = bridge.conversation.begin_user_utterance()
+
+    livekit.emit(
+        "user_input_transcribed",
+        UserInputTranscribedEvent(
+            transcript="Open calculator", is_final=True, item_id="real-one"
+        ),
+    )
+    livekit.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(item=message("real-one", "user", "Open calculator")),
+    )
+
+    assert bridge.conversation.turns[0].user_utterance_generation == generation
 
 
 def test_accepted_turn_observer_receives_exact_canonical_turn() -> None:
