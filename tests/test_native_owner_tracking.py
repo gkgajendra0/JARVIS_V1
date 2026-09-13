@@ -9,8 +9,11 @@ from jarvis.identity.owner_evidence import (
 from jarvis.identity.passive_liveness import PassiveLivenessState
 from jarvis.vision.camera import CapturedFrame
 from jarvis.vision.models import BoundingBox, FollowCommand, Track
-from jarvis.vision.native_owner_tracking import NativeOwnerTrackingObserver
-from jarvis.vision.owner_reacquisition import NativeTrackingStatus
+from jarvis.vision.native_owner_tracking import (
+    NativeOwnerTrackingConfig,
+    NativeOwnerTrackingObserver,
+)
+from jarvis.vision.owner_reacquisition import NativeTrackingStatus, ReacquisitionState
 from jarvis.vision.runtime import VisionSnapshot
 
 
@@ -95,7 +98,6 @@ def test_observer_targets_confirmed_owner_and_reacquires_after_native_loss() -> 
     )
     assert client.targets == [first_box]
 
-    # DJI confirms lock through native state; no repeated A6 is emitted.
     client.native_status = NativeTrackingStatus(
         connected=True,
         active=True,
@@ -109,7 +111,6 @@ def test_observer_targets_confirmed_owner_and_reacquires_after_native_loss() -> 
     )
     assert client.targets == [first_box]
 
-    # Owner leaves. Native A5 confirms loss. No owner assessment means no target.
     owner.invalidate("owner_left_frame")
     client.native_status = NativeTrackingStatus(
         connected=True,
@@ -120,7 +121,6 @@ def test_observer_targets_confirmed_owner_and_reacquires_after_native_loss() -> 
     observer.observe(frame(3, 13.0), snapshot(3, 13.0))
     assert client.targets == [first_box]
 
-    # GK returns on a new visual track at a new location -> exactly one fresh A6.
     return_box = BoundingBox(0.55, 0.18, 0.88, 0.86)
     owner.publish(live_owner(track_id=22, observed_at=15.0))
     client.native_status = NativeTrackingStatus(
@@ -135,7 +135,6 @@ def test_observer_targets_confirmed_owner_and_reacquires_after_native_loss() -> 
     )
     assert client.targets == [first_box, return_box]
 
-    # Same owner evidence on the next frame cannot spam A6 while lock is pending.
     owner.publish(live_owner(track_id=22, observed_at=15.1))
     observer.observe(
         frame(5, 15.1),
@@ -158,3 +157,24 @@ def test_observer_never_targets_unconfirmed_visible_person() -> None:
         snapshot(1, 5.0, track(99, stranger_box, 5.0)),
     )
     assert client.targets == []
+
+
+def test_perception_hint_throttles_only_while_native_lock_is_healthy() -> None:
+    owner = OwnerContextState()
+    client = FakeNativeClient()
+    observer = NativeOwnerTrackingObserver(
+        owner_context=owner,
+        client=client,  # type: ignore[arg-type]
+        config=NativeOwnerTrackingConfig(
+            searching_perception_fps=10.0,
+            locked_perception_fps=2.0,
+        ),
+    )
+
+    assert observer.perception_fps_hint() == 10.0
+
+    observer.controller.state = ReacquisitionState.LOCKED
+    assert observer.perception_fps_hint() == 2.0
+
+    observer.controller.state = ReacquisitionState.REACQUIRING
+    assert observer.perception_fps_hint() == 10.0
