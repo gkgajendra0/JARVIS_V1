@@ -62,6 +62,7 @@ class ReacquisitionDecision:
     action: ReacquisitionAction = ReacquisitionAction.NONE
     bounds: BoundingBox | None = None
     reason: str = ""
+    owner_absence_confirmed: bool = False
 
 
 class OwnerReacquisitionController:
@@ -72,6 +73,12 @@ class OwnerReacquisitionController:
     evidence, and it may maintain that already-authorized lock while OWNER
     evidence is only briefly missing. It may never promote SEARCHING or
     REACQUIRING to LOCKED by itself.
+
+    Native-tracking loss and OWNER absence are separate signals. Losing DJI's
+    subject box may require reacquisition/recenter, but it must never by itself be
+    treated as proof that the OWNER left the workstation. ``owner_absence_confirmed``
+    is raised only after live OWNER evidence has remained absent for the configured
+    confirmation window.
     """
 
     def __init__(self, config: ReacquisitionConfig | None = None) -> None:
@@ -113,11 +120,14 @@ class OwnerReacquisitionController:
 
         if owner_fresh:
             self._owner_missing_since = None
-        elif (
-            self.state is ReacquisitionState.LOCKED
-            and self._owner_missing_since is None
+        elif self._ever_locked and self.state in (
+            ReacquisitionState.LOCKED,
+            ReacquisitionState.REACQUIRING,
         ):
-            self._owner_missing_since = now
+            if self._owner_missing_since is None:
+                self._owner_missing_since = now
+
+        owner_absence_confirmed = self._owner_loss_is_confirmed(now)
 
         if self.state is ReacquisitionState.LOCK_PENDING and native_healthy:
             self.state = ReacquisitionState.LOCKED
@@ -132,18 +142,25 @@ class OwnerReacquisitionController:
             )
 
         if self.state is ReacquisitionState.LOCKED:
-            owner_loss_confirmed = self._owner_loss_is_confirmed(now)
             native_loss_confirmed = (
                 not native.connected
                 or self._fresh_negative_poll(now=now, native=native)
                 or self._subject_push_is_stale(now=now, native=native)
             )
-            if owner_loss_confirmed or native_loss_confirmed:
+            if owner_absence_confirmed or native_loss_confirmed:
                 self.state = ReacquisitionState.REACQUIRING
                 self._lost_since = now
                 self._recenter_sent_at = None
-                self._owner_missing_since = None
-            elif native_healthy:
+                return ReacquisitionDecision(
+                    state=self.state,
+                    reason=(
+                        "confirmed_owner_absence"
+                        if owner_absence_confirmed
+                        else "native_tracking_lost_reacquiring"
+                    ),
+                    owner_absence_confirmed=owner_absence_confirmed,
+                )
+            if native_healthy:
                 return ReacquisitionDecision(
                     state=self.state,
                     reason=(
@@ -152,11 +169,10 @@ class OwnerReacquisitionController:
                         else "awaiting_owner_loss_confirmation"
                     ),
                 )
-            else:
-                return ReacquisitionDecision(
-                    state=self.state,
-                    reason="awaiting_native_loss_confirmation",
-                )
+            return ReacquisitionDecision(
+                state=self.state,
+                reason="awaiting_native_loss_confirmation",
+            )
 
         if self.state is ReacquisitionState.LOCK_PENDING:
             pending_since = self._lock_pending_since
@@ -185,6 +201,7 @@ class OwnerReacquisitionController:
             return ReacquisitionDecision(
                 state=self.state,
                 reason="native_transport_unavailable",
+                owner_absence_confirmed=owner_absence_confirmed,
             )
 
         if owner_fresh:
@@ -219,6 +236,7 @@ class OwnerReacquisitionController:
                 return ReacquisitionDecision(
                     state=self.state,
                     reason="awaiting_recenter_settle",
+                    owner_absence_confirmed=owner_absence_confirmed,
                 )
             if self._recenter_is_due(now):
                 self._recenter_sent_at = now
@@ -226,11 +244,13 @@ class OwnerReacquisitionController:
                     state=self.state,
                     action=ReacquisitionAction.RECENTER_GIMBAL,
                     reason="confirmed_owner_loss_recenter",
+                    owner_absence_confirmed=owner_absence_confirmed,
                 )
 
         return ReacquisitionDecision(
             state=self.state,
             reason="fresh_live_owner_not_visible",
+            owner_absence_confirmed=owner_absence_confirmed,
         )
 
     def _owner_is_fresh(
