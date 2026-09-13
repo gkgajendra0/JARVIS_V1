@@ -124,6 +124,8 @@ class JarvisConfig:
     pocket3_subject_push_stale_seconds: float = 1.25
     pocket3_lock_pending_timeout_seconds: float = 2.5
     pocket3_resend_cooldown_seconds: float = 1.0
+    owner_workstation_lock_enabled: bool = False
+    owner_workstation_lock_delay_seconds: float = 5.0
 
     def __post_init__(self) -> None:
         normalized = str(self.log_level).strip().upper()
@@ -179,6 +181,14 @@ class JarvisConfig:
             raise ValueError(
                 "JARVIS_POCKET3_NATIVE_TRACKING_ENABLED requires JARVIS_VISION_ENABLED"
             )
+        if (
+            self.owner_workstation_lock_enabled
+            and not self.pocket3_native_tracking_enabled
+        ):
+            raise ValueError(
+                "JARVIS_OWNER_WORKSTATION_LOCK_ENABLED requires "
+                "JARVIS_POCKET3_NATIVE_TRACKING_ENABLED"
+            )
 
         for name in (
             "audio_input_device",
@@ -203,6 +213,7 @@ class JarvisConfig:
             "pocket3_subject_push_stale_seconds",
             "pocket3_lock_pending_timeout_seconds",
             "pocket3_resend_cooldown_seconds",
+            "owner_workstation_lock_delay_seconds",
         )
         for name in positive_values:
             value = getattr(self, name)
@@ -342,5 +353,11 @@ class JarvisConfig:
             ),
             pocket3_resend_cooldown_seconds=_configured_float(
                 "JARVIS_POCKET3_RESEND_COOLDOWN_SECONDS", 1.0, machine
+            ),
+            owner_workstation_lock_enabled=_configured_bool(
+                "JARVIS_OWNER_WORKSTATION_LOCK_ENABLED", False, machine
+            ),
+            owner_workstation_lock_delay_seconds=_configured_float(
+                "JARVIS_OWNER_WORKSTATION_LOCK_DELAY_SECONDS", 5.0, machine
             ),
         )
