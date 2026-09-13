@@ -24,7 +24,9 @@ def test_recovery_config_rejects_non_positive_attempt_counts() -> None:
         Pocket3RecoveryConfig(wifi_join_attempts=0)
 
 
-def test_saved_windows_profile_can_be_reused_without_ble(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_saved_windows_profile_can_be_reused_without_ble(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     client = _client(saved_wifi_wait_seconds=1.0)
     monkeypatch.setattr(
         "jarvis.vision.pocket3_recovery.subprocess.run",
@@ -91,7 +93,9 @@ def test_ble_does_not_retry_after_credentials_were_delivered(
         client._credentials_ready.set()
         raise RuntimeError("BLE keepalive dropped after provisioning")
 
-    monkeypatch.setattr(Pocket3NativeTrackerClient, "_ble_session", fails_after_credentials)
+    monkeypatch.setattr(
+        Pocket3NativeTrackerClient, "_ble_session", fails_after_credentials
+    )
 
     with pytest.raises(RuntimeError, match="keepalive"):
         asyncio.run(client._ble_session())
@@ -121,7 +125,9 @@ def test_wifi_association_retries_instead_of_failing_one_shot(
             raise TimeoutError("association pending")
 
     monkeypatch.setattr(Pocket3NativeTrackerClient, "_join_windows_wifi", flaky_join)
-    monkeypatch.setattr("jarvis.vision.pocket3_recovery.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        "jarvis.vision.pocket3_recovery.time.sleep", lambda _seconds: None
+    )
 
     client._join_windows_wifi("OsmoPocket3-C36F", "not-a-real-secret")
 
