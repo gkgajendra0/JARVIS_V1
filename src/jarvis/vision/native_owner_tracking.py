@@ -42,6 +42,18 @@ class NativeOwnerTrackingClient(Protocol):
     def close(self) -> None: ...
 
 
+class OwnerPresenceObserver(Protocol):
+    def observe(
+        self,
+        *,
+        now: float,
+        tracking_state: ReacquisitionState,
+        owner_present: bool,
+    ) -> object: ...
+
+    def reset(self) -> None: ...
+
+
 class Pocket3NativeOwnerTrackingClient(Pocket3NativeTrackerClient):
     """Pocket transport plus Mimo's native one-shot gimbal recenter command."""
 
@@ -95,11 +107,13 @@ class NativeOwnerTrackingObserver:
         client: NativeOwnerTrackingClient,
         controller: OwnerReacquisitionController | None = None,
         config: NativeOwnerTrackingConfig | None = None,
+        owner_presence_observer: OwnerPresenceObserver | None = None,
     ) -> None:
         self.owner_context = owner_context
         self.client = client
         self.controller = controller or OwnerReacquisitionController()
         self.config = config or NativeOwnerTrackingConfig()
+        self.owner_presence_observer = owner_presence_observer
         self._last_poll_at: float | None = None
         self._last_connect_attempt_at: float | None = None
         self._last_logged_state: ReacquisitionState | None = None
@@ -169,6 +183,16 @@ class NativeOwnerTrackingObserver:
             )
             self._last_logged_state = decision.state
 
+        if self.owner_presence_observer is not None:
+            try:
+                self.owner_presence_observer.observe(
+                    now=now,
+                    tracking_state=decision.state,
+                    owner_present=owner_bounds is not None,
+                )
+            except Exception:
+                LOGGER.exception("OWNER workstation-presence policy failed")
+
         if decision.action is ReacquisitionAction.RECENTER_GIMBAL:
             try:
                 self.client.clear_target()
@@ -201,6 +225,8 @@ class NativeOwnerTrackingObserver:
     def close(self) -> None:
         self.client.close()
         self.controller.reset()
+        if self.owner_presence_observer is not None:
+            self.owner_presence_observer.reset()
 
     def _reconnect_due(self, now: float) -> bool:
         attempted = self._last_connect_attempt_at
@@ -222,6 +248,7 @@ def build_default_native_owner_tracking_observer(
     recenter_settle_seconds: float = 0.75,
     searching_perception_fps: float = 10.0,
     locked_perception_fps: float = 2.0,
+    owner_presence_observer: OwnerPresenceObserver | None = None,
 ) -> NativeOwnerTrackingObserver:
     controller = OwnerReacquisitionController(
         ReacquisitionConfig(
@@ -241,4 +268,5 @@ def build_default_native_owner_tracking_observer(
             searching_perception_fps=searching_perception_fps,
             locked_perception_fps=locked_perception_fps,
         ),
+        owner_presence_observer=owner_presence_observer,
     )
