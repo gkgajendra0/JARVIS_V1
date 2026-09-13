@@ -60,7 +60,9 @@ def run_native_owner_tracking_live(
     print(f"Tracking-only OWNER evidence window: {_TRACKING_EVIDENCE_WINDOW} samples")
     print("Expected flow:")
     print("  1. JARVIS recognizes live OWNER and sends one A6.")
-    print("  2. Pocket 3 native ActiveTrack follows OWNER; JARVIS throttles perception.")
+    print(
+        "  2. Pocket 3 native ActiveTrack follows OWNER; JARVIS throttles perception."
+    )
     print("  3. OWNER leaves the frame; JARVIS ramps perception back up and recenters.")
     print("  4. OWNER returns; JARVIS sends a fresh A6 and Pocket relocks.")
     print("Press Ctrl+C after the leave-and-return scenario is complete.")
