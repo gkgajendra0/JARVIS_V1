@@ -43,6 +43,7 @@ def _leave_and_lock(
         now=lost_at,
         tracking_state=ReacquisitionState.REACQUIRING,
         owner_present=False,
+        owner_absence_confirmed=True,
     )
 
 
@@ -54,6 +55,7 @@ def test_does_not_lock_before_owner_was_ever_confirmed() -> None:
         now=10.0,
         tracking_state=ReacquisitionState.REACQUIRING,
         owner_present=False,
+        owner_absence_confirmed=True,
     )
 
     assert action is WorkstationPresenceAction.NONE
@@ -69,6 +71,7 @@ def test_lock_pending_owner_gap_never_locks() -> None:
         now=1.0,
         tracking_state=ReacquisitionState.LOCK_PENDING,
         owner_present=False,
+        owner_absence_confirmed=True,
     )
 
     assert action is WorkstationPresenceAction.NONE
@@ -84,6 +87,23 @@ def test_native_failure_does_not_lock_while_live_owner_is_still_present() -> Non
         now=1.0,
         tracking_state=ReacquisitionState.REACQUIRING,
         owner_present=True,
+        owner_absence_confirmed=False,
+    )
+
+    assert action is WorkstationPresenceAction.NONE
+    assert workstation.lock_calls == 0
+
+
+def test_native_reacquisition_without_confirmed_owner_absence_does_not_lock() -> None:
+    workstation = FakeWorkstation()
+    controller = _controller(workstation)
+    _confirm_owner(controller, 0.0)
+
+    action = controller.observe(
+        now=1.0,
+        tracking_state=ReacquisitionState.REACQUIRING,
+        owner_present=False,
+        owner_absence_confirmed=False,
     )
 
     assert action is WorkstationPresenceAction.NONE
@@ -100,6 +120,7 @@ def test_confirmed_owner_absence_locks_immediately_and_exactly_once() -> None:
         now=20.0,
         tracking_state=ReacquisitionState.REACQUIRING,
         owner_present=False,
+        owner_absence_confirmed=True,
     )
 
     assert action is WorkstationPresenceAction.LOCK_WORKSTATION
@@ -118,6 +139,7 @@ def test_unbound_subject_does_not_complete_auto_lock_cycle() -> None:
         now=8.0,
         tracking_state=ReacquisitionState.LOCKED,
         owner_present=False,
+        owner_absence_confirmed=False,
     )
 
     assert action is WorkstationPresenceAction.NONE
@@ -170,16 +192,19 @@ def test_failed_immediate_lock_retries_only_after_cooldown() -> None:
         now=1.0,
         tracking_state=ReacquisitionState.REACQUIRING,
         owner_present=False,
+        owner_absence_confirmed=True,
     )
     controller.observe(
         now=1.9,
         tracking_state=ReacquisitionState.REACQUIRING,
         owner_present=False,
+        owner_absence_confirmed=True,
     )
     controller.observe(
         now=3.1,
         tracking_state=ReacquisitionState.REACQUIRING,
         owner_present=False,
+        owner_absence_confirmed=True,
     )
 
     assert workstation.lock_calls == 2
