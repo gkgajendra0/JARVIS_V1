@@ -159,7 +159,9 @@ def test_reacquiring_absence_can_confirm_after_native_loss() -> None:
     assert confirmed.owner_absence_confirmed is True
 
 
-def test_transient_reacquisition_gap_does_not_confirm_absence_if_owner_returns() -> None:
+def test_transient_reacquisition_gap_does_not_confirm_absence_if_owner_returns() -> (
+    None
+):
     controller = OwnerReacquisitionController(
         ReacquisitionConfig(owner_evidence_max_age_seconds=2.0)
     )
@@ -343,7 +345,9 @@ def test_stale_owner_evidence_never_triggers_a6() -> None:
     assert decision.reason == "fresh_live_owner_not_visible"
 
 
-def test_transport_loss_moves_locked_session_to_reacquiring_without_owner_absence() -> None:
+def test_transport_loss_moves_locked_session_to_reacquiring_without_owner_absence() -> (
+    None
+):
     controller = OwnerReacquisitionController()
     controller.step(
         now=1.0,
