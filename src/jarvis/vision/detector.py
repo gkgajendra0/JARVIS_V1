@@ -72,7 +72,11 @@ class RFDetrNanoDetector:
 
     def detect(self, frame: CapturedFrame) -> list[Detection]:
         rgb = cv2.cvtColor(frame.image, cv2.COLOR_BGR2RGB)
-        raw = self._model.predict(rgb, threshold=self.config.threshold)
+        raw = self._model.predict(
+            rgb,
+            threshold=self.config.threshold,
+            include_source_image=False,
+        )
 
         class_ids = np.asarray(raw.class_id)
         confidences = np.asarray(raw.confidence)
