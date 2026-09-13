@@ -22,7 +22,8 @@ from jarvis.vision.service import build_default_vision_service
 LOGGER = logging.getLogger(__name__)
 
 _TRACKING_EVIDENCE_WINDOW = 5
-_PERCEPTION_FPS = 10.0
+_SEARCHING_PERCEPTION_FPS = 10.0
+_LOCKED_PERCEPTION_FPS = 2.0
 _OPENCV_THREADS = 1
 
 
@@ -50,13 +51,17 @@ def run_native_owner_tracking_live(
     print(f"USB camera index: {camera_index}")
     print(f"Pocket BLE name: {ble_name}")
     print("Software PTZ: SAFE / not armed")
-    print(f"Perception rate: {_PERCEPTION_FPS:.1f} FPS")
+    print(
+        "Adaptive perception: "
+        f"{_SEARCHING_PERCEPTION_FPS:.1f} FPS searching/reacquiring -> "
+        f"{_LOCKED_PERCEPTION_FPS:.1f} FPS while native lock is healthy"
+    )
     print(f"OpenCV threads: {_OPENCV_THREADS}")
     print(f"Tracking-only OWNER evidence window: {_TRACKING_EVIDENCE_WINDOW} samples")
     print("Expected flow:")
     print("  1. JARVIS recognizes live OWNER and sends one A6.")
-    print("  2. Pocket 3 native ActiveTrack follows OWNER.")
-    print("  3. OWNER leaves the frame; JARVIS enters reacquiring.")
+    print("  2. Pocket 3 native ActiveTrack follows OWNER; JARVIS throttles perception.")
+    print("  3. OWNER leaves the frame; JARVIS ramps perception back up and recenters.")
     print("  4. OWNER returns; JARVIS sends a fresh A6 and Pocket relocks.")
     print("Press Ctrl+C after the leave-and-return scenario is complete.")
     print()
@@ -72,6 +77,8 @@ def run_native_owner_tracking_live(
     tracking_observer = build_default_native_owner_tracking_observer(
         owner_context=owner_observer.state,
         ble_name=ble_name,
+        searching_perception_fps=_SEARCHING_PERCEPTION_FPS,
+        locked_perception_fps=_LOCKED_PERCEPTION_FPS,
     )
     camera = OpenCVCameraSource(
         OpenCVCameraConfig(
@@ -86,7 +93,8 @@ def run_native_owner_tracking_live(
         evidence_observer=owner_observer,
         tracking_observer=tracking_observer,
         camera_source=camera,
-        perception_fps=_PERCEPTION_FPS,
+        perception_fps=_SEARCHING_PERCEPTION_FPS,
+        perception_fps_provider=tracking_observer.perception_fps_hint,
         opencv_threads=_OPENCV_THREADS,
     )
 
