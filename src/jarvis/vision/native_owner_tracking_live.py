@@ -73,8 +73,8 @@ def run_native_owner_tracking_live(
             f"{workstation_lock_delay_seconds:.1f}s of confirmed OWNER absence"
         )
         print(
-            "Return behavior: JARVIS wakes the display only after live OWNER "
-            "reacquisition; Windows Hello/Winlogon performs actual unlock"
+            "Return behavior: Windows Hello/PIN/Winlogon must unlock the session; "
+            "JARVIS resumes OWNER tracking afterward"
         )
     else:
         print("Workstation presence: SAFE / not armed")
@@ -86,10 +86,8 @@ def run_native_owner_tracking_live(
     print("  3. OWNER leaves the frame; JARVIS ramps perception back up and recenters.")
     if workstation_lock:
         print("  4. Sustained confirmed OWNER absence locks the Windows workstation.")
-        print(
-            "  5. OWNER returns; JARVIS reacquires, relocks tracking, and wakes display."
-        )
-        print("  6. Windows Hello/Winlogon remains the authentication authority.")
+        print("  5. Windows Hello/PIN/Winlogon unlocks the user session.")
+        print("  6. JARVIS resumes vision, reacquires OWNER, and sends a fresh A6.")
     else:
         print("  4. OWNER returns; JARVIS sends a fresh A6 and Pocket relocks.")
     print("Press Ctrl+C after the leave-and-return scenario is complete.")
@@ -179,7 +177,7 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "ARM real Windows workstation lock after sustained confirmed OWNER "
-            "absence. Return wake does not bypass Windows authentication."
+            "absence. Windows Hello/PIN/Winlogon remains responsible for unlock."
         ),
     )
     parser.add_argument(
