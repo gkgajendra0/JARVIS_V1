@@ -84,7 +84,7 @@ def test_owner_workstation_lock_requires_native_tracking() -> None:
         JarvisConfig(owner_workstation_lock_enabled=True)
 
 
-def test_owner_workstation_lock_accepts_explicit_native_tracking_configuration() -> None:
+def test_owner_workstation_lock_accepts_native_tracking() -> None:
     config = JarvisConfig(
         vision_enabled=True,
         pocket3_native_tracking_enabled=True,
