@@ -26,6 +26,7 @@ from jarvis.identity.model_assets import (
 from jarvis.identity.owner_enrollment import default_identity_data_dir
 from jarvis.identity.owner_evidence import (
     OwnerIdentityObservation,
+    OwnerIdentityThresholds,
     OwnerLivenessBindingAssessment,
     OwnerLivenessBindingState,
     TemporalOwnerIdentity,
@@ -38,6 +39,7 @@ from jarvis.identity.owner_template_runtime import (
 )
 from jarvis.identity.passive_liveness import (
     PassiveLivenessObservation,
+    PassiveLivenessThresholds,
     TemporalPassiveLiveness,
 )
 from jarvis.identity.passive_pad import MiniFasEnsembleProvider, PassivePadProvider
@@ -132,6 +134,8 @@ class OwnerContextObserver:
         framing_policy: HeadFirstFramingPolicy | None = None,
         analysis_interval_seconds: float = _DEFAULT_ANALYSIS_INTERVAL_SECONDS,
         session_poll_interval_seconds: float = _DEFAULT_SESSION_POLL_INTERVAL_SECONDS,
+        identity_thresholds: OwnerIdentityThresholds | None = None,
+        liveness_thresholds: PassiveLivenessThresholds | None = None,
     ) -> None:
         if analysis_interval_seconds <= 0:
             raise ValueError("owner context analysis interval must be positive")
@@ -146,6 +150,8 @@ class OwnerContextObserver:
         self.framing_policy = framing_policy or HeadFirstFramingPolicy()
         self.analysis_interval_seconds = analysis_interval_seconds
         self.session_poll_interval_seconds = session_poll_interval_seconds
+        self.identity_thresholds = identity_thresholds
+        self.liveness_thresholds = liveness_thresholds
         self._session_id: str | None = None
         self._track_id: int | None = None
         self._identity_window: TemporalOwnerIdentity | None = None
@@ -291,11 +297,13 @@ class OwnerContextObserver:
             session_id=session_id,
             visual_track_id=track_id,
             face_provider_id=self.owner_template.provider_id,
+            thresholds=self.identity_thresholds,
         )
         self._liveness_window = TemporalPassiveLiveness(
             session_id=session_id,
             visual_track_id=track_id,
             pad_provider_id=self.pad_provider.provider_id,
+            thresholds=self.liveness_thresholds,
         )
         self._last_analysis_at = None
         self.state.invalidate("owner_context_temporal_window_reset")
@@ -328,8 +336,17 @@ def _full_frame_face_xyxy(
     return left, top, right, bottom
 
 
-def build_default_owner_context_observer() -> OwnerContextObserver:
-    """Load the exact accepted 3B.8 OWNER template, SFace, and MiniFAS stack."""
+def build_default_owner_context_observer(
+    *,
+    identity_thresholds: OwnerIdentityThresholds | None = None,
+    liveness_thresholds: PassiveLivenessThresholds | None = None,
+) -> OwnerContextObserver:
+    """Load the accepted OWNER template, SFace, and MiniFAS stack.
+
+    Default thresholds remain the security-oriented 15-sample temporal windows.
+    Callers with a lower-risk purpose such as camera-follow reacquisition may pass
+    explicit shorter windows without changing authority defaults.
+    """
     manifest = load_default_face_model_manifest()
     model_cache = ModelAssetCache()
     detector_asset = manifest.by_role("face_detector")
@@ -368,4 +385,6 @@ def build_default_owner_context_observer() -> OwnerContextObserver:
         face_recognizer=face_recognizer,
         pad_provider=pad_provider,
         session_provider=WindowsWtsSessionProvider(),
+        identity_thresholds=identity_thresholds,
+        liveness_thresholds=liveness_thresholds,
     )
