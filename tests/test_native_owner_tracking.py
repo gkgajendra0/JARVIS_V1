@@ -1,6 +1,7 @@
 import time
 
 import numpy as np
+import pytest
 
 from jarvis.identity.owner_context import OwnerContextState
 from jarvis.identity.owner_evidence import (
@@ -28,6 +29,7 @@ class FakeNativeClient:
         self.closed = False
         self.clears = 0
         self.recenters = 0
+        self.recoveries = 0
 
     def start(self) -> None:
         self.connected = True
@@ -47,6 +49,11 @@ class FakeNativeClient:
 
     def recenter_gimbal(self) -> None:
         self.recenters += 1
+
+    def recover_tracking_session(self) -> None:
+        self.recoveries += 1
+        self.connected = True
+        self.native_status = NativeTrackingStatus(connected=True, active=False)
 
     def close(self) -> None:
         self.closed = True
@@ -197,3 +204,49 @@ def test_perception_hint_throttles_only_with_fresh_current_owner_lock() -> None:
 
     observer.controller.state = ReacquisitionState.REACQUIRING
     assert observer.perception_fps_hint() == 10.0
+
+
+def test_tracking_config_rejects_invalid_recovery_policy() -> None:
+    with pytest.raises(ValueError, match="target_attempts_before_session_recovery"):
+        NativeOwnerTrackingConfig(target_attempts_before_session_recovery=0)
+    with pytest.raises(ValueError, match="session_recovery_cooldown_seconds"):
+        NativeOwnerTrackingConfig(session_recovery_cooldown_seconds=0.0)
+
+
+def test_observer_rebuilds_session_after_bounded_unconfirmed_target_attempts() -> None:
+    owner = OwnerContextState()
+    client = FakeNativeClient()
+    observer = NativeOwnerTrackingObserver(
+        owner_context=owner,
+        client=client,  # type: ignore[arg-type]
+        config=NativeOwnerTrackingConfig(
+            target_attempts_before_session_recovery=1,
+            session_recovery_cooldown_seconds=10.0,
+        ),
+    )
+    bounds = BoundingBox(0.2, 0.15, 0.6, 0.85)
+
+    owner.publish(live_owner(track_id=7, observed_at=10.0))
+    observer.observe(
+        frame(1, 10.0),
+        snapshot(1, 10.0, track(7, bounds, 10.0)),
+    )
+    assert client.targets == [bounds]
+
+    owner.publish(live_owner(track_id=7, observed_at=12.0))
+    observer.observe(
+        frame(2, 12.0),
+        snapshot(2, 12.0, track(7, bounds, 12.0)),
+    )
+    recovery_thread = observer._recovery_thread
+    assert recovery_thread is not None
+    recovery_thread.join(timeout=1.0)
+    assert client.recoveries == 1
+
+    owner.publish(live_owner(track_id=7, observed_at=12.1))
+    observer.observe(
+        frame(3, 12.1),
+        snapshot(3, 12.1, track(7, bounds, 12.1)),
+    )
+    assert observer._target_attempts_without_native_lock <= 1
+    observer.close()
