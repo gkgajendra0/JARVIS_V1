@@ -51,7 +51,7 @@ def _fresh_owner() -> OwnerLivenessBindingAssessment:
     )
 
 
-def test_locked_state_throttles_only_while_owner_evidence_is_fresh() -> None:
+def test_locked_state_throttles_only_with_fresh_and_current_owner() -> None:
     owner = OwnerContextState()
     observer = NativeOwnerTrackingObserver(
         owner_context=owner,
@@ -68,9 +68,12 @@ def test_locked_state_throttles_only_while_owner_evidence_is_fresh() -> None:
     assert observer.perception_fps_hint() == 10.0
 
     owner.publish(_fresh_owner())
+    assert observer.perception_fps_hint() == 10.0
+
+    observer._owner_observed_in_latest_snapshot = True
     assert observer.perception_fps_hint() == 1.0
 
-    owner.invalidate("temporary_track_dropout")
+    observer._owner_observed_in_latest_snapshot = False
     assert observer.perception_fps_hint() == 10.0
 
     observer.controller.state = ReacquisitionState.REACQUIRING
