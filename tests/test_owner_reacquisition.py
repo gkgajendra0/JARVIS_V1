@@ -49,7 +49,7 @@ def test_initial_owner_candidate_sends_one_target_then_waits_for_lock() -> None:
     assert repeated.action is ReacquisitionAction.NONE
 
 
-def test_native_subject_push_confirms_lock_without_repeated_a6() -> None:
+def test_native_subject_push_confirms_authorized_owner_lock() -> None:
     controller = OwnerReacquisitionController()
     controller.step(
         now=10.0,
@@ -66,9 +66,10 @@ def test_native_subject_push_confirms_lock_without_repeated_a6() -> None:
     )
     assert locked.state is ReacquisitionState.LOCKED
     assert locked.action is ReacquisitionAction.NONE
+    assert locked.reason == "authorized_native_tracking_healthy"
 
 
-def test_short_subject_push_gap_does_not_false_trigger_reacquisition() -> None:
+def test_short_owner_evidence_gap_does_not_false_trigger_reacquisition() -> None:
     controller = OwnerReacquisitionController()
     controller.step(
         now=1.0,
@@ -87,10 +88,10 @@ def test_short_subject_push_gap_does_not_false_trigger_reacquisition() -> None:
         now=2.0,
         owner_bounds=None,
         owner_observed_at=None,
-        native=native(active=True, poll_at=1.95, push_at=1.1),
+        native=native(active=True, poll_at=1.95, push_at=1.9),
     )
     assert waiting.state is ReacquisitionState.LOCKED
-    assert waiting.reason == "native_tracking_healthy"
+    assert waiting.reason == "awaiting_owner_loss_confirmation"
 
 
 def test_stale_subject_push_enters_reacquisition_even_if_a5_stays_active() -> None:
@@ -117,6 +118,58 @@ def test_stale_subject_push_enters_reacquisition_even_if_a5_stays_active() -> No
     assert lost.state is ReacquisitionState.REACQUIRING
     assert lost.action is ReacquisitionAction.NONE
     assert lost.reason == "fresh_live_owner_not_visible"
+
+
+def test_native_tracking_a_stranger_cannot_reauthorize_owner_lock() -> None:
+    controller = OwnerReacquisitionController(
+        ReacquisitionConfig(owner_evidence_max_age_seconds=2.0)
+    )
+
+    controller.step(
+        now=10.0,
+        owner_bounds=OWNER_BOX,
+        owner_observed_at=9.9,
+        native=native(),
+    )
+    locked = controller.step(
+        now=10.3,
+        owner_bounds=OWNER_BOX,
+        owner_observed_at=10.2,
+        native=native(active=True, poll_at=10.25, push_at=10.28),
+    )
+    assert locked.state is ReacquisitionState.LOCKED
+
+    # GK leaves but DJI keeps producing healthy tracking pushes because it starts
+    # following another visible person. JARVIS allows only a short confirmation
+    # window; native tracking itself is not owner identity evidence.
+    confirming = controller.step(
+        now=11.0,
+        owner_bounds=None,
+        owner_observed_at=None,
+        native=native(active=True, poll_at=10.95, push_at=10.98),
+    )
+    assert confirming.state is ReacquisitionState.LOCKED
+    assert confirming.reason == "awaiting_owner_loss_confirmation"
+
+    lost = controller.step(
+        now=13.1,
+        owner_bounds=None,
+        owner_observed_at=None,
+        native=native(active=True, poll_at=13.05, push_at=13.08),
+    )
+    assert lost.state is ReacquisitionState.REACQUIRING
+    assert lost.action is ReacquisitionAction.NONE
+
+    # Even with another fresh DJI subject push, REACQUIRING can never become
+    # LOCKED until a fresh live OWNER causes a new A6 authorization.
+    stranger_still_tracked = controller.step(
+        now=13.4,
+        owner_bounds=None,
+        owner_observed_at=None,
+        native=native(active=True, poll_at=13.35, push_at=13.38),
+    )
+    assert stranger_still_tracked.state is ReacquisitionState.REACQUIRING
+    assert stranger_still_tracked.action is ReacquisitionAction.NONE
 
 
 def test_room_scenario_reacquires_only_when_owner_returns() -> None:
