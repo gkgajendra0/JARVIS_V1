@@ -22,9 +22,10 @@ class FakeRFModel:
     def inference(self, **kwargs):
         self.inference_kwargs = kwargs
 
-    def predict(self, image, threshold):
+    def predict(self, image, threshold, include_source_image=True):
         assert image.shape == (100, 200, 3)
         assert threshold == 0.1
+        assert include_source_image is False
         return SimpleNamespace(
             class_id=np.array([1, 2]),
             confidence=np.array([0.9, 0.8]),
@@ -65,7 +66,8 @@ def test_rf_detr_adapter_uses_duplicate_suppressor_for_person_candidates():
         def inference(self, **kwargs):
             pass
 
-        def predict(self, image, threshold):
+        def predict(self, image, threshold, include_source_image=True):
+            assert include_source_image is False
             return SimpleNamespace(
                 class_id=np.array([1, 1]),
                 confidence=np.array([0.95, 0.53]),

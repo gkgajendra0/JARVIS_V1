@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import queue
+import time
 from collections.abc import Callable
 from pathlib import Path
 from threading import Event, RLock, Thread
@@ -17,7 +19,11 @@ from jarvis.vision.runtime import VisionRuntime, VisionSnapshot
 LOGGER = logging.getLogger(__name__)
 
 _HEAD_MODEL_NAME = "blaze_face_full_range.tflite"
+_DEFAULT_PERCEPTION_FPS = 10.0
+_DEFAULT_OPENCV_THREADS = 1
+_TRACK_LOSS_SECONDS = 2.0
 FramePairTap = Callable[[CapturedFrame, VisionSnapshot], None]
+PerceptionFpsProvider = Callable[[], float]
 
 
 class VisionService:
@@ -33,11 +39,15 @@ class VisionService:
         frame_pair_tap: FramePairTap | None = None,
         frame_pair_tap_max_snapshot_age_seconds: float = 0.15,
         process_timeout_seconds: float = 0.20,
+        perception_fps: float = _DEFAULT_PERCEPTION_FPS,
+        perception_fps_provider: PerceptionFpsProvider | None = None,
     ) -> None:
         if process_timeout_seconds <= 0:
             raise ValueError("process_timeout_seconds must be positive")
         if frame_pair_tap_max_snapshot_age_seconds <= 0:
             raise ValueError("frame-pair tap snapshot age must be positive")
+        if perception_fps <= 0:
+            raise ValueError("perception_fps must be positive")
         self.runtime = runtime
         self.diagnostics = diagnostics or VisionDiagnostics()
         self._observer = observer
@@ -47,6 +57,9 @@ class VisionService:
             frame_pair_tap_max_snapshot_age_seconds
         )
         self._process_timeout_seconds = process_timeout_seconds
+        self._maximum_perception_fps = perception_fps
+        self._perception_fps_provider = perception_fps_provider
+        self._minimum_process_interval_seconds = 1.0 / perception_fps
         self._runtime_lock = RLock()
         self._snapshot_lock = RLock()
         self._lifecycle_lock = RLock()
@@ -208,6 +221,7 @@ class VisionService:
     def _run_loop(self) -> None:
         try:
             while not self._stop_requested.is_set():
+                cycle_started = time.monotonic()
                 with self._runtime_lock:
                     snapshot = self.runtime.process_once(
                         timeout_seconds=self._process_timeout_seconds
@@ -222,6 +236,12 @@ class VisionService:
                     )
                     if exact_pair and self._evidence_observer is not None:
                         self._publish_evidence_pair(frame, snapshot)
+
+                elapsed = time.monotonic() - cycle_started
+                minimum_interval = self._current_minimum_process_interval_seconds()
+                remaining = minimum_interval - elapsed
+                if remaining > 0 and self._stop_requested.wait(remaining):
+                    break
         except Exception as exc:
             self.diagnostics.record_error(exc)
             LOGGER.exception("Integrated vision service failed")
@@ -235,6 +255,26 @@ class VisionService:
             finally:
                 self.diagnostics.set_running(False)
                 self._stop_requested.set()
+
+    def _current_minimum_process_interval_seconds(self) -> float:
+        provider = self._perception_fps_provider
+        if provider is None:
+            return self._minimum_process_interval_seconds
+        try:
+            requested_fps = float(provider())
+        except Exception:
+            LOGGER.exception(
+                "Adaptive perception rate provider failed; using configured maximum"
+            )
+            return self._minimum_process_interval_seconds
+        if not math.isfinite(requested_fps) or requested_fps <= 0:
+            LOGGER.warning(
+                "Adaptive perception rate %.3f is invalid; using configured maximum",
+                requested_fps,
+            )
+            return self._minimum_process_interval_seconds
+        effective_fps = min(requested_fps, self._maximum_perception_fps)
+        return 1.0 / effective_fps
 
     def _publish_evidence_pair(
         self,
@@ -364,11 +404,23 @@ def build_default_vision_service(
     *,
     head_model_path: str | Path | None = None,
     evidence_observer: VisionObserver | None = None,
+    tracking_observer: VisionObserver | None = None,
     frame_pair_tap: FramePairTap | None = None,
     camera_source: CameraSource | None = None,
+    perception_fps: float = _DEFAULT_PERCEPTION_FPS,
+    perception_fps_provider: PerceptionFpsProvider | None = None,
+    opencv_threads: int = _DEFAULT_OPENCV_THREADS,
 ) -> VisionService:
     """Compose the benchmark-selected Step 2.5 hardware/runtime stack lazily."""
+    if perception_fps <= 0:
+        raise ValueError("perception_fps must be positive")
+    if opencv_threads < 1:
+        raise ValueError("opencv_threads must be at least 1")
+
+    import cv2
+
     from jarvis.vision.camera import OpenCVCameraSource
+    from jarvis.vision.composite_observer import CompositeVisionObserver
     from jarvis.vision.detector import RFDetrNanoDetector
     from jarvis.vision.follow import (
         FollowConfig,
@@ -386,13 +438,25 @@ def build_default_vision_service(
     from jarvis.vision.targeting import TargetManager
     from jarvis.vision.tracker import OCSORTAdapter, OCSORTConfig
 
+    cv2.setNumThreads(opencv_threads)
+    lost_track_buffer = max(1, round(perception_fps * _TRACK_LOSS_SECONDS))
+    LOGGER.info(
+        "Vision runtime scheduling: perception_fps=%.1f opencv_threads=%s "
+        "tracker_lost_buffer=%s adaptive=%s",
+        perception_fps,
+        opencv_threads,
+        lost_track_buffer,
+        perception_fps_provider is not None,
+    )
+
     model_path = resolve_blazeface_model_path(head_model_path)
     runtime = VisionRuntime(
         camera=camera_source or OpenCVCameraSource(),
         detector=RFDetrNanoDetector(),
         tracker=OCSORTAdapter(
             OCSORTConfig(
-                lost_track_buffer=60,
+                frame_rate=perception_fps,
+                lost_track_buffer=lost_track_buffer,
                 minimum_consecutive_frames=2,
                 minimum_iou_threshold=-0.30,
                 direction_consistency_weight=0.20,
@@ -442,15 +506,30 @@ def build_default_vision_service(
             body_fallback_tilt_scale=0.45,
         ),
     )
-    observer = (
+    preview_observer = (
         OpenCVVisionObserver()
         if os.environ.get("JARVIS_VISION_PREVIEW", "").strip().lower()
         in {"1", "true", "yes", "on"}
         else None
     )
+    observers = [
+        candidate
+        for candidate in (preview_observer, tracking_observer)
+        if candidate is not None
+    ]
+    observer: VisionObserver | None
+    if not observers:
+        observer = None
+    elif len(observers) == 1:
+        observer = observers[0]
+    else:
+        observer = CompositeVisionObserver(observers)
+
     return VisionService(
         runtime,
         observer=observer,
         evidence_observer=evidence_observer,
         frame_pair_tap=frame_pair_tap,
+        perception_fps=perception_fps,
+        perception_fps_provider=perception_fps_provider,
     )

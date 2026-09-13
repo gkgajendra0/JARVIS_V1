@@ -118,6 +118,12 @@ class JarvisConfig:
     speaker_shadow_enabled: bool = False
     active_speaker_shadow_enabled: bool = False
     active_speaker_model_path: str | None = None
+    pocket3_native_tracking_enabled: bool = False
+    pocket3_ble_name: str = "OsmoPocket3-C36F"
+    pocket3_owner_evidence_max_age_seconds: float = 2.0
+    pocket3_subject_push_stale_seconds: float = 1.25
+    pocket3_lock_pending_timeout_seconds: float = 2.5
+    pocket3_resend_cooldown_seconds: float = 1.0
 
     def __post_init__(self) -> None:
         normalized = str(self.log_level).strip().upper()
@@ -132,6 +138,7 @@ class JarvisConfig:
             "realtime_voice",
             "gemini_realtime_model",
             "gemini_realtime_voice",
+            "pocket3_ble_name",
         ):
             value = str(getattr(self, name)).strip()
             if not value:
@@ -168,6 +175,11 @@ class JarvisConfig:
                 "JARVIS_MEMORY_SEMANTIC_RECALL_MODEL requires JARVIS_MEMORY_ENABLED"
             )
 
+        if self.pocket3_native_tracking_enabled and not self.vision_enabled:
+            raise ValueError(
+                "JARVIS_POCKET3_NATIVE_TRACKING_ENABLED requires JARVIS_VISION_ENABLED"
+            )
+
         for name in (
             "audio_input_device",
             "audio_output_device",
@@ -187,6 +199,10 @@ class JarvisConfig:
             "initial_request_timeout_seconds",
             "follow_up_timeout_seconds",
             "max_utterance_seconds",
+            "pocket3_owner_evidence_max_age_seconds",
+            "pocket3_subject_push_stale_seconds",
+            "pocket3_lock_pending_timeout_seconds",
+            "pocket3_resend_cooldown_seconds",
         )
         for name in positive_values:
             value = getattr(self, name)
@@ -308,5 +324,23 @@ class JarvisConfig:
             ),
             active_speaker_model_path=_configured_optional_text(
                 "JARVIS_LR_ASD_MODEL_PATH", machine
+            ),
+            pocket3_native_tracking_enabled=_configured_bool(
+                "JARVIS_POCKET3_NATIVE_TRACKING_ENABLED", False, machine
+            ),
+            pocket3_ble_name=_configured_required_text(
+                "JARVIS_POCKET3_BLE_NAME", "OsmoPocket3-C36F", machine
+            ),
+            pocket3_owner_evidence_max_age_seconds=_configured_float(
+                "JARVIS_POCKET3_OWNER_EVIDENCE_MAX_AGE_SECONDS", 2.0, machine
+            ),
+            pocket3_subject_push_stale_seconds=_configured_float(
+                "JARVIS_POCKET3_SUBJECT_PUSH_STALE_SECONDS", 1.25, machine
+            ),
+            pocket3_lock_pending_timeout_seconds=_configured_float(
+                "JARVIS_POCKET3_LOCK_PENDING_TIMEOUT_SECONDS", 2.5, machine
+            ),
+            pocket3_resend_cooldown_seconds=_configured_float(
+                "JARVIS_POCKET3_RESEND_COOLDOWN_SECONDS", 1.0, machine
             ),
         )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from jarvis.vision.camera import CapturedFrame
 from jarvis.vision.models import BoundingBox, FollowCommand, TargetState, Track
@@ -95,6 +96,36 @@ def test_service_requires_lock_before_arming() -> None:
         assert "visible locked target" in str(exc)
     else:
         raise AssertionError("arming without a target must fail")
+
+
+def test_service_defaults_to_ten_hz_perception() -> None:
+    runtime = _FakeRuntime([_track(7)], {7})
+    service = VisionService(runtime)  # type: ignore[arg-type]
+
+    assert service._minimum_process_interval_seconds == pytest.approx(0.1)
+    assert service._current_minimum_process_interval_seconds() == pytest.approx(0.1)
+
+
+def test_service_honors_adaptive_rate_and_caps_it_to_configured_maximum() -> None:
+    runtime = _FakeRuntime([_track(7)], {7})
+    requested_fps = [2.0]
+    service = VisionService(
+        runtime,  # type: ignore[arg-type]
+        perception_fps=10.0,
+        perception_fps_provider=lambda: requested_fps[0],
+    )
+
+    assert service._current_minimum_process_interval_seconds() == pytest.approx(0.5)
+
+    requested_fps[0] = 20.0
+    assert service._current_minimum_process_interval_seconds() == pytest.approx(0.1)
+
+
+def test_service_rejects_non_positive_perception_rate() -> None:
+    runtime = _FakeRuntime([_track(7)], {7})
+
+    with pytest.raises(ValueError, match="perception_fps"):
+        VisionService(runtime, perception_fps=0)  # type: ignore[arg-type]
 
 
 def test_frame_pair_tap_accepts_only_fresh_perception_context() -> None:
