@@ -5,7 +5,11 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 
-from jarvis.self_model.health import HealthRegistry, HealthSnapshot, roll_up_dependency_health
+from jarvis.self_model.health import (
+    HealthRegistry,
+    HealthSnapshot,
+    roll_up_dependency_health,
+)
 from jarvis.self_model.models import ComponentDescriptor, DependencyDescriptor
 
 
@@ -84,17 +88,13 @@ class SelfModelRegistry:
     def dependencies_for(self, component_id: str) -> tuple[DependencyDescriptor, ...]:
         normalized = str(component_id).strip().lower()
         return tuple(
-            item
-            for item in self.dependencies
-            if item.source_component_id == normalized
+            item for item in self.dependencies if item.source_component_id == normalized
         )
 
     def dependents_of(self, component_id: str) -> tuple[DependencyDescriptor, ...]:
         normalized = str(component_id).strip().lower()
         return tuple(
-            item
-            for item in self.dependencies
-            if item.target_component_id == normalized
+            item for item in self.dependencies if item.target_component_id == normalized
         )
 
     def affected_components(self, component_id: str) -> tuple[str, ...]:
