@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from livekit.agents import AgentFalseInterruptionEvent, ConversationItemAddedEvent
+from livekit.agents import ConversationItemAddedEvent, UserInputTranscribedEvent
 from livekit.agents.llm import ChatMessage
 
 from jarvis.conversation import ConversationSession
@@ -23,7 +23,7 @@ class FakeAgentSession:
         self.handlers[event](value)
 
 
-def test_false_interruption_retires_phantom_generation_before_real_user_turn() -> None:
+def test_false_vad_activity_cannot_poison_next_real_user_generation() -> None:
     livekit = FakeAgentSession()
     conversation = ConversationSession(session_id="false-interruption-generation")
     conversation.start()
@@ -34,15 +34,21 @@ def test_false_interruption_retires_phantom_generation_before_real_user_turn() -
         show_transcript=False,
     )
 
-    phantom_generation = conversation.begin_user_utterance()
+    phantom_activity = conversation.begin_user_activity()
 
-    assert "agent_false_interruption" in livekit.handlers
+    assert phantom_activity == 1
+    assert conversation.user_utterance_generation == 0
+    assert "agent_false_interruption" not in livekit.handlers
+
+    real_activity = conversation.begin_user_activity()
     livekit.emit(
-        "agent_false_interruption",
-        AgentFalseInterruptionEvent(resumed=False),
+        "user_input_transcribed",
+        UserInputTranscribedEvent(
+            transcript="Jarvis, set volume to 40 percent.",
+            is_final=True,
+            item_id="volume-turn",
+        ),
     )
-
-    real_generation = conversation.begin_user_utterance()
     livekit.emit(
         "conversation_item_added",
         ConversationItemAddedEvent(
@@ -54,7 +60,9 @@ def test_false_interruption_retires_phantom_generation_before_real_user_turn() -
         ),
     )
 
-    assert phantom_generation == 1
-    assert real_generation == 2
+    assert real_activity == 2
     assert len(bridge.conversation.turns) == 1
-    assert bridge.conversation.turns[0].user_utterance_generation == real_generation
+    turn = bridge.conversation.turns[0]
+    assert turn.user_utterance_generation == 1
+    assert turn.user_activity_epoch == real_activity
+    assert bridge.conversation.user_utterance_generation == 1
