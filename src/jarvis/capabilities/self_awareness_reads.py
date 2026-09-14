@@ -105,7 +105,11 @@ class SelfAwarenessReadExecutor:
             target=target,
             parameters=params,
             material_summary=summaries[request.operation],
-            attributes=(ActionAttributes() if routine_health else ActionAttributes(private_read=True)),
+            attributes=(
+                ActionAttributes()
+                if routine_health
+                else ActionAttributes(private_read=True)
+            ),
             execution_payload={},
         )
 
