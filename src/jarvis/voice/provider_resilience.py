@@ -11,6 +11,7 @@ from livekit.agents import ErrorEvent
 from livekit.agents.voice import io
 
 from jarvis.provider_resilience import (
+    ProviderFailureKind,
     ProviderResilienceState,
     classify_provider_failure,
 )
@@ -18,14 +19,25 @@ from jarvis.voice.local_status_speech import LocalStatusSpeech
 
 LOGGER = logging.getLogger(__name__)
 
+_JARVIS_TERMINAL_FAILURE_KINDS = frozenset(
+    {
+        ProviderFailureKind.QUOTA_EXHAUSTED,
+        ProviderFailureKind.AUTHENTICATION_FAILED,
+        ProviderFailureKind.PERMISSION_DENIED,
+        ProviderFailureKind.MODEL_UNAVAILABLE,
+        ProviderFailureKind.REQUEST_REJECTED,
+    }
+)
+
 
 class ProviderResilienceSessionObserver:
     """Diagnose terminal realtime failures, announce locally, then close cleanly.
 
     LiveKit documents realtime-model errors as safe to mark recoverable from an
-    ``error`` handler. JARVIS does so only long enough to play its zero-cloud status
-    message through the existing output, then explicitly closes the session. This
-    prevents the outer wake runtime from re-arming while the message is still playing.
+    ``error`` handler. JARVIS treats that flag as transport guidance rather than
+    canonical policy: billing/credential/request failures remain terminal even when
+    the SDK marks the wrapper recoverable. JARVIS keeps a session alive only long
+    enough to play its zero-cloud status message, then explicitly closes it.
     """
 
     def __init__(
@@ -80,7 +92,12 @@ class ProviderResilienceSessionObserver:
             return
 
         failure = classify_provider_failure(error, provider=self._provider)
-        if getattr(error, "recoverable", False):
+        if self._terminal_task is not None and not self._terminal_task.done():
+            return
+
+        sdk_recoverable = bool(getattr(error, "recoverable", False))
+        jarvis_terminal = failure.kind in _JARVIS_TERMINAL_FAILURE_KINDS
+        if sdk_recoverable and not jarvis_terminal:
             LOGGER.warning(
                 "Recoverable realtime provider error | provider=%s | kind=%s | "
                 "status_code=%s | retryable=%s",
@@ -90,23 +107,23 @@ class ProviderResilienceSessionObserver:
                 failure.retryable,
             )
             return
-        if self._terminal_task is not None and not self._terminal_task.done():
-            return
 
         self._state.mark_failure(failure)
         self._notify_health()
         LOGGER.error(
             "Terminal realtime provider error | provider=%s | kind=%s | "
-            "status_code=%s | retryable=%s | health=degraded",
+            "status_code=%s | retryable=%s | sdk_recoverable=%s | health=degraded",
             self._provider,
             failure.kind.value,
             failure.status_code,
             failure.retryable,
+            sdk_recoverable,
         )
 
-        # LiveKit's documented error contract allows realtime-model failures to be
-        # marked recoverable. We use that only to keep the session alive long enough
-        # for local deterministic status speech; we explicitly close immediately after.
+        # LiveKit's error contract allows realtime-model failures to be marked
+        # recoverable. We use that only as a short transport bridge while local
+        # deterministic status speech plays; JARVIS policy still owns whether the
+        # failure is terminal and closes the session immediately after the message.
         error.recoverable = True
         self._terminal_task = asyncio.create_task(
             self._announce_and_close(failure.spoken_message),
