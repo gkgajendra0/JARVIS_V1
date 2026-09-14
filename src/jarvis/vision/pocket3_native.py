@@ -585,6 +585,12 @@ class Pocket3NativeTrackerClient:
 
         async with BleakClient(device, timeout=20) as client:
             await client.start_notify(_FFF4, notification_handler)
+            await self._wait_for_ble_event(
+                ready_event,
+                timeout=self.config.ble_ready_timeout_seconds,
+                stage="protocol readiness",
+            )
+            LOGGER.info("Pocket 3 BLE protocol ready; waking pairing session")
             await client.write_gatt_char(
                 _FFF5,
                 _build_duml(
@@ -597,12 +603,7 @@ class Pocket3NativeTrackerClient:
                 ),
                 response=False,
             )
-            await self._wait_for_ble_event(
-                ready_event,
-                timeout=self.config.ble_ready_timeout_seconds,
-                stage="protocol readiness",
-            )
-            LOGGER.info("Pocket 3 BLE protocol ready; starting pairing")
+            await asyncio.sleep(0.4)
             await client.write_gatt_char(_FFF4, b"\x01\x00", response=True)
             await asyncio.sleep(0.2)
             await client.write_gatt_char(
