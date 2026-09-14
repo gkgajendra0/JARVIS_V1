@@ -15,6 +15,12 @@ from pathlib import Path
 
 from jarvis.capabilities.runtime import build_default_capability_runtime
 from jarvis.config import JarvisConfig
+from jarvis.health_adapters import (
+    CapabilityExecutionHealthObserver,
+    record_capability_catalog_health,
+    record_foundation_health,
+    require_startup_preflight_with_health,
+)
 from jarvis.identity.active_speaker import (
     ActiveSpeakerVisualBuffer,
     LrAsdActiveSpeakerProvider,
@@ -42,6 +48,7 @@ from jarvis.memory.release_guard import build_memory_release_guard
 from jarvis.memory.runtime import build_default_memory_runtime
 from jarvis.preflight import StartupPreflightError, require_startup_preflight
 from jarvis.provider_resilience import ProviderResilienceState
+from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.vision.native_owner_tracking import (
     build_default_native_owner_tracking_observer,
 )
@@ -66,6 +73,8 @@ _POCKET3_STARTUP_LOCK_WAIT_SECONDS = 30.0
 
 def build_production_voice_runtime(
     config: JarvisConfig,
+    *,
+    self_awareness: SelfAwarenessRuntime | None = None,
 ) -> CanonicalActiveSpeakerRuntimeController:
     """Build the production single-microphone-owner voice/vision runtime."""
     if config.wake_model_path is None:
@@ -248,11 +257,19 @@ def build_production_voice_runtime(
         research_service.provider_name,
     )
 
+    result_observer = (
+        CapabilityExecutionHealthObserver(self_awareness)
+        if self_awareness is not None
+        else None
+    )
     capability_runtime = build_default_capability_runtime(
         ai_provider=config.ai_provider,
         hands_planner_model=config.hands_planner_model,
+        result_observer=result_observer,
     )
     capability_catalog = capability_runtime.refresh_catalog()
+    if self_awareness is not None:
+        record_capability_catalog_health(self_awareness, capability_catalog)
     structured_hands = capability_catalog.by_key("windows:desktop.control")
     visual_hands = capability_catalog.by_key("visual:desktop.control")
     browser_hands = capability_catalog.by_key("browser:playwright")
@@ -338,9 +355,32 @@ def build_production_voice_runtime(
 async def _run_from_configuration() -> None:
     config = JarvisConfig.from_environment()
     configure_logging(config.log_level)
-    require_startup_preflight(config)
-    runtime = build_production_voice_runtime(config)
-    await runtime.run()
+
+    self_awareness: SelfAwarenessRuntime | None = None
+    try:
+        self_awareness = SelfAwarenessRuntime()
+    except Exception as exc:  # noqa: BLE001 - diagnostics must not block startup
+        LOGGER.warning(
+            "Self-awareness evidence is unavailable; continuing without it: %s",
+            type(exc).__name__,
+        )
+
+    if self_awareness is None:
+        require_startup_preflight(config)
+        runtime = build_production_voice_runtime(config)
+        await runtime.run()
+        return
+
+    try:
+        record_foundation_health(self_awareness)
+        require_startup_preflight_with_health(config, self_awareness)
+        runtime = build_production_voice_runtime(
+            config,
+            self_awareness=self_awareness,
+        )
+        await runtime.run()
+    finally:
+        self_awareness.close()
 
 
 def main() -> int:
