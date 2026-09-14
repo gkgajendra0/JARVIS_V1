@@ -134,7 +134,7 @@ def test_interim_empty_transcript_does_not_retire_pending_voice_generation() -> 
     assert bridge.conversation.turns[0].user_utterance_generation == generation
 
 
-def test_nonempty_final_transcript_preserves_existing_fifo_assignment() -> None:
+def test_nonempty_final_transcript_commits_before_later_conversation_item() -> None:
     livekit, bridge = active_bridge()
     generation = bridge.conversation.begin_user_utterance()
 
@@ -144,12 +144,45 @@ def test_nonempty_final_transcript_preserves_existing_fifo_assignment() -> None:
             transcript="Open calculator", is_final=True, item_id="real-one"
         ),
     )
+
+    assert len(bridge.conversation.turns) == 1
+    assert bridge.conversation.turns[0].text == "Open calculator"
+    assert bridge.conversation.turns[0].external_item_id == "real-one"
+    assert bridge.conversation.turns[0].user_utterance_generation == generation
+
     livekit.emit(
         "conversation_item_added",
         ConversationItemAddedEvent(item=message("real-one", "user", "Open calculator")),
     )
 
+    assert len(bridge.conversation.turns) == 1
+    assert bridge.live_context.recent_turns == bridge.conversation.turns
+
+
+def test_itemless_final_transcript_deduplicates_later_conversation_item() -> None:
+    livekit, bridge = active_bridge()
+    generation = bridge.conversation.begin_user_utterance()
+
+    livekit.emit(
+        "user_input_transcribed",
+        UserInputTranscribedEvent(
+            transcript="Set volume to 40 percent",
+            is_final=True,
+            item_id=None,
+        ),
+    )
+
+    assert len(bridge.conversation.turns) == 1
     assert bridge.conversation.turns[0].user_utterance_generation == generation
+
+    livekit.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=message("later-item", "user", "Set volume to 40 percent")
+        ),
+    )
+
+    assert len(bridge.conversation.turns) == 1
 
 
 def test_accepted_turn_observer_receives_exact_canonical_turn() -> None:
