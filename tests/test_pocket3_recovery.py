@@ -185,6 +185,39 @@ def test_a6_waiter_exists_before_fast_reply_can_arrive(
     assert client._a6_events == {}
 
 
+def test_clear_target_waits_for_fast_a6_reply(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _client()
+    with client._lock:
+        client._connected = True
+
+    def immediate_reply_send(
+        self: Pocket3NativeTrackerClient,
+        *,
+        receiver: int,
+        flags: int,
+        cmd_set: int,
+        cmd_id: int,
+        payload: bytes,
+    ) -> int:
+        del receiver, flags, cmd_set, cmd_id, payload
+        seq = self._command_seq
+        self._command_seq = (self._command_seq + 1) & 0xFFFF
+        pending = self._a6_events.get(seq)
+        assert pending is not None
+        event, holder = pending
+        holder.append(b"\x00")
+        event.set()
+        return seq
+
+    monkeypatch.setattr(
+        Pocket3NativeTrackerClient, "_send_command", immediate_reply_send
+    )
+    client.clear_target()
+    assert client._a6_events == {}
+
+
 def test_close_invalidates_stale_native_tracking_and_wakes_a6_waiters() -> None:
     client = _client()
     waiter = threading.Event()

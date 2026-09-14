@@ -142,6 +142,101 @@ def runtime_with_session(
     return runtime, session, conversation, audio, scripted_speech
 
 
+@pytest.mark.asyncio
+async def test_startup_greeting_waits_for_tracking_readiness() -> None:
+    import threading
+
+    class Detector:
+        async def wait_for_detection(self):
+            await asyncio.Event().wait()
+
+    class StartupAudio(FakeAudio):
+        def __init__(self) -> None:
+            super().__init__()
+            self.detector = Detector()
+            self.started = asyncio.Event()
+
+        def set_overflow_handler(self, handler) -> None:
+            del handler
+
+        async def start(self) -> None:
+            self.started.set()
+
+        async def resume_wake(self, *, cooldown_seconds: float) -> None:
+            del cooldown_seconds
+
+        async def aclose(self) -> None:
+            return None
+
+    audio = StartupAudio()
+    scripted_speech = FakeScriptedSpeech()
+    readiness = threading.Event()
+    calls: list[float] = []
+
+    def wait_for_ready(timeout_seconds: float) -> bool:
+        calls.append(timeout_seconds)
+        return readiness.wait(timeout_seconds)
+
+    runtime = VoiceRuntimeController(
+        JarvisConfig(),
+        audio,  # type: ignore[arg-type]
+        scripted_speech=scripted_speech,
+        startup_readiness_waiter=wait_for_ready,
+        startup_readiness_timeout_seconds=1.0,
+    )
+    task = asyncio.create_task(runtime.run())
+    await asyncio.wait_for(audio.started.wait(), timeout=1)
+    await asyncio.sleep(0.05)
+    assert scripted_speech.started.is_set() is False
+
+    readiness.set()
+    await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
+    assert calls == [1.0]
+
+    scripted_speech.release.set()
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_startup_readiness_timeout_skips_greeting() -> None:
+    class Detector:
+        async def wait_for_detection(self):
+            await asyncio.Event().wait()
+
+    class StartupAudio(FakeAudio):
+        def __init__(self) -> None:
+            super().__init__()
+            self.detector = Detector()
+
+        def set_overflow_handler(self, handler) -> None:
+            del handler
+
+        async def start(self) -> None:
+            return None
+
+        async def resume_wake(self, *, cooldown_seconds: float) -> None:
+            del cooldown_seconds
+
+        async def aclose(self) -> None:
+            return None
+
+    audio = StartupAudio()
+    scripted_speech = FakeScriptedSpeech()
+    runtime = VoiceRuntimeController(
+        JarvisConfig(),
+        audio,  # type: ignore[arg-type]
+        scripted_speech=scripted_speech,
+        startup_readiness_waiter=lambda _timeout: False,
+        startup_readiness_timeout_seconds=0.01,
+    )
+    task = asyncio.create_task(runtime.run())
+    await asyncio.sleep(0.05)
+    assert scripted_speech.started.is_set() is False
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
 @pytest.mark.parametrize(
     "text",
     [

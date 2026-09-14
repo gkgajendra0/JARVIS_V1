@@ -107,6 +107,12 @@ class NativeOwnerTrackingObserver:
         self._recovery_thread: threading.Thread | None = None
         self._recovery_succeeded: bool | None = None
         self._closing = threading.Event()
+        self._startup_lock_event = threading.Event()
+
+    def wait_for_startup_lock(self, timeout_seconds: float) -> bool:
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        return self._startup_lock_event.wait(timeout_seconds)
 
     def perception_fps_hint(self) -> float:
         """Return the useful JARVIS perception rate for the current trust state.
@@ -186,6 +192,8 @@ class NativeOwnerTrackingObserver:
             owner_observed_at=owner_observed_at,
             native=native_status,
         )
+        if decision.state is ReacquisitionState.LOCKED:
+            self._startup_lock_event.set()
         if decision.state is not self._last_logged_state:
             LOGGER.info(
                 "Pocket 3 owner-tracking state: %s (%s)",
@@ -249,6 +257,7 @@ class NativeOwnerTrackingObserver:
         self.controller.reset()
         self._owner_observed_in_latest_snapshot = False
         self._target_attempts_without_native_lock = 0
+        self._startup_lock_event.clear()
 
     def _reconnect_due(self, now: float) -> bool:
         attempted = self._last_connect_attempt_at

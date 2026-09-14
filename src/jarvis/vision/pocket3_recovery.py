@@ -99,33 +99,12 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
         self.close()
         self.start()
 
-    def set_target(self, bounds: BoundingBox) -> bool:
-        """Send A6 with its ACK waiter installed before the UDP packet can be received."""
-
+    def _send_a6_with_ack(self, payload: bytes, *, timeout_message: str) -> bool:
         if not self.connected:
             raise RuntimeError("Pocket 3 native tracking datalink is not connected")
-        with self._lock:
-            tracking_id = self._tracking_id
-            self._tracking_id = (self._tracking_id + 1) & 0xFFFF
-            if self._tracking_id == 0:
-                self._tracking_id = 1
-        payload = (
-            b"\x01\x00\x00"
-            + struct.pack("<H", tracking_id)
-            + struct.pack(
-                "<ffff",
-                bounds.center_x,
-                bounds.center_y,
-                bounds.width,
-                bounds.height,
-            )
-        )
         event = threading.Event()
         reply_holder: list[bytes] = []
 
-        # The base transport serializes command sequence allocation with _io_lock.
-        # Hold that same re-entrant lock while reserving the next sequence so the A6
-        # waiter exists before udp.send() can produce a fast camera reply.
         with self._io_lock:
             with self._lock:
                 expected_seq = self._command_seq
@@ -151,11 +130,46 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
         if not event.wait(self.config.command_timeout_seconds):
             with self._lock:
                 self._a6_events.pop(expected_seq, None)
-            LOGGER.warning("Pocket 3 A6 direct ACK timed out; awaiting A5/0x89 state")
+            LOGGER.warning(timeout_message)
             return False
         with self._lock:
             self._a6_events.pop(expected_seq, None)
         return bool(reply_holder and reply_holder[0][:1] == b"\x00")
+
+    def set_target(self, bounds: BoundingBox) -> bool:
+        with self._lock:
+            tracking_id = self._tracking_id
+            self._tracking_id = (self._tracking_id + 1) & 0xFFFF
+            if self._tracking_id == 0:
+                self._tracking_id = 1
+        payload = (
+            b"\x01\x00\x00"
+            + struct.pack("<H", tracking_id)
+            + struct.pack(
+                "<ffff",
+                bounds.center_x,
+                bounds.center_y,
+                bounds.width,
+                bounds.height,
+            )
+        )
+        return self._send_a6_with_ack(
+            payload,
+            timeout_message=(
+                "Pocket 3 A6 direct ACK timed out; awaiting A5/0x89 state"
+            ),
+        )
+
+    def clear_target(self) -> None:
+        if not self.connected:
+            return
+        direct_ack = self._send_a6_with_ack(
+            bytes(21),
+            timeout_message=(
+                "Pocket 3 A6 clear-target ACK timed out; continuing with recenter"
+            ),
+        )
+        LOGGER.info("Pocket 3 A6 clear target completed: direct_ack=%s", direct_ack)
 
     def _try_saved_wifi_fast_path(self) -> bool:
         ssid = self.config.ble_name

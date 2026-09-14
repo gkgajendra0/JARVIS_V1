@@ -64,6 +64,7 @@ SessionFactory = Callable[
     [JarvisConfig], tuple[AgentSession, LiveKitConversationBridge]
 ]
 StartupGreetingFactory = Callable[[], str]
+StartupReadinessWaiter = Callable[[float], bool]
 
 _UPDATE_APPROVAL_PROMPT = (
     "A JARVIS software update is available. Shall I install it and restart now? "
@@ -180,6 +181,8 @@ class VoiceRuntimeController:
         speech_region_detector: SpeechRegionDetector | None = None,
         scripted_speech: ScriptedSpeech | None = None,
         startup_greeting_factory: StartupGreetingFactory = select_startup_greeting,
+        startup_readiness_waiter: StartupReadinessWaiter | None = None,
+        startup_readiness_timeout_seconds: float = 30.0,
     ) -> None:
         self.config = config
         self.audio = audio
@@ -205,6 +208,10 @@ class VoiceRuntimeController:
         self._scripted_speech = scripted_speech
         self._owns_scripted_speech = False
         self._startup_greeting_factory = startup_greeting_factory
+        if startup_readiness_timeout_seconds <= 0:
+            raise ValueError("startup_readiness_timeout_seconds must be positive")
+        self._startup_readiness_waiter = startup_readiness_waiter
+        self._startup_readiness_timeout_seconds = startup_readiness_timeout_seconds
 
     @property
     def state(self) -> VoiceRuntimeState:
@@ -235,6 +242,25 @@ class VoiceRuntimeController:
             self._scripted_speech = build_scripted_speech(self.config)
             self._owns_scripted_speech = True
         return self._scripted_speech
+
+    async def _wait_for_startup_readiness(self) -> bool:
+        if self._startup_readiness_waiter is None:
+            return True
+        timeout = self._startup_readiness_timeout_seconds
+        LOGGER.info(
+            "JARVIS startup waiting up to %.1fs for trusted camera tracking lock",
+            timeout,
+        )
+        ready = await asyncio.to_thread(self._startup_readiness_waiter, timeout)
+        if ready:
+            LOGGER.info("JARVIS startup camera tracking lock is ready")
+            return True
+        LOGGER.warning(
+            "JARVIS startup camera tracking lock was not confirmed within %.1fs; "
+            "entering wake mode silently",
+            timeout,
+        )
+        return False
 
     async def _speak_startup_greeting(self) -> None:
         if not self.config.startup_greeting_enabled:
@@ -529,7 +555,13 @@ class VoiceRuntimeController:
                 )
                 LOGGER.info("JARVIS development voice-control channel is active")
 
-            await self._speak_startup_greeting()
+            startup_ready = await self._wait_for_startup_readiness()
+            if startup_ready:
+                await self._speak_startup_greeting()
+            else:
+                LOGGER.info(
+                    "JARVIS startup greeting skipped until a trusted camera lock exists"
+                )
             self._state = VoiceRuntimeState.IDLE
             LOGGER.info("JARVIS is idle; local wake detection is active")
             while not self._shutdown.is_set():

@@ -163,6 +163,41 @@ def test_observer_targets_confirmed_owner_and_reacquires_after_native_loss() -> 
     assert client.closed is True
 
 
+def test_observer_recenters_after_confirmed_owner_loss() -> None:
+    owner = OwnerContextState()
+    client = FakeNativeClient()
+    observer = NativeOwnerTrackingObserver(owner_context=owner, client=client)  # type: ignore[arg-type]
+    bounds = BoundingBox(0.20, 0.15, 0.55, 0.85)
+
+    owner.publish(live_owner(track_id=7, observed_at=10.0))
+    observer.observe(frame(1, 10.0), snapshot(1, 10.0, track(7, bounds, 10.0)))
+    client.native_status = NativeTrackingStatus(
+        connected=True,
+        active=True,
+        last_poll_at=10.4,
+        last_subject_push_at=10.45,
+    )
+    owner.publish(live_owner(track_id=7, observed_at=10.5))
+    observer.observe(frame(2, 10.5), snapshot(2, 10.5, track(7, bounds, 10.5)))
+    assert observer.wait_for_startup_lock(0.001) is True
+    assert observer.controller.state is ReacquisitionState.LOCKED
+
+    owner.invalidate("owner_left_frame")
+    client.native_status = NativeTrackingStatus(
+        connected=True,
+        active=False,
+        last_poll_at=13.0,
+        last_subject_push_at=11.0,
+    )
+    observer.observe(frame(3, 13.0), snapshot(3, 13.0))
+    assert observer.controller.state is ReacquisitionState.REACQUIRING
+    assert client.recenters == 0
+
+    observer.observe(frame(4, 14.1), snapshot(4, 14.1))
+    assert client.clears == 1
+    assert client.recenters == 1
+
+
 def test_observer_never_targets_unconfirmed_visible_person() -> None:
     owner = OwnerContextState()
     client = FakeNativeClient()

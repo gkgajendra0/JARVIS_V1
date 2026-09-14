@@ -61,6 +61,7 @@ from jarvis.voice.wakeword import LiveKitWakeDetector, load_livekit_predictor
 
 LOGGER = logging.getLogger(__name__)
 _NATIVE_TRACKING_EVIDENCE_MAX_GAP_SECONDS = 2.0
+_POCKET3_STARTUP_LOCK_WAIT_SECONDS = 30.0
 
 
 def build_production_voice_runtime(
@@ -325,6 +326,12 @@ def build_production_voice_runtime(
         research_service=research_service,
         capability_runtime=capability_runtime,
         session_factory=production_session_factory,
+        startup_readiness_waiter=(
+            tracking_observer.wait_for_startup_lock
+            if tracking_observer is not None
+            else None
+        ),
+        startup_readiness_timeout_seconds=_POCKET3_STARTUP_LOCK_WAIT_SECONDS,
     )
 
 
