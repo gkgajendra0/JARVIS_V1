@@ -104,7 +104,10 @@ def test_native_tracking_delegate_failure_is_reported_then_preserved() -> None:
         wrapper.observe(object(), object())  # type: ignore[arg-type]
 
     assert awareness.observations[-1]["state"] is HealthState.FAILED
-    assert awareness.observations[-1]["reason_code"] == "native_tracking_observer_failed"
+    assert (
+        awareness.observations[-1]["reason_code"]
+        == "native_tracking_observer_failed"
+    )
 
 
 def test_composed_frame_taps_isolate_peer_failures() -> None:
