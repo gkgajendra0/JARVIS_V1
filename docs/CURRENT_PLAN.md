@@ -2,17 +2,50 @@
 
 ## Active Work
 
-**Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027, CAP-028) — REQUIREMENTS / RESEARCH.**
+**Owner-approved Self-Awareness Foundation interlude — IMPLEMENTATION / VALIDATION on `feature/self-awareness-foundation`.**
 
-The accepted production baseline is protected `main` at `fcb87500b0cf7e431f9f76077aa1fad8234db53f` after the owner-accepted PR #40 Pocket 3 BLE startup-readiness merge.
+The protected production baseline is `main` at `c664d38667b8c2b8f6d709bd3ded29f9afd13bfd`, after the accepted production-state documentation reconciliation merge.
 
-Step 8 implementation is **not yet authorized**. The next formal work remains requirements recovery, fresh research, technology selection, architecture proposal, owner approval, then implementation.
+This interlude implements prerequisites reused by later CAP-037/CAP-038/CAP-046/CAP-047 work: a JARVIS-owned component/dependency Self Model, deterministic evidence-backed health, structured redacted operational evidence, backend-neutral traces/metrics, and separate engineering incident memory. It does **not** authorize autonomous repair/self-modification and does not mark Steps 13, 18, 19 or 20 complete.
+
+**Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027, CAP-028) remains the next formal roadmap slice and remains REQUIREMENTS / RESEARCH.** Step 8 implementation is not authorized by this interlude.
 
 ## Current Stage
 
-**STEPS 0–3 DONE — STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 BOUNDED COMPLETE — STEP 7 DONE — POST-STEP-7 HANDS / POCKET / PERFORMANCE / STABILITY INTERLUDE ACCEPTED — STEP 8 REQUIREMENTS / RESEARCH.**
+**STEPS 0–3 DONE — STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 BOUNDED COMPLETE — STEP 7 DONE — POST-STEP-7 HANDS / POCKET / PERFORMANCE / STABILITY INTERLUDE ACCEPTED — SELF-AWARENESS FOUNDATION INTERLUDE ACTIVE — STEP 8 REQUIREMENTS / RESEARCH.**
 
 `PRODUCT.md` owns permanent product intent/status, `ROADMAP.md` owns sequence, `CURRENT_ARCHITECTURE.md` owns accepted running architecture, and `docs/research/` owns detailed evidence.
+
+---
+
+## Active Self-Awareness Foundation interlude
+
+Owner approval was given to implement the researched foundation through the normal feature-branch -> tests/CI -> real owner-machine validation -> documentation reconciliation -> PR -> explicit protected-main merge flow.
+
+Current intended slice:
+
+1. static component/dependency Self Model contracts;
+2. deterministic health observations with freshness/TTL and explicit dependency criticality;
+3. correlation context and privacy redaction;
+4. structured local operational logging with bounded rotation and readable console compatibility;
+5. OpenTelemetry traces/metrics behind a replaceable adapter, with OTLP network export disabled by default;
+6. separate SQLite incident/engineering-memory lifecycle;
+7. automated contract tests and documentation/ADR evidence.
+
+Explicit non-scope for this interlude:
+
+- autonomous diagnosis presented as fact;
+- coding-agent execution or source mutation;
+- automatic repair or self-improvement;
+- automatic protected-main merge;
+- silent authority expansion;
+- raw continuous audio/video or unrestricted prompt/provider-payload logging;
+- automatic observability-backend deployment before resource/privacy acceptance.
+
+Architecture decision: `docs/decisions/ADR-018_SELF_AWARENESS_EVIDENCE_AND_HEALTH_FOUNDATION.md`.
+Research/evidence: `docs/research/SELF_AWARENESS_FOUNDATION_RESEARCH.md`.
+
+Production acceptance still requires green repository checks plus real owner-machine verification for privacy, runtime overhead and non-regression. Until that acceptance/merge, `CURRENT_ARCHITECTURE.md` continues to describe the existing production runtime rather than this branch.
 
 ---
 
@@ -83,13 +116,13 @@ Full consolidated evidence and disposition history: `docs/research/POST_STEP_7_I
 | Workstation auto-lock experiment | **REJECTED / NOT PRODUCTION** | Explicitly excluded from accepted Pocket/performance recovery; OWNER absence affects tracking/recenter, not Windows locking. |
 | PR #37 | **SUPERSEDED AS STANDALONE** | Its canonical generation fix is retained in PR #38. |
 | Steps 9/10/12 | **PLANNED WITH PARTIAL FOUNDATIONS** | Hands pulled forward bounded foundations, not the complete future product slices. |
-| Steps 13–20 | **PLANNED** | Awareness, proactivity, extensibility, self-repair and self-improvement remain future governed work. |
+| Steps 13–20 | **PLANNED** | Awareness, proactivity, extensibility, self-repair and self-improvement remain future governed work; this active foundation does not change their formal status. |
 
 ---
 
-## Step 8 — active requirements / research
+## Step 8 — queued formal requirements / research
 
-Step 8 must start research-first from the reconciled production baseline:
+Step 8 must start research-first from the reconciled production baseline after the owner decides the active interlude is complete or deliberately paused:
 
 1. recover CAP-027/CAP-028 requirements and privacy/authority constraints;
 2. inspect conversation, memory, authority, capability-runtime, Hands and lifecycle boundaries;
@@ -102,4 +135,6 @@ Step 8 must start research-first from the reconciled production baseline:
 
 ## Immediate Next Action
 
-**STEP 8 REQUIREMENTS RECOVERY -> FRESH RESEARCH -> TECHNOLOGY DECISION -> ARCHITECTURE PROPOSAL -> OWNER APPROVAL BEFORE IMPLEMENTATION.**
+**SELF-AWARENESS FOUNDATION: COMPLETE IMPLEMENTATION -> REPOSITORY CI -> OWNER-MACHINE PRIVACY/PERFORMANCE/NON-REGRESSION ACCEPTANCE -> DOCUMENTATION RECONCILIATION -> EXPLICIT PROTECTED-MAIN MERGE APPROVAL.**
+
+Step 8 remains the next formal roadmap slice after this interlude.
