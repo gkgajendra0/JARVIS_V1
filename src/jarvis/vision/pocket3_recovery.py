@@ -32,7 +32,7 @@ class Pocket3RecoveryConfig:
     """Bounded recovery policy for Pocket 3 startup and reconnection."""
 
     saved_wifi_wait_seconds: float = 6.0
-    ble_attempts: int = 5
+    ble_attempts: int = 2
     ble_retry_pause_seconds: float = 1.0
     ble_provision_timeout_seconds: float = 120.0
     wifi_join_attempts: int = 6
@@ -278,6 +278,10 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
                 await super()._ble_session()
                 return
             except BaseException as exc:
+                # A close/shutdown must unwind the current BLE wait, not schedule
+                # another full provisioning attempt while JARVIS is stopping.
+                if self._stop.is_set():
+                    raise
                 if self._credentials_ready.is_set():
                     raise
                 last_error = exc
