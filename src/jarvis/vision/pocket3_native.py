@@ -66,6 +66,7 @@ _APP_PRESENCE = bytes(
 class Pocket3NativeConfig:
     ble_name: str = "OsmoPocket3-C36F"
     connect_timeout_seconds: float = 25.0
+    ble_ready_timeout_seconds: float = 6.0
     wifi_ap_settle_seconds: float = 2.0
     wifi_join_timeout_seconds: float = 15.0
     command_timeout_seconds: float = 1.5
@@ -75,6 +76,7 @@ class Pocket3NativeConfig:
             raise ValueError("Pocket 3 BLE name must not be empty")
         for name in (
             "connect_timeout_seconds",
+            "ble_ready_timeout_seconds",
             "wifi_ap_settle_seconds",
             "wifi_join_timeout_seconds",
             "command_timeout_seconds",
@@ -87,6 +89,10 @@ class Pocket3NativeConfig:
 class NativeSubjectBox:
     bounds: BoundingBox
     observed_at: float
+
+
+class _Pocket3BleStopped(RuntimeError):
+    """Internal signal used to unwind a BLE wait during JARVIS shutdown."""
 
 
 def _crc8(data: bytes | bytearray) -> int:
@@ -491,9 +497,38 @@ class Pocket3NativeTrackerClient:
         self._ble_thread = None
         self._password = None
 
+    async def _wait_for_ble_event(
+        self,
+        event: asyncio.Event,
+        *,
+        timeout: float,
+        stage: str,
+    ) -> None:
+        """Wait for camera protocol evidence while remaining responsive to shutdown."""
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while True:
+            if self._stop.is_set():
+                raise _Pocket3BleStopped(
+                    f"Pocket 3 BLE {stage} stopped during JARVIS shutdown"
+                )
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise TimeoutError(f"Pocket 3 BLE {stage} timed out")
+            try:
+                await asyncio.wait_for(event.wait(), timeout=min(0.20, remaining))
+                return
+            except TimeoutError:
+                continue
+
     def _ble_thread_main(self) -> None:
         try:
             asyncio.run(self._ble_session())
+        except _Pocket3BleStopped:
+            # Expected lifecycle cancellation. Wake any synchronous provisioning waiter
+            # without printing a frightening traceback during normal shutdown.
+            self._credentials_ready.set()
         except BaseException as exc:
             self._ble_error = exc
             LOGGER.exception("Pocket 3 BLE provisioning failed")
@@ -507,12 +542,19 @@ class Pocket3NativeTrackerClient:
                 "Pocket 3 native tracking needs the 'bleak' dependency"
             ) from exc
 
+        ready_event = asyncio.Event()
         pair_event = asyncio.Event()
         ssid_event = asyncio.Event()
         password_event = asyncio.Event()
 
         def notification_handler(_sender: object, incoming: bytearray) -> None:
-            for frame in _scan_duml(bytes(incoming)):
+            frames = _scan_duml(bytes(incoming))
+            if frames:
+                # Subscribing only enables notifications. A valid inbound DUML frame is
+                # the protocol-level evidence that the camera is actually ready for the
+                # pairing sequence; do not race pairing against BLE service startup.
+                ready_event.set()
+            for frame in frames:
                 cmd_set = int(frame["cmd_set"])
                 cmd_id = int(frame["cmd_id"])
                 payload = bytes(frame["payload"])
@@ -555,7 +597,12 @@ class Pocket3NativeTrackerClient:
                 ),
                 response=False,
             )
-            await asyncio.sleep(0.4)
+            await self._wait_for_ble_event(
+                ready_event,
+                timeout=self.config.ble_ready_timeout_seconds,
+                stage="protocol readiness",
+            )
+            LOGGER.info("Pocket 3 BLE protocol ready; starting pairing")
             await client.write_gatt_char(_FFF4, b"\x01\x00", response=True)
             await asyncio.sleep(0.2)
             await client.write_gatt_char(
@@ -570,7 +617,11 @@ class Pocket3NativeTrackerClient:
                 ),
                 response=False,
             )
-            await asyncio.wait_for(pair_event.wait(), timeout=12.0)
+            await self._wait_for_ble_event(
+                pair_event,
+                timeout=12.0,
+                stage="pairing confirmation",
+            )
             await client.write_gatt_char(
                 _FFF5,
                 _build_duml(
@@ -582,7 +633,11 @@ class Pocket3NativeTrackerClient:
                 ),
                 response=False,
             )
-            await asyncio.wait_for(ssid_event.wait(), timeout=5.0)
+            await self._wait_for_ble_event(
+                ssid_event,
+                timeout=5.0,
+                stage="Wi-Fi SSID response",
+            )
             await client.write_gatt_char(
                 _FFF5,
                 _build_duml(
@@ -594,7 +649,11 @@ class Pocket3NativeTrackerClient:
                 ),
                 response=False,
             )
-            await asyncio.wait_for(password_event.wait(), timeout=5.0)
+            await self._wait_for_ble_event(
+                password_event,
+                timeout=5.0,
+                stage="Wi-Fi password response",
+            )
             await client.write_gatt_char(
                 _FFF5,
                 _build_duml(
