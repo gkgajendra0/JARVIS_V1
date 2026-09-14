@@ -293,9 +293,11 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
                 if attempt >= self.recovery_config.wifi_join_attempts:
                     break
                 LOGGER.warning(
-                    "Pocket 3 Wi-Fi association attempt %d/%d failed; retrying",
+                    "Pocket 3 Wi-Fi association attempt %d/%d failed (%s: %s); retrying",
                     attempt,
                     self.recovery_config.wifi_join_attempts,
+                    type(exc).__name__,
+                    exc,
                 )
                 time.sleep(self.recovery_config.wifi_retry_pause_seconds)
 

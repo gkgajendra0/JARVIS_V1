@@ -26,6 +26,21 @@ def test_recovery_config_rejects_non_positive_attempt_counts() -> None:
         Pocket3RecoveryConfig(wifi_join_attempts=0)
 
 
+def test_native_config_rejects_non_positive_wifi_ap_settle_seconds() -> None:
+    with pytest.raises(ValueError, match="wifi_ap_settle_seconds"):
+        Pocket3NativeConfig(wifi_ap_settle_seconds=0.0)
+
+
+def test_native_ble_session_settles_ap_before_releasing_windows_join() -> None:
+    import inspect
+
+    source = inspect.getsource(Pocket3NativeTrackerClient._ble_session)
+    settle = source.index("await asyncio.sleep(self.config.wifi_ap_settle_seconds)")
+    credentials_ready = source.index("self._credentials_ready.set()")
+    keepalive = source.index("keepalive = _build_duml")
+    assert settle < credentials_ready < keepalive
+
+
 def test_saved_windows_profile_can_be_reused_without_ble(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
