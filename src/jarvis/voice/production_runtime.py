@@ -18,6 +18,7 @@ from jarvis.capabilities.self_awareness_reads import SelfAwarenessReadExecutor
 from jarvis.config import JarvisConfig
 from jarvis.health_adapters import (
     CapabilityExecutionHealthObserver,
+    ProviderResilienceHealthObserver,
     record_capability_catalog_health,
     record_foundation_health,
     require_startup_preflight_with_health,
@@ -294,6 +295,11 @@ def build_production_voice_runtime(
     )
 
     provider_resilience_state = ProviderResilienceState()
+    provider_health_observer = (
+        ProviderResilienceHealthObserver(self_awareness)
+        if self_awareness is not None
+        else None
+    )
     local_status_speech = build_local_status_speech()
     LOGGER.info(
         "Step-5 minimal provider resilience is configured: provider=%s "
@@ -314,6 +320,7 @@ def build_production_voice_runtime(
             state=provider_resilience_state,
             status_speech=local_status_speech,
             output_getter=lambda: audio.output,
+            health_observer=provider_health_observer,
         )
         silent_audio_recovery = SilentRealtimeAudioRecovery(
             session_config,
