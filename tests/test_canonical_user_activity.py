@@ -77,7 +77,9 @@ def test_vad_activity_never_advances_canonical_user_generation() -> None:
     assert conversation.user_utterance_generation == 1
 
 
-def test_final_user_transcript_is_canonical_before_duplicate_conversation_item() -> None:
+def test_final_user_transcript_is_canonical_before_duplicate_conversation_item() -> (
+    None
+):
     livekit = FakeAgentSession()
     conversation = ConversationSession(session_id="final-transcript-canonical")
     conversation.start()
