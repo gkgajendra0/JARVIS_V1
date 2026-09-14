@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
+from jarvis.capabilities.models import (
+    CapabilityCatalog,
+    CapabilityResult,
+    CapabilityStatus,
+)
 from jarvis.config import JarvisConfig
 from jarvis.observability.redaction import redact_data
 from jarvis.preflight import StartupPreflightError, print_preflight, run_startup_preflight
@@ -19,6 +23,40 @@ def _preflight_component(label: str) -> str:
     if any(item in normalized for item in ("lr-asd", "active-speaker")):
         return "vision.base"
     return "runtime.voice"
+
+
+def record_foundation_health(awareness: SelfAwarenessRuntime) -> None:
+    """Publish the state of the new evidence and incident foundation itself."""
+
+    awareness.observe(
+        component_id="observability",
+        source="startup",
+        state=HealthState.HEALTHY,
+        reason_code="evidence_runtime_available",
+        summary="Operational evidence runtime is available",
+        ttl_seconds=300.0,
+    )
+    incident_state = (
+        HealthState.HEALTHY
+        if awareness.incident_persistence_available
+        else HealthState.DEGRADED
+    )
+    awareness.observe(
+        component_id="incidents",
+        source="startup",
+        state=incident_state,
+        reason_code=(
+            "incident_store_available"
+            if awareness.incident_persistence_available
+            else "incident_store_unavailable"
+        ),
+        summary=(
+            "Engineering incident persistence is available"
+            if awareness.incident_persistence_available
+            else "Engineering incident persistence is unavailable"
+        ),
+        ttl_seconds=300.0,
+    )
 
 
 def require_startup_preflight_with_health(
@@ -47,6 +85,21 @@ def require_startup_preflight_with_health(
             "Run jarvis-setup after fixing the reported item(s)."
         )
     print("Preflight passed. Starting JARVIS...\n")
+
+
+def record_capability_catalog_health(
+    awareness: SelfAwarenessRuntime,
+    catalog: CapabilityCatalog,
+) -> None:
+    awareness.observe(
+        component_id="capability_runtime",
+        source="capability_catalog",
+        state=HealthState.HEALTHY,
+        reason_code="capability_catalog_refreshed",
+        summary="Capability catalog refreshed successfully",
+        ttl_seconds=300.0,
+        metadata={"capability_count": len(catalog.capabilities)},
+    )
 
 
 class CapabilityExecutionHealthObserver:
