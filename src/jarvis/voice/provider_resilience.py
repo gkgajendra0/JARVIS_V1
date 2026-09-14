@@ -36,12 +36,14 @@ class ProviderResilienceSessionObserver:
         state: ProviderResilienceState,
         status_speech: LocalStatusSpeech | None,
         output_getter: Callable[[], io.AudioOutput | None],
+        health_observer: Callable[[ProviderResilienceState], None] | None = None,
     ) -> None:
         self._session = session
         self._provider = provider
         self._state = state
         self._status_speech = status_speech
         self._output_getter = output_getter
+        self._health_observer = health_observer
         self._terminal_task: asyncio.Task[None] | None = None
         session.on("error", self._on_error)
         session.on("agent_state_changed", self._on_agent_state_changed)
@@ -49,6 +51,14 @@ class ProviderResilienceSessionObserver:
     @property
     def terminal_task(self) -> asyncio.Task[None] | None:
         return self._terminal_task
+
+    def _notify_health(self) -> None:
+        if self._health_observer is None:
+            return
+        try:
+            self._health_observer(self._state)
+        except Exception:  # noqa: BLE001,S110 - diagnostics must not break resilience
+            pass
 
     def _on_agent_state_changed(self, event: Any) -> None:
         if getattr(event, "new_state", None) not in {
@@ -58,6 +68,7 @@ class ProviderResilienceSessionObserver:
         }:
             return
         if self._state.mark_recovered():
+            self._notify_health()
             LOGGER.info(
                 "Cloud provider recovered | provider=%s | health=healthy",
                 self._provider,
@@ -83,6 +94,7 @@ class ProviderResilienceSessionObserver:
             return
 
         self._state.mark_failure(failure)
+        self._notify_health()
         LOGGER.error(
             "Terminal realtime provider error | provider=%s | kind=%s | "
             "status_code=%s | retryable=%s | health=degraded",
