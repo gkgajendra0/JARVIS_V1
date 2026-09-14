@@ -105,8 +105,7 @@ def test_native_tracking_delegate_failure_is_reported_then_preserved() -> None:
 
     assert awareness.observations[-1]["state"] is HealthState.FAILED
     assert (
-        awareness.observations[-1]["reason_code"]
-        == "native_tracking_observer_failed"
+        awareness.observations[-1]["reason_code"] == "native_tracking_observer_failed"
     )
 
 
