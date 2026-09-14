@@ -88,7 +88,7 @@ def _create_realtime_model(config: JarvisConfig):
 
 
 class LiveKitConversationBridge:
-    """Translate committed LiveKit items into canonical JARVIS turns."""
+    """Translate final LiveKit USER transcripts and committed items into JARVIS turns."""
 
     def __init__(
         self,
@@ -103,6 +103,7 @@ class LiveKitConversationBridge:
         self.live_context = live_context
         self._show_transcript = show_transcript
         self._seen_item_ids: set[str] = set()
+        self._transcript_committed_user_turn_ids: set[str] = set()
         self._accepted_turn_observers: list[AcceptedTurnObserver] = []
         self._close_observers: list[ConversationCloseObserver] = []
         session.on("user_input_transcribed", self._on_user_input_transcribed)
@@ -138,19 +139,108 @@ class LiveKitConversationBridge:
                     "Conversation-close observer failed; session shutdown is unaffected"
                 )
 
-    def _on_user_input_transcribed(self, event: UserInputTranscribedEvent) -> None:
-        if not event.is_final or event.transcript.strip():
-            return
-        generation = self.conversation.discard_untranscribed_user_utterance()
-        if generation is not None:
-            LOGGER.info(
-                "Retired voice USER generation with final empty transcript | generation=%s",
-                generation,
+    @staticmethod
+    def _normalized_item_id(value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    def _accept_canonical_turn(
+        self,
+        role: ConversationRole,
+        text: str,
+        *,
+        interrupted: bool = False,
+        external_item_id: str | None = None,
+    ) -> ConversationTurn:
+        turn = self.conversation.accept_turn(
+            role,
+            text,
+            interrupted=interrupted,
+            external_item_id=external_item_id,
+        )
+        if not self.live_context.observe_turn(turn):
+            raise RuntimeError(
+                "canonical accepted turn was already present in LiveContext"
             )
+        if external_item_id is not None:
+            self._seen_item_ids.add(external_item_id)
+        if self._show_transcript:
+            suffix = " [interrupted]" if turn.interrupted else ""
+            LOGGER.info("%s: %s%s", turn.role.value, turn.text, suffix)
+        self._notify_accepted_turn(turn)
+        return turn
+
+    def _current_generation_user_turn(self, text: str) -> ConversationTurn | None:
+        generation = self.conversation.user_utterance_generation
+        if generation <= 0:
+            return None
+        return next(
+            (
+                turn
+                for turn in reversed(self.conversation.turns)
+                if turn.role is ConversationRole.USER
+                and turn.user_utterance_generation == generation
+                and turn.text == text
+            ),
+            None,
+        )
+
+    def _consume_transcript_committed_turn(self, text: str) -> bool:
+        for turn in reversed(self.conversation.turns):
+            if turn.turn_id not in self._transcript_committed_user_turn_ids:
+                continue
+            if turn.text != text:
+                continue
+            self._transcript_committed_user_turn_ids.remove(turn.turn_id)
+            return True
+        return False
+
+    def _confirm_seen_item(self, item_id: str) -> None:
+        for turn in reversed(self.conversation.turns):
+            if turn.external_item_id != item_id:
+                continue
+            self._transcript_committed_user_turn_ids.discard(turn.turn_id)
+            break
+
+    def _on_user_input_transcribed(self, event: UserInputTranscribedEvent) -> None:
+        if not event.is_final:
+            return
+
+        text = event.transcript.strip()
+        if not text:
+            return
+
+        item_id = self._normalized_item_id(getattr(event, "item_id", None))
+        if item_id is not None and item_id in self._seen_item_ids:
+            return
+        if self._current_generation_user_turn(text) is not None:
+            if item_id is not None:
+                self._seen_item_ids.add(item_id)
+            return
+
+        turn = self._accept_canonical_turn(
+            ConversationRole.USER,
+            text,
+            external_item_id=item_id,
+        )
+        self._transcript_committed_user_turn_ids.add(turn.turn_id)
+        LOGGER.debug(
+            "Committed canonical USER turn from final transcript | generation=%s | "
+            "activity_epoch=%s | item_id=%s",
+            turn.user_utterance_generation,
+            turn.user_activity_epoch,
+            item_id or "unavailable",
+        )
 
     def _on_conversation_item_added(self, event: ConversationItemAddedEvent) -> None:
         item = event.item
-        if not isinstance(item, ChatMessage) or item.id in self._seen_item_ids:
+        if not isinstance(item, ChatMessage):
+            return
+        item_id = self._normalized_item_id(item.id)
+        if item_id is not None and item_id in self._seen_item_ids:
+            self._confirm_seen_item(item_id)
             return
         try:
             role = ConversationRole(item.role)
@@ -159,22 +249,21 @@ class LiveKitConversationBridge:
         text = item.text_content.strip()
         if not text:
             return
+
+        if role is ConversationRole.USER and self._consume_transcript_committed_turn(
+            text
+        ):
+            if item_id is not None:
+                self._seen_item_ids.add(item_id)
+            return
+
         interrupted = bool(item.interrupted and role is ConversationRole.ASSISTANT)
-        turn = self.conversation.accept_turn(
+        self._accept_canonical_turn(
             role,
             text,
             interrupted=interrupted,
-            external_item_id=item.id,
+            external_item_id=item_id,
         )
-        if not self.live_context.observe_turn(turn):
-            raise RuntimeError(
-                "canonical accepted turn was already present in LiveContext"
-            )
-        self._seen_item_ids.add(item.id)
-        if self._show_transcript:
-            suffix = " [interrupted]" if turn.interrupted else ""
-            LOGGER.info("%s: %s%s", turn.role.value, turn.text, suffix)
-        self._notify_accepted_turn(turn)
 
     def _on_error(self, event: ErrorEvent) -> None:
         summary = getattr(event.error, "label", type(event.error).__name__)
