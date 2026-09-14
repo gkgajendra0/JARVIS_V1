@@ -95,9 +95,7 @@ def test_dependency_rollup_and_blast_radius_are_deterministic() -> None:
 
 def test_correlation_context_is_explicitly_restored() -> None:
     assert current_correlation().session_id is None
-    token = set_correlation(
-        CorrelationContext(session_id="s1", component_id="hands")
-    )
+    token = set_correlation(CorrelationContext(session_id="s1", component_id="hands"))
     try:
         assert current_correlation().session_id == "s1"
         assert current_correlation().component_id == "hands"
@@ -122,9 +120,7 @@ def test_redaction_blocks_sensitive_keys_and_token_shapes() -> None:
 
 
 def test_operational_event_carries_context_and_redacts_attributes() -> None:
-    token = set_correlation(
-        CorrelationContext(session_id="s1", component_id="hands")
-    )
+    token = set_correlation(CorrelationContext(session_id="s1", component_id="hands"))
     try:
         event = OperationalEvent.create(
             event_name="capability.failed",
