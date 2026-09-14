@@ -36,9 +36,7 @@ def test_routine_health_is_low_risk_but_engineering_details_are_private(
     details = executor.prepare(
         _request("get_component_details", {"component_id": "runtime.provider"})
     )
-    incidents = executor.prepare(
-        _request("list_recent_incidents", {"max_results": 5})
-    )
+    incidents = executor.prepare(_request("list_recent_incidents", {"max_results": 5}))
 
     assert routine.attributes == ActionAttributes()
     assert component.attributes == ActionAttributes()
@@ -70,9 +68,7 @@ def test_system_and_component_queries_use_deterministic_health(tmp_path: Path) -
 
     assert system.status is CapabilityStatus.SUCCEEDED
     assert system.data["component_count"] >= 1
-    states = {
-        item["component_id"]: item["state"] for item in system.data["components"]
-    }
+    states = {item["component_id"]: item["state"] for item in system.data["components"]}
     assert states["runtime.provider"] == "failed"
     assert component.data["state"] == "failed"
     assert component.data["reason_codes"] == ["provider_unavailable"]
@@ -117,9 +113,7 @@ def test_recent_incidents_are_available_through_governed_read(tmp_path: Path) ->
     assert result.status is CapabilityStatus.SUCCEEDED
     assert result.data["available"] is True
     assert len(result.data["incidents"]) == 1
-    assert result.data["incidents"][0]["affected_components"] == [
-        "capability_runtime"
-    ]
+    assert result.data["incidents"][0]["affected_components"] == ["capability_runtime"]
     awareness.close()
 
 
