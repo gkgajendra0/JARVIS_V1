@@ -160,7 +160,14 @@ class LocalReadAgentTools(_ConversationCapabilityTools):
 
     @property
     def tools(self) -> list:
-        return self._hands.tools
+        hands_tools = list(self._hands.tools)
+        self_awareness = self._runtime.catalog.by_key("local:self_awareness.read")
+        if self_awareness is None or not self_awareness.execution_enabled:
+            return hands_tools
+        return [
+            *SelfAwarenessAgentTools(self._runtime, self._conversation).tools,
+            *hands_tools,
+        ]
 
     async def inspect(
         self,
