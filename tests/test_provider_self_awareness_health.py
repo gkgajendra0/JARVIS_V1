@@ -9,7 +9,10 @@ from typing import Any
 import pytest
 
 from jarvis.health_adapters import ProviderResilienceHealthObserver
-from jarvis.provider_resilience import ProviderResilienceState, classify_provider_failure
+from jarvis.provider_resilience import (
+    ProviderResilienceState,
+    classify_provider_failure,
+)
 from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.self_model.health import HealthState
 from jarvis.voice.provider_resilience import ProviderResilienceSessionObserver
@@ -74,7 +77,9 @@ def test_provider_health_adapter_maps_degraded_then_recovered(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
-async def test_session_observer_notifies_health_on_terminal_failure_and_recovery() -> None:
+async def test_session_observer_notifies_health_on_terminal_failure_and_recovery() -> (
+    None
+):
     session = FakeSession()
     state = ProviderResilienceState()
     observed: list[tuple[str, str | None]] = []
