@@ -51,6 +51,11 @@ from jarvis.memory.runtime import build_default_memory_runtime
 from jarvis.preflight import StartupPreflightError, require_startup_preflight
 from jarvis.provider_resilience import ProviderResilienceState
 from jarvis.self_awareness import SelfAwarenessRuntime
+from jarvis.vision.health_observers import (
+    NativeTrackingHealthObserver,
+    VisionFrameHealthTap,
+    compose_frame_pair_taps,
+)
 from jarvis.vision.native_owner_tracking import (
     build_default_native_owner_tracking_observer,
 )
@@ -149,7 +154,7 @@ def build_production_voice_runtime(
     tracking_observer = None
     if config.pocket3_native_tracking_enabled:
         assert owner_context_state is not None
-        tracking_observer = build_default_native_owner_tracking_observer(
+        native_tracking_observer = build_default_native_owner_tracking_observer(
             owner_context=owner_context_state,
             ble_name=config.pocket3_ble_name,
             owner_evidence_max_age_seconds=(
@@ -159,6 +164,11 @@ def build_production_voice_runtime(
             lock_pending_timeout_seconds=(config.pocket3_lock_pending_timeout_seconds),
             resend_cooldown_seconds=config.pocket3_resend_cooldown_seconds,
             locked_perception_fps=1.0,
+        )
+        tracking_observer = (
+            NativeTrackingHealthObserver(native_tracking_observer, self_awareness)
+            if self_awareness is not None
+            else native_tracking_observer
         )
         LOGGER.info(
             "Pocket 3 native OWNER tracking is enabled: USB remains canonical "
@@ -185,16 +195,23 @@ def build_production_voice_runtime(
     speech_region_detector = (
         LiveKitSileroSpeechRegionDetector() if config.speaker_shadow_enabled else None
     )
+    vision_health_tap = (
+        VisionFrameHealthTap(self_awareness) if self_awareness is not None else None
+    )
+    active_speaker_tap = (
+        active_speaker_visual_buffer.observe
+        if active_speaker_visual_buffer is not None
+        else None
+    )
 
     vision_service = (
         build_default_vision_service(
             head_model_path=config.vision_head_model_path,
             evidence_observer=evidence_observer,
             tracking_observer=tracking_observer,
-            frame_pair_tap=(
-                active_speaker_visual_buffer.observe
-                if active_speaker_visual_buffer is not None
-                else None
+            frame_pair_tap=compose_frame_pair_taps(
+                active_speaker_tap,
+                vision_health_tap,
             ),
             perception_fps_provider=(
                 tracking_observer.perception_fps_hint
