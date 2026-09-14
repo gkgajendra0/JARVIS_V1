@@ -12,6 +12,7 @@ from jarvis.capabilities.models import (
 from jarvis.config import JarvisConfig
 from jarvis.observability.redaction import redact_data
 from jarvis.preflight import StartupPreflightError, print_preflight, run_startup_preflight
+from jarvis.provider_resilience import ProviderHealth, ProviderResilienceState
 from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.self_model.health import HealthState
 
@@ -149,4 +150,45 @@ class CapabilityExecutionHealthObserver:
                     "reason": result.reason,
                 }
             ),
+        )
+
+
+class ProviderResilienceHealthObserver:
+    """Mirror deterministic provider resilience state into the Self Model."""
+
+    def __init__(self, awareness: SelfAwarenessRuntime) -> None:
+        self._awareness = awareness
+
+    def __call__(self, state: ProviderResilienceState) -> None:
+        failure = state.last_failure
+        if state.health is ProviderHealth.HEALTHY:
+            health_state = HealthState.HEALTHY
+            reason_code = "provider_healthy"
+            summary = "Cloud provider session is healthy"
+            metadata: dict[str, Any] = {}
+        else:
+            health_state = HealthState.DEGRADED
+            reason_code = (
+                f"provider_{failure.kind.value}" if failure is not None else "provider_degraded"
+            )
+            summary = "Cloud provider session is degraded"
+            metadata = (
+                {
+                    "provider": failure.provider,
+                    "failure_kind": failure.kind.value,
+                    "status_code": failure.status_code,
+                    "retryable": failure.retryable,
+                }
+                if failure is not None
+                else {}
+            )
+        _observe_safely(
+            self._awareness,
+            component_id="runtime.provider",
+            source="provider_session",
+            state=health_state,
+            reason_code=reason_code,
+            summary=summary,
+            ttl_seconds=120.0,
+            metadata=redact_data(metadata),
         )
