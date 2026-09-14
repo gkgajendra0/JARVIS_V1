@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -38,6 +37,7 @@ class ConversationTurn:
     accepted_at: datetime = field(default_factory=_utc_now)
     external_item_id: str | None = None
     user_utterance_generation: int | None = None
+    user_activity_epoch: int | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.role, ConversationRole):
@@ -72,6 +72,14 @@ class ConversationTurn:
                 raise ValueError(
                     "user_utterance_generation is only valid for USER turns"
                 )
+        activity_epoch = self.user_activity_epoch
+        if activity_epoch is not None:
+            if isinstance(activity_epoch, bool) or not isinstance(activity_epoch, int):
+                raise TypeError("user_activity_epoch must be an integer")
+            if activity_epoch <= 0:
+                raise ValueError("user_activity_epoch must be positive")
+            if self.role is not ConversationRole.USER:
+                raise ValueError("user_activity_epoch is only valid for USER turns")
         object.__setattr__(self, "text", text)
         object.__setattr__(self, "turn_id", self.turn_id.strip())
         object.__setattr__(self, "accepted_at", self.accepted_at.astimezone(UTC))
@@ -90,8 +98,8 @@ class ConversationSession:
         self._session_id = resolved_session_id
         self._status = ConversationStatus.CREATED
         self._turns: list[ConversationTurn] = []
+        self._user_activity_epoch = 0
         self._user_utterance_generation = 0
-        self._pending_user_generations: deque[int] = deque()
 
     @property
     def session_id(self) -> str:
@@ -106,33 +114,41 @@ class ConversationSession:
         return tuple(self._turns)
 
     @property
+    def user_activity_epoch(self) -> int:
+        """Newest local speech-activity epoch, whether real speech or false VAD."""
+
+        return self._user_activity_epoch
+
+    @property
     def user_utterance_generation(self) -> int:
-        """Newest voice-user generation, including speech with transcript pending."""
+        """Newest canonical accepted USER-turn generation."""
 
         return self._user_utterance_generation
 
-    def begin_user_utterance(self) -> int:
-        """Advance and queue a generation as soon as LiveKit reports user speech."""
+    def begin_user_activity(self) -> int:
+        """Advance local user activity without creating canonical conversation truth."""
 
         if self._status is not ConversationStatus.ACTIVE:
             raise RuntimeError(
-                f"cannot begin a user utterance in a {self._status.value} conversation"
+                f"cannot begin user activity in a {self._status.value} conversation"
             )
-        self._user_utterance_generation += 1
-        self._pending_user_generations.append(self._user_utterance_generation)
-        return self._user_utterance_generation
+        self._user_activity_epoch += 1
+        return self._user_activity_epoch
+
+    def begin_user_utterance(self) -> int:
+        """Compatibility alias for activity-only speech start tracking."""
+
+        return self.begin_user_activity()
 
     def discard_untranscribed_user_utterance(self) -> int | None:
-        """Retire the oldest started voice generation after final no-text evidence."""
+        """Compatibility no-op: raw activity never creates canonical generations."""
 
         if self._status is not ConversationStatus.ACTIVE:
             raise RuntimeError(
                 "cannot discard a user utterance in a "
                 f"{self._status.value} conversation"
             )
-        if not self._pending_user_generations:
-            return None
-        return self._pending_user_generations.popleft()
+        return None
 
     def start(self) -> None:
         if self._status is not ConversationStatus.CREATED:
@@ -152,19 +168,18 @@ class ConversationSession:
                 f"cannot add a turn to a {self._status.value} conversation"
             )
         generation: int | None = None
+        activity_epoch: int | None = None
         if role is ConversationRole.USER:
-            if self._pending_user_generations:
-                generation = self._pending_user_generations.popleft()
-            else:
-                # Non-voice callers and unit tests may commit USER turns directly.
-                self._user_utterance_generation += 1
-                generation = self._user_utterance_generation
+            self._user_utterance_generation += 1
+            generation = self._user_utterance_generation
+            activity_epoch = self._user_activity_epoch or None
         turn = ConversationTurn(
             role=role,
             text=text,
             interrupted=interrupted,
             external_item_id=external_item_id,
             user_utterance_generation=generation,
+            user_activity_epoch=activity_epoch,
         )
         self._turns.append(turn)
         return turn
