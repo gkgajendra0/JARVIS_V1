@@ -21,6 +21,7 @@ import tempfile
 import threading
 import time
 from dataclasses import dataclass
+from typing import Protocol
 from xml.sax.saxutils import escape as xml_escape
 
 from jarvis.vision.models import BoundingBox
@@ -37,6 +38,11 @@ _UDP_PORT = 9004
 # Already approved JARVIS BLE identity from the protocol acceptance work.
 _BLE_IDENTIFIER = "4a415256495350433030303030303031"
 _BLE_TOKEN = "JARVIS"
+_BLE_SERVICE_SETTLE_SECONDS = 1.0
+_BLE_PAIR_CONFIRM_TIMEOUT_SECONDS = 12.0
+_BLE_PAIR_AUTH_RETRY_SECONDS = 1.5
+_BLE_PAIR_AUTH_ATTEMPTS = 3
+_BLE_PAIR_AUTH_SEQUENCE_START = 0x8092
 
 # Captured Osmo datalink identity used by Mimo-compatible implementations.
 _TCP_IDENTIFIER = "284ae5b8d76b3375a04a6417ad71bea3"
@@ -60,6 +66,15 @@ _APP_PRESENCE = bytes(
         0x02,
     ]
 )
+
+
+class _BleGattWriter(Protocol):
+    async def write_gatt_char(
+        self,
+        char_specifier: str,
+        data: bytes,
+        response: bool = False,
+    ) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -522,6 +537,101 @@ class Pocket3NativeTrackerClient:
             except TimeoutError:
                 continue
 
+    async def _wait_for_ble_settle(self, seconds: float, *, stage: str) -> None:
+        """Pace no-response BLE writes without making shutdown wait for the delay."""
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + seconds
+        while True:
+            if self._stop.is_set():
+                raise _Pocket3BleStopped(
+                    f"Pocket 3 BLE {stage} stopped during JARVIS shutdown"
+                )
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return
+            await asyncio.sleep(min(0.20, remaining))
+
+    async def _send_pair_auth_until_confirmed(
+        self,
+        client: _BleGattWriter,
+        pair_event: asyncio.Event,
+        pair_request_seen_event: asyncio.Event,
+    ) -> None:
+        """Retry the drop-prone no-response auth write inside one BLE connection."""
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + _BLE_PAIR_CONFIRM_TIMEOUT_SECONDS
+        payload = _pack_string(_BLE_IDENTIFIER) + _pack_string(_BLE_TOKEN)
+
+        for attempt_index in range(_BLE_PAIR_AUTH_ATTEMPTS):
+            if pair_event.is_set():
+                return
+            if self._stop.is_set():
+                raise _Pocket3BleStopped(
+                    "Pocket 3 BLE pairing confirmation stopped during JARVIS shutdown"
+                )
+
+            sequence = (_BLE_PAIR_AUTH_SEQUENCE_START + attempt_index) & 0xFFFF
+            LOGGER.info(
+                "Pocket 3 BLE pairing auth attempt %d/%d: seq=0x%04X",
+                attempt_index + 1,
+                _BLE_PAIR_AUTH_ATTEMPTS,
+                sequence,
+            )
+            await client.write_gatt_char(
+                _FFF5,
+                _build_duml(
+                    receiver=0x07,
+                    seq=sequence,
+                    flags=0x40,
+                    cmd_set=0x07,
+                    cmd_id=0x45,
+                    payload=payload,
+                ),
+                response=False,
+            )
+
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                break
+            wait_seconds = (
+                remaining
+                if attempt_index + 1 >= _BLE_PAIR_AUTH_ATTEMPTS
+                else min(_BLE_PAIR_AUTH_RETRY_SECONDS, remaining)
+            )
+            try:
+                await self._wait_for_ble_event(
+                    pair_event,
+                    timeout=wait_seconds,
+                    stage=f"pairing confirmation after auth attempt {attempt_index + 1}",
+                )
+                return
+            except TimeoutError:
+                if pair_request_seen_event.is_set():
+                    remaining = deadline - loop.time()
+                    if remaining <= 0:
+                        break
+                    LOGGER.info(
+                        "Pocket 3 accepted the pairing request; waiting for owner approval"
+                    )
+                    await self._wait_for_ble_event(
+                        pair_event,
+                        timeout=remaining,
+                        stage="owner pairing approval",
+                    )
+                    return
+                if attempt_index + 1 < _BLE_PAIR_AUTH_ATTEMPTS:
+                    LOGGER.warning(
+                        "Pocket 3 pairing auth attempt %d/%d had no confirmation; retrying in the same BLE session",
+                        attempt_index + 1,
+                        _BLE_PAIR_AUTH_ATTEMPTS,
+                    )
+                    continue
+                break
+
+        raise TimeoutError("Pocket 3 BLE pairing confirmation timed out")
+
     def _ble_thread_main(self) -> None:
         try:
             asyncio.run(self._ble_session())
@@ -544,6 +654,7 @@ class Pocket3NativeTrackerClient:
 
         ready_event = asyncio.Event()
         pair_event = asyncio.Event()
+        pair_request_seen_event = asyncio.Event()
         ssid_event = asyncio.Event()
         password_event = asyncio.Event()
 
@@ -551,8 +662,9 @@ class Pocket3NativeTrackerClient:
             frames = _scan_duml(bytes(incoming))
             if frames:
                 # Subscribing only enables notifications. A valid inbound DUML frame is
-                # the protocol-level evidence that the camera is actually ready for the
-                # pairing sequence; do not race pairing against BLE service startup.
+                # protocol-level evidence that the camera is talking to JARVIS. Pairing
+                # also observes a minimum service-settle gate below because FFF5 is a
+                # write-without-response channel and early writes can be dropped.
                 ready_event.set()
             for frame in frames:
                 cmd_set = int(frame["cmd_set"])
@@ -560,10 +672,13 @@ class Pocket3NativeTrackerClient:
                 payload = bytes(frame["payload"])
                 if cmd_set == 0x07 and cmd_id == 0x45:
                     if payload[:2] == b"\x00\x01":
+                        LOGGER.info("Pocket 3 BLE pairing confirmed: already paired")
                         pair_event.set()
                     elif payload[:2] == b"\x00\x02":
+                        pair_request_seen_event.set()
                         LOGGER.info("Approve the JARVIS pairing request on Pocket 3")
                 elif cmd_set == 0x07 and cmd_id == 0x46 and payload[:1] == b"\x01":
+                    LOGGER.info("Pocket 3 BLE pairing confirmed by owner approval")
                     pair_event.set()
                 elif cmd_set == 0x07 and cmd_id == 0x07:
                     value = _parse_status_string(payload)
@@ -585,12 +700,22 @@ class Pocket3NativeTrackerClient:
 
         async with BleakClient(device, timeout=20) as client:
             await client.start_notify(_FFF4, notification_handler)
+            notify_ready_at = asyncio.get_running_loop().time()
             await self._wait_for_ble_event(
                 ready_event,
                 timeout=self.config.ble_ready_timeout_seconds,
                 stage="protocol readiness",
             )
-            LOGGER.info("Pocket 3 BLE protocol ready; waking pairing session")
+            elapsed_after_notify = asyncio.get_running_loop().time() - notify_ready_at
+            settle_remaining = max(0.0, _BLE_SERVICE_SETTLE_SECONDS - elapsed_after_notify)
+            if settle_remaining:
+                await self._wait_for_ble_settle(
+                    settle_remaining,
+                    stage="service settle",
+                )
+            LOGGER.info(
+                "Pocket 3 BLE protocol ready and service settle complete; waking pairing session"
+            )
             await client.write_gatt_char(
                 _FFF5,
                 _build_duml(
@@ -606,22 +731,10 @@ class Pocket3NativeTrackerClient:
             await asyncio.sleep(0.4)
             await client.write_gatt_char(_FFF4, b"\x01\x00", response=True)
             await asyncio.sleep(0.2)
-            await client.write_gatt_char(
-                _FFF5,
-                _build_duml(
-                    receiver=0x07,
-                    seq=0x8092,
-                    flags=0x40,
-                    cmd_set=0x07,
-                    cmd_id=0x45,
-                    payload=_pack_string(_BLE_IDENTIFIER) + _pack_string(_BLE_TOKEN),
-                ),
-                response=False,
-            )
-            await self._wait_for_ble_event(
+            await self._send_pair_auth_until_confirmed(
+                client,
                 pair_event,
-                timeout=12.0,
-                stage="pairing confirmation",
+                pair_request_seen_event,
             )
             await client.write_gatt_char(
                 _FFF5,
