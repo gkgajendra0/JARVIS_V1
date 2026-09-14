@@ -167,9 +167,7 @@ class SqliteIncidentStore:
             status=IncidentStatus(payload["status"]),
             created_at_epoch=payload["created_at_epoch"],
             updated_at_epoch=payload["updated_at_epoch"],
-            affected_components=tuple(
-                json.loads(payload["affected_components_json"])
-            ),
+            affected_components=tuple(json.loads(payload["affected_components_json"])),
             evidence=evidence,
             root_cause=payload["root_cause"],
             accepted_fix=payload["accepted_fix"],
@@ -200,7 +198,7 @@ class SqliteIncidentStore:
             rows = self._connection.execute(query, parameters).fetchall()
         return tuple(
             incident
-            for incident_id, in rows
+            for (incident_id,) in rows
             if (incident := self.get(incident_id)) is not None
         )
 
