@@ -51,9 +51,7 @@ class EvidenceReference:
                 time.time() if occurred_at_epoch is None else occurred_at_epoch
             ),
             component_id=(
-                str(component_id).strip().lower()
-                if component_id is not None
-                else None
+                str(component_id).strip().lower() if component_id is not None else None
             ),
         )
 
@@ -144,9 +142,7 @@ class IncidentRecord:
             deployment_result=(
                 str(deployment_result).strip() if deployment_result else None
             ),
-            rollback_status=(
-                str(rollback_status).strip() if rollback_status else None
-            ),
+            rollback_status=(str(rollback_status).strip() if rollback_status else None),
             lessons=tuple(str(item).strip() for item in lessons),
             updated_at_epoch=(time.time() if now_epoch is None else now_epoch),
         )
