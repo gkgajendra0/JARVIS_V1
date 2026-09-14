@@ -91,6 +91,32 @@ def test_429_quota_is_distinguished_from_rate_limit() -> None:
 
 
 @pytest.mark.parametrize(
+    ("message", "body"),
+    [
+        ("controlled", {"error": {"code": "credit_balance_exhausted"}}),
+        ("You have no credits remaining", None),
+    ],
+)
+def test_exhausted_api_credit_signals_override_generic_429_rate_limit(
+    message: str,
+    body: object | None,
+) -> None:
+    failure = classify_provider_failure(
+        FakeStatusError(
+            message,
+            status_code=429,
+            body=body,
+            retryable=True,
+        ),
+        provider="openai",
+    )
+
+    assert failure.kind is ProviderFailureKind.QUOTA_EXHAUSTED
+    assert failure.status_code == 429
+    assert failure.retryable is True
+
+
+@pytest.mark.parametrize(
     ("status", "body", "expected"),
     [
         (401, None, ProviderFailureKind.AUTHENTICATION_FAILED),
