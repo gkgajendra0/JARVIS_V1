@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import jarvis.vision.pocket3_native as pocket3_native
 from jarvis.identity.owner_context import OwnerContextState
+from jarvis.vision import pocket3_native
 from jarvis.vision.native_owner_tracking import (
     NativeOwnerTrackingConfig,
     NativeOwnerTrackingObserver,
