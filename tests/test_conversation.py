@@ -30,37 +30,41 @@ def test_session_accepts_ordered_turns_while_active() -> None:
     assert second.user_utterance_generation is None
 
 
-def test_voice_generations_bind_delayed_user_transcripts_fifo() -> None:
-    session = ConversationSession(session_id="voice-generation-test")
+def test_voice_activity_never_creates_canonical_user_generations() -> None:
+    session = ConversationSession(session_id="voice-activity-test")
     session.start()
 
-    first_generation = session.begin_user_utterance()
-    second_generation = session.begin_user_utterance()
-    assert session.user_utterance_generation == 2
+    first_activity = session.begin_user_activity()
+    second_activity = session.begin_user_activity()
 
-    first = session.accept_turn(ConversationRole.USER, "First delayed transcript")
-    second = session.accept_turn(ConversationRole.USER, "Second delayed transcript")
+    assert first_activity == 1
+    assert second_activity == 2
+    assert session.user_activity_epoch == 2
+    assert session.user_utterance_generation == 0
 
-    assert first_generation == 1
-    assert second_generation == 2
-    assert first.user_utterance_generation == first_generation
-    assert second.user_utterance_generation == second_generation
-    assert session.user_utterance_generation == 2
+    turn = session.accept_turn(ConversationRole.USER, "Real accepted transcript")
+
+    assert turn.user_utterance_generation == 1
+    assert turn.user_activity_epoch == second_activity
+    assert session.user_utterance_generation == 1
 
 
-def test_final_empty_voice_generation_can_be_retired_without_reordering() -> None:
-    session = ConversationSession(session_id="empty-voice-generation-test")
+def test_final_empty_activity_needs_no_canonical_generation_retirement() -> None:
+    session = ConversationSession(session_id="empty-voice-activity-test")
     session.start()
 
-    abandoned_generation = session.begin_user_utterance()
-    real_generation = session.begin_user_utterance()
-
+    activity_epoch = session.begin_user_activity()
     retired = session.discard_untranscribed_user_utterance()
+
+    assert activity_epoch == 1
+    assert retired is None
+    assert session.user_activity_epoch == 1
+    assert session.user_utterance_generation == 0
+
     real_turn = session.accept_turn(ConversationRole.USER, "Set volume to 30 percent")
 
-    assert retired == abandoned_generation
-    assert real_turn.user_utterance_generation == real_generation
-    assert session.user_utterance_generation == real_generation
+    assert real_turn.user_utterance_generation == 1
+    assert real_turn.user_activity_epoch == activity_epoch
 
 
 def test_discard_untranscribed_voice_generation_is_noop_when_queue_is_empty() -> None:
