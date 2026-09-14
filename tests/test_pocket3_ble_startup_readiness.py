@@ -25,12 +25,12 @@ def test_pairing_waits_for_real_protocol_readiness() -> None:
     source = inspect.getsource(Pocket3NativeTrackerClient._ble_session)
 
     subscribe = source.index("await client.start_notify(_FFF4, notification_handler)")
-    session_wake = source.index('payload=b"\\x04\\x00"')
     readiness = source.index('stage="protocol readiness"')
+    session_wake = source.index('payload=b"\\x04\\x00"')
     pair_arm = source.index('await client.write_gatt_char(_FFF4, b"\\x01\\x00"')
     pairing = source.index('stage="pairing confirmation"')
 
-    assert subscribe < session_wake < readiness < pair_arm < pairing
+    assert subscribe < readiness < session_wake < pair_arm < pairing
 
 
 def test_ble_event_wait_unwinds_promptly_on_shutdown() -> None:
