@@ -23,14 +23,29 @@ def _request(operation: str, parameters: dict | None = None) -> CapabilityReques
     )
 
 
-def test_self_awareness_reads_are_private_and_read_only(tmp_path: Path) -> None:
+def test_routine_health_is_low_risk_but_engineering_details_are_private(
+    tmp_path: Path,
+) -> None:
     awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
     executor = SelfAwarenessReadExecutor(awareness)
 
-    prepared = executor.prepare(_request("get_system_health"))
+    routine = executor.prepare(_request("get_system_health"))
+    component = executor.prepare(
+        _request("get_component_health", {"component_id": "runtime.provider"})
+    )
+    details = executor.prepare(
+        _request("get_component_details", {"component_id": "runtime.provider"})
+    )
+    incidents = executor.prepare(
+        _request("list_recent_incidents", {"max_results": 5})
+    )
 
-    assert prepared.attributes == ActionAttributes(private_read=True)
-    assert prepared.execution_payload == {}
+    assert routine.attributes == ActionAttributes()
+    assert component.attributes == ActionAttributes()
+    assert details.attributes == ActionAttributes(private_read=True)
+    assert incidents.attributes == ActionAttributes(private_read=True)
+    assert routine.execution_payload == {}
+    assert details.execution_payload == {}
     awareness.close()
 
 
