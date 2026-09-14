@@ -96,16 +96,29 @@ def test_committed_items_write_once_and_preserve_repeated_text() -> None:
     assert bridge.live_context.recent_turns == turns
 
 
-def test_final_empty_transcript_retires_only_its_pending_voice_generation() -> None:
+def test_final_empty_transcript_does_not_create_canonical_user_turn() -> None:
     livekit, bridge = active_bridge()
-    abandoned_generation = bridge.conversation.begin_user_utterance()
+    empty_activity = bridge.conversation.begin_user_activity()
 
     livekit.emit(
         "user_input_transcribed",
         UserInputTranscribedEvent(transcript="", is_final=True, item_id="empty-one"),
     )
 
-    real_generation = bridge.conversation.begin_user_utterance()
+    assert empty_activity == 1
+    assert bridge.conversation.user_activity_epoch == 1
+    assert bridge.conversation.user_utterance_generation == 0
+    assert bridge.conversation.turns == ()
+
+    real_activity = bridge.conversation.begin_user_activity()
+    livekit.emit(
+        "user_input_transcribed",
+        UserInputTranscribedEvent(
+            transcript="Set volume to 30 percent",
+            is_final=True,
+            item_id="real-one",
+        ),
+    )
     livekit.emit(
         "conversation_item_added",
         ConversationItemAddedEvent(
@@ -113,30 +126,38 @@ def test_final_empty_transcript_retires_only_its_pending_voice_generation() -> N
         ),
     )
 
-    assert abandoned_generation == 1
-    assert real_generation == 2
-    assert bridge.conversation.turns[0].user_utterance_generation == real_generation
+    assert real_activity == 2
+    assert len(bridge.conversation.turns) == 1
+    turn = bridge.conversation.turns[0]
+    assert turn.user_utterance_generation == 1
+    assert turn.user_activity_epoch == real_activity
 
 
-def test_interim_empty_transcript_does_not_retire_pending_voice_generation() -> None:
+def test_interim_empty_transcript_does_not_create_canonical_user_turn() -> None:
     livekit, bridge = active_bridge()
-    generation = bridge.conversation.begin_user_utterance()
+    activity_epoch = bridge.conversation.begin_user_activity()
 
     livekit.emit(
         "user_input_transcribed",
         UserInputTranscribedEvent(transcript="", is_final=False),
     )
+
+    assert bridge.conversation.user_utterance_generation == 0
+    assert bridge.conversation.turns == ()
+
     livekit.emit(
         "conversation_item_added",
         ConversationItemAddedEvent(item=message("real-one", "user", "Open calculator")),
     )
 
-    assert bridge.conversation.turns[0].user_utterance_generation == generation
+    turn = bridge.conversation.turns[0]
+    assert turn.user_utterance_generation == 1
+    assert turn.user_activity_epoch == activity_epoch
 
 
-def test_nonempty_final_transcript_preserves_existing_fifo_assignment() -> None:
+def test_nonempty_final_transcript_commits_once_before_conversation_item() -> None:
     livekit, bridge = active_bridge()
-    generation = bridge.conversation.begin_user_utterance()
+    activity_epoch = bridge.conversation.begin_user_activity()
 
     livekit.emit(
         "user_input_transcribed",
@@ -144,12 +165,19 @@ def test_nonempty_final_transcript_preserves_existing_fifo_assignment() -> None:
             transcript="Open calculator", is_final=True, item_id="real-one"
         ),
     )
+
+    assert len(bridge.conversation.turns) == 1
+    turn = bridge.conversation.turns[0]
+    assert turn.user_utterance_generation == 1
+    assert turn.user_activity_epoch == activity_epoch
+
     livekit.emit(
         "conversation_item_added",
         ConversationItemAddedEvent(item=message("real-one", "user", "Open calculator")),
     )
 
-    assert bridge.conversation.turns[0].user_utterance_generation == generation
+    assert bridge.conversation.turns == (turn,)
+    assert bridge.live_context.recent_turns == (turn,)
 
 
 def test_accepted_turn_observer_receives_exact_canonical_turn() -> None:
