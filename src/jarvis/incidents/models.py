@@ -41,7 +41,7 @@ class EvidenceReference:
         summary: str,
         component_id: str | None = None,
         occurred_at_epoch: float | None = None,
-    ) -> "EvidenceReference":
+    ) -> EvidenceReference:
         return cls(
             evidence_id=str(uuid.uuid4()),
             kind=str(kind).strip().lower(),
@@ -85,7 +85,7 @@ class IncidentRecord:
         affected_components: tuple[str, ...] | list[str] = (),
         severity: IncidentSeverity = IncidentSeverity.WARNING,
         now_epoch: float | None = None,
-    ) -> "IncidentRecord":
+    ) -> IncidentRecord:
         now = time.time() if now_epoch is None else now_epoch
         return cls(
             incident_id=str(uuid.uuid4()),
@@ -111,7 +111,7 @@ class IncidentRecord:
         evidence: EvidenceReference,
         *,
         now_epoch: float | None = None,
-    ) -> "IncidentRecord":
+    ) -> IncidentRecord:
         return replace(
             self,
             evidence=(*self.evidence, evidence),
@@ -130,7 +130,7 @@ class IncidentRecord:
         rollback_status: str | None = None,
         lessons: tuple[str, ...] | list[str] = (),
         now_epoch: float | None = None,
-    ) -> "IncidentRecord":
+    ) -> IncidentRecord:
         return replace(
             self,
             status=IncidentStatus.RESOLVED,
