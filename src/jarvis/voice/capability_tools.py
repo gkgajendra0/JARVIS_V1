@@ -325,20 +325,27 @@ class SelfAwarenessAgentTools(_ConversationCapabilityTools):
         max_results: int = 20,
         status: str = "",
     ) -> dict[str, object]:
-        """Read JARVIS's own deterministic operational health and engineering evidence.
+        """Read JARVIS's deterministic operational health and engineering evidence.
 
-        Use only when the USER asks about JARVIS itself: current health/status, a named
-        JARVIS component, dependencies/affected components, implementation location, or
-        recent engineering incidents. Supported operations are `get_system_health`,
-        `get_component_health`, `get_component_details`, and `list_recent_incidents`.
-        Supply `component_id` only for the two component operations. Use `status` only
-        to filter incident state and `max_results` only for incident history.
+        Call this tool whenever the USER asks about JARVIS itself: current health/status,
+        a named JARVIS component, dependencies/affected components, implementation/source
+        location, architecture metadata, or recent engineering incidents. Do not invent an
+        implementation answer and do not refuse a requested implementation/incident read
+        merely because it is private; call this governed tool and let canonical Authority
+        return succeeded, denied, or verification-required evidence.
+
+        Supported operations are `get_system_health`, `get_component_health`,
+        `get_component_details`, and `list_recent_incidents`. Supply `component_id` only
+        for the two component operations. Use `status` only to filter incident state and
+        `max_results` only for incident history.
 
         Health values come from JARVIS-owned probes and state machines, not model
         inference. Treat UNKNOWN as missing/stale evidence, never as healthy. Routine
         health reads are low-risk; implementation details and incident history still go
-        through canonical private-read authority. This tool is READ ONLY and cannot
-        repair, mutate, restart, install, deploy, merge, or change policy.
+        through canonical private-read authority. Follow the returned status exactly: if
+        access is denied or verification is required, say so without fabricating details.
+        This tool is READ ONLY and cannot repair, mutate, restart, install, deploy, merge,
+        or change policy.
         """
         del context
         try:
