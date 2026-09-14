@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from jarvis.capabilities.models import (
     CapabilityCatalog,
     CapabilityResult,
@@ -25,10 +27,21 @@ def _preflight_component(label: str) -> str:
     return "runtime.voice"
 
 
+def _observe_safely(
+    awareness: SelfAwarenessRuntime,
+    **kwargs: Any,
+) -> None:
+    try:
+        awareness.observe(**kwargs)
+    except Exception:  # noqa: BLE001,S110 - diagnostics must never block runtime
+        pass
+
+
 def record_foundation_health(awareness: SelfAwarenessRuntime) -> None:
     """Publish the state of the new evidence and incident foundation itself."""
 
-    awareness.observe(
+    _observe_safely(
+        awareness,
         component_id="observability",
         source="startup",
         state=HealthState.HEALTHY,
@@ -41,7 +54,8 @@ def record_foundation_health(awareness: SelfAwarenessRuntime) -> None:
         if awareness.incident_persistence_available
         else HealthState.DEGRADED
     )
-    awareness.observe(
+    _observe_safely(
+        awareness,
         component_id="incidents",
         source="startup",
         state=incident_state,
@@ -68,7 +82,8 @@ def require_startup_preflight_with_health(
     checks = run_startup_preflight(config)
     print_preflight(checks)
     for check in checks:
-        awareness.observe(
+        _observe_safely(
+            awareness,
             component_id=_preflight_component(check.label),
             source=f"preflight:{check.label.casefold().replace(' ', '_')}",
             state=HealthState.HEALTHY if check.ok else HealthState.FAILED,
@@ -91,7 +106,8 @@ def record_capability_catalog_health(
     awareness: SelfAwarenessRuntime,
     catalog: CapabilityCatalog,
 ) -> None:
-    awareness.observe(
+    _observe_safely(
+        awareness,
         component_id="capability_runtime",
         source="capability_catalog",
         state=HealthState.HEALTHY,
@@ -116,7 +132,8 @@ class CapabilityExecutionHealthObserver:
             if result.status is CapabilityStatus.SUCCEEDED
             else HealthState.DEGRADED
         )
-        self._awareness.observe(
+        _observe_safely(
+            self._awareness,
             component_id="capability_runtime",
             source=f"execution:{result.capability_key}",
             state=state,
