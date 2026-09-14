@@ -153,6 +153,8 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
                 self._a6_events.pop(expected_seq, None)
             LOGGER.warning("Pocket 3 A6 direct ACK timed out; awaiting A5/0x89 state")
             return False
+        with self._lock:
+            self._a6_events.pop(expected_seq, None)
         return bool(reply_holder and reply_holder[0][:1] == b"\x00")
 
     def _try_saved_wifi_fast_path(self) -> bool:
