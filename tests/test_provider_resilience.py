@@ -194,6 +194,45 @@ async def test_terminal_realtime_failure_is_announced_locally_then_closed() -> N
     await observer.terminal_task
 
 
+@pytest.mark.asyncio
+async def test_sdk_recoverable_quota_still_becomes_terminal_jarvis_failure() -> None:
+    session = FakeSession()
+    state = ProviderResilienceState()
+    speech = FakeStatusSpeech()
+    output = object()
+    health_updates: list[ProviderHealth] = []
+    observer = ProviderResilienceSessionObserver(
+        session,
+        provider="openai",
+        state=state,
+        status_speech=speech,
+        output_getter=lambda: output,  # type: ignore[arg-type]
+        health_observer=lambda current: health_updates.append(current.health),
+    )
+    wrapped = FakeRealtimeError(
+        FakeStatusError(
+            "You have no credits remaining",
+            status_code=429,
+            body={"error": {"code": "credit_balance_exhausted"}},
+            retryable=True,
+        ),
+        recoverable=True,
+    )
+    event = SimpleNamespace(error=wrapped, source=object())
+
+    session.emit("error", event)
+    session.emit("error", event)
+    await asyncio.wait_for(session.closed.wait(), timeout=1)
+
+    assert state.health is ProviderHealth.DEGRADED
+    assert state.last_failure is not None
+    assert state.last_failure.kind is ProviderFailureKind.QUOTA_EXHAUSTED
+    assert health_updates == [ProviderHealth.DEGRADED]
+    assert speech.spoken == [(output, state.last_failure.spoken_message)]
+    assert observer.terminal_task is not None
+    await observer.terminal_task
+
+
 def test_recoverable_realtime_error_is_not_announced_or_marked_degraded() -> None:
     session = FakeSession()
     state = ProviderResilienceState()
