@@ -707,7 +707,9 @@ class Pocket3NativeTrackerClient:
                 stage="protocol readiness",
             )
             elapsed_after_notify = asyncio.get_running_loop().time() - notify_ready_at
-            settle_remaining = max(0.0, _BLE_SERVICE_SETTLE_SECONDS - elapsed_after_notify)
+            settle_remaining = max(
+                0.0, _BLE_SERVICE_SETTLE_SECONDS - elapsed_after_notify
+            )
             if settle_remaining:
                 await self._wait_for_ble_settle(
                     settle_remaining,
