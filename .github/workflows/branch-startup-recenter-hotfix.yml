@@ -1,0 +1,178 @@
+name: Startup and Recenter Hotfix Applicator
+
+on:
+  push:
+    branches:
+      - fix/runtime-stability-pass
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out stabilization branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/runtime-stability-pass
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply startup lock and recenter sequencing fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str, label: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              assert text.count(old) == 1, f"{label} drifted: {text.count(old)} matches"
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          # Voice runtime: generic bounded startup-readiness barrier before greeting.
+          replace_once(
+              "src/jarvis/voice/runtime.py",
+              "StartupGreetingFactory = Callable[[], str]\n",
+              "StartupGreetingFactory = Callable[[], str]\nStartupReadinessWaiter = Callable[[float], bool]\n",
+              "startup readiness type alias",
+          )
+          replace_once(
+              "src/jarvis/voice/runtime.py",
+              "        startup_greeting_factory: StartupGreetingFactory = select_startup_greeting,\n    ) -> None:\n",
+              "        startup_greeting_factory: StartupGreetingFactory = select_startup_greeting,\n        startup_readiness_waiter: StartupReadinessWaiter | None = None,\n        startup_readiness_timeout_seconds: float = 30.0,\n    ) -> None:\n",
+              "voice runtime constructor signature",
+          )
+          replace_once(
+              "src/jarvis/voice/runtime.py",
+              "        self._startup_greeting_factory = startup_greeting_factory\n\n    @property\n",
+              "        self._startup_greeting_factory = startup_greeting_factory\n        if startup_readiness_timeout_seconds <= 0:\n            raise ValueError(\"startup_readiness_timeout_seconds must be positive\")\n        self._startup_readiness_waiter = startup_readiness_waiter\n        self._startup_readiness_timeout_seconds = startup_readiness_timeout_seconds\n\n    @property\n",
+              "voice runtime startup readiness fields",
+          )
+          replace_once(
+              "src/jarvis/voice/runtime.py",
+              "    async def _speak_startup_greeting(self) -> None:\n",
+              "    async def _wait_for_startup_readiness(self) -> None:\n        waiter = self._startup_readiness_waiter\n        if waiter is None:\n            return\n        timeout = self._startup_readiness_timeout_seconds\n        LOGGER.info(\n            \"JARVIS startup waiting up to %.1fs for trusted camera tracking lock\",\n            timeout,\n        )\n        ready = await asyncio.to_thread(waiter, timeout)\n        if ready:\n            LOGGER.info(\"JARVIS startup camera tracking lock is ready\")\n        else:\n            LOGGER.warning(\n                \"JARVIS startup camera tracking lock was not confirmed within %.1fs; \"\n                \"continuing without blocking voice startup\",\n                timeout,\n            )\n\n    async def _speak_startup_greeting(self) -> None:\n",
+              "voice runtime startup readiness method",
+          )
+          replace_once(
+              "src/jarvis/voice/runtime.py",
+              "            await self._speak_startup_greeting()\n            self._state = VoiceRuntimeState.IDLE\n",
+              "            await self._wait_for_startup_readiness()\n            await self._speak_startup_greeting()\n            self._state = VoiceRuntimeState.IDLE\n",
+              "voice runtime readiness before greeting",
+          )
+
+          # Native tracking observer: expose only the trusted LOCKED state as startup-ready.
+          replace_once(
+              "src/jarvis/vision/native_owner_tracking.py",
+              "        self._recovery_succeeded: bool | None = None\n        self._closing = threading.Event()\n",
+              "        self._recovery_succeeded: bool | None = None\n        self._closing = threading.Event()\n        self._startup_lock_event = threading.Event()\n",
+              "tracking observer startup event",
+          )
+          replace_once(
+              "src/jarvis/vision/native_owner_tracking.py",
+              "    def perception_fps_hint(self) -> float:\n",
+              "    def wait_for_startup_lock(self, timeout_seconds: float) -> bool:\n        \"\"\"Wait for a real OWNER-authorized native LOCKED state.\"\"\"\n\n        if timeout_seconds <= 0:\n            raise ValueError(\"timeout_seconds must be positive\")\n        return self._startup_lock_event.wait(timeout_seconds)\n\n    def perception_fps_hint(self) -> float:\n",
+              "tracking observer startup wait method",
+          )
+          replace_once(
+              "src/jarvis/vision/native_owner_tracking.py",
+              "        decision = self.controller.step(\n            now=now,\n            owner_bounds=owner_bounds,\n            owner_observed_at=owner_observed_at,\n            native=native_status,\n        )\n        if decision.state is not self._last_logged_state:\n",
+              "        decision = self.controller.step(\n            now=now,\n            owner_bounds=owner_bounds,\n            owner_observed_at=owner_observed_at,\n            native=native_status,\n        )\n        if decision.state is ReacquisitionState.LOCKED:\n            self._startup_lock_event.set()\n        if decision.state is not self._last_logged_state:\n",
+              "tracking observer lock event set",
+          )
+          replace_once(
+              "src/jarvis/vision/native_owner_tracking.py",
+              "        self._target_attempts_without_native_lock = 0\n\n    def _reconnect_due(self, now: float) -> bool:\n",
+              "        self._target_attempts_without_native_lock = 0\n        self._startup_lock_event.clear()\n\n    def _reconnect_due(self, now: float) -> bool:\n",
+              "tracking observer startup event clear",
+          )
+
+          # Production wiring: Pocket tracking gate only when native tracking exists.
+          replace_once(
+              "src/jarvis/voice/production_runtime.py",
+              "_NATIVE_TRACKING_EVIDENCE_MAX_GAP_SECONDS = 2.0\n",
+              "_NATIVE_TRACKING_EVIDENCE_MAX_GAP_SECONDS = 2.0\n_POCKET3_STARTUP_LOCK_WAIT_SECONDS = 30.0\n",
+              "production startup lock timeout constant",
+          )
+          replace_once(
+              "src/jarvis/voice/production_runtime.py",
+              "        capability_runtime=capability_runtime,\n        session_factory=production_session_factory,\n    )\n",
+              "        capability_runtime=capability_runtime,\n        session_factory=production_session_factory,\n        startup_readiness_waiter=(\n            tracking_observer.wait_for_startup_lock\n            if tracking_observer is not None\n            else None\n        ),\n        startup_readiness_timeout_seconds=_POCKET3_STARTUP_LOCK_WAIT_SECONDS,\n    )\n",
+              "production startup lock wiring",
+          )
+
+          # Resilient A6 helper: use the same race-free ACK sequencing for SET and CLEAR.
+          p = Path("src/jarvis/vision/pocket3_recovery.py")
+          text = p.read_text(encoding="utf-8")
+          start = text.index("    def set_target(self, bounds: BoundingBox) -> bool:\n")
+          end = text.index("    def _try_saved_wifi_fast_path(self) -> bool:\n", start)
+          replacement = '''    def _send_a6_with_ack(self, payload: bytes, *, timeout_message: str) -> bool:\n        \"\"\"Send one A6 with its ACK waiter installed before UDP transmission.\"\"\"\n\n        if not self.connected:\n            raise RuntimeError(\"Pocket 3 native tracking datalink is not connected\")\n        event = threading.Event()\n        reply_holder: list[bytes] = []\n\n        with self._io_lock:\n            with self._lock:\n                expected_seq = self._command_seq\n                self._a6_events[expected_seq] = (event, reply_holder)\n            try:\n                actual_seq = super()._send_command(\n                    receiver=0x01,\n                    flags=0x40,\n                    cmd_set=0x02,\n                    cmd_id=0xA6,\n                    payload=payload,\n                )\n            except Exception:\n                with self._lock:\n                    self._a6_events.pop(expected_seq, None)\n                raise\n\n        if actual_seq != expected_seq:\n            with self._lock:\n                self._a6_events.pop(expected_seq, None)\n            raise RuntimeError(\"Pocket 3 A6 sequence reservation drifted unexpectedly\")\n\n        if not event.wait(self.config.command_timeout_seconds):\n            with self._lock:\n                self._a6_events.pop(expected_seq, None)\n            LOGGER.warning(timeout_message)\n            return False\n        with self._lock:\n            self._a6_events.pop(expected_seq, None)\n        return bool(reply_holder and reply_holder[0][:1] == b\"\\x00\")\n\n    def set_target(self, bounds: BoundingBox) -> bool:\n        \"\"\"Send an OWNER target and synchronously observe its direct A6 ACK.\"\"\"\n\n        with self._lock:\n            tracking_id = self._tracking_id\n            self._tracking_id = (self._tracking_id + 1) & 0xFFFF\n            if self._tracking_id == 0:\n                self._tracking_id = 1\n        payload = (\n            b\"\\x01\\x00\\x00\"\n            + struct.pack(\"<H\", tracking_id)\n            + struct.pack(\n                \"<ffff\",\n                bounds.center_x,\n                bounds.center_y,\n                bounds.width,\n                bounds.height,\n            )\n        )\n        return self._send_a6_with_ack(\n            payload,\n            timeout_message=(\n                \"Pocket 3 A6 direct ACK timed out; awaiting A5/0x89 state\"\n            ),\n        )\n\n    def clear_target(self) -> None:\n        \"\"\"Stop ActiveTrack before a subsequent gimbal recenter command.\"\"\"\n\n        if not self.connected:\n            return\n        direct_ack = self._send_a6_with_ack(\n            bytes(21),\n            timeout_message=(\n                \"Pocket 3 A6 clear-target ACK timed out; continuing with recenter\"\n            ),\n        )\n        LOGGER.info(\"Pocket 3 A6 clear target completed: direct_ack=%s\", direct_ack)\n\n'''
+          p.write_text(text[:start] + replacement + text[end:], encoding="utf-8")
+
+          # Tests: voice greeting barrier.
+          replace_once(
+              "tests/test_voice_runtime.py",
+              "import asyncio\n",
+              "import asyncio\nimport threading\n",
+              "voice runtime threading import",
+          )
+          replace_once(
+              "tests/test_voice_runtime.py",
+              "class FakeAudio:\n    def __init__(self) -> None:\n        self.output = LocalAudioOutput(output_device=None)\n        self.activated = False\n        self.deactivated = False\n\n    def activate_session(self, session_input) -> None:\n",
+              "class FakeDetector:\n    def __init__(self) -> None:\n        self.release = asyncio.Event()\n\n    async def wait_for_detection(self):\n        await self.release.wait()\n        return SimpleNamespace(name=\"jarvis\", confidence=1.0)\n\n\nclass FakeAudio:\n    def __init__(self) -> None:\n        self.output = LocalAudioOutput(output_device=None)\n        self.detector = FakeDetector()\n        self.started = asyncio.Event()\n        self.activated = False\n        self.deactivated = False\n\n    async def start(self) -> None:\n        self.started.set()\n\n    async def resume_wake(self, *, cooldown_seconds: float) -> None:\n        del cooldown_seconds\n\n    async def aclose(self) -> None:\n        return None\n\n    def set_overflow_handler(self, handler) -> None:\n        del handler\n\n    def activate_session(self, session_input) -> None:\n",
+              "voice runtime fake audio lifecycle",
+          )
+          marker = "\n\n@pytest.mark.parametrize(\n    \"text\",\n"
+          addition = '''\n\n@pytest.mark.asyncio\nasync def test_startup_greeting_waits_for_tracking_readiness() -> None:\n    audio = FakeAudio()\n    scripted_speech = FakeScriptedSpeech()\n    readiness = threading.Event()\n    calls: list[float] = []\n\n    def wait_for_ready(timeout_seconds: float) -> bool:\n        calls.append(timeout_seconds)\n        return readiness.wait(timeout_seconds)\n\n    runtime = VoiceRuntimeController(\n        JarvisConfig(),\n        audio,  # type: ignore[arg-type]\n        scripted_speech=scripted_speech,\n        startup_readiness_waiter=wait_for_ready,\n        startup_readiness_timeout_seconds=1.0,\n    )\n    task = asyncio.create_task(runtime.run())\n    await asyncio.wait_for(audio.started.wait(), timeout=1)\n    await asyncio.sleep(0.05)\n    assert scripted_speech.started.is_set() is False\n\n    readiness.set()\n    await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)\n    assert calls == [1.0]\n\n    scripted_speech.release.set()\n    await asyncio.sleep(0)\n    runtime.request_shutdown()\n    await asyncio.wait_for(task, timeout=1)\n\n\n@pytest.mark.parametrize(\n    \"text\",\n'''
+          replace_once(
+              "tests/test_voice_runtime.py",
+              marker,
+              addition,
+              "startup greeting readiness regression insertion",
+          )
+
+          # Tests: trusted lock event + real owner-loss recenter path.
+          marker = "\n\ndef test_observer_never_targets_unconfirmed_visible_person() -> None:\n"
+          addition = '''\n\ndef test_observer_recenters_after_confirmed_owner_loss() -> None:\n    owner = OwnerContextState()\n    client = FakeNativeClient()\n    observer = NativeOwnerTrackingObserver(owner_context=owner, client=client)  # type: ignore[arg-type]\n    bounds = BoundingBox(0.20, 0.15, 0.55, 0.85)\n\n    owner.publish(live_owner(track_id=7, observed_at=10.0))\n    observer.observe(\n        frame(1, 10.0),\n        snapshot(1, 10.0, track(7, bounds, 10.0)),\n    )\n    client.native_status = NativeTrackingStatus(\n        connected=True,\n        active=True,\n        last_poll_at=10.4,\n        last_subject_push_at=10.45,\n    )\n    owner.publish(live_owner(track_id=7, observed_at=10.5))\n    observer.observe(\n        frame(2, 10.5),\n        snapshot(2, 10.5, track(7, bounds, 10.5)),\n    )\n    assert observer.wait_for_startup_lock(0.001) is True\n    assert observer.controller.state is ReacquisitionState.LOCKED\n\n    owner.invalidate(\"owner_left_frame\")\n    client.native_status = NativeTrackingStatus(\n        connected=True,\n        active=False,\n        last_poll_at=13.0,\n        last_subject_push_at=11.0,\n    )\n    observer.observe(frame(3, 13.0), snapshot(3, 13.0))\n    assert observer.controller.state is ReacquisitionState.REACQUIRING\n    assert client.recenters == 0\n\n    observer.observe(frame(4, 14.1), snapshot(4, 14.1))\n    assert client.clears == 1\n    assert client.recenters == 1\n\n\ndef test_observer_never_targets_unconfirmed_visible_person() -> None:\n'''
+          replace_once(
+              "tests/test_native_owner_tracking.py",
+              marker,
+              addition,
+              "owner loss recenter regression insertion",
+          )
+
+          # Tests: clear target uses the race-free A6 waiter before recenter can follow.
+          marker = "\n\ndef test_close_invalidates_stale_native_tracking_and_wakes_a6_waiters() -> None:\n"
+          addition = '''\n\ndef test_clear_target_waits_for_fast_a6_reply(\n    monkeypatch: pytest.MonkeyPatch,\n) -> None:\n    client = _client()\n    with client._lock:\n        client._connected = True\n\n    def immediate_reply_send(\n        self: Pocket3NativeTrackerClient,\n        *,\n        receiver: int,\n        flags: int,\n        cmd_set: int,\n        cmd_id: int,\n        payload: bytes,\n    ) -> int:\n        del receiver, flags, cmd_set, cmd_id, payload\n        seq = self._command_seq\n        self._command_seq = (self._command_seq + 1) & 0xFFFF\n        pending = self._a6_events.get(seq)\n        assert pending is not None\n        event, holder = pending\n        holder.append(b\"\\x00\")\n        event.set()\n        return seq\n\n    monkeypatch.setattr(\n        Pocket3NativeTrackerClient, \"_send_command\", immediate_reply_send\n    )\n\n    client.clear_target()\n    assert client._a6_events == {}\n\n\ndef test_close_invalidates_stale_native_tracking_and_wakes_a6_waiters() -> None:\n'''
+          replace_once(
+              "tests/test_pocket3_recovery.py",
+              marker,
+              addition,
+              "clear target A6 waiter regression insertion",
+          )
+          PY
+
+      - name: Format and lint touched files
+        run: |
+          python -m pip install "ruff==0.16.5"
+          ruff format src/jarvis/voice/runtime.py src/jarvis/voice/production_runtime.py src/jarvis/vision/native_owner_tracking.py src/jarvis/vision/pocket3_recovery.py tests/test_voice_runtime.py tests/test_native_owner_tracking.py tests/test_pocket3_recovery.py
+          ruff check src/jarvis/voice/runtime.py src/jarvis/voice/production_runtime.py src/jarvis/vision/native_owner_tracking.py src/jarvis/vision/pocket3_recovery.py tests/test_voice_runtime.py tests/test_native_owner_tracking.py tests/test_pocket3_recovery.py
+          python -m compileall -q src tests
+
+      - name: Commit fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/jarvis/voice/runtime.py src/jarvis/voice/production_runtime.py src/jarvis/vision/native_owner_tracking.py src/jarvis/vision/pocket3_recovery.py tests/test_voice_runtime.py tests/test_native_owner_tracking.py tests/test_pocket3_recovery.py
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Gate greeting on Pocket lock and sequence recenter"
+          git push origin HEAD:fix/runtime-stability-pass
