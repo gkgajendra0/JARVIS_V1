@@ -169,7 +169,6 @@ def roll_up_dependency_health(
     for dependency_id, criticality, snapshot in dependencies:
         dependency_states.append((dependency_id, snapshot.state))
         unhealthy = snapshot.state in {
-            HealthState.UNKNOWN,
             HealthState.STARTING,
             HealthState.DEGRADED,
             HealthState.FAILED,
