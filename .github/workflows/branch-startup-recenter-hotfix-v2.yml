@@ -34,10 +34,10 @@ jobs:
           python -m compileall -q src tests
 
       - name: Install focused test dependencies
-        run: python -m pip install -e ".[test]"
+        run: python -m pip install -e ".[dev,phase45d-acceptance,hands]"
 
       - name: Run focused regressions
-        run: pytest -q tests/test_voice_runtime.py tests/test_native_owner_tracking.py tests/test_pocket3_recovery.py
+        run: python -m pytest -q tests/test_voice_runtime.py tests/test_native_owner_tracking.py tests/test_pocket3_recovery.py
 
       - name: Commit fixes
         shell: bash
