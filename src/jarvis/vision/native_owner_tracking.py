@@ -150,7 +150,9 @@ class NativeOwnerTrackingObserver:
                 # stale frame timestamp captured before it began.
                 self._last_connect_attempt_at = time.monotonic()
                 if not self._closing.is_set():
-                    LOGGER.exception("Pocket 3 native tracking connection attempt failed")
+                    LOGGER.exception(
+                        "Pocket 3 native tracking connection attempt failed"
+                    )
                 return
             self._last_connect_attempt_at = time.monotonic()
             LOGGER.info(
