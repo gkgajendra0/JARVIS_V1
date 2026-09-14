@@ -10,7 +10,7 @@ from jarvis.capabilities.self_awareness_reads import SelfAwarenessReadExecutor
 from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.self_model.health import HealthState
-from jarvis.voice.capability_tools import LocalReadAgentTools
+from jarvis.voice.capability_tools import LocalReadAgentTools, SelfAwarenessAgentTools
 
 
 class FakeAuthority:
@@ -28,7 +28,7 @@ class FakeAuthority:
         pass
 
 
-def _tools(tmp_path: Path, user_text: str):
+def _toolsets(tmp_path: Path, user_text: str):
     awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
     executor = SelfAwarenessReadExecutor(awareness)
     runtime = CapabilityRuntime(
@@ -39,12 +39,16 @@ def _tools(tmp_path: Path, user_text: str):
     conversation = ConversationSession(session_id="session-1")
     conversation.start()
     conversation.accept_turn(ConversationRole.USER, user_text)
-    return awareness, LocalReadAgentTools(runtime, conversation)
+    return (
+        awareness,
+        SelfAwarenessAgentTools(runtime, conversation),
+        LocalReadAgentTools(runtime, conversation),
+    )
 
 
 @pytest.mark.asyncio
 async def test_voice_can_read_deterministic_self_health(tmp_path: Path) -> None:
-    awareness, tools = _tools(tmp_path, "Jarvis, what is your health status?")
+    awareness, tools, _ = _toolsets(tmp_path, "Jarvis, what is your health status?")
     awareness.observe(
         component_id="runtime.provider",
         source="test_probe",
@@ -70,7 +74,7 @@ async def test_voice_can_read_deterministic_self_health(tmp_path: Path) -> None:
 async def test_voice_self_read_requires_current_self_diagnostic_warrant(
     tmp_path: Path,
 ) -> None:
-    awareness, tools = _tools(tmp_path, "What is the weather today?")
+    awareness, tools, _ = _toolsets(tmp_path, "What is the weather today?")
 
     result = await tools.inspect_self_awareness(operation="get_system_health")
 
@@ -80,8 +84,10 @@ async def test_voice_self_read_requires_current_self_diagnostic_warrant(
 
 
 @pytest.mark.asyncio
-async def test_voice_can_request_component_implementation_details(tmp_path: Path) -> None:
-    awareness, tools = _tools(
+async def test_voice_can_request_component_implementation_details(
+    tmp_path: Path,
+) -> None:
+    awareness, tools, _ = _toolsets(
         tmp_path,
         "Jarvis, where is your provider component code implemented?",
     )
@@ -96,8 +102,11 @@ async def test_voice_can_request_component_implementation_details(tmp_path: Path
     awareness.close()
 
 
-def test_voice_tool_bundle_exposes_self_health_tool(tmp_path: Path) -> None:
-    awareness, tools = _tools(tmp_path, "Jarvis health status")
+def test_voice_tool_bundle_exposes_self_health_tool_only_when_available(
+    tmp_path: Path,
+) -> None:
+    awareness, self_tools, combined_tools = _toolsets(tmp_path, "Jarvis health status")
 
-    assert tools.tools[0] == tools.inspect_self
+    assert [tool.id for tool in self_tools.tools] == ["inspect_self"]
+    assert [tool.id for tool in combined_tools.tools] == ["inspect_self", "use_computer"]
     awareness.close()
