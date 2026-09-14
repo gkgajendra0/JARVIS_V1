@@ -96,12 +96,16 @@ class SelfAwarenessReadExecutor:
             ),
             "list_recent_incidents": "Read bounded recent JARVIS engineering incidents",
         }
+        routine_health = request.operation in {
+            "get_system_health",
+            "get_component_health",
+        }
         return PreparedCapability(
             request=request,
             target=target,
             parameters=params,
             material_summary=summaries[request.operation],
-            attributes=ActionAttributes(private_read=True),
+            attributes=(ActionAttributes() if routine_health else ActionAttributes(private_read=True)),
             execution_payload={},
         )
 
