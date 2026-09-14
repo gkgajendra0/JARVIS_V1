@@ -7,6 +7,7 @@ from collections.abc import Callable
 
 from google.genai import types as google_types
 from livekit.agents import (
+    AgentFalseInterruptionEvent,
     AgentSession,
     CloseEvent,
     CloseReason,
@@ -106,6 +107,7 @@ class LiveKitConversationBridge:
         self._accepted_turn_observers: list[AcceptedTurnObserver] = []
         self._close_observers: list[ConversationCloseObserver] = []
         session.on("user_input_transcribed", self._on_user_input_transcribed)
+        session.on("agent_false_interruption", self._on_agent_false_interruption)
         session.on("conversation_item_added", self._on_conversation_item_added)
         session.on("error", self._on_error)
         session.on("close", self._on_close)
@@ -147,6 +149,17 @@ class LiveKitConversationBridge:
                 "Retired voice USER generation with final empty transcript | generation=%s",
                 generation,
             )
+
+    def _on_agent_false_interruption(self, event: AgentFalseInterruptionEvent) -> None:
+        generation = self.conversation.discard_untranscribed_user_utterance()
+        if generation is None:
+            return
+        LOGGER.info(
+            "Retired voice USER generation after LiveKit false interruption | "
+            "generation=%s | resumed=%s",
+            generation,
+            event.resumed,
+        )
 
     def _on_conversation_item_added(self, event: ConversationItemAddedEvent) -> None:
         item = event.item
