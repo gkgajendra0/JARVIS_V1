@@ -161,7 +161,9 @@ class LiveKitConversationBridge:
             external_item_id=external_item_id,
         )
         if not self.live_context.observe_turn(turn):
-            raise RuntimeError("canonical accepted turn was already present in LiveContext")
+            raise RuntimeError(
+                "canonical accepted turn was already present in LiveContext"
+            )
         if external_item_id is not None:
             self._seen_item_ids.add(external_item_id)
         if self._show_transcript:
@@ -252,7 +254,9 @@ class LiveKitConversationBridge:
         if not text:
             return
 
-        if role is ConversationRole.USER and self._consume_transcript_committed_turn(text):
+        if role is ConversationRole.USER and self._consume_transcript_committed_turn(
+            text
+        ):
             if item_id is not None:
                 self._seen_item_ids.add(item_id)
             return
