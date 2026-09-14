@@ -32,94 +32,97 @@ jobs:
           native_path = Path("src/jarvis/vision/pocket3_native.py")
           native = native_path.read_text(encoding="utf-8")
 
-          old = '''    connect_timeout_seconds: float = 25.0
-              wifi_join_timeout_seconds: float = 15.0
-              command_timeout_seconds: float = 1.5
-          '''.replace("              ", "    ")
-          new = '''    connect_timeout_seconds: float = 25.0
-              wifi_ap_settle_seconds: float = 2.0
-              wifi_join_timeout_seconds: float = 15.0
-              command_timeout_seconds: float = 1.5
-          '''.replace("              ", "    ")
+          old = (
+              "    connect_timeout_seconds: float = 25.0\n"
+              "    wifi_join_timeout_seconds: float = 15.0\n"
+              "    command_timeout_seconds: float = 1.5\n"
+          )
+          new = (
+              "    connect_timeout_seconds: float = 25.0\n"
+              "    wifi_ap_settle_seconds: float = 2.0\n"
+              "    wifi_join_timeout_seconds: float = 15.0\n"
+              "    command_timeout_seconds: float = 1.5\n"
+          )
           assert native.count(old) == 1, "Pocket3NativeConfig block drifted"
           native = native.replace(old, new, 1)
 
-          old = '''            "connect_timeout_seconds",
-              "wifi_join_timeout_seconds",
-          '''.replace("              ", "            ")
-          new = '''            "connect_timeout_seconds",
-              "wifi_ap_settle_seconds",
-              "wifi_join_timeout_seconds",
-          '''.replace("              ", "            ")
+          old = (
+              '            "connect_timeout_seconds",\n'
+              '            "wifi_join_timeout_seconds",\n'
+          )
+          new = (
+              '            "connect_timeout_seconds",\n'
+              '            "wifi_ap_settle_seconds",\n'
+              '            "wifi_join_timeout_seconds",\n'
+          )
           assert native.count(old) == 1, "Pocket3NativeConfig validation block drifted"
           native = native.replace(old, new, 1)
 
-          old = '''            self._credentials_ready.set()
-
-              keepalive = _build_duml(
-          '''.replace("              ", "            ")
-          new = '''            # FFF5 is write-without-response. The hardware-proven Pocket 3
-              # sequence leaves a bounded settle window after 53/10 wakes the Wi-Fi AP
-              # before Windows association and before the next BLE keepalive write.
-              await asyncio.sleep(self.config.wifi_ap_settle_seconds)
-              LOGGER.info(
-                  "Pocket 3 Wi-Fi AP wake settle complete; releasing Windows association"
-              )
-              self._credentials_ready.set()
-
-              keepalive = _build_duml(
-          '''.replace("              ", "            ")
+          old = (
+              "            self._credentials_ready.set()\n"
+              "\n"
+              "            keepalive = _build_duml(\n"
+          )
+          new = (
+              "            # FFF5 is write-without-response. The hardware-proven Pocket 3\n"
+              "            # sequence leaves a bounded settle window after 53/10 wakes the Wi-Fi AP\n"
+              "            # before Windows association and before the next BLE keepalive write.\n"
+              "            await asyncio.sleep(self.config.wifi_ap_settle_seconds)\n"
+              "            LOGGER.info(\n"
+              '                "Pocket 3 Wi-Fi AP wake settle complete; releasing Windows association"\n'
+              "            )\n"
+              "            self._credentials_ready.set()\n"
+              "\n"
+              "            keepalive = _build_duml(\n"
+          )
           assert native.count(old) == 1, "Pocket 3 AP wake handoff block drifted"
           native = native.replace(old, new, 1)
           native_path.write_text(native, encoding="utf-8")
 
           recovery_path = Path("src/jarvis/vision/pocket3_recovery.py")
           recovery = recovery_path.read_text(encoding="utf-8")
-          old = '''                LOGGER.warning(
-                      "Pocket 3 Wi-Fi association attempt %d/%d failed; retrying",
-                      attempt,
-                      self.recovery_config.wifi_join_attempts,
-                  )
-          '''.replace("                  ", "                ")
-          new = '''                LOGGER.warning(
-                      "Pocket 3 Wi-Fi association attempt %d/%d failed (%s: %s); retrying",
-                      attempt,
-                      self.recovery_config.wifi_join_attempts,
-                      type(exc).__name__,
-                      exc,
-                  )
-          '''.replace("                  ", "                ")
+          old = (
+              "                LOGGER.warning(\n"
+              '                    "Pocket 3 Wi-Fi association attempt %d/%d failed; retrying",\n'
+              "                    attempt,\n"
+              "                    self.recovery_config.wifi_join_attempts,\n"
+              "                )\n"
+          )
+          new = (
+              "                LOGGER.warning(\n"
+              '                    "Pocket 3 Wi-Fi association attempt %d/%d failed (%s: %s); retrying",\n'
+              "                    attempt,\n"
+              "                    self.recovery_config.wifi_join_attempts,\n"
+              "                    type(exc).__name__,\n"
+              "                    exc,\n"
+              "                )\n"
+          )
           assert recovery.count(old) == 1, "Pocket 3 Wi-Fi retry warning block drifted"
           recovery = recovery.replace(old, new, 1)
           recovery_path.write_text(recovery, encoding="utf-8")
 
           test_path = Path("tests/test_pocket3_recovery.py")
           tests = test_path.read_text(encoding="utf-8")
-          marker = '''
-
-          def test_saved_windows_profile_can_be_reused_without_ble(
-          '''.replace("          ", "")
-          addition = '''
-
-          def test_native_config_rejects_non_positive_wifi_ap_settle_seconds() -> None:
-              with pytest.raises(ValueError, match="wifi_ap_settle_seconds"):
-                  Pocket3NativeConfig(wifi_ap_settle_seconds=0.0)
-
-
-          def test_native_ble_session_settles_ap_before_releasing_windows_join() -> None:
-              import inspect
-
-              source = inspect.getsource(Pocket3NativeTrackerClient._ble_session)
-              settle = source.index(
-                  "await asyncio.sleep(self.config.wifi_ap_settle_seconds)"
-              )
-              credentials_ready = source.index("self._credentials_ready.set()")
-              keepalive = source.index("keepalive = _build_duml")
-              assert settle < credentials_ready < keepalive
-
-
-          def test_saved_windows_profile_can_be_reused_without_ble(
-          '''.replace("          ", "")
+          marker = "\n\ndef test_saved_windows_profile_can_be_reused_without_ble(\n"
+          addition = (
+              "\n\n"
+              "def test_native_config_rejects_non_positive_wifi_ap_settle_seconds() -> None:\n"
+              "    with pytest.raises(ValueError, match=\"wifi_ap_settle_seconds\"):\n"
+              "        Pocket3NativeConfig(wifi_ap_settle_seconds=0.0)\n"
+              "\n\n"
+              "def test_native_ble_session_settles_ap_before_releasing_windows_join() -> None:\n"
+              "    import inspect\n"
+              "\n"
+              "    source = inspect.getsource(Pocket3NativeTrackerClient._ble_session)\n"
+              "    settle = source.index(\n"
+              '        "await asyncio.sleep(self.config.wifi_ap_settle_seconds)"\n'
+              "    )\n"
+              '    credentials_ready = source.index("self._credentials_ready.set()")\n'
+              '    keepalive = source.index("keepalive = _build_duml")\n'
+              "    assert settle < credentials_ready < keepalive\n"
+              "\n\n"
+              "def test_saved_windows_profile_can_be_reused_without_ble(\n"
+          )
           assert tests.count(marker) == 1, "Pocket 3 recovery test insertion point drifted"
           tests = tests.replace(marker, addition, 1)
           test_path.write_text(tests, encoding="utf-8")
