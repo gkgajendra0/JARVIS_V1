@@ -1,160 +1,71 @@
-# Step 7A / 9A — Governed Computer Use Research and Bounded Implementation
+# Step 7A / 9A — Governed Computer Use Research and Bounded Prototype
 
-Status: **IMPLEMENTED FOR OWNER-MACHINE TECHNOLOGY SMOKE — NOT PRODUCTION-VOICE ENABLED**
+Status: **HISTORICAL TECHNOLOGY PROTOTYPE — SUPERSEDED BY ACCEPTED JARVIS HANDS PR #30**
 
-Date: 2026-09-09
+Original date: 2026-09-09
 
-## Why this bounded interlude exists
+## Why this record remains
 
-The owner approved a narrow sequencing experiment before broad Step 7 local-file work:
-use the smallest provider-neutral computer-use boundary and mature provider computer-use
-technology instead of building custom GUI intelligence.
+This bounded interlude validated an early provider-neutral visual computer-use core before the full governed Hands architecture existed. It proved that mature provider Computer Use plus a replaceable local input/screenshot bridge was viable without building custom GUI intelligence from scratch.
 
-This does not mark Step 7 or Step 9 complete and does not change the protected roadmap
-sequence by itself.
+It did **not** itself constitute production voice authority, and it should not now be read as the current desktop architecture.
 
-## Research decision
+## Historical prototype
 
-The implementation follows the research-first rule.
-
-### Gemini
-
-Google's current Gemini Computer Use supports `desktop` as a first-class environment.
-The application supplies the current screenshot, Gemini returns bounded UI function
-calls, the application executes them, captures a new screenshot, and returns a
-`function_result`. Gemini 3.x uses normalized 0..999 screen coordinates and exposes
-provider safety decisions including `require_confirmation` and blocked outcomes.
-
-Selected default model: `gemini-3.6-flash`.
-
-Important implementation choices:
-
-- use the existing active provider credential;
-- enable Gemini screenshot prompt-injection detection;
-- never disable Gemini safety policies;
-- never auto-acknowledge `require_confirmation`;
-- use the same provider-neutral local executor contract as OpenAI.
-
-Reference:
-https://ai.google.dev/gemini-api/docs/computer-use
-
-### OpenAI
-
-The pinned OpenAI SDK already contains the current Responses `{"type": "computer"}`
-tool plus `computer_call`, batched actions, pending safety checks, and
-`computer_call_output` screenshot contracts. No SDK replacement is required.
-
-Selected default model: `gpt-5.6-terra` for the cost-balanced OpenAI path. The model
-remains replaceable.
-
-Important implementation choices:
-
-- pending provider safety checks stop execution;
-- safety checks are never silently acknowledged;
-- screenshot/action mechanics remain local and replaceable.
-
-Reference:
-https://platform.openai.com/docs/guides/tools-computer-use
-
-### Windows bridge
-
-The first replaceable local bridge uses:
-
-- MSS 10.2.0 for fast all-monitor screenshot capture;
-- PyAutoGUI 0.9.54 only as the bounded mouse/keyboard input driver;
-- existing OpenCV/Numpy for PNG encoding.
-
-MSS is imported before PyAutoGUI to avoid DPI-awareness interference. PyAutoGUI's
-upper-left emergency fail-safe remains enabled. The bridge is isolated behind the
-`ComputerExecutor` protocol so Microsoft UI Automation / `winapp ui` can replace or
-supplement input mechanics later without changing Gemini/OpenAI provider logic.
-
-References:
-https://pypi.org/project/mss/
-https://pyautogui.readthedocs.io/
-https://learn.microsoft.com/windows/apps/dev-tools/winapp-cli/ui-automation
-
-## Implemented contract
+The prototype separated:
 
 ```text
 ComputerUseService
-    |
-    +-- ComputerUseProvider
-    |      +-- GeminiComputerUseProvider
-    |      `-- OpenAIComputerUseProvider
-    |
-    `-- ComputerExecutor
-           `-- MssPyAutoGuiExecutor
+    +-- provider adapter
+    |     +-- Gemini computer-use protocol
+    |     `-- OpenAI computer-use protocol
+    `-- local ComputerExecutor
+          `-- bounded screenshot/input bridge
 ```
 
-The provider owns model-specific computer-use protocol mechanics.
-JARVIS owns the bounded local execution adapter and normalized truthful result.
+The provider owned model-specific computer-use protocol mechanics; JARVIS owned local execution/result normalization.
 
-The normal realtime Gemini/OpenAI voice brain is not replaced by this code.
+At that time production voice wiring was intentionally withheld because the final shared Hands transaction/authority/grounding architecture had not yet been designed and accepted.
 
-## Safety boundary
+## Safety lessons retained
 
-This commit deliberately does **not** register `computer_use` as a production voice
-tool yet.
+The prototype correctly established several constraints that carried forward:
 
-Accepted Step-3 authority policy classifies reversible local changes as requiring at
-least T2 `CORROBORATED_OWNER` plus direct intent for direct-user actions. Step 3
-deliberately closed with T2 unpromoted. The current normal voice runtime also does not
-yet assemble `AuthorityService` into arbitrary action tools.
+- provider safety signals supplement rather than replace JARVIS Authority;
+- safety confirmation/block states are never silently acknowledged;
+- visual execution is not permission to create arbitrary shell/deletion/installation/communication/payment/security/account/self-modification authority;
+- provider-specific screenshot/action mechanics must remain behind a replaceable JARVIS boundary;
+- real computer actions must not be downgraded to routine merely to avoid authority requirements.
 
-The implementation therefore refuses to solve the integration problem by:
+## What superseded it
 
-- pretending T1 is T2;
-- reclassifying real computer actions as routine merely to avoid authority;
-- adding a second ad-hoc permission system;
-- relying only on provider safety;
-- silently acknowledging provider safety checkpoints.
+PR #30 replaced the prototype as the production Hands architecture with:
 
-Production voice exposure remains a separate authority-binding task.
+- one canonical voice-facing `use_computer` handoff;
+- canonical USER-generation transaction leases and duplicate/supersession protection;
+- native Windows semantics first;
+- Playwright for browser tasks;
+- Microsoft `winapp` UI Automation for generic desktop tasks;
+- target-window-scoped visual Computer Use only after structured UI evidence is insufficient;
+- canonical `ActionProposal -> AuthorityService -> permit -> verification -> audit`;
+- generic multilingual grounding;
+- postcondition verification and bounded fast-path execution.
 
-## Owner-machine smoke
+The accepted visual path is therefore narrower and better governed than this early all-monitor screenshot/input smoke design: it is explicit opt-in, target-window scoped, geometry/focus bound, and has a deterministic CRITICAL risk floor.
 
-Install the optional bridge:
+PR #38 later hardened the accepted Hands path further by fixing canonical empty-transcript reconciliation, app-hint schema normalization and structured-UI stagnation escalation.
 
-```powershell
-pip install -e ".[computer-use]"
-```
+## T2 clarification
 
-Gemini smoke:
+This prototype was written while T2 was effectively unavailable for production computer actions. Current Hands does **not** solve that by promoting biometric evidence. Instead, a successful direct-user Windows Hello/T3 verification may establish the separately documented bounded same-session T2 convenience window for eligible non-critical work. Turn-specific spoken actor binding/general biometric T2 remain deferred.
 
-```powershell
-jarvis-computer-smoke notepad-type --provider gemini
-```
+## Final disposition
 
-Read-only Settings navigation smoke:
+Do not revive or merge this prototype as a parallel desktop-control stack. Keep it as research evidence showing why the mature provider Computer Use route was viable and which safety lessons survived.
 
-```powershell
-jarvis-computer-smoke settings-bluetooth-readonly --provider gemini
-```
+Current production truth is in:
 
-OpenAI can be selected with `--provider openai`.
-
-The smoke harness:
-
-- exposes only fixed non-consequential scenarios;
-- requires the owner to type `RUN` before any action;
-- keeps PyAutoGUI emergency fail-safe enabled;
-- never runs from normal `jarvis-voice`;
-- does not constitute production authority acceptance.
-
-## Acceptance gate before live voice wiring
-
-The next patch may expose a high-level canonical-user-turn `computer_use` tool only
-after all of the following are true:
-
-1. owner-machine Gemini or OpenAI smoke completes reliably;
-2. multi-monitor coordinates are correct on the actual Windows setup;
-3. provider safety confirmation/block paths halt before local execution;
-4. a real Step-3 authority context can be supplied without inventing/promoting trust;
-5. proposal -> approval -> permit -> immediate pre-execution revalidation is bound to
-   the same material computer task;
-6. no arbitrary shell, deletion, installation, communication, payment, security,
-   account, or self-modification authority enters this slice.
-
-Until then this is a technology-validating execution core, not a claim that JARVIS
-has production hands.
+- `JARVIS_HANDS_RUNTIME_ARCHITECTURE_PROPOSAL.md` (reconciled accepted architecture record);
+- `JARVIS_GENERIC_DESKTOP_AGENT_IMPLEMENTATION.md`;
+- `JARVIS_HANDS_H1_H5_OWNER_ACCEPTANCE.md`;
+- `POST_STEP_7_INTEGRATION_ACCEPTANCE.md`.

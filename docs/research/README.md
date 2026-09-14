@@ -1,10 +1,10 @@
-# Research Records
+# Research and Acceptance Records
 
-This directory contains bounded research records for the currently active product slice.
+This directory contains bounded research, implementation evidence, benchmark results, and owner-machine acceptance records for JARVIS product slices and approved interludes.
 
-Research is evidence, not architecture and not implementation authority. A record should be created only when the active step requires a real technology decision.
+Research is evidence, not architecture and not implementation authority. `docs/CURRENT_ARCHITECTURE.md` describes what currently exists, `docs/CURRENT_PLAN.md` owns active work, and `docs/ROADMAP.md` owns sequence.
 
-Each record should answer:
+Each record should answer, where applicable:
 
 - What JARVIS behavior is required?
 - What current technologies are credible candidates?
@@ -13,5 +13,12 @@ Each record should answer:
 - What are the architecture, security, privacy, licensing, cost, latency, reliability, and maintenance implications?
 - What benchmark or acceptance evidence is required?
 - What is the final decision: `KEEP_OURS`, `ADOPT`, `ADAPT`, `WRAP`, `REWRITE`, or `REJECT`?
+- Was the work accepted, bounded/deferred, superseded, rejected, or left experimental, and why?
 
-Do not research future subsystems just because they are interesting. Research only the active product slice unless a demonstrated blocker requires a detour.
+Historical proposal/experiment files may retain the state they had when written. They must not be treated as current architecture merely because they remain in Git. Later acceptance/reconciliation records take precedence for current status.
+
+For the accepted work after formal Step 7, including JARVIS Hands, Pocket 3 native OWNER tracking, selective runtime-performance recovery, PR #38 stability fixes, PR #40 Pocket BLE startup hardening, and the explicit deferred/superseded/rejected ledger, see `POST_STEP_7_INTEGRATION_ACCEPTANCE.md`.
+
+The focused owner-machine/CI acceptance record for PR #40 is `POCKET3_BLE_STARTUP_ACCEPTANCE_2026-09-14.md`.
+
+Do not research future subsystems merely because they are interesting. Research the active product slice unless a demonstrated blocker or owner-approved interlude requires a detour.
