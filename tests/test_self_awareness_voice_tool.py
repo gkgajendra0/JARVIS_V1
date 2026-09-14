@@ -108,5 +108,8 @@ def test_voice_tool_bundle_exposes_self_health_tool_only_when_available(
     awareness, self_tools, combined_tools = _toolsets(tmp_path, "Jarvis health status")
 
     assert [tool.id for tool in self_tools.tools] == ["inspect_self"]
-    assert [tool.id for tool in combined_tools.tools] == ["inspect_self", "use_computer"]
+    assert [tool.id for tool in combined_tools.tools] == [
+        "inspect_self",
+        "use_computer",
+    ]
     awareness.close()
