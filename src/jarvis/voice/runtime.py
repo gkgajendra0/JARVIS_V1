@@ -64,11 +64,13 @@ SessionFactory = Callable[
     [JarvisConfig], tuple[AgentSession, LiveKitConversationBridge]
 ]
 StartupGreetingFactory = Callable[[], str]
+StartupReadinessWaiter = Callable[[float], bool]
 
 _UPDATE_APPROVAL_PROMPT = (
     "A JARVIS software update is available. Shall I install it and restart now? "
     "Please answer yes or no."
 )
+_STANDBY_ACKNOWLEDGEMENT = "Of course. I'll be standing by if you need me."
 
 
 class VoiceRuntimeState(str, Enum):
@@ -89,6 +91,7 @@ class _UpdateApprovalRequest:
 _EXIT_CORES = frozenset(
     {
         "go to sleep",
+        "go back to sleep",
         "end session",
         "end the session",
         "सो जाओ",
@@ -178,6 +181,8 @@ class VoiceRuntimeController:
         speech_region_detector: SpeechRegionDetector | None = None,
         scripted_speech: ScriptedSpeech | None = None,
         startup_greeting_factory: StartupGreetingFactory = select_startup_greeting,
+        startup_readiness_waiter: StartupReadinessWaiter | None = None,
+        startup_readiness_timeout_seconds: float = 30.0,
     ) -> None:
         self.config = config
         self.audio = audio
@@ -203,6 +208,10 @@ class VoiceRuntimeController:
         self._scripted_speech = scripted_speech
         self._owns_scripted_speech = False
         self._startup_greeting_factory = startup_greeting_factory
+        if startup_readiness_timeout_seconds <= 0:
+            raise ValueError("startup_readiness_timeout_seconds must be positive")
+        self._startup_readiness_waiter = startup_readiness_waiter
+        self._startup_readiness_timeout_seconds = startup_readiness_timeout_seconds
 
     @property
     def state(self) -> VoiceRuntimeState:
@@ -233,6 +242,25 @@ class VoiceRuntimeController:
             self._scripted_speech = build_scripted_speech(self.config)
             self._owns_scripted_speech = True
         return self._scripted_speech
+
+    async def _wait_for_startup_readiness(self) -> bool:
+        if self._startup_readiness_waiter is None:
+            return True
+        timeout = self._startup_readiness_timeout_seconds
+        LOGGER.info(
+            "JARVIS startup waiting up to %.1fs for trusted camera tracking lock",
+            timeout,
+        )
+        ready = await asyncio.to_thread(self._startup_readiness_waiter, timeout)
+        if ready:
+            LOGGER.info("JARVIS startup camera tracking lock is ready")
+            return True
+        LOGGER.warning(
+            "JARVIS startup camera tracking lock was not confirmed within %.1fs; "
+            "entering wake mode silently",
+            timeout,
+        )
+        return False
 
     async def _speak_startup_greeting(self) -> None:
         if not self.config.startup_greeting_enabled:
@@ -527,7 +555,13 @@ class VoiceRuntimeController:
                 )
                 LOGGER.info("JARVIS development voice-control channel is active")
 
-            await self._speak_startup_greeting()
+            startup_ready = await self._wait_for_startup_readiness()
+            if startup_ready:
+                await self._speak_startup_greeting()
+            else:
+                LOGGER.info(
+                    "JARVIS startup greeting skipped until a trusted camera lock exists"
+                )
             self._state = VoiceRuntimeState.IDLE
             LOGGER.info("JARVIS is idle; local wake detection is active")
             while not self._shutdown.is_set():
@@ -715,6 +749,8 @@ class VoiceRuntimeController:
         if paired_turn_capture is not None:
             paired_turn_capture.clear()
         shadow_tasks: set[asyncio.Task[None]] = set()
+        exit_task: asyncio.Task[None] | None = None
+        exit_in_progress = False
 
         def on_audio_frame(
             frame,
@@ -769,7 +805,35 @@ class VoiceRuntimeController:
             shadow_tasks.add(task)
             task.add_done_callback(shadow_tasks.discard)
 
+        async def acknowledge_and_end_session() -> None:
+            try:
+                try:
+                    await session.interrupt(force=True)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    LOGGER.exception(
+                        "Realtime speech could not be interrupted before standby acknowledgement"
+                    )
+
+                try:
+                    await self._get_scripted_speech().speak(
+                        output,
+                        _STANDBY_ACKNOWLEDGEMENT,
+                    )
+                    LOGGER.info("JARVIS standby acknowledgement finished playing")
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    LOGGER.exception(
+                        "JARVIS standby acknowledgement failed; returning to local wake detection"
+                    )
+            finally:
+                active_end.set()
+
         def on_user_state(event: UserStateChangedEvent) -> None:
+            if exit_in_progress:
+                return
             if event.new_state == "speaking":
                 self._arm_timeout(self.config.max_utterance_seconds)
             elif event.new_state == "listening":
@@ -785,7 +849,7 @@ class VoiceRuntimeController:
                 self._cancel_timeout()
 
         def on_conversation_item(event: ConversationItemAddedEvent) -> None:
-            nonlocal has_user_turn
+            nonlocal has_user_turn, exit_in_progress, exit_task
             item = event.item
             if not isinstance(item, ChatMessage) or item.role != "user":
                 return
@@ -795,13 +859,23 @@ class VoiceRuntimeController:
             has_user_turn = True
             self._cancel_timeout()
             submit_shadow_turn()
-            if _is_exit_intent(text):
+            if _is_exit_intent(text) and not exit_in_progress:
+                exit_in_progress = True
                 LOGGER.info("Explicit voice-session exit accepted")
-                active_end.set()
+                try:
+                    session.input.set_audio_enabled(False)
+                except Exception:
+                    LOGGER.exception(
+                        "Voice input could not be disabled during standby transition"
+                    )
+                exit_task = asyncio.create_task(
+                    acknowledge_and_end_session(),
+                    name="jarvis-standby-acknowledgement",
+                )
 
         def on_playback_finished(event: PlaybackFinishedEvent) -> None:
             del event
-            if self._state is VoiceRuntimeState.ACTIVE:
+            if self._state is VoiceRuntimeState.ACTIVE and not exit_in_progress:
                 self._arm_timeout(self.config.follow_up_timeout_seconds)
 
         def on_close(event: CloseEvent) -> None:
@@ -851,6 +925,9 @@ class VoiceRuntimeController:
         finally:
             self._cancel_timeout()
             output.off("playback_finished", on_playback_finished)
+            if exit_task is not None and not exit_task.done():
+                exit_task.cancel()
+                await asyncio.gather(exit_task, return_exceptions=True)
             self.audio.deactivate_session()
             await session.aclose()
             if shadow_tasks:

@@ -1,8 +1,10 @@
 import asyncio
+import threading
 from types import SimpleNamespace
 
 import pytest
 
+from jarvis.vision.models import BoundingBox
 from jarvis.vision.pocket3_native import Pocket3NativeConfig, Pocket3NativeTrackerClient
 from jarvis.vision.pocket3_recovery import (
     Pocket3RecoveryConfig,
@@ -22,6 +24,21 @@ def test_recovery_config_rejects_non_positive_attempt_counts() -> None:
         Pocket3RecoveryConfig(ble_attempts=0)
     with pytest.raises(ValueError, match="wifi_join_attempts"):
         Pocket3RecoveryConfig(wifi_join_attempts=0)
+
+
+def test_native_config_rejects_non_positive_wifi_ap_settle_seconds() -> None:
+    with pytest.raises(ValueError, match="wifi_ap_settle_seconds"):
+        Pocket3NativeConfig(wifi_ap_settle_seconds=0.0)
+
+
+def test_native_ble_session_settles_ap_before_releasing_windows_join() -> None:
+    import inspect
+
+    source = inspect.getsource(Pocket3NativeTrackerClient._ble_session)
+    settle = source.index("await asyncio.sleep(self.config.wifi_ap_settle_seconds)")
+    credentials_ready = source.index("self._credentials_ready.set()")
+    keepalive = source.index("keepalive = _build_duml")
+    assert settle < credentials_ready < keepalive
 
 
 def test_saved_windows_profile_can_be_reused_without_ble(
@@ -132,3 +149,91 @@ def test_wifi_association_retries_instead_of_failing_one_shot(
     client._join_windows_wifi("OsmoPocket3-C36F", "not-a-real-secret")
 
     assert attempts == 3
+
+
+def test_a6_waiter_exists_before_fast_reply_can_arrive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _client()
+    with client._lock:
+        client._connected = True
+
+    def immediate_reply_send(
+        self: Pocket3NativeTrackerClient,
+        *,
+        receiver: int,
+        flags: int,
+        cmd_set: int,
+        cmd_id: int,
+        payload: bytes,
+    ) -> int:
+        del receiver, flags, cmd_set, cmd_id, payload
+        seq = self._command_seq
+        self._command_seq = (self._command_seq + 1) & 0xFFFF
+        pending = self._a6_events.get(seq)
+        assert pending is not None
+        event, holder = pending
+        holder.append(b"\x00")
+        event.set()
+        return seq
+
+    monkeypatch.setattr(
+        Pocket3NativeTrackerClient, "_send_command", immediate_reply_send
+    )
+
+    assert client.set_target(BoundingBox(0.2, 0.2, 0.6, 0.8)) is True
+    assert client._a6_events == {}
+
+
+def test_clear_target_waits_for_fast_a6_reply(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _client()
+    with client._lock:
+        client._connected = True
+
+    def immediate_reply_send(
+        self: Pocket3NativeTrackerClient,
+        *,
+        receiver: int,
+        flags: int,
+        cmd_set: int,
+        cmd_id: int,
+        payload: bytes,
+    ) -> int:
+        del receiver, flags, cmd_set, cmd_id, payload
+        seq = self._command_seq
+        self._command_seq = (self._command_seq + 1) & 0xFFFF
+        pending = self._a6_events.get(seq)
+        assert pending is not None
+        event, holder = pending
+        holder.append(b"\x00")
+        event.set()
+        return seq
+
+    monkeypatch.setattr(
+        Pocket3NativeTrackerClient, "_send_command", immediate_reply_send
+    )
+    client.clear_target()
+    assert client._a6_events == {}
+
+
+def test_close_invalidates_stale_native_tracking_and_wakes_a6_waiters() -> None:
+    client = _client()
+    waiter = threading.Event()
+    with client._lock:
+        client._connected = True
+        client._tracking_active = True
+        client._last_poll_at = 10.0
+        client._last_subject_push_at = 10.5
+        client._a6_events[123] = (waiter, [])
+
+    client.close()
+
+    status = client.status()
+    assert status.connected is False
+    assert status.active is False
+    assert status.last_poll_at is None
+    assert status.last_subject_push_at is None
+    assert client._a6_events == {}
+    assert waiter.is_set()

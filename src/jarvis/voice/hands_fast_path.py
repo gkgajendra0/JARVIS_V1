@@ -84,6 +84,12 @@ _FAST_PARAMETER_ALIASES: dict[str, dict[str, str]] = {
         "value": "percent",
         "brightness_percent": "percent",
     },
+    "open_app": {
+        "app_name": "app",
+    },
+    "close_app": {
+        "app_name": "app",
+    },
 }
 
 

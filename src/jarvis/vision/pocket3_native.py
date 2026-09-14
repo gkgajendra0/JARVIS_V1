@@ -66,6 +66,7 @@ _APP_PRESENCE = bytes(
 class Pocket3NativeConfig:
     ble_name: str = "OsmoPocket3-C36F"
     connect_timeout_seconds: float = 25.0
+    wifi_ap_settle_seconds: float = 2.0
     wifi_join_timeout_seconds: float = 15.0
     command_timeout_seconds: float = 1.5
 
@@ -74,6 +75,7 @@ class Pocket3NativeConfig:
             raise ValueError("Pocket 3 BLE name must not be empty")
         for name in (
             "connect_timeout_seconds",
+            "wifi_ap_settle_seconds",
             "wifi_join_timeout_seconds",
             "command_timeout_seconds",
         ):
@@ -604,6 +606,13 @@ class Pocket3NativeTrackerClient:
                     payload=b"\x00\x00\x00\x00",
                 ),
                 response=False,
+            )
+            # FFF5 is write-without-response. The hardware-proven Pocket 3
+            # sequence leaves a bounded settle window after 53/10 wakes the Wi-Fi AP
+            # before Windows association and before the next BLE keepalive write.
+            await asyncio.sleep(self.config.wifi_ap_settle_seconds)
+            LOGGER.info(
+                "Pocket 3 Wi-Fi AP wake settle complete; releasing Windows association"
             )
             self._credentials_ready.set()
 

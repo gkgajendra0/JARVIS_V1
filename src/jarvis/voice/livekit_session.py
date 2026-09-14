@@ -13,6 +13,7 @@ from livekit.agents import (
     ConversationItemAddedEvent,
     ErrorEvent,
     TurnHandlingOptions,
+    UserInputTranscribedEvent,
 )
 from livekit.agents.llm import ChatMessage
 from livekit.plugins import google, openai
@@ -104,6 +105,7 @@ class LiveKitConversationBridge:
         self._seen_item_ids: set[str] = set()
         self._accepted_turn_observers: list[AcceptedTurnObserver] = []
         self._close_observers: list[ConversationCloseObserver] = []
+        session.on("user_input_transcribed", self._on_user_input_transcribed)
         session.on("conversation_item_added", self._on_conversation_item_added)
         session.on("error", self._on_error)
         session.on("close", self._on_close)
@@ -135,6 +137,16 @@ class LiveKitConversationBridge:
                 LOGGER.exception(
                     "Conversation-close observer failed; session shutdown is unaffected"
                 )
+
+    def _on_user_input_transcribed(self, event: UserInputTranscribedEvent) -> None:
+        if not event.is_final or event.transcript.strip():
+            return
+        generation = self.conversation.discard_untranscribed_user_utterance()
+        if generation is not None:
+            LOGGER.info(
+                "Retired voice USER generation with final empty transcript | generation=%s",
+                generation,
+            )
 
     def _on_conversation_item_added(self, event: ConversationItemAddedEvent) -> None:
         item = event.item

@@ -29,14 +29,24 @@ from jarvis.voice.runtime import (
 )
 
 
+class FakeSessionInput:
+    def __init__(self) -> None:
+        self.audio = None
+        self.audio_enabled = True
+
+    def set_audio_enabled(self, enabled: bool) -> None:
+        self.audio_enabled = enabled
+
+
 class FakeSession:
     def __init__(self, *, start_error: Exception | None = None) -> None:
         self.handlers: dict[str, list] = defaultdict(list)
-        self.input = SimpleNamespace(audio=None)
+        self.input = FakeSessionInput()
         self.output = SimpleNamespace(audio=None)
         self.started = asyncio.Event()
         self.closed = False
         self.start_error = start_error
+        self.interrupt_calls: list[bool] = []
 
     def on(self, event: str, callback):
         self.handlers[event].append(callback)
@@ -51,6 +61,12 @@ class FakeSession:
         self.started.set()
         if self.start_error is not None:
             raise self.start_error
+
+    def interrupt(self, *, force: bool = False) -> asyncio.Future[None]:
+        self.interrupt_calls.append(force)
+        future = asyncio.get_running_loop().create_future()
+        future.set_result(None)
+        return future
 
     async def aclose(self) -> None:
         self.closed = True
@@ -126,12 +142,110 @@ def runtime_with_session(
     return runtime, session, conversation, audio, scripted_speech
 
 
+@pytest.mark.asyncio
+async def test_startup_greeting_waits_for_tracking_readiness() -> None:
+    import threading
+
+    class Detector:
+        async def wait_for_detection(self):
+            await asyncio.Event().wait()
+
+    class StartupAudio(FakeAudio):
+        def __init__(self) -> None:
+            super().__init__()
+            self.detector = Detector()
+            self.started = asyncio.Event()
+
+        def set_overflow_handler(self, handler) -> None:
+            del handler
+
+        async def start(self) -> None:
+            self.started.set()
+
+        async def resume_wake(self, *, cooldown_seconds: float) -> None:
+            del cooldown_seconds
+
+        async def aclose(self) -> None:
+            return None
+
+    audio = StartupAudio()
+    scripted_speech = FakeScriptedSpeech()
+    readiness = threading.Event()
+    calls: list[float] = []
+
+    def wait_for_ready(timeout_seconds: float) -> bool:
+        calls.append(timeout_seconds)
+        return readiness.wait(timeout_seconds)
+
+    runtime = VoiceRuntimeController(
+        JarvisConfig(),
+        audio,  # type: ignore[arg-type]
+        scripted_speech=scripted_speech,
+        startup_readiness_waiter=wait_for_ready,
+        startup_readiness_timeout_seconds=1.0,
+    )
+    task = asyncio.create_task(runtime.run())
+    await asyncio.wait_for(audio.started.wait(), timeout=1)
+    await asyncio.sleep(0.05)
+    assert scripted_speech.started.is_set() is False
+
+    readiness.set()
+    await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
+    assert calls == [1.0]
+
+    scripted_speech.release.set()
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_startup_readiness_timeout_skips_greeting() -> None:
+    class Detector:
+        async def wait_for_detection(self):
+            await asyncio.Event().wait()
+
+    class StartupAudio(FakeAudio):
+        def __init__(self) -> None:
+            super().__init__()
+            self.detector = Detector()
+
+        def set_overflow_handler(self, handler) -> None:
+            del handler
+
+        async def start(self) -> None:
+            return None
+
+        async def resume_wake(self, *, cooldown_seconds: float) -> None:
+            del cooldown_seconds
+
+        async def aclose(self) -> None:
+            return None
+
+    audio = StartupAudio()
+    scripted_speech = FakeScriptedSpeech()
+    runtime = VoiceRuntimeController(
+        JarvisConfig(),
+        audio,  # type: ignore[arg-type]
+        scripted_speech=scripted_speech,
+        startup_readiness_waiter=lambda _timeout: False,
+        startup_readiness_timeout_seconds=0.01,
+    )
+    task = asyncio.create_task(runtime.run())
+    await asyncio.sleep(0.05)
+    assert scripted_speech.started.is_set() is False
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
 @pytest.mark.parametrize(
     "text",
     [
         "Go to sleep.",
+        "Go back to sleep.",
         "Ok, Jarvis, go to sleep.",
         "Jarvis, please go to sleep now.",
+        "Jarvis, go back to sleep now.",
+        "Okay, Jarvis, go back to sleep please.",
         "Please end the session.",
         "No, leave it. Go to sleep now.",
         "No, leave it, Jarvis, go to sleep now.",
@@ -157,8 +271,8 @@ def test_exit_intent_rejects_negated_or_discussed_phrases(text: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_explicit_exit_ends_active_session_and_cleans_up() -> None:
-    runtime, session, conversation, audio, _ = runtime_with_session()
+async def test_explicit_exit_speaks_standby_ack_before_session_cleanup() -> None:
+    runtime, session, conversation, audio, scripted_speech = runtime_with_session()
     task = asyncio.create_task(runtime._run_one_session())
     await session.started.wait()
     assert runtime.state is VoiceRuntimeState.ACTIVE
@@ -166,9 +280,23 @@ async def test_explicit_exit_ends_active_session_and_cleans_up() -> None:
     session.emit(
         "conversation_item_added",
         ConversationItemAddedEvent(
-            item=ChatMessage(id="exit", role="user", content=["Jarvis, go to sleep."])
+            item=ChatMessage(
+                id="exit",
+                role="user",
+                content=["Jarvis, go back to sleep now."],
+            )
         ),
     )
+    await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
+
+    assert scripted_speech.spoken == ["Of course. I'll be standing by if you need me."]
+    assert session.interrupt_calls == [True]
+    assert session.input.audio_enabled is False
+    assert task.done() is False
+    assert session.closed is False
+    assert audio.deactivated is False
+
+    scripted_speech.release.set()
     await asyncio.wait_for(task, timeout=1)
 
     assert audio.activated is True

@@ -122,6 +122,18 @@ class ConversationSession:
         self._pending_user_generations.append(self._user_utterance_generation)
         return self._user_utterance_generation
 
+    def discard_untranscribed_user_utterance(self) -> int | None:
+        """Retire the oldest started voice generation after final no-text evidence."""
+
+        if self._status is not ConversationStatus.ACTIVE:
+            raise RuntimeError(
+                "cannot discard a user utterance in a "
+                f"{self._status.value} conversation"
+            )
+        if not self._pending_user_generations:
+            return None
+        return self._pending_user_generations.popleft()
+
     def start(self) -> None:
         if self._status is not ConversationStatus.CREATED:
             raise RuntimeError(f"cannot start a {self._status.value} conversation")

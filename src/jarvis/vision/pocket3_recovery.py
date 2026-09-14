@@ -15,11 +15,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import struct
 import subprocess
 import threading
 import time
 from dataclasses import dataclass
 
+from jarvis.vision.models import BoundingBox
 from jarvis.vision.pocket3_native import Pocket3NativeConfig, Pocket3NativeTrackerClient
 
 LOGGER = logging.getLogger(__name__)
@@ -73,6 +75,101 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
             return
 
         self._start_with_ble_fallback()
+
+    def close(self) -> None:
+        """Close transport and invalidate all native tracking evidence atomically."""
+
+        super().close()
+        with self._lock:
+            pending = tuple(self._a6_events.values())
+            self._a6_events.clear()
+            self._tracking_active = False
+            self._last_poll_at = None
+            self._last_subject_push_at = None
+            self._latest_subject_box = None
+        for event, _holder in pending:
+            event.set()
+
+    def recover_tracking_session(self) -> None:
+        """Rebuild a stale DJI control session using the saved Windows Wi-Fi profile."""
+
+        LOGGER.warning(
+            "Pocket 3 rebuilding native tracking session after failed reacquisition"
+        )
+        self.close()
+        self.start()
+
+    def _send_a6_with_ack(self, payload: bytes, *, timeout_message: str) -> bool:
+        if not self.connected:
+            raise RuntimeError("Pocket 3 native tracking datalink is not connected")
+        event = threading.Event()
+        reply_holder: list[bytes] = []
+
+        with self._io_lock:
+            with self._lock:
+                expected_seq = self._command_seq
+                self._a6_events[expected_seq] = (event, reply_holder)
+            try:
+                actual_seq = super()._send_command(
+                    receiver=0x01,
+                    flags=0x40,
+                    cmd_set=0x02,
+                    cmd_id=0xA6,
+                    payload=payload,
+                )
+            except Exception:
+                with self._lock:
+                    self._a6_events.pop(expected_seq, None)
+                raise
+
+        if actual_seq != expected_seq:
+            with self._lock:
+                self._a6_events.pop(expected_seq, None)
+            raise RuntimeError("Pocket 3 A6 sequence reservation drifted unexpectedly")
+
+        if not event.wait(self.config.command_timeout_seconds):
+            with self._lock:
+                self._a6_events.pop(expected_seq, None)
+            LOGGER.warning(timeout_message)
+            return False
+        with self._lock:
+            self._a6_events.pop(expected_seq, None)
+        return bool(reply_holder and reply_holder[0][:1] == b"\x00")
+
+    def set_target(self, bounds: BoundingBox) -> bool:
+        with self._lock:
+            tracking_id = self._tracking_id
+            self._tracking_id = (self._tracking_id + 1) & 0xFFFF
+            if self._tracking_id == 0:
+                self._tracking_id = 1
+        payload = (
+            b"\x01\x00\x00"
+            + struct.pack("<H", tracking_id)
+            + struct.pack(
+                "<ffff",
+                bounds.center_x,
+                bounds.center_y,
+                bounds.width,
+                bounds.height,
+            )
+        )
+        return self._send_a6_with_ack(
+            payload,
+            timeout_message=(
+                "Pocket 3 A6 direct ACK timed out; awaiting A5/0x89 state"
+            ),
+        )
+
+    def clear_target(self) -> None:
+        if not self.connected:
+            return
+        direct_ack = self._send_a6_with_ack(
+            bytes(21),
+            timeout_message=(
+                "Pocket 3 A6 clear-target ACK timed out; continuing with recenter"
+            ),
+        )
+        LOGGER.info("Pocket 3 A6 clear target completed: direct_ack=%s", direct_ack)
 
     def _try_saved_wifi_fast_path(self) -> bool:
         ssid = self.config.ble_name
@@ -210,9 +307,11 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
                 if attempt >= self.recovery_config.wifi_join_attempts:
                     break
                 LOGGER.warning(
-                    "Pocket 3 Wi-Fi association attempt %d/%d failed; retrying",
+                    "Pocket 3 Wi-Fi association attempt %d/%d failed (%s: %s); retrying",
                     attempt,
                     self.recovery_config.wifi_join_attempts,
+                    type(exc).__name__,
+                    exc,
                 )
                 time.sleep(self.recovery_config.wifi_retry_pause_seconds)
 

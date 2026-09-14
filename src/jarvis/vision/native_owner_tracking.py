@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -40,6 +41,8 @@ class NativeOwnerTrackingClient(Protocol):
 
     def recenter_gimbal(self) -> None: ...
 
+    def recover_tracking_session(self) -> None: ...
+
     def close(self) -> None: ...
 
 
@@ -52,6 +55,8 @@ class NativeOwnerTrackingConfig:
     reconnect_backoff_seconds: float = 5.0
     searching_perception_fps: float = 10.0
     locked_perception_fps: float = 2.0
+    target_attempts_before_session_recovery: int = 3
+    session_recovery_cooldown_seconds: float = 10.0
 
     def __post_init__(self) -> None:
         if self.poll_interval_seconds <= 0:
@@ -66,6 +71,10 @@ class NativeOwnerTrackingConfig:
             raise ValueError(
                 "locked_perception_fps must not exceed searching_perception_fps"
             )
+        if self.target_attempts_before_session_recovery <= 0:
+            raise ValueError("target_attempts_before_session_recovery must be positive")
+        if self.session_recovery_cooldown_seconds <= 0:
+            raise ValueError("session_recovery_cooldown_seconds must be positive")
 
 
 class NativeOwnerTrackingObserver:
@@ -93,6 +102,17 @@ class NativeOwnerTrackingObserver:
         self._last_connect_attempt_at: float | None = None
         self._last_logged_state: ReacquisitionState | None = None
         self._owner_observed_in_latest_snapshot = False
+        self._target_attempts_without_native_lock = 0
+        self._last_session_recovery_at: float | None = None
+        self._recovery_thread: threading.Thread | None = None
+        self._recovery_succeeded: bool | None = None
+        self._closing = threading.Event()
+        self._startup_lock_event = threading.Event()
+
+    def wait_for_startup_lock(self, timeout_seconds: float) -> bool:
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        return self._startup_lock_event.wait(timeout_seconds)
 
     def perception_fps_hint(self) -> float:
         """Return the useful JARVIS perception rate for the current trust state.
@@ -114,6 +134,10 @@ class NativeOwnerTrackingObserver:
 
     def observe(self, frame: CapturedFrame, snapshot: VisionSnapshot) -> None:
         now = frame.captured_at
+        self._finish_session_recovery(now)
+        if self._session_recovery_in_progress():
+            return
+
         if not self.client.connected:
             if not self._reconnect_due(now):
                 return
@@ -158,12 +182,18 @@ class NativeOwnerTrackingObserver:
                 owner_observed_at = assessment.observed_at_monotonic
         self._owner_observed_in_latest_snapshot = owner_bounds is not None
 
+        native_status = self.client.status()
+        if native_status.active:
+            self._target_attempts_without_native_lock = 0
+
         decision = self.controller.step(
             now=now,
             owner_bounds=owner_bounds,
             owner_observed_at=owner_observed_at,
-            native=self.client.status(),
+            native=native_status,
         )
+        if decision.state is ReacquisitionState.LOCKED:
+            self._startup_lock_event.set()
         if decision.state is not self._last_logged_state:
             LOGGER.info(
                 "Pocket 3 owner-tracking state: %s (%s)",
@@ -173,6 +203,7 @@ class NativeOwnerTrackingObserver:
             self._last_logged_state = decision.state
 
         if decision.action is ReacquisitionAction.RECENTER_GIMBAL:
+            self._target_attempts_without_native_lock = 0
             try:
                 self.client.clear_target()
                 self.client.recenter_gimbal()
@@ -186,25 +217,47 @@ class NativeOwnerTrackingObserver:
         if decision.action is not ReacquisitionAction.SET_OWNER_TARGET:
             return
         assert decision.bounds is not None
+
+        if (
+            self._target_attempts_without_native_lock
+            >= self.config.target_attempts_before_session_recovery
+            and self._session_recovery_due(now)
+        ):
+            self._start_session_recovery(now)
+            return
+
         try:
             direct_ack = self.client.set_target(decision.bounds)
+            self._target_attempts_without_native_lock += 1
             LOGGER.info(
                 "Pocket 3 A6 owner target sent: reason=%s direct_ack=%s "
-                "center=(%.3f, %.3f) size=(%.3f, %.3f)",
+                "attempt_without_native_lock=%s center=(%.3f, %.3f) size=(%.3f, %.3f)",
                 decision.reason,
                 direct_ack,
+                self._target_attempts_without_native_lock,
                 decision.bounds.center_x,
                 decision.bounds.center_y,
                 decision.bounds.width,
                 decision.bounds.height,
             )
         except Exception:
+            self._target_attempts_without_native_lock += 1
             LOGGER.exception("Pocket 3 A6 owner target failed")
 
     def close(self) -> None:
+        self._closing.set()
         self.client.close()
+        recovery_thread = self._recovery_thread
+        if recovery_thread is not None and recovery_thread.is_alive():
+            recovery_thread.join(timeout=2.0)
+            if recovery_thread.is_alive():
+                LOGGER.warning("Pocket 3 recovery thread is still winding down")
+            self.client.close()
+        self._recovery_thread = None
         self.controller.reset()
         self._owner_observed_in_latest_snapshot = False
+        self._target_attempts_without_native_lock = 0
+        self._startup_lock_event.clear()
 
     def _reconnect_due(self, now: float) -> bool:
         attempted = self._last_connect_attempt_at
@@ -212,6 +265,71 @@ class NativeOwnerTrackingObserver:
             attempted is None
             or now - attempted >= self.config.reconnect_backoff_seconds
         )
+
+    def _session_recovery_due(self, now: float) -> bool:
+        attempted = self._last_session_recovery_at
+        return (
+            attempted is None
+            or now - attempted >= self.config.session_recovery_cooldown_seconds
+        )
+
+    def _session_recovery_in_progress(self) -> bool:
+        thread = self._recovery_thread
+        return thread is not None and thread.is_alive()
+
+    def _start_session_recovery(self, now: float) -> None:
+        if self._session_recovery_in_progress():
+            return
+        self._last_session_recovery_at = now
+        self._recovery_succeeded = None
+
+        def recover() -> None:
+            succeeded = False
+            try:
+                self.client.recover_tracking_session()
+                succeeded = True
+            except Exception:
+                LOGGER.exception("Pocket 3 native tracking session recovery failed")
+            finally:
+                if self._closing.is_set():
+                    self.client.close()
+                self._recovery_succeeded = succeeded
+
+        self._recovery_thread = threading.Thread(
+            target=recover,
+            name="jarvis-pocket3-tracking-recovery",
+            daemon=True,
+        )
+        self._recovery_thread.start()
+        LOGGER.warning(
+            "Pocket 3 native tracking recovery started after %s target attempts "
+            "without a confirmed native lock",
+            self._target_attempts_without_native_lock,
+        )
+
+    def _finish_session_recovery(self, now: float) -> None:
+        thread = self._recovery_thread
+        if thread is None or thread.is_alive():
+            return
+        thread.join(timeout=0.0)
+        succeeded = bool(self._recovery_succeeded)
+        self._recovery_thread = None
+        self._recovery_succeeded = None
+        self._target_attempts_without_native_lock = 0
+        self._last_poll_at = None
+        self._last_connect_attempt_at = now
+        if succeeded:
+            self.controller.reset()
+            self._last_logged_state = None
+            LOGGER.info(
+                "Pocket 3 native tracking session recovered; OWNER reacquisition reset "
+                "to searching until fresh native lock evidence returns"
+            )
+        else:
+            LOGGER.warning(
+                "Pocket 3 native tracking session recovery did not restore transport; "
+                "normal reconnect backoff remains active"
+            )
 
 
 def build_default_native_owner_tracking_observer(
