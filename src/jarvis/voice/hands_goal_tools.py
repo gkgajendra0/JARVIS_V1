@@ -131,13 +131,16 @@ class HandsGoalAgentTools:
     def tools(self) -> list:
         return [self.use_computer]
 
-    def _turn_for_generation(self, generation: int) -> ConversationTurn | None:
+    def _turn_for_activity(self, activity_epoch: int) -> ConversationTurn | None:
         return next(
             (
                 candidate
                 for candidate in reversed(self._conversation.turns)
                 if candidate.role is ConversationRole.USER
-                and candidate.user_utterance_generation == generation
+                and (
+                    activity_epoch <= 0
+                    or candidate.user_activity_epoch == activity_epoch
+                )
             ),
             None,
         )
@@ -145,34 +148,35 @@ class HandsGoalAgentTools:
     async def _claim_current_user_turn(self) -> tuple[ConversationTurn, int]:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self._transcript_wait_seconds
-        generation = self._conversation.user_utterance_generation
-
-        while generation <= 0:
-            if loop.time() >= deadline:
-                raise HandsOrchestrationError(
-                    "JARVIS Hands timed out waiting for the current USER utterance"
-                )
-            await asyncio.sleep(_TRANSCRIPT_POLL_SECONDS)
-            generation = self._conversation.user_utterance_generation
+        activity_epoch = self._conversation.user_activity_epoch
 
         while True:
-            if self._conversation.user_utterance_generation != generation:
+            if self._conversation.user_activity_epoch != activity_epoch:
                 raise HandsGoalSuperseded(
                     "Hands tool call was superseded before its canonical transcript arrived"
                 )
-            turn = self._turn_for_generation(generation)
+
+            turn = self._turn_for_activity(activity_epoch)
             if turn is not None:
+                generation = turn.user_utterance_generation
+                if generation is None:
+                    raise HandsOrchestrationError(
+                        "canonical USER turn is missing its generation"
+                    )
                 if generation in self._claimed_user_generations:
                     raise HandsGoalSuperseded(
                         "duplicate Hands tool call for this USER utterance was ignored"
                     )
                 self._claimed_user_generations.add(generation)
                 LOGGER.info(
-                    "Hands voice lease claimed | generation=%s | turn_id=%s",
+                    "Hands voice lease claimed | generation=%s | activity_epoch=%s | "
+                    "turn_id=%s",
                     generation,
+                    activity_epoch,
                     turn.turn_id,
                 )
                 return turn, generation
+
             if loop.time() >= deadline:
                 raise HandsOrchestrationError(
                     "JARVIS Hands timed out waiting for the canonical USER transcript"
@@ -221,15 +225,22 @@ class HandsGoalAgentTools:
             LOGGER.info("Hands voice lease ignored before claim: %s", exc)
             return self._superseded_result(str(exc))
 
+        activity_epoch = turn.user_activity_epoch
+
         def is_current() -> bool:
-            return self._conversation.user_utterance_generation == generation
+            if self._conversation.user_utterance_generation != generation:
+                return False
+            return activity_epoch is None or (
+                self._conversation.user_activity_epoch == activity_epoch
+            )
 
         async with self._execution_lock:
             if not is_current():
                 LOGGER.info(
                     "Hands voice lease superseded before execution | generation=%s | "
-                    "turn_id=%s",
+                    "activity_epoch=%s | turn_id=%s",
                     generation,
+                    activity_epoch,
                     turn.turn_id,
                 )
                 result = self._superseded_result(
@@ -276,8 +287,9 @@ class HandsGoalAgentTools:
             except HandsGoalSuperseded as exc:
                 LOGGER.info(
                     "Hands voice lease superseded during orchestration | generation=%s | "
-                    "turn_id=%s",
+                    "activity_epoch=%s | turn_id=%s",
                     generation,
+                    activity_epoch,
                     turn.turn_id,
                 )
                 result = self._superseded_result(str(exc))
@@ -323,11 +335,13 @@ class HandsGoalAgentTools:
         Never split a multi-step goal into repeated calls for the same USER utterance.
 
         A realtime provider may call this before its final transcript is emitted. JARVIS
-        binds the call to the current speech generation and waits for the canonical
-        transcript. A newer USER utterance supersedes stale planning before another action
-        may start. An atomic local action that already started is allowed to finish safely.
-        If status is ``superseded``, do not report the older goal as a failure; continue
-        with the newer USER request.
+        binds the call to the current local USER activity epoch, waits for the canonical
+        accepted USER turn for that activity, and then leases execution to that canonical
+        turn. Raw VAD activity never becomes command identity. A newer USER activity or
+        canonical USER turn supersedes stale planning before another action may start. An
+        atomic local action that already started is allowed to finish safely. If status is
+        ``superseded``, do not report the older goal as a failure; continue with the newer
+        USER request.
 
         If status is ``clarification_required``, ask the returned clarification question.
         Otherwise treat the tool result as authoritative and never claim success for denied,
