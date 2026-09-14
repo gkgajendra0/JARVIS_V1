@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections import deque
 from collections.abc import Callable
 
 from google.genai import types as google_types
@@ -104,7 +103,7 @@ class LiveKitConversationBridge:
         self.live_context = live_context
         self._show_transcript = show_transcript
         self._seen_item_ids: set[str] = set()
-        self._early_itemless_user_turn_ids: deque[str] = deque()
+        self._transcript_committed_user_turn_ids: set[str] = set()
         self._accepted_turn_observers: list[AcceptedTurnObserver] = []
         self._close_observers: list[ConversationCloseObserver] = []
         session.on("user_input_transcribed", self._on_user_input_transcribed)
@@ -186,20 +185,22 @@ class LiveKitConversationBridge:
             None,
         )
 
-    def _consume_matching_itemless_early_turn(self, text: str) -> bool:
-        if not self._early_itemless_user_turn_ids:
-            return False
-        turns_by_id = {turn.turn_id: turn for turn in self.conversation.turns}
-        for turn_id in tuple(self._early_itemless_user_turn_ids):
-            turn = turns_by_id.get(turn_id)
-            if turn is None:
-                self._early_itemless_user_turn_ids.remove(turn_id)
+    def _consume_transcript_committed_turn(self, text: str) -> bool:
+        for turn in reversed(self.conversation.turns):
+            if turn.turn_id not in self._transcript_committed_user_turn_ids:
                 continue
             if turn.text != text:
                 continue
-            self._early_itemless_user_turn_ids.remove(turn_id)
+            self._transcript_committed_user_turn_ids.remove(turn.turn_id)
             return True
         return False
+
+    def _confirm_seen_item(self, item_id: str) -> None:
+        for turn in reversed(self.conversation.turns):
+            if turn.external_item_id != item_id:
+                continue
+            self._transcript_committed_user_turn_ids.discard(turn.turn_id)
+            break
 
     def _on_user_input_transcribed(self, event: UserInputTranscribedEvent) -> None:
         if not event.is_final:
@@ -228,8 +229,7 @@ class LiveKitConversationBridge:
             text,
             external_item_id=item_id,
         )
-        if item_id is None:
-            self._early_itemless_user_turn_ids.append(turn.turn_id)
+        self._transcript_committed_user_turn_ids.add(turn.turn_id)
         LOGGER.debug(
             "Committed canonical USER turn from final transcript | generation=%s | item_id=%s",
             turn.user_utterance_generation,
@@ -242,6 +242,7 @@ class LiveKitConversationBridge:
             return
         item_id = self._normalized_item_id(item.id)
         if item_id is not None and item_id in self._seen_item_ids:
+            self._confirm_seen_item(item_id)
             return
         try:
             role = ConversationRole(item.role)
@@ -251,12 +252,10 @@ class LiveKitConversationBridge:
         if not text:
             return
 
-        if role is ConversationRole.USER:
-            current = self._current_generation_user_turn(text)
-            if current is not None or self._consume_matching_itemless_early_turn(text):
-                if item_id is not None:
-                    self._seen_item_ids.add(item_id)
-                return
+        if role is ConversationRole.USER and self._consume_transcript_committed_turn(text):
+            if item_id is not None:
+                self._seen_item_ids.add(item_id)
+            return
 
         interrupted = bool(item.interrupted and role is ConversationRole.ASSISTANT)
         self._accept_canonical_turn(
