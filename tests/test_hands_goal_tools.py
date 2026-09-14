@@ -75,8 +75,11 @@ async def test_voice_hands_waits_for_current_transcript_instead_of_using_old_tur
     conversation = ConversationSession(session_id="hands-wait")
     conversation.start()
     old = conversation.accept_turn(ConversationRole.USER, "Set volume to 35 percent")
-    generation = conversation.begin_user_utterance()
-    assert generation > (old.user_utterance_generation or 0)
+    activity_epoch = conversation.begin_user_activity()
+
+    assert old.user_activity_epoch is None
+    assert activity_epoch == 1
+    assert conversation.user_utterance_generation == 1
 
     fake = FakeOrchestrator()
     tools = HandsGoalAgentTools(
@@ -92,18 +95,17 @@ async def test_voice_hands_waits_for_current_transcript_instead_of_using_old_tur
     latest = conversation.accept_turn(ConversationRole.USER, "Open Apple Music")
     result = await pending
 
+    assert latest.user_activity_epoch == activity_epoch
     assert result["ok"] is True
     assert result["canonical_user_turn_id"] == latest.turn_id
     assert fake.calls[0]["goal"] == "Open Apple Music"
 
 
 @pytest.mark.asyncio
-async def test_newer_voice_generation_supersedes_call_waiting_for_old_transcript() -> (
-    None
-):
+async def test_newer_voice_activity_supersedes_call_waiting_for_old_transcript() -> None:
     conversation = ConversationSession(session_id="hands-supersede-pending")
     conversation.start()
-    conversation.begin_user_utterance()
+    conversation.begin_user_activity()
     tools = HandsGoalAgentTools(
         runtime(),
         conversation,
@@ -113,7 +115,7 @@ async def test_newer_voice_generation_supersedes_call_waiting_for_old_transcript
 
     pending = asyncio.create_task(tools.execute_goal())
     await asyncio.sleep(0.03)
-    conversation.begin_user_utterance()
+    conversation.begin_user_activity()
     result = await pending
 
     assert result["ok"] is False
