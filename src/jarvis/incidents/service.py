@@ -139,6 +139,16 @@ class IncidentService:
             if normalized in incident.affected_components
         )[:limit]
 
+    def list_recent(
+        self,
+        *,
+        limit: int = 50,
+        status: IncidentStatus | None = None,
+    ) -> tuple[IncidentRecord, ...]:
+        """Return bounded recent engineering incidents through the service API."""
+
+        return self._store.list_recent(limit=limit, status=status)
+
     def _recent_open_for_component(
         self,
         component_id: str,
