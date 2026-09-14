@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 from jarvis.capabilities.runtime import build_default_capability_runtime
+from jarvis.capabilities.self_awareness_reads import SelfAwarenessReadExecutor
 from jarvis.config import JarvisConfig
 from jarvis.health_adapters import (
     CapabilityExecutionHealthObserver,
@@ -262,10 +263,16 @@ def build_production_voice_runtime(
         if self_awareness is not None
         else None
     )
+    extra_executors = (
+        (SelfAwarenessReadExecutor(self_awareness),)
+        if self_awareness is not None
+        else ()
+    )
     capability_runtime = build_default_capability_runtime(
         ai_provider=config.ai_provider,
         hands_planner_model=config.hands_planner_model,
         result_observer=result_observer,
+        extra_executors=extra_executors,
     )
     capability_catalog = capability_runtime.refresh_catalog()
     if self_awareness is not None:
