@@ -11,7 +11,11 @@ from jarvis.capabilities.models import (
 )
 from jarvis.config import JarvisConfig
 from jarvis.observability.redaction import redact_data
-from jarvis.preflight import StartupPreflightError, print_preflight, run_startup_preflight
+from jarvis.preflight import (
+    StartupPreflightError,
+    print_preflight,
+    run_startup_preflight,
+)
 from jarvis.provider_resilience import ProviderHealth, ProviderResilienceState
 from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.self_model.health import HealthState
@@ -88,7 +92,9 @@ def require_startup_preflight_with_health(
             component_id=_preflight_component(check.label),
             source=f"preflight:{check.label.casefold().replace(' ', '_')}",
             state=HealthState.HEALTHY if check.ok else HealthState.FAILED,
-            reason_code=("startup_check_passed" if check.ok else "startup_check_failed"),
+            reason_code=(
+                "startup_check_passed" if check.ok else "startup_check_failed"
+            ),
             summary=f"{check.label}: {'passed' if check.ok else 'failed'}",
             ttl_seconds=300.0,
             metadata=redact_data({"detail": check.detail}),
@@ -169,7 +175,9 @@ class ProviderResilienceHealthObserver:
         else:
             health_state = HealthState.DEGRADED
             reason_code = (
-                f"provider_{failure.kind.value}" if failure is not None else "provider_degraded"
+                f"provider_{failure.kind.value}"
+                if failure is not None
+                else "provider_degraded"
             )
             summary = "Cloud provider session is degraded"
             metadata = (
