@@ -102,7 +102,9 @@ async def test_voice_hands_waits_for_current_transcript_instead_of_using_old_tur
 
 
 @pytest.mark.asyncio
-async def test_newer_voice_activity_supersedes_call_waiting_for_old_transcript() -> None:
+async def test_newer_voice_activity_supersedes_call_waiting_for_old_transcript() -> (
+    None
+):
     conversation = ConversationSession(session_id="hands-supersede-pending")
     conversation.start()
     conversation.begin_user_activity()
