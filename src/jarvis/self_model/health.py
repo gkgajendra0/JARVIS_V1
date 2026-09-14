@@ -122,8 +122,7 @@ class HealthRegistry:
             items = tuple(
                 observation
                 for (candidate, _), observation in self._latest.items()
-                if candidate == normalized
-                and observation.is_fresh(now_epoch=now_epoch)
+                if candidate == normalized and observation.is_fresh(now_epoch=now_epoch)
             )
         return tuple(sorted(items, key=lambda item: item.source))
 
