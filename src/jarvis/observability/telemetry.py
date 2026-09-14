@@ -40,9 +40,7 @@ class TelemetryRuntime:
             self._tracer_provider.add_span_processor(
                 BatchSpanProcessor(OTLPSpanExporter())
             )
-            metric_readers.append(
-                PeriodicExportingMetricReader(OTLPMetricExporter())
-            )
+            metric_readers.append(PeriodicExportingMetricReader(OTLPMetricExporter()))
         self._meter_provider = MeterProvider(
             resource=resource,
             metric_readers=metric_readers,
