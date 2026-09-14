@@ -233,20 +233,31 @@ def test_observer_rebuilds_session_after_bounded_unconfirmed_target_attempts() -
     )
     assert client.targets == [bounds]
 
+    # A fresh target gets the controller's full native-lock confirmation window.
     owner.publish(live_owner(track_id=7, observed_at=12.0))
     observer.observe(
         frame(2, 12.0),
         snapshot(2, 12.0, track(7, bounds, 12.0)),
+    )
+    assert observer._recovery_thread is None
+    assert client.recoveries == 0
+
+    # Once LOCK_PENDING times out, the next resend opportunity is replaced by one
+    # bounded session rebuild instead of blindly sending another A6.
+    owner.publish(live_owner(track_id=7, observed_at=13.0))
+    observer.observe(
+        frame(3, 13.0),
+        snapshot(3, 13.0, track(7, bounds, 13.0)),
     )
     recovery_thread = observer._recovery_thread
     assert recovery_thread is not None
     recovery_thread.join(timeout=1.0)
     assert client.recoveries == 1
 
-    owner.publish(live_owner(track_id=7, observed_at=12.1))
+    owner.publish(live_owner(track_id=7, observed_at=13.1))
     observer.observe(
-        frame(3, 12.1),
-        snapshot(3, 12.1, track(7, bounds, 12.1)),
+        frame(4, 13.1),
+        snapshot(4, 13.1, track(7, bounds, 13.1)),
     )
     assert observer._target_attempts_without_native_lock <= 1
     observer.close()
