@@ -326,6 +326,7 @@ def build_default_capability_runtime(
     hands_planner_model: str | None = None,
     visual_computer_use_enabled: bool | None = None,
     result_observer: CapabilityResultObserver | None = None,
+    extra_executors: tuple[CapabilityExecutor, ...] = (),
 ) -> CapabilityRuntime:
     project = LocalProjectReadExecutor()
     system = SystemReadExecutor()
@@ -360,6 +361,7 @@ def build_default_capability_runtime(
         power,
         software,
     ]
+    executors.extend(extra_executors)
 
     write_roots: ApprovedWriteRootPolicy | None = None
     try:
