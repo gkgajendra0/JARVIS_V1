@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -141,16 +142,24 @@ class NativeOwnerTrackingObserver:
         if not self.client.connected:
             if not self._reconnect_due(now):
                 return
-            self._last_connect_attempt_at = now
             try:
                 self.client.start()
-                LOGGER.info(
-                    "Pocket 3 native owner tracking transport connected; "
-                    "software PTZ remains SAFE"
-                )
             except Exception:
-                LOGGER.exception("Pocket 3 native tracking connection attempt failed")
+                # The attempt can spend many seconds in BLE/WLAN setup. Start the
+                # reconnect cooldown when that attempt actually finishes, not from the
+                # stale frame timestamp captured before it began.
+                self._last_connect_attempt_at = time.monotonic()
+                if not self._closing.is_set():
+                    LOGGER.exception("Pocket 3 native tracking connection attempt failed")
                 return
+            self._last_connect_attempt_at = time.monotonic()
+            LOGGER.info(
+                "Pocket 3 native owner tracking transport connected; "
+                "software PTZ remains SAFE"
+            )
+            # Do not feed a frame captured before a potentially slow connection into
+            # reacquisition timing. The next fresh vision frame will poll/target.
+            return
 
         if self._last_poll_at is None or (
             now - self._last_poll_at >= self.config.poll_interval_seconds
