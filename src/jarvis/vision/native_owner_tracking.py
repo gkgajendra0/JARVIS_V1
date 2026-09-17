@@ -284,14 +284,11 @@ class NativeOwnerTrackingObserver:
     ) -> bool:
         if not native_status.connected or not native_status.active:
             return False
+        pushed_at = native_status.last_subject_push_at
+        if pushed_at is None:
+            return False
         freshness_seconds = self.controller.config.subject_push_stale_seconds
-        for observed_at in (
-            native_status.last_subject_push_at,
-            native_status.last_poll_at,
-        ):
-            if observed_at is not None and 0 <= now - observed_at <= freshness_seconds:
-                return True
-        return False
+        return 0 <= now - pushed_at <= freshness_seconds
 
     def _session_recovery_due(self, now: float) -> bool:
         attempted = self._last_session_recovery_at
