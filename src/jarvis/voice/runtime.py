@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import unicodedata
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -54,6 +53,7 @@ from jarvis.voice.livekit_session import (
 from jarvis.voice.observed_audio import ObservedSessionAudioInput
 from jarvis.voice.paired_audio import PairedAudioRuntime
 from jarvis.voice.scripted_speech import ScriptedSpeech, build_scripted_speech
+from jarvis.voice.standby_tools import StandbyAgentTools
 from jarvis.voice.startup_greeting import select_startup_greeting
 from jarvis.voice.vision_tools import VisionAgentTools
 from jarvis.voice.wakeword import LiveKitWakeDetector, load_livekit_predictor
@@ -86,81 +86,6 @@ class _UpdateApprovalRequest:
     local_sha: str
     remote_sha: str
     response: asyncio.Future[bool]
-
-
-_EXIT_CORES = frozenset(
-    {
-        "go to sleep",
-        "go back to sleep",
-        "end session",
-        "end the session",
-        "सो जाओ",
-        "सेशन बंद करो",
-    }
-)
-_EXIT_PREFIXES = (
-    "ok ",
-    "okay ",
-    "hey ",
-    "please ",
-    "jarvis ",
-    "ठीक है ",
-    "कृपया ",
-    "जार्विस ",
-)
-_EXIT_SUFFIXES = (" please", " now", " कृपया", " अभी")
-
-
-def _normalized_intent(text: str) -> str:
-    normalized = "".join(
-        character
-        if character.isspace()
-        or character == "_"
-        or unicodedata.category(character)[0] in {"L", "M", "N"}
-        else " "
-        for character in text.casefold()
-    )
-    return " ".join(normalized.split())
-
-
-def _final_spoken_clause(text: str) -> str:
-    """Return the final non-empty punctuation-delimited clause."""
-    clauses: list[str] = []
-    current: list[str] = []
-    for character in text:
-        if unicodedata.category(character).startswith("P"):
-            clause = "".join(current).strip()
-            if clause:
-                clauses.append(clause)
-            current.clear()
-        else:
-            current.append(character)
-    clause = "".join(current).strip()
-    if clause:
-        clauses.append(clause)
-    return clauses[-1] if clauses else text
-
-
-def _is_exit_intent(text: str) -> bool:
-    """Accept bounded command variants without matching quoted or negated text."""
-    candidate = _normalized_intent(_final_spoken_clause(text))
-    changed = True
-    while changed:
-        changed = False
-        for prefix in _EXIT_PREFIXES:
-            if candidate.startswith(prefix):
-                candidate = candidate.removeprefix(prefix).strip()
-                changed = True
-                break
-    changed = True
-    while changed:
-        changed = False
-        for suffix in _EXIT_SUFFIXES:
-            if candidate.endswith(suffix):
-                candidate = candidate.removesuffix(suffix).strip()
-                changed = True
-                break
-    return candidate in _EXIT_CORES
 
 
 class VoiceRuntimeController:
@@ -831,6 +756,25 @@ class VoiceRuntimeController:
             finally:
                 active_end.set()
 
+        def request_standby() -> bool:
+            nonlocal exit_in_progress, exit_task
+            if exit_in_progress:
+                return False
+            exit_in_progress = True
+            self._cancel_timeout()
+            LOGGER.info("Semantic voice-session standby accepted")
+            try:
+                session.input.set_audio_enabled(False)
+            except Exception:
+                LOGGER.exception(
+                    "Voice input could not be disabled during standby transition"
+                )
+            exit_task = asyncio.create_task(
+                acknowledge_and_end_session(),
+                name="jarvis-standby-acknowledgement",
+            )
+            return True
+
         def on_user_state(event: UserStateChangedEvent) -> None:
             if exit_in_progress:
                 return
@@ -849,7 +793,7 @@ class VoiceRuntimeController:
                 self._cancel_timeout()
 
         def on_conversation_item(event: ConversationItemAddedEvent) -> None:
-            nonlocal has_user_turn, exit_in_progress, exit_task
+            nonlocal has_user_turn
             item = event.item
             if not isinstance(item, ChatMessage) or item.role != "user":
                 return
@@ -859,19 +803,6 @@ class VoiceRuntimeController:
             has_user_turn = True
             self._cancel_timeout()
             submit_shadow_turn()
-            if _is_exit_intent(text) and not exit_in_progress:
-                exit_in_progress = True
-                LOGGER.info("Explicit voice-session exit accepted")
-                try:
-                    session.input.set_audio_enabled(False)
-                except Exception:
-                    LOGGER.exception(
-                        "Voice input could not be disabled during standby transition"
-                    )
-                exit_task = asyncio.create_task(
-                    acknowledge_and_end_session(),
-                    name="jarvis-standby-acknowledgement",
-                )
 
         def on_playback_finished(event: PlaybackFinishedEvent) -> None:
             del event
@@ -891,7 +822,9 @@ class VoiceRuntimeController:
         bridge.conversation.start()
         self.audio.activate_session(session_input)
         self._arm_timeout(self.config.initial_request_timeout_seconds)
-        tools = self._vision_tools.tools if self._vision_tools is not None else []
+        tools = list(self._vision_tools.tools) if self._vision_tools is not None else []
+        standby_tools = StandbyAgentTools(request_standby)
+        tools.extend(standby_tools.tools)
         try:
             try:
                 await session.start(agent=JarvisVoiceAgent(tools=tools))
