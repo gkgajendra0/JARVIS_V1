@@ -194,7 +194,7 @@ class NativeOwnerTrackingObserver:
         self._owner_observed_in_latest_snapshot = owner_bounds is not None
 
         native_status = self.client.status()
-        if native_status.active:
+        if self._native_lock_evidence_is_fresh(now, native_status):
             self._target_attempts_without_native_lock = 0
 
         decision = self.controller.step(
@@ -276,6 +276,22 @@ class NativeOwnerTrackingObserver:
             attempted is None
             or now - attempted >= self.config.reconnect_backoff_seconds
         )
+
+    def _native_lock_evidence_is_fresh(
+        self,
+        now: float,
+        native_status: NativeTrackingStatus,
+    ) -> bool:
+        if not native_status.connected or not native_status.active:
+            return False
+        freshness_seconds = self.controller.config.subject_push_stale_seconds
+        for observed_at in (
+            native_status.last_subject_push_at,
+            native_status.last_poll_at,
+        ):
+            if observed_at is not None and 0 <= now - observed_at <= freshness_seconds:
+                return True
+        return False
 
     def _session_recovery_due(self, now: float) -> bool:
         attempted = self._last_session_recovery_at
