@@ -22,6 +22,7 @@ import time
 from dataclasses import dataclass
 
 from jarvis.vision.models import BoundingBox
+from jarvis.vision.owner_reacquisition import NativeTrackingStatus
 from jarvis.vision.pocket3_native import Pocket3NativeConfig, Pocket3NativeTrackerClient
 
 LOGGER = logging.getLogger(__name__)
@@ -63,6 +64,17 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
     ) -> None:
         super().__init__(config)
         self.recovery_config = recovery_config or Pocket3RecoveryConfig()
+        self._last_transport_rx_at: float | None = None
+
+    def status(self) -> NativeTrackingStatus:
+        with self._lock:
+            return NativeTrackingStatus(
+                connected=self._connected,
+                active=self._tracking_active,
+                last_poll_at=self._last_poll_at,
+                last_subject_push_at=self._last_subject_push_at,
+                last_transport_rx_at=self._last_transport_rx_at,
+            )
 
     def start(self) -> None:
         with self._lock:
@@ -86,6 +98,7 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
             self._tracking_active = False
             self._last_poll_at = None
             self._last_subject_push_at = None
+            self._last_transport_rx_at = None
             self._latest_subject_box = None
         for event, _holder in pending:
             event.set()
@@ -98,6 +111,13 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
         )
         self.close()
         self.start()
+
+    def _ingest_transport(self, datagram: bytes) -> None:
+        super()._ingest_transport(datagram)
+        if len(datagram) < 8:
+            return
+        with self._lock:
+            self._last_transport_rx_at = time.monotonic()
 
     def _send_a6_with_ack(self, payload: bytes, *, timeout_message: str) -> bool:
         if not self.connected:
