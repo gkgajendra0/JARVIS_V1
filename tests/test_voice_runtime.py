@@ -13,6 +13,7 @@ from livekit.agents import (
     CloseReason,
     ConversationItemAddedEvent,
     UserInputTranscribedEvent,
+    llm,
 )
 from livekit.agents.llm import ChatMessage
 
@@ -22,11 +23,7 @@ from jarvis.identity.speaker_turn import InMemorySpeakerTurnCapture
 from jarvis.memory.live_context import LiveContext
 from jarvis.voice.audio import LocalAudioOutput
 from jarvis.voice.livekit_session import LiveKitConversationBridge
-from jarvis.voice.runtime import (
-    VoiceRuntimeController,
-    VoiceRuntimeState,
-    _is_exit_intent,
-)
+from jarvis.voice.runtime import VoiceRuntimeController, VoiceRuntimeState
 
 
 class FakeSessionInput:
@@ -47,6 +44,7 @@ class FakeSession:
         self.closed = False
         self.start_error = start_error
         self.interrupt_calls: list[bool] = []
+        self.agent: Any | None = None
 
     def on(self, event: str, callback):
         self.handlers[event].append(callback)
@@ -57,7 +55,7 @@ class FakeSession:
             callback(value)
 
     async def start(self, *, agent: Any) -> None:
-        del agent
+        self.agent = agent
         self.started.set()
         if self.start_error is not None:
             raise self.start_error
@@ -237,56 +235,26 @@ async def test_startup_readiness_timeout_skips_greeting() -> None:
     await asyncio.wait_for(task, timeout=1)
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "Go to sleep.",
-        "Go back to sleep.",
-        "Ok, Jarvis, go to sleep.",
-        "Jarvis, please go to sleep now.",
-        "Jarvis, go back to sleep now.",
-        "Okay, Jarvis, go back to sleep please.",
-        "Please end the session.",
-        "No, leave it. Go to sleep now.",
-        "No, leave it, Jarvis, go to sleep now.",
-        "ठीक है, जार्विस सो जाओ।",
-    ],
-)
-def test_exit_intent_accepts_bounded_polite_variants(text: str) -> None:
-    assert _is_exit_intent(text) is True
-
-
-@pytest.mark.parametrize(
-    "text",
-    [
-        "Do not go to sleep.",
-        "No. Do not go to sleep.",
-        "Tell me why you go to sleep.",
-        "What does go to sleep mean?",
-        "Jarvis, continue.",
-    ],
-)
-def test_exit_intent_rejects_negated_or_discussed_phrases(text: str) -> None:
-    assert _is_exit_intent(text) is False
-
-
 @pytest.mark.asyncio
-async def test_explicit_exit_speaks_standby_ack_before_session_cleanup() -> None:
+async def test_semantic_standby_speaks_ack_before_session_cleanup() -> None:
     runtime, session, conversation, audio, scripted_speech = runtime_with_session()
     task = asyncio.create_task(runtime._run_one_session())
     await session.started.wait()
     assert runtime.state is VoiceRuntimeState.ACTIVE
+    assert session.agent is not None
 
-    session.emit(
-        "conversation_item_added",
-        ConversationItemAddedEvent(
-            item=ChatMessage(
-                id="exit",
-                role="user",
-                content=["Jarvis, go back to sleep now."],
-            )
+    tool_ctx = llm.ToolContext(session.agent.tools)
+    assert tool_ctx.get_function_tool("enter_standby") is not None
+    result = await llm.execute_function_call(
+        llm.FunctionToolCall(
+            name="enter_standby",
+            arguments="{}",
+            call_id="standby-test",
         ),
+        tool_ctx,
     )
+    assert result.raw_exception is None
+    assert result.raw_output["status"] == "standby_requested"
     await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
 
     assert scripted_speech.spoken == ["Of course. I'll be standing by if you need me."]
