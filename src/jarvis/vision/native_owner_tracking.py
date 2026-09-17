@@ -58,6 +58,7 @@ class NativeOwnerTrackingConfig:
     locked_perception_fps: float = 2.0
     target_attempts_before_session_recovery: int = 3
     session_recovery_cooldown_seconds: float = 10.0
+    transport_rx_stale_seconds: float = 3.0
 
     def __post_init__(self) -> None:
         if self.poll_interval_seconds <= 0:
@@ -76,6 +77,8 @@ class NativeOwnerTrackingConfig:
             raise ValueError("target_attempts_before_session_recovery must be positive")
         if self.session_recovery_cooldown_seconds <= 0:
             raise ValueError("session_recovery_cooldown_seconds must be positive")
+        if self.transport_rx_stale_seconds <= 0:
+            raise ValueError("transport_rx_stale_seconds must be positive")
 
 
 class NativeOwnerTrackingObserver:
@@ -194,6 +197,11 @@ class NativeOwnerTrackingObserver:
         self._owner_observed_in_latest_snapshot = owner_bounds is not None
 
         native_status = self.client.status()
+        if self._transport_rx_is_stale(now, native_status):
+            if self._session_recovery_due(now):
+                self._start_session_recovery(now, reason="stale_transport_rx")
+            return
+
         if self._native_lock_evidence_is_fresh(now, native_status):
             self._target_attempts_without_native_lock = 0
 
@@ -234,7 +242,7 @@ class NativeOwnerTrackingObserver:
             >= self.config.target_attempts_before_session_recovery
             and self._session_recovery_due(now)
         ):
-            self._start_session_recovery(now)
+            self._start_session_recovery(now, reason="unconfirmed_native_lock")
             return
 
         try:
@@ -277,6 +285,19 @@ class NativeOwnerTrackingObserver:
             or now - attempted >= self.config.reconnect_backoff_seconds
         )
 
+    def _transport_rx_is_stale(
+        self,
+        now: float,
+        native_status: NativeTrackingStatus,
+    ) -> bool:
+        if not native_status.connected:
+            return False
+        received_at = native_status.last_transport_rx_at
+        if received_at is None:
+            return False
+        age = now - received_at
+        return age >= 0 and age > self.config.transport_rx_stale_seconds
+
     def _native_lock_evidence_is_fresh(
         self,
         now: float,
@@ -301,7 +322,7 @@ class NativeOwnerTrackingObserver:
         thread = self._recovery_thread
         return thread is not None and thread.is_alive()
 
-    def _start_session_recovery(self, now: float) -> None:
+    def _start_session_recovery(self, now: float, *, reason: str) -> None:
         if self._session_recovery_in_progress():
             return
         self._last_session_recovery_at = now
@@ -326,8 +347,9 @@ class NativeOwnerTrackingObserver:
         )
         self._recovery_thread.start()
         LOGGER.warning(
-            "Pocket 3 native tracking recovery started after %s target attempts "
-            "without a confirmed native lock",
+            "Pocket 3 native tracking recovery started: reason=%s "
+            "target_attempts_without_native_lock=%s",
+            reason,
             self._target_attempts_without_native_lock,
         )
 
