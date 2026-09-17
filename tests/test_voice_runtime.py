@@ -12,6 +12,7 @@ from livekit.agents import (
     CloseEvent,
     CloseReason,
     ConversationItemAddedEvent,
+    RunContext,
     UserInputTranscribedEvent,
     llm,
 )
@@ -45,6 +46,7 @@ class FakeSession:
         self.start_error = start_error
         self.interrupt_calls: list[bool] = []
         self.agent: Any | None = None
+        self._global_run_state = None
 
     def on(self, event: str, callback):
         self.handlers[event].append(callback)
@@ -245,6 +247,16 @@ async def test_semantic_standby_speaks_ack_before_session_cleanup() -> None:
 
     tool_ctx = llm.ToolContext(session.agent.tools)
     assert tool_ctx.get_function_tool("enter_standby") is not None
+    function_call = llm.FunctionCall(
+        name="enter_standby",
+        arguments="{}",
+        call_id="standby-test",
+    )
+    call_ctx = RunContext(
+        session=session,  # type: ignore[arg-type]
+        speech_handle=SimpleNamespace(num_steps=1),  # type: ignore[arg-type]
+        function_call=function_call,
+    )
     result = await llm.execute_function_call(
         llm.FunctionToolCall(
             name="enter_standby",
@@ -252,6 +264,7 @@ async def test_semantic_standby_speaks_ack_before_session_cleanup() -> None:
             call_id="standby-test",
         ),
         tool_ctx,
+        call_ctx=call_ctx,
     )
     assert result.raw_exception is None
     assert result.raw_output["status"] == "standby_requested"
