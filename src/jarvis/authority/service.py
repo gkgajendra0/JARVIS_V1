@@ -33,7 +33,6 @@ class AuthorityError(RuntimeError):
     pass
 
 
-
 def _proposal_audit_metadata(proposal: ActionProposal) -> dict[str, object]:
     """Return bounded, non-secret proposal metadata useful for incident review."""
 
