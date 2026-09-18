@@ -9,6 +9,8 @@ def test_default_self_model_is_hierarchical_and_covers_jarvis_namespaces() -> No
     model = build_default_self_model()
 
     assert len(model.components) >= 35
+    assert model.root_components[0].component_id == "jarvis"
+    assert len(model.root_components) == 1
     assert model.component("runtime.voice") is not None
     assert model.component("voice.wake") is not None
     assert model.component("memory.durable") is not None
@@ -28,6 +30,8 @@ def test_default_self_model_is_hierarchical_and_covers_jarvis_namespaces() -> No
     }
     mapped = set()
     for descriptor in model.components:
+        if descriptor.component_id == "jarvis":
+            continue
         for source_path in descriptor.source_paths:
             path = Path(source_path)
             try:
