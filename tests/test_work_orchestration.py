@@ -1065,7 +1065,6 @@ async def test_global_execution_lease_bounds_all_executor_steps(
     assert store.require(second.work_id).state is WorkState.RUNNING
 
 
-
 @pytest.mark.asyncio
 async def test_cancel_during_running_executor_preserves_cancelled_state(
     tmp_path: Path,
