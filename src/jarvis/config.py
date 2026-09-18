@@ -91,6 +91,9 @@ class JarvisConfig:
     gemini_realtime_model: str = "gemini-3.1-flash-live-preview"
     gemini_realtime_voice: str = "Charon"
     hands_planner_model: str | None = None
+    work_orchestration_enabled: bool = False
+    work_orchestration_model: str | None = None
+    work_global_concurrency: int = 4
     visual_computer_use_enabled: bool = False
     show_transcript: bool = True
     startup_greeting_enabled: bool = True
@@ -152,11 +155,19 @@ class JarvisConfig:
             "memory_candidate_extraction_model",
             "memory_semantic_recall_model",
             "hands_planner_model",
+            "work_orchestration_model",
         ):
             value = getattr(self, name)
             if value is not None:
                 normalized_value = str(value).strip()
                 object.__setattr__(self, name, normalized_value or None)
+
+        if isinstance(self.work_global_concurrency, bool) or not isinstance(
+            self.work_global_concurrency, int
+        ):
+            raise TypeError("work_global_concurrency must be an integer")
+        if self.work_global_concurrency <= 0:
+            raise ValueError("work_global_concurrency must be greater than zero")
 
         if self.memory_candidate_extraction_enabled:
             if not self.memory_enabled:
@@ -257,6 +268,15 @@ class JarvisConfig:
             ),
             hands_planner_model=_configured_optional_text(
                 "JARVIS_HANDS_PLANNER_MODEL", machine
+            ),
+            work_orchestration_enabled=_configured_bool(
+                "JARVIS_WORK_ORCHESTRATION_ENABLED", False, machine
+            ),
+            work_orchestration_model=_configured_optional_text(
+                "JARVIS_WORK_ORCHESTRATION_MODEL", machine
+            ),
+            work_global_concurrency=_configured_int(
+                "JARVIS_WORK_GLOBAL_CONCURRENCY", 4, machine
             ),
             visual_computer_use_enabled=_configured_bool(
                 "JARVIS_VISUAL_COMPUTER_USE_ENABLED", False, machine
