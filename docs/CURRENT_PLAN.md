@@ -4,7 +4,7 @@
 
 **PR #41 — Self-Awareness Foundation owner-machine acceptance resumes from the fully reconciled production baseline.**
 
-The accepted production baseline is protected `main` at `e2ff21e78480a09eb243cdd2c121b39e47620d0f` after owner-accepted PRs #43, #49 and #48 were consolidated on 2026-09-18.
+The accepted runtime-code baseline produced by owner-accepted PRs #43, #49 and #48 is `e2ff21e78480a09eb243cdd2c121b39e47620d0f`; later documentation-only reconciliation commits may advance protected `main` without changing that runtime state.
 
 PR #41 remains draft/unmerged. Its implementation is complete; the next work is real owner-machine privacy/resource/incident/non-regression acceptance, documentation reconciliation, then explicit protected-main merge approval.
 

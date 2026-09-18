@@ -147,9 +147,11 @@ PR #41 is implementation-complete but remains draft/unmerged pending owner-machi
 
 ## Final production state
 
-Protected production baseline after the accepted merges:
+Accepted runtime-code baseline after the accepted merges:
 
 `e2ff21e78480a09eb243cdd2c121b39e47620d0f`
+
+Protected `main` may advance beyond this SHA through documentation-only reconciliation without changing the accepted runtime code.
 
 The accepted heads of PRs #43, #49 and the updated #48 branch are all ancestors of this main baseline.
 

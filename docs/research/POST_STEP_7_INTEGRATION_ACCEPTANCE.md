@@ -4,7 +4,7 @@ Status: **ACCEPTED PRODUCTION BASELINE**
 
 Date: 2026-09-18
 
-Protected-main baseline: `e2ff21e78480a09eb243cdd2c121b39e47620d0f`
+Accepted runtime-code baseline: `e2ff21e78480a09eb243cdd2c121b39e47620d0f`
 
 This record was reconciled after a repository-wide audit of open PRs, closed-unmerged PRs, all surviving branches, no-PR branches, deferred issues and the current protected-main history.
 
