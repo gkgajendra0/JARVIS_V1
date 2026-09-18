@@ -34,6 +34,7 @@ from jarvis.voice.memory_tools import MemoryAgentTools
 from jarvis.voice.research_tools import ResearchAgentTools
 from jarvis.voice.runtime import VoiceRuntimeController
 from jarvis.voice.work_tools import WorkAgentTools
+from jarvis.work.models import WorkDeliveryKind
 from jarvis.work.runtime import WorkRuntime
 
 LOGGER = logging.getLogger(__name__)
@@ -104,14 +105,17 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._session_conversation: ConversationSession | None = None
         self._user_is_speaking = False
         self._session_ready_for_inactivity = False
+        self._agent_state = "unavailable"
 
         def capture_session(config: JarvisConfig):
             session, bridge = original_session_factory(config)
             self._session_conversation = bridge.conversation
             self._user_is_speaking = False
             self._session_ready_for_inactivity = False
+            self._agent_state = "unavailable"
 
             def track_agent_state(event: AgentStateChangedEvent) -> None:
+                self._agent_state = event.new_state
                 LOGGER.info(
                     "Voice agent state changed: %s -> %s",
                     event.old_state,
@@ -188,6 +192,62 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 work_runtime=work_runtime,
             )
 
+    @staticmethod
+    def _work_delivery_text(kind: WorkDeliveryKind, message: str) -> str:
+        normalized = " ".join(message.split())
+        if kind is WorkDeliveryKind.OWNER_INPUT:
+            return f"Sir, I need your input on a background task. {normalized}"
+        if kind is WorkDeliveryKind.FAILURE:
+            return f"Sir, a background task failed. {normalized}"
+        return f"Sir, {normalized}"
+
+    async def _deliver_pending_work(self) -> None:
+        while not self._shutdown.is_set():
+            runtime = self._work_runtime
+            output = self.audio.output
+            can_speak = (
+                runtime is not None
+                and output is not None
+                and self._state.value == "active"
+                and not self._user_is_speaking
+                and self._agent_state == "listening"
+            )
+            if not can_speak:
+                await asyncio.sleep(0.5)
+                continue
+
+            pending = runtime.store.list_pending_deliveries(limit=5)
+            if not pending:
+                await asyncio.sleep(0.5)
+                continue
+
+            delivery = pending[0]
+            try:
+                await self._get_scripted_speech().speak(
+                    output,
+                    self._work_delivery_text(delivery.kind, delivery.message),
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                LOGGER.exception(
+                    "Background work notification delivery failed | delivery_id=%s",
+                    delivery.delivery_id,
+                )
+                await asyncio.sleep(2.0)
+                continue
+
+            runtime.store.mark_delivery_delivered(delivery.delivery_id)
+            LOGGER.info(
+                "Background work notification delivered | delivery_id=%s | "
+                "work_id=%s | kind=%s | policy=%s",
+                delivery.delivery_id,
+                delivery.work_id,
+                delivery.kind.value,
+                delivery.policy.value,
+            )
+            await asyncio.sleep(0.2)
+
     def _arm_timeout(self, seconds: float) -> None:
         """Arm inactivity shutdown only after startup and only while user is silent."""
 
@@ -225,6 +285,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
     async def run(self) -> None:
         memory_runtime = self._memory_runtime
         capability_runtime = self._capability_runtime
+        delivery_task: asyncio.Task[None] | None = None
         if memory_runtime is not None:
             await memory_runtime.start()
             LOGGER.info(
@@ -260,12 +321,21 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 "browser_control=%s | raw_shell=False",
                 bool(browser_hands and browser_hands.execution_enabled),
             )
+        if self._work_runtime is not None:
+            delivery_task = asyncio.create_task(
+                self._deliver_pending_work(),
+                name="jarvis-work-delivery",
+            )
         try:
             await super().run()
         finally:
+            if delivery_task is not None:
+                delivery_task.cancel()
+                await asyncio.gather(delivery_task, return_exceptions=True)
             self._session_ready_for_inactivity = False
             self._user_is_speaking = False
             self._session_conversation = None
+            self._agent_state = "unavailable"
             if self._work_runtime is not None:
                 self._work_runtime.close()
             if capability_runtime is not None:
