@@ -5,7 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.work.brain import BrainAction, BrainCoordinator, BrainDecision, BrainRequest
+from jarvis.work.brain import (
+    BrainAction,
+    BrainCoordinator,
+    BrainDecision,
+    BrainPreempted,
+    BrainRequest,
+    InteractiveBrainGate,
+)
 from jarvis.work.engine import (
     WorkActionRegistry,
     WorkEngine,
@@ -728,3 +735,144 @@ async def test_executor_can_request_owner_input_without_becoming_failure(
     assert step.state.value == "completed"
     assert step.observation["needs_owner"] is True
     assert len(store.list_pending_deliveries()) == 1
+
+
+@pytest.mark.asyncio
+async def test_interactive_voice_preempts_inflight_background_reasoning() -> None:
+    class BlockingReasoner:
+        def __init__(self) -> None:
+            self.started = asyncio.Event()
+            self.cancelled = asyncio.Event()
+
+        async def decide(self, request: BrainRequest) -> BrainDecision:
+            del request
+            self.started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                self.cancelled.set()
+            raise AssertionError("unreachable")
+
+    reasoner = BlockingReasoner()
+    gate = InteractiveBrainGate()
+    coordinator = BrainCoordinator(reasoner, interactive_gate=gate)
+    item = WorkItem(
+        request="Background reasoning",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-brain-gate",
+        source_turn_id="turn-brain-gate",
+    )
+    request = BrainRequest(
+        work=item,
+        recent_steps=(),
+        purpose="test interactive preemption",
+        allowed_actions=(
+            BrainAction(
+                name="do_step",
+                description="Do one bounded step",
+                parameter_schema={"type": "object"},
+            ),
+        ),
+    )
+
+    task = asyncio.create_task(coordinator.decide(request))
+    await reasoner.started.wait()
+    gate.set_interactive_active(True)
+
+    with pytest.raises(BrainPreempted):
+        await task
+
+    assert reasoner.cancelled.is_set()
+    assert coordinator.busy is False
+
+
+@pytest.mark.asyncio
+async def test_brain_preemption_waits_without_consuming_failure_budget(
+    tmp_path: Path,
+) -> None:
+    class PreemptibleReasoner:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.started = asyncio.Event()
+
+        async def decide(self, request: BrainRequest) -> BrainDecision:
+            del request
+            self.calls += 1
+            if self.calls == 1:
+                self.started.set()
+                await asyncio.Event().wait()
+            return BrainDecision(action="do_step", summary="Continue after voice")
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = PreemptibleReasoner()
+    gate = InteractiveBrainGate()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner, interactive_gate=gate),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+    )
+    item = create_item(store, request="Background task")
+
+    first_advance = asyncio.create_task(engine.advance(item.work_id))
+    await reasoner.started.wait()
+    gate.set_interactive_active(True)
+    preempted = await first_advance
+
+    assert preempted.state is WorkState.WAITING_RESOURCE
+    assert store.list_steps(item.work_id) == ()
+    assert store.list_pending_deliveries() == ()
+
+    gate.set_interactive_active(False)
+    resumed = await engine.advance(item.work_id)
+
+    assert resumed.state is WorkState.RUNNING
+    assert store.list_steps(item.work_id)[-1].kind == "do_step"
+
+
+@pytest.mark.asyncio
+async def test_deterministic_worker_continues_while_voice_owns_brain(
+    tmp_path: Path,
+) -> None:
+    class ImmediateReasoner:
+        async def decide(self, request: BrainRequest) -> BrainDecision:
+            del request
+            return BrainDecision(action="controlled_step", summary="Run deterministic work")
+
+    class ControlledExecutor:
+        descriptor = BrainAction(
+            name="controlled_step",
+            description="Controlled deterministic work",
+            parameter_schema={"type": "object"},
+        )
+        work_types = frozenset({WorkType.GENERIC})
+
+        def __init__(self) -> None:
+            self.started = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def execute(self, *, work: WorkItem, parameters: dict) -> dict:
+            del work, parameters
+            self.started.set()
+            await self.release.wait()
+            return {"finished": True}
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    gate = InteractiveBrainGate()
+    executor = ControlledExecutor()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(ImmediateReasoner(), interactive_gate=gate),
+        actions=WorkActionRegistry((executor,)),
+    )
+    item = create_item(store, request="Keep deterministic work running")
+
+    task = asyncio.create_task(engine.advance(item.work_id))
+    await executor.started.wait()
+
+    gate.set_interactive_active(True)
+    executor.release.set()
+    result = await task
+
+    assert result.state is WorkState.RUNNING
+    assert store.list_steps(item.work_id)[-1].observation == {"finished": True}
+    assert gate.interactive_active is True
