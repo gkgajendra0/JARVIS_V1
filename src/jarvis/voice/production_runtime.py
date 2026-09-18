@@ -280,7 +280,7 @@ def build_production_voice_runtime(
 
     work_runtime = None
     if config.work_orchestration_enabled:
-        work_runtime = build_work_runtime(
+        work_runtime = await build_work_runtime(
             provider=config.ai_provider,
             research_service=research_service,
             model=config.work_orchestration_model,
