@@ -7,7 +7,14 @@ import pytest
 
 from jarvis.work.brain import BrainAction, BrainCoordinator, BrainDecision, BrainRequest
 from jarvis.work.engine import WorkActionRegistry, WorkEngine
-from jarvis.work.models import DeliveryPolicy, WorkItem, WorkPriority, WorkState, WorkType
+from jarvis.work.models import (
+    DeliveryPolicy,
+    WorkDeliveryKind,
+    WorkItem,
+    WorkPriority,
+    WorkState,
+    WorkType,
+)
 from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.resources import ResourceLeaseManager
 from jarvis.work.store import SQLiteWorkStore, WorkStoreError
@@ -550,3 +557,99 @@ async def test_failed_dependency_fails_only_dependent_work(tmp_path: Path) -> No
     assert result.state is WorkState.FAILED
     assert store.require(dependency.work_id).state is WorkState.FAILED
     assert store.require(dependent.work_id).state is WorkState.FAILED
+
+
+def test_cancel_one_work_item_does_not_affect_another(tmp_path: Path) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+
+    first = orchestrator.start(
+        request="Task A",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-cancel",
+        source_turn_id="turn-a",
+    )
+    second = orchestrator.start(
+        request="Task B",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-cancel",
+        source_turn_id="turn-b",
+    )
+
+    orchestrator.cancel(first.work.work_id)
+
+    assert store.require(first.work.work_id).state is WorkState.CANCELLED
+    assert store.require(second.work.work_id).state is WorkState.QUEUED
+    assert backend.cancelled == [first.work.work_id]
+
+
+def test_delivery_policy_is_durable_ordered_and_exactly_once(tmp_path: Path) -> None:
+    path = tmp_path / "work.sqlite"
+    store = SQLiteWorkStore(path)
+    idle = WorkItem(
+        request="Idle delivery",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-delivery",
+        source_turn_id="turn-idle",
+        delivery_policy=DeliveryPolicy.WHEN_IDLE,
+    )
+    interrupt = WorkItem(
+        request="Interrupt delivery",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-delivery",
+        source_turn_id="turn-interrupt",
+        delivery_policy=DeliveryPolicy.INTERRUPT,
+    )
+    silent = WorkItem(
+        request="Silent delivery",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-delivery",
+        source_turn_id="turn-silent",
+        delivery_policy=DeliveryPolicy.SILENT,
+    )
+    for item in (idle, interrupt, silent):
+        store.create(item)
+
+    store.enqueue_delivery(
+        work=idle,
+        kind=WorkDeliveryKind.COMPLETION,
+        message="Idle complete",
+        event_key="completion",
+    )
+    store.enqueue_delivery(
+        work=interrupt,
+        kind=WorkDeliveryKind.FAILURE,
+        message="Urgent failure",
+        event_key="failure",
+    )
+    assert (
+        store.enqueue_delivery(
+            work=silent,
+            kind=WorkDeliveryKind.COMPLETION,
+            message="Never speak",
+            event_key="completion",
+        )
+        is None
+    )
+
+    reopened = SQLiteWorkStore(path)
+    pending = reopened.list_pending_deliveries()
+    assert [item.work_id for item in pending] == [
+        interrupt.work_id,
+        idle.work_id,
+    ]
+
+    reopened.mark_delivery_delivered(pending[0].delivery_id)
+    assert [item.work_id for item in reopened.list_pending_deliveries()] == [
+        idle.work_id
+    ]
+
+    duplicate = reopened.enqueue_delivery(
+        work=idle,
+        kind=WorkDeliveryKind.COMPLETION,
+        message="Idle complete",
+        event_key="completion",
+    )
+    assert duplicate is not None
+    assert len(reopened.list_pending_deliveries()) == 1
