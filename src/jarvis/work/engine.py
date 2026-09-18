@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from jarvis.work.brain import BrainAction, BrainCoordinator, BrainRequest
+from jarvis.work.brain import BrainAction, BrainCoordinator, BrainPreempted, BrainRequest
 from jarvis.work.models import (
     WorkDeliveryKind,
     WorkItem,
@@ -99,7 +99,11 @@ class WorkEngine:
         self._resources = resources or ResourceLeaseManager()
 
     def _make_running(self, work: WorkItem) -> WorkItem:
-        if work.state is WorkState.QUEUED or work.state is WorkState.RETRYING:
+        if work.state in {
+            WorkState.QUEUED,
+            WorkState.RETRYING,
+            WorkState.WAITING_RESOURCE,
+        }:
             running = work.transition(WorkState.RUNNING, status_detail="reasoning")
             return self._store.save(running, expected_version=work.version)
         return work
@@ -351,6 +355,15 @@ class WorkEngine:
                     allowed_actions=actions,
                 )
             )
+        except BrainPreempted:
+            latest = self._store.require(work.work_id)
+            waiting = latest.transition(
+                WorkState.WAITING_RESOURCE,
+                status_detail="waiting for interactive brain",
+                current_step_id=latest.current_step_id,
+            )
+            saved = self._store.save(waiting, expected_version=latest.version)
+            return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
         except Exception as exc:
             return self._record_reasoning_failure(work, exc)
 
