@@ -39,7 +39,7 @@ The Pocket 3 visual sensor/PTZ foundation was deliberately inserted before Step 
 
 ### Self-Awareness Foundation
 
-PR #41 is owner-accepted (2026-09-18) as a bounded read-only foundation: hierarchical whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, redacted local operational evidence, incident engineering memory and typed governed Self-Awareness reads. Autonomous diagnosis/repair remains later work.
+PR #41 is owner-accepted and merged to protected `main` (2026-09-18) as a bounded read-only foundation: hierarchical whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, redacted local operational evidence, incident engineering memory and typed governed Self-Awareness reads. Autonomous diagnosis/repair remains later work.
 
 Detailed acceptance: `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
 
@@ -127,7 +127,7 @@ Research for future slices is intentionally deferred until that slice becomes ac
 
 ## Current next step
 
-Persistent Concurrent Work Orchestration is the active **requirements / research** foundation. It must reuse conversation, lifecycle, Authority, capability runtime, Hands, Self-Awareness and observability while defining durable work truth, bounded concurrency, dependencies/resources, restart recovery, progress/status and non-blocking result delivery.
+Persistent Concurrent Work Orchestration (issue #53) is the active **requirements / research** foundation. It must reuse conversation, lifecycle, Authority, capability runtime, Hands, Self-Awareness and observability while defining durable work truth, bounded concurrency, dependencies/resources, restart recovery, progress/status and non-blocking result delivery.
 
 After that foundation is accepted, Step 8 begins formal tasks/reminders/scheduling requirements and implementation on top of the same work model.
 

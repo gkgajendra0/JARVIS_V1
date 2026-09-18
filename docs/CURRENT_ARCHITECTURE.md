@@ -2,9 +2,9 @@
 
 ## Status
 
-**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS FOUNDATION PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION IS THE NEXT ARCHITECTURE FOUNDATION; STEP 8 IS QUEUED AFTER IT.**
+**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS FOUNDATION PR #41 IS OWNER ACCEPTED AND MERGED. PERSISTENT CONCURRENT WORK ORCHESTRATION (ISSUE #53) IS THE NEXT ARCHITECTURE FOUNDATION; STEP 8 IS QUEUED AFTER IT.**
 
-Accepted pre-Self-Awareness runtime-code baseline after the 2026-09-18 consolidation: `e2ff21e78480a09eb243cdd2c121b39e47620d0f`. PR #41 adds the accepted bounded Self-Awareness runtime; final documentation-only reconciliation commits do not change that implementation behavior.
+Protected-main production baseline after the Self-Awareness merge: `e5484cb9d599783e7f715bc6fb435af459dc49a0`. PR #41 adds the accepted bounded Self-Awareness runtime; later documentation-only reconciliation commits do not change that implementation behavior.
 
 This file describes architecture that actually exists on protected `main`. Historical proposals and experiments belong in `docs/research/`; active acceptance work belongs in `CURRENT_PLAN.md`.
 
@@ -238,7 +238,7 @@ Repository-wide reconciliation evidence: `docs/research/PRODUCTION_RECONCILIATIO
 
 ## Next architecture acceptance
 
-The next architecture foundation is **Persistent Concurrent Work Orchestration**.
+The next architecture foundation is **Persistent Concurrent Work Orchestration (issue #53)**.
 
 It is not implemented yet. The requirements/research phase must define durable provider-neutral work items, lifecycle/state, bounded concurrent workers, dependency/priority/resource management, restart recovery, Authority-preserving execution, progress/status and deferred completion delivery while normal conversation remains available.
 

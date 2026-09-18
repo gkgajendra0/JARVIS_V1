@@ -2,7 +2,7 @@
 
 ## Decision
 
-PR #41 Self-Awareness Foundation is **OWNER ACCEPTED** for protected-main merge on 2026-09-18.
+PR #41 Self-Awareness Foundation is **OWNER ACCEPTED** and was merged to protected `main` on 2026-09-18 at `e5484cb9d599783e7f715bc6fb435af459dc49a0`.
 
 The accepted scope is the bounded read-only Self-Awareness foundation: hierarchical Self Model, deterministic health/dependency/blast-radius reasoning, structured operational evidence, local incident engineering memory, privacy redaction, and typed governed read tools.
 
@@ -93,3 +93,8 @@ On 2026-09-18 the owner explicitly:
 - accepted the long-running synchronous voice delay as future orchestration work;
 - approved merging PR #41 to protected `main`;
 - approved promoting Persistent Concurrent Work Orchestration to the next architecture foundation before Step 8 implementation.
+
+## Merge result
+
+- PR #41 merged successfully to protected `main` at `e5484cb9d599783e7f715bc6fb435af459dc49a0`.
+- Persistent Concurrent Work Orchestration Foundation is tracked as issue #53 and is the next requirements/research architecture item before Step 8 implementation.
