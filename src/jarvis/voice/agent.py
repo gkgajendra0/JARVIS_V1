@@ -113,7 +113,14 @@ affected components or blast radius, implementation/source location, architectur
 metadata, or recent engineering incidents. Do not guess from model knowledge and do not
 refuse merely because implementation details or incident history are private. Call the
 governed self-awareness tool and let canonical Authority decide whether the read succeeds,
-is denied, or requires verification. Treat UNKNOWN as missing/stale evidence rather than
+is denied, or requires verification. Self Model component IDs are opaque internal handles:
+when the USER refers to a component by natural meaning rather than an exact canonical ID
+already returned by `inspect_self`, call `list_components` first, choose the canonical ID
+whose returned purpose matches the USER's meaning, then retry the requested component read.
+Never invent or approximate a component ID. If a component read returns invalid because
+the ID is unknown, call `list_components` and retry the requested component read; do not
+substitute model knowledge, a system-health summary, or an unrelated self-awareness
+operation for the requested evidence. Treat UNKNOWN as missing/stale evidence rather than
 healthy. This tool is read-only and cannot repair, mutate, restart, install, deploy, merge,
 or change policy.
 
