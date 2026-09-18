@@ -9,6 +9,10 @@ from pathlib import Path
 from jarvis.knowledge.research import CurrentResearchService
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator
+from jarvis.work.development import (
+    DevelopmentWorkspaceManager,
+    build_development_executors,
+)
 from jarvis.work.dbos_backend import (
     DBOSWorkExecutionBackend,
     initialize_dbos_work_runtime,
@@ -18,6 +22,7 @@ from jarvis.work.engine import WorkActionRegistry, WorkEngine
 from jarvis.work.models import WorkItem, WorkState, WorkType
 from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.reasoner import ProviderWorkReasoner
+from jarvis.work.resources import ResourceLeaseManager
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
 
@@ -80,8 +85,25 @@ def build_work_runtime(
     store = SQLiteWorkStore(store_path or default_work_store_path())
     reasoner = ProviderWorkReasoner(provider=provider, model=model)
     brain = BrainCoordinator(reasoner)
-    actions = WorkActionRegistry((ResearchWorkExecutor(research_service),))
-    engine = WorkEngine(store=store, brain=brain, actions=actions)
+    workspace_manager = DevelopmentWorkspaceManager()
+    executors = (
+        ResearchWorkExecutor(research_service),
+        *build_development_executors(workspace_manager),
+    )
+    actions = WorkActionRegistry(tuple(executors))
+    resources = ResourceLeaseManager(
+        {
+            "cpu": max(1, min(2, global_concurrency)),
+            "git": 1,
+            "network": max(1, global_concurrency),
+        }
+    )
+    engine = WorkEngine(
+        store=store,
+        brain=brain,
+        actions=actions,
+        resources=resources,
+    )
     backend = initialize_dbos_work_runtime(
         engine=engine,
         event_loop=loop,
@@ -95,5 +117,5 @@ def build_work_runtime(
         engine=engine,
         backend=backend,
         orchestrator=orchestrator,
-        supported_work_types=frozenset({WorkType.RESEARCH}),
+        supported_work_types=frozenset({WorkType.RESEARCH, WorkType.DEVELOPMENT}),
     )
