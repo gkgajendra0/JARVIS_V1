@@ -29,6 +29,12 @@ def _unique_text(values: tuple[str, ...] | list[str]) -> tuple[str, ...]:
     return tuple(sorted({str(value).strip() for value in values if str(value).strip()}))
 
 
+def _unique_lower_text(values: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    return tuple(
+        sorted({str(value).strip().lower() for value in values if str(value).strip()})
+    )
+
+
 class DependencyCriticality(str, Enum):
     """How dependency health should affect the source component."""
 
@@ -56,11 +62,7 @@ class DependencyDescriptor:
             "target_component_id",
             _identifier(self.target_component_id, field="target_component_id"),
         )
-        object.__setattr__(
-            self,
-            "relation",
-            _identifier(self.relation, field="relation"),
-        )
+        object.__setattr__(self, "relation", _identifier(self.relation, field="relation"))
         if self.fallback_component_id is not None:
             object.__setattr__(
                 self,
@@ -99,6 +101,8 @@ class ComponentDescriptor:
     source_paths: tuple[str, ...]
     owner: str = "jarvis"
     lifecycle: str = "active"
+    parent_component_id: str | None = None
+    health_surface: bool = False
     product_capabilities: tuple[str, ...] = ()
     capability_keys: tuple[str, ...] = ()
     code_symbols: tuple[str, ...] = ()
@@ -107,6 +111,7 @@ class ComponentDescriptor:
     docs: tuple[str, ...] = ()
     resources: tuple[str, ...] = ()
     health_probes: tuple[str, ...] = ()
+    logger_prefixes: tuple[str, ...] = ()
     stale_after_seconds: float = 60.0
 
     def __post_init__(self) -> None:
@@ -117,11 +122,13 @@ class ComponentDescriptor:
         )
         object.__setattr__(self, "purpose", _text(self.purpose, field="purpose"))
         object.__setattr__(self, "owner", _identifier(self.owner, field="owner"))
-        object.__setattr__(
-            self,
-            "lifecycle",
-            _identifier(self.lifecycle, field="lifecycle"),
-        )
+        object.__setattr__(self, "lifecycle", _identifier(self.lifecycle, field="lifecycle"))
+        if self.parent_component_id is not None:
+            object.__setattr__(
+                self,
+                "parent_component_id",
+                _identifier(self.parent_component_id, field="parent_component_id"),
+            )
         if self.stale_after_seconds <= 0:
             raise ValueError("stale_after_seconds must be positive")
         for field_name in (
@@ -140,5 +147,10 @@ class ComponentDescriptor:
                 field_name,
                 _unique_text(getattr(self, field_name)),
             )
+        object.__setattr__(
+            self,
+            "logger_prefixes",
+            _unique_lower_text(self.logger_prefixes),
+        )
         if not self.source_paths:
             raise ValueError("component source_paths must not be empty")
