@@ -637,6 +637,153 @@ class DevelopmentRunTestsExecutor:
         )
 
 
+class DevelopmentDiffExecutor:
+    descriptor = BrainAction(
+        name="dev_diff",
+        description=(
+            "Inspect the bounded Git diff for this WorkItem's isolated branch before "
+            "creating a local review commit."
+        ),
+        parameter_schema={"type": "object", "additionalProperties": False},
+    )
+    work_types = frozenset({WorkType.DEVELOPMENT})
+
+    def __init__(self, manager: DevelopmentWorkspaceManager) -> None:
+        self._manager = manager
+
+    def resource_keys(
+        self,
+        work: WorkItem,
+        parameters: dict[str, Any],
+    ) -> tuple[str, ...]:
+        del work, parameters
+        return ("git",)
+
+    async def execute(
+        self,
+        *,
+        work: WorkItem,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        del parameters
+        workspace = self._manager.workspace_for(work.work_id)
+        if not workspace.path.is_dir():
+            raise DevelopmentWorkspaceError("development workspace is not prepared")
+        result = await asyncio.to_thread(
+            self._manager._run,
+            workspace.path,
+            "diff",
+            "--no-ext-diff",
+            "--",
+        )
+        text = result.stdout
+        return {
+            "branch": workspace.branch,
+            "diff": text[:_MAX_READ_CHARS],
+            "truncated": len(text) > _MAX_READ_CHARS,
+        }
+
+
+class DevelopmentCommitExecutor:
+    descriptor = BrainAction(
+        name="dev_commit",
+        description=(
+            "Create a local Git commit only on this WorkItem's isolated development "
+            "branch after JARVIS has passed sandboxed tests and inspected the diff. "
+            "This never pushes or merges."
+        ),
+        parameter_schema={
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                }
+            },
+            "required": ["message"],
+            "additionalProperties": False,
+        },
+    )
+    work_types = frozenset({WorkType.DEVELOPMENT})
+
+    def __init__(self, manager: DevelopmentWorkspaceManager) -> None:
+        self._manager = manager
+
+    def resource_keys(
+        self,
+        work: WorkItem,
+        parameters: dict[str, Any],
+    ) -> tuple[str, ...]:
+        del work, parameters
+        return ("git",)
+
+    async def execute(
+        self,
+        *,
+        work: WorkItem,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        workspace = self._manager.workspace_for(work.work_id)
+        if not workspace.path.is_dir():
+            raise DevelopmentWorkspaceError("development workspace is not prepared")
+        message = " ".join(str(parameters.get("message") or "").split())
+        if not message or len(message) > 500:
+            raise DevelopmentWorkspaceError("development commit message is invalid")
+
+        await asyncio.to_thread(
+            self._manager._run,
+            workspace.path,
+            "add",
+            "--all",
+        )
+        status_before = await asyncio.to_thread(
+            self._manager._run,
+            workspace.path,
+            "status",
+            "--porcelain=v1",
+        )
+        if not status_before.stdout.strip():
+            raise DevelopmentWorkspaceError(
+                "development branch has no changes to commit"
+            )
+
+        await asyncio.to_thread(
+            self._manager._run,
+            workspace.path,
+            "commit",
+            "-m",
+            message,
+            timeout=120.0,
+        )
+        head = await asyncio.to_thread(
+            self._manager._run,
+            workspace.path,
+            "rev-parse",
+            "HEAD",
+        )
+        status_after = await asyncio.to_thread(
+            self._manager._run,
+            workspace.path,
+            "status",
+            "--porcelain=v1",
+        )
+        clean = not status_after.stdout.strip()
+        if not clean:
+            raise DevelopmentWorkspaceError(
+                "development worktree is not clean after local commit"
+            )
+        return {
+            "committed": True,
+            "commit": head.stdout.strip(),
+            "branch": workspace.branch,
+            "clean": True,
+            "pushed": False,
+            "merged": False,
+            "production_tree_modified": False,
+        }
+
+
 class DevelopmentStatusExecutor:
     descriptor = BrainAction(
         name="dev_status",
@@ -669,5 +816,7 @@ def build_development_executors(
         DevelopmentSearchExecutor(manager),
         DevelopmentWriteFileExecutor(manager),
         DevelopmentRunTestsExecutor(manager, runner=test_runner),
+        DevelopmentDiffExecutor(manager),
+        DevelopmentCommitExecutor(manager),
         DevelopmentStatusExecutor(manager),
     )
