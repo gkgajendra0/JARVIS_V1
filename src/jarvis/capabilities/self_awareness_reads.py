@@ -258,8 +258,7 @@ class SelfAwarenessReadExecutor:
             ],
             "component_count": len(components),
             "root_components": [
-                item.component_id
-                for item in self._awareness.self_model.root_components
+                item.component_id for item in self._awareness.self_model.root_components
             ],
         }
 
@@ -356,9 +355,7 @@ class SelfAwarenessReadExecutor:
             status=IncidentStatus.RESOLVED,
         )
         incidents = tuple(
-            item
-            for item in candidates
-            if scope.intersection(item.affected_components)
+            item for item in candidates if scope.intersection(item.affected_components)
         )[:limit]
         return {
             "available": True,
