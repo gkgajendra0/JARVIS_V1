@@ -104,18 +104,24 @@ Redaction is layered and deny-by-default for common secret/credential keys. Norm
 
 Operational incident memory is separate from personal memory and authority audit. It stores compact engineering facts: symptoms, affected components, evidence references, confirmed root cause, accepted fix, regression tests, commit/PR and deployment/rollback outcome.
 
-## First implementation slice
+## Implemented foundation
 
-The branch `feature/self-awareness-foundation` implements the smallest useful foundation:
+The branch `feature/self-awareness-foundation` now implements the complete read-only foundation required before a later diagnostic/repair agent:
 
-1. component/dependency Self Model contracts;
-2. deterministic Health Registry with TTL and dependency roll-up;
-3. correlation context and privacy redaction;
-4. structured rotating JSONL operational logging while preserving console logging;
-5. OpenTelemetry trace/metric adapter with network export disabled by default;
-6. separate SQLite incident/engineering-memory lifecycle;
-7. automated contract tests;
-8. ADR/documentation describing the safety boundary.
+1. hierarchical whole-JARVIS component/dependency Self Model with parent/child structure;
+2. source-path, logger, tests/config/docs/resources and capability metadata;
+3. a bounded top-level health surface plus deterministic Health Registry TTL/dependency roll-up;
+4. correlation context and deny-by-default privacy redaction;
+5. structured rotating JSONL operational logging while preserving console logging;
+6. bounded newest-first querying across the current + rotated JSONL spool by canonical component/time/severity/reason/correlation/text;
+7. OpenTelemetry trace/metric adapter with network export disabled by default;
+8. separate SQLite incident/engineering-memory lifecycle;
+9. retrieval of prior resolved incidents including confirmed root cause, accepted fix, regression tests, commit/PR and lessons;
+10. typed voice-facing Self-Awareness tools so semantic intent remains provider-owned while canonical IDs/evidence remain JARVIS-owned;
+11. automated coverage/evidence/privacy/authority contract tests;
+12. ADR/documentation describing the safety and future-repair boundary.
+
+This still does **not** implement autonomous root-cause diagnosis or code mutation. It provides the trusted map and evidence those later agents must consume.
 
 ## Explicit non-scope
 
@@ -129,4 +135,15 @@ The branch `feature/self-awareness-foundation` implements the smallest useful fo
 
 ## Next evidence after CI
 
-After repository CI is green, real owner-machine acceptance should measure log correctness/redaction, CPU/RAM/disk overhead, startup/runtime behavior, and non-regression of voice, Hands, Pocket 3 and provider workflows. Collector/backend deployment should happen only after that local evidence is satisfactory.
+After repository CI is green, real owner-machine acceptance should verify:
+
+- typed semantic component discovery and detail routing;
+- whole-model hierarchy visibility without bloating the overall health response;
+- bounded log/evidence queries over the real rotating spool;
+- prior resolved-incident/fix retrieval;
+- representative secret redaction in persisted evidence;
+- CPU/RAM/disk overhead;
+- controlled degraded/failed health + incident/blast-radius behavior;
+- non-regression of voice, Hands, Pocket 3 and provider workflows.
+
+Collector/backend deployment should happen only after that local evidence is satisfactory.
