@@ -65,11 +65,37 @@ class WorkRuntime:
     def set_interactive_brain_active(self, active: bool) -> None:
         self._interactive_brain_gate.set_interactive_active(active)
 
-    def submit_owner_input(self, work_id: str, response: str) -> WorkItem:
-        work = self.store.require(work_id)
-        if work.state is not WorkState.WAITING_FOR_OWNER:
-            raise ValueError("work is not waiting for owner input")
-        self.backend.send_owner_input(work_id, response)
+    def resolve_waiting_owner_work(
+        self,
+        work_id: str | None = None,
+    ) -> WorkItem:
+        normalized = str(work_id or "").strip()
+        if normalized:
+            work = self.store.require(normalized)
+            if work.state is not WorkState.WAITING_FOR_OWNER:
+                raise ValueError("work is not waiting for owner input")
+            return work
+
+        waiting = self.store.list(
+            states=(WorkState.WAITING_FOR_OWNER,),
+            limit=10,
+        )
+        if len(waiting) == 1:
+            return waiting[0]
+        if not waiting:
+            raise ValueError("no background work is waiting for owner input")
+        raise ValueError(
+            "multiple background tasks are waiting for owner input; "
+            "identify the task before continuing"
+        )
+
+    def submit_owner_input(
+        self,
+        work_id: str | None,
+        response: str,
+    ) -> WorkItem:
+        work = self.resolve_waiting_owner_work(work_id)
+        self.backend.send_owner_input(work.work_id, response)
         return work
 
     def close(self) -> None:
