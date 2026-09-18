@@ -83,8 +83,10 @@ class WorkAgentTools:
         """Start durable work from the latest accepted USER request and return immediately.
 
         Use this only when the USER clearly asks JARVIS to perform work that may continue
-        independently of the current voice turn, such as a long-running research request,
-        and expects to continue talking or be told later when it is ready. The canonical
+        independently of the current voice turn, such as long-running research or an
+        isolated JARVIS repository implementation request, and expects to continue talking
+        or be told later when it is ready. Use research for web/current-information work
+        and development for repository implementation/testing. The canonical
         request text comes from JARVIS's latest accepted USER turn; never invent or
         paraphrase a hidden task prompt.
 
