@@ -478,6 +478,34 @@ class PowerSessionExecutor:
     def prepare(self, request: CapabilityRequest) -> PreparedCapability:
         if request.operation not in self.operations:
             raise WindowsDeviceValidationError("unsupported power/session operation")
+
+        intent_operation = str(
+            request.parameters.get("intent_operation") or ""
+        ).strip()
+        intent_evidence = " ".join(
+            str(request.parameters.get("intent_evidence") or "").split()
+        )
+        if intent_operation or intent_evidence:
+            if intent_operation != request.operation:
+                raise WindowsDeviceValidationError(
+                    "power/session intent binding does not match requested operation"
+                )
+            if not intent_evidence or len(intent_evidence) > 240:
+                raise WindowsDeviceValidationError(
+                    "power/session intent evidence must be non-empty and bounded"
+                )
+            authority_parameters = {
+                "intent_operation": intent_operation,
+                "intent_evidence": intent_evidence,
+            }
+            material_summary = (
+                f"{request.operation.replace('_', ' ').title()} "
+                f'— requested as: "{intent_evidence}"'
+            )
+        else:
+            authority_parameters = {}
+            material_summary = request.operation.replace("_", " ").title()
+
         critical = request.operation != "lock_workstation"
         attributes = (
             ActionAttributes(executable_or_system_change=True)
@@ -487,8 +515,8 @@ class PowerSessionExecutor:
         return PreparedCapability(
             request=request,
             target={"domain": "system.power_session", "machine": "local"},
-            parameters={},
-            material_summary=request.operation.replace("_", " ").title(),
+            parameters=authority_parameters,
+            material_summary=material_summary,
             attributes=attributes,
             execution_payload={},
         )
