@@ -77,7 +77,7 @@ class RecoveredEngine:
 async def test_dbos_executes_durable_work_without_blocking_event_loop(
     tmp_path,
 ) -> None:
-    backend = await initialize_dbos_work_runtime(
+    backend = initialize_dbos_work_runtime(
         engine=ImmediateCompleteEngine(),  # type: ignore[arg-type]
         event_loop=asyncio.get_running_loop(),
         application_version="test-work-v1",
@@ -98,7 +98,7 @@ async def test_dbos_executes_durable_work_without_blocking_event_loop(
 async def test_dbos_recovers_waiting_work_after_runtime_restart(tmp_path) -> None:
     database_url = f"sqlite:///{(tmp_path / 'dbos-recovery.sqlite3').as_posix()}"
     first_engine = WaitingEngine()
-    first_backend = await initialize_dbos_work_runtime(
+    first_backend = initialize_dbos_work_runtime(
         engine=first_engine,  # type: ignore[arg-type]
         event_loop=asyncio.get_running_loop(),
         application_version="test-work-recovery-v1",
@@ -112,7 +112,7 @@ async def test_dbos_recovers_waiting_work_after_runtime_restart(tmp_path) -> Non
     shutdown_dbos_work_runtime()
 
     recovered_engine = RecoveredEngine()
-    recovered_backend = await initialize_dbos_work_runtime(
+    recovered_backend = initialize_dbos_work_runtime(
         engine=recovered_engine,  # type: ignore[arg-type]
         event_loop=asyncio.get_running_loop(),
         application_version="test-work-recovery-v1",

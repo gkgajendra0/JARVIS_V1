@@ -105,7 +105,7 @@ class WorkRuntime:
         shutdown_dbos_work_runtime()
 
 
-async def build_work_runtime(
+def build_work_runtime(
     *,
     provider: str,
     research_service: CurrentResearchService,
@@ -148,7 +148,7 @@ async def build_work_runtime(
         actions=actions,
         resources=resources,
     )
-    backend = await initialize_dbos_work_runtime(
+    backend = initialize_dbos_work_runtime(
         engine=engine,
         event_loop=loop,
         application_version=_application_version(),

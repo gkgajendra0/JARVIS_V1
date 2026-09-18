@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from dbos import DBOS, DBOSConfig, SetEnqueueOptions, SetWorkflowID
@@ -179,7 +180,7 @@ class DBOSWorkExecutionBackend:
         DBOS.send(work_id, normalized, topic=_OWNER_TOPIC)
 
 
-async def initialize_dbos_work_runtime(
+def initialize_dbos_work_runtime(
     *,
     engine: WorkEngine,
     event_loop: asyncio.AbstractEventLoop,
@@ -203,10 +204,15 @@ async def initialize_dbos_work_runtime(
     }
     DBOS(config=config)
     DBOS.launch()
-    await DBOS.register_queue_async(
-        _QUEUE_NAME,
-        global_concurrency=queue_concurrency,
-    )
+    with ThreadPoolExecutor(
+        max_workers=1,
+        thread_name_prefix="jarvis-dbos-startup",
+    ) as pool:
+        pool.submit(
+            DBOS.register_queue,
+            _QUEUE_NAME,
+            global_concurrency=queue_concurrency,
+        ).result()
     return DBOSWorkExecutionBackend()
 
 

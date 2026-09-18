@@ -151,8 +151,7 @@ class WorkEngine:
             if not committed:
                 return (
                     False,
-                    "development work must be committed on its isolated branch "
-                    "with a clean worktree",
+                    "development work must be committed on its isolated branch with a clean worktree",
                 )
             return True, None
         return True, None
@@ -364,7 +363,7 @@ class WorkEngine:
             )
             saved = self._store.save(waiting, expected_version=latest.version)
             return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - provider boundary must fail closed
             return self._record_reasoning_failure(work, exc)
 
         if decision.goal_complete:
@@ -559,7 +558,7 @@ class WorkEngine:
                 progressed=True,
                 owner_question=exc.question,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - executor boundary must contain faults
             failed_step = running_step.fail(type(exc).__name__ + ": " + str(exc))
             self._store.save_step(failed_step)
             latest = self._store.require(work.work_id)

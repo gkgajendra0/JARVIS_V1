@@ -196,9 +196,11 @@ class WorkStep:
             raise ValueError("step summary must not be empty")
         if self.state is WorkStepState.RUNNING and self.started_at is None:
             raise ValueError("running step requires started_at")
-        if self.state in {WorkStepState.COMPLETED, WorkStepState.FAILED}:
-            if self.completed_at is None:
-                raise ValueError("finished step requires completed_at")
+        if (
+            self.state in {WorkStepState.COMPLETED, WorkStepState.FAILED}
+            and self.completed_at is None
+        ):
+            raise ValueError("finished step requires completed_at")
 
     def start(self) -> WorkStep:
         if self.state is not WorkStepState.PLANNED:
