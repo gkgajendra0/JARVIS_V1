@@ -137,8 +137,19 @@ class WorkOrchestrator:
         item = self._store.require(work_id)
         if item.state is not WorkState.PAUSED:
             raise ValueError("only paused work can be resumed")
+        target_state = (
+            item.paused_from_state
+            if item.paused_from_state
+            in {
+                WorkState.QUEUED,
+                WorkState.WAITING_DEPENDENCY,
+                WorkState.WAITING_UNTIL,
+                WorkState.WAITING_FOR_OWNER,
+            }
+            else WorkState.RUNNING
+        )
         resumed = item.transition(
-            WorkState.RUNNING,
+            target_state,
             status_detail="resumed by owner",
             current_step_id=item.current_step_id,
         )
