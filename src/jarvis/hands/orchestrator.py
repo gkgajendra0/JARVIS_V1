@@ -71,6 +71,55 @@ _POWER_OPERATIONS = {
     "shutdown_workstation",
 }
 
+_POWER_OPERATION_EVIDENCE: dict[str, tuple[str, ...]] = {
+    "lock_workstation": ("lock", "लॉक"),
+    "sleep_workstation": ("sleep", "suspend", "स्लीप", "सस्पेंड"),
+    "sign_out": (
+        "sign out",
+        "sign me out",
+        "log out",
+        "log me out",
+        "logout",
+        "साइन आउट",
+        "लॉग आउट",
+        "लॉगआउट",
+    ),
+    "restart_workstation": (
+        "restart",
+        "reboot",
+        "रीस्टार्ट",
+        "रिस्टार्ट",
+        "रीबूट",
+    ),
+    "shutdown_workstation": (
+        "shutdown",
+        "shut down",
+        "power off",
+        "turn off",
+        "switch off",
+        "शटडाउन",
+        "शट डाउन",
+        "बंद",
+        "band",
+    ),
+}
+_POWER_MACHINE_TARGETS = (
+    "computer",
+    "pc",
+    "laptop",
+    "workstation",
+    "windows",
+    "machine",
+    "system",
+    "कंप्यूटर",
+    "पीसी",
+    "लैपटॉप",
+    "विंडोज",
+    "मशीन",
+    "सिस्टम",
+)
+_POWER_LOCK_TARGETS = (*_POWER_MACHINE_TARGETS, "screen", "स्क्रीन")
+
 _ROUTE_GROUP_SPECS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
         "system_status",
@@ -321,6 +370,39 @@ def _evidence_grounded(evidence: str, latest_user_text: str) -> bool:
     evidence_text = _normalized(evidence)
     latest = _normalized(latest_user_text)
     return bool(evidence_text) and evidence_text in latest
+
+
+def _contains_exact_phrase(normalized_text: str, phrase: str) -> bool:
+    normalized_phrase = _normalized(phrase)
+    if not normalized_phrase:
+        return False
+    return f" {normalized_phrase} " in f" {normalized_text} "
+
+
+def _bind_power_session_intent(
+    operation: str,
+    evidence: str,
+) -> dict[str, str]:
+    normalized_evidence = _normalized(evidence)
+    operation_terms = _POWER_OPERATION_EVIDENCE.get(operation, ())
+    target_terms = (
+        _POWER_LOCK_TARGETS if operation == "lock_workstation" else _POWER_MACHINE_TARGETS
+    )
+    operation_bound = any(
+        _contains_exact_phrase(normalized_evidence, term) for term in operation_terms
+    )
+    target_bound = any(
+        _contains_exact_phrase(normalized_evidence, term) for term in target_terms
+    )
+    if not operation_bound or not target_bound:
+        raise HandsOrchestrationError(
+            "power/session intent is not explicitly bound to the proposed operation "
+            "and local computer target"
+        )
+    return {
+        "intent_operation": operation,
+        "intent_evidence": " ".join(str(evidence).split()),
+    }
 
 
 def _numeric_values(text: str) -> tuple[float, ...]:
@@ -760,7 +842,12 @@ class HandsOrchestrator:
                     "max_results": int(action.parameters.get("max_results", 20)),
                 },
             )
-        if action.operation in _POWER_OPERATIONS or not action.parameters:
+        if action.operation in _POWER_OPERATIONS:
+            return NormalizedAction(
+                action.operation,
+                _bind_power_session_intent(action.operation, action.evidence),
+            )
+        if not action.parameters:
             return NormalizedAction(action.operation, {})
         return NormalizedAction(action.operation, dict(action.parameters))
 
