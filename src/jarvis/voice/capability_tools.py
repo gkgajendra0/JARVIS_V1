@@ -50,55 +50,6 @@ _LOCAL_READ_MARKERS = (
     "repo check",
 )
 
-_SELF_SUBJECT_MARKERS = (
-    "jarvis",
-    "you",
-    "your",
-    "yourself",
-    "hands",
-    "pocket",
-    "tracking",
-    "vision",
-    "provider",
-    "voice",
-    "capability",
-    "component",
-    "tum",
-    "aap",
-)
-_SELF_DIAGNOSTIC_MARKERS = (
-    "health",
-    "healthy",
-    "status",
-    "wrong",
-    "broken",
-    "failed",
-    "failing",
-    "failure",
-    "issue",
-    "problem",
-    "dependency",
-    "dependencies",
-    "depends",
-    "dependent",
-    "affect",
-    "affected",
-    "impact",
-    "blast radius",
-    "fail",
-    "fails",
-    "incident",
-    "incidents",
-    "coded",
-    "code",
-    "source",
-    "implementation",
-    "architecture",
-    "kharab",
-    "theek",
-    "problem hai",
-)
-
 
 class CapabilityToolGroundingError(ValueError):
     pass
@@ -285,14 +236,6 @@ class SelfAwarenessAgentTools(_ConversationCapabilityTools):
         status: str = "",
     ) -> dict[str, object]:
         turn = self._latest_user_turn()
-        if not _self_read_warranted(turn.text):
-            return {
-                "ok": False,
-                "status": "self_read_not_warranted",
-                "operation": operation,
-                "reason": "current user request does not warrant JARVIS self-diagnostics",
-                "canonical_user_turn_id": turn.turn_id,
-            }
         parameters: dict[str, object] = {"max_results": max_results}
         if component_id:
             parameters["component_id"] = component_id
