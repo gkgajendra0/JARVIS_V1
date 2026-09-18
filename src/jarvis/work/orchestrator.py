@@ -50,6 +50,14 @@ class WorkOrchestrator:
         priority: WorkPriority = WorkPriority.NORMAL,
         delivery_policy: DeliveryPolicy = DeliveryPolicy.WHEN_IDLE,
     ) -> WorkSubmission:
+        existing = self._store.find_by_source_turn(
+            source_session_id=source_session_id,
+            source_turn_id=source_turn_id,
+            work_type=work_type,
+        )
+        if existing is not None:
+            return WorkSubmission(work=existing, execution_id=existing.work_id)
+
         item = WorkItem(
             request=request,
             work_type=work_type,
