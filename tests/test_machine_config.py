@@ -107,7 +107,6 @@ def test_environment_is_used_when_machine_setting_is_absent(
     assert JarvisConfig.from_environment().ai_provider == "gemini"
 
 
-
 def test_work_runtime_non_secret_settings_can_be_persisted(tmp_path: Path) -> None:
     path = tmp_path / "machine.json"
     save_machine_settings(

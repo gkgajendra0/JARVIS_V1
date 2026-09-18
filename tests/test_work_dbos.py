@@ -133,7 +133,6 @@ async def test_dbos_recovers_waiting_work_after_runtime_restart(tmp_path) -> Non
         shutdown_dbos_work_runtime()
 
 
-
 @pytest.mark.parametrize(
     "state",
     [
