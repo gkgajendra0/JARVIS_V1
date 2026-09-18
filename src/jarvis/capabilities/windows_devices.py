@@ -483,26 +483,26 @@ class PowerSessionExecutor:
         intent_evidence = " ".join(
             str(request.parameters.get("intent_evidence") or "").split()
         )
-        if intent_operation or intent_evidence:
-            if intent_operation != request.operation:
-                raise WindowsDeviceValidationError(
-                    "power/session intent binding does not match requested operation"
-                )
-            if not intent_evidence or len(intent_evidence) > 240:
-                raise WindowsDeviceValidationError(
-                    "power/session intent evidence must be non-empty and bounded"
-                )
-            authority_parameters = {
-                "intent_operation": intent_operation,
-                "intent_evidence": intent_evidence,
-            }
-            material_summary = (
-                f"{request.operation.replace('_', ' ').title()} "
-                f'— requested as: "{intent_evidence}"'
+        if not intent_operation or not intent_evidence:
+            raise WindowsDeviceValidationError(
+                "power/session intent binding is required"
             )
-        else:
-            authority_parameters = {}
-            material_summary = request.operation.replace("_", " ").title()
+        if intent_operation != request.operation:
+            raise WindowsDeviceValidationError(
+                "power/session intent binding does not match requested operation"
+            )
+        if len(intent_evidence) > 240:
+            raise WindowsDeviceValidationError(
+                "power/session intent evidence must be bounded"
+            )
+        authority_parameters = {
+            "intent_operation": intent_operation,
+            "intent_evidence": intent_evidence,
+        }
+        material_summary = (
+            f"{request.operation.replace('_', ' ').title()} "
+            f'— requested as: "{intent_evidence}"'
+        )
 
         critical = request.operation != "lock_workstation"
         attributes = (
