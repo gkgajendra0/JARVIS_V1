@@ -176,7 +176,9 @@ def test_unknown_component_guides_canonical_component_discovery(tmp_path: Path) 
 
 
 
-def test_component_details_expose_hierarchy_and_logger_ownership(tmp_path: Path) -> None:
+def test_component_details_expose_hierarchy_and_logger_ownership(
+    tmp_path: Path,
+) -> None:
     awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
     executor = SelfAwarenessReadExecutor(awareness)
 
@@ -193,7 +195,9 @@ def test_component_details_expose_hierarchy_and_logger_ownership(tmp_path: Path)
     awareness.close()
 
 
-def test_similar_resolved_incidents_return_confirmed_fix_history(tmp_path: Path) -> None:
+def test_similar_resolved_incidents_return_confirmed_fix_history(
+    tmp_path: Path,
+) -> None:
     awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
     assert awareness.incidents is not None
     incident = awareness.incidents.create_manual(
