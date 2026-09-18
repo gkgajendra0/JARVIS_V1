@@ -113,6 +113,9 @@ def durable_workflow(work_id: str) -> dict[str, Any]:
             if owner_input is not None:
                 _apply_owner_input(work_id, str(owner_input))
 
+        elif state is WorkState.WAITING_RESOURCE:
+            DBOS.sleep(0.25)
+
         elif state is WorkState.WAITING_DEPENDENCY:
             DBOS.sleep(1.0)
 
