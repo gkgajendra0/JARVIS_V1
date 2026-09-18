@@ -87,6 +87,10 @@ Rules:
 - ``evidence`` should be the shortest exact phrase copied from the latest accepted USER
   turn that supports this action. Do not stitch distant words together and do not
   paraphrase. Evidence is audit context; JARVIS separately grounds consequential fields.
+- For any power/session action, the evidence phrase itself must explicitly contain both
+  the requested operation and the local computer/Windows target. Conversational phrases
+  about JARVIS sleeping, standing by, leaving, or ending the conversation are never
+  evidence for a Windows power/session action.
 - Material user data and consequential targets may not be invented.
 - For an installed local app/game, use app lifecycle rather than WinGet discovery.
 - Browser automation is only for browser/web/URL goals.
