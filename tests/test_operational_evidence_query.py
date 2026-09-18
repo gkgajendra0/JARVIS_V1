@@ -94,3 +94,29 @@ def test_evidence_query_is_bounded_and_skips_invalid_json(tmp_path) -> None:
     assert result.truncated is True
     assert result.scanned_lines == 5
     assert len(result.events) <= 3
+
+
+
+def test_evidence_query_redacts_sensitive_values_again_on_read(tmp_path) -> None:
+    path = tmp_path / "jarvis.jsonl"
+    _write(
+        path,
+        [
+            {
+                "timestamp": "2026-09-18T08:00:00Z",
+                "level": "error",
+                "logger": "jarvis.provider_resilience",
+                "event": "provider failed with sk-abcdefghijklmnop",
+                "component_id": "runtime.provider",
+            }
+        ],
+    )
+
+    result = LocalOperationalEvidenceQuery(path).query(
+        component_id="runtime.provider",
+        max_results=5,
+    )
+
+    assert len(result.events) == 1
+    assert "sk-abcdefghijklmnop" not in result.events[0]["event"]
+    assert "[REDACTED]" in result.events[0]["event"]
