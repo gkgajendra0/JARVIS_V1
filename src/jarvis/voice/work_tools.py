@@ -280,7 +280,11 @@ class WorkAgentTools:
         except WorkStoreError:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
         except ValueError as exc:
-            return {"ok": False, "status": "invalid_state", "reason": str(exc)}
+            return {
+                "ok": False,
+                "status": "owner_input_target_unresolved",
+                "reason": str(exc),
+            }
         return {
             "ok": True,
             "status": "owner_input_submitted",
