@@ -236,3 +236,14 @@ def test_power_intent_binding_rejects_operation_substitution() -> None:
                 },
             )
         )
+
+
+
+def test_power_executor_rejects_unbound_operation() -> None:
+    executor = PowerSessionExecutor(FakePower())
+
+    with pytest.raises(
+        WindowsDeviceValidationError,
+        match="intent binding is required",
+    ):
+        executor.prepare(request(executor, "restart_workstation"))
