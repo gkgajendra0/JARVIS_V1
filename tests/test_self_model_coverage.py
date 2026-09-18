@@ -24,9 +24,7 @@ def test_default_self_model_is_hierarchical_and_covers_jarvis_namespaces() -> No
 
     source_root = Path("src/jarvis")
     immediate = {
-        path.name
-        for path in source_root.iterdir()
-        if path.name != "__pycache__"
+        path.name for path in source_root.iterdir() if path.name != "__pycache__"
     }
     mapped = set()
     for descriptor in model.components:
