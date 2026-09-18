@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 from jarvis.work.development import (
+    DevelopmentCommitExecutor,
+    DevelopmentDiffExecutor,
     DevelopmentRunTestsExecutor,
     DevelopmentWorkspaceError,
     DevelopmentWorkspaceManager,
@@ -239,3 +241,37 @@ async def test_docker_runner_uses_locked_down_fixed_pytest_command(
     assert result["passed"] is True
     assert result["network"] == "disabled"
     assert result["workspace"] == "read_only"
+
+
+@pytest.mark.asyncio
+async def test_development_diff_and_commit_stay_on_isolated_branch(
+    git_project: Path,
+    tmp_path: Path,
+) -> None:
+    manager = DevelopmentWorkspaceManager(
+        repository_root=git_project,
+        workspace_root=tmp_path / "worktrees",
+    )
+    manager.ensure("work_dev_test")
+    write = DevelopmentWriteFileExecutor(manager)
+    diff = DevelopmentDiffExecutor(manager)
+    commit = DevelopmentCommitExecutor(manager)
+
+    await write.execute(
+        work=_development_item(),
+        parameters={"path": "module.py", "text": "VALUE = 2\n"},
+    )
+    diff_result = await diff.execute(work=_development_item(), parameters={})
+    commit_result = await commit.execute(
+        work=_development_item(),
+        parameters={"message": "Update isolated module"},
+    )
+
+    assert "VALUE = 2" in diff_result["diff"]
+    assert commit_result["committed"] is True
+    assert commit_result["clean"] is True
+    assert commit_result["pushed"] is False
+    assert commit_result["merged"] is False
+    assert commit_result["production_tree_modified"] is False
+    assert (git_project / "module.py").read_text(encoding="utf-8") == "VALUE = 1\n"
+    assert _git(git_project, "status", "--porcelain").stdout == ""
