@@ -128,7 +128,6 @@ def test_unknown_component_is_rejected_before_execution(tmp_path: Path) -> None:
     awareness.close()
 
 
-
 def test_list_components_exposes_canonical_ids_and_purposes(tmp_path: Path) -> None:
     awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
     executor = SelfAwarenessReadExecutor(awareness)
@@ -137,8 +136,7 @@ def test_list_components_exposes_canonical_ids_and_purposes(tmp_path: Path) -> N
 
     assert result.status is CapabilityStatus.SUCCEEDED
     components = {
-        item["component_id"]: item["purpose"]
-        for item in result.data["components"]
+        item["component_id"]: item["purpose"] for item in result.data["components"]
     }
     assert components["runtime.provider"] == (
         "Cloud AI provider boundary and provider resilience."
