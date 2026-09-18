@@ -34,7 +34,7 @@ from jarvis.voice.memory_tools import MemoryAgentTools
 from jarvis.voice.research_tools import ResearchAgentTools
 from jarvis.voice.runtime import VoiceRuntimeController
 from jarvis.voice.work_tools import WorkAgentTools
-from jarvis.work.models import WorkDeliveryKind
+from jarvis.work.models import DeliveryPolicy, WorkDeliveryKind
 from jarvis.work.runtime import WorkRuntime
 
 LOGGER = logging.getLogger(__name__)
@@ -106,9 +106,11 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._user_is_speaking = False
         self._session_ready_for_inactivity = False
         self._agent_state = "unavailable"
+        self._live_session: Any | None = None
 
         def capture_session(config: JarvisConfig):
             session, bridge = original_session_factory(config)
+            self._live_session = session
             self._session_conversation = bridge.conversation
             self._user_is_speaking = False
             self._session_ready_for_inactivity = False
@@ -161,8 +163,15 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 )
                 self._arm_timeout(timeout)
 
+            def clear_live_session(event) -> None:
+                del event
+                if self._live_session is session:
+                    self._live_session = None
+                    self._agent_state = "unavailable"
+
             session.on("agent_state_changed", track_agent_state)
             session.on("user_state_changed", track_user_activity)
+            session.on("close", clear_live_session)
             return session, bridge
 
         super().__init__(*args, session_factory=capture_session, **kwargs)
@@ -205,14 +214,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         while not self._shutdown.is_set():
             runtime = self._work_runtime
             output = self.audio.output
-            can_speak = (
+            active = (
                 runtime is not None
                 and output is not None
                 and self._state.value == "active"
                 and not self._user_is_speaking
-                and self._agent_state == "listening"
             )
-            if not can_speak:
+            if not active:
                 await asyncio.sleep(0.5)
                 continue
 
@@ -222,6 +230,32 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 continue
 
             delivery = pending[0]
+            if (
+                delivery.policy is DeliveryPolicy.WHEN_IDLE
+                and self._agent_state != "listening"
+            ):
+                await asyncio.sleep(0.25)
+                continue
+
+            if (
+                delivery.policy is DeliveryPolicy.INTERRUPT
+                and self._agent_state != "listening"
+            ):
+                session = self._live_session
+                if session is None:
+                    await asyncio.sleep(0.25)
+                    continue
+                try:
+                    await session.interrupt(force=True)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    LOGGER.exception(
+                        "Could not interrupt realtime response for urgent work delivery"
+                    )
+                    await asyncio.sleep(0.5)
+                    continue
+
             try:
                 await self._get_scripted_speech().speak(
                     output,
@@ -336,6 +370,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             self._user_is_speaking = False
             self._session_conversation = None
             self._agent_state = "unavailable"
+            self._live_session = None
             if self._work_runtime is not None:
                 self._work_runtime.close()
             if capability_runtime is not None:
