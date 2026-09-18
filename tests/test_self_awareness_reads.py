@@ -37,11 +37,25 @@ def test_routine_health_is_low_risk_but_engineering_details_are_private(
         _request("get_component_details", {"component_id": "runtime.provider"})
     )
     incidents = executor.prepare(_request("list_recent_incidents", {"max_results": 5}))
+    evidence = executor.prepare(
+        _request(
+            "query_operational_evidence",
+            {"component_id": "runtime.provider", "max_results": 5},
+        )
+    )
+    prior_fixes = executor.prepare(
+        _request(
+            "list_similar_resolved_incidents",
+            {"component_id": "runtime.provider", "max_results": 5},
+        )
+    )
 
     assert routine.attributes == ActionAttributes()
     assert component.attributes == ActionAttributes()
     assert details.attributes == ActionAttributes(private_read=True)
     assert incidents.attributes == ActionAttributes(private_read=True)
+    assert evidence.attributes == ActionAttributes(private_read=True)
+    assert prior_fixes.attributes == ActionAttributes(private_read=True)
     assert routine.execution_payload == {}
     assert details.execution_payload == {}
     awareness.close()
@@ -158,4 +172,54 @@ def test_unknown_component_guides_canonical_component_discovery(tmp_path: Path) 
         executor.prepare(
             _request("get_component_details", {"component_id": "provider"})
         )
+    awareness.close()
+
+
+
+def test_component_details_expose_hierarchy_and_logger_ownership(tmp_path: Path) -> None:
+    awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
+    executor = SelfAwarenessReadExecutor(awareness)
+
+    result = executor.execute(
+        executor.prepare(
+            _request("get_component_details", {"component_id": "voice.wake"})
+        )
+    )
+
+    assert result.status is CapabilityStatus.SUCCEEDED
+    assert result.data["parent_component_id"] == "runtime.voice"
+    assert "runtime.voice" in result.data["ancestors"]
+    assert "jarvis.voice.wakeword" in result.data["logger_prefixes"]
+    awareness.close()
+
+
+def test_similar_resolved_incidents_return_confirmed_fix_history(tmp_path: Path) -> None:
+    awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
+    assert awareness.incidents is not None
+    incident = awareness.incidents.create_manual(
+        symptom="provider session stopped",
+        affected_components=("runtime.provider",),
+    )
+    awareness.incidents.resolve(
+        incident.incident_id,
+        root_cause="provider quota exhausted",
+        accepted_fix="switch project quota before restarting session",
+        regression_tests=("tests/test_provider_resilience.py",),
+        commit_sha="abc123",
+        pr_number=77,
+    )
+    executor = SelfAwarenessReadExecutor(awareness)
+
+    result = executor.execute(
+        executor.prepare(
+            _request(
+                "list_similar_resolved_incidents",
+                {"component_id": "runtime.provider", "max_results": 5},
+            )
+        )
+    )
+
+    assert result.status is CapabilityStatus.SUCCEEDED
+    assert result.data["incidents"][0]["root_cause"] == "provider quota exhausted"
+    assert result.data["incidents"][0]["accepted_fix"].startswith("switch project")
     awareness.close()
