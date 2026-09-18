@@ -73,6 +73,10 @@ class AuthorityBroker(Protocol):
     def close(self) -> None: ...
 
 
+class CapabilityResultObserver(Protocol):
+    def __call__(self, result: CapabilityResult) -> None: ...
+
+
 class CapabilityRuntime:
     """Resolve -> validate -> authorize -> revalidate -> execute -> audit."""
 
@@ -84,6 +88,7 @@ class CapabilityRuntime:
         authority: AuthorityBroker,
         hands_registry: HandsCapabilityRegistry | None = None,
         hands_planner=None,
+        result_observer: CapabilityResultObserver | None = None,
     ) -> None:
         self._executors = {executor.capability_key: executor for executor in executors}
         if len(self._executors) != len(executors):
@@ -98,6 +103,7 @@ class CapabilityRuntime:
         self._authority = authority
         self._hands_registry = hands_registry or HandsCapabilityRegistry.default()
         self._hands_planner = hands_planner
+        self._result_observer = result_observer
         self._catalog: CapabilityCatalog | None = None
 
     def refresh_catalog(self) -> CapabilityCatalog:
@@ -172,12 +178,14 @@ class CapabilityRuntime:
     ) -> CapabilityResult:
         capability_key = self.capability_for_operation(operation)
         if capability_key is None:
-            return CapabilityResult(
-                status=CapabilityStatus.INVALID,
-                capability_key="unresolved",
-                operation=str(operation),
-                data={},
-                reason="operation does not resolve to exactly one governed capability",
+            return self._record_result(
+                CapabilityResult(
+                    status=CapabilityStatus.INVALID,
+                    capability_key="unresolved",
+                    operation=str(operation),
+                    data={},
+                    reason="operation does not resolve to exactly one governed capability",
+                )
             )
         return self.execute(
             CapabilityRequest(
@@ -251,30 +259,43 @@ class CapabilityRuntime:
                 result=result,
             )
         except AuditError:
-            return CapabilityResult(
-                status=CapabilityStatus.FAILED,
-                capability_key=result.capability_key,
-                operation=result.operation,
-                data={},
-                reason="capability result audit failed; result withheld",
-                elapsed_ms=(time.monotonic() - started) * 1000.0,
+            return self._record_result(
+                CapabilityResult(
+                    status=CapabilityStatus.FAILED,
+                    capability_key=result.capability_key,
+                    operation=result.operation,
+                    data={},
+                    reason="capability result audit failed; result withheld",
+                    elapsed_ms=(time.monotonic() - started) * 1000.0,
+                )
             )
+        return self._record_result(result)
+
+    def _record_result(self, result: CapabilityResult) -> CapabilityResult:
+        if self._result_observer is None:
+            return result
+        try:
+            self._result_observer(result)
+        except Exception:  # noqa: BLE001,S110 - diagnostics must not break execution
+            pass
         return result
 
-    @staticmethod
     def _failure(
+        self,
         request: CapabilityRequest,
         status: CapabilityStatus,
         started: float,
         reason: str,
     ) -> CapabilityResult:
-        return CapabilityResult(
-            status=status,
-            capability_key=request.capability_key,
-            operation=request.operation,
-            data={},
-            reason=reason,
-            elapsed_ms=(time.monotonic() - started) * 1000.0,
+        return self._record_result(
+            CapabilityResult(
+                status=status,
+                capability_key=request.capability_key,
+                operation=request.operation,
+                data={},
+                reason=reason,
+                elapsed_ms=(time.monotonic() - started) * 1000.0,
+            )
         )
 
     def close(self) -> None:
@@ -304,6 +325,8 @@ def build_default_capability_runtime(
     ai_provider: str | None = None,
     hands_planner_model: str | None = None,
     visual_computer_use_enabled: bool | None = None,
+    result_observer: CapabilityResultObserver | None = None,
+    extra_executors: tuple[CapabilityExecutor, ...] = (),
 ) -> CapabilityRuntime:
     project = LocalProjectReadExecutor()
     system = SystemReadExecutor()
@@ -338,6 +361,7 @@ def build_default_capability_runtime(
         power,
         software,
     ]
+    executors.extend(extra_executors)
 
     write_roots: ApprovedWriteRootPolicy | None = None
     try:
@@ -378,4 +402,5 @@ def build_default_capability_runtime(
         authority=CapabilityAuthorityBroker(),
         hands_registry=HandsCapabilityRegistry.default(),
         hands_planner=hands_planner,
+        result_observer=result_observer,
     )

@@ -208,6 +208,9 @@ def classify_provider_failure(error: object, *, provider: str) -> ProviderFailur
         "resource_exhausted",
         "resource exhausted",
         "insufficient_quota",
+        "credit_balance_exhausted",
+        "credit balance exhausted",
+        "no credits remaining",
         "daily quota",
         "billing quota",
     )
@@ -223,7 +226,8 @@ def classify_provider_failure(error: object, *, provider: str) -> ProviderFailur
 
     # Realtime SDK errors do not always preserve an HTTP status. Provider error codes
     # and messages are therefore first-class diagnostic evidence, especially for token
-    # rate limits such as ``response failed: [tokens] rate_limit_exceeded``.
+    # rate limits such as ``response failed: [tokens] rate_limit_exceeded`` and billing
+    # exhaustion codes such as ``credit_balance_exhausted``.
     if any(marker in evidence for marker in quota_markers):
         kind = ProviderFailureKind.QUOTA_EXHAUSTED
     elif status == 429 or any(marker in evidence for marker in rate_markers):

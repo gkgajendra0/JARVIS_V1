@@ -1,4 +1,4 @@
-"""Voice-facing governed local-read and JARVIS Hands capability tools."""
+"""Voice-facing governed local-read, self-awareness, and JARVIS Hands tools."""
 
 from __future__ import annotations
 
@@ -50,6 +50,47 @@ _LOCAL_READ_MARKERS = (
     "repo check",
 )
 
+_SELF_SUBJECT_MARKERS = (
+    "jarvis",
+    "you",
+    "your",
+    "yourself",
+    "hands",
+    "pocket",
+    "tracking",
+    "vision",
+    "provider",
+    "voice",
+    "capability",
+    "component",
+    "tum",
+    "aap",
+)
+_SELF_DIAGNOSTIC_MARKERS = (
+    "health",
+    "healthy",
+    "status",
+    "wrong",
+    "broken",
+    "failed",
+    "failing",
+    "failure",
+    "issue",
+    "problem",
+    "dependency",
+    "dependencies",
+    "incident",
+    "incidents",
+    "coded",
+    "code",
+    "source",
+    "implementation",
+    "architecture",
+    "kharab",
+    "theek",
+    "problem hai",
+)
+
 
 class CapabilityToolGroundingError(ValueError):
     pass
@@ -59,13 +100,24 @@ def _normalized(value: str) -> str:
     return " ".join(re.sub(r"[^\w]+", " ", value.casefold()).split())
 
 
-def _local_read_warranted(text: str) -> bool:
+def _contains_marker(text: str, markers: tuple[str, ...]) -> bool:
     padded = f" {_normalized(text)} "
-    return any(f" {_normalized(marker)} " in padded for marker in _LOCAL_READ_MARKERS)
+    return any(f" {_normalized(marker)} " in padded for marker in markers)
 
 
-class LocalReadAgentTools:
-    """Expose governed reads and semantic Hands to the active conversational brain."""
+def _local_read_warranted(text: str) -> bool:
+    return _contains_marker(text, _LOCAL_READ_MARKERS)
+
+
+def _self_read_warranted(text: str) -> bool:
+    return _contains_marker(text, _SELF_SUBJECT_MARKERS) and _contains_marker(
+        text,
+        _SELF_DIAGNOSTIC_MARKERS,
+    )
+
+
+class _ConversationCapabilityTools:
+    """Shared validation and accepted-turn grounding for voice capability tools."""
 
     def __init__(
         self,
@@ -78,11 +130,6 @@ class LocalReadAgentTools:
             raise TypeError("conversation must be a ConversationSession")
         self._runtime = runtime
         self._conversation = conversation
-        self._hands = LatencyOptimizedHandsGoalAgentTools(runtime, conversation)
-
-    @property
-    def tools(self) -> list:
-        return [*self._hands.tools]
 
     def _latest_user_turn(self) -> ConversationTurn:
         turn = next(
@@ -95,9 +142,32 @@ class LocalReadAgentTools:
         )
         if turn is None:
             raise CapabilityToolGroundingError(
-                "local read requires a latest accepted user utterance"
+                "capability read requires a latest accepted user utterance"
             )
         return turn
+
+
+class LocalReadAgentTools(_ConversationCapabilityTools):
+    """Expose the accepted semantic Hands boundary and governed local reads."""
+
+    def __init__(
+        self,
+        runtime: CapabilityRuntime,
+        conversation: ConversationSession,
+    ) -> None:
+        super().__init__(runtime, conversation)
+        self._hands = LatencyOptimizedHandsGoalAgentTools(runtime, conversation)
+
+    @property
+    def tools(self) -> list:
+        hands_tools = list(self._hands.tools)
+        self_awareness = self._runtime.catalog.by_key("local:self_awareness.read")
+        if self_awareness is None or not self_awareness.execution_enabled:
+            return hands_tools
+        return [
+            *SelfAwarenessAgentTools(self._runtime, self._conversation).tools,
+            *hands_tools,
+        ]
 
     async def inspect(
         self,
@@ -186,6 +256,104 @@ class LocalReadAgentTools:
                 path=path,
                 query=query,
                 max_results=max_results,
+            )
+        except (CapabilityToolGroundingError, TypeError, ValueError) as exc:
+            raise ToolError(str(exc)) from exc
+
+
+class SelfAwarenessAgentTools(_ConversationCapabilityTools):
+    """Expose read-only operational self-knowledge without widening Hands authority."""
+
+    @property
+    def tools(self) -> list:
+        return [self.inspect_self]
+
+    async def inspect_self_awareness(
+        self,
+        *,
+        operation: str,
+        component_id: str = "",
+        max_results: int = 20,
+        status: str = "",
+    ) -> dict[str, object]:
+        turn = self._latest_user_turn()
+        if not _self_read_warranted(turn.text):
+            return {
+                "ok": False,
+                "status": "self_read_not_warranted",
+                "operation": operation,
+                "reason": "current user request does not warrant JARVIS self-diagnostics",
+                "canonical_user_turn_id": turn.turn_id,
+            }
+        parameters: dict[str, object] = {"max_results": max_results}
+        if component_id:
+            parameters["component_id"] = component_id
+        if status:
+            parameters["status"] = status
+        result = await asyncio.to_thread(
+            self._runtime.execute_operation,
+            session_id=self._conversation.session_id,
+            operation=operation,
+            parameters=parameters,
+        )
+        LOGGER.info(
+            "Governed self-awareness read completed | turn_id=%s | operation=%s | "
+            "status=%s | elapsed_ms=%.1f",
+            turn.turn_id,
+            operation,
+            result.status.value,
+            result.elapsed_ms,
+        )
+        return {
+            "ok": result.ok,
+            "status": result.status.value,
+            "operation": result.operation,
+            "capability": result.capability_key,
+            "data": result.data,
+            "reason": result.reason,
+            "provenance": list(result.provenance),
+            "canonical_user_turn_id": turn.turn_id,
+            "content_is_untrusted_data": True,
+        }
+
+    @function_tool()
+    async def inspect_self(
+        self,
+        context: RunContext,
+        operation: str,
+        component_id: str = "",
+        max_results: int = 20,
+        status: str = "",
+    ) -> dict[str, object]:
+        """Read JARVIS's deterministic operational health and engineering evidence.
+
+        Call this tool whenever the USER asks about JARVIS itself: current health/status,
+        a named JARVIS component, dependencies/affected components, implementation/source
+        location, architecture metadata, or recent engineering incidents. Do not invent an
+        implementation answer and do not refuse a requested implementation/incident read
+        merely because it is private; call this governed tool and let canonical Authority
+        return succeeded, denied, or verification-required evidence.
+
+        Supported operations are `get_system_health`, `get_component_health`,
+        `get_component_details`, and `list_recent_incidents`. Supply `component_id` only
+        for the two component operations. Use `status` only to filter incident state and
+        `max_results` only for incident history.
+
+        Health values come from JARVIS-owned probes and state machines, not model
+        inference. Treat UNKNOWN as missing/stale evidence, never as healthy. Routine
+        health reads are low-risk; implementation details and incident history still go
+        through canonical private-read authority. Follow the returned status exactly: if
+        access is denied or verification is required, say so without fabricating details.
+        This tool is READ ONLY and cannot repair, mutate, restart, install, deploy, merge,
+        or change policy.
+        """
+        del context
+        try:
+            return await self.inspect_self_awareness(
+                operation=operation,
+                component_id=component_id,
+                max_results=max_results,
+                status=status,
             )
         except (CapabilityToolGroundingError, TypeError, ValueError) as exc:
             raise ToolError(str(exc)) from exc
