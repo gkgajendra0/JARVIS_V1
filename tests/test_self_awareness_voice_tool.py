@@ -110,9 +110,19 @@ def test_voice_tool_bundle_exposes_self_health_tool_only_when_available(
 ) -> None:
     awareness, self_tools, combined_tools = _toolsets(tmp_path, "Jarvis health status")
 
-    assert [tool.id for tool in self_tools.tools] == ["inspect_self"]
+    assert [tool.id for tool in self_tools.tools] == [
+        "list_self_components",
+        "get_self_system_health",
+        "get_self_component_health",
+        "get_self_component_details",
+        "list_self_incidents",
+    ]
     assert [tool.id for tool in combined_tools.tools] == [
-        "inspect_self",
+        "list_self_components",
+        "get_self_system_health",
+        "get_self_component_health",
+        "get_self_component_details",
+        "list_self_incidents",
         "use_computer",
     ]
     awareness.close()
@@ -133,4 +143,24 @@ async def test_voice_can_list_canonical_self_components(tmp_path: Path) -> None:
         for item in result["data"]["components"]  # type: ignore[index]
     }
     assert "runtime.provider" in ids
+    awareness.close()
+
+
+
+@pytest.mark.asyncio
+async def test_typed_component_details_tool_requires_canonical_component_id(
+    tmp_path: Path,
+) -> None:
+    awareness, tools, _ = _toolsets(
+        tmp_path,
+        "What breaks if the part that lets you think online fails?",
+    )
+
+    result = await tools.get_self_component_details(
+        None,
+        component_id="runtime.provider",
+    )
+
+    assert result["ok"] is True
+    assert "runtime.voice" in result["data"]["affected_components"]  # type: ignore[index]
     awareness.close()
