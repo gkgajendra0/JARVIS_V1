@@ -431,4 +431,3 @@ class SelfAwarenessAgentTools(_ConversationCapabilityTools):
             max_results=max_results,
             status=status,
         )
-
