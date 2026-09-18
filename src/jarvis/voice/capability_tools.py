@@ -218,7 +218,13 @@ class SelfAwarenessAgentTools(_ConversationCapabilityTools):
 
     @property
     def tools(self) -> list:
-        return [self.inspect_self]
+        return [
+            self.list_self_components,
+            self.get_self_system_health,
+            self.get_self_component_health,
+            self.get_self_component_details,
+            self.list_self_incidents,
+        ]
 
     async def inspect_self_awareness(
         self,
@@ -262,46 +268,94 @@ class SelfAwarenessAgentTools(_ConversationCapabilityTools):
         }
 
     @function_tool()
-    async def inspect_self(
+    async def list_self_components(
         self,
         context: RunContext,
-        operation: str,
-        component_id: str = "",
+    ) -> dict[str, object]:
+        """List canonical JARVIS Self Model component IDs and their purposes.
+
+        Use this routine read-only discovery tool whenever the USER refers to an internal
+        JARVIS component by natural meaning and you do not already have its exact canonical
+        component ID from the current conversation/tool evidence. Do not ask the USER for
+        permission to perform this discovery; call it directly, select the returned
+        component whose purpose matches the USER's meaning, then call the requested typed
+        component read.
+        """
+        del context
+        return await self.inspect_self_awareness(operation="list_components")
+
+    @function_tool()
+    async def get_self_system_health(
+        self,
+        context: RunContext,
+    ) -> dict[str, object]:
+        """Read the current deterministic health summary for all JARVIS components.
+
+        Use for broad questions about JARVIS's current overall/system health. Health comes
+        from JARVIS-owned probes and state machines, never model inference. UNKNOWN means
+        missing or stale evidence, not healthy.
+        """
+        del context
+        return await self.inspect_self_awareness(operation="get_system_health")
+
+    @function_tool()
+    async def get_self_component_health(
+        self,
+        context: RunContext,
+        component_id: str,
+    ) -> dict[str, object]:
+        """Read deterministic health for one canonical JARVIS Self Model component.
+
+        component_id must be an exact canonical ID returned by list_self_components or
+        already established by current tool evidence. Never invent, translate, abbreviate,
+        or approximate this value. If the canonical ID is unknown, call
+        list_self_components first without asking the USER for permission.
+        """
+        del context
+        return await self.inspect_self_awareness(
+            operation="get_component_health",
+            component_id=component_id,
+        )
+
+    @function_tool()
+    async def get_self_component_details(
+        self,
+        context: RunContext,
+        component_id: str,
+    ) -> dict[str, object]:
+        """Read implementation, dependency and blast-radius details for one JARVIS component.
+
+        Use for questions about what a component depends on, what depends on it, what would
+        be affected by its failure, implementation/source location, architecture metadata,
+        tests, configuration, resources, or health probes. component_id must be an exact
+        canonical ID returned by list_self_components or already established by current
+        tool evidence. Never invent or approximate it. This is a governed private read;
+        let canonical Authority decide whether it succeeds or requires verification.
+        """
+        del context
+        return await self.inspect_self_awareness(
+            operation="get_component_details",
+            component_id=component_id,
+        )
+
+    @function_tool()
+    async def list_self_incidents(
+        self,
+        context: RunContext,
         max_results: int = 20,
         status: str = "",
     ) -> dict[str, object]:
-        """Read JARVIS's deterministic operational health and engineering evidence.
+        """Read bounded recent JARVIS engineering incidents.
 
-        Call this tool whenever the USER asks about JARVIS itself: current health/status,
-        a named JARVIS component, dependencies/affected components, implementation/source
-        location, architecture metadata, or recent engineering incidents. Do not invent an
-        implementation answer and do not refuse a requested implementation/incident read
-        merely because it is private; call this governed tool and let canonical Authority
-        return succeeded, denied, or verification-required evidence.
-
-        Supported operations are `list_components`, `get_system_health`,
-        `get_component_health`, `get_component_details`, and
-        `list_recent_incidents`. Component IDs are canonical opaque handles owned by the
-        Self Model. Use `list_components` to discover the current IDs and purposes; never
-        invent, translate, abbreviate, or approximate a component ID. Supply
-        `component_id` only for the two component operations. Use `status` only to
-        filter incident state and `max_results` only for incident history.
-
-        Health values come from JARVIS-owned probes and state machines, not model
-        inference. Treat UNKNOWN as missing/stale evidence, never as healthy. Routine
-        health reads are low-risk; implementation details and incident history still go
-        through canonical private-read authority. Follow the returned status exactly: if
-        access is denied or verification is required, say so without fabricating details.
-        This tool is READ ONLY and cannot repair, mutate, restart, install, deploy, merge,
-        or change policy.
+        Use when the USER asks about JARVIS's recent failures/incidents or engineering
+        history. This is a governed private read. status may optionally be one canonical
+        incident state and max_results is bounded by JARVIS. Do not fabricate incident
+        details if access is denied or the store has no evidence.
         """
         del context
-        try:
-            return await self.inspect_self_awareness(
-                operation=operation,
-                component_id=component_id,
-                max_results=max_results,
-                status=status,
-            )
-        except (CapabilityToolGroundingError, TypeError, ValueError) as exc:
-            raise ToolError(str(exc)) from exc
+        return await self.inspect_self_awareness(
+            operation="list_recent_incidents",
+            max_results=max_results,
+            status=status,
+        )
+
