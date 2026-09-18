@@ -129,7 +129,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 )
                 if event.new_state == "speaking":
                     if bridge.conversation.status is ConversationStatus.ACTIVE:
-                        bridge.conversation.begin_user_utterance()
+                        bridge.conversation.begin_user_activity()
                     self._user_is_speaking = True
                     self._cancel_timeout()
                     return
