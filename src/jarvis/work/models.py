@@ -56,6 +56,17 @@ class DeliveryPolicy(str, Enum):
     INTERRUPT = "interrupt"
 
 
+class WorkDeliveryKind(str, Enum):
+    OWNER_INPUT = "owner_input"
+    COMPLETION = "completion"
+    FAILURE = "failure"
+
+
+class WorkDeliveryState(str, Enum):
+    PENDING = "pending"
+    DELIVERED = "delivered"
+
+
 class WorkType(str, Enum):
     DEVELOPMENT = "development"
     RESEARCH = "research"
@@ -127,6 +138,39 @@ _ALLOWED_TRANSITIONS: dict[WorkState, frozenset[WorkState]] = {
     WorkState.FAILED: frozenset(),
     WorkState.CANCELLED: frozenset(),
 }
+
+
+
+@dataclass(frozen=True, slots=True)
+class WorkDelivery:
+    work_id: str
+    kind: WorkDeliveryKind
+    message: str
+    policy: DeliveryPolicy
+    event_key: str
+    delivery_id: str = field(default_factory=lambda: _new_id("delivery"))
+    state: WorkDeliveryState = WorkDeliveryState.PENDING
+    created_at: datetime = field(default_factory=_utc_now)
+    delivered_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        if not self.work_id.strip():
+            raise ValueError("delivery work_id must not be empty")
+        if not self.message.strip():
+            raise ValueError("delivery message must not be empty")
+        if not self.event_key.strip():
+            raise ValueError("delivery event_key must not be empty")
+        if self.state is WorkDeliveryState.DELIVERED and self.delivered_at is None:
+            raise ValueError("delivered notification requires delivered_at")
+
+    def delivered(self) -> WorkDelivery:
+        if self.state is WorkDeliveryState.DELIVERED:
+            return self
+        return replace(
+            self,
+            state=WorkDeliveryState.DELIVERED,
+            delivered_at=_utc_now(),
+        )
 
 
 @dataclass(frozen=True, slots=True)
