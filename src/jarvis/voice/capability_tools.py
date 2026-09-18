@@ -223,7 +223,9 @@ class SelfAwarenessAgentTools(_ConversationCapabilityTools):
             self.get_self_system_health,
             self.get_self_component_health,
             self.get_self_component_details,
+            self.query_self_operational_evidence,
             self.list_self_incidents,
+            self.list_similar_self_incidents,
         ]
 
     async def inspect_self_awareness(
@@ -233,6 +235,13 @@ class SelfAwarenessAgentTools(_ConversationCapabilityTools):
         component_id: str = "",
         max_results: int = 20,
         status: str = "",
+        since_seconds: float = 900.0,
+        severity: str = "",
+        reason_code: str = "",
+        session_id: str = "",
+        turn_id: str = "",
+        incident_id: str = "",
+        query: str = "",
     ) -> dict[str, object]:
         turn = self._latest_user_turn()
         parameters: dict[str, object] = {"max_results": max_results}
@@ -240,6 +249,18 @@ class SelfAwarenessAgentTools(_ConversationCapabilityTools):
             parameters["component_id"] = component_id
         if status:
             parameters["status"] = status
+        if operation == "query_operational_evidence":
+            parameters.update(
+                {
+                    "since_seconds": since_seconds,
+                    "severity": severity,
+                    "reason_code": reason_code,
+                    "session_id": session_id,
+                    "turn_id": turn_id,
+                    "incident_id": incident_id,
+                    "query": query,
+                }
+            )
         result = await asyncio.to_thread(
             self._runtime.execute_operation,
             session_id=self._conversation.session_id,
@@ -336,6 +357,58 @@ class SelfAwarenessAgentTools(_ConversationCapabilityTools):
         return await self.inspect_self_awareness(
             operation="get_component_details",
             component_id=component_id,
+        )
+
+    @function_tool()
+    async def query_self_operational_evidence(
+        self,
+        context: RunContext,
+        component_id: str,
+        since_seconds: float = 900.0,
+        max_results: int = 30,
+        severity: str = "",
+        reason_code: str = "",
+        query: str = "",
+    ) -> dict[str, object]:
+        """Read bounded structured logs/evidence for one canonical JARVIS component.
+
+        Use when the USER asks what actually happened, why a component appears unhealthy,
+        or asks for operational evidence behind a diagnosis. component_id must be an exact
+        canonical ID from list_self_components/current tool evidence. The query is bounded
+        across the current and rotated local JSONL logs; never request or expose raw
+        secrets, audio, video, screenshots, prompts, or provider payloads. This is a
+        governed private read and does not mutate or repair anything.
+        """
+        del context
+        return await self.inspect_self_awareness(
+            operation="query_operational_evidence",
+            component_id=component_id,
+            since_seconds=since_seconds,
+            max_results=max_results,
+            severity=severity,
+            reason_code=reason_code,
+            query=query,
+        )
+
+    @function_tool()
+    async def list_similar_self_incidents(
+        self,
+        context: RunContext,
+        component_id: str,
+        max_results: int = 5,
+    ) -> dict[str, object]:
+        """Read prior resolved incidents/fixes for one canonical JARVIS component.
+
+        Use to answer whether JARVIS has seen a similar problem before and what root cause,
+        accepted fix, regression tests, commit/PR, deployment result and lessons were
+        recorded. This is read-only engineering memory, not permission to reuse a fix
+        blindly or mutate production.
+        """
+        del context
+        return await self.inspect_self_awareness(
+            operation="list_similar_resolved_incidents",
+            component_id=component_id,
+            max_results=max_results,
         )
 
     @function_tool()
