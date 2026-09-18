@@ -321,6 +321,12 @@ async def test_planner_cannot_claim_completion_immediately_after_failed_action()
     [
         ("That's all for now.", "restart_workstation", "That's all for now"),
         ("You can go back to sleep.", "sleep_workstation", "go back to sleep"),
+        (
+            "Please shut down my computer.",
+            "restart_workstation",
+            "shut down my computer",
+        ),
+        ("Restart Jarvis.", "restart_workstation", "Restart Jarvis"),
     ],
 )
 async def test_power_session_rejects_operation_not_explicitly_bound_to_computer_intent(
@@ -358,16 +364,34 @@ async def test_power_session_rejects_operation_not_explicitly_bound_to_computer_
 
 
 @pytest.mark.asyncio
-async def test_power_session_binds_exact_canonical_evidence_to_authority_request() -> (\n    None\n):
-    executor = RecordingExecutor(("restart_workstation",))
+@pytest.mark.parametrize(
+    ("goal", "operation", "evidence"),
+    [
+        ("Please lock my screen.", "lock_workstation", "lock my screen"),
+        ("Put my computer to sleep.", "sleep_workstation", "my computer to sleep"),
+        ("Please sign me out of Windows.", "sign_out", "sign me out of Windows"),
+        ("Please restart my computer.", "restart_workstation", "restart my computer"),
+        (
+            "Please shut down my computer.",
+            "shutdown_workstation",
+            "shut down my computer",
+        ),
+    ],
+)
+async def test_power_session_binds_exact_canonical_evidence_to_authority_request(
+    goal: str,
+    operation: str,
+    evidence: str,
+) -> None:
+    executor = RecordingExecutor((operation,))
     planner = ScriptedPlanner(
         ("power",),
         [
             PlannerTurn(
                 action=PlannedAction(
-                    operation="restart_workstation",
+                    operation=operation,
                     parameters={},
-                    evidence="restart my computer",
+                    evidence=evidence,
                 )
             ),
             PlannerTurn(goal_complete=True),
@@ -379,11 +403,11 @@ async def test_power_session_binds_exact_canonical_evidence_to_authority_request
 
     result = await orchestrator.execute_goal(
         session_id="power-intent-explicit",
-        goal="Please restart my computer.",
+        goal=goal,
     )
 
     assert result["ok"] is True
     assert executor.calls[0].parameters == {
-        "intent_operation": "restart_workstation",
-        "intent_evidence": "restart my computer",
+        "intent_operation": operation,
+        "intent_evidence": evidence,
     }
