@@ -386,7 +386,9 @@ def _bind_power_session_intent(
     normalized_evidence = _normalized(evidence)
     operation_terms = _POWER_OPERATION_EVIDENCE.get(operation, ())
     target_terms = (
-        _POWER_LOCK_TARGETS if operation == "lock_workstation" else _POWER_MACHINE_TARGETS
+        _POWER_LOCK_TARGETS
+        if operation == "lock_workstation"
+        else _POWER_MACHINE_TARGETS
     )
     operation_bound = any(
         _contains_exact_phrase(normalized_evidence, term) for term in operation_terms
