@@ -9,6 +9,7 @@ from jarvis.work.brain import BrainAction, BrainCoordinator, BrainDecision, Brai
 from jarvis.work.engine import WorkActionRegistry, WorkEngine
 from jarvis.work.models import DeliveryPolicy, WorkItem, WorkPriority, WorkState, WorkType
 from jarvis.work.orchestrator import WorkOrchestrator
+from jarvis.work.resources import ResourceLeaseManager
 from jarvis.work.store import SQLiteWorkStore, WorkStoreError
 
 
@@ -227,3 +228,150 @@ def test_orchestrator_accepts_pause_resume_cancel_without_session_ownership(
     cancelled = orchestrator.cancel(work_id)
     assert cancelled.state is WorkState.CANCELLED
     assert backend.cancelled == [work_id]
+
+
+@pytest.mark.asyncio
+async def test_resource_leases_bound_execution_and_surface_waiting_state(
+    tmp_path: Path,
+) -> None:
+    class CpuExecutor(ConcurrentExecutor):
+        def resource_keys(self, work: WorkItem, parameters: dict) -> tuple[str, ...]:
+            del work, parameters
+            return ("cpu",)
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = ScriptedReasoner()
+    executor = CpuExecutor()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((executor,)),
+        resources=ResourceLeaseManager({"cpu": 1}),
+    )
+    first = create_item(store, request="CPU task A")
+    second = WorkItem(
+        request="CPU task B",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-1",
+        source_turn_id="turn-cpu-2",
+    )
+    store.create(second)
+    for item in (first, second):
+        reasoner.decisions[item.work_id] = [
+            BrainDecision(action="do_step", summary="Use CPU")
+        ]
+
+    first_task = asyncio.create_task(engine.advance(first.work_id))
+    await asyncio.sleep(0.02)
+    second_task = asyncio.create_task(engine.advance(second.work_id))
+    await asyncio.sleep(0.02)
+
+    assert store.require(second.work_id).state is WorkState.WAITING_RESOURCE
+
+    await asyncio.gather(first_task, second_task)
+    assert executor.max_active == 1
+    assert store.require(first.work_id).state is WorkState.RUNNING
+    assert store.require(second.work_id).state is WorkState.RUNNING
+
+
+@pytest.mark.asyncio
+async def test_development_completion_requires_passing_tests(tmp_path: Path) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = ScriptedReasoner()
+
+    class DevelopmentNoopExecutor:
+        descriptor = BrainAction(
+            name="dev_status",
+            description="Read development status",
+            parameter_schema={"type": "object"},
+        )
+        work_types = frozenset({WorkType.DEVELOPMENT})
+
+        async def execute(self, *, work: WorkItem, parameters: dict) -> dict:
+            del work, parameters
+            return {"prepared": True}
+
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((DevelopmentNoopExecutor(),)),
+    )
+    item = WorkItem(
+        request="Implement persistent memory",
+        work_type=WorkType.DEVELOPMENT,
+        source_session_id="session-dev",
+        source_turn_id="turn-dev",
+    )
+    store.create(item)
+    reasoner.decisions[item.work_id] = [
+        BrainDecision(action=None, summary="Done", goal_complete=True)
+    ]
+
+    result = await engine.advance(item.work_id)
+
+    assert result.state is WorkState.RUNNING
+    assert store.require(item.work_id).state is WorkState.RUNNING
+    steps = store.list_steps(item.work_id)
+    assert steps[-1].kind == "completion_guard"
+    assert steps[-1].observation["allowed"] is False
+
+
+@pytest.mark.asyncio
+async def test_research_completion_requires_successful_evidence(tmp_path: Path) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = ScriptedReasoner()
+
+    class ResearchNoopExecutor:
+        descriptor = BrainAction(
+            name="research_web",
+            description="Research",
+            parameter_schema={"type": "object"},
+        )
+        work_types = frozenset({WorkType.RESEARCH})
+
+        async def execute(self, *, work: WorkItem, parameters: dict) -> dict:
+            del work, parameters
+            return {"ok": False}
+
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((ResearchNoopExecutor(),)),
+    )
+    item = WorkItem(
+        request="Research current orchestration",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-research",
+        source_turn_id="turn-research",
+    )
+    store.create(item)
+    reasoner.decisions[item.work_id] = [
+        BrainDecision(action=None, summary="Done", goal_complete=True)
+    ]
+
+    await engine.advance(item.work_id)
+
+    assert store.require(item.work_id).state is WorkState.RUNNING
+    assert store.list_steps(item.work_id)[-1].kind == "completion_guard"
+
+
+def test_work_submission_is_idempotent_for_same_canonical_turn(tmp_path: Path) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+
+    first = orchestrator.start(
+        request="Research this in background",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-idem",
+        source_turn_id="turn-idem",
+    )
+    second = orchestrator.start(
+        request="Research this in background",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-idem",
+        source_turn_id="turn-idem",
+    )
+
+    assert first.work.work_id == second.work.work_id
+    assert backend.submitted == [first.work.work_id]
