@@ -45,7 +45,6 @@ def _toolsets(tmp_path: Path, user_text: str):
         LocalReadAgentTools(runtime, conversation),
     )
 
-
 @pytest.mark.asyncio
 async def test_voice_can_read_deterministic_self_health(tmp_path: Path) -> None:
     awareness, tools, _ = _toolsets(tmp_path, "Jarvis, what is your health status?")
@@ -69,7 +68,6 @@ async def test_voice_can_read_deterministic_self_health(tmp_path: Path) -> None:
     assert states["runtime.provider"] == "degraded"
     awareness.close()
 
-
 @pytest.mark.asyncio
 async def test_voice_self_read_requires_current_self_diagnostic_warrant(
     tmp_path: Path,
@@ -81,7 +79,6 @@ async def test_voice_self_read_requires_current_self_diagnostic_warrant(
     assert result["ok"] is False
     assert result["status"] == "self_read_not_warranted"
     awareness.close()
-
 
 @pytest.mark.asyncio
 async def test_voice_can_request_component_implementation_details(
@@ -113,7 +110,6 @@ def test_voice_tool_bundle_exposes_self_health_tool_only_when_available(
         "use_computer",
     ]
     awareness.close()
-
 
 
 @pytest.mark.asyncio
