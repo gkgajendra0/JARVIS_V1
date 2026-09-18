@@ -987,7 +987,6 @@ def test_development_completion_requires_post_edit_verification_order() -> None:
     assert reason is None
 
 
-
 @pytest.mark.asyncio
 async def test_pause_during_inflight_reasoning_stops_before_execution(
     tmp_path: Path,
