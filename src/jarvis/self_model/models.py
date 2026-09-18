@@ -62,7 +62,9 @@ class DependencyDescriptor:
             "target_component_id",
             _identifier(self.target_component_id, field="target_component_id"),
         )
-        object.__setattr__(self, "relation", _identifier(self.relation, field="relation"))
+        object.__setattr__(
+            self, "relation", _identifier(self.relation, field="relation")
+        )
         if self.fallback_component_id is not None:
             object.__setattr__(
                 self,
@@ -122,7 +124,9 @@ class ComponentDescriptor:
         )
         object.__setattr__(self, "purpose", _text(self.purpose, field="purpose"))
         object.__setattr__(self, "owner", _identifier(self.owner, field="owner"))
-        object.__setattr__(self, "lifecycle", _identifier(self.lifecycle, field="lifecycle"))
+        object.__setattr__(
+            self, "lifecycle", _identifier(self.lifecycle, field="lifecycle")
+        )
         if self.parent_component_id is not None:
             object.__setattr__(
                 self,
