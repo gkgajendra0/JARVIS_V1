@@ -96,7 +96,6 @@ def test_evidence_query_is_bounded_and_skips_invalid_json(tmp_path) -> None:
     assert len(result.events) <= 3
 
 
-
 def test_evidence_query_redacts_sensitive_values_again_on_read(tmp_path) -> None:
     path = tmp_path / "jarvis.jsonl"
     _write(
