@@ -937,7 +937,6 @@ def test_multiple_waiting_owner_tasks_require_disambiguation(tmp_path: Path) -> 
         runtime.resolve_waiting_owner_work(None)
 
 
-
 def test_development_completion_requires_post_edit_verification_order() -> None:
     work = WorkItem(
         request="Implement safely",
@@ -950,11 +949,15 @@ def test_development_completion_requires_post_edit_verification_order() -> None:
         kind: str,
         observation: dict | None = None,
     ) -> WorkStep:
-        return WorkStep(
-            work_id=work.work_id,
-            kind=kind,
-            summary=kind,
-        ).start().complete(observation or {})
+        return (
+            WorkStep(
+                work_id=work.work_id,
+                kind=kind,
+                summary=kind,
+            )
+            .start()
+            .complete(observation or {})
+        )
 
     stale_verification = (
         completed_step("dev_run_tests", {"passed": True, "sandbox": "docker"}),

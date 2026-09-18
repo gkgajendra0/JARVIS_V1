@@ -123,8 +123,7 @@ class WorkEngine:
             (
                 index
                 for index, step in enumerate(steps)
-                if step.kind == "dev_write_file"
-                and step.state.value == "completed"
+                if step.kind == "dev_write_file" and step.state.value == "completed"
             ),
             default=-1,
         )
@@ -142,8 +141,7 @@ class WorkEngine:
             (
                 index
                 for index, step in enumerate(steps)
-                if step.kind == "dev_diff"
-                and step.state.value == "completed"
+                if step.kind == "dev_diff" and step.state.value == "completed"
             ),
             default=-1,
         )
