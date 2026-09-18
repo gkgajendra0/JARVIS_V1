@@ -12,6 +12,9 @@ from typing import Iterable
 
 from jarvis.work.models import (
     DeliveryPolicy,
+    WorkDelivery,
+    WorkDeliveryKind,
+    WorkDeliveryState,
     WorkItem,
     WorkPriority,
     WorkState,
@@ -99,6 +102,20 @@ class SQLiteWorkStore:
                     version INTEGER NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS work_deliveries (
+                    delivery_id TEXT PRIMARY KEY,
+                    work_id TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    policy TEXT NOT NULL,
+                    event_key TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    delivered_at TEXT,
+                    FOREIGN KEY(work_id) REFERENCES work_items(work_id),
+                    UNIQUE(work_id, event_key)
+                );
+
                 CREATE TABLE IF NOT EXISTS work_steps (
                     step_id TEXT PRIMARY KEY,
                     work_id TEXT NOT NULL,
@@ -120,6 +137,8 @@ class SQLiteWorkStore:
                     ON work_items(source_session_id, source_turn_id, work_type);
                 CREATE INDEX IF NOT EXISTS idx_work_steps_work
                     ON work_steps(work_id, created_at ASC);
+                CREATE INDEX IF NOT EXISTS idx_work_deliveries_pending
+                    ON work_deliveries(state, created_at ASC);
                 """
             )
 
@@ -144,6 +163,23 @@ class SQLiteWorkStore:
             created_at=created_at,
             updated_at=updated_at,
             version=row["version"],
+        )
+
+    @staticmethod
+    def _delivery_from_row(row: sqlite3.Row) -> WorkDelivery:
+        created_at = _parse_dt(row["created_at"])
+        if created_at is None:
+            raise WorkStoreError("stored work delivery is missing created_at")
+        return WorkDelivery(
+            delivery_id=row["delivery_id"],
+            work_id=row["work_id"],
+            kind=WorkDeliveryKind(row["kind"]),
+            message=row["message"],
+            policy=DeliveryPolicy(row["policy"]),
+            event_key=row["event_key"],
+            state=WorkDeliveryState(row["state"]),
+            created_at=created_at,
+            delivered_at=_parse_dt(row["delivered_at"]),
         )
 
     @staticmethod
@@ -254,6 +290,93 @@ class SQLiteWorkStore:
                     f"stale work update rejected: {item.work_id} expected v{expected_version}"
                 )
         return item
+
+    def enqueue_delivery(
+        self,
+        *,
+        work: WorkItem,
+        kind: WorkDeliveryKind,
+        message: str,
+        event_key: str,
+    ) -> WorkDelivery | None:
+        if work.delivery_policy is DeliveryPolicy.SILENT:
+            return None
+        delivery = WorkDelivery(
+            work_id=work.work_id,
+            kind=kind,
+            message=message,
+            policy=work.delivery_policy,
+            event_key=event_key,
+        )
+        with self._lock, self._connect() as connection:
+            existing = connection.execute(
+                """
+                SELECT * FROM work_deliveries
+                WHERE work_id = ? AND event_key = ?
+                """,
+                (work.work_id, event_key),
+            ).fetchone()
+            if existing is not None:
+                return self._delivery_from_row(existing)
+            connection.execute(
+                """
+                INSERT INTO work_deliveries (
+                    delivery_id, work_id, kind, message, policy, event_key,
+                    state, created_at, delivered_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    delivery.delivery_id,
+                    delivery.work_id,
+                    delivery.kind.value,
+                    delivery.message,
+                    delivery.policy.value,
+                    delivery.event_key,
+                    delivery.state.value,
+                    _dt(delivery.created_at),
+                    _dt(delivery.delivered_at),
+                ),
+            )
+        return delivery
+
+    def list_pending_deliveries(self, *, limit: int = 20) -> tuple[WorkDelivery, ...]:
+        if limit <= 0:
+            raise ValueError("delivery limit must be positive")
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM work_deliveries
+                WHERE state = ?
+                ORDER BY created_at ASC
+                LIMIT ?
+                """,
+                (WorkDeliveryState.PENDING.value, limit),
+            ).fetchall()
+        return tuple(self._delivery_from_row(row) for row in rows)
+
+    def mark_delivery_delivered(self, delivery_id: str) -> WorkDelivery:
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM work_deliveries WHERE delivery_id = ?",
+                (delivery_id,),
+            ).fetchone()
+            if row is None:
+                raise WorkStoreError(f"unknown work delivery: {delivery_id}")
+            delivery = self._delivery_from_row(row)
+            updated = delivery.delivered()
+            connection.execute(
+                """
+                UPDATE work_deliveries
+                SET state = ?, delivered_at = ?
+                WHERE delivery_id = ?
+                """,
+                (
+                    updated.state.value,
+                    _dt(updated.delivered_at),
+                    updated.delivery_id,
+                ),
+            )
+        return updated
 
     def add_step(self, step: WorkStep) -> WorkStep:
         with self._lock, self._connect() as connection:
