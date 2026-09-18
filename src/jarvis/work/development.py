@@ -15,12 +15,12 @@ import pathlib
 import re
 import shutil
 import subprocess
-import sys
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from jarvis.capabilities.local_reads import default_project_root
 from jarvis.work.brain import BrainAction
+from jarvis.work.engine import WorkOwnerInputRequired
 from jarvis.work.models import WorkItem, WorkType
 from jarvis.work.store import default_work_state_dir
 
@@ -426,12 +426,121 @@ class DevelopmentWriteFileExecutor:
         }
 
 
+class DevelopmentTestRunner(Protocol):
+    async def run(
+        self,
+        workspace: pathlib.Path,
+        *,
+        targets: tuple[str, ...],
+        timeout_seconds: float,
+    ) -> dict[str, Any]: ...
+
+
+class DockerDevelopmentTestRunner:
+    """Run fixed pytest commands inside a locked-down prebuilt Docker image."""
+
+    def __init__(self, image: str) -> None:
+        self.image = image.strip()
+        if not self.image:
+            raise ValueError("development test image must not be empty")
+        docker = shutil.which("docker")
+        if docker is None:
+            raise DevelopmentWorkspaceError("Docker executable is unavailable")
+        self._docker = docker
+
+    async def run(
+        self,
+        workspace: pathlib.Path,
+        *,
+        targets: tuple[str, ...],
+        timeout_seconds: float,
+    ) -> dict[str, Any]:
+        mount = f"type=bind,src={workspace},dst=/workspace,readonly"
+        command = [
+            self._docker,
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--read-only",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
+            "--pids-limit",
+            "128",
+            "--memory",
+            "2g",
+            "--cpus",
+            "2",
+            "--mount",
+            mount,
+            "--tmpfs",
+            "/tmp:rw,noexec,nosuid,size=512m",
+            "--workdir",
+            "/workspace",
+            "--env",
+            "PYTHONDONTWRITEBYTECODE=1",
+            self.image,
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            *targets,
+        ]
+        try:
+            completed = await asyncio.to_thread(
+                subprocess.run,
+                command,
+                cwd=workspace,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout_seconds,
+                check=False,
+                shell=False,
+            )
+        except subprocess.TimeoutExpired:
+            return {
+                "passed": False,
+                "timed_out": True,
+                "timeout_seconds": timeout_seconds,
+                "output": "sandboxed pytest timed out",
+                "sandbox": "docker",
+            }
+        combined = (completed.stdout + "\n" + completed.stderr).strip()
+        return {
+            "passed": completed.returncode == 0,
+            "returncode": completed.returncode,
+            "timed_out": False,
+            "output": combined[-20_000:],
+            "command": ["python", "-m", "pytest", "-q", *targets],
+            "sandbox": "docker",
+            "network": "disabled",
+            "workspace": "read_only",
+        }
+
+
+def build_development_test_runner() -> DevelopmentTestRunner | None:
+    image = os.getenv("JARVIS_DEV_TEST_DOCKER_IMAGE", "").strip()
+    if not image:
+        return None
+    try:
+        return DockerDevelopmentTestRunner(image)
+    except DevelopmentWorkspaceError:
+        return None
+
+
 class DevelopmentRunTestsExecutor:
     descriptor = BrainAction(
         name="dev_run_tests",
         description=(
-            "Run bounded pytest inside this WorkItem's isolated worktree. Only pytest "
-            "targets are accepted; arbitrary shell commands are not available."
+            "Run bounded pytest inside an approved locked-down development sandbox. "
+            "If no sandbox is configured, JARVIS must wait for owner input rather than "
+            "execute model-edited code with host permissions."
         ),
         parameter_schema={
             "type": "object",
@@ -448,14 +557,28 @@ class DevelopmentRunTestsExecutor:
     )
     work_types = frozenset({WorkType.DEVELOPMENT})
 
-    def __init__(self, manager: DevelopmentWorkspaceManager) -> None:
+    def __init__(
+        self,
+        manager: DevelopmentWorkspaceManager,
+        runner: DevelopmentTestRunner | None = None,
+    ) -> None:
         self._manager = manager
+        self._runner = runner
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self,
+        work: WorkItem,
+        parameters: dict[str, Any],
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("cpu",)
 
-    async def execute(self, *, work: WorkItem, parameters: dict[str, Any]) -> dict[str, Any]:
+    async def execute(
+        self,
+        *,
+        work: WorkItem,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
         workspace = self._manager.workspace_for(work.work_id)
         if not workspace.path.is_dir():
             raise DevelopmentWorkspaceError("development workspace is not prepared")
@@ -472,38 +595,26 @@ class DevelopmentRunTestsExecutor:
                 or pathlib.PureWindowsPath(str(pure)).is_absolute()
                 or ".." in pure.parts
             ):
-                raise DevelopmentWorkspaceError("pytest target must remain inside worktree")
+                raise DevelopmentWorkspaceError(
+                    "pytest target must remain inside worktree"
+                )
             targets.append(text)
-        timeout = min(max(float(parameters.get("timeout_seconds", 120.0)), 1.0), _MAX_TEST_SECONDS)
-        command = [sys.executable, "-m", "pytest", "-q", *targets]
-        try:
-            completed = await asyncio.to_thread(
-                subprocess.run,
-                command,
-                cwd=workspace.path,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-                check=False,
-                shell=False,
+        runner = self._runner
+        if runner is None:
+            raise WorkOwnerInputRequired(
+                "Safe development test sandbox is not configured. "
+                "Configure an approved JARVIS Docker test image before I execute "
+                "model-edited code."
             )
-        except subprocess.TimeoutExpired:
-            return {
-                "passed": False,
-                "timed_out": True,
-                "timeout_seconds": timeout,
-                "output": "pytest timed out",
-            }
-        combined = (completed.stdout + "\n" + completed.stderr).strip()
-        return {
-            "passed": completed.returncode == 0,
-            "returncode": completed.returncode,
-            "timed_out": False,
-            "output": combined[-20_000:],
-            "command": ["python", "-m", "pytest", "-q", *targets],
-        }
+        timeout = min(
+            max(float(parameters.get("timeout_seconds", 120.0)), 1.0),
+            _MAX_TEST_SECONDS,
+        )
+        return await runner.run(
+            workspace.path,
+            targets=tuple(targets),
+            timeout_seconds=timeout,
+        )
 
 
 class DevelopmentStatusExecutor:
@@ -528,6 +639,8 @@ class DevelopmentStatusExecutor:
 
 def build_development_executors(
     manager: DevelopmentWorkspaceManager,
+    *,
+    test_runner: DevelopmentTestRunner | None = None,
 ) -> tuple[object, ...]:
     return (
         PrepareDevelopmentWorkspaceExecutor(manager),
@@ -535,6 +648,6 @@ def build_development_executors(
         DevelopmentReadFileExecutor(manager),
         DevelopmentSearchExecutor(manager),
         DevelopmentWriteFileExecutor(manager),
-        DevelopmentRunTestsExecutor(manager),
+        DevelopmentRunTestsExecutor(manager, runner=test_runner),
         DevelopmentStatusExecutor(manager),
     )
