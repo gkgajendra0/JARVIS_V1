@@ -16,6 +16,8 @@ from jarvis.work.models import (
 from jarvis.work.resources import ResourceLeaseManager
 from jarvis.work.store import SQLiteWorkStore
 
+_MAX_CONSECUTIVE_FAILURES = 3
+
 
 class WorkActionExecutor(Protocol):
     descriptor: BrainAction
@@ -140,6 +142,64 @@ class WorkEngine:
             progressed=True,
         )
 
+    def _retry_or_fail(
+        self,
+        work: WorkItem,
+        *,
+        reason: str,
+        current_step_id: str | None = None,
+    ) -> WorkAdvanceResult:
+        steps = self._store.list_steps(work.work_id)
+        consecutive_failures = 0
+        for step in reversed(steps):
+            if step.state.value != "failed":
+                break
+            consecutive_failures += 1
+
+        if consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
+            failed = work.transition(
+                WorkState.FAILED,
+                status_detail=reason,
+                current_step_id=current_step_id,
+            )
+            saved = self._store.save(failed, expected_version=work.version)
+            self._store.enqueue_delivery(
+                work=saved,
+                kind=WorkDeliveryKind.FAILURE,
+                message=reason,
+                event_key=f"failure:{saved.version}",
+            )
+            return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
+
+        retrying = work.transition(
+            WorkState.RETRYING,
+            status_detail=reason,
+            current_step_id=current_step_id,
+        )
+        saved = self._store.save(retrying, expected_version=work.version)
+        return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
+
+    def _record_reasoning_failure(
+        self,
+        work: WorkItem,
+        exc: Exception,
+    ) -> WorkAdvanceResult:
+        step = WorkStep(
+            work_id=work.work_id,
+            kind="brain_reasoning",
+            summary="JARVIS brain reasoning failed",
+            input_data={},
+        )
+        self._store.add_step(step)
+        failed_step = step.start().fail(f"{type(exc).__name__}: {exc}")
+        self._store.save_step(failed_step)
+        latest = self._store.require(work.work_id)
+        return self._retry_or_fail(
+            latest,
+            reason=f"brain reasoning failed: {type(exc).__name__}",
+            current_step_id=step.step_id,
+        )
+
     async def advance(self, work_id: str) -> WorkAdvanceResult:
         work = self._store.require(work_id)
         if work.state.terminal or work.state is WorkState.PAUSED:
@@ -169,14 +229,17 @@ class WorkEngine:
             return WorkAdvanceResult(work.work_id, failed.state, progressed=True)
 
         steps = self._store.list_steps(work.work_id)
-        decision = await self._brain.decide(
-            BrainRequest(
-                work=work,
-                recent_steps=steps[-12:],
-                purpose="choose the next bounded step for this JARVIS-owned work item",
-                allowed_actions=actions,
+        try:
+            decision = await self._brain.decide(
+                BrainRequest(
+                    work=work,
+                    recent_steps=steps[-12:],
+                    purpose="choose the next bounded step for this JARVIS-owned work item",
+                    allowed_actions=actions,
+                )
             )
-        )
+        except Exception as exc:
+            return self._record_reasoning_failure(work, exc)
 
         if decision.goal_complete:
             allowed, guard_reason = self._completion_guard(work, steps)
@@ -294,13 +357,11 @@ class WorkEngine:
             failed_step = running_step.fail(type(exc).__name__ + ": " + str(exc))
             self._store.save_step(failed_step)
             latest = self._store.require(work.work_id)
-            retrying = latest.transition(
-                WorkState.RETRYING,
-                status_detail=f"step failed: {decision_action}",
+            return self._retry_or_fail(
+                latest,
+                reason=f"step failed: {decision_action}",
                 current_step_id=step.step_id,
             )
-            self._store.save(retrying, expected_version=latest.version)
-            return WorkAdvanceResult(work.work_id, retrying.state, progressed=True)
 
         completed_step = running_step.complete(observation)
         self._store.save_step(completed_step)
