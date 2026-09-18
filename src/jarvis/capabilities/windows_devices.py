@@ -479,9 +479,7 @@ class PowerSessionExecutor:
         if request.operation not in self.operations:
             raise WindowsDeviceValidationError("unsupported power/session operation")
 
-        intent_operation = str(
-            request.parameters.get("intent_operation") or ""
-        ).strip()
+        intent_operation = str(request.parameters.get("intent_operation") or "").strip()
         intent_evidence = " ".join(
             str(request.parameters.get("intent_evidence") or "").split()
         )
