@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -236,9 +235,7 @@ def initialize_dbos_work_runtime(
         "application_version": application_version,
         "enable_patching": True,
         "system_database_url": (
-            system_database_url
-            or os.getenv("JARVIS_WORK_DBOS_DATABASE_URL")
-            or default_dbos_system_database_url()
+            system_database_url or default_dbos_system_database_url()
         ),
     }
     DBOS(config=config)

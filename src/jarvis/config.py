@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from jarvis.ai_provider import configured_ai_provider, normalize_ai_provider
 from jarvis.machine_config import configured_text, load_machine_settings
@@ -93,6 +93,7 @@ class JarvisConfig:
     hands_planner_model: str | None = None
     work_orchestration_enabled: bool = False
     work_orchestration_model: str | None = None
+    work_dbos_database_url: str | None = field(default=None, repr=False)
     work_global_concurrency: int = 4
     development_test_docker_image: str | None = None
     visual_computer_use_enabled: bool = False
@@ -157,12 +158,28 @@ class JarvisConfig:
             "memory_semantic_recall_model",
             "hands_planner_model",
             "work_orchestration_model",
+            "work_dbos_database_url",
             "development_test_docker_image",
         ):
             value = getattr(self, name)
             if value is not None:
                 normalized_value = str(value).strip()
                 object.__setattr__(self, name, normalized_value or None)
+
+        if self.work_orchestration_enabled:
+            if self.work_dbos_database_url is None:
+                raise ValueError(
+                    "JARVIS_WORK_DBOS_DATABASE_URL is required when "
+                    "work orchestration is enabled"
+                )
+            normalized_db_url = self.work_dbos_database_url.casefold()
+            if not normalized_db_url.startswith(
+                ("postgresql://", "postgres://", "postgresql+psycopg://")
+            ):
+                raise ValueError(
+                    "JARVIS_WORK_DBOS_DATABASE_URL must use Postgres "
+                    "for production orchestration"
+                )
 
         if isinstance(self.work_global_concurrency, bool) or not isinstance(
             self.work_global_concurrency, int
@@ -276,6 +293,9 @@ class JarvisConfig:
             ),
             work_orchestration_model=_configured_optional_text(
                 "JARVIS_WORK_ORCHESTRATION_MODEL", machine
+            ),
+            work_dbos_database_url=_configured_optional_text(
+                "JARVIS_WORK_DBOS_DATABASE_URL", machine
             ),
             work_global_concurrency=_configured_int(
                 "JARVIS_WORK_GLOBAL_CONCURRENCY", 4, machine

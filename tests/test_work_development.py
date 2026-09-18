@@ -9,7 +9,9 @@ import pytest
 from jarvis.work.development import (
     DevelopmentCommitExecutor,
     DevelopmentDiffExecutor,
+    DevelopmentReadFileExecutor,
     DevelopmentRunTestsExecutor,
+    DevelopmentSearchExecutor,
     DevelopmentWorkspaceError,
     DevelopmentWorkspaceManager,
     DevelopmentWriteFileExecutor,
@@ -274,3 +276,90 @@ async def test_development_diff_and_commit_stay_on_isolated_branch(
     assert commit_result["production_tree_modified"] is False
     assert (git_project / "module.py").read_text(encoding="utf-8") == "VALUE = 1\n"
     assert _git(git_project, "status", "--porcelain").stdout == ""
+
+
+
+def test_development_blocks_git_control_files(
+    git_project: Path,
+    tmp_path: Path,
+) -> None:
+    manager = DevelopmentWorkspaceManager(
+        repository_root=git_project,
+        workspace_root=tmp_path / "worktrees",
+    )
+    manager.ensure("work_dev_test")
+
+    for path in (".gitattributes", ".gitmodules"):
+        with pytest.raises(DevelopmentWorkspaceError, match="credential/secret-like"):
+            manager.resolve("work_dev_test", path)
+
+
+@pytest.mark.asyncio
+async def test_development_read_and_search_do_not_expose_secret_like_content(
+    git_project: Path,
+    tmp_path: Path,
+) -> None:
+    manager = DevelopmentWorkspaceManager(
+        repository_root=git_project,
+        workspace_root=tmp_path / "worktrees",
+    )
+    workspace = manager.ensure("work_dev_test")
+    secret = "sk-" + ("a" * 24)
+    (workspace.path / "normal.py").write_text(
+        f'TOKEN = "{secret}"\n',
+        encoding="utf-8",
+    )
+
+    reader = DevelopmentReadFileExecutor(manager)
+    with pytest.raises(DevelopmentWorkspaceError, match="model context"):
+        await reader.execute(
+            work=_development_item(),
+            parameters={"path": "normal.py"},
+        )
+
+    search = DevelopmentSearchExecutor(manager)
+    result = await search.execute(
+        work=_development_item(),
+        parameters={"query": "TOKEN"},
+    )
+    assert result["matches"] == []
+
+
+@pytest.mark.asyncio
+async def test_development_git_commands_disable_repository_hooks(
+    git_project: Path,
+    tmp_path: Path,
+) -> None:
+    hook_dir = git_project / ".hooks"
+    hook_dir.mkdir()
+    sentinel = tmp_path / "hook-ran.txt"
+    hook = hook_dir / "post-commit"
+    hook.write_text(
+        "#!/bin/sh\nprintf hook-ran > "
+        + str(sentinel).replace("\\", "/")
+        + "\n",
+        encoding="utf-8",
+    )
+    hook.chmod(0o755)
+    _git(git_project, "add", ".hooks/post-commit")
+    _git(git_project, "commit", "-m", "add tracked hook")
+    _git(git_project, "config", "core.hooksPath", ".hooks")
+
+    manager = DevelopmentWorkspaceManager(
+        repository_root=git_project,
+        workspace_root=tmp_path / "worktrees",
+    )
+    manager.ensure("work_dev_test")
+    write = DevelopmentWriteFileExecutor(manager)
+    commit = DevelopmentCommitExecutor(manager)
+
+    await write.execute(
+        work=_development_item(),
+        parameters={"path": "module.py", "text": "VALUE = 3\n"},
+    )
+    await commit.execute(
+        work=_development_item(),
+        parameters={"message": "Commit without host hooks"},
+    )
+
+    assert sentinel.exists() is False

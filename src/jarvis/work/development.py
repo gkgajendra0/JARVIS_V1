@@ -36,6 +36,8 @@ _BLOCKED_NAMES = frozenset(
         "secrets.json",
         "id_rsa",
         "id_ed25519",
+        ".gitattributes",
+        ".gitmodules",
     }
 )
 _BLOCKED_SUFFIXES = frozenset({".pem", ".p12", ".pfx", ".key", ".kdbx"})
@@ -102,9 +104,13 @@ class DevelopmentWorkspaceManager:
                 "JARVIS source root is not a Git repository"
             )
         self.workspace_root.mkdir(parents=True, exist_ok=True)
+        self._disabled_hooks_root = (
+            self.workspace_root / ".disabled-git-hooks"
+        ).resolve()
+        self._disabled_hooks_root.mkdir(parents=True, exist_ok=True)
 
-    @staticmethod
     def _run(
+        self,
         cwd: pathlib.Path,
         *args: str,
         timeout: float = 60.0,
@@ -115,7 +121,12 @@ class DevelopmentWorkspaceManager:
             raise DevelopmentWorkspaceError("Git executable is unavailable")
         try:
             return subprocess.run(
-                [git, *args],
+                [
+                    git,
+                    "-c",
+                    f"core.hooksPath={self._disabled_hooks_root}",
+                    *args,
+                ],
                 cwd=cwd,
                 capture_output=True,
                 text=True,
@@ -283,6 +294,10 @@ class DevelopmentReadFileExecutor:
         if target.stat().st_size > _MAX_WRITE_BYTES:
             raise DevelopmentWorkspaceError("development file exceeds read limit")
         text = await asyncio.to_thread(target.read_text, encoding="utf-8")
+        if _contains_secret(text):
+            raise DevelopmentWorkspaceError(
+                "credential-like content is blocked from development model context"
+            )
         truncated = len(text) > _MAX_READ_CHARS
         return {
             "path": target.relative_to(
@@ -398,7 +413,11 @@ class DevelopmentSearchExecutor:
             )
             if completed.returncode not in {0, 1}:
                 raise DevelopmentWorkspaceError("ripgrep search failed")
-            matches = completed.stdout.splitlines()[:limit]
+            matches = [
+                line
+                for line in completed.stdout.splitlines()
+                if not _contains_secret(line)
+            ][:limit]
         else:
             for path in workspace.path.rglob("*"):
                 if len(matches) >= limit:
@@ -414,7 +433,7 @@ class DevelopmentSearchExecutor:
                     for number, line in enumerate(
                         path.read_text(encoding="utf-8").splitlines(), 1
                     ):
-                        if query in line:
+                        if query in line and not _contains_secret(line):
                             matches.append(
                                 f"{relative.as_posix()}:{number}:{line[:500]}"
                             )
@@ -730,9 +749,14 @@ class DevelopmentDiffExecutor:
             workspace.path,
             "diff",
             "--no-ext-diff",
+            "--no-textconv",
             "--",
         )
         text = result.stdout
+        if _contains_secret(text):
+            raise DevelopmentWorkspaceError(
+                "credential-like content is blocked from development diff context"
+            )
         return {
             "branch": workspace.branch,
             "diff": text[:_MAX_READ_CHARS],

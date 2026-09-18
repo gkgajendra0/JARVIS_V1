@@ -286,6 +286,7 @@ def build_production_voice_runtime(
             model=config.work_orchestration_model,
             global_concurrency=config.work_global_concurrency,
             development_test_image=config.development_test_docker_image,
+            dbos_database_url=config.work_dbos_database_url,
             event_loop=asyncio.get_running_loop(),
         )
         LOGGER.info(
