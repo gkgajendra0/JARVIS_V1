@@ -285,13 +285,15 @@ def build_production_voice_runtime(
             research_service=research_service,
             model=config.work_orchestration_model,
             global_concurrency=config.work_global_concurrency,
+            development_test_image=config.development_test_docker_image,
             event_loop=asyncio.get_running_loop(),
         )
         LOGGER.info(
-            "Persistent work runtime configured: provider=%s concurrency=%s "
-            "canonical_store=True durable_backend=DBOS",
+            "Persistent work runtime configured: provider=%s physical_concurrency=%s "
+            "dev_sandbox=%s canonical_store=True durable_backend=DBOS",
             config.ai_provider,
             config.work_global_concurrency,
+            bool(config.development_test_docker_image),
         )
 
     result_observer = (
