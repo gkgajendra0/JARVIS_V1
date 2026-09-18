@@ -155,7 +155,6 @@ def test_active_states_consume_reasoning_budget(state: WorkState) -> None:
     assert _consumes_reasoning_budget(state) is True
 
 
-
 def test_dbos_control_messages_use_idempotency_keys(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

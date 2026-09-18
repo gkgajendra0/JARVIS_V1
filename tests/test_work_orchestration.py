@@ -1183,7 +1183,6 @@ async def test_voice_preemption_after_owner_pause_preserves_paused_state(
     assert store.list_steps(submission.work.work_id) == ()
 
 
-
 def test_interrupted_running_step_recovers_waiting_for_owner(
     tmp_path: Path,
 ) -> None:
