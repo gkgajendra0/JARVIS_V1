@@ -296,3 +296,45 @@ def test_observer_rebuilds_session_after_bounded_unconfirmed_target_attempts() -
     )
     assert observer._target_attempts_without_native_lock <= 1
     observer.close()
+
+
+def test_stale_native_active_does_not_prevent_bounded_session_recovery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owner = OwnerContextState()
+    client = FakeNativeClient()
+    observer = NativeOwnerTrackingObserver(
+        owner_context=owner,
+        client=client,  # type: ignore[arg-type]
+        config=NativeOwnerTrackingConfig(
+            target_attempts_before_session_recovery=3,
+            session_recovery_cooldown_seconds=10.0,
+        ),
+    )
+    bounds = BoundingBox(0.2, 0.15, 0.6, 0.85)
+
+    def timed_out_target(target: BoundingBox) -> bool:
+        client.targets.append(target)
+        return False
+
+    monkeypatch.setattr(client, "set_target", timed_out_target)
+
+    for frame_id, now in enumerate((10.0, 13.0, 16.0, 19.0), start=1):
+        client.native_status = NativeTrackingStatus(
+            connected=True,
+            active=True,
+            last_poll_at=now,
+            last_subject_push_at=1.0,
+        )
+        owner.publish(live_owner(track_id=7, observed_at=now))
+        observer.observe(
+            frame(frame_id, now),
+            snapshot(frame_id, now, track(7, bounds, now)),
+        )
+
+    recovery_thread = observer._recovery_thread
+    assert recovery_thread is not None
+    recovery_thread.join(timeout=1.0)
+    assert client.recoveries == 1
+    assert len(client.targets) == 3
+    observer.close()

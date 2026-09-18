@@ -22,6 +22,7 @@ import time
 from dataclasses import dataclass
 
 from jarvis.vision.models import BoundingBox
+from jarvis.vision.owner_reacquisition import NativeTrackingStatus
 from jarvis.vision.pocket3_native import Pocket3NativeConfig, Pocket3NativeTrackerClient
 
 LOGGER = logging.getLogger(__name__)
@@ -63,6 +64,17 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
     ) -> None:
         super().__init__(config)
         self.recovery_config = recovery_config or Pocket3RecoveryConfig()
+        self._last_transport_rx_at: float | None = None
+
+    def status(self) -> NativeTrackingStatus:
+        with self._lock:
+            return NativeTrackingStatus(
+                connected=self._connected,
+                active=self._tracking_active,
+                last_poll_at=self._last_poll_at,
+                last_subject_push_at=self._last_subject_push_at,
+                last_transport_rx_at=self._last_transport_rx_at,
+            )
 
     def start(self) -> None:
         with self._lock:
@@ -86,6 +98,7 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
             self._tracking_active = False
             self._last_poll_at = None
             self._last_subject_push_at = None
+            self._last_transport_rx_at = None
             self._latest_subject_box = None
         for event, _holder in pending:
             event.set()
@@ -93,11 +106,41 @@ class ResilientPocket3NativeTrackerClient(Pocket3NativeTrackerClient):
     def recover_tracking_session(self) -> None:
         """Rebuild a stale DJI control session using the saved Windows Wi-Fi profile."""
 
+        now = time.monotonic()
+        status = self.status()
+        try:
+            wifi_associated: bool | None = self._status_has_ssid(
+                self._wlan_status(), self.config.ble_name
+            )
+        except Exception:
+            wifi_associated = None
+            LOGGER.exception(
+                "Pocket 3 recovery diagnostics could not read Windows Wi-Fi state"
+            )
         LOGGER.warning(
-            "Pocket 3 rebuilding native tracking session after failed reacquisition"
+            "Pocket 3 rebuilding native tracking session: "
+            "transport_rx_age_s=%s a5_age_s=%s subject_push_age_s=%s "
+            "windows_wifi_associated=%s",
+            self._evidence_age_seconds(now, status.last_transport_rx_at),
+            self._evidence_age_seconds(now, status.last_poll_at),
+            self._evidence_age_seconds(now, status.last_subject_push_at),
+            wifi_associated,
         )
         self.close()
         self.start()
+
+    @staticmethod
+    def _evidence_age_seconds(now: float, observed_at: float | None) -> float | None:
+        if observed_at is None:
+            return None
+        return max(0.0, now - observed_at)
+
+    def _ingest_transport(self, datagram: bytes) -> None:
+        super()._ingest_transport(datagram)
+        if len(datagram) < 8:
+            return
+        with self._lock:
+            self._last_transport_rx_at = time.monotonic()
 
     def _send_a6_with_ack(self, payload: bytes, *, timeout_message: str) -> bool:
         if not self.connected:

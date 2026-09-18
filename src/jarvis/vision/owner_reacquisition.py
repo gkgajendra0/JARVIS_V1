@@ -32,6 +32,7 @@ class NativeTrackingStatus:
     active: bool
     last_poll_at: float | None = None
     last_subject_push_at: float | None = None
+    last_transport_rx_at: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
