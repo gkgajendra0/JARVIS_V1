@@ -278,7 +278,6 @@ async def test_development_diff_and_commit_stay_on_isolated_branch(
     assert _git(git_project, "status", "--porcelain").stdout == ""
 
 
-
 def test_development_blocks_git_control_files(
     git_project: Path,
     tmp_path: Path,
@@ -335,9 +334,7 @@ async def test_development_git_commands_disable_repository_hooks(
     sentinel = tmp_path / "hook-ran.txt"
     hook = hook_dir / "post-commit"
     hook.write_text(
-        "#!/bin/sh\nprintf hook-ran > "
-        + str(sentinel).replace("\\", "/")
-        + "\n",
+        "#!/bin/sh\nprintf hook-ran > " + str(sentinel).replace("\\", "/") + "\n",
         encoding="utf-8",
     )
     hook.chmod(0o755)

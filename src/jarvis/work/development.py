@@ -43,10 +43,10 @@ _BLOCKED_NAMES = frozenset(
 _BLOCKED_SUFFIXES = frozenset({".pem", ".p12", ".pfx", ".key", ".kdbx"})
 _SECRET_PATTERNS = (
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
-    re.compile(r"\\bsk-[A-Za-z0-9_-]{20,}\\b"),
-    re.compile(r"\\bAIza[0-9A-Za-z_-]{30,}\\b"),
-    re.compile(r"\\bAKIA[0-9A-Z]{16}\\b"),
-    re.compile(r"\\bgh[pousr]_[A-Za-z0-9]{20,}\\b"),
+    re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
+    re.compile(r"\bAIza[0-9A-Za-z_-]{30,}\b"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"),
 )
 
 

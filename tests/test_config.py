@@ -155,7 +155,6 @@ def test_invalid_live_context_environment_value_fails_truthfully(
         JarvisConfig.from_environment()
 
 
-
 def test_work_orchestration_requires_production_postgres() -> None:
     with pytest.raises(ValueError, match="WORK_DBOS_DATABASE_URL"):
         JarvisConfig(work_orchestration_enabled=True)
