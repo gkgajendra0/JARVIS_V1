@@ -117,6 +117,9 @@ def durable_workflow(work_id: str) -> dict[str, Any]:
                 _apply_owner_input(work_id, str(owner_input))
                 break
 
+        elif state is WorkState.RETRYING:
+            DBOS.sleep(1.0)
+
         elif state is WorkState.PAUSED:
             while True:
                 command = DBOS.recv(
@@ -189,6 +192,7 @@ def initialize_dbos_work_runtime(
     config: DBOSConfig = {
         "name": "jarvis-v1-work",
         "application_version": application_version,
+        "enable_patching": True,
         "system_database_url": (
             system_database_url
             or os.getenv("JARVIS_WORK_DBOS_DATABASE_URL")
