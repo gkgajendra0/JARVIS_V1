@@ -72,15 +72,81 @@ class BrainReasoner(Protocol):
     async def decide(self, request: BrainRequest) -> BrainDecision: ...
 
 
+class BrainPreempted(RuntimeError):
+    """Interactive voice took precedence over background model reasoning."""
+
+
+class InteractiveBrainGate:
+    """Give live owner conversation absolute priority over background reasoning."""
+
+    def __init__(self) -> None:
+        self._interactive_active = False
+        self._idle = asyncio.Event()
+        self._idle.set()
+        self._background_task: asyncio.Task[BrainDecision] | None = None
+
+    @property
+    def interactive_active(self) -> bool:
+        return self._interactive_active
+
+    async def wait_until_idle(self) -> None:
+        await self._idle.wait()
+
+    def set_interactive_active(self, active: bool) -> None:
+        normalized = bool(active)
+        if normalized == self._interactive_active:
+            return
+        self._interactive_active = normalized
+        if normalized:
+            self._idle.clear()
+            task = self._background_task
+            if task is not None and not task.done():
+                task.cancel()
+        else:
+            self._idle.set()
+
+    async def run_background(
+        self,
+        reasoner: BrainReasoner,
+        request: BrainRequest,
+    ) -> BrainDecision:
+        await self.wait_until_idle()
+        if self._interactive_active:
+            raise BrainPreempted("interactive voice brain has priority")
+        task = asyncio.create_task(
+            reasoner.decide(request),
+            name=f"jarvis-background-brain-{request.work.work_id}",
+        )
+        self._background_task = task
+        try:
+            return await task
+        except asyncio.CancelledError as exc:
+            if self._interactive_active:
+                raise BrainPreempted(
+                    "background reasoning was preempted by interactive voice"
+                ) from exc
+            raise
+        finally:
+            if self._background_task is task:
+                self._background_task = None
+
+
 class BrainCoordinator:
     """Serialize reasoning through one priority-aware JARVIS brain lease.
 
-    Deterministic/background execution may run concurrently. Only model reasoning is
-    serialized here, and higher-priority WorkItems receive the next available lease.
+    Voice has absolute priority through the interactive gate. Deterministic background
+    execution may continue concurrently, but provider reasoning is preempted whenever
+    the owner is speaking or the live agent is thinking/speaking.
     """
 
-    def __init__(self, reasoner: BrainReasoner) -> None:
+    def __init__(
+        self,
+        reasoner: BrainReasoner,
+        *,
+        interactive_gate: InteractiveBrainGate | None = None,
+    ) -> None:
         self._reasoner = reasoner
+        self._interactive_gate = interactive_gate or InteractiveBrainGate()
         self._busy = False
         self._sequence = itertools.count()
         self._waiters: list[tuple[int, int, asyncio.Future[None]]] = []
@@ -88,6 +154,10 @@ class BrainCoordinator:
     @property
     def busy(self) -> bool:
         return self._busy
+
+    @property
+    def interactive_gate(self) -> InteractiveBrainGate:
+        return self._interactive_gate
 
     async def _acquire(self, request: BrainRequest) -> None:
         if not self._busy:
@@ -117,7 +187,10 @@ class BrainCoordinator:
     async def decide(self, request: BrainRequest) -> BrainDecision:
         await self._acquire(request)
         try:
-            decision = await self._reasoner.decide(request)
+            decision = await self._interactive_gate.run_background(
+                self._reasoner,
+                request,
+            )
             allowed = {item.name for item in request.allowed_actions}
             if decision.action is not None and decision.action not in allowed:
                 raise ValueError(
