@@ -6,7 +6,7 @@
 
 The accepted runtime-code baseline produced by owner-accepted PRs #43, #49 and #48 is `e2ff21e78480a09eb243cdd2c121b39e47620d0f`; later documentation-only reconciliation commits may advance protected `main` without changing that runtime state.
 
-PR #41 remains draft/unmerged. Its implementation is complete; the next work is real owner-machine privacy/resource/incident/non-regression acceptance, documentation reconciliation, then explicit protected-main merge approval.
+PR #41 remains draft/unmerged. The implementation has been expanded from the initial nine-component health map into a hierarchical whole-JARVIS Self Model with bounded structured-log evidence queries, typed Self-Awareness reads and resolved-incident/fix retrieval. Autonomous diagnosis/repair remains explicitly out of scope. The next work is repository CI followed by one consolidated owner-machine privacy/resource/evidence/incident/non-regression acceptance pass, final docs reconciliation, then explicit protected-main merge approval.
 
 **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027, CAP-028) remains the next formal roadmap slice after the Self-Awareness interlude and remains REQUIREMENTS / RESEARCH.**
 
@@ -121,6 +121,6 @@ Step 8 must start research-first from the reconciled production baseline:
 
 ## Immediate Next Action
 
-**REBASE / RECONCILE PR #41 ON THIS PRODUCTION BASELINE -> OWNER-MACHINE SELF-AWARENESS PRIVACY / RESOURCE / INCIDENT / NON-REGRESSION ACCEPTANCE -> FINAL DOCS -> EXPLICIT PROTECTED-MAIN MERGE APPROVAL.**
+**PR #41 WHOLE-JARVIS SELF-MODEL / EVIDENCE CI -> CONSOLIDATED OWNER-MACHINE SELF-AWARENESS PRIVACY / RESOURCE / LOG-EVIDENCE / INCIDENT / NON-REGRESSION ACCEPTANCE -> FINAL DOCS -> EXPLICIT PROTECTED-MAIN MERGE APPROVAL.**
 
 After that interlude, resume **STEP 8 REQUIREMENTS RECOVERY -> FRESH RESEARCH -> TECHNOLOGY DECISION -> ARCHITECTURE PROPOSAL -> OWNER APPROVAL BEFORE IMPLEMENTATION.**
