@@ -41,3 +41,13 @@ def test_voice_instructions_keep_implicit_memory_handling_invisible() -> None:
     assert "do NOT mention candidate extraction, quarantine" in normalized
     assert '"My favorite wild bird is falcon"' in normalized
     assert '"Do you want me to remember that?"' in normalized
+
+
+
+def test_voice_instructions_route_self_diagnostics_through_inspect_self() -> None:
+    normalized = " ".join(INSTRUCTIONS.split())
+    assert "When `inspect_self` is available" in normalized
+    assert "dependencies" in normalized
+    assert "affected components" in normalized
+    assert "recent engineering incidents" in normalized
+    assert "do not refuse" in normalized
