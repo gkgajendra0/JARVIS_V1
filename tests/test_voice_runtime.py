@@ -36,11 +36,20 @@ class FakeSessionInput:
         self.audio_enabled = enabled
 
 
+class FakeSessionOutput:
+    def __init__(self) -> None:
+        self.audio = None
+        self.audio_enabled = True
+
+    def set_audio_enabled(self, enabled: bool) -> None:
+        self.audio_enabled = enabled
+
+
 class FakeSession:
     def __init__(self, *, start_error: Exception | None = None) -> None:
         self.handlers: dict[str, list] = defaultdict(list)
         self.input = FakeSessionInput()
-        self.output = SimpleNamespace(audio=None)
+        self.output = FakeSessionOutput()
         self.started = asyncio.Event()
         self.closed = False
         self.start_error = start_error
@@ -267,12 +276,13 @@ async def test_semantic_standby_speaks_ack_before_session_cleanup() -> None:
         call_ctx=call_ctx,
     )
     assert result.raw_exception is None
-    assert result.raw_output["status"] == "standby_requested"
+    assert result.raw_output is None
+    assert session.input.audio_enabled is False
+    assert session.output.audio_enabled is False
     await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
 
     assert scripted_speech.spoken == ["Of course. I'll be standing by if you need me."]
     assert session.interrupt_calls == [True]
-    assert session.input.audio_enabled is False
     assert task.done() is False
     assert session.closed is False
     assert audio.deactivated is False
