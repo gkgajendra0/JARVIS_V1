@@ -24,6 +24,10 @@ _AI_ROLE_MODEL_DEFAULTS: dict[str, dict[str, str]] = {
         "gemini": "gemini-3.5-flash",
         "openai": "gpt-5.6-terra",
     },
+    "work_orchestration": {
+        "gemini": "gemini-3.5-flash",
+        "openai": "gpt-5.6-terra",
+    },
     "memory_candidate_extraction": {
         "gemini": "gemini-3.5-flash-lite",
         "openai": "gpt-5.6-terra",
