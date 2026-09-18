@@ -52,7 +52,6 @@ def test_voice_instructions_route_self_diagnostics_through_inspect_self() -> Non
     assert "do not refuse" in normalized
 
 
-
 def test_voice_instructions_use_canonical_self_component_discovery() -> None:
     normalized = " ".join(INSTRUCTIONS.split())
     assert "component IDs are opaque internal handles" in normalized
