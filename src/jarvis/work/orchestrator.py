@@ -49,6 +49,7 @@ class WorkOrchestrator:
         source_turn_id: str,
         priority: WorkPriority = WorkPriority.NORMAL,
         delivery_policy: DeliveryPolicy = DeliveryPolicy.WHEN_IDLE,
+        dependencies: tuple[str, ...] = (),
     ) -> WorkSubmission:
         existing = self._store.find_by_source_turn(
             source_session_id=source_session_id,
@@ -65,6 +66,7 @@ class WorkOrchestrator:
             source_turn_id=source_turn_id,
             priority=priority,
             delivery_policy=delivery_policy,
+            dependencies=dependencies,
         )
         self._store.create(item)
         try:
