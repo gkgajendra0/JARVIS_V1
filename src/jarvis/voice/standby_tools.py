@@ -20,7 +20,7 @@ class StandbyAgentTools:
         return [self.enter_standby]
 
     @function_tool()
-    async def enter_standby(self, context: RunContext) -> dict[str, object]:
+    async def enter_standby(self, context: RunContext) -> None:
         """Return JARVIS to wake-word standby when the conversation is clearly over.
 
         Use this only when the user clearly means they are finished talking to JARVIS
@@ -33,15 +33,4 @@ class StandbyAgentTools:
         quotes a standby phrase, negates it, or otherwise mentions sleep ambiguously.
         """
         del context
-        accepted = self._request_standby()
-        if accepted:
-            return {
-                "ok": True,
-                "status": "standby_requested",
-                "reason": "JARVIS conversational standby transition accepted",
-            }
-        return {
-            "ok": True,
-            "status": "standby_already_requested",
-            "reason": "JARVIS standby transition is already in progress",
-        }
+        self._request_standby()
