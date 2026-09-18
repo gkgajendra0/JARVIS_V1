@@ -344,13 +344,26 @@ class SelfAwarenessReadExecutor:
     ) -> dict[str, Any]:
         if self._awareness.incidents is None:
             return {"available": False, "incidents": []}
-        incidents = self._awareness.incidents.similar_resolved(
+        scope = {
             component_id,
-            limit=limit,
+            *(
+                item.component_id
+                for item in self._awareness.self_model.descendants_of(component_id)
+            ),
+        }
+        candidates = self._awareness.incidents.list_recent(
+            limit=max(100, limit * 10),
+            status=IncidentStatus.RESOLVED,
         )
+        incidents = tuple(
+            item
+            for item in candidates
+            if scope.intersection(item.affected_components)
+        )[:limit]
         return {
             "available": True,
             "component_id": component_id,
+            "component_scope": sorted(scope),
             "incidents": [self._incident_payload(item) for item in incidents],
         }
 
