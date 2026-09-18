@@ -7,6 +7,7 @@ import pytest
 from dbos import DBOS
 
 from jarvis.work.dbos_backend import (
+    _consumes_reasoning_budget,
     initialize_dbos_work_runtime,
     shutdown_dbos_work_runtime,
 )
@@ -130,3 +131,26 @@ async def test_dbos_recovers_waiting_work_after_runtime_restart(tmp_path) -> Non
         assert recovered_engine.owner_input == "yes"
     finally:
         shutdown_dbos_work_runtime()
+
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        WorkState.WAITING_RESOURCE,
+        WorkState.WAITING_DEPENDENCY,
+        WorkState.WAITING_UNTIL,
+        WorkState.WAITING_FOR_OWNER,
+        WorkState.PAUSED,
+    ],
+)
+def test_waiting_states_do_not_consume_reasoning_budget(state: WorkState) -> None:
+    assert _consumes_reasoning_budget(state) is False
+
+
+@pytest.mark.parametrize(
+    "state",
+    [WorkState.QUEUED, WorkState.RUNNING, WorkState.RETRYING],
+)
+def test_active_states_consume_reasoning_budget(state: WorkState) -> None:
+    assert _consumes_reasoning_budget(state) is True

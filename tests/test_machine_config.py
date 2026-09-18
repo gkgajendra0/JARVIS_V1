@@ -105,3 +105,34 @@ def test_environment_is_used_when_machine_setting_is_absent(
     monkeypatch.setenv("JARVIS_AI_PROVIDER", "gemini")
 
     assert JarvisConfig.from_environment().ai_provider == "gemini"
+
+
+
+def test_work_runtime_non_secret_settings_can_be_persisted(tmp_path: Path) -> None:
+    path = tmp_path / "machine.json"
+    save_machine_settings(
+        {
+            "JARVIS_WORK_ORCHESTRATION_ENABLED": "true",
+            "JARVIS_WORK_ORCHESTRATION_MODEL": "model-x",
+            "JARVIS_WORK_GLOBAL_CONCURRENCY": "4",
+            "JARVIS_DEV_TEST_DOCKER_IMAGE": "jarvis-dev-tests:local",
+        },
+        path,
+    )
+    settings = load_machine_settings(path)
+    assert settings["JARVIS_WORK_ORCHESTRATION_ENABLED"] == "true"
+    assert settings["JARVIS_WORK_ORCHESTRATION_MODEL"] == "model-x"
+    assert settings["JARVIS_WORK_GLOBAL_CONCURRENCY"] == "4"
+    assert settings["JARVIS_DEV_TEST_DOCKER_IMAGE"] == "jarvis-dev-tests:local"
+
+
+def test_work_database_url_cannot_be_persisted(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="may not be persisted"):
+        save_machine_settings(
+            {
+                "JARVIS_WORK_DBOS_DATABASE_URL": (
+                    "postgresql://jarvis:secret@localhost/jarvis_work"
+                )
+            },
+            tmp_path / "machine.json",
+        )

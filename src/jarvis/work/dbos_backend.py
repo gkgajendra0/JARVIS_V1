@@ -17,6 +17,15 @@ _OWNER_TOPIC = "owner-input"
 _CONTROL_TOPIC = "work-control"
 _EVENT_STATE = "jarvis-work-state"
 _MAX_REASONING_CYCLES = 200
+_WAITING_STATES = frozenset(
+    {
+        WorkState.WAITING_RESOURCE,
+        WorkState.WAITING_DEPENDENCY,
+        WorkState.WAITING_UNTIL,
+        WorkState.WAITING_FOR_OWNER,
+        WorkState.PAUSED,
+    }
+)
 
 _ENGINE: WorkEngine | None = None
 _JARVIS_EVENT_LOOP: asyncio.AbstractEventLoop | None = None
@@ -69,6 +78,10 @@ def _run_dbos_sync(callable_, /, *args, **kwargs):
         return pool.submit(callable_, *args, **kwargs).result()
 
 
+def _consumes_reasoning_budget(state: WorkState) -> bool:
+    return not state.terminal and state not in _WAITING_STATES
+
+
 def _queue_priority(priority: WorkPriority) -> int:
     return {
         WorkPriority.URGENT: 1,
@@ -114,9 +127,10 @@ def _fail_bounded_work(work_id: str) -> str:
 
 @DBOS.workflow(max_recovery_attempts=20)
 def durable_workflow(work_id: str) -> dict[str, Any]:
-    """Durable outer loop. JARVIS still owns every semantic step and state."""
+    """Durable outer loop. Waiting time never consumes semantic-work budget."""
 
-    for _ in range(_MAX_REASONING_CYCLES):
+    reasoning_cycles = 0
+    while reasoning_cycles < _MAX_REASONING_CYCLES:
         payload = _advance_work(work_id)
         state = WorkState(payload["state"])
         DBOS.set_event(_EVENT_STATE, payload)
@@ -124,10 +138,13 @@ def durable_workflow(work_id: str) -> dict[str, Any]:
         if state.terminal:
             return payload
 
+        if _consumes_reasoning_budget(state):
+            reasoning_cycles += 1
+
         if state is WorkState.WAITING_FOR_OWNER:
             owner_input = DBOS.recv(
                 topic=_OWNER_TOPIC,
-                timeout_seconds=1,
+                timeout_seconds=3600,
             )
             if owner_input is not None:
                 _apply_owner_input(work_id, str(owner_input))
@@ -135,7 +152,11 @@ def durable_workflow(work_id: str) -> dict[str, Any]:
         elif state is WorkState.WAITING_RESOURCE:
             DBOS.sleep(0.25)
 
-        elif state is WorkState.WAITING_DEPENDENCY or state is WorkState.RETRYING:
+        elif state in {
+            WorkState.WAITING_DEPENDENCY,
+            WorkState.WAITING_UNTIL,
+            WorkState.RETRYING,
+        }:
             DBOS.sleep(1.0)
 
         elif state is WorkState.PAUSED:
