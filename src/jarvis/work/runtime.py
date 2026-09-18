@@ -108,7 +108,7 @@ def build_work_runtime(
         engine=engine,
         event_loop=loop,
         application_version=_application_version(),
-        global_concurrency=global_concurrency,
+        queue_concurrency=None,
         system_database_url=dbos_database_url,
     )
     orchestrator = WorkOrchestrator(store, backend)
