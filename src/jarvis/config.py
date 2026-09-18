@@ -94,6 +94,7 @@ class JarvisConfig:
     work_orchestration_enabled: bool = False
     work_orchestration_model: str | None = None
     work_global_concurrency: int = 4
+    development_test_docker_image: str | None = None
     visual_computer_use_enabled: bool = False
     show_transcript: bool = True
     startup_greeting_enabled: bool = True
@@ -156,6 +157,7 @@ class JarvisConfig:
             "memory_semantic_recall_model",
             "hands_planner_model",
             "work_orchestration_model",
+            "development_test_docker_image",
         ):
             value = getattr(self, name)
             if value is not None:
@@ -277,6 +279,9 @@ class JarvisConfig:
             ),
             work_global_concurrency=_configured_int(
                 "JARVIS_WORK_GLOBAL_CONCURRENCY", 4, machine
+            ),
+            development_test_docker_image=_configured_optional_text(
+                "JARVIS_DEV_TEST_DOCKER_IMAGE", machine
             ),
             visual_computer_use_enabled=_configured_bool(
                 "JARVIS_VISUAL_COMPUTER_USE_ENABLED", False, machine
