@@ -361,9 +361,92 @@ class WorkEngine:
             self._store.save(resumed, expected_version=work.version)
         return None
 
+    def _ensure_state_delivery(self, work: WorkItem) -> None:
+        if work.state is WorkState.COMPLETED:
+            self._store.enqueue_delivery(
+                work=work,
+                kind=WorkDeliveryKind.COMPLETION,
+                message=work.status_detail or "Background work completed.",
+                event_key="completion",
+            )
+        elif work.state is WorkState.FAILED:
+            self._store.enqueue_delivery(
+                work=work,
+                kind=WorkDeliveryKind.FAILURE,
+                message=work.status_detail or "Background work failed.",
+                event_key=f"failure:{work.version}",
+            )
+        elif work.state is WorkState.WAITING_FOR_OWNER:
+            self._store.enqueue_delivery(
+                work=work,
+                kind=WorkDeliveryKind.OWNER_INPUT,
+                message=work.status_detail or "This work needs your input.",
+                event_key=f"owner:{work.version}",
+            )
+
+    def reconcile_interrupted_steps(self) -> tuple[str, ...]:
+        """Fail closed on executor steps whose outcome was not durably recorded."""
+
+        reconciled: list[str] = []
+        active = self._store.list(
+            states=(
+                WorkState.QUEUED,
+                WorkState.RUNNING,
+                WorkState.WAITING_RESOURCE,
+                WorkState.WAITING_DEPENDENCY,
+                WorkState.WAITING_UNTIL,
+                WorkState.WAITING_FOR_OWNER,
+                WorkState.PAUSED,
+                WorkState.RETRYING,
+            ),
+            limit=10_000,
+        )
+        for work in active:
+            running_steps = [
+                step
+                for step in self._store.list_steps(work.work_id)
+                if step.state.value == "running"
+            ]
+            if not running_steps:
+                continue
+
+            for step in running_steps:
+                self._store.save_step(
+                    step.fail(
+                        "process interrupted before executor outcome was durably recorded"
+                    )
+                )
+
+            latest = self._store.require(work.work_id)
+            last_step = running_steps[-1]
+            detail = (
+                "A background step was interrupted by process restart and its outcome "
+                "is unverified. Review the task before retrying."
+            )
+            if latest.state is WorkState.PAUSED:
+                updated = latest.with_progress(
+                    current_step_id=last_step.step_id,
+                    status_detail=detail,
+                )
+                self._store.save(updated, expected_version=latest.version)
+            elif not latest.state.terminal:
+                waiting = latest.transition(
+                    WorkState.WAITING_FOR_OWNER,
+                    status_detail=detail,
+                    current_step_id=last_step.step_id,
+                )
+                saved = self._store.save(waiting, expected_version=latest.version)
+                self._ensure_state_delivery(saved)
+            reconciled.append(work.work_id)
+
+        return tuple(reconciled)
+
     async def advance(self, work_id: str) -> WorkAdvanceResult:
         work = self._store.require(work_id)
-        if work.state.terminal or work.state is WorkState.PAUSED:
+        if work.state.terminal:
+            self._ensure_state_delivery(work)
+            return WorkAdvanceResult(work.work_id, work.state, progressed=False)
+        if work.state is WorkState.PAUSED:
             return WorkAdvanceResult(work.work_id, work.state, progressed=False)
 
         dependency_result = self._check_dependencies(work)
@@ -374,6 +457,7 @@ class WorkEngine:
         if work.state.terminal or work.state is WorkState.PAUSED:
             return WorkAdvanceResult(work.work_id, work.state, progressed=False)
         if work.state is WorkState.WAITING_FOR_OWNER:
+            self._ensure_state_delivery(work)
             return WorkAdvanceResult(
                 work.work_id,
                 work.state,
@@ -692,12 +776,20 @@ class WorkEngine:
         return saved
 
     def apply_owner_input(self, work_id: str, response: str) -> WorkItem:
-        work = self._store.require(work_id)
-        if work.state is not WorkState.WAITING_FOR_OWNER:
-            raise ValueError("work is not waiting for owner input")
         normalized = response.strip()
         if not normalized:
             raise ValueError("owner response must not be empty")
+        work = self._store.require(work_id)
+        if work.state is not WorkState.WAITING_FOR_OWNER:
+            already_applied = any(
+                step.kind == "owner_input"
+                and step.state.value == "completed"
+                and step.observation.get("response") == normalized
+                for step in reversed(self._store.list_steps(work_id))
+            )
+            if already_applied:
+                return work
+            raise ValueError("work is not waiting for owner input")
         step = WorkStep(
             work_id=work.work_id,
             kind="owner_input",

@@ -95,7 +95,11 @@ class WorkRuntime:
         response: str,
     ) -> WorkItem:
         work = self.resolve_waiting_owner_work(work_id)
-        self.backend.send_owner_input(work.work_id, response)
+        self.backend.send_owner_input(
+            work.work_id,
+            response,
+            idempotency_key=f"owner-input:{work.version}",
+        )
         return work
 
     def close(self) -> None:
@@ -150,6 +154,7 @@ def build_work_runtime(
         resources=resources,
         base_resource_keys=("work",),
     )
+    engine.reconcile_interrupted_steps()
     backend = initialize_dbos_work_runtime(
         engine=engine,
         event_loop=loop,
@@ -158,6 +163,7 @@ def build_work_runtime(
         system_database_url=dbos_database_url,
     )
     orchestrator = WorkOrchestrator(store, backend)
+    orchestrator.reconcile_active()
     return WorkRuntime(
         store=store,
         engine=engine,

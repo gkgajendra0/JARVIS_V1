@@ -201,12 +201,18 @@ class DBOSWorkExecutionBackend:
             raise RuntimeError("DBOS did not preserve canonical JARVIS work ID")
         return workflow_id
 
-    def cancel(self, execution_id: str) -> None:
+    def cancel(
+        self,
+        execution_id: str,
+        *,
+        idempotency_key: str | None = None,
+    ) -> None:
         _run_dbos_sync(
             DBOS.send,
             execution_id,
             "cancel",
             topic=_CONTROL_TOPIC,
+            idempotency_key=idempotency_key,
         )
         _run_dbos_sync(
             DBOS.cancel_workflow,
@@ -219,15 +225,27 @@ class DBOSWorkExecutionBackend:
         # finish safely; the durable loop observes PAUSED before starting another step.
         del execution_id
 
-    def resume(self, execution_id: str) -> None:
+    def resume(
+        self,
+        execution_id: str,
+        *,
+        idempotency_key: str | None = None,
+    ) -> None:
         _run_dbos_sync(
             DBOS.send,
             execution_id,
             "resume",
             topic=_CONTROL_TOPIC,
+            idempotency_key=idempotency_key,
         )
 
-    def send_owner_input(self, work_id: str, response: str) -> None:
+    def send_owner_input(
+        self,
+        work_id: str,
+        response: str,
+        *,
+        idempotency_key: str | None = None,
+    ) -> None:
         normalized = response.strip()
         if not normalized:
             raise ValueError("owner response must not be empty")
@@ -236,6 +254,7 @@ class DBOSWorkExecutionBackend:
             work_id,
             normalized,
             topic=_OWNER_TOPIC,
+            idempotency_key=idempotency_key,
         )
 
 

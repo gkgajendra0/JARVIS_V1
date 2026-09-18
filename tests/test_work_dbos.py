@@ -153,3 +153,39 @@ def test_waiting_states_do_not_consume_reasoning_budget(state: WorkState) -> Non
 )
 def test_active_states_consume_reasoning_budget(state: WorkState) -> None:
     assert _consumes_reasoning_budget(state) is True
+
+
+
+def test_dbos_control_messages_use_idempotency_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str, str | None]] = []
+
+    def fake_run_dbos_sync(callable_, /, *args, **kwargs):
+        del callable_
+        calls.append(
+            (
+                str(args[0]),
+                str(args[1]),
+                kwargs.get("idempotency_key"),
+            )
+        )
+
+    monkeypatch.setattr(
+        "jarvis.work.dbos_backend._run_dbos_sync",
+        fake_run_dbos_sync,
+    )
+    from jarvis.work.dbos_backend import DBOSWorkExecutionBackend
+
+    backend = DBOSWorkExecutionBackend()
+    backend.resume("work_control", idempotency_key="resume:4")
+    backend.send_owner_input(
+        "work_control",
+        "yes",
+        idempotency_key="owner-input:7",
+    )
+
+    assert calls == [
+        ("work_control", "resume", "resume:4"),
+        ("work_control", "yes", "owner-input:7"),
+    ]

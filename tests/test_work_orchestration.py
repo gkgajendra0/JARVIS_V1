@@ -77,20 +77,34 @@ class FakeBackend:
         self.cancelled: list[str] = []
         self.paused: list[str] = []
         self.resumed: list[str] = []
+        self.cancel_keys: list[str | None] = []
+        self.resume_keys: list[str | None] = []
 
     def submit(self, work_id: str, *, priority: WorkPriority) -> str:
         del priority
         self.submitted.append(work_id)
         return work_id
 
-    def cancel(self, execution_id: str) -> None:
+    def cancel(
+        self,
+        execution_id: str,
+        *,
+        idempotency_key: str | None = None,
+    ) -> None:
         self.cancelled.append(execution_id)
+        self.cancel_keys.append(idempotency_key)
 
     def pause(self, execution_id: str) -> None:
         self.paused.append(execution_id)
 
-    def resume(self, execution_id: str) -> None:
+    def resume(
+        self,
+        execution_id: str,
+        *,
+        idempotency_key: str | None = None,
+    ) -> None:
         self.resumed.append(execution_id)
+        self.resume_keys.append(idempotency_key)
 
 
 def create_item(store: SQLiteWorkStore, *, request: str = "Do work") -> WorkItem:
@@ -1167,3 +1181,135 @@ async def test_voice_preemption_after_owner_pause_preserves_paused_state(
     assert result.state is WorkState.PAUSED
     assert store.require(submission.work.work_id).state is WorkState.PAUSED
     assert store.list_steps(submission.work.work_id) == ()
+
+
+
+def test_interrupted_running_step_recovers_waiting_for_owner(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Recover interrupted executor")
+    running = item.transition(WorkState.RUNNING, status_detail="running")
+    store.save(running, expected_version=item.version)
+    step = WorkStep(
+        work_id=item.work_id,
+        kind="do_step",
+        summary="Potential side effect",
+    )
+    store.add_step(step)
+    running_step = step.start()
+    store.save_step(running_step)
+    with_step = running.with_progress(
+        current_step_id=step.step_id,
+        status_detail="Potential side effect",
+    )
+    store.save(with_step, expected_version=running.version)
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(ScriptedReasoner()),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+    )
+
+    reconciled = engine.reconcile_interrupted_steps()
+
+    recovered = store.require(item.work_id)
+    recovered_step = store.list_steps(item.work_id)[-1]
+    assert reconciled == (item.work_id,)
+    assert recovered.state is WorkState.WAITING_FOR_OWNER
+    assert "outcome is unverified" in (recovered.status_detail or "")
+    assert recovered_step.state.value == "failed"
+    assert "interrupted" in (recovered_step.error or "")
+    deliveries = store.list_pending_deliveries()
+    assert len(deliveries) == 1
+    assert deliveries[0].kind is WorkDeliveryKind.OWNER_INPUT
+
+
+@pytest.mark.asyncio
+async def test_terminal_and_owner_wait_deliveries_are_reconciled_on_replay(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(ScriptedReasoner()),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+    )
+    completed_item = create_item(store, request="Recover completion delivery")
+    running = completed_item.transition(WorkState.RUNNING)
+    store.save(running, expected_version=completed_item.version)
+    completed = running.transition(
+        WorkState.COMPLETED,
+        status_detail="Recovered completion",
+    )
+    store.save(completed, expected_version=running.version)
+
+    result = await engine.advance(completed_item.work_id)
+    assert result.state is WorkState.COMPLETED
+    completion_deliveries = store.list_pending_deliveries()
+    assert len(completion_deliveries) == 1
+    assert completion_deliveries[0].kind is WorkDeliveryKind.COMPLETION
+
+    waiting_item = WorkItem(
+        request="Recover owner delivery",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-delivery-replay",
+        source_turn_id="turn-owner-replay",
+    )
+    store.create(waiting_item)
+    waiting_running = waiting_item.transition(WorkState.RUNNING)
+    store.save(waiting_running, expected_version=waiting_item.version)
+    waiting = waiting_running.transition(
+        WorkState.WAITING_FOR_OWNER,
+        status_detail="Choose safely?",
+    )
+    store.save(waiting, expected_version=waiting_running.version)
+
+    result = await engine.advance(waiting_item.work_id)
+    assert result.state is WorkState.WAITING_FOR_OWNER
+    deliveries = store.list_pending_deliveries()
+    assert len(deliveries) == 2
+    assert deliveries[-1].kind is WorkDeliveryKind.OWNER_INPUT
+
+
+def test_orchestrator_reconciles_active_execution_idempotently(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+    item = create_item(store, request="Saved before durable enqueue")
+
+    reconciled = orchestrator.reconcile_active()
+
+    assert reconciled == (item.work_id,)
+    assert backend.submitted == [item.work_id]
+    assert store.require(item.work_id).state is WorkState.QUEUED
+
+
+def test_apply_owner_input_is_idempotent_after_canonical_save(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Owner replay")
+    running = item.transition(WorkState.RUNNING)
+    store.save(running, expected_version=item.version)
+    waiting = running.transition(
+        WorkState.WAITING_FOR_OWNER,
+        status_detail="Continue?",
+    )
+    store.save(waiting, expected_version=running.version)
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(ScriptedReasoner()),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+    )
+
+    first = engine.apply_owner_input(item.work_id, "yes")
+    replay = engine.apply_owner_input(item.work_id, "yes")
+
+    assert first.state is WorkState.RUNNING
+    assert replay.state is WorkState.RUNNING
+    owner_steps = [
+        step for step in store.list_steps(item.work_id) if step.kind == "owner_input"
+    ]
+    assert len(owner_steps) == 1

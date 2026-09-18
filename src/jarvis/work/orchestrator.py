@@ -20,11 +20,21 @@ class WorkExecutionBackend(Protocol):
 
     def submit(self, work_id: str, *, priority: WorkPriority) -> str: ...
 
-    def cancel(self, execution_id: str) -> None: ...
+    def cancel(
+        self,
+        execution_id: str,
+        *,
+        idempotency_key: str | None = None,
+    ) -> None: ...
 
     def pause(self, execution_id: str) -> None: ...
 
-    def resume(self, execution_id: str) -> None: ...
+    def resume(
+        self,
+        execution_id: str,
+        *,
+        idempotency_key: str | None = None,
+    ) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +100,17 @@ class WorkOrchestrator:
     def get(self, work_id: str) -> WorkItem:
         return self._store.require(work_id)
 
+    def reconcile_active(self, *, limit: int = 10_000) -> tuple[str, ...]:
+        """Idempotently ensure canonical active WorkItems have durable executions."""
+
+        reconciled: list[str] = []
+        for item in self.list_active(limit=limit):
+            execution_id = self._backend.submit(item.work_id, priority=item.priority)
+            if execution_id != item.work_id:
+                raise RuntimeError("durable backend must use work_id as execution_id")
+            reconciled.append(item.work_id)
+        return tuple(reconciled)
+
     def list_active(self, *, limit: int = 100) -> tuple[WorkItem, ...]:
         return self._store.list(
             states=(
@@ -115,7 +136,10 @@ class WorkOrchestrator:
             current_step_id=item.current_step_id,
         )
         saved = self._store.save(cancelled, expected_version=item.version)
-        self._backend.cancel(work_id)
+        self._backend.cancel(
+            work_id,
+            idempotency_key=f"cancel:{saved.version}",
+        )
         return saved
 
     def pause(self, work_id: str) -> WorkItem:
@@ -155,7 +179,10 @@ class WorkOrchestrator:
         )
         saved = self._store.save(resumed, expected_version=item.version)
         try:
-            self._backend.resume(work_id)
+            self._backend.resume(
+                work_id,
+                idempotency_key=f"resume:{item.version}",
+            )
         except Exception:
             latest = self._store.require(work_id)
             reverted = latest.transition(
