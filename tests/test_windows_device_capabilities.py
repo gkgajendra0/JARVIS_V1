@@ -199,7 +199,6 @@ def test_power_backend_result_is_reported_as_initiated_not_final_state() -> None
     assert result.data == {"request_initiated": True, "verification_passed": True}
 
 
-
 def test_power_intent_binding_is_carried_into_authority_material() -> None:
     executor = PowerSessionExecutor(FakePower())
     prepared = executor.prepare(
