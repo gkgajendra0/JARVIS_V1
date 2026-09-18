@@ -109,7 +109,9 @@ class SelfAwarenessRuntime:
             metadata=metadata or {},
         )
         if self.incidents is not None:
-            incident = self.incidents.record_health_transition(before.health, after.health)
+            incident = self.incidents.record_health_transition(
+                before.health, after.health
+            )
             if incident is not None:
                 LOGGER.warning(
                     "engineering_incident_recorded",
