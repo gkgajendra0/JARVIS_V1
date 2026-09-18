@@ -36,6 +36,7 @@ def _bounded_log_reason(reason: object, *, max_chars: int = 240) -> str:
     text = " ".join(str(reason or "-").split())
     return text[:max_chars] or "-"
 
+
 _SEMANTIC_EVIDENCE_OPERATIONS = frozenset(
     {
         "system_status",
