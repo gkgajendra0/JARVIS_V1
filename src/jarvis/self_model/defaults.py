@@ -512,7 +512,10 @@ def build_default_self_model() -> SelfModelRegistry:
                 "src/jarvis/capabilities/document_reader.py",
             ),
             parent_component_id="hands",
-            logger_prefixes=("jarvis.capabilities.local", "jarvis.capabilities.document"),
+            logger_prefixes=(
+                "jarvis.capabilities.local",
+                "jarvis.capabilities.document",
+            ),
         ),
         C(
             "hands.development",
@@ -590,7 +593,9 @@ def build_default_self_model() -> SelfModelRegistry:
             "Composition of Self Model, health registry, operational evidence and incidents.",
             ("src/jarvis/self_awareness.py", "src/jarvis/self_model"),
             logger_prefixes=("jarvis.self_awareness",),
-            docs=("docs/decisions/ADR-018_SELF_AWARENESS_EVIDENCE_AND_HEALTH_FOUNDATION.md",),
+            docs=(
+                "docs/decisions/ADR-018_SELF_AWARENESS_EVIDENCE_AND_HEALTH_FOUNDATION.md",
+            ),
         ),
         C(
             "performance",
