@@ -397,11 +397,31 @@ class DevelopmentWriteFileExecutor:
     def __init__(self, manager: DevelopmentWorkspaceManager) -> None:
         self._manager = manager
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self,
+        work: WorkItem,
+        parameters: dict[str, Any],
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("git",)
 
-    async def execute(self, *, work: WorkItem, parameters: dict[str, Any]) -> dict[str, Any]:
+    @staticmethod
+    def persisted_input(parameters: dict[str, Any]) -> dict[str, Any]:
+        text = str(parameters.get("text") or "")
+        encoded = text.encode("utf-8")
+        return {
+            "path": str(parameters.get("path") or ""),
+            "size_bytes": len(encoded),
+            "sha256": hashlib.sha256(encoded).hexdigest(),
+            "content_persisted": False,
+        }
+
+    async def execute(
+        self,
+        *,
+        work: WorkItem,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
         text = str(parameters.get("text") or "")
         encoded = text.encode("utf-8")
         if _contains_secret(text):
