@@ -6,11 +6,18 @@ import pytest
 
 from jarvis.capabilities.discovery import CapabilityResolver
 from jarvis.capabilities.local_reads import ApprovedRootPolicy, LocalProjectReadExecutor
-from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
+from jarvis.capabilities.models import (
+    CapabilityCatalog,
+    CapabilityDescriptor,
+    CapabilityKind,
+    CapabilityResult,
+    CapabilityStatus,
+)
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.health_adapters import (
     CapabilityExecutionHealthObserver,
     record_foundation_health,
+    record_hands_availability_health,
     require_startup_preflight_with_health,
 )
 from jarvis.preflight import PreflightCheck, StartupPreflightError
@@ -166,4 +173,83 @@ def test_preflight_health_is_recorded_before_startup_failure(
         awareness.component_snapshot("runtime.provider").health.state
         is HealthState.FAILED
     )
+    awareness.close()
+
+
+
+def _hands_catalog(
+    *,
+    structured: bool = False,
+    visual: bool = False,
+    browser: bool = False,
+) -> CapabilityCatalog:
+    return CapabilityCatalog(
+        sources=(),
+        capabilities=(
+            CapabilityDescriptor.create(
+                capability_id="desktop.control",
+                source_id="windows",
+                kind=CapabilityKind.STRUCTURED_AUTOMATION,
+                name="Structured Desktop",
+                description="Structured desktop control",
+                execution_enabled=structured,
+            ),
+            CapabilityDescriptor.create(
+                capability_id="desktop.control",
+                source_id="visual",
+                kind=CapabilityKind.VISUAL_FALLBACK,
+                name="Visual Desktop",
+                description="Visual desktop fallback",
+                execution_enabled=visual,
+            ),
+            CapabilityDescriptor.create(
+                capability_id="playwright",
+                source_id="browser",
+                kind=CapabilityKind.STRUCTURED_AUTOMATION,
+                name="Browser",
+                description="Browser control",
+                execution_enabled=browser,
+            ),
+        ),
+    )
+
+
+def test_hands_readiness_reports_healthy_when_structured_executor_is_ready(
+    tmp_path: Path,
+) -> None:
+    awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
+
+    record_hands_availability_health(
+        awareness,
+        _hands_catalog(structured=True, visual=True, browser=True),
+    )
+
+    snapshot = awareness.component_snapshot("hands")
+    assert snapshot.health.state is HealthState.HEALTHY
+    assert "hands_structured_executor_ready" in snapshot.health.reason_codes
+    awareness.close()
+
+
+def test_hands_readiness_reports_degraded_with_fallback_only(tmp_path: Path) -> None:
+    awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
+
+    record_hands_availability_health(
+        awareness,
+        _hands_catalog(visual=True, browser=True),
+    )
+
+    snapshot = awareness.component_snapshot("hands")
+    assert snapshot.health.state is HealthState.DEGRADED
+    assert "hands_fallback_only" in snapshot.health.reason_codes
+    awareness.close()
+
+
+def test_hands_readiness_reports_failed_when_no_executor_is_ready(tmp_path: Path) -> None:
+    awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
+
+    record_hands_availability_health(awareness, _hands_catalog())
+
+    snapshot = awareness.component_snapshot("hands")
+    assert snapshot.health.state is HealthState.FAILED
+    assert "hands_executor_unavailable" in snapshot.health.reason_codes
     awareness.close()
