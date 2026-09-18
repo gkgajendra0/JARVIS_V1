@@ -45,9 +45,9 @@ Detailed acceptance: `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
 
 ### Persistent Concurrent Work Orchestration foundation
 
-Owner-approved sequence change on 2026-09-18: durable concurrent work orchestration is pulled forward as the **next architecture foundation before Step 8 implementation**. This does not renumber the roadmap.
+Owner-approved sequence change on 2026-09-18: durable concurrent work orchestration is pulled forward as the **architecture foundation before Step 8 implementation**. This does not renumber the roadmap.
 
-The foundation will define provider-neutral durable work items, lifecycle/state, bounded concurrent workers, dependencies/priorities/resource leases, restart recovery, Authority-preserving execution, progress/status, and deferred completion delivery while normal conversation remains available.
+Draft PR #55 now contains the implementation: provider-neutral durable WorkItems, explicit lifecycle/state, DBOS restart recovery, single-brain live-voice priority, priorities/dependencies/resource leases, pause/resume/cancel/owner-input semantics, persisted deferred delivery, bounded research work, and isolated sandboxed development work. It remains **not production-accepted** until exact-head automated validation and the real owner-machine acceptance matrix pass.
 
 Step 8 tasks/reminders/scheduling and later Step 15 proactive/event-driven work must reuse this foundation rather than create separate task/background systems.
 

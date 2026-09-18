@@ -574,6 +574,25 @@ def build_default_self_model() -> SelfModelRegistry:
             logger_prefixes=("jarvis.capabilities.development_git",),
         ),
         C(
+            "work",
+            "Persistent concurrent JARVIS-owned work orchestration and durable execution.",
+            ("src/jarvis/work", "src/jarvis/voice/work_tools.py"),
+            parent_component_id="jarvis",
+            product_capabilities=("CAP-023",),
+            resources=(
+                "%LOCALAPPDATA%/JARVIS/work/work.sqlite3",
+                "%LOCALAPPDATA%/JARVIS/work/dbos.sqlite3",
+            ),
+            logger_prefixes=("jarvis.work", "jarvis.voice.work_tools"),
+        ),
+        C(
+            "work.development",
+            "Isolated Git worktrees and sandbox-gated staged development execution.",
+            ("src/jarvis/work/development.py", "tools/development-sandbox"),
+            parent_component_id="work",
+            logger_prefixes=("jarvis.work.development",),
+        ),
+        C(
             "knowledge.research",
             "Provider-neutral source-aware current web research with provenance.",
             ("src/jarvis/knowledge", "src/jarvis/voice/research_tools.py"),
@@ -665,6 +684,11 @@ def build_default_self_model() -> SelfModelRegistry:
             "runtime.voice",
             "runtime.provider",
             criticality=DependencyCriticality.BLOCKING,
+        ),
+        DependencyDescriptor(
+            "work",
+            "runtime.provider",
+            criticality=DependencyCriticality.DEGRADING,
         ),
         DependencyDescriptor(
             "runtime.voice",

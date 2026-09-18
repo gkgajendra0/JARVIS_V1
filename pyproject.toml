@@ -16,6 +16,7 @@ dependencies = [
     "openai==2.54.0",
     "google-genai==2.22.0",
     "exa-py==2.20.0",
+    "dbos==2.31.1",
     "sounddevice>=0.5,<1",
     "numpy>=2,<3",
     "opencv-python==5.0.0.93",

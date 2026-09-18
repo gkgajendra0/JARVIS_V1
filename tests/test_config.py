@@ -153,3 +153,21 @@ def test_invalid_live_context_environment_value_fails_truthfully(
 
     with pytest.raises(ValueError, match="JARVIS_LIVE_CONTEXT_RECENT_TURNS"):
         JarvisConfig.from_environment()
+
+
+def test_work_orchestration_requires_production_postgres() -> None:
+    with pytest.raises(ValueError, match="WORK_DBOS_DATABASE_URL"):
+        JarvisConfig(work_orchestration_enabled=True)
+
+    with pytest.raises(ValueError, match="must use Postgres"):
+        JarvisConfig(
+            work_orchestration_enabled=True,
+            work_dbos_database_url="sqlite:///work.sqlite3",
+        )
+
+    config = JarvisConfig(
+        work_orchestration_enabled=True,
+        work_dbos_database_url="postgresql://localhost/jarvis_work",
+    )
+    assert config.work_orchestration_enabled is True
+    assert config.work_dbos_database_url == "postgresql://localhost/jarvis_work"
