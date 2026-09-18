@@ -95,6 +95,7 @@ class SQLiteWorkStore:
                     priority INTEGER NOT NULL,
                     delivery_policy TEXT NOT NULL,
                     dependencies_json TEXT NOT NULL DEFAULT '[]',
+                    paused_from_state TEXT,
                     current_step_id TEXT,
                     result_json TEXT NOT NULL,
                     status_detail TEXT,
@@ -151,6 +152,10 @@ class SQLiteWorkStore:
                     "ALTER TABLE work_items "
                     "ADD COLUMN dependencies_json TEXT NOT NULL DEFAULT '[]'"
                 )
+            if "paused_from_state" not in columns:
+                connection.execute(
+                    "ALTER TABLE work_items ADD COLUMN paused_from_state TEXT"
+                )
 
     @staticmethod
     def _item_from_row(row: sqlite3.Row) -> WorkItem:
@@ -168,6 +173,11 @@ class SQLiteWorkStore:
             priority=WorkPriority(row["priority"]),
             delivery_policy=DeliveryPolicy(row["delivery_policy"]),
             dependencies=tuple(json.loads(row["dependencies_json"])),
+            paused_from_state=(
+                WorkState(row["paused_from_state"])
+                if row["paused_from_state"] is not None
+                else None
+            ),
             current_step_id=row["current_step_id"],
             result=json.loads(row["result_json"]),
             status_detail=row["status_detail"],
@@ -220,9 +230,9 @@ class SQLiteWorkStore:
                     INSERT INTO work_items (
                         work_id, request, work_type, source_session_id, source_turn_id,
                         state, priority, delivery_policy, dependencies_json,
-                        current_step_id, result_json, status_detail, created_at,
-                        updated_at, version
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        paused_from_state, current_step_id, result_json, status_detail,
+                        created_at, updated_at, version
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         item.work_id,
@@ -234,6 +244,11 @@ class SQLiteWorkStore:
                         int(item.priority),
                         item.delivery_policy.value,
                         json.dumps(item.dependencies),
+                        (
+                            item.paused_from_state.value
+                            if item.paused_from_state is not None
+                            else None
+                        ),
                         item.current_step_id,
                         json.dumps(item.result, sort_keys=True),
                         item.status_detail,
@@ -281,14 +296,20 @@ class SQLiteWorkStore:
             cursor = connection.execute(
                 """
                 UPDATE work_items SET
-                    state = ?, priority = ?, delivery_policy = ?, current_step_id = ?,
-                    result_json = ?, status_detail = ?, updated_at = ?, version = ?
+                    state = ?, priority = ?, delivery_policy = ?,
+                    paused_from_state = ?, current_step_id = ?, result_json = ?,
+                    status_detail = ?, updated_at = ?, version = ?
                 WHERE work_id = ? AND version = ?
                 """,
                 (
                     item.state.value,
                     int(item.priority),
                     item.delivery_policy.value,
+                    (
+                        item.paused_from_state.value
+                        if item.paused_from_state is not None
+                        else None
+                    ),
                     item.current_step_id,
                     json.dumps(item.result, sort_keys=True),
                     item.status_detail,
