@@ -6,7 +6,11 @@ from pathlib import Path
 import pytest
 
 from jarvis.work.brain import BrainAction, BrainCoordinator, BrainDecision, BrainRequest
-from jarvis.work.engine import WorkActionRegistry, WorkEngine
+from jarvis.work.engine import (
+    WorkActionRegistry,
+    WorkEngine,
+    WorkOwnerInputRequired,
+)
 from jarvis.work.models import (
     DeliveryPolicy,
     WorkDeliveryKind,
@@ -653,3 +657,74 @@ def test_delivery_policy_is_durable_ordered_and_exactly_once(tmp_path: Path) -> 
     )
     assert duplicate is not None
     assert len(reopened.list_pending_deliveries()) == 1
+
+
+def test_pause_resume_restores_waiting_for_owner_state(tmp_path: Path) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+    submission = orchestrator.start(
+        request="Need a decision later",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-pause-wait",
+        source_turn_id="turn-pause-wait",
+    )
+    queued = submission.work
+    running = queued.transition(WorkState.RUNNING)
+    store.save(running, expected_version=queued.version)
+    waiting = running.transition(
+        WorkState.WAITING_FOR_OWNER,
+        status_detail="Choose A or B?",
+    )
+    store.save(waiting, expected_version=running.version)
+
+    paused = orchestrator.pause(waiting.work_id)
+    assert paused.state is WorkState.PAUSED
+    assert paused.paused_from_state is WorkState.WAITING_FOR_OWNER
+
+    reopened = SQLiteWorkStore(tmp_path / "work.sqlite")
+    recovered = reopened.require(waiting.work_id)
+    assert recovered.paused_from_state is WorkState.WAITING_FOR_OWNER
+
+    resumed = orchestrator.resume(waiting.work_id)
+    assert resumed.state is WorkState.WAITING_FOR_OWNER
+    assert resumed.paused_from_state is None
+
+
+@pytest.mark.asyncio
+async def test_executor_can_request_owner_input_without_becoming_failure(
+    tmp_path: Path,
+) -> None:
+    class OwnerGateExecutor:
+        descriptor = BrainAction(
+            name="owner_gate",
+            description="Require owner input",
+            parameter_schema={"type": "object"},
+        )
+        work_types = frozenset({WorkType.GENERIC})
+
+        async def execute(self, *, work: WorkItem, parameters: dict) -> dict:
+            del work, parameters
+            raise WorkOwnerInputRequired("Safe sandbox is required.")
+
+    class GateReasoner:
+        async def decide(self, request: BrainRequest) -> BrainDecision:
+            del request
+            return BrainDecision(action="owner_gate", summary="Run gated step")
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(GateReasoner()),
+        actions=WorkActionRegistry((OwnerGateExecutor(),)),
+    )
+    item = create_item(store, request="Run safely")
+
+    result = await engine.advance(item.work_id)
+
+    assert result.state is WorkState.WAITING_FOR_OWNER
+    assert result.owner_question == "Safe sandbox is required."
+    step = store.list_steps(item.work_id)[-1]
+    assert step.state.value == "completed"
+    assert step.observation["needs_owner"] is True
+    assert len(store.list_pending_deliveries()) == 1
