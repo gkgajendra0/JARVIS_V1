@@ -200,8 +200,84 @@ class WorkEngine:
             current_step_id=step.step_id,
         )
 
+    def _check_dependencies(self, work: WorkItem) -> WorkAdvanceResult | None:
+        if not work.dependencies:
+            if work.state is WorkState.WAITING_DEPENDENCY:
+                resumed = work.transition(
+                    WorkState.RUNNING,
+                    status_detail="dependencies satisfied",
+                )
+                self._store.save(resumed, expected_version=work.version)
+            return None
+
+        dependencies: list[WorkItem] = []
+        for dependency_id in work.dependencies:
+            dependency = self._store.get(dependency_id)
+            if dependency is None:
+                failed = work.transition(
+                    WorkState.FAILED,
+                    status_detail=f"dependency is missing: {dependency_id}",
+                )
+                saved = self._store.save(failed, expected_version=work.version)
+                self._store.enqueue_delivery(
+                    work=saved,
+                    kind=WorkDeliveryKind.FAILURE,
+                    message=saved.status_detail or "Background work dependency failed.",
+                    event_key=f"failure:{saved.version}",
+                )
+                return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
+            dependencies.append(dependency)
+
+        failed_dependencies = [
+            item
+            for item in dependencies
+            if item.state in {WorkState.FAILED, WorkState.CANCELLED}
+        ]
+        if failed_dependencies:
+            names = ", ".join(item.work_id for item in failed_dependencies)
+            failed = work.transition(
+                WorkState.FAILED,
+                status_detail=f"dependency did not complete successfully: {names}",
+            )
+            saved = self._store.save(failed, expected_version=work.version)
+            self._store.enqueue_delivery(
+                work=saved,
+                kind=WorkDeliveryKind.FAILURE,
+                message=saved.status_detail or "Background work dependency failed.",
+                event_key=f"failure:{saved.version}",
+            )
+            return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
+
+        pending = [item for item in dependencies if item.state is not WorkState.COMPLETED]
+        if pending:
+            if work.state is WorkState.WAITING_DEPENDENCY:
+                return WorkAdvanceResult(work.work_id, work.state, progressed=False)
+            waiting = work.transition(
+                WorkState.WAITING_DEPENDENCY,
+                status_detail="waiting for dependencies: "
+                + ", ".join(item.work_id for item in pending),
+            )
+            saved = self._store.save(waiting, expected_version=work.version)
+            return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
+
+        if work.state is WorkState.WAITING_DEPENDENCY:
+            resumed = work.transition(
+                WorkState.RUNNING,
+                status_detail="dependencies satisfied",
+            )
+            self._store.save(resumed, expected_version=work.version)
+        return None
+
     async def advance(self, work_id: str) -> WorkAdvanceResult:
         work = self._store.require(work_id)
+        if work.state.terminal or work.state is WorkState.PAUSED:
+            return WorkAdvanceResult(work.work_id, work.state, progressed=False)
+
+        dependency_result = self._check_dependencies(work)
+        if dependency_result is not None:
+            return dependency_result
+        work = self._store.require(work_id)
+
         if work.state.terminal or work.state is WorkState.PAUSED:
             return WorkAdvanceResult(work.work_id, work.state, progressed=False)
         if work.state is WorkState.WAITING_FOR_OWNER:
