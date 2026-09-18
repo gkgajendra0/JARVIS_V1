@@ -9,9 +9,17 @@ from pathlib import Path
 from typing import Any
 
 from jarvis.incidents import IncidentService, SqliteIncidentStore
+from jarvis.observability.evidence_query import (
+    EvidenceQueryResult,
+    LocalOperationalEvidenceQuery,
+    recent_since_epoch,
+)
+from jarvis.observability.logging import get_logger
 from jarvis.self_model.defaults import build_default_self_model
 from jarvis.self_model.health import HealthObservation, HealthRegistry, HealthState
 from jarvis.self_model.registry import ComponentSnapshot, SelfModelRegistry
+
+LOGGER = get_logger(__name__)
 
 
 def default_incident_store_path() -> Path:
@@ -41,9 +49,11 @@ class SelfAwarenessRuntime:
         self_model: SelfModelRegistry | None = None,
         health: HealthRegistry | None = None,
         incident_store_path: str | Path | None = None,
+        operational_log_path: str | Path | None = None,
     ) -> None:
         self.self_model = self_model or build_default_self_model()
         self.health = health or HealthRegistry()
+        self.operational_evidence = LocalOperationalEvidenceQuery(operational_log_path)
         self._incident_store: SqliteIncidentStore | None = None
         self.incidents: IncidentService | None = None
         path = (
@@ -89,8 +99,26 @@ class SelfAwarenessRuntime:
             )
         )
         after = self.self_model.snapshot(component_id, self.health, now_epoch=now)
+        LOGGER.info(
+            "health_observation",
+            component_id=component_id,
+            health_source=source,
+            state=state.value,
+            reason_code=reason_code,
+            summary=summary,
+            metadata=metadata or {},
+        )
         if self.incidents is not None:
-            self.incidents.record_health_transition(before.health, after.health)
+            incident = self.incidents.record_health_transition(before.health, after.health)
+            if incident is not None:
+                LOGGER.warning(
+                    "engineering_incident_recorded",
+                    component_id=component_id,
+                    incident_id=incident.incident_id,
+                    state=after.health.state.value,
+                    reason_code=reason_code,
+                    status=incident.status.value,
+                )
         return after
 
     def component_snapshot(
@@ -109,8 +137,43 @@ class SelfAwarenessRuntime:
         self,
         *,
         now_epoch: float | None = None,
+        health_surface_only: bool = False,
     ) -> tuple[ComponentSnapshot, ...]:
-        return self.self_model.system_snapshot(self.health, now_epoch=now_epoch)
+        return self.self_model.system_snapshot(
+            self.health,
+            now_epoch=now_epoch,
+            health_surface_only=health_surface_only,
+        )
+
+    def query_operational_evidence(
+        self,
+        *,
+        component_id: str,
+        since_seconds: float = 15 * 60,
+        severity: str = "",
+        reason_code: str = "",
+        session_id: str = "",
+        turn_id: str = "",
+        incident_id: str = "",
+        query: str = "",
+        max_results: int = 30,
+        now_epoch: float | None = None,
+    ) -> EvidenceQueryResult:
+        descriptor = self.self_model.component(component_id)
+        if descriptor is None:
+            raise KeyError(f"unknown component: {component_id}")
+        return self.operational_evidence.query(
+            component_id=descriptor.component_id,
+            logger_prefixes=descriptor.logger_prefixes,
+            since_epoch=recent_since_epoch(since_seconds, now_epoch=now_epoch),
+            severity=severity,
+            reason_code=reason_code,
+            session_id=session_id,
+            turn_id=turn_id,
+            incident_id=incident_id,
+            query=query,
+            max_results=max_results,
+        )
 
     def close(self) -> None:
         if self._incident_store is not None:
