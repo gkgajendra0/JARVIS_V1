@@ -169,7 +169,6 @@ async def test_typed_component_details_tool_requires_canonical_component_id(
     awareness.close()
 
 
-
 @pytest.mark.asyncio
 async def test_typed_operational_evidence_tool_is_read_only_and_bounded(
     tmp_path: Path,
