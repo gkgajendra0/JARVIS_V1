@@ -358,7 +358,7 @@ async def test_power_session_rejects_operation_not_explicitly_bound_to_computer_
 
 
 @pytest.mark.asyncio
-async def test_power_session_binds_exact_canonical_evidence_to_authority_request() -> None:
+async def test_power_session_binds_exact_canonical_evidence_to_authority_request() -> (\n    None\n):
     executor = RecordingExecutor(("restart_workstation",))
     planner = ScriptedPlanner(
         ("power",),
