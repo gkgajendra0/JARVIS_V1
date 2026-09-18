@@ -106,15 +106,12 @@ def durable_workflow(work_id: str) -> dict[str, Any]:
             return payload
 
         if state is WorkState.WAITING_FOR_OWNER:
-            while True:
-                owner_input = DBOS.recv(
-                    topic=_OWNER_TOPIC,
-                    timeout_seconds=3600,
-                )
-                if owner_input is None:
-                    continue
+            owner_input = DBOS.recv(
+                topic=_OWNER_TOPIC,
+                timeout_seconds=1,
+            )
+            if owner_input is not None:
                 _apply_owner_input(work_id, str(owner_input))
-                break
 
         elif state is WorkState.WAITING_DEPENDENCY:
             DBOS.sleep(1.0)
