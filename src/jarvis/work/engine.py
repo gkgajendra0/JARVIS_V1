@@ -420,11 +420,17 @@ class WorkEngine:
         decision_summary: str,
         decision_parameters: dict[str, Any],
     ) -> WorkAdvanceResult:
+        persistence_provider = getattr(executor, "persisted_input", None)
+        persisted_input = (
+            dict(persistence_provider(dict(decision_parameters)))
+            if callable(persistence_provider)
+            else dict(decision_parameters)
+        )
         step = WorkStep(
             work_id=work.work_id,
             kind=decision_action,
             summary=decision_summary,
-            input_data=dict(decision_parameters),
+            input_data=persisted_input,
         )
         self._store.add_step(step)
         running_step = step.start()
