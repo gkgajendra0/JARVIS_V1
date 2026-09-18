@@ -11,8 +11,8 @@ from jarvis.capabilities.windows_devices import (
     BluetoothControlExecutor,
     DisplayControlExecutor,
     PowerSessionExecutor,
-    WinRtBluetoothBackend,
     WindowsDeviceValidationError,
+    WinRtBluetoothBackend,
 )
 
 
