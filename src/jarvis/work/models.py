@@ -240,6 +240,7 @@ class WorkItem:
     priority: WorkPriority = WorkPriority.NORMAL
     delivery_policy: DeliveryPolicy = DeliveryPolicy.WHEN_IDLE
     dependencies: tuple[str, ...] = ()
+    paused_from_state: WorkState | None = None
     current_step_id: str | None = None
     result: dict[str, Any] = field(default_factory=dict)
     status_detail: str | None = None
@@ -262,6 +263,8 @@ class WorkItem:
         if self.work_id in normalized_dependencies:
             raise ValueError("work item cannot depend on itself")
         object.__setattr__(self, "dependencies", normalized_dependencies)
+        if self.state is not WorkState.PAUSED and self.paused_from_state is not None:
+            raise ValueError("paused_from_state is only valid while work is paused")
 
     def transition(
         self,
@@ -279,9 +282,15 @@ class WorkItem:
             None if status_detail is None else status_detail.strip() or None
         )
         next_result = self.result if result is None else dict(result)
+        paused_from_state = self.paused_from_state
+        if state is WorkState.PAUSED and self.state is not WorkState.PAUSED:
+            paused_from_state = self.state
+        elif self.state is WorkState.PAUSED and state is not WorkState.PAUSED:
+            paused_from_state = None
         return replace(
             self,
             state=state,
+            paused_from_state=paused_from_state,
             status_detail=normalized_detail,
             current_step_id=current_step_id,
             result=next_result,
