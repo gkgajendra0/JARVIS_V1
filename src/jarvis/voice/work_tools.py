@@ -49,6 +49,7 @@ class WorkAgentTools:
             self.cancel_background_work,
             self.pause_background_work,
             self.resume_background_work,
+            self.reprioritize_background_work,
             self.continue_background_work,
         ]
 
@@ -218,6 +219,42 @@ class WorkAgentTools:
         except ValueError as exc:
             return {"ok": False, "status": "invalid_state", "reason": str(exc)}
         return {"ok": True, "status": "resumed", **_public_work(item)}
+
+    @function_tool()
+    async def reprioritize_background_work(
+        self,
+        context: RunContext,
+        work_id: str,
+        priority: str,
+    ) -> dict[str, object]:
+        """Change canonical scheduling priority for one non-terminal WorkItem.
+
+        priority must be low, normal, high, or urgent. The updated priority controls
+        which WorkItem receives future JARVIS brain/resource opportunities; it never
+        expands that WorkItem's Authority.
+        """
+        del context
+        normalized = str(priority).strip().casefold()
+        mapping = {
+            "low": WorkPriority.LOW,
+            "normal": WorkPriority.NORMAL,
+            "high": WorkPriority.HIGH,
+            "urgent": WorkPriority.URGENT,
+        }
+        selected = mapping.get(normalized)
+        if selected is None:
+            return {
+                "ok": False,
+                "status": "invalid_priority",
+                "allowed": list(mapping),
+            }
+        try:
+            item = self._runtime.orchestrator.reprioritize(work_id, selected)
+        except WorkStoreError:
+            return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
+        except ValueError as exc:
+            return {"ok": False, "status": "invalid_state", "reason": str(exc)}
+        return {"ok": True, "status": "reprioritized", **_public_work(item)}
 
     @function_tool()
     async def continue_background_work(
