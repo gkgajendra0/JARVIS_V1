@@ -313,3 +313,77 @@ async def test_planner_cannot_claim_completion_immediately_after_failed_action()
             session_id="false-completion",
             goal="Open Apple Music",
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("goal", "operation", "evidence"),
+    [
+        ("That's all for now.", "restart_workstation", "That's all for now"),
+        ("You can go back to sleep.", "sleep_workstation", "go back to sleep"),
+    ],
+)
+async def test_power_session_rejects_operation_not_explicitly_bound_to_computer_intent(
+    goal: str,
+    operation: str,
+    evidence: str,
+) -> None:
+    executor = RecordingExecutor((operation,))
+    planner = ScriptedPlanner(
+        ("power",),
+        [
+            PlannerTurn(
+                action=PlannedAction(
+                    operation=operation,
+                    parameters={},
+                    evidence=evidence,
+                )
+            )
+        ],
+    )
+    orchestrator = HandsOrchestrator(
+        runtime_for(executor), planner, app_catalog=FakeCatalog()
+    )
+
+    with pytest.raises(
+        HandsOrchestrationError,
+        match="power/session intent is not explicitly bound",
+    ):
+        await orchestrator.execute_goal(
+            session_id="power-intent-mismatch",
+            goal=goal,
+        )
+
+    assert executor.calls == []
+
+
+@pytest.mark.asyncio
+async def test_power_session_binds_exact_canonical_evidence_to_authority_request() -> None:
+    executor = RecordingExecutor(("restart_workstation",))
+    planner = ScriptedPlanner(
+        ("power",),
+        [
+            PlannerTurn(
+                action=PlannedAction(
+                    operation="restart_workstation",
+                    parameters={},
+                    evidence="restart my computer",
+                )
+            ),
+            PlannerTurn(goal_complete=True),
+        ],
+    )
+    orchestrator = HandsOrchestrator(
+        runtime_for(executor), planner, app_catalog=FakeCatalog()
+    )
+
+    result = await orchestrator.execute_goal(
+        session_id="power-intent-explicit",
+        goal="Please restart my computer.",
+    )
+
+    assert result["ok"] is True
+    assert executor.calls[0].parameters == {
+        "intent_operation": "restart_workstation",
+        "intent_evidence": "restart my computer",
+    }
