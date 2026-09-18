@@ -1029,7 +1029,6 @@ async def test_pause_during_inflight_reasoning_stops_before_execution(
     assert store.list_steps(submission.work.work_id) == ()
 
 
-
 @pytest.mark.asyncio
 async def test_global_execution_lease_bounds_all_executor_steps(
     tmp_path: Path,
