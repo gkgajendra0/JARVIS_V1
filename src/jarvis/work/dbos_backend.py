@@ -88,10 +88,14 @@ def _apply_owner_input(work_id: str, response: str) -> str:
 
 @DBOS.step(retries_allowed=True, max_attempts=3, interval_seconds=1.0)
 def _fail_bounded_work(work_id: str) -> str:
-    return _engine().fail(
-        work_id,
-        "bounded reasoning cycle limit exceeded",
-    ).state.value
+    return (
+        _engine()
+        .fail(
+            work_id,
+            "bounded reasoning cycle limit exceeded",
+        )
+        .state.value
+    )
 
 
 @DBOS.workflow(max_recovery_attempts=20)
@@ -117,10 +121,7 @@ def durable_workflow(work_id: str) -> dict[str, Any]:
         elif state is WorkState.WAITING_RESOURCE:
             DBOS.sleep(0.25)
 
-        elif state is WorkState.WAITING_DEPENDENCY:
-            DBOS.sleep(1.0)
-
-        elif state is WorkState.RETRYING:
+        elif state is WorkState.WAITING_DEPENDENCY or state is WorkState.RETRYING:
             DBOS.sleep(1.0)
 
         elif state is WorkState.PAUSED:
@@ -152,8 +153,9 @@ class DBOSWorkExecutionBackend:
     """Queue/recovery mechanics only; canonical work truth remains in JARVIS store."""
 
     def submit(self, work_id: str, *, priority: WorkPriority) -> str:
-        with SetWorkflowID(work_id), SetEnqueueOptions(
-            priority=_queue_priority(priority)
+        with (
+            SetWorkflowID(work_id),
+            SetEnqueueOptions(priority=_queue_priority(priority)),
         ):
             handle = DBOS.enqueue_workflow(_QUEUE_NAME, durable_workflow, work_id)
         workflow_id = handle.get_workflow_id()

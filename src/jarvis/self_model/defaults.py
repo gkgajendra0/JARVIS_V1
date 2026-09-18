@@ -690,7 +690,6 @@ def build_default_self_model() -> SelfModelRegistry:
             "runtime.provider",
             criticality=DependencyCriticality.DEGRADING,
         ),
-
         DependencyDescriptor(
             "runtime.voice",
             "capability_runtime",

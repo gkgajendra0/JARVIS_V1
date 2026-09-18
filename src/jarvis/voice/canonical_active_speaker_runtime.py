@@ -360,7 +360,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 "Persistent concurrent work orchestration is active | "
                 "supported_types=%s | voice_session_ownership=False",
                 ",".join(
-                    sorted(item.value for item in self._work_runtime.supported_work_types)
+                    sorted(
+                        item.value for item in self._work_runtime.supported_work_types
+                    )
                 ),
             )
         if capability_runtime is not None:

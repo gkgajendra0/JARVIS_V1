@@ -128,5 +128,7 @@ class ProviderWorkReasoner:
         )
         allowed = {action.name: action for action in request.allowed_actions}
         if decision.action is not None and decision.action not in allowed:
-            raise ValueError("work reasoner selected an action outside the JARVIS catalog")
+            raise ValueError(
+                "work reasoner selected an action outside the JARVIS catalog"
+            )
         return decision

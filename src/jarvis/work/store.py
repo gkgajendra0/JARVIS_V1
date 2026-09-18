@@ -7,8 +7,8 @@ import os
 import pathlib
 import sqlite3
 import threading
+from collections.abc import Iterable
 from datetime import UTC, datetime
-from typing import Iterable
 
 from jarvis.work.models import (
     DeliveryPolicy,
@@ -145,7 +145,9 @@ class SQLiteWorkStore:
             )
             columns = {
                 row[1]
-                for row in connection.execute("PRAGMA table_info(work_items)").fetchall()
+                for row in connection.execute(
+                    "PRAGMA table_info(work_items)"
+                ).fetchall()
             }
             if "dependencies_json" not in columns:
                 connection.execute(

@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from livekit.agents import RunContext, function_tool
-from livekit.agents.llm import ToolError
 
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
-from jarvis.work.models import DeliveryPolicy, WorkPriority, WorkState, WorkType
+from jarvis.work.models import DeliveryPolicy, WorkPriority, WorkType
 from jarvis.work.runtime import WorkRuntime
 from jarvis.work.store import WorkStoreError
 

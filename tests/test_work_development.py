@@ -196,7 +196,6 @@ async def test_development_test_target_cannot_escape_worktree(
         )
 
 
-
 @pytest.mark.asyncio
 async def test_docker_runner_uses_locked_down_fixed_pytest_command(
     git_project: Path,

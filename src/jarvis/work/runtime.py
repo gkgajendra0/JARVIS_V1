@@ -9,15 +9,15 @@ from pathlib import Path
 from jarvis.knowledge.research import CurrentResearchService
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
-from jarvis.work.development import (
-    DevelopmentWorkspaceManager,
-    build_development_executors,
-    build_development_test_runner,
-)
 from jarvis.work.dbos_backend import (
     DBOSWorkExecutionBackend,
     initialize_dbos_work_runtime,
     shutdown_dbos_work_runtime,
+)
+from jarvis.work.development import (
+    DevelopmentWorkspaceManager,
+    build_development_executors,
+    build_development_test_runner,
 )
 from jarvis.work.engine import WorkActionRegistry, WorkEngine
 from jarvis.work.models import WorkItem, WorkState, WorkType

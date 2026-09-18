@@ -27,15 +27,17 @@ from jarvis.work.store import default_work_state_dir
 _MAX_READ_CHARS = 40_000
 _MAX_WRITE_BYTES = 1_000_000
 _MAX_TEST_SECONDS = 300.0
-_BLOCKED_NAMES = frozenset({
-    ".env",
-    "credentials",
-    "credentials.json",
-    "secrets",
-    "secrets.json",
-    "id_rsa",
-    "id_ed25519",
-})
+_BLOCKED_NAMES = frozenset(
+    {
+        ".env",
+        "credentials",
+        "credentials.json",
+        "secrets",
+        "secrets.json",
+        "id_rsa",
+        "id_ed25519",
+    }
+)
 _BLOCKED_SUFFIXES = frozenset({".pem", ".p12", ".pfx", ".key", ".kdbx"})
 _SECRET_PATTERNS = (
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
@@ -64,7 +66,9 @@ def _safe_work_id(value: str) -> str:
 def _is_sensitive(path: pathlib.PurePath) -> bool:
     for part in path.parts:
         name = part.casefold()
-        if name in _BLOCKED_NAMES or name.startswith((".env", "credentials", "secrets")):
+        if name in _BLOCKED_NAMES or name.startswith(
+            (".env", "credentials", "secrets")
+        ):
             return True
         if pathlib.PurePath(name).suffix in _BLOCKED_SUFFIXES:
             return True
@@ -94,7 +98,9 @@ class DevelopmentWorkspaceManager:
             workspace_root or (default_work_state_dir() / "worktrees")
         ).resolve()
         if not (self.repository_root / ".git").exists():
-            raise DevelopmentWorkspaceError("JARVIS source root is not a Git repository")
+            raise DevelopmentWorkspaceError(
+                "JARVIS source root is not a Git repository"
+            )
         self.workspace_root.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
@@ -119,7 +125,11 @@ class DevelopmentWorkspaceManager:
                 check=check,
                 shell=False,
             )
-        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        except (
+            OSError,
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+        ) as exc:
             raise DevelopmentWorkspaceError(str(exc)) from exc
 
     def workspace_for(self, work_id: str) -> DevelopmentWorkspace:
@@ -129,7 +139,9 @@ class DevelopmentWorkspaceManager:
         try:
             path.relative_to(self.workspace_root)
         except ValueError as exc:
-            raise DevelopmentWorkspaceError("workspace path escaped approved root") from exc
+            raise DevelopmentWorkspaceError(
+                "workspace path escaped approved root"
+            ) from exc
         return DevelopmentWorkspace(work_id=work_id, branch=branch, path=path)
 
     def ensure(self, work_id: str) -> DevelopmentWorkspace:
@@ -137,7 +149,9 @@ class DevelopmentWorkspaceManager:
         if (workspace.path / ".git").exists() or (workspace.path / ".git").is_file():
             return workspace
         if workspace.path.exists():
-            raise DevelopmentWorkspaceError("workspace path exists but is not a Git worktree")
+            raise DevelopmentWorkspaceError(
+                "workspace path exists but is not a Git worktree"
+            )
 
         branch_check = self._run(
             self.repository_root,
@@ -157,7 +171,9 @@ class DevelopmentWorkspaceManager:
             raise DevelopmentWorkspaceError("Git worktree creation was not verified")
         return workspace
 
-    def resolve(self, work_id: str, relative_path: str, *, require_file: bool = False) -> pathlib.Path:
+    def resolve(
+        self, work_id: str, relative_path: str, *, require_file: bool = False
+    ) -> pathlib.Path:
         workspace = self.workspace_for(work_id)
         if not workspace.path.is_dir():
             raise DevelopmentWorkspaceError("development workspace is not prepared")
@@ -166,14 +182,20 @@ class DevelopmentWorkspaceManager:
         if not raw or pure.is_absolute() or pathlib.PureWindowsPath(raw).is_absolute():
             raise DevelopmentWorkspaceError("development path must be relative")
         if any(part in {"..", ".git"} for part in pure.parts):
-            raise DevelopmentWorkspaceError("development path traversal/internals are blocked")
+            raise DevelopmentWorkspaceError(
+                "development path traversal/internals are blocked"
+            )
         if _is_sensitive(pure):
-            raise DevelopmentWorkspaceError("credential/secret-like development path is blocked")
+            raise DevelopmentWorkspaceError(
+                "credential/secret-like development path is blocked"
+            )
         target = (workspace.path / raw).resolve(strict=False)
         try:
             target.relative_to(workspace.path)
         except ValueError as exc:
-            raise DevelopmentWorkspaceError("development path escaped worktree") from exc
+            raise DevelopmentWorkspaceError(
+                "development path escaped worktree"
+            ) from exc
         cursor = workspace.path
         for part in target.relative_to(workspace.path).parts:
             cursor /= part
@@ -209,11 +231,15 @@ class PrepareDevelopmentWorkspaceExecutor:
     def __init__(self, manager: DevelopmentWorkspaceManager) -> None:
         self._manager = manager
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("git",)
 
-    async def execute(self, *, work: WorkItem, parameters: dict[str, Any]) -> dict[str, Any]:
+    async def execute(
+        self, *, work: WorkItem, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
         del parameters
         workspace = await asyncio.to_thread(self._manager.ensure, work.work_id)
         return {
@@ -230,7 +256,9 @@ class DevelopmentReadFileExecutor:
         description="Read one non-sensitive UTF-8 source file from this WorkItem's worktree.",
         parameter_schema={
             "type": "object",
-            "properties": {"path": {"type": "string", "minLength": 1, "maxLength": 1000}},
+            "properties": {
+                "path": {"type": "string", "minLength": 1, "maxLength": 1000}
+            },
             "required": ["path"],
             "additionalProperties": False,
         },
@@ -240,18 +268,26 @@ class DevelopmentReadFileExecutor:
     def __init__(self, manager: DevelopmentWorkspaceManager) -> None:
         self._manager = manager
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ()
 
-    async def execute(self, *, work: WorkItem, parameters: dict[str, Any]) -> dict[str, Any]:
-        target = self._manager.resolve(work.work_id, str(parameters.get("path") or ""), require_file=True)
+    async def execute(
+        self, *, work: WorkItem, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
+        target = self._manager.resolve(
+            work.work_id, str(parameters.get("path") or ""), require_file=True
+        )
         if target.stat().st_size > _MAX_WRITE_BYTES:
             raise DevelopmentWorkspaceError("development file exceeds read limit")
         text = await asyncio.to_thread(target.read_text, encoding="utf-8")
         truncated = len(text) > _MAX_READ_CHARS
         return {
-            "path": target.relative_to(self._manager.workspace_for(work.work_id).path).as_posix(),
+            "path": target.relative_to(
+                self._manager.workspace_for(work.work_id).path
+            ).as_posix(),
             "text": text[:_MAX_READ_CHARS],
             "truncated": truncated,
         }
@@ -263,7 +299,9 @@ class DevelopmentListFilesExecutor:
         description="List tracked and untracked non-sensitive files in this WorkItem's worktree.",
         parameter_schema={
             "type": "object",
-            "properties": {"max_results": {"type": "integer", "minimum": 1, "maximum": 100}},
+            "properties": {
+                "max_results": {"type": "integer", "minimum": 1, "maximum": 100}
+            },
             "additionalProperties": False,
         },
     )
@@ -272,11 +310,15 @@ class DevelopmentListFilesExecutor:
     def __init__(self, manager: DevelopmentWorkspaceManager) -> None:
         self._manager = manager
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("git",)
 
-    async def execute(self, *, work: WorkItem, parameters: dict[str, Any]) -> dict[str, Any]:
+    async def execute(
+        self, *, work: WorkItem, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
         workspace = self._manager.workspace_for(work.work_id)
         if not workspace.path.is_dir():
             raise DevelopmentWorkspaceError("development workspace is not prepared")
@@ -323,11 +365,15 @@ class DevelopmentSearchExecutor:
     def __init__(self, manager: DevelopmentWorkspaceManager) -> None:
         self._manager = manager
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("cpu",)
 
-    async def execute(self, *, work: WorkItem, parameters: dict[str, Any]) -> dict[str, Any]:
+    async def execute(
+        self, *, work: WorkItem, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
         workspace = self._manager.workspace_for(work.work_id)
         if not workspace.path.is_dir():
             raise DevelopmentWorkspaceError("development workspace is not prepared")
@@ -365,9 +411,13 @@ class DevelopmentSearchExecutor:
                 try:
                     if path.stat().st_size > _MAX_WRITE_BYTES:
                         continue
-                    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                    for number, line in enumerate(
+                        path.read_text(encoding="utf-8").splitlines(), 1
+                    ):
                         if query in line:
-                            matches.append(f"{relative.as_posix()}:{number}:{line[:500]}")
+                            matches.append(
+                                f"{relative.as_posix()}:{number}:{line[:500]}"
+                            )
                             if len(matches) >= limit:
                                 break
                 except (OSError, UnicodeError):
@@ -433,13 +483,17 @@ class DevelopmentWriteFileExecutor:
         target = self._manager.resolve(work.work_id, str(parameters.get("path") or ""))
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_name(f".{target.name}.jarvis-{os.getpid()}.tmp")
-        await asyncio.to_thread(temporary.write_text, text, encoding="utf-8", newline="")
+        await asyncio.to_thread(
+            temporary.write_text, text, encoding="utf-8", newline=""
+        )
         await asyncio.to_thread(os.replace, temporary, target)
         observed = await asyncio.to_thread(target.read_bytes)
         if observed != encoded:
             raise DevelopmentWorkspaceError("development write verification failed")
         return {
-            "path": target.relative_to(self._manager.workspace_for(work.work_id).path).as_posix(),
+            "path": target.relative_to(
+                self._manager.workspace_for(work.work_id).path
+            ).as_posix(),
             "size_bytes": len(encoded),
             "sha256": hashlib.sha256(encoded).hexdigest(),
             "production_tree_modified": False,
@@ -797,11 +851,15 @@ class DevelopmentStatusExecutor:
     def __init__(self, manager: DevelopmentWorkspaceManager) -> None:
         self._manager = manager
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("git",)
 
-    async def execute(self, *, work: WorkItem, parameters: dict[str, Any]) -> dict[str, Any]:
+    async def execute(
+        self, *, work: WorkItem, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
         del parameters
         return await asyncio.to_thread(self._manager.status, work.work_id)
 

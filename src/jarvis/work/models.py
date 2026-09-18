@@ -140,7 +140,6 @@ _ALLOWED_TRANSITIONS: dict[WorkState, frozenset[WorkState]] = {
 }
 
 
-
 @dataclass(frozen=True, slots=True)
 class WorkDelivery:
     work_id: str
@@ -260,7 +259,9 @@ class WorkItem:
         if self.version <= 0:
             raise ValueError("work version must be positive")
         normalized_dependencies = tuple(
-            dict.fromkeys(str(item).strip() for item in self.dependencies if str(item).strip())
+            dict.fromkeys(
+                str(item).strip() for item in self.dependencies if str(item).strip()
+            )
         )
         if self.work_id in normalized_dependencies:
             raise ValueError("work item cannot depend on itself")
@@ -279,7 +280,9 @@ class WorkItem:
         if state is self.state:
             return self
         if state not in _ALLOWED_TRANSITIONS[self.state]:
-            raise ValueError(f"invalid work transition: {self.state.value} -> {state.value}")
+            raise ValueError(
+                f"invalid work transition: {self.state.value} -> {state.value}"
+            )
         normalized_detail = (
             None if status_detail is None else status_detail.strip() or None
         )

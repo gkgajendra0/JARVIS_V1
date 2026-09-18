@@ -836,7 +836,9 @@ async def test_deterministic_worker_continues_while_voice_owns_brain(
     class ImmediateReasoner:
         async def decide(self, request: BrainRequest) -> BrainDecision:
             del request
-            return BrainDecision(action="controlled_step", summary="Run deterministic work")
+            return BrainDecision(
+                action="controlled_step", summary="Run deterministic work"
+            )
 
     class ControlledExecutor:
         descriptor = BrainAction(

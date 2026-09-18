@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from jarvis.work.brain import BrainAction, BrainCoordinator, BrainPreempted, BrainRequest
+from jarvis.work.brain import (
+    BrainAction,
+    BrainCoordinator,
+    BrainPreempted,
+    BrainRequest,
+)
 from jarvis.work.models import (
     WorkDeliveryKind,
     WorkItem,
@@ -70,7 +75,9 @@ class WorkActionRegistry:
     def require(self, action: str, work_type: WorkType) -> WorkActionExecutor:
         executor = self._by_name.get(action)
         if executor is None or work_type not in executor.work_types:
-            raise ValueError(f"work action is unavailable for {work_type.value}: {action}")
+            raise ValueError(
+                f"work action is unavailable for {work_type.value}: {action}"
+            )
         return executor
 
 
@@ -123,7 +130,10 @@ class WorkEngine:
             return (
                 (True, None)
                 if successful
-                else (False, "fresh research evidence has not been successfully retrieved")
+                else (
+                    False,
+                    "fresh research evidence has not been successfully retrieved",
+                )
             )
         if work.work_type is WorkType.DEVELOPMENT:
             tested = any(
@@ -135,12 +145,14 @@ class WorkEngine:
             if not tested:
                 return False, "development work requires a verified passing test step"
             reviewed_diff = any(
-                step.kind == "dev_diff"
-                and step.state.value == "completed"
+                step.kind == "dev_diff" and step.state.value == "completed"
                 for step in steps
             )
             if not reviewed_diff:
-                return False, "development work requires a recorded final diff inspection"
+                return (
+                    False,
+                    "development work requires a recorded final diff inspection",
+                )
             committed = any(
                 step.kind == "dev_commit"
                 and step.state.value == "completed"
@@ -288,7 +300,9 @@ class WorkEngine:
             )
             return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
 
-        pending = [item for item in dependencies if item.state is not WorkState.COMPLETED]
+        pending = [
+            item for item in dependencies if item.state is not WorkState.COMPLETED
+        ]
         if pending:
             if work.state is WorkState.WAITING_DEPENDENCY:
                 return WorkAdvanceResult(work.work_id, work.state, progressed=False)
@@ -377,8 +391,7 @@ class WorkEngine:
                     (
                         step
                         for step in reversed(steps)
-                        if step.kind == "dev_commit"
-                        and step.state.value == "completed"
+                        if step.kind == "dev_commit" and step.state.value == "completed"
                     ),
                     None,
                 )

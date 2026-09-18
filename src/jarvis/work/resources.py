@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import AsyncIterator, Mapping
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,7 +35,9 @@ class ResourceLeaseManager:
             self._semaphores[key] = asyncio.Semaphore(capacity)
 
     def normalize(self, keys: tuple[str, ...]) -> tuple[str, ...]:
-        normalized = tuple(sorted({str(key).strip().casefold() for key in keys if str(key).strip()}))
+        normalized = tuple(
+            sorted({str(key).strip().casefold() for key in keys if str(key).strip()})
+        )
         unknown = [key for key in normalized if key not in self._semaphores]
         if unknown:
             raise ValueError(f"unknown work resources: {unknown}")
@@ -60,7 +62,7 @@ class ResourceLeaseManager:
             ResourceSnapshot(
                 key=key,
                 capacity=self._capacity[key],
-                available=semaphore._value,  # noqa: SLF001 - diagnostics only
+                available=semaphore._value,
             )
             for key, semaphore in sorted(self._semaphores.items())
         )
