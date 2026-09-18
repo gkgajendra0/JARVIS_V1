@@ -360,7 +360,13 @@ class SQLiteWorkStore:
                 """
                 SELECT * FROM work_deliveries
                 WHERE state = ?
-                ORDER BY created_at ASC
+                ORDER BY
+                    CASE policy
+                        WHEN 'interrupt' THEN 0
+                        WHEN 'when_idle' THEN 1
+                        ELSE 2
+                    END,
+                    created_at ASC
                 LIMIT ?
                 """,
                 (WorkDeliveryState.PENDING.value, limit),
