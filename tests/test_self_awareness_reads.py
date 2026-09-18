@@ -175,7 +175,6 @@ def test_unknown_component_guides_canonical_component_discovery(tmp_path: Path) 
     awareness.close()
 
 
-
 def test_component_details_expose_hierarchy_and_logger_ownership(
     tmp_path: Path,
 ) -> None:
