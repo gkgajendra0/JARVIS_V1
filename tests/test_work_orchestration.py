@@ -480,3 +480,73 @@ async def test_repeated_step_failures_are_bounded(tmp_path: Path) -> None:
     assert second.state is WorkState.RETRYING
     assert third.state is WorkState.FAILED
     assert len(store.list_pending_deliveries()) == 1
+
+
+@pytest.mark.asyncio
+async def test_work_waits_for_dependency_then_resumes(tmp_path: Path) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = ScriptedReasoner()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+    )
+    dependency = create_item(store, request="dependency")
+    dependent = WorkItem(
+        request="dependent",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-dependency",
+        source_turn_id="turn-dependent",
+        dependencies=(dependency.work_id,),
+    )
+    store.create(dependent)
+    reasoner.decisions[dependent.work_id] = [
+        BrainDecision(action="do_step", summary="Run after dependency")
+    ]
+
+    waiting = await engine.advance(dependent.work_id)
+    assert waiting.state is WorkState.WAITING_DEPENDENCY
+    assert reasoner.max_active == 0
+
+    running_dependency = dependency.transition(WorkState.RUNNING)
+    store.save(running_dependency, expected_version=dependency.version)
+    completed_dependency = running_dependency.transition(WorkState.COMPLETED)
+    store.save(completed_dependency, expected_version=running_dependency.version)
+
+    resumed = await engine.advance(dependent.work_id)
+    assert resumed.state is WorkState.RUNNING
+    assert store.list_steps(dependent.work_id)[-1].kind == "do_step"
+
+
+@pytest.mark.asyncio
+async def test_failed_dependency_fails_only_dependent_work(tmp_path: Path) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = ScriptedReasoner()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+    )
+    dependency = create_item(store, request="dependency")
+    dependent = WorkItem(
+        request="dependent",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-dependency-fail",
+        source_turn_id="turn-dependent-fail",
+        dependencies=(dependency.work_id,),
+    )
+    store.create(dependent)
+
+    running_dependency = dependency.transition(WorkState.RUNNING)
+    store.save(running_dependency, expected_version=dependency.version)
+    failed_dependency = running_dependency.transition(
+        WorkState.FAILED,
+        status_detail="dependency failed",
+    )
+    store.save(failed_dependency, expected_version=running_dependency.version)
+
+    result = await engine.advance(dependent.work_id)
+
+    assert result.state is WorkState.FAILED
+    assert store.require(dependency.work_id).state is WorkState.FAILED
+    assert store.require(dependent.work_id).state is WorkState.FAILED
