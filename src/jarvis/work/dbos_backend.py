@@ -144,7 +144,7 @@ def durable_workflow(work_id: str) -> dict[str, Any]:
         if state is WorkState.WAITING_FOR_OWNER:
             owner_input = DBOS.recv(
                 topic=_OWNER_TOPIC,
-                timeout_seconds=3600,
+                timeout_seconds=1,
             )
             if owner_input is not None:
                 _apply_owner_input(work_id, str(owner_input))

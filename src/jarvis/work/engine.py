@@ -417,6 +417,12 @@ class WorkEngine:
         except Exception as exc:  # noqa: BLE001 - provider boundary must fail closed
             return self._record_reasoning_failure(work, exc)
 
+        latest = self._store.require(work.work_id)
+        if latest.state.terminal or latest.state is WorkState.PAUSED:
+            return WorkAdvanceResult(latest.work_id, latest.state, progressed=False)
+        if latest.version != work.version:
+            work = latest
+
         if decision.goal_complete:
             allowed, guard_reason = self._completion_guard(work, steps)
             if not allowed:

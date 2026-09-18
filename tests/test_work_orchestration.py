@@ -985,3 +985,46 @@ def test_development_completion_requires_post_edit_verification_order() -> None:
     allowed, reason = WorkEngine._completion_guard(work, correct_order)
     assert allowed is True
     assert reason is None
+
+
+
+@pytest.mark.asyncio
+async def test_pause_during_inflight_reasoning_stops_before_execution(
+    tmp_path: Path,
+) -> None:
+    class BlockingReasoner:
+        def __init__(self) -> None:
+            self.started = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def decide(self, request: BrainRequest) -> BrainDecision:
+            del request
+            self.started.set()
+            await self.release.wait()
+            return BrainDecision(action="do_step", summary="Should not execute")
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = BlockingReasoner()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+    )
+    backend = FakeBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+    submission = orchestrator.start(
+        request="Pause me while reasoning",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-pause-reasoning",
+        source_turn_id="turn-pause-reasoning",
+    )
+
+    advance = asyncio.create_task(engine.advance(submission.work.work_id))
+    await reasoner.started.wait()
+    paused = orchestrator.pause(submission.work.work_id)
+    reasoner.release.set()
+    result = await advance
+
+    assert paused.state is WorkState.PAUSED
+    assert result.state is WorkState.PAUSED
+    assert store.list_steps(submission.work.work_id) == ()
