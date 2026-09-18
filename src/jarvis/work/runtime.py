@@ -76,6 +76,7 @@ def build_work_runtime(
     research_service: CurrentResearchService,
     model: str | None = None,
     global_concurrency: int = 4,
+    development_test_image: str | None = None,
     store_path: str | Path | None = None,
     dbos_database_url: str | None = None,
     event_loop: asyncio.AbstractEventLoop | None = None,
@@ -91,7 +92,7 @@ def build_work_runtime(
         ResearchWorkExecutor(research_service),
         *build_development_executors(
             workspace_manager,
-            test_runner=build_development_test_runner(),
+            test_runner=build_development_test_runner(development_test_image),
         ),
     )
     actions = WorkActionRegistry(tuple(executors))
