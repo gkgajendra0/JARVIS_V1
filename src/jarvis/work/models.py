@@ -239,6 +239,7 @@ class WorkItem:
     state: WorkState = WorkState.QUEUED
     priority: WorkPriority = WorkPriority.NORMAL
     delivery_policy: DeliveryPolicy = DeliveryPolicy.WHEN_IDLE
+    dependencies: tuple[str, ...] = ()
     current_step_id: str | None = None
     result: dict[str, Any] = field(default_factory=dict)
     status_detail: str | None = None
@@ -255,6 +256,12 @@ class WorkItem:
             raise ValueError("source_turn_id must not be empty")
         if self.version <= 0:
             raise ValueError("work version must be positive")
+        normalized_dependencies = tuple(
+            dict.fromkeys(str(item).strip() for item in self.dependencies if str(item).strip())
+        )
+        if self.work_id in normalized_dependencies:
+            raise ValueError("work item cannot depend on itself")
+        object.__setattr__(self, "dependencies", normalized_dependencies)
 
     def transition(
         self,
