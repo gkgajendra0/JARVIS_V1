@@ -119,3 +119,22 @@ def test_voice_tool_bundle_exposes_self_health_tool_only_when_available(
         "use_computer",
     ]
     awareness.close()
+
+
+
+@pytest.mark.asyncio
+async def test_voice_can_list_canonical_self_components(tmp_path: Path) -> None:
+    awareness, tools, _ = _toolsets(
+        tmp_path,
+        "Which internal part handles your cloud intelligence?",
+    )
+
+    result = await tools.inspect_self_awareness(operation="list_components")
+
+    assert result["ok"] is True
+    ids = {
+        item["component_id"]
+        for item in result["data"]["components"]  # type: ignore[index]
+    }
+    assert "runtime.provider" in ids
+    awareness.close()
