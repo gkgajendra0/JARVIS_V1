@@ -409,6 +409,12 @@ class WorkEngine:
             )
         except BrainPreempted:
             latest = self._store.require(work.work_id)
+            if latest.state.terminal or latest.state is WorkState.PAUSED:
+                return WorkAdvanceResult(
+                    latest.work_id,
+                    latest.state,
+                    progressed=False,
+                )
             waiting = latest.transition(
                 WorkState.WAITING_RESOURCE,
                 status_detail="waiting for interactive brain",
@@ -417,7 +423,14 @@ class WorkEngine:
             saved = self._store.save(waiting, expected_version=latest.version)
             return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
         except Exception as exc:  # noqa: BLE001 - provider boundary must fail closed
-            return self._record_reasoning_failure(work, exc)
+            latest = self._store.require(work.work_id)
+            if latest.state.terminal or latest.state is WorkState.PAUSED:
+                return WorkAdvanceResult(
+                    latest.work_id,
+                    latest.state,
+                    progressed=False,
+                )
+            return self._record_reasoning_failure(latest, exc)
 
         latest = self._store.require(work.work_id)
         if latest.state.terminal or latest.state is WorkState.PAUSED:
@@ -601,6 +614,12 @@ class WorkEngine:
             )
             self._store.save_step(waiting_step)
             latest = self._store.require(work.work_id)
+            if latest.state.terminal or latest.state is WorkState.PAUSED:
+                return WorkAdvanceResult(
+                    latest.work_id,
+                    latest.state,
+                    progressed=False,
+                )
             waiting = latest.transition(
                 WorkState.WAITING_FOR_OWNER,
                 status_detail=exc.question,
@@ -623,6 +642,12 @@ class WorkEngine:
             failed_step = running_step.fail(type(exc).__name__ + ": " + str(exc))
             self._store.save_step(failed_step)
             latest = self._store.require(work.work_id)
+            if latest.state.terminal or latest.state is WorkState.PAUSED:
+                return WorkAdvanceResult(
+                    latest.work_id,
+                    latest.state,
+                    progressed=False,
+                )
             return self._retry_or_fail(
                 latest,
                 reason=f"step failed: {decision_action}",
@@ -632,6 +657,12 @@ class WorkEngine:
         completed_step = running_step.complete(observation)
         self._store.save_step(completed_step)
         latest = self._store.require(work.work_id)
+        if latest.state.terminal:
+            return WorkAdvanceResult(
+                latest.work_id,
+                latest.state,
+                progressed=False,
+            )
         progressed = latest.with_progress(
             current_step_id=None,
             status_detail=f"completed step: {decision_action}",

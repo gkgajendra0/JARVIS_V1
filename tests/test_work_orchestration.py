@@ -1063,3 +1063,108 @@ async def test_global_execution_lease_bounds_all_executor_steps(
     assert executor.max_active == 1
     assert store.require(first.work_id).state is WorkState.RUNNING
     assert store.require(second.work_id).state is WorkState.RUNNING
+
+
+
+@pytest.mark.asyncio
+async def test_cancel_during_running_executor_preserves_cancelled_state(
+    tmp_path: Path,
+) -> None:
+    class ImmediateReasoner:
+        async def decide(self, request: BrainRequest) -> BrainDecision:
+            del request
+            return BrainDecision(
+                action="controlled_cancel_step",
+                summary="Run controlled work",
+            )
+
+    class ControlledExecutor:
+        descriptor = BrainAction(
+            name="controlled_cancel_step",
+            description="Controlled executor for cancellation race",
+            parameter_schema={"type": "object"},
+        )
+        work_types = frozenset({WorkType.GENERIC})
+
+        def __init__(self) -> None:
+            self.started = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def execute(self, *, work: WorkItem, parameters: dict) -> dict:
+            del work, parameters
+            self.started.set()
+            await self.release.wait()
+            return {"finished_after_cancel": True}
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+    executor = ControlledExecutor()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(ImmediateReasoner()),
+        actions=WorkActionRegistry((executor,)),
+    )
+    submission = orchestrator.start(
+        request="Cancel me during the atomic step",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-cancel-executor",
+        source_turn_id="turn-cancel-executor",
+    )
+
+    advance = asyncio.create_task(engine.advance(submission.work.work_id))
+    await executor.started.wait()
+    cancelled = orchestrator.cancel(submission.work.work_id)
+    executor.release.set()
+    result = await advance
+
+    assert cancelled.state is WorkState.CANCELLED
+    assert result.state is WorkState.CANCELLED
+    assert store.require(submission.work.work_id).state is WorkState.CANCELLED
+    assert store.list_pending_deliveries() == ()
+    assert store.list_steps(submission.work.work_id)[-1].observation == {
+        "finished_after_cancel": True
+    }
+
+
+@pytest.mark.asyncio
+async def test_voice_preemption_after_owner_pause_preserves_paused_state(
+    tmp_path: Path,
+) -> None:
+    class BlockingReasoner:
+        def __init__(self) -> None:
+            self.started = asyncio.Event()
+
+        async def decide(self, request: BrainRequest) -> BrainDecision:
+            del request
+            self.started.set()
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+    reasoner = BlockingReasoner()
+    gate = InteractiveBrainGate()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner, interactive_gate=gate),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+    )
+    submission = orchestrator.start(
+        request="Pause before voice preempts reasoning",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-pause-preempt",
+        source_turn_id="turn-pause-preempt",
+    )
+
+    advance = asyncio.create_task(engine.advance(submission.work.work_id))
+    await reasoner.started.wait()
+    paused = orchestrator.pause(submission.work.work_id)
+    gate.set_interactive_active(True)
+    result = await advance
+
+    assert paused.state is WorkState.PAUSED
+    assert result.state is WorkState.PAUSED
+    assert store.require(submission.work.work_id).state is WorkState.PAUSED
+    assert store.list_steps(submission.work.work_id) == ()
