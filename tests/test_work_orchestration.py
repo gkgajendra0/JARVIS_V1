@@ -375,3 +375,71 @@ def test_work_submission_is_idempotent_for_same_canonical_turn(tmp_path: Path) -
 
     assert first.work.work_id == second.work.work_id
     assert backend.submitted == [first.work.work_id]
+
+
+@pytest.mark.asyncio
+async def test_single_brain_lease_honors_work_priority(tmp_path: Path) -> None:
+    class OrderedReasoner:
+        def __init__(self) -> None:
+            self.order: list[str] = []
+            self.blocker_started = asyncio.Event()
+            self.release_blocker = asyncio.Event()
+            self.active = 0
+            self.max_active = 0
+
+        async def decide(self, request: BrainRequest) -> BrainDecision:
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            self.order.append(request.work.request)
+            try:
+                if request.work.request == "blocker":
+                    self.blocker_started.set()
+                    await self.release_blocker.wait()
+                return BrainDecision(action="do_step", summary="Execute")
+            finally:
+                self.active -= 1
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = OrderedReasoner()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+    )
+
+    blocker = WorkItem(
+        request="blocker",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-priority",
+        source_turn_id="turn-blocker",
+        priority=WorkPriority.NORMAL,
+    )
+    low = WorkItem(
+        request="low",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-priority",
+        source_turn_id="turn-low",
+        priority=WorkPriority.LOW,
+    )
+    urgent = WorkItem(
+        request="urgent",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-priority",
+        source_turn_id="turn-urgent",
+        priority=WorkPriority.URGENT,
+    )
+    for item in (blocker, low, urgent):
+        store.create(item)
+
+    blocker_task = asyncio.create_task(engine.advance(blocker.work_id))
+    await reasoner.blocker_started.wait()
+    low_task = asyncio.create_task(engine.advance(low.work_id))
+    await asyncio.sleep(0)
+    urgent_task = asyncio.create_task(engine.advance(urgent.work_id))
+    await asyncio.sleep(0)
+    reasoner.release_blocker.set()
+
+    await asyncio.gather(blocker_task, low_task, urgent_task)
+
+    assert reasoner.max_active == 1
+    assert reasoner.order == ["blocker", "urgent", "low"]
