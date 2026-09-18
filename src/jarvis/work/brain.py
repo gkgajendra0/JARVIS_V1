@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import heapq
+import itertools
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -71,27 +73,56 @@ class BrainReasoner(Protocol):
 
 
 class BrainCoordinator:
-    """Serialize background reasoning through JARVIS's one configured active brain.
+    """Serialize reasoning through one priority-aware JARVIS brain lease.
 
-    Background I/O and deterministic execution may run concurrently. Model reasoning is
-    intentionally leased through this coordinator so independent work items cannot become
-    independent provider-owned brains.
+    Deterministic/background execution may run concurrently. Only model reasoning is
+    serialized here, and higher-priority WorkItems receive the next available lease.
     """
 
     def __init__(self, reasoner: BrainReasoner) -> None:
         self._reasoner = reasoner
-        self._lease = asyncio.Lock()
+        self._busy = False
+        self._sequence = itertools.count()
+        self._waiters: list[tuple[int, int, asyncio.Future[None]]] = []
 
     @property
     def busy(self) -> bool:
-        return self._lease.locked()
+        return self._busy
+
+    async def _acquire(self, request: BrainRequest) -> None:
+        if not self._busy:
+            self._busy = True
+            return
+        loop = asyncio.get_running_loop()
+        waiter: asyncio.Future[None] = loop.create_future()
+        heapq.heappush(
+            self._waiters,
+            (-int(request.work.priority), next(self._sequence), waiter),
+        )
+        try:
+            await waiter
+        except asyncio.CancelledError:
+            waiter.cancel()
+            raise
+
+    def _release(self) -> None:
+        while self._waiters:
+            _, _, waiter = heapq.heappop(self._waiters)
+            if waiter.cancelled():
+                continue
+            waiter.set_result(None)
+            return
+        self._busy = False
 
     async def decide(self, request: BrainRequest) -> BrainDecision:
-        async with self._lease:
+        await self._acquire(request)
+        try:
             decision = await self._reasoner.decide(request)
-        allowed = {item.name for item in request.allowed_actions}
-        if decision.action is not None and decision.action not in allowed:
-            raise ValueError(
-                f"brain selected action outside JARVIS allowance: {decision.action}"
-            )
-        return decision
+            allowed = {item.name for item in request.allowed_actions}
+            if decision.action is not None and decision.action not in allowed:
+                raise ValueError(
+                    f"brain selected action outside JARVIS allowance: {decision.action}"
+                )
+            return decision
+        finally:
+            self._release()
