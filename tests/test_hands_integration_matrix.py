@@ -253,7 +253,14 @@ def test_h2_h5_representative_operations_flow_through_one_runtime(
         ),
         ("set_display_brightness", {"percent": 42}, "system:display"),
         ("pair_bluetooth_device", {"name": "Test Buds"}, "device:bluetooth"),
-        ("lock_workstation", {}, "system:power_session"),
+        (
+            "lock_workstation",
+            {
+                "intent_operation": "lock_workstation",
+                "intent_evidence": "lock my screen",
+            },
+            "system:power_session",
+        ),
         (
             "install_package",
             {"package_id": "Example.SafePackage"},
