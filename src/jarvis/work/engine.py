@@ -52,6 +52,14 @@ class WorkActionRegistry:
             by_name[name] = executor
         self._by_name = by_name
 
+    @property
+    def supported_work_types(self) -> frozenset[WorkType]:
+        return frozenset(
+            work_type
+            for executor in self._by_name.values()
+            for work_type in executor.work_types
+        )
+
     def actions_for(self, work_type: WorkType) -> tuple[BrainAction, ...]:
         return tuple(
             executor.descriptor
@@ -120,11 +128,29 @@ class WorkEngine:
                 and step.observation.get("passed") is True
                 for step in steps
             )
-            return (
-                (True, None)
-                if tested
-                else (False, "development work requires a verified passing test step")
+            if not tested:
+                return False, "development work requires a verified passing test step"
+            reviewed_diff = any(
+                step.kind == "dev_diff"
+                and step.state.value == "completed"
+                for step in steps
             )
+            if not reviewed_diff:
+                return False, "development work requires a recorded final diff inspection"
+            committed = any(
+                step.kind == "dev_commit"
+                and step.state.value == "completed"
+                and step.observation.get("committed") is True
+                and step.observation.get("clean") is True
+                for step in steps
+            )
+            if not committed:
+                return (
+                    False,
+                    "development work must be committed on its isolated branch "
+                    "with a clean worktree",
+                )
+            return True, None
         return True, None
 
     def _record_completion_guard(
@@ -333,10 +359,39 @@ class WorkEngine:
             if not allowed:
                 assert guard_reason is not None
                 return self._record_completion_guard(work, guard_reason)
+            result_payload: dict[str, Any] = {"summary": decision.summary}
+            if work.work_type is WorkType.DEVELOPMENT:
+                commit_step = next(
+                    (
+                        step
+                        for step in reversed(steps)
+                        if step.kind == "dev_commit"
+                        and step.state.value == "completed"
+                    ),
+                    None,
+                )
+                test_step = next(
+                    (
+                        step
+                        for step in reversed(steps)
+                        if step.kind == "dev_run_tests"
+                        and step.state.value == "completed"
+                        and step.observation.get("passed") is True
+                    ),
+                    None,
+                )
+                if commit_step is not None:
+                    result_payload["branch"] = commit_step.observation.get("branch")
+                    result_payload["commit"] = commit_step.observation.get("commit")
+                if test_step is not None:
+                    result_payload["verification"] = {
+                        "passed": True,
+                        "sandbox": test_step.observation.get("sandbox"),
+                    }
             completed = work.transition(
                 WorkState.COMPLETED,
                 status_detail=decision.summary,
-                result={"summary": decision.summary},
+                result=result_payload,
             )
             self._store.save(completed, expected_version=work.version)
             self._store.enqueue_delivery(
@@ -367,6 +422,27 @@ class WorkEngine:
             )
 
         assert decision.action is not None
+        if decision.action == "dev_commit":
+            has_passing_tests = any(
+                step.kind == "dev_run_tests"
+                and step.state.value == "completed"
+                and step.observation.get("passed") is True
+                for step in steps
+            )
+            if not has_passing_tests:
+                return self._record_completion_guard(
+                    work,
+                    "local development commit requires passing sandboxed tests first",
+                )
+            has_diff = any(
+                step.kind == "dev_diff" and step.state.value == "completed"
+                for step in steps
+            )
+            if not has_diff:
+                return self._record_completion_guard(
+                    work,
+                    "local development commit requires diff inspection first",
+                )
         executor = self._actions.require(decision.action, work.work_type)
         resource_provider = getattr(executor, "resource_keys", None)
         resource_keys = (
