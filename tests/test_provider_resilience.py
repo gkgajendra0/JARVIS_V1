@@ -91,6 +91,32 @@ def test_429_quota_is_distinguished_from_rate_limit() -> None:
 
 
 @pytest.mark.parametrize(
+    ("message", "body"),
+    [
+        ("controlled", {"error": {"code": "credit_balance_exhausted"}}),
+        ("You have no credits remaining", None),
+    ],
+)
+def test_exhausted_api_credit_signals_override_generic_429_rate_limit(
+    message: str,
+    body: object | None,
+) -> None:
+    failure = classify_provider_failure(
+        FakeStatusError(
+            message,
+            status_code=429,
+            body=body,
+            retryable=True,
+        ),
+        provider="openai",
+    )
+
+    assert failure.kind is ProviderFailureKind.QUOTA_EXHAUSTED
+    assert failure.status_code == 429
+    assert failure.retryable is True
+
+
+@pytest.mark.parametrize(
     ("status", "body", "expected"),
     [
         (401, None, ProviderFailureKind.AUTHENTICATION_FAILED),
@@ -189,6 +215,45 @@ async def test_terminal_realtime_failure_is_announced_locally_then_closed() -> N
     assert state.health is ProviderHealth.DEGRADED
     assert state.last_failure is not None
     assert state.last_failure.kind is ProviderFailureKind.QUOTA_EXHAUSTED
+    assert speech.spoken == [(output, state.last_failure.spoken_message)]
+    assert observer.terminal_task is not None
+    await observer.terminal_task
+
+
+@pytest.mark.asyncio
+async def test_sdk_recoverable_quota_still_becomes_terminal_jarvis_failure() -> None:
+    session = FakeSession()
+    state = ProviderResilienceState()
+    speech = FakeStatusSpeech()
+    output = object()
+    health_updates: list[ProviderHealth] = []
+    observer = ProviderResilienceSessionObserver(
+        session,
+        provider="openai",
+        state=state,
+        status_speech=speech,
+        output_getter=lambda: output,  # type: ignore[arg-type]
+        health_observer=lambda current: health_updates.append(current.health),
+    )
+    wrapped = FakeRealtimeError(
+        FakeStatusError(
+            "You have no credits remaining",
+            status_code=429,
+            body={"error": {"code": "credit_balance_exhausted"}},
+            retryable=True,
+        ),
+        recoverable=True,
+    )
+    event = SimpleNamespace(error=wrapped, source=object())
+
+    session.emit("error", event)
+    session.emit("error", event)
+    await asyncio.wait_for(session.closed.wait(), timeout=1)
+
+    assert state.health is ProviderHealth.DEGRADED
+    assert state.last_failure is not None
+    assert state.last_failure.kind is ProviderFailureKind.QUOTA_EXHAUSTED
+    assert health_updates == [ProviderHealth.DEGRADED]
     assert speech.spoken == [(output, state.last_failure.spoken_message)]
     assert observer.terminal_task is not None
     await observer.terminal_task

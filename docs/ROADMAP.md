@@ -13,14 +13,14 @@ This roadmap owns **sequence only**. It does not select technology, define curre
 | 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | DONE (BOUNDED); full offline conversation deferred |
 | 6 | Knowledge, Current Research, Truthfulness | CAP-014–017 | DONE (BOUNDED) |
 | 7 | Governed Capability Runtime + Safe Local Reads | CAP-018, CAP-021, CAP-022, CAP-032 | DONE — OWNER ACCEPTED 2026-09-09 |
-| 8 | Notes, Tasks, Reminders, Scheduling | CAP-027, CAP-028 | ACTIVE — REQUIREMENTS / RESEARCH |
+| 8 | Notes, Tasks, Reminders, Scheduling | CAP-027, CAP-028 | QUEUED AFTER CONCURRENT-WORK FOUNDATION |
 | 9 | Computer, Application, Device Control | CAP-023, CAP-024 | PLANNED — PARTIAL HANDS FOUNDATION EXISTS |
 | 10 | Browser and Web Interaction | CAP-025 | PLANNED — PARTIAL PLAYWRIGHT FOUNDATION EXISTS |
 | 11 | Calendar, Email, External Communication | CAP-029, CAP-030 | PLANNED |
 | 12 | Documents, File Writes, Coding/Project Operations | CAP-026, CAP-031 | PLANNED — PARTIAL HANDS FOUNDATION EXISTS |
 | 13 | HUD, Visual Workspace, Health, Diagnostics | CAP-038, CAP-039 | PLANNED |
 | 14 | Passive World Awareness | CAP-019, CAP-020 | PLANNED |
-| 15 | Proactive Monitoring and Background Work | CAP-040, CAP-041 | PLANNED |
+| 15 | Proactive Monitoring and Event-Driven Background Work | CAP-040, CAP-041 | PLANNED — REUSES CONCURRENT-WORK FOUNDATION |
 | 16 | Extensibility and Plugin/Skill Lifecycle | CAP-033 | PLANNED |
 | 17 | Daily Assistant and Multi-Capability Workflows | CAP-042 | PLANNED |
 | 18 | Learning, Gap Detection, Governed Skill Creation | CAP-043–045 | PLANNED |
@@ -36,6 +36,20 @@ The Pocket 3 visual sensor/PTZ foundation was deliberately inserted before Step 
 ### Development supervisor
 
 `jarvis-dev` is accepted development infrastructure, not a product step. It can detect a protected-main update, ask the owner, fast-forward/restart, verify readiness and restore the last-known-good revision on failed readiness. Normal `jarvis-voice` does not gain autonomous Git/self-update authority from this.
+
+### Self-Awareness Foundation
+
+PR #41 is owner-accepted (2026-09-18) as a bounded read-only foundation: hierarchical whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, redacted local operational evidence, incident engineering memory and typed governed Self-Awareness reads. Autonomous diagnosis/repair remains later work.
+
+Detailed acceptance: `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
+
+### Persistent Concurrent Work Orchestration foundation
+
+Owner-approved sequence change on 2026-09-18: durable concurrent work orchestration is pulled forward as the **next architecture foundation before Step 8 implementation**. This does not renumber the roadmap.
+
+The foundation will define provider-neutral durable work items, lifecycle/state, bounded concurrent workers, dependencies/priorities/resource leases, restart recovery, Authority-preserving execution, progress/status, and deferred completion delivery while normal conversation remains available.
+
+Step 8 tasks/reminders/scheduling and later Step 15 proactive/event-driven work must reuse this foundation rather than create separate task/background systems.
 
 ### Post-Step-7 production integration interlude
 
@@ -60,8 +74,8 @@ Current major deferrals:
 - strict independent Step-4 semantic-memory verifier;
 - Phase-4.5E automatic memory injection;
 - full Step-5 offline conversation/provider failover;
-- long-running/background Step-6 research;
-- later awareness/proactivity/plugin/self-repair/self-improvement capabilities.
+- long-running/background Step-6 research until the new concurrent-work foundation is accepted;
+- later proactive monitoring/plugin/self-repair/self-improvement capabilities.
 
 A deferred capability is not a hidden failure and must not be represented as working.
 
@@ -113,7 +127,9 @@ Research for future slices is intentionally deferred until that slice becomes ac
 
 ## Current next step
 
-Step 8 is active **research only**. It must reuse the existing conversation, memory, authority, capability runtime and accepted Hands foundations while defining canonical task/reminder truth, scheduling/delivery state, timezone/recurrence/edit/cancel semantics, failure recovery and audit before implementation is authorized.
+Persistent Concurrent Work Orchestration is the active **requirements / research** foundation. It must reuse conversation, lifecycle, Authority, capability runtime, Hands, Self-Awareness and observability while defining durable work truth, bounded concurrency, dependencies/resources, restart recovery, progress/status and non-blocking result delivery.
+
+After that foundation is accepted, Step 8 begins formal tasks/reminders/scheduling requirements and implementation on top of the same work model.
 
 ## Roadmap change rule
 

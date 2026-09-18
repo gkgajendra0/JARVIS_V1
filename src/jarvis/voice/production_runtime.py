@@ -14,7 +14,16 @@ import sys
 from pathlib import Path
 
 from jarvis.capabilities.runtime import build_default_capability_runtime
+from jarvis.capabilities.self_awareness_reads import SelfAwarenessReadExecutor
 from jarvis.config import JarvisConfig
+from jarvis.health_adapters import (
+    CapabilityExecutionHealthObserver,
+    ProviderResilienceHealthObserver,
+    record_capability_catalog_health,
+    record_foundation_health,
+    record_hands_availability_health,
+    require_startup_preflight_with_health,
+)
 from jarvis.identity.active_speaker import (
     ActiveSpeakerVisualBuffer,
     LrAsdActiveSpeakerProvider,
@@ -42,6 +51,12 @@ from jarvis.memory.release_guard import build_memory_release_guard
 from jarvis.memory.runtime import build_default_memory_runtime
 from jarvis.preflight import StartupPreflightError, require_startup_preflight
 from jarvis.provider_resilience import ProviderResilienceState
+from jarvis.self_awareness import SelfAwarenessRuntime
+from jarvis.vision.health_observers import (
+    NativeTrackingHealthObserver,
+    VisionFrameHealthTap,
+    compose_frame_pair_taps,
+)
 from jarvis.vision.native_owner_tracking import (
     build_default_native_owner_tracking_observer,
 )
@@ -66,6 +81,8 @@ _POCKET3_STARTUP_LOCK_WAIT_SECONDS = 30.0
 
 def build_production_voice_runtime(
     config: JarvisConfig,
+    *,
+    self_awareness: SelfAwarenessRuntime | None = None,
 ) -> CanonicalActiveSpeakerRuntimeController:
     """Build the production single-microphone-owner voice/vision runtime."""
     if config.wake_model_path is None:
@@ -138,7 +155,7 @@ def build_production_voice_runtime(
     tracking_observer = None
     if config.pocket3_native_tracking_enabled:
         assert owner_context_state is not None
-        tracking_observer = build_default_native_owner_tracking_observer(
+        native_tracking_observer = build_default_native_owner_tracking_observer(
             owner_context=owner_context_state,
             ble_name=config.pocket3_ble_name,
             owner_evidence_max_age_seconds=(
@@ -148,6 +165,11 @@ def build_production_voice_runtime(
             lock_pending_timeout_seconds=(config.pocket3_lock_pending_timeout_seconds),
             resend_cooldown_seconds=config.pocket3_resend_cooldown_seconds,
             locked_perception_fps=1.0,
+        )
+        tracking_observer = (
+            NativeTrackingHealthObserver(native_tracking_observer, self_awareness)
+            if self_awareness is not None
+            else native_tracking_observer
         )
         LOGGER.info(
             "Pocket 3 native OWNER tracking is enabled: USB remains canonical "
@@ -174,16 +196,23 @@ def build_production_voice_runtime(
     speech_region_detector = (
         LiveKitSileroSpeechRegionDetector() if config.speaker_shadow_enabled else None
     )
+    vision_health_tap = (
+        VisionFrameHealthTap(self_awareness) if self_awareness is not None else None
+    )
+    active_speaker_tap = (
+        active_speaker_visual_buffer.observe
+        if active_speaker_visual_buffer is not None
+        else None
+    )
 
     vision_service = (
         build_default_vision_service(
             head_model_path=config.vision_head_model_path,
             evidence_observer=evidence_observer,
             tracking_observer=tracking_observer,
-            frame_pair_tap=(
-                active_speaker_visual_buffer.observe
-                if active_speaker_visual_buffer is not None
-                else None
+            frame_pair_tap=compose_frame_pair_taps(
+                active_speaker_tap,
+                vision_health_tap,
             ),
             perception_fps_provider=(
                 tracking_observer.perception_fps_hint
@@ -248,11 +277,26 @@ def build_production_voice_runtime(
         research_service.provider_name,
     )
 
+    result_observer = (
+        CapabilityExecutionHealthObserver(self_awareness)
+        if self_awareness is not None
+        else None
+    )
+    extra_executors = (
+        (SelfAwarenessReadExecutor(self_awareness),)
+        if self_awareness is not None
+        else ()
+    )
     capability_runtime = build_default_capability_runtime(
         ai_provider=config.ai_provider,
         hands_planner_model=config.hands_planner_model,
+        result_observer=result_observer,
+        extra_executors=extra_executors,
     )
     capability_catalog = capability_runtime.refresh_catalog()
+    if self_awareness is not None:
+        record_capability_catalog_health(self_awareness, capability_catalog)
+        record_hands_availability_health(self_awareness, capability_catalog)
     structured_hands = capability_catalog.by_key("windows:desktop.control")
     visual_hands = capability_catalog.by_key("visual:desktop.control")
     browser_hands = capability_catalog.by_key("browser:playwright")
@@ -270,6 +314,11 @@ def build_production_voice_runtime(
     )
 
     provider_resilience_state = ProviderResilienceState()
+    provider_health_observer = (
+        ProviderResilienceHealthObserver(self_awareness)
+        if self_awareness is not None
+        else None
+    )
     local_status_speech = build_local_status_speech()
     LOGGER.info(
         "Step-5 minimal provider resilience is configured: provider=%s "
@@ -290,6 +339,7 @@ def build_production_voice_runtime(
             state=provider_resilience_state,
             status_speech=local_status_speech,
             output_getter=lambda: audio.output,
+            health_observer=provider_health_observer,
         )
         silent_audio_recovery = SilentRealtimeAudioRecovery(
             session_config,
@@ -338,9 +388,32 @@ def build_production_voice_runtime(
 async def _run_from_configuration() -> None:
     config = JarvisConfig.from_environment()
     configure_logging(config.log_level)
-    require_startup_preflight(config)
-    runtime = build_production_voice_runtime(config)
-    await runtime.run()
+
+    self_awareness: SelfAwarenessRuntime | None = None
+    try:
+        self_awareness = SelfAwarenessRuntime()
+    except Exception as exc:  # noqa: BLE001 - diagnostics must not block startup
+        LOGGER.warning(
+            "Self-awareness evidence is unavailable; continuing without it: %s",
+            type(exc).__name__,
+        )
+
+    if self_awareness is None:
+        require_startup_preflight(config)
+        runtime = build_production_voice_runtime(config)
+        await runtime.run()
+        return
+
+    try:
+        record_foundation_health(self_awareness)
+        require_startup_preflight_with_health(config, self_awareness)
+        runtime = build_production_voice_runtime(
+            config,
+            self_awareness=self_awareness,
+        )
+        await runtime.run()
+    finally:
+        self_awareness.close()
 
 
 def main() -> int:

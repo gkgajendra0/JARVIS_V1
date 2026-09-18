@@ -2,9 +2,9 @@
 
 ## Status
 
-**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS FOUNDATION PR #41 IS IMPLEMENTED BUT NOT YET PRODUCTION-ACCEPTED. STEP 8 REMAINS QUEUED REQUIREMENTS / RESEARCH.**
+**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS FOUNDATION PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION IS THE NEXT ARCHITECTURE FOUNDATION; STEP 8 IS QUEUED AFTER IT.**
 
-Accepted runtime-code baseline after the 2026-09-18 consolidation: `e2ff21e78480a09eb243cdd2c121b39e47620d0f`. Documentation-only reconciliation commits may advance protected `main` without changing that runtime state.
+Accepted pre-Self-Awareness runtime-code baseline after the 2026-09-18 consolidation: `e2ff21e78480a09eb243cdd2c121b39e47620d0f`. PR #41 adds the accepted bounded Self-Awareness runtime; final documentation-only reconciliation commits do not change that implementation behavior.
 
 This file describes architecture that actually exists on protected `main`. Historical proposals and experiments belong in `docs/research/`; active acceptance work belongs in `CURRENT_PLAN.md`.
 
@@ -28,6 +28,11 @@ AEC/NS/HPF/AGC          RF-DETR/OC-SORT     risk + OPA
         |              DJI native tracking
         |                    |
         +-- CAM++ / LR-ASD shadow evidence -------+
+                             |
+                    SELF-AWARENESS / OBSERVABILITY
+                             |
+               Self Model + health + dependencies
+               rotating evidence + incident memory
 
 canonical USER turns
    +-> LiveContext / MemoryService
@@ -154,6 +159,32 @@ Step 6 uses `CurrentResearchService` with Exa as the first replaceable retrieval
 
 ---
 
+## Self-Awareness and operational evidence
+
+PR #41 adds the owner-accepted bounded read-only Self-Awareness foundation.
+
+Canonical architecture includes:
+
+- a version-controlled hierarchical whole-JARVIS Self Model with stable component IDs, parent/child relationships, source/test/config/resource/probe metadata and dependency edges;
+- deterministic component health with HEALTHY / DEGRADED / FAILED / UNKNOWN states, freshness/TTL handling and top-level bounded system health;
+- dependency criticality and blast-radius queries;
+- privacy-aware structured operational events with correlation context;
+- deny-by-default redaction at write time plus re-redaction when evidence is read;
+- human-readable console logging plus bounded rotating local JSONL evidence;
+- OpenTelemetry trace/metric adapter with external OTLP export disabled by default;
+- separate local SQLite engineering incident memory;
+- typed governed Self-Awareness reads for component discovery, health, details, operational evidence, incident history and similar resolved incidents.
+
+Self-Awareness is evidence/truth infrastructure, not execution authority. Incident history is historical evidence rather than repair instruction, UNKNOWN remains truthful missing/stale evidence, and no Self-Awareness read can grant autonomous code mutation, deployment, merge or Authority expansion.
+
+Owner-machine acceptance proved natural architecture/component questions, provider/blast-radius inspection, operational Pocket evidence reads and normal live Pocket recovery. The evidence query itself completed in ~47 ms.
+
+A long synchronous Gemini Live multi-tool interaction exposed that durable concurrent work/result delivery is not yet implemented. That limitation is deliberately assigned to the next Persistent Concurrent Work Orchestration foundation rather than hidden inside Self-Awareness with special-case vocabulary or timeout behavior.
+
+Detailed acceptance: `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
+
+---
+
 ## Capability runtime and JARVIS Hands
 
 Step 7 established the provider-neutral capability/runtime boundary, approved-root reads, isolated MarkItDown document conversion, `inspect_local`, and canonical authority integration.
@@ -196,8 +227,9 @@ Not currently claimed as solved:
 - issue #45: false-interruption resume is configured although production audio cannot pause;
 - issue #46: intermittent LiveKit AudioMixer timeout investigation;
 - full offline conversation or automatic provider failover;
+- persistent concurrent work orchestration: long-running work can still monopolize a realtime tool turn until the new durable work foundation is implemented;
 - full future Steps 9, 10 and 12 beyond accepted Hands foundations;
-- calendar/email communication, proactive/background automation, plugin lifecycle, world-awareness/HUD end state, or autonomous self-repair/self-improvement.
+- calendar/email communication, proactive/event-driven automation, plugin lifecycle, world-awareness/HUD end state, or autonomous self-repair/self-improvement.
 
 Detailed accepted/deferred/superseded/rejected history: `docs/research/POST_STEP_7_INTEGRATION_ACCEPTANCE.md`.
 Repository-wide reconciliation evidence: `docs/research/PRODUCTION_RECONCILIATION_2026-09-18.md`.
@@ -206,6 +238,8 @@ Repository-wide reconciliation evidence: `docs/research/PRODUCTION_RECONCILIATIO
 
 ## Next architecture acceptance
 
-PR #41 Self-Awareness Foundation is implemented on its feature branch but is **not part of this production architecture yet**. It must first be reconciled onto this accepted baseline and pass owner-machine privacy, resource, incident, health/blast-radius, console/logging and Voice/Hands/Pocket non-regression acceptance.
+The next architecture foundation is **Persistent Concurrent Work Orchestration**.
 
-After that interlude is explicitly accepted and merged, Step 8 — Notes, Tasks, Reminders, and Scheduling — remains the next formal roadmap slice.
+It is not implemented yet. The requirements/research phase must define durable provider-neutral work items, lifecycle/state, bounded concurrent workers, dependency/priority/resource management, restart recovery, Authority-preserving execution, progress/status and deferred completion delivery while normal conversation remains available.
+
+This foundation must be architecture-approved before implementation. Step 8 — Notes, Tasks, Reminders, and Scheduling — will then reuse the same durable work model rather than introduce a separate task/background subsystem.
