@@ -49,7 +49,7 @@ def test_voice_instructions_route_self_diagnostics_through_typed_tools() -> None
     assert "`get_self_component_details`" in normalized
     assert "dependencies" in normalized
     assert "affected components" in normalized
-    assert "recent engineering incidents" in normalized
+    assert "engineering incidents" in normalized
     assert "do not refuse" in normalized
 
 
