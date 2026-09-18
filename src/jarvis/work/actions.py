@@ -34,6 +34,14 @@ class ResearchWorkExecutor:
     def __init__(self, service: CurrentResearchService) -> None:
         self._service = service
 
+    def resource_keys(
+        self,
+        work: WorkItem,
+        parameters: dict[str, Any],
+    ) -> tuple[str, ...]:
+        del work, parameters
+        return ("network",)
+
     async def execute(
         self,
         *,
