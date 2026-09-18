@@ -55,6 +55,7 @@ class FakeBackend:
     def __init__(self) -> None:
         self.submitted: list[str] = []
         self.cancelled: list[str] = []
+        self.paused: list[str] = []
         self.resumed: list[str] = []
 
     def submit(self, work_id: str, *, priority: WorkPriority) -> str:
@@ -64,6 +65,9 @@ class FakeBackend:
 
     def cancel(self, execution_id: str) -> None:
         self.cancelled.append(execution_id)
+
+    def pause(self, execution_id: str) -> None:
+        self.paused.append(execution_id)
 
     def resume(self, execution_id: str) -> None:
         self.resumed.append(execution_id)
@@ -213,7 +217,8 @@ def test_orchestrator_accepts_pause_resume_cancel_without_session_ownership(
 
     paused = orchestrator.pause(work_id)
     assert paused.state is WorkState.PAUSED
-    assert backend.cancelled == [work_id]
+    assert backend.paused == [work_id]
+    assert backend.cancelled == []
 
     resumed = orchestrator.resume(work_id)
     assert resumed.state is WorkState.RUNNING
@@ -221,4 +226,4 @@ def test_orchestrator_accepts_pause_resume_cancel_without_session_ownership(
 
     cancelled = orchestrator.cancel(work_id)
     assert cancelled.state is WorkState.CANCELLED
-    assert backend.cancelled == [work_id, work_id]
+    assert backend.cancelled == [work_id]
