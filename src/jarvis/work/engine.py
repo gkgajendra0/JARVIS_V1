@@ -6,7 +6,13 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from jarvis.work.brain import BrainAction, BrainCoordinator, BrainRequest
-from jarvis.work.models import WorkItem, WorkState, WorkStep, WorkType
+from jarvis.work.models import (
+    WorkDeliveryKind,
+    WorkItem,
+    WorkState,
+    WorkStep,
+    WorkType,
+)
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -94,6 +100,12 @@ class WorkEngine:
                 status_detail=f"no registered executor for {work.work_type.value}",
             )
             self._store.save(failed, expected_version=work.version)
+            self._store.enqueue_delivery(
+                work=failed,
+                kind=WorkDeliveryKind.FAILURE,
+                message=failed.status_detail or "Background work failed.",
+                event_key=f"failure:{failed.version}",
+            )
             return WorkAdvanceResult(work.work_id, failed.state, progressed=True)
 
         steps = self._store.list_steps(work.work_id)
@@ -113,6 +125,12 @@ class WorkEngine:
                 result={"summary": decision.summary},
             )
             self._store.save(completed, expected_version=work.version)
+            self._store.enqueue_delivery(
+                work=completed,
+                kind=WorkDeliveryKind.COMPLETION,
+                message=decision.summary,
+                event_key="completion",
+            )
             return WorkAdvanceResult(work.work_id, completed.state, progressed=True)
 
         if decision.needs_owner:
@@ -121,6 +139,12 @@ class WorkEngine:
                 status_detail=decision.owner_question,
             )
             self._store.save(waiting, expected_version=work.version)
+            self._store.enqueue_delivery(
+                work=waiting,
+                kind=WorkDeliveryKind.OWNER_INPUT,
+                message=decision.owner_question or "This work needs your input.",
+                event_key=f"owner:{waiting.version}",
+            )
             return WorkAdvanceResult(
                 work.work_id,
                 waiting.state,
@@ -184,7 +208,14 @@ class WorkEngine:
             status_detail=normalized,
             current_step_id=work.current_step_id,
         )
-        return self._store.save(failed, expected_version=work.version)
+        saved = self._store.save(failed, expected_version=work.version)
+        self._store.enqueue_delivery(
+            work=saved,
+            kind=WorkDeliveryKind.FAILURE,
+            message=normalized,
+            event_key=f"failure:{saved.version}",
+        )
+        return saved
 
     def apply_owner_input(self, work_id: str, response: str) -> WorkItem:
         work = self._store.require(work_id)
