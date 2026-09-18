@@ -146,7 +146,6 @@ async def test_voice_can_list_canonical_self_components(tmp_path: Path) -> None:
     awareness.close()
 
 
-
 @pytest.mark.asyncio
 async def test_typed_component_details_tool_requires_canonical_component_id(
     tmp_path: Path,
