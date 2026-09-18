@@ -53,7 +53,9 @@ class SelfModelRegistry:
             while current.parent_component_id is not None:
                 parent_id = current.parent_component_id
                 if parent_id in seen:
-                    raise ValueError(f"component hierarchy cycle detected at {parent_id}")
+                    raise ValueError(
+                        f"component hierarchy cycle detected at {parent_id}"
+                    )
                 seen.add(parent_id)
                 current = self._components[parent_id]
 
@@ -89,7 +91,9 @@ class SelfModelRegistry:
 
     @property
     def components(self) -> tuple[ComponentDescriptor, ...]:
-        return tuple(sorted(self._components.values(), key=lambda item: item.component_id))
+        return tuple(
+            sorted(self._components.values(), key=lambda item: item.component_id)
+        )
 
     @property
     def root_components(self) -> tuple[ComponentDescriptor, ...]:
@@ -147,7 +151,9 @@ class SelfModelRegistry:
             ancestors.append(current)
         return tuple(ancestors)
 
-    def components_for_source_path(self, source_path: str) -> tuple[ComponentDescriptor, ...]:
+    def components_for_source_path(
+        self, source_path: str
+    ) -> tuple[ComponentDescriptor, ...]:
         candidate = PurePosixPath(str(source_path).replace("\\", "/"))
         matches = []
         for component in self.components:
