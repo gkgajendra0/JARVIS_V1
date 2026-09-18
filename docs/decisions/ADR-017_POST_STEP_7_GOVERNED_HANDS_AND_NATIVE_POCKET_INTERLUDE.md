@@ -76,6 +76,19 @@ Step 8 remains the next formal slice.
 
 The interlude does not expand JARVIS beyond the bounded authority contracts already accepted for these capabilities. Later slices remain subject to research-first design, canonical authority, automated validation and owner-machine acceptance.
 
+### 2026-09-18 power/session safety amendment
+
+Power/session execution is additionally fail-closed on operation-specific canonical USER intent:
+
+- the planner's exact latest-USER evidence must name both the proposed operation and the local computer/Windows target;
+- the bound operation/evidence are included in the proposal fingerprint and Windows Hello material summary;
+- the native power executor refuses unbound or substituted intent;
+- Authority audit records the bounded power intent for incident reconstruction.
+
+Windows Hello remains a strong owner verifier, not a semantic-intent detector. Standby/sleep language directed at JARVIS must never be reinterpreted as Windows sleep/restart/shutdown.
+
+See `docs/research/POWER_SESSION_INTENT_BINDING_2026-09-18.md`.
+
 ## Superseded/rejected experiment handling
 
 Historical optimization/integration branches are evidence rather than merge queues. Proven work was selectively recovered on current main. In particular:
