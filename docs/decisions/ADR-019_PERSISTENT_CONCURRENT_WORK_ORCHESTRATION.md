@@ -74,7 +74,7 @@ This foundation does not grant unrestricted shell, credential access, protected-
 
 ### 10. Production and console launch paths remain distinct
 
-Persistent orchestration is assembled by the `jarvis-voice` production runtime. The historical `src/jarvis/voice/entrypoint.py` LiveKit console entrypoint remains a Step-1 development path and is not an acceptance path for this foundation.
+Persistent orchestration is assembled by the `jarvis-voice` production runtime. WorkRuntime lifetime spans the production controller's wake-idle/active-session loop, so entering conversational standby closes the cloud voice session without stopping eligible background work. The historical `src/jarvis/voice/entrypoint.py` LiveKit console entrypoint remains a Step-1 development path and is not an acceptance path for this foundation.
 
 ## Technology disposition
 

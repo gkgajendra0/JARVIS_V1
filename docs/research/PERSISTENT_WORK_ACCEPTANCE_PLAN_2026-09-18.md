@@ -109,9 +109,13 @@ Expected: same WorkItem identity; eligible DBOS workflow is reattached/recovered
 
 Expected: JARVIS does **not** automatically replay the unknown side effect. Any persisted RUNNING WorkStep is marked interrupted/unverified and the WorkItem moves to `WAITING_FOR_OWNER` with a truthful recovery explanation. A natural owner response may then decide whether to retry/continue.
 
-### H. Completion delivery
+### H. Standby continuity and completion delivery
 
-Allow work to complete while an active session is listening.
+With at least one WorkItem still non-terminal, tell JARVIS to enter conversational standby. Leave it in wake-idle long enough for background work to make observable progress, then wake JARVIS and ask for status.
+
+Expected: entering standby closes only the active cloud conversation; eligible background work continues under the same canonical WorkItem identity. On wake, status reflects real progress/completion rather than restarting the task.
+
+Then allow work to complete while an active session is listening.
 
 Expected: `WHEN_IDLE` waits for listening/user-silent state, announces once, marks delivered only after speech succeeds, and remains pending during wake-idle/standby until the next eligible active session.
 
