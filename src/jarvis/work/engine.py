@@ -83,6 +83,63 @@ class WorkEngine:
             return self._store.save(running, expected_version=work.version)
         return work
 
+    @staticmethod
+    def _completion_guard(
+        work: WorkItem,
+        steps: tuple[WorkStep, ...],
+    ) -> tuple[bool, str | None]:
+        if work.work_type is WorkType.RESEARCH:
+            successful = any(
+                step.kind == "research_web"
+                and step.state.value == "completed"
+                and bool(step.observation.get("ok"))
+                for step in steps
+            )
+            return (
+                (True, None)
+                if successful
+                else (False, "fresh research evidence has not been successfully retrieved")
+            )
+        if work.work_type is WorkType.DEVELOPMENT:
+            tested = any(
+                step.kind == "dev_run_tests"
+                and step.state.value == "completed"
+                and step.observation.get("passed") is True
+                for step in steps
+            )
+            return (
+                (True, None)
+                if tested
+                else (False, "development work requires a verified passing test step")
+            )
+        return True, None
+
+    def _record_completion_guard(
+        self,
+        work: WorkItem,
+        reason: str,
+    ) -> WorkAdvanceResult:
+        step = WorkStep(
+            work_id=work.work_id,
+            kind="completion_guard",
+            summary="JARVIS rejected premature completion",
+            input_data={},
+        )
+        self._store.add_step(step)
+        completed = step.start().complete({"allowed": False, "reason": reason})
+        self._store.save_step(completed)
+        latest = self._store.require(work.work_id)
+        progressed = latest.with_progress(
+            current_step_id=None,
+            status_detail=f"completion deferred: {reason}",
+        )
+        self._store.save(progressed, expected_version=latest.version)
+        return WorkAdvanceResult(
+            work.work_id,
+            progressed.state,
+            progressed=True,
+        )
+
     async def advance(self, work_id: str) -> WorkAdvanceResult:
         work = self._store.require(work_id)
         if work.state.terminal or work.state is WorkState.PAUSED:
@@ -122,6 +179,10 @@ class WorkEngine:
         )
 
         if decision.goal_complete:
+            allowed, guard_reason = self._completion_guard(work, steps)
+            if not allowed:
+                assert guard_reason is not None
+                return self._record_completion_guard(work, guard_reason)
             completed = work.transition(
                 WorkState.COMPLETED,
                 status_detail=decision.summary,
