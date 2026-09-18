@@ -12,6 +12,7 @@ from jarvis.work.brain import BrainCoordinator
 from jarvis.work.development import (
     DevelopmentWorkspaceManager,
     build_development_executors,
+    build_development_test_runner,
 )
 from jarvis.work.dbos_backend import (
     DBOSWorkExecutionBackend,
@@ -88,7 +89,10 @@ def build_work_runtime(
     workspace_manager = DevelopmentWorkspaceManager()
     executors = (
         ResearchWorkExecutor(research_service),
-        *build_development_executors(workspace_manager),
+        *build_development_executors(
+            workspace_manager,
+            test_runner=build_development_test_runner(),
+        ),
     )
     actions = WorkActionRegistry(tuple(executors))
     resources = ResourceLeaseManager(
