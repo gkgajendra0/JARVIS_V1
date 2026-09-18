@@ -116,6 +116,8 @@ class SQLiteWorkStore:
 
                 CREATE INDEX IF NOT EXISTS idx_work_items_state
                     ON work_items(state, priority DESC, created_at ASC);
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_work_items_source_turn_type
+                    ON work_items(source_session_id, source_turn_id, work_type);
                 CREATE INDEX IF NOT EXISTS idx_work_steps_work
                     ON work_steps(work_id, created_at ASC);
                 """
@@ -199,6 +201,23 @@ class SQLiteWorkStore:
         with self._lock, self._connect() as connection:
             row = connection.execute(
                 "SELECT * FROM work_items WHERE work_id = ?", (work_id,)
+            ).fetchone()
+        return None if row is None else self._item_from_row(row)
+
+    def find_by_source_turn(
+        self,
+        *,
+        source_session_id: str,
+        source_turn_id: str,
+        work_type: WorkType,
+    ) -> WorkItem | None:
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM work_items
+                WHERE source_session_id = ? AND source_turn_id = ? AND work_type = ?
+                """,
+                (source_session_id, source_turn_id, work_type.value),
             ).fetchone()
         return None if row is None else self._item_from_row(row)
 
