@@ -125,6 +125,48 @@ def record_capability_catalog_health(
     )
 
 
+def record_hands_availability_health(
+    awareness: SelfAwarenessRuntime,
+    catalog: CapabilityCatalog,
+) -> None:
+    """Publish deterministic Hands execution readiness from the capability catalog."""
+
+    structured = catalog.by_key("windows:desktop.control")
+    visual = catalog.by_key("visual:desktop.control")
+    browser = catalog.by_key("browser:playwright")
+    structured_ready = bool(structured and structured.execution_enabled)
+    visual_ready = bool(visual and visual.execution_enabled)
+    browser_ready = bool(browser and browser.execution_enabled)
+
+    if structured_ready:
+        state = HealthState.HEALTHY
+        reason_code = "hands_structured_executor_ready"
+        summary = "Hands structured desktop execution is ready"
+    elif visual_ready or browser_ready:
+        state = HealthState.DEGRADED
+        reason_code = "hands_fallback_only"
+        summary = "Hands is available only through fallback/browser execution surfaces"
+    else:
+        state = HealthState.FAILED
+        reason_code = "hands_executor_unavailable"
+        summary = "No Hands execution surface is currently ready"
+
+    _observe_safely(
+        awareness,
+        component_id="hands",
+        source="hands_executor_availability",
+        state=state,
+        reason_code=reason_code,
+        summary=summary,
+        ttl_seconds=300.0,
+        metadata={
+            "structured_desktop_control": structured_ready,
+            "visual_fallback": visual_ready,
+            "browser_control": browser_ready,
+        },
+    )
+
+
 class CapabilityExecutionHealthObserver:
     """Translate governed capability outcomes into deterministic health evidence."""
 
