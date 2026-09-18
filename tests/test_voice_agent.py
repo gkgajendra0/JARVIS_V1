@@ -58,6 +58,6 @@ def test_voice_instructions_use_canonical_self_component_discovery() -> None:
     assert "component IDs are opaque internal handles" in normalized
     assert "call `list_self_components` first" in normalized
     assert "Do not ask the USER for permission" in normalized
-    assert "never invent or approximate a component ID" in normalized
+    assert "Never invent or approximate a component ID" in normalized
     assert "retry the requested component read" in normalized
     assert "do not substitute model knowledge" in normalized
