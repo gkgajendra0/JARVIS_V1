@@ -69,15 +69,21 @@ async def test_voice_can_read_deterministic_self_health(tmp_path: Path) -> None:
     awareness.close()
 
 @pytest.mark.asyncio
-async def test_voice_self_read_requires_current_self_diagnostic_warrant(
+async def test_self_awareness_execution_does_not_depend_on_keyword_matching(
     tmp_path: Path,
 ) -> None:
-    awareness, tools, _ = _toolsets(tmp_path, "What is the weather today?")
+    awareness, tools, _ = _toolsets(
+        tmp_path,
+        "If the thing that lets you think online disappears, what else stops working?",
+    )
 
-    result = await tools.inspect_self_awareness(operation="get_system_health")
+    result = await tools.inspect_self_awareness(
+        operation="get_component_details",
+        component_id="runtime.provider",
+    )
 
-    assert result["ok"] is False
-    assert result["status"] == "self_read_not_warranted"
+    assert result["ok"] is True
+    assert "runtime.voice" in result["data"]["affected_components"]  # type: ignore[index]
     awareness.close()
 
 @pytest.mark.asyncio
@@ -109,23 +115,4 @@ def test_voice_tool_bundle_exposes_self_health_tool_only_when_available(
         "inspect_self",
         "use_computer",
     ]
-    awareness.close()
-
-
-@pytest.mark.asyncio
-async def test_voice_dependency_blast_radius_accepts_natural_owner_phrasing(
-    tmp_path: Path,
-) -> None:
-    awareness, tools, _ = _toolsets(
-        tmp_path,
-        "Tell me what your runtime provider depends on and what would be affected if it fails.",
-    )
-
-    result = await tools.inspect_self_awareness(
-        operation="get_component_details",
-        component_id="runtime.provider",
-    )
-
-    assert result["ok"] is True
-    assert "runtime.voice" in result["data"]["affected_components"]  # type: ignore[index]
     awareness.close()
