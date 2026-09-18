@@ -172,6 +172,20 @@ class WorkEngine:
         self._store.save(progressed, expected_version=latest.version)
         return WorkAdvanceResult(work.work_id, progressed.state, progressed=True)
 
+    def fail(self, work_id: str, reason: str) -> WorkItem:
+        work = self._store.require(work_id)
+        if work.state.terminal:
+            return work
+        normalized = reason.strip()
+        if not normalized:
+            raise ValueError("work failure reason must not be empty")
+        failed = work.transition(
+            WorkState.FAILED,
+            status_detail=normalized,
+            current_step_id=work.current_step_id,
+        )
+        return self._store.save(failed, expected_version=work.version)
+
     def apply_owner_input(self, work_id: str, response: str) -> WorkItem:
         work = self._store.require(work_id)
         if work.state is not WorkState.WAITING_FOR_OWNER:
