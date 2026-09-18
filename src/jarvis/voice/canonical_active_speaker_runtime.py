@@ -52,7 +52,7 @@ class _SessionToolBundle:
         memory_query_coordinator: ProviderVerifiedMemoryQueryCoordinator | None,
         research_service: CurrentResearchService | None,
         capability_runtime: CapabilityRuntime | None,
-        work_runtime: WorkRuntime | None,
+        work_runtime: WorkRuntime | None = None,
     ) -> None:
         self._vision_tools = vision_tools
         self._conversation_getter = conversation_getter
