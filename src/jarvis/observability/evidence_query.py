@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from jarvis.observability.logging import default_jsonl_log_path
 from jarvis.observability.redaction import redact_data
@@ -33,7 +34,7 @@ def _timestamp_epoch(value: object) -> float | None:
         return None
     text = value.strip()
     try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp()
+        return datetime.fromisoformat(text).timestamp()
     except ValueError:
         return None
 
