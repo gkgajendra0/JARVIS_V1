@@ -544,12 +544,14 @@ class DockerDevelopmentTestRunner:
         }
 
 
-def build_development_test_runner() -> DevelopmentTestRunner | None:
-    image = os.getenv("JARVIS_DEV_TEST_DOCKER_IMAGE", "").strip()
-    if not image:
+def build_development_test_runner(
+    image: str | None,
+) -> DevelopmentTestRunner | None:
+    normalized = str(image or "").strip()
+    if not normalized:
         return None
     try:
-        return DockerDevelopmentTestRunner(image)
+        return DockerDevelopmentTestRunner(normalized)
     except DevelopmentWorkspaceError:
         return None
 
