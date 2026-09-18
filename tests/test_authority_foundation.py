@@ -682,7 +682,6 @@ def test_session_mismatch_denies() -> None:
     assert decision.reason_codes == ("proposal_session_mismatch",)
 
 
-
 def test_power_session_authority_audit_records_bound_intent() -> None:
     clock = FakeClock()
     audit = InMemoryAuditEventStore()
