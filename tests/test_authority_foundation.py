@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 
 import pytest
@@ -679,3 +680,50 @@ def test_session_mismatch_denies() -> None:
     )
     assert decision.effect is AuthorityEffect.DENY
     assert decision.reason_codes == ("proposal_session_mismatch",)
+
+
+
+def test_power_session_authority_audit_records_bound_intent() -> None:
+    clock = FakeClock()
+    audit = InMemoryAuditEventStore()
+    authority, approvals, _ = service(clock, audit=audit)
+    p = ActionProposal.create(
+        session_id="power-audit",
+        capability="system:power_session",
+        operation="restart_workstation",
+        target={"domain": "system.power_session", "machine": "local"},
+        parameters={
+            "intent_operation": "restart_workstation",
+            "intent_evidence": "restart my computer",
+        },
+        material_summary='Restart Workstation — requested as: "restart my computer"',
+        attributes=ActionAttributes(executable_or_system_change=True),
+        origin=ActionOrigin.DIRECT_USER,
+        ttl_seconds=120,
+        now_monotonic=clock(),
+        proposal_id="power-proposal",
+        nonce="power-nonce",
+    )
+    approval_id = grant(
+        approvals,
+        p,
+        requirement=ApprovalRequirement.STRONG,
+        method=ApprovalMethod.STRONG_VERIFIER,
+    )
+
+    decision = authority.evaluate(
+        proposal=p,
+        context=context(
+            session_id="power-audit",
+            trust=TrustTier.VERIFIED_OWNER,
+        ),
+        approval_id=approval_id,
+    )
+
+    assert decision.effect is AuthorityEffect.ALLOW
+    event = next(item for item in audit.events if item.event_type == "authority_allow")
+    metadata = json.loads(event.metadata_json)
+    assert metadata["capability"] == "system:power_session"
+    assert metadata["operation"] == "restart_workstation"
+    assert metadata["intent_operation"] == "restart_workstation"
+    assert metadata["intent_evidence"] == "restart my computer"
