@@ -115,9 +115,21 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             self._user_is_speaking = False
             self._session_ready_for_inactivity = False
             self._agent_state = "unavailable"
+            if work_runtime is not None:
+                work_runtime.set_interactive_brain_active(False)
+
+            def sync_interactive_brain_gate() -> None:
+                if work_runtime is None:
+                    return
+                interactive = self._user_is_speaking or self._agent_state in {
+                    "thinking",
+                    "speaking",
+                }
+                work_runtime.set_interactive_brain_active(interactive)
 
             def track_agent_state(event: AgentStateChangedEvent) -> None:
                 self._agent_state = event.new_state
+                sync_interactive_brain_gate()
                 LOGGER.info(
                     "Voice agent state changed: %s -> %s",
                     event.old_state,
@@ -144,12 +156,14 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     if bridge.conversation.status is ConversationStatus.ACTIVE:
                         bridge.conversation.begin_user_activity()
                     self._user_is_speaking = True
+                    sync_interactive_brain_gate()
                     self._cancel_timeout()
                     return
                 if event.new_state != "listening":
                     return
 
                 self._user_is_speaking = False
+                sync_interactive_brain_gate()
                 if not self._session_ready_for_inactivity:
                     return
                 has_user_turn = any(
@@ -168,6 +182,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 if self._live_session is session:
                     self._live_session = None
                     self._agent_state = "unavailable"
+                    self._user_is_speaking = False
+                    if work_runtime is not None:
+                        work_runtime.set_interactive_brain_active(False)
 
             session.on("agent_state_changed", track_agent_state)
             session.on("user_state_changed", track_user_activity)
@@ -371,6 +388,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             self._session_conversation = None
             self._agent_state = "unavailable"
             self._live_session = None
+            if self._work_runtime is not None:
+                self._work_runtime.set_interactive_brain_active(False)
             if self._work_runtime is not None:
                 self._work_runtime.close()
             if capability_runtime is not None:
