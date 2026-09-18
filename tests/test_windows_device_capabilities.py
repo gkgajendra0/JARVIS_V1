@@ -180,8 +180,26 @@ def test_winrt_bluetooth_listing_bridges_running_event_loop(monkeypatch) -> None
 
 def test_power_lock_is_reversible_but_shutdown_is_critical() -> None:
     executor = PowerSessionExecutor(FakePower())
-    lock = executor.prepare(request(executor, "lock_workstation"))
-    shutdown = executor.prepare(request(executor, "shutdown_workstation"))
+    lock = executor.prepare(
+        request(
+            executor,
+            "lock_workstation",
+            {
+                "intent_operation": "lock_workstation",
+                "intent_evidence": "lock my screen",
+            },
+        )
+    )
+    shutdown = executor.prepare(
+        request(
+            executor,
+            "shutdown_workstation",
+            {
+                "intent_operation": "shutdown_workstation",
+                "intent_evidence": "shut down my computer",
+            },
+        )
+    )
 
     assert lock.attributes.reversible_local_change is True
     assert (
@@ -192,7 +210,16 @@ def test_power_lock_is_reversible_but_shutdown_is_critical() -> None:
 def test_power_backend_result_is_reported_as_initiated_not_final_state() -> None:
     executor = PowerSessionExecutor(FakePower())
     result = executor.execute(
-        executor.prepare(request(executor, "restart_workstation"))
+        executor.prepare(
+            request(
+                executor,
+                "restart_workstation",
+                {
+                    "intent_operation": "restart_workstation",
+                    "intent_evidence": "restart my computer",
+                },
+            )
+        )
     )
 
     assert result.status is CapabilityStatus.SUCCEEDED
@@ -236,7 +263,6 @@ def test_power_intent_binding_rejects_operation_substitution() -> None:
                 },
             )
         )
-
 
 
 def test_power_executor_rejects_unbound_operation() -> None:
