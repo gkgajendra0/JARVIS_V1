@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from jarvis.authority.risk import RiskClassifier
 from jarvis.authority.types import RiskClass
 from jarvis.capabilities.models import CapabilityRequest, CapabilityStatus
@@ -10,6 +12,7 @@ from jarvis.capabilities.windows_devices import (
     DisplayControlExecutor,
     PowerSessionExecutor,
     WinRtBluetoothBackend,
+    WindowsDeviceValidationError,
 )
 
 
@@ -194,3 +197,43 @@ def test_power_backend_result_is_reported_as_initiated_not_final_state() -> None
 
     assert result.status is CapabilityStatus.SUCCEEDED
     assert result.data == {"request_initiated": True, "verification_passed": True}
+
+
+
+def test_power_intent_binding_is_carried_into_authority_material() -> None:
+    executor = PowerSessionExecutor(FakePower())
+    prepared = executor.prepare(
+        request(
+            executor,
+            "restart_workstation",
+            {
+                "intent_operation": "restart_workstation",
+                "intent_evidence": "restart my computer",
+            },
+        )
+    )
+
+    assert prepared.parameters == {
+        "intent_operation": "restart_workstation",
+        "intent_evidence": "restart my computer",
+    }
+    assert 'requested as: "restart my computer"' in prepared.material_summary
+
+
+def test_power_intent_binding_rejects_operation_substitution() -> None:
+    executor = PowerSessionExecutor(FakePower())
+
+    with pytest.raises(
+        WindowsDeviceValidationError,
+        match="intent binding does not match",
+    ):
+        executor.prepare(
+            request(
+                executor,
+                "restart_workstation",
+                {
+                    "intent_operation": "shutdown_workstation",
+                    "intent_evidence": "shut down my computer",
+                },
+            )
+        )
