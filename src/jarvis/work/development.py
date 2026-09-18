@@ -27,7 +27,6 @@ from jarvis.work.store import default_work_state_dir
 _MAX_READ_CHARS = 40_000
 _MAX_WRITE_BYTES = 1_000_000
 _MAX_TEST_SECONDS = 300.0
-_BRANCH_SAFE = re.compile(r"[^a-zA-Z0-9._/-]+")
 _BLOCKED_NAMES = frozenset({
     ".env",
     "credentials",
@@ -38,10 +37,21 @@ _BLOCKED_NAMES = frozenset({
     "id_ed25519",
 })
 _BLOCKED_SUFFIXES = frozenset({".pem", ".p12", ".pfx", ".key", ".kdbx"})
+_SECRET_PATTERNS = (
+    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    re.compile(r"\\bsk-[A-Za-z0-9_-]{20,}\\b"),
+    re.compile(r"\\bAIza[0-9A-Za-z_-]{30,}\\b"),
+    re.compile(r"\\bAKIA[0-9A-Z]{16}\\b"),
+    re.compile(r"\\bgh[pousr]_[A-Za-z0-9]{20,}\\b"),
+)
 
 
 class DevelopmentWorkspaceError(RuntimeError):
     pass
+
+
+def _contains_secret(text: str) -> bool:
+    return any(pattern.search(text) for pattern in _SECRET_PATTERNS)
 
 
 def _safe_work_id(value: str) -> str:
@@ -394,6 +404,10 @@ class DevelopmentWriteFileExecutor:
     async def execute(self, *, work: WorkItem, parameters: dict[str, Any]) -> dict[str, Any]:
         text = str(parameters.get("text") or "")
         encoded = text.encode("utf-8")
+        if _contains_secret(text):
+            raise DevelopmentWorkspaceError(
+                "credential-like text is blocked from staged development writes"
+            )
         if len(encoded) > _MAX_WRITE_BYTES:
             raise DevelopmentWorkspaceError("development write exceeds size limit")
         target = self._manager.resolve(work.work_id, str(parameters.get("path") or ""))
