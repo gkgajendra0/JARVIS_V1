@@ -242,10 +242,11 @@ class SelfAwarenessAgentTools(_ConversationCapabilityTools):
         )
         LOGGER.info(
             "Governed self-awareness read completed | turn_id=%s | operation=%s | "
-            "status=%s | elapsed_ms=%.1f",
+            "status=%s | reason=%s | elapsed_ms=%.1f",
             turn.turn_id,
             operation,
             result.status.value,
+            result.reason or "-",
             result.elapsed_ms,
         )
         return {
@@ -278,10 +279,13 @@ class SelfAwarenessAgentTools(_ConversationCapabilityTools):
         merely because it is private; call this governed tool and let canonical Authority
         return succeeded, denied, or verification-required evidence.
 
-        Supported operations are `get_system_health`, `get_component_health`,
-        `get_component_details`, and `list_recent_incidents`. Supply `component_id` only
-        for the two component operations. Use `status` only to filter incident state and
-        `max_results` only for incident history.
+        Supported operations are `list_components`, `get_system_health`,
+        `get_component_health`, `get_component_details`, and
+        `list_recent_incidents`. Component IDs are canonical opaque handles owned by the
+        Self Model. Use `list_components` to discover the current IDs and purposes; never
+        invent, translate, abbreviate, or approximate a component ID. Supply
+        `component_id` only for the two component operations. Use `status` only to
+        filter incident state and `max_results` only for incident history.
 
         Health values come from JARVIS-owned probes and state machines, not model
         inference. Treat UNKNOWN as missing/stale evidence, never as healthy. Routine
