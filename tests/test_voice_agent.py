@@ -43,9 +43,10 @@ def test_voice_instructions_keep_implicit_memory_handling_invisible() -> None:
     assert '"Do you want me to remember that?"' in normalized
 
 
-def test_voice_instructions_route_self_diagnostics_through_inspect_self() -> None:
+def test_voice_instructions_route_self_diagnostics_through_typed_tools() -> None:
     normalized = " ".join(INSTRUCTIONS.split())
-    assert "When `inspect_self` is available" in normalized
+    assert "Self-Awareness read tools" in normalized
+    assert "`get_self_component_details`" in normalized
     assert "dependencies" in normalized
     assert "affected components" in normalized
     assert "recent engineering incidents" in normalized
@@ -55,7 +56,8 @@ def test_voice_instructions_route_self_diagnostics_through_inspect_self() -> Non
 def test_voice_instructions_use_canonical_self_component_discovery() -> None:
     normalized = " ".join(INSTRUCTIONS.split())
     assert "component IDs are opaque internal handles" in normalized
-    assert "call `list_components` first" in normalized
+    assert "call `list_self_components` first" in normalized
+    assert "Do not ask the USER for permission" in normalized
     assert "never invent or approximate a component ID" in normalized
     assert "retry the requested component read" in normalized
     assert "do not substitute model knowledge" in normalized
