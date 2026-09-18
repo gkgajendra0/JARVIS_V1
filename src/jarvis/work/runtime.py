@@ -137,6 +137,7 @@ def build_work_runtime(
     actions = WorkActionRegistry(tuple(executors))
     resources = ResourceLeaseManager(
         {
+            "work": max(1, global_concurrency),
             "cpu": max(1, min(2, global_concurrency)),
             "git": 1,
             "network": max(1, global_concurrency),
@@ -147,6 +148,7 @@ def build_work_runtime(
         brain=brain,
         actions=actions,
         resources=resources,
+        base_resource_keys=("work",),
     )
     backend = initialize_dbos_work_runtime(
         engine=engine,

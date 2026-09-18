@@ -1027,3 +1027,40 @@ async def test_pause_during_inflight_reasoning_stops_before_execution(
     assert paused.state is WorkState.PAUSED
     assert result.state is WorkState.PAUSED
     assert store.list_steps(submission.work.work_id) == ()
+
+
+
+@pytest.mark.asyncio
+async def test_global_execution_lease_bounds_all_executor_steps(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = ScriptedReasoner()
+    executor = ConcurrentExecutor()
+    resources = ResourceLeaseManager({"work": 1, "cpu": 2, "network": 4, "git": 1})
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((executor,)),
+        resources=resources,
+        base_resource_keys=("work",),
+    )
+    first = create_item(store, request="Global task A")
+    second = WorkItem(
+        request="Global task B",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-1",
+        source_turn_id="turn-global-2",
+    )
+    store.create(second)
+
+    for item in (first, second):
+        reasoner.decisions[item.work_id] = [
+            BrainDecision(action="do_step", summary="Execute bounded step")
+        ]
+
+    await asyncio.gather(engine.advance(first.work_id), engine.advance(second.work_id))
+
+    assert executor.max_active == 1
+    assert store.require(first.work_id).state is WorkState.RUNNING
+    assert store.require(second.work_id).state is WorkState.RUNNING

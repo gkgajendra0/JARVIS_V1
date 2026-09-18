@@ -99,11 +99,13 @@ class WorkEngine:
         brain: BrainCoordinator,
         actions: WorkActionRegistry,
         resources: ResourceLeaseManager | None = None,
+        base_resource_keys: tuple[str, ...] = (),
     ) -> None:
         self._store = store
         self._brain = brain
         self._actions = actions
         self._resources = resources or ResourceLeaseManager()
+        self._base_resource_keys = self._resources.normalize(base_resource_keys)
 
     def _make_running(self, work: WorkItem) -> WorkItem:
         if work.state in {
@@ -519,7 +521,9 @@ class WorkEngine:
             if callable(resource_provider)
             else ()
         )
-        resource_keys = self._resources.normalize(resource_keys)
+        resource_keys = self._resources.normalize(
+            (*self._base_resource_keys, *resource_keys)
+        )
 
         if resource_keys:
             waiting = work.transition(
