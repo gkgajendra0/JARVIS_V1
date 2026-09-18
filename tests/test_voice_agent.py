@@ -43,7 +43,6 @@ def test_voice_instructions_keep_implicit_memory_handling_invisible() -> None:
     assert '"Do you want me to remember that?"' in normalized
 
 
-
 def test_voice_instructions_route_self_diagnostics_through_inspect_self() -> None:
     normalized = " ".join(INSTRUCTIONS.split())
     assert "When `inspect_self` is available" in normalized
