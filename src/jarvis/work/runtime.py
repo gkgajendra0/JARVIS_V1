@@ -121,5 +121,5 @@ def build_work_runtime(
         engine=engine,
         backend=backend,
         orchestrator=orchestrator,
-        supported_work_types=frozenset({WorkType.RESEARCH, WorkType.DEVELOPMENT}),
+        supported_work_types=actions.supported_work_types,
     )
