@@ -73,6 +73,7 @@ from jarvis.voice.media_devices_audio import (
 from jarvis.voice.provider_resilience import ProviderResilienceSessionObserver
 from jarvis.voice.silent_audio_recovery import SilentRealtimeAudioRecovery
 from jarvis.voice.wakeword import LiveKitWakeDetector, load_livekit_predictor
+from jarvis.work.runtime import build_work_runtime
 
 LOGGER = logging.getLogger(__name__)
 _NATIVE_TRACKING_EVIDENCE_MAX_GAP_SECONDS = 2.0
@@ -277,6 +278,22 @@ def build_production_voice_runtime(
         research_service.provider_name,
     )
 
+    work_runtime = None
+    if config.work_orchestration_enabled:
+        work_runtime = build_work_runtime(
+            provider=config.ai_provider,
+            research_service=research_service,
+            model=config.work_orchestration_model,
+            global_concurrency=config.work_global_concurrency,
+            event_loop=asyncio.get_running_loop(),
+        )
+        LOGGER.info(
+            "Persistent work runtime configured: provider=%s concurrency=%s "
+            "canonical_store=True durable_backend=DBOS",
+            config.ai_provider,
+            config.work_global_concurrency,
+        )
+
     result_observer = (
         CapabilityExecutionHealthObserver(self_awareness)
         if self_awareness is not None
@@ -375,6 +392,7 @@ def build_production_voice_runtime(
         memory_query_coordinator=memory_query_coordinator,
         research_service=research_service,
         capability_runtime=capability_runtime,
+        work_runtime=work_runtime,
         session_factory=production_session_factory,
         startup_readiness_waiter=(
             tracking_observer.wait_for_startup_lock
