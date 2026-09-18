@@ -21,6 +21,7 @@ from jarvis.health_adapters import (
     ProviderResilienceHealthObserver,
     record_capability_catalog_health,
     record_foundation_health,
+    record_hands_availability_health,
     require_startup_preflight_with_health,
 )
 from jarvis.identity.active_speaker import (
@@ -295,6 +296,7 @@ def build_production_voice_runtime(
     capability_catalog = capability_runtime.refresh_catalog()
     if self_awareness is not None:
         record_capability_catalog_health(self_awareness, capability_catalog)
+        record_hands_availability_health(self_awareness, capability_catalog)
     structured_hands = capability_catalog.by_key("windows:desktop.control")
     visual_hands = capability_catalog.by_key("visual:desktop.control")
     browser_hands = capability_catalog.by_key("browser:playwright")
