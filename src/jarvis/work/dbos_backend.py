@@ -16,7 +16,6 @@ _QUEUE_NAME = "jarvis-work"
 _OWNER_TOPIC = "owner-input"
 _CONTROL_TOPIC = "work-control"
 _EVENT_STATE = "jarvis-work-state"
-_DEFAULT_GLOBAL_CONCURRENCY = 4
 _MAX_REASONING_CYCLES = 200
 
 _ENGINE: WorkEngine | None = None
@@ -185,11 +184,11 @@ def initialize_dbos_work_runtime(
     engine: WorkEngine,
     event_loop: asyncio.AbstractEventLoop,
     application_version: str,
-    global_concurrency: int = _DEFAULT_GLOBAL_CONCURRENCY,
+    queue_concurrency: int | None = None,
     system_database_url: str | None = None,
 ) -> DBOSWorkExecutionBackend:
-    if global_concurrency <= 0:
-        raise ValueError("work global concurrency must be positive")
+    if queue_concurrency is not None and queue_concurrency <= 0:
+        raise ValueError("DBOS queue concurrency must be positive when configured")
     configure_work_engine(engine, event_loop)
 
     config: DBOSConfig = {
@@ -204,7 +203,7 @@ def initialize_dbos_work_runtime(
     }
     DBOS(config=config)
     DBOS.launch()
-    DBOS.register_queue(_QUEUE_NAME, global_concurrency=global_concurrency)
+    DBOS.register_queue(_QUEUE_NAME, global_concurrency=queue_concurrency)
     return DBOSWorkExecutionBackend()
 
 
