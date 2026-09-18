@@ -40,6 +40,8 @@ Already-started deterministic bounded executor work may continue while conversat
 
 The durable workflow has a bounded semantic reasoning-cycle limit, but waiting/paused states do not consume that budget. A task may wait for the owner or a dependency for an arbitrarily long real-world interval without being failed merely because time passed.
 
+Crash recovery is deliberately split by evidence quality. Canonical active WorkItems are re-submitted using the same DBOS workflow ID so a process death after SQLite state creation but before durable enqueue cannot orphan work or create a duplicate execution. However, if process death leaves a persisted WorkStep in RUNNING state, JARVIS treats that executor outcome as unknown: the step is marked interrupted/unverified and the WorkItem moves to WAITING_FOR_OWNER rather than automatically replaying a potentially side-effecting action. Saved COMPLETED / FAILED / WAITING_FOR_OWNER states also reconstruct any missing durable delivery record after restart.
+
 ### 5. Workers are bounded typed executors
 
 The orchestrator is not a monolithic worker. A registry exposes only actions explicitly supported for a WorkType. The initial production candidate deliberately supports source-aware background research and isolated JARVIS repository development.
@@ -48,9 +50,9 @@ Resource leases bound shared CPU/Git/network surfaces. Priorities affect future 
 
 ### 6. Owner control is canonical and race-safe
 
-Pause, resume, cancel and reprioritize update canonical JARVIS state. Optimistic versions reject stale writes. After model reasoning returns, the engine re-reads canonical state before starting an action, so an owner pause/cancel that occurred during reasoning stops execution cleanly.
+Pause, resume, cancel and reprioritize update canonical JARVIS state. Optimistic versions reject stale writes. After model reasoning returns, the engine re-reads canonical state before starting an action, so an owner pause/cancel that occurred during reasoning stops execution cleanly. If cancellation happens while an already-started atomic executor is running, the executor may finish, but its later bookkeeping cannot resurrect the cancelled WorkItem or announce success.
 
-If exactly one task is `WAITING_FOR_OWNER`, a natural reply may continue it without requiring an internal WorkItem ID. Multiple waiting tasks require disambiguation.
+If exactly one task is `WAITING_FOR_OWNER`, a natural reply may continue it without requiring an internal WorkItem ID. Multiple waiting tasks require disambiguation. Owner-input and durable control messages use idempotency keys, and replay of an already-applied identical owner response is treated idempotently instead of creating duplicate owner-input steps.
 
 ### 7. Result delivery is durable and truthful
 
@@ -87,7 +89,7 @@ Persistent orchestration is assembled by the `jarvis-voice` production runtime. 
 
 ## Acceptance gates
 
-This foundation is not production-accepted until exact-head CI is green, the owner-machine production path starts with Postgres DBOS and the approved Docker image, concurrent research/development plus immediate voice/Hands behavior is proven, restart recovery/cancel isolation/deferred delivery are proven, development isolation is proven, and the owner explicitly accepts the behavior before protected-main merge.
+This foundation is not production-accepted until exact-head CI is green, the owner-machine production path starts with Postgres DBOS and the approved Docker image, concurrent research/development plus immediate voice/Hands behavior is proven, normal restart recovery and forced mid-executor crash recovery are proven, cancel isolation/deferred delivery are proven, development isolation is proven, and the owner explicitly accepts the behavior before protected-main merge.
 
 Detailed procedure: `docs/research/PERSISTENT_WORK_ACCEPTANCE_PLAN_2026-09-18.md`.
 

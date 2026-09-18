@@ -99,9 +99,15 @@ Do not manufacture a pass if the real task never requires clarification; record 
 
 ### G. Restart recovery
 
-Start a non-terminal task, note its WorkItem ID/state, stop `jarvis-voice`, then restart with the same Postgres URL and local work state.
+Exercise both recovery classes.
 
-Expected: same WorkItem identity; eligible DBOS workflow recovers; no duplicate task; waiting wall-clock time does not cause false failure.
+**G1 — clean restart:** start a non-terminal task, note its WorkItem ID/state, stop `jarvis-voice` normally, then restart with the same Postgres URL and local work state.
+
+Expected: same WorkItem identity; eligible DBOS workflow is reattached/recovered idempotently; no duplicate task; waiting wall-clock time does not cause false failure.
+
+**G2 — forced mid-executor crash:** use a safe background task whose bounded executor can be observed running, then terminate the JARVIS process before that executor outcome is durably recorded and restart with the same state.
+
+Expected: JARVIS does **not** automatically replay the unknown side effect. Any persisted RUNNING WorkStep is marked interrupted/unverified and the WorkItem moves to `WAITING_FOR_OWNER` with a truthful recovery explanation. A natural owner response may then decide whether to retry/continue.
 
 ### H. Completion delivery
 
@@ -115,7 +121,7 @@ Verify latest edit -> passing Docker tests -> final diff -> clean isolated commi
 
 ## Blockers
 
-Any serial voice blocking, brain competition with active conversation, duplicate/lost work after restart, waiting-time false failure, cross-task cancellation, premature success delivery, host execution of model-edited code, protected-main mutation, secret exposure, or production orchestration without explicit Postgres fails acceptance.
+Any serial voice blocking, brain competition with active conversation, duplicate/lost work after restart, automatic replay of an executor whose pre-crash outcome is unknown, waiting-time false failure, cross-task cancellation, premature success delivery, host execution of model-edited code, protected-main mutation, secret exposure, or production orchestration without explicit Postgres fails acceptance.
 
 ## Acceptance record
 
