@@ -63,7 +63,6 @@ def test_voice_instructions_use_canonical_self_component_discovery() -> None:
     assert "do not substitute model knowledge" in normalized
 
 
-
 def test_voice_instructions_ground_diagnosis_in_evidence_not_old_fixes() -> None:
     normalized = " ".join(INSTRUCTIONS.split())
     assert "`query_self_operational_evidence`" in normalized
