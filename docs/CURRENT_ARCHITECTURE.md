@@ -206,6 +206,6 @@ Repository-wide reconciliation evidence: `docs/research/PRODUCTION_RECONCILIATIO
 
 ## Next architecture acceptance
 
-PR #41 Self-Awareness Foundation is implemented on its feature branch but is **not part of this production architecture yet**. It must first be reconciled onto this accepted baseline and pass owner-machine privacy, resource, incident, health/blast-radius, console/logging and Voice/Hands/Pocket non-regression acceptance.
+PR #41 Self-Awareness Foundation is implemented on its feature branch but is **not part of this production architecture yet**. The candidate branch now contains a hierarchical whole-JARVIS Self Model, bounded top-level health surface, rotating structured JSONL evidence queries, typed Self-Awareness reads, and resolved incident/fix retrieval. Autonomous diagnosis/repair remains outside this architecture. The branch must pass owner-machine privacy, resource, log-evidence, incident, health/blast-radius, console/logging and Voice/Hands/Pocket non-regression acceptance before protected-main merge.
 
 After that interlude is explicitly accepted and merged, Step 8 — Notes, Tasks, Reminders, and Scheduling — remains the next formal roadmap slice.
