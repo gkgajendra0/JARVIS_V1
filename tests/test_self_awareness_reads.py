@@ -126,3 +126,38 @@ def test_unknown_component_is_rejected_before_execution(tmp_path: Path) -> None:
             _request("get_component_details", {"component_id": "missing.component"})
         )
     awareness.close()
+
+
+
+def test_list_components_exposes_canonical_ids_and_purposes(tmp_path: Path) -> None:
+    awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
+    executor = SelfAwarenessReadExecutor(awareness)
+
+    result = executor.execute(executor.prepare(_request("list_components")))
+
+    assert result.status is CapabilityStatus.SUCCEEDED
+    components = {
+        item["component_id"]: item["purpose"]
+        for item in result.data["components"]
+    }
+    assert components["runtime.provider"] == (
+        "Cloud AI provider boundary and provider resilience."
+    )
+    assert components["vision.pocket3"] == (
+        "Pocket 3 native tracking transport and evidence."
+    )
+    awareness.close()
+
+
+def test_unknown_component_guides_canonical_component_discovery(tmp_path: Path) -> None:
+    awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
+    executor = SelfAwarenessReadExecutor(awareness)
+
+    with pytest.raises(
+        SelfAwarenessReadValidationError,
+        match="use list_components",
+    ):
+        executor.prepare(
+            _request("get_component_details", {"component_id": "provider"})
+        )
+    awareness.close()
