@@ -94,6 +94,7 @@ class SQLiteWorkStore:
                     state TEXT NOT NULL,
                     priority INTEGER NOT NULL,
                     delivery_policy TEXT NOT NULL,
+                    dependencies_json TEXT NOT NULL DEFAULT '[]',
                     current_step_id TEXT,
                     result_json TEXT NOT NULL,
                     status_detail TEXT,
@@ -141,6 +142,15 @@ class SQLiteWorkStore:
                     ON work_deliveries(state, created_at ASC);
                 """
             )
+            columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(work_items)").fetchall()
+            }
+            if "dependencies_json" not in columns:
+                connection.execute(
+                    "ALTER TABLE work_items "
+                    "ADD COLUMN dependencies_json TEXT NOT NULL DEFAULT '[]'"
+                )
 
     @staticmethod
     def _item_from_row(row: sqlite3.Row) -> WorkItem:
@@ -157,6 +167,7 @@ class SQLiteWorkStore:
             state=WorkState(row["state"]),
             priority=WorkPriority(row["priority"]),
             delivery_policy=DeliveryPolicy(row["delivery_policy"]),
+            dependencies=tuple(json.loads(row["dependencies_json"])),
             current_step_id=row["current_step_id"],
             result=json.loads(row["result_json"]),
             status_detail=row["status_detail"],
@@ -208,9 +219,10 @@ class SQLiteWorkStore:
                     """
                     INSERT INTO work_items (
                         work_id, request, work_type, source_session_id, source_turn_id,
-                        state, priority, delivery_policy, current_step_id, result_json,
-                        status_detail, created_at, updated_at, version
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        state, priority, delivery_policy, dependencies_json,
+                        current_step_id, result_json, status_detail, created_at,
+                        updated_at, version
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         item.work_id,
@@ -221,6 +233,7 @@ class SQLiteWorkStore:
                         item.state.value,
                         int(item.priority),
                         item.delivery_policy.value,
+                        json.dumps(item.dependencies),
                         item.current_step_id,
                         json.dumps(item.result, sort_keys=True),
                         item.status_detail,
