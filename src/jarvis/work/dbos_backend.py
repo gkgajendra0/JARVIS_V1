@@ -179,7 +179,7 @@ class DBOSWorkExecutionBackend:
         DBOS.send(work_id, normalized, topic=_OWNER_TOPIC)
 
 
-def initialize_dbos_work_runtime(
+async def initialize_dbos_work_runtime(
     *,
     engine: WorkEngine,
     event_loop: asyncio.AbstractEventLoop,
@@ -203,7 +203,10 @@ def initialize_dbos_work_runtime(
     }
     DBOS(config=config)
     DBOS.launch()
-    DBOS.register_queue(_QUEUE_NAME, global_concurrency=queue_concurrency)
+    await DBOS.register_queue_async(
+        _QUEUE_NAME,
+        global_concurrency=queue_concurrency,
+    )
     return DBOSWorkExecutionBackend()
 
 
