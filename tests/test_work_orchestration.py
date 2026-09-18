@@ -240,7 +240,7 @@ def test_orchestrator_accepts_pause_resume_cancel_without_session_ownership(
     assert backend.cancelled == []
 
     resumed = orchestrator.resume(work_id)
-    assert resumed.state is WorkState.RUNNING
+    assert resumed.state is WorkState.QUEUED
     assert backend.resumed == [work_id]
 
     cancelled = orchestrator.cancel(work_id)

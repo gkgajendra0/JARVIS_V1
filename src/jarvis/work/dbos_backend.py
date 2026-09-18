@@ -55,6 +55,21 @@ def _jarvis_loop() -> asyncio.AbstractEventLoop:
     return _JARVIS_EVENT_LOOP
 
 
+def _run_dbos_sync(callable_, /, *args, **kwargs):
+    """Keep DBOS synchronous APIs off JARVIS's active asyncio event loop."""
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return callable_(*args, **kwargs)
+
+    with ThreadPoolExecutor(
+        max_workers=1,
+        thread_name_prefix="jarvis-dbos-call",
+    ) as pool:
+        return pool.submit(callable_, *args, **kwargs).result()
+
+
 def _queue_priority(priority: WorkPriority) -> int:
     return {
         WorkPriority.URGENT: 1,
@@ -153,19 +168,31 @@ class DBOSWorkExecutionBackend:
     """Queue/recovery mechanics only; canonical work truth remains in JARVIS store."""
 
     def submit(self, work_id: str, *, priority: WorkPriority) -> str:
-        with (
-            SetWorkflowID(work_id),
-            SetEnqueueOptions(priority=_queue_priority(priority)),
-        ):
-            handle = DBOS.enqueue_workflow(_QUEUE_NAME, durable_workflow, work_id)
+        def enqueue():
+            with (
+                SetWorkflowID(work_id),
+                SetEnqueueOptions(priority=_queue_priority(priority)),
+            ):
+                return DBOS.enqueue_workflow(_QUEUE_NAME, durable_workflow, work_id)
+
+        handle = _run_dbos_sync(enqueue)
         workflow_id = handle.get_workflow_id()
         if workflow_id != work_id:
             raise RuntimeError("DBOS did not preserve canonical JARVIS work ID")
         return workflow_id
 
     def cancel(self, execution_id: str) -> None:
-        DBOS.send(execution_id, "cancel", topic=_CONTROL_TOPIC)
-        DBOS.cancel_workflow(execution_id, cancel_children=True)
+        _run_dbos_sync(
+            DBOS.send,
+            execution_id,
+            "cancel",
+            topic=_CONTROL_TOPIC,
+        )
+        _run_dbos_sync(
+            DBOS.cancel_workflow,
+            execution_id,
+            cancel_children=True,
+        )
 
     def pause(self, execution_id: str) -> None:
         # Canonical PAUSED state is sufficient. An already-started atomic step may
@@ -173,13 +200,23 @@ class DBOSWorkExecutionBackend:
         del execution_id
 
     def resume(self, execution_id: str) -> None:
-        DBOS.send(execution_id, "resume", topic=_CONTROL_TOPIC)
+        _run_dbos_sync(
+            DBOS.send,
+            execution_id,
+            "resume",
+            topic=_CONTROL_TOPIC,
+        )
 
     def send_owner_input(self, work_id: str, response: str) -> None:
         normalized = response.strip()
         if not normalized:
             raise ValueError("owner response must not be empty")
-        DBOS.send(work_id, normalized, topic=_OWNER_TOPIC)
+        _run_dbos_sync(
+            DBOS.send,
+            work_id,
+            normalized,
+            topic=_OWNER_TOPIC,
+        )
 
 
 def initialize_dbos_work_runtime(
