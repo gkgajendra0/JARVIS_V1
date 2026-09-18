@@ -11,7 +11,9 @@ from jarvis.work.development import (
     DevelopmentWorkspaceError,
     DevelopmentWorkspaceManager,
     DevelopmentWriteFileExecutor,
+    DockerDevelopmentTestRunner,
 )
+from jarvis.work.engine import WorkOwnerInputRequired
 from jarvis.work.models import WorkItem, WorkType
 
 
@@ -113,7 +115,49 @@ def test_development_paths_cannot_escape_worktree(
 
 
 @pytest.mark.asyncio
-async def test_development_test_runner_is_pytest_only_and_verified(
+async def test_development_test_executor_uses_only_configured_runner(
+    git_project: Path,
+    tmp_path: Path,
+) -> None:
+    class RecordingRunner:
+        def __init__(self) -> None:
+            self.calls: list[tuple[Path, tuple[str, ...], float]] = []
+
+        async def run(
+            self,
+            workspace: Path,
+            *,
+            targets: tuple[str, ...],
+            timeout_seconds: float,
+        ) -> dict:
+            self.calls.append((workspace, targets, timeout_seconds))
+            return {"passed": True, "sandbox": "test-double"}
+
+    manager = DevelopmentWorkspaceManager(
+        repository_root=git_project,
+        workspace_root=tmp_path / "worktrees",
+    )
+    manager.ensure("work_dev_test")
+    runner = RecordingRunner()
+    executor = DevelopmentRunTestsExecutor(manager, runner=runner)
+
+    result = await executor.execute(
+        work=_development_item(),
+        parameters={"targets": ["tests/test_module.py"], "timeout_seconds": 60},
+    )
+
+    assert result["passed"] is True
+    assert runner.calls == [
+        (
+            manager.workspace_for("work_dev_test").path,
+            ("tests/test_module.py",),
+            60.0,
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_development_tests_wait_for_owner_without_safe_sandbox(
     git_project: Path,
     tmp_path: Path,
 ) -> None:
@@ -124,14 +168,11 @@ async def test_development_test_runner_is_pytest_only_and_verified(
     manager.ensure("work_dev_test")
     executor = DevelopmentRunTestsExecutor(manager)
 
-    result = await executor.execute(
-        work=_development_item(),
-        parameters={"targets": ["tests/test_module.py"], "timeout_seconds": 60},
-    )
-
-    assert result["passed"] is True
-    assert result["timed_out"] is False
-    assert result["command"][:4] == ["python", "-m", "pytest", "-q"]
+    with pytest.raises(WorkOwnerInputRequired, match="sandbox is not configured"):
+        await executor.execute(
+            work=_development_item(),
+            parameters={"targets": ["tests/test_module.py"]},
+        )
 
 
 @pytest.mark.asyncio
@@ -151,3 +192,50 @@ async def test_development_test_target_cannot_escape_worktree(
             work=_development_item(),
             parameters={"targets": ["../outside.py"]},
         )
+
+
+
+@pytest.mark.asyncio
+async def test_docker_runner_uses_locked_down_fixed_pytest_command(
+    git_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "jarvis.work.development.shutil.which",
+        lambda name: "/usr/bin/docker" if name == "docker" else None,
+    )
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return subprocess.CompletedProcess(command, 0, "1 passed", "")
+
+    monkeypatch.setattr("jarvis.work.development.subprocess.run", fake_run)
+
+    runner = DockerDevelopmentTestRunner("jarvis-tests:locked")
+    result = await runner.run(
+        git_project,
+        targets=("tests/test_module.py",),
+        timeout_seconds=45.0,
+    )
+
+    command = captured["command"]
+    assert isinstance(command, list)
+    assert "--network" in command and command[command.index("--network") + 1] == "none"
+    assert "--read-only" in command
+    assert "--cap-drop" in command and command[command.index("--cap-drop") + 1] == "ALL"
+    assert "--security-opt" in command
+    assert "no-new-privileges" in command
+    assert "jarvis-tests:locked" in command
+    image_index = command.index("jarvis-tests:locked")
+    assert command[image_index + 1 : image_index + 5] == [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+    ]
+    assert result["passed"] is True
+    assert result["network"] == "disabled"
+    assert result["workspace"] == "read_only"
