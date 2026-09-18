@@ -16,7 +16,11 @@ The research objective was to reuse mature observability and engineering-agent t
 
 ### 1. JARVIS owns the operational Self Model
 
-A version-controlled Self Model describes components, source locations, product/capability relationships, dependencies, health probes, configuration surfaces and validation evidence. External observability products may store or visualize telemetry but do not become canonical component truth.
+A version-controlled **hierarchical whole-JARVIS Self Model** describes the major runtime and engineering subsystems plus their meaningful subcomponents. It maps parent/child structure, source locations, logger ownership, product/capability relationships, dependencies, health probes, configuration/resource surfaces, tests and documentation.
+
+The model is deliberately not one entry per Python function. JARVIS keeps a compact map of the whole system and retrieves deep code/evidence only when needed. A bounded `health_surface` preserves a useful top-level health view while non-probed subcomponents remain discoverable for architecture and diagnosis.
+
+External observability products may store or visualize telemetry but do not become canonical component truth.
 
 ### 2. Health is deterministic and evidence-backed
 
@@ -40,9 +44,15 @@ Authority audit continues to own permission/action evidence. Personal memory con
 
 ### 6. Incident memory is durable engineering knowledge
 
-Incidents group meaningful degraded/failed transitions and may retain compact evidence references, affected components, confirmed root cause, accepted fix, regression tests, commit/PR, deployment result, rollback state and lessons. This is the durable input for future diagnosis; raw high-volume telemetry remains subject to bounded retention.
+Incidents group meaningful degraded/failed transitions and may retain compact evidence references, affected components, confirmed root cause, accepted fix, regression tests, commit/PR, deployment result, rollback state and lessons. Resolved incidents can be retrieved by component (including child-component scope) as prior engineering history for future diagnosis. A previous fix is evidence, not permission to reuse it automatically.
 
-### 7. Repair/evolution agents remain outside authority
+### 7. Operational evidence is queryable but bounded
+
+JARVIS can read its local rotating JSONL spool through a read-only bounded evidence-query layer. Queries are scoped by canonical component and may additionally filter a bounded time window, severity, reason code, correlation identifiers or plain diagnostic text. Component logger-prefix ownership allows older log call sites without explicit `component_id` to remain discoverable.
+
+The evidence reader scans current/rotated files newest-first with hard line/result bounds and returns a small projected event schema rather than placing whole log files into model context.
+
+### 8. Repair/evolution agents remain outside authority
 
 No model or coding agent gains production mutation authority from this foundation. Future repair must remain `evidence -> diagnosis -> proposal -> isolated branch/worktree/sandbox -> tests -> owner approval -> protected-main merge -> jarvis-dev readiness -> keep/rollback`.
 
@@ -69,7 +79,8 @@ This interlude is not production-accepted until:
 4. local runtime overhead is measured on the owner machine;
 5. current hardware/provider/Hands/Pocket behavior is not regressed;
 6. documentation is reconciled after real-use acceptance;
-7. protected-main merge remains explicit owner approval.
+7. hierarchical Self Model coverage and bounded evidence querying pass repository tests;
+8. protected-main merge remains explicit owner approval.
 
 ## Reconsideration triggers
 
