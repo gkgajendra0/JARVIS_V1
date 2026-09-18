@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import sqlite3
 import threading
@@ -22,6 +23,30 @@ from jarvis.work.models import (
 
 class WorkStoreError(RuntimeError):
     pass
+
+
+def default_work_state_dir() -> pathlib.Path:
+    if os.name == "nt":
+        base = pathlib.Path(
+            os.environ.get(
+                "LOCALAPPDATA",
+                str(pathlib.Path.home() / "AppData" / "Local"),
+            )
+        )
+    else:
+        base = pathlib.Path(
+            os.environ.get(
+                "XDG_STATE_HOME",
+                str(pathlib.Path.home() / ".local" / "state"),
+            )
+        )
+    path = base / "JARVIS" / "work"
+    path.mkdir(parents=True, exist_ok=True)
+    return path.resolve()
+
+
+def default_work_store_path() -> pathlib.Path:
+    return default_work_state_dir() / "work.sqlite3"
 
 
 def _dt(value: datetime | None) -> str | None:
