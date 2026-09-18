@@ -876,3 +876,59 @@ async def test_deterministic_worker_continues_while_voice_owns_brain(
     assert result.state is WorkState.RUNNING
     assert store.list_steps(item.work_id)[-1].observation == {"finished": True}
     assert gate.interactive_active is True
+
+
+def test_unique_waiting_owner_work_can_be_resolved_without_id(tmp_path: Path) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+    submission = orchestrator.start(
+        request="Need one owner answer",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-natural-owner",
+        source_turn_id="turn-natural-owner",
+    )
+    queued = submission.work
+    running = queued.transition(WorkState.RUNNING)
+    store.save(running, expected_version=queued.version)
+    waiting = running.transition(
+        WorkState.WAITING_FOR_OWNER,
+        status_detail="Proceed?",
+    )
+    store.save(waiting, expected_version=running.version)
+
+    from jarvis.work.runtime import WorkRuntime
+
+    runtime = object.__new__(WorkRuntime)
+    runtime.store = store
+
+    resolved = runtime.resolve_waiting_owner_work(None)
+
+    assert resolved.work_id == waiting.work_id
+
+
+def test_multiple_waiting_owner_tasks_require_disambiguation(tmp_path: Path) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    for index in range(2):
+        item = WorkItem(
+            request=f"Owner task {index}",
+            work_type=WorkType.GENERIC,
+            source_session_id="session-owner-ambiguous",
+            source_turn_id=f"turn-owner-{index}",
+        )
+        store.create(item)
+        running = item.transition(WorkState.RUNNING)
+        store.save(running, expected_version=item.version)
+        waiting = running.transition(
+            WorkState.WAITING_FOR_OWNER,
+            status_detail="Need owner input",
+        )
+        store.save(waiting, expected_version=running.version)
+
+    from jarvis.work.runtime import WorkRuntime
+
+    runtime = object.__new__(WorkRuntime)
+    runtime.store = store
+
+    with pytest.raises(ValueError, match="multiple background tasks"):
+        runtime.resolve_waiting_owner_work(None)
