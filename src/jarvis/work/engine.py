@@ -124,7 +124,7 @@ class WorkEngine:
         if decision.goal_complete:
             completed = work.transition(
                 WorkState.COMPLETED,
-                status_detail=decision_summary,
+                status_detail=decision.summary,
                 result={"summary": decision.summary},
             )
             self._store.save(completed, expected_version=work.version)
@@ -220,7 +220,7 @@ class WorkEngine:
         self._store.save_step(running_step)
         with_step = work.with_progress(
             current_step_id=step.step_id,
-            status_detail=decision.summary,
+            status_detail=decision_summary,
         )
         self._store.save(with_step, expected_version=work.version)
 
