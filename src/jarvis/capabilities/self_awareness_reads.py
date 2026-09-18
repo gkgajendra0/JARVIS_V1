@@ -26,6 +26,7 @@ class SelfAwarenessReadValidationError(ValueError):
 class SelfAwarenessReadExecutor:
     capability_key = "local:self_awareness.read"
     operations = (
+        "list_components",
         "get_system_health",
         "get_component_health",
         "get_component_details",
@@ -63,7 +64,10 @@ class SelfAwarenessReadExecutor:
             if not component_id:
                 raise SelfAwarenessReadValidationError("component_id is required")
             if self._awareness.self_model.component(component_id) is None:
-                raise SelfAwarenessReadValidationError("unknown component_id")
+                raise SelfAwarenessReadValidationError(
+                    "unknown component_id; use list_components to select a canonical "
+                    "component_id from the Self Model"
+                )
             params = {"component_id": component_id}
             target["component_id"] = component_id
         elif request.operation == "list_recent_incidents":
@@ -89,6 +93,7 @@ class SelfAwarenessReadExecutor:
             params = {}
 
         summaries = {
+            "list_components": "List canonical JARVIS Self Model components",
             "get_system_health": "Read current JARVIS component health summary",
             "get_component_health": "Read deterministic health for one JARVIS component",
             "get_component_details": (
@@ -97,6 +102,7 @@ class SelfAwarenessReadExecutor:
             "list_recent_incidents": "Read bounded recent JARVIS engineering incidents",
         }
         routine_health = request.operation in {
+            "list_components",
             "get_system_health",
             "get_component_health",
         }
@@ -117,7 +123,9 @@ class SelfAwarenessReadExecutor:
         started = time.monotonic()
         try:
             operation = prepared.request.operation
-            if operation == "get_system_health":
+            if operation == "list_components":
+                data = self._list_components()
+            elif operation == "get_system_health":
                 data = self._system_health()
             elif operation == "get_component_health":
                 data = self._component_health(str(prepared.parameters["component_id"]))
@@ -145,6 +153,19 @@ class SelfAwarenessReadExecutor:
                 reason=f"self-awareness read failed: {type(exc).__name__}",
                 elapsed_ms=(time.monotonic() - started) * 1000.0,
             )
+
+    def _list_components(self) -> dict[str, Any]:
+        components = self._awareness.self_model.components
+        return {
+            "components": [
+                {
+                    "component_id": item.component_id,
+                    "purpose": item.purpose,
+                }
+                for item in components
+            ],
+            "component_count": len(components),
+        }
 
     def _system_health(self) -> dict[str, Any]:
         snapshots = self._awareness.system_snapshot()
