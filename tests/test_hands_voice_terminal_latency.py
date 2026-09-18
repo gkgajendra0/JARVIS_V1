@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections import deque
 import logging
+from collections import deque
 
 import pytest
 
@@ -136,7 +136,6 @@ async def test_verified_single_route_action_skips_completion_planner_round_trip(
     assert planner.next_action_calls == 1
     assert len(executor.calls) == 1
     assert executor.calls[0].parameters == {"percent": 30.0}
-
 
 
 class DeniedExecutor(RecordingExecutor):
