@@ -44,6 +44,7 @@ class WorkAgentTools:
         return [
             self.start_background_work,
             self.list_background_work,
+            self.list_recent_background_work,
             self.get_background_work_status,
             self.cancel_background_work,
             self.pause_background_work,
@@ -134,6 +135,24 @@ class WorkAgentTools:
         """
         del context
         items = self._runtime.orchestrator.list_active(limit=50)
+        return {
+            "ok": True,
+            "status": "listed",
+            "work": [_public_work(item) for item in items],
+        }
+
+    @function_tool()
+    async def list_recent_background_work(
+        self,
+        context: RunContext,
+    ) -> dict[str, object]:
+        """List recent JARVIS WorkItems including finished/failed/cancelled work.
+
+        Use for questions such as "what finished while I was away?" or when the USER
+        wants both active and recently terminal work.
+        """
+        del context
+        items = self._runtime.store.list(limit=50)
         return {
             "ok": True,
             "status": "listed",
