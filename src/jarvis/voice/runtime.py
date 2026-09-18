@@ -769,6 +769,12 @@ class VoiceRuntimeController:
                 LOGGER.exception(
                     "Voice input could not be disabled during standby transition"
                 )
+            try:
+                session.output.set_audio_enabled(False)
+            except Exception:
+                LOGGER.exception(
+                    "Voice output could not be detached during standby transition"
+                )
             exit_task = asyncio.create_task(
                 acknowledge_and_end_session(),
                 name="jarvis-standby-acknowledgement",
