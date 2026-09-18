@@ -201,7 +201,11 @@ class WorkAgentTools:
         except WorkStoreError:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
         except ValueError as exc:
-            return {"ok": False, "status": "invalid_state", "reason": str(exc)}
+            return {
+                "ok": False,
+                "status": "owner_input_target_unresolved",
+                "reason": str(exc),
+            }
         return {"ok": True, "status": "paused", **_public_work(item)}
 
     @function_tool()
@@ -260,18 +264,19 @@ class WorkAgentTools:
     async def continue_background_work(
         self,
         context: RunContext,
-        work_id: str,
+        work_id: str = "",
     ) -> dict[str, object]:
-        """Supply the latest accepted USER utterance to work waiting for owner input.
+        """Supply the latest accepted USER utterance to owner-waiting background work.
 
-        Use only when the referenced WorkItem is WAITING_FOR_OWNER and the latest USER
-        turn is clearly their answer/approval/choice for that work. The actual response
-        is grounded from the canonical USER turn, not from a model-generated parameter.
+        If exactly one WorkItem is WAITING_FOR_OWNER, work_id may be omitted so a natural
+        reply such as "yes" can continue it. If multiple tasks are waiting, JARVIS must
+        identify/clarify the target instead of guessing. The actual response is grounded
+        from the canonical USER turn, never from model-generated hidden text.
         """
         del context
         turn = self._latest_user_turn()
         try:
-            waiting = self._runtime.submit_owner_input(work_id, turn.text)
+            waiting = self._runtime.submit_owner_input(work_id or None, turn.text)
         except WorkStoreError:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
         except ValueError as exc:
