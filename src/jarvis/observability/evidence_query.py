@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from jarvis.observability.logging import default_jsonl_log_path
+from jarvis.observability.redaction import redact_data
 
 _MAX_RESULTS = 100
 _MAX_SCAN_LINES = 20_000
@@ -94,7 +95,7 @@ def _project_event(row: dict[str, Any], *, file_name: str) -> dict[str, Any]:
         if key in row and row[key] not in {None, ""}
     }
     projected["log_file"] = file_name
-    return projected
+    return dict(redact_data(projected))
 
 
 class LocalOperationalEvidenceQuery:
