@@ -4,7 +4,7 @@
 
 **STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS FOUNDATION PR #41 IS IMPLEMENTED BUT NOT YET PRODUCTION-ACCEPTED. STEP 8 REMAINS QUEUED REQUIREMENTS / RESEARCH.**
 
-Protected production baseline after the 2026-09-18 reconciliation: `e2ff21e78480a09eb243cdd2c121b39e47620d0f`.
+Accepted runtime-code baseline after the 2026-09-18 consolidation: `e2ff21e78480a09eb243cdd2c121b39e47620d0f`. Documentation-only reconciliation commits may advance protected `main` without changing that runtime state.
 
 This file describes architecture that actually exists on protected `main`. Historical proposals and experiments belong in `docs/research/`; active acceptance work belongs in `CURRENT_PLAN.md`.
 
