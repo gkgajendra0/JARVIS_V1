@@ -24,6 +24,7 @@ from jarvis.work.models import (
     WorkItem,
     WorkPriority,
     WorkState,
+    WorkStep,
     WorkType,
 )
 from jarvis.work.orchestrator import WorkOrchestrator
@@ -934,3 +935,50 @@ def test_multiple_waiting_owner_tasks_require_disambiguation(tmp_path: Path) -> 
 
     with pytest.raises(ValueError, match="multiple background tasks"):
         runtime.resolve_waiting_owner_work(None)
+
+
+
+def test_development_completion_requires_post_edit_verification_order() -> None:
+    work = WorkItem(
+        request="Implement safely",
+        work_type=WorkType.DEVELOPMENT,
+        source_session_id="session-dev-order",
+        source_turn_id="turn-dev-order",
+    )
+
+    def completed_step(
+        kind: str,
+        observation: dict | None = None,
+    ) -> WorkStep:
+        return WorkStep(
+            work_id=work.work_id,
+            kind=kind,
+            summary=kind,
+        ).start().complete(observation or {})
+
+    stale_verification = (
+        completed_step("dev_run_tests", {"passed": True, "sandbox": "docker"}),
+        completed_step("dev_write_file", {"path": "module.py"}),
+        completed_step("dev_diff", {"diff": "changed"}),
+        completed_step(
+            "dev_commit",
+            {"committed": True, "clean": True, "commit": "abc"},
+        ),
+    )
+    allowed, reason = WorkEngine._completion_guard(work, stale_verification)
+    assert allowed is False
+    assert reason is not None
+    assert "after the latest edit" in reason
+
+    correct_order = (
+        completed_step("dev_write_file", {"path": "module.py"}),
+        completed_step("dev_run_tests", {"passed": True, "sandbox": "docker"}),
+        completed_step("dev_diff", {"diff": "changed"}),
+        completed_step(
+            "dev_commit",
+            {"committed": True, "clean": True, "commit": "def"},
+        ),
+    )
+    allowed, reason = WorkEngine._completion_guard(work, correct_order)
+    assert allowed is True
+    assert reason is None

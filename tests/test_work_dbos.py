@@ -88,7 +88,7 @@ async def test_dbos_executes_durable_work_without_blocking_event_loop(
     try:
         assert backend.submit(work_id, priority=WorkPriority.NORMAL) == work_id
         handle = await DBOS.retrieve_workflow_async(work_id)
-        result = await asyncio.to_thread(handle.get_result)
+        result = await handle.get_result()
         assert result["state"] == WorkState.COMPLETED.value
     finally:
         shutdown_dbos_work_runtime()
@@ -123,7 +123,7 @@ async def test_dbos_recovers_waiting_work_after_runtime_restart(tmp_path) -> Non
         recovered_backend.send_owner_input(work_id, "yes")
         handle = await DBOS.retrieve_workflow_async(work_id)
         result = await asyncio.wait_for(
-            asyncio.to_thread(handle.get_result),
+            handle.get_result(),
             timeout=15.0,
         )
         assert result["state"] == WorkState.COMPLETED.value

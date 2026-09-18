@@ -116,6 +116,51 @@ class WorkEngine:
         return work
 
     @staticmethod
+    def _development_evidence_indices(
+        steps: tuple[WorkStep, ...],
+    ) -> tuple[int, int, int, int]:
+        last_write = max(
+            (
+                index
+                for index, step in enumerate(steps)
+                if step.kind == "dev_write_file"
+                and step.state.value == "completed"
+            ),
+            default=-1,
+        )
+        last_passing_test = max(
+            (
+                index
+                for index, step in enumerate(steps)
+                if step.kind == "dev_run_tests"
+                and step.state.value == "completed"
+                and step.observation.get("passed") is True
+            ),
+            default=-1,
+        )
+        last_diff = max(
+            (
+                index
+                for index, step in enumerate(steps)
+                if step.kind == "dev_diff"
+                and step.state.value == "completed"
+            ),
+            default=-1,
+        )
+        last_clean_commit = max(
+            (
+                index
+                for index, step in enumerate(steps)
+                if step.kind == "dev_commit"
+                and step.state.value == "completed"
+                and step.observation.get("committed") is True
+                and step.observation.get("clean") is True
+            ),
+            default=-1,
+        )
+        return last_write, last_passing_test, last_diff, last_clean_commit
+
+    @staticmethod
     def _completion_guard(
         work: WorkItem,
         steps: tuple[WorkStep, ...],
@@ -136,34 +181,28 @@ class WorkEngine:
                 )
             )
         if work.work_type is WorkType.DEVELOPMENT:
-            tested = any(
-                step.kind == "dev_run_tests"
-                and step.state.value == "completed"
-                and step.observation.get("passed") is True
-                for step in steps
-            )
-            if not tested:
-                return False, "development work requires a verified passing test step"
-            reviewed_diff = any(
-                step.kind == "dev_diff" and step.state.value == "completed"
-                for step in steps
-            )
-            if not reviewed_diff:
+            (
+                last_write,
+                last_passing_test,
+                last_diff,
+                last_clean_commit,
+            ) = WorkEngine._development_evidence_indices(steps)
+            if last_write < 0:
+                return False, "development work requires a staged source change"
+            if last_passing_test <= last_write:
                 return (
                     False,
-                    "development work requires a recorded final diff inspection",
+                    "development work requires passing sandboxed tests after the latest edit",
                 )
-            committed = any(
-                step.kind == "dev_commit"
-                and step.state.value == "completed"
-                and step.observation.get("committed") is True
-                and step.observation.get("clean") is True
-                for step in steps
-            )
-            if not committed:
+            if last_diff <= last_passing_test:
                 return (
                     False,
-                    "development work must be committed on its isolated branch with a clean worktree",
+                    "development work requires final diff inspection after passing tests",
+                )
+            if last_clean_commit <= last_diff:
+                return (
+                    False,
+                    "development work must be committed after final diff inspection with a clean worktree",
                 )
             return True, None
         return True, None
@@ -448,25 +487,26 @@ class WorkEngine:
 
         assert decision.action is not None
         if decision.action == "dev_commit":
-            has_passing_tests = any(
-                step.kind == "dev_run_tests"
-                and step.state.value == "completed"
-                and step.observation.get("passed") is True
-                for step in steps
-            )
-            if not has_passing_tests:
+            (
+                last_write,
+                last_passing_test,
+                last_diff,
+                _,
+            ) = self._development_evidence_indices(steps)
+            if last_write < 0:
                 return self._record_completion_guard(
                     work,
-                    "local development commit requires passing sandboxed tests first",
+                    "local development commit requires a staged source change",
                 )
-            has_diff = any(
-                step.kind == "dev_diff" and step.state.value == "completed"
-                for step in steps
-            )
-            if not has_diff:
+            if last_passing_test <= last_write:
                 return self._record_completion_guard(
                     work,
-                    "local development commit requires diff inspection first",
+                    "local development commit requires passing sandboxed tests after the latest edit",
+                )
+            if last_diff <= last_passing_test:
+                return self._record_completion_guard(
+                    work,
+                    "local development commit requires final diff inspection after passing tests",
                 )
         executor = self._actions.require(decision.action, work.work_type)
         resource_provider = getattr(executor, "resource_keys", None)
