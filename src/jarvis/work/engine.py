@@ -13,6 +13,7 @@ from jarvis.work.models import (
     WorkStep,
     WorkType,
 )
+from jarvis.work.resources import ResourceLeaseManager
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -69,10 +70,12 @@ class WorkEngine:
         store: SQLiteWorkStore,
         brain: BrainCoordinator,
         actions: WorkActionRegistry,
+        resources: ResourceLeaseManager | None = None,
     ) -> None:
         self._store = store
         self._brain = brain
         self._actions = actions
+        self._resources = resources or ResourceLeaseManager()
 
     def _make_running(self, work: WorkItem) -> WorkItem:
         if work.state is WorkState.QUEUED or work.state is WorkState.RETRYING:
@@ -121,7 +124,7 @@ class WorkEngine:
         if decision.goal_complete:
             completed = work.transition(
                 WorkState.COMPLETED,
-                status_detail=decision.summary,
+                status_detail=decision_summary,
                 result={"summary": decision.summary},
             )
             self._store.save(completed, expected_version=work.version)
@@ -154,11 +157,63 @@ class WorkEngine:
 
         assert decision.action is not None
         executor = self._actions.require(decision.action, work.work_type)
+        resource_provider = getattr(executor, "resource_keys", None)
+        resource_keys = (
+            tuple(resource_provider(work, dict(decision.parameters)))
+            if callable(resource_provider)
+            else ()
+        )
+        resource_keys = self._resources.normalize(resource_keys)
+
+        if resource_keys:
+            waiting = work.transition(
+                WorkState.WAITING_RESOURCE,
+                status_detail="waiting for resources: " + ", ".join(resource_keys),
+            )
+            self._store.save(waiting, expected_version=work.version)
+            async with self._resources.lease(resource_keys):
+                latest = self._store.require(work.work_id)
+                if latest.state.terminal or latest.state is WorkState.PAUSED:
+                    return WorkAdvanceResult(
+                        latest.work_id,
+                        latest.state,
+                        progressed=False,
+                    )
+                running = latest.transition(
+                    WorkState.RUNNING,
+                    status_detail=decision.summary,
+                )
+                work = self._store.save(running, expected_version=latest.version)
+                return await self._execute_action(
+                    work=work,
+                    executor=executor,
+                    decision_action=decision.action,
+                    decision_summary=decision.summary,
+                    decision_parameters=dict(decision.parameters),
+                )
+
+        return await self._execute_action(
+            work=work,
+            executor=executor,
+            decision_action=decision.action,
+            decision_summary=decision.summary,
+            decision_parameters=dict(decision.parameters),
+        )
+
+    async def _execute_action(
+        self,
+        *,
+        work: WorkItem,
+        executor: WorkActionExecutor,
+        decision_action: str,
+        decision_summary: str,
+        decision_parameters: dict[str, Any],
+    ) -> WorkAdvanceResult:
         step = WorkStep(
             work_id=work.work_id,
-            kind=decision.action,
-            summary=decision.summary,
-            input_data=dict(decision.parameters),
+            kind=decision_action,
+            summary=decision_summary,
+            input_data=dict(decision_parameters),
         )
         self._store.add_step(step)
         running_step = step.start()
@@ -172,7 +227,7 @@ class WorkEngine:
         try:
             observation = await executor.execute(
                 work=with_step,
-                parameters=dict(decision.parameters),
+                parameters=dict(decision_parameters),
             )
         except Exception as exc:
             failed_step = running_step.fail(type(exc).__name__ + ": " + str(exc))
@@ -180,7 +235,7 @@ class WorkEngine:
             latest = self._store.require(work.work_id)
             retrying = latest.transition(
                 WorkState.RETRYING,
-                status_detail=f"step failed: {decision.action}",
+                status_detail=f"step failed: {decision_action}",
                 current_step_id=step.step_id,
             )
             self._store.save(retrying, expected_version=latest.version)
@@ -191,7 +246,7 @@ class WorkEngine:
         latest = self._store.require(work.work_id)
         progressed = latest.with_progress(
             current_step_id=None,
-            status_detail=f"completed step: {decision.action}",
+            status_detail=f"completed step: {decision_action}",
         )
         self._store.save(progressed, expected_version=latest.version)
         return WorkAdvanceResult(work.work_id, progressed.state, progressed=True)
