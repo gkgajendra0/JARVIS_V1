@@ -110,9 +110,7 @@ class LocalOperationalEvidenceQuery:
         if backup_count < 0:
             raise ValueError("backup_count must not be negative")
         if max_scan_lines < 1 or max_scan_lines > _MAX_SCAN_LINES:
-            raise ValueError(
-                f"max_scan_lines must be between 1 and {_MAX_SCAN_LINES}"
-            )
+            raise ValueError(f"max_scan_lines must be between 1 and {_MAX_SCAN_LINES}")
         self.path = (
             Path(log_path).expanduser()
             if log_path is not None
@@ -124,7 +122,10 @@ class LocalOperationalEvidenceQuery:
     def _paths(self) -> tuple[Path, ...]:
         return (
             self.path,
-            *(Path(f"{self.path}.{index}") for index in range(1, self.backup_count + 1)),
+            *(
+                Path(f"{self.path}.{index}")
+                for index in range(1, self.backup_count + 1)
+            ),
         )
 
     def query(
@@ -217,7 +218,10 @@ class LocalOperationalEvidenceQuery:
                     != normalized_reason
                 ):
                     continue
-                if normalized_session and str(row.get("session_id") or "") != normalized_session:
+                if (
+                    normalized_session
+                    and str(row.get("session_id") or "") != normalized_session
+                ):
                     continue
                 if normalized_turn and str(row.get("turn_id") or "") != normalized_turn:
                     continue
