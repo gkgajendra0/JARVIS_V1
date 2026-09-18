@@ -50,3 +50,13 @@ def test_voice_instructions_route_self_diagnostics_through_inspect_self() -> Non
     assert "affected components" in normalized
     assert "recent engineering incidents" in normalized
     assert "do not refuse" in normalized
+
+
+
+def test_voice_instructions_use_canonical_self_component_discovery() -> None:
+    normalized = " ".join(INSTRUCTIONS.split())
+    assert "component IDs are opaque internal handles" in normalized
+    assert "call `list_components` first" in normalized
+    assert "never invent or approximate a component ID" in normalized
+    assert "retry the requested component read" in normalized
+    assert "do not substitute model knowledge" in normalized
