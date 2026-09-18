@@ -68,13 +68,6 @@ def _local_read_warranted(text: str) -> bool:
     return _contains_marker(text, _LOCAL_READ_MARKERS)
 
 
-def _self_read_warranted(text: str) -> bool:
-    return _contains_marker(text, _SELF_SUBJECT_MARKERS) and _contains_marker(
-        text,
-        _SELF_DIAGNOSTIC_MARKERS,
-    )
-
-
 class _ConversationCapabilityTools:
     """Shared validation and accepted-turn grounding for voice capability tools."""
 
