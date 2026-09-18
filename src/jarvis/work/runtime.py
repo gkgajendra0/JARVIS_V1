@@ -8,7 +8,7 @@ from pathlib import Path
 
 from jarvis.knowledge.research import CurrentResearchService
 from jarvis.work.actions import ResearchWorkExecutor
-from jarvis.work.brain import BrainCoordinator
+from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
 from jarvis.work.development import (
     DevelopmentWorkspaceManager,
     build_development_executors,
@@ -45,16 +45,25 @@ class WorkRuntime:
         backend: DBOSWorkExecutionBackend,
         orchestrator: WorkOrchestrator,
         supported_work_types: frozenset[WorkType],
+        interactive_brain_gate: InteractiveBrainGate,
     ) -> None:
         self.store = store
         self.engine = engine
         self.backend = backend
         self.orchestrator = orchestrator
         self.supported_work_types = supported_work_types
+        self._interactive_brain_gate = interactive_brain_gate
         self._closed = False
 
     def supports(self, work_type: WorkType) -> bool:
         return work_type in self.supported_work_types
+
+    @property
+    def interactive_brain_active(self) -> bool:
+        return self._interactive_brain_gate.interactive_active
+
+    def set_interactive_brain_active(self, active: bool) -> None:
+        self._interactive_brain_gate.set_interactive_active(active)
 
     def submit_owner_input(self, work_id: str, response: str) -> WorkItem:
         work = self.store.require(work_id)
@@ -86,7 +95,11 @@ def build_work_runtime(
     loop = event_loop or asyncio.get_running_loop()
     store = SQLiteWorkStore(store_path or default_work_store_path())
     reasoner = ProviderWorkReasoner(provider=provider, model=model)
-    brain = BrainCoordinator(reasoner)
+    interactive_brain_gate = InteractiveBrainGate()
+    brain = BrainCoordinator(
+        reasoner,
+        interactive_gate=interactive_brain_gate,
+    )
     workspace_manager = DevelopmentWorkspaceManager()
     executors = (
         ResearchWorkExecutor(research_service),
@@ -123,4 +136,5 @@ def build_work_runtime(
         backend=backend,
         orchestrator=orchestrator,
         supported_work_types=actions.supported_work_types,
+        interactive_brain_gate=interactive_brain_gate,
     )
