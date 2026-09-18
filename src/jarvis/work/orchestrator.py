@@ -22,6 +22,8 @@ class WorkExecutionBackend(Protocol):
 
     def cancel(self, execution_id: str) -> None: ...
 
+    def pause(self, execution_id: str) -> None: ...
+
     def resume(self, execution_id: str) -> None: ...
 
 
@@ -97,37 +99,52 @@ class WorkOrchestrator:
         item = self._store.require(work_id)
         if item.state.terminal:
             return item
-        self._backend.cancel(work_id)
         cancelled = item.transition(
             WorkState.CANCELLED,
             status_detail="cancelled by owner",
             current_step_id=item.current_step_id,
         )
-        return self._store.save(cancelled, expected_version=item.version)
+        saved = self._store.save(cancelled, expected_version=item.version)
+        self._backend.cancel(work_id)
+        return saved
 
     def pause(self, work_id: str) -> WorkItem:
         item = self._store.require(work_id)
         if item.state.terminal:
             raise ValueError("terminal work cannot be paused")
-        self._backend.cancel(work_id)
+        if item.state is WorkState.PAUSED:
+            return item
         paused = item.transition(
             WorkState.PAUSED,
             status_detail="paused by owner",
             current_step_id=item.current_step_id,
         )
-        return self._store.save(paused, expected_version=item.version)
+        saved = self._store.save(paused, expected_version=item.version)
+        self._backend.pause(work_id)
+        return saved
 
     def resume(self, work_id: str) -> WorkItem:
         item = self._store.require(work_id)
         if item.state is not WorkState.PAUSED:
             raise ValueError("only paused work can be resumed")
-        self._backend.resume(work_id)
         resumed = item.transition(
             WorkState.RUNNING,
             status_detail="resumed by owner",
             current_step_id=item.current_step_id,
         )
-        return self._store.save(resumed, expected_version=item.version)
+        saved = self._store.save(resumed, expected_version=item.version)
+        try:
+            self._backend.resume(work_id)
+        except Exception:
+            latest = self._store.require(work_id)
+            reverted = latest.transition(
+                WorkState.PAUSED,
+                status_detail="resume failed; work remains paused",
+                current_step_id=latest.current_step_id,
+            )
+            self._store.save(reverted, expected_version=latest.version)
+            raise
+        return saved
 
     def reprioritize(self, work_id: str, priority: WorkPriority) -> WorkItem:
         item = self._store.require(work_id)
