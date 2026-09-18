@@ -33,6 +33,28 @@ class AuthorityError(RuntimeError):
     pass
 
 
+def _proposal_audit_metadata(proposal: ActionProposal) -> dict[str, object]:
+    """Return bounded, non-secret proposal metadata useful for incident review."""
+
+    metadata: dict[str, object] = {
+        "capability": proposal.capability,
+        "operation": proposal.operation,
+    }
+    if proposal.capability != "system:power_session":
+        return metadata
+
+    parameters = proposal.parameters()
+    if not isinstance(parameters, dict):
+        return metadata
+    intent_operation = parameters.get("intent_operation")
+    intent_evidence = parameters.get("intent_evidence")
+    if isinstance(intent_operation, str) and intent_operation:
+        metadata["intent_operation"] = intent_operation
+    if isinstance(intent_evidence, str) and intent_evidence:
+        metadata["intent_evidence"] = intent_evidence[:240]
+    return metadata
+
+
 @dataclass(frozen=True, slots=True)
 class AuthorityDecision:
     decision_id: str
@@ -370,6 +392,7 @@ class AuthorityService:
                     proposal_fingerprint=proposal.fingerprint,
                     reason_codes=(reason,),
                     metadata={
+                        **_proposal_audit_metadata(proposal),
                         "decision_id": decision_id,
                         "risk_class": risk_class.name,
                         "policy_version": policy_version,
@@ -407,6 +430,7 @@ class AuthorityService:
             proposal_fingerprint=proposal.fingerprint,
             reason_codes=assessment.policy.reason_codes,
             metadata={
+                **_proposal_audit_metadata(proposal),
                 "decision_id": decision_id,
                 "risk_class": assessment.risk.risk_class.name,
                 "policy_version": assessment.policy.policy_version,

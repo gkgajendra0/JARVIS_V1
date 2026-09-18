@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from jarvis.authority.risk import RiskClassifier
 from jarvis.authority.types import RiskClass
 from jarvis.capabilities.models import CapabilityRequest, CapabilityStatus
@@ -9,6 +11,7 @@ from jarvis.capabilities.windows_devices import (
     BluetoothControlExecutor,
     DisplayControlExecutor,
     PowerSessionExecutor,
+    WindowsDeviceValidationError,
     WinRtBluetoothBackend,
 )
 
@@ -177,8 +180,26 @@ def test_winrt_bluetooth_listing_bridges_running_event_loop(monkeypatch) -> None
 
 def test_power_lock_is_reversible_but_shutdown_is_critical() -> None:
     executor = PowerSessionExecutor(FakePower())
-    lock = executor.prepare(request(executor, "lock_workstation"))
-    shutdown = executor.prepare(request(executor, "shutdown_workstation"))
+    lock = executor.prepare(
+        request(
+            executor,
+            "lock_workstation",
+            {
+                "intent_operation": "lock_workstation",
+                "intent_evidence": "lock my screen",
+            },
+        )
+    )
+    shutdown = executor.prepare(
+        request(
+            executor,
+            "shutdown_workstation",
+            {
+                "intent_operation": "shutdown_workstation",
+                "intent_evidence": "shut down my computer",
+            },
+        )
+    )
 
     assert lock.attributes.reversible_local_change is True
     assert (
@@ -189,8 +210,66 @@ def test_power_lock_is_reversible_but_shutdown_is_critical() -> None:
 def test_power_backend_result_is_reported_as_initiated_not_final_state() -> None:
     executor = PowerSessionExecutor(FakePower())
     result = executor.execute(
-        executor.prepare(request(executor, "restart_workstation"))
+        executor.prepare(
+            request(
+                executor,
+                "restart_workstation",
+                {
+                    "intent_operation": "restart_workstation",
+                    "intent_evidence": "restart my computer",
+                },
+            )
+        )
     )
 
     assert result.status is CapabilityStatus.SUCCEEDED
     assert result.data == {"request_initiated": True, "verification_passed": True}
+
+
+def test_power_intent_binding_is_carried_into_authority_material() -> None:
+    executor = PowerSessionExecutor(FakePower())
+    prepared = executor.prepare(
+        request(
+            executor,
+            "restart_workstation",
+            {
+                "intent_operation": "restart_workstation",
+                "intent_evidence": "restart my computer",
+            },
+        )
+    )
+
+    assert prepared.parameters == {
+        "intent_operation": "restart_workstation",
+        "intent_evidence": "restart my computer",
+    }
+    assert 'requested as: "restart my computer"' in prepared.material_summary
+
+
+def test_power_intent_binding_rejects_operation_substitution() -> None:
+    executor = PowerSessionExecutor(FakePower())
+
+    with pytest.raises(
+        WindowsDeviceValidationError,
+        match="intent binding does not match",
+    ):
+        executor.prepare(
+            request(
+                executor,
+                "restart_workstation",
+                {
+                    "intent_operation": "shutdown_workstation",
+                    "intent_evidence": "shut down my computer",
+                },
+            )
+        )
+
+
+def test_power_executor_rejects_unbound_operation() -> None:
+    executor = PowerSessionExecutor(FakePower())
+
+    with pytest.raises(
+        WindowsDeviceValidationError,
+        match="intent binding is required",
+    ):
+        executor.prepare(request(executor, "restart_workstation"))

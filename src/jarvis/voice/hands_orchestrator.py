@@ -31,6 +31,12 @@ LOGGER = logging.getLogger(__name__)
 _VOICE_MAX_ACTIONS = 8
 _UIA_UNVERIFIED_BEFORE_VISUAL = 2
 
+
+def _bounded_log_reason(reason: object, *, max_chars: int = 240) -> str:
+    text = " ".join(str(reason or "-").split())
+    return text[:max_chars] or "-"
+
+
 _SEMANTIC_EVIDENCE_OPERATIONS = frozenset(
     {
         "system_status",
@@ -546,12 +552,13 @@ class VoiceHandsOrchestrator(HandsOrchestrator):
             verified = bool(observation["verified"])
             LOGGER.info(
                 "Hands execution observation | step=%s | operation=%s | status=%s | "
-                "ok=%s | verified=%s | execution_ms=%.1f",
+                "ok=%s | verified=%s | reason=%s | execution_ms=%.1f",
                 step_number,
                 normalized.operation,
                 result.status.value,
                 result.ok,
                 verified,
+                _bounded_log_reason(result.reason),
                 execute_ms,
             )
 

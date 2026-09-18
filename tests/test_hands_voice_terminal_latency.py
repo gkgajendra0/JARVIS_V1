@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections import deque
 
 import pytest
@@ -135,3 +136,32 @@ async def test_verified_single_route_action_skips_completion_planner_round_trip(
     assert planner.next_action_calls == 1
     assert len(executor.calls) == 1
     assert executor.calls[0].parameters == {"percent": 30.0}
+
+
+class DeniedExecutor(RecordingExecutor):
+    def execute(self, prepared):
+        return CapabilityResult(
+            status=CapabilityStatus.DENIED,
+            capability_key=self.capability_key,
+            operation=prepared.request.operation,
+            data={},
+            reason="test-denial-reason",
+            provenance=("test",),
+        )
+
+
+@pytest.mark.asyncio
+async def test_voice_hands_execution_log_includes_failure_reason(caplog) -> None:
+    executor = DeniedExecutor()
+    planner = CountingPlanner()
+    orchestrator = VoiceHandsOrchestrator(_runtime(executor), planner)
+
+    with caplog.at_level(logging.INFO, logger="jarvis.voice.hands_orchestrator"):
+        result = await orchestrator.execute_goal(
+            session_id="latency-denial-log",
+            goal="Set my volume to 30 percent.",
+        )
+
+    assert result["ok"] is False
+    assert result["reason"] == "test-denial-reason"
+    assert "reason=test-denial-reason" in caplog.text

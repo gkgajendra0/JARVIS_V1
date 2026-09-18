@@ -313,3 +313,101 @@ async def test_planner_cannot_claim_completion_immediately_after_failed_action()
             session_id="false-completion",
             goal="Open Apple Music",
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("goal", "operation", "evidence"),
+    [
+        ("That's all for now.", "restart_workstation", "That's all for now"),
+        ("You can go back to sleep.", "sleep_workstation", "go back to sleep"),
+        (
+            "Please shut down my computer.",
+            "restart_workstation",
+            "shut down my computer",
+        ),
+        ("Restart Jarvis.", "restart_workstation", "Restart Jarvis"),
+    ],
+)
+async def test_power_session_rejects_operation_not_explicitly_bound_to_computer_intent(
+    goal: str,
+    operation: str,
+    evidence: str,
+) -> None:
+    executor = RecordingExecutor((operation,))
+    planner = ScriptedPlanner(
+        ("power",),
+        [
+            PlannerTurn(
+                action=PlannedAction(
+                    operation=operation,
+                    parameters={},
+                    evidence=evidence,
+                )
+            )
+        ],
+    )
+    orchestrator = HandsOrchestrator(
+        runtime_for(executor), planner, app_catalog=FakeCatalog()
+    )
+
+    with pytest.raises(
+        HandsOrchestrationError,
+        match="power/session intent is not explicitly bound",
+    ):
+        await orchestrator.execute_goal(
+            session_id="power-intent-mismatch",
+            goal=goal,
+        )
+
+    assert executor.calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("goal", "operation", "evidence"),
+    [
+        ("Please lock my screen.", "lock_workstation", "lock my screen"),
+        ("Put my computer to sleep.", "sleep_workstation", "my computer to sleep"),
+        ("Please sign me out of Windows.", "sign_out", "sign me out of Windows"),
+        ("Please restart my computer.", "restart_workstation", "restart my computer"),
+        (
+            "Please shut down my computer.",
+            "shutdown_workstation",
+            "shut down my computer",
+        ),
+    ],
+)
+async def test_power_session_binds_exact_canonical_evidence_to_authority_request(
+    goal: str,
+    operation: str,
+    evidence: str,
+) -> None:
+    executor = RecordingExecutor((operation,))
+    planner = ScriptedPlanner(
+        ("power",),
+        [
+            PlannerTurn(
+                action=PlannedAction(
+                    operation=operation,
+                    parameters={},
+                    evidence=evidence,
+                )
+            ),
+            PlannerTurn(goal_complete=True),
+        ],
+    )
+    orchestrator = HandsOrchestrator(
+        runtime_for(executor), planner, app_catalog=FakeCatalog()
+    )
+
+    result = await orchestrator.execute_goal(
+        session_id="power-intent-explicit",
+        goal=goal,
+    )
+
+    assert result["ok"] is True
+    assert executor.calls[0].parameters == {
+        "intent_operation": operation,
+        "intent_evidence": evidence,
+    }
