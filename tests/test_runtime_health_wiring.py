@@ -176,7 +176,6 @@ def test_preflight_health_is_recorded_before_startup_failure(
     awareness.close()
 
 
-
 def _hands_catalog(
     *,
     structured: bool = False,
@@ -244,7 +243,9 @@ def test_hands_readiness_reports_degraded_with_fallback_only(tmp_path: Path) -> 
     awareness.close()
 
 
-def test_hands_readiness_reports_failed_when_no_executor_is_ready(tmp_path: Path) -> None:
+def test_hands_readiness_reports_failed_when_no_executor_is_ready(
+    tmp_path: Path,
+) -> None:
     awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
 
     record_hands_availability_health(awareness, _hands_catalog())
