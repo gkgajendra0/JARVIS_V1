@@ -2,13 +2,13 @@
 
 ## Active Work
 
-**PR #41 — Self-Awareness Foundation is OWNER ACCEPTED and approved for protected-main merge (2026-09-18).**
+**PR #41 — Self-Awareness Foundation is OWNER ACCEPTED and merged to protected `main` (2026-09-18) at `e5484cb9d599783e7f715bc6fb435af459dc49a0`.**
 
 The accepted runtime-code baseline produced by owner-accepted PRs #43, #49 and #48 is `e2ff21e78480a09eb243cdd2c121b39e47620d0f`; later documentation-only reconciliation commits may advance protected `main` without changing that earlier runtime state.
 
 PR #41 now adds the bounded read-only hierarchical whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, structured operational-evidence queries, typed Self-Awareness reads and resolved-incident/fix retrieval. Autonomous diagnosis/repair remains explicitly out of scope. Final acceptance evidence is recorded in `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
 
-**Persistent Concurrent Work Orchestration is now the next architecture foundation.** It will be researched and designed before Step 8 implementation so long-running development, research, diagnostics, monitoring and later scheduled work can run as durable concurrent work items without monopolizing the live voice turn.
+**Persistent Concurrent Work Orchestration is now the next architecture foundation (issue #53).** It will be researched and designed before Step 8 implementation so long-running development, research, diagnostics, monitoring and later scheduled work can run as durable concurrent work items without monopolizing the live voice turn.
 
 **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027, CAP-028) remains the next numbered roadmap slice, queued to build on that orchestration foundation.**
 
@@ -140,8 +140,8 @@ Step 8 must then reuse that durable work foundation while remaining research-fir
 
 ## Immediate Next Action
 
-**FINAL PR #41 DOCUMENTATION / CI -> PROTECTED-MAIN MERGE (OWNER APPROVED 2026-09-18).**
+**PR #41 IS MERGED. ISSUE #53 — PERSISTENT CONCURRENT WORK ORCHESTRATION FOUNDATION — IS THE ACTIVE NEXT WORK ITEM.**
 
-Then begin **PERSISTENT CONCURRENT WORK ORCHESTRATION REQUIREMENTS RECOVERY -> FRESH RESEARCH -> TECHNOLOGY DECISION -> ARCHITECTURE PROPOSAL -> OWNER APPROVAL BEFORE IMPLEMENTATION**.
+Begin **REQUIREMENTS RECOVERY -> FRESH RESEARCH -> TECHNOLOGY DECISION -> ARCHITECTURE PROPOSAL -> OWNER APPROVAL BEFORE IMPLEMENTATION**.
 
 After that foundation is accepted, continue **STEP 8 TASKS / REMINDERS / SCHEDULING** on top of the same durable work model.
