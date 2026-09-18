@@ -81,7 +81,7 @@ async def test_dbos_executes_durable_work_without_blocking_event_loop(
         engine=ImmediateCompleteEngine(),  # type: ignore[arg-type]
         event_loop=asyncio.get_running_loop(),
         application_version="test-work-v1",
-        global_concurrency=2,
+        queue_concurrency=None,
         system_database_url=f"sqlite:///{(tmp_path / 'dbos.sqlite3').as_posix()}",
     )
     work_id = "work_dbos_complete"
