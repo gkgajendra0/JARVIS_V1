@@ -19,6 +19,17 @@ from jarvis.work.store import SQLiteWorkStore
 _MAX_CONSECUTIVE_FAILURES = 3
 
 
+class WorkOwnerInputRequired(RuntimeError):
+    """An executor cannot continue safely without a new owner decision/input."""
+
+    def __init__(self, question: str) -> None:
+        normalized = question.strip()
+        if not normalized:
+            raise ValueError("owner-input question must not be empty")
+        super().__init__(normalized)
+        self.question = normalized
+
+
 class WorkActionExecutor(Protocol):
     descriptor: BrainAction
     work_types: frozenset[WorkType]
@@ -428,6 +439,30 @@ class WorkEngine:
             observation = await executor.execute(
                 work=with_step,
                 parameters=dict(decision_parameters),
+            )
+        except WorkOwnerInputRequired as exc:
+            waiting_step = running_step.complete(
+                {"needs_owner": True, "question": exc.question}
+            )
+            self._store.save_step(waiting_step)
+            latest = self._store.require(work.work_id)
+            waiting = latest.transition(
+                WorkState.WAITING_FOR_OWNER,
+                status_detail=exc.question,
+                current_step_id=step.step_id,
+            )
+            saved = self._store.save(waiting, expected_version=latest.version)
+            self._store.enqueue_delivery(
+                work=saved,
+                kind=WorkDeliveryKind.OWNER_INPUT,
+                message=exc.question,
+                event_key=f"owner:{saved.version}",
+            )
+            return WorkAdvanceResult(
+                saved.work_id,
+                saved.state,
+                progressed=True,
+                owner_question=exc.question,
             )
         except Exception as exc:
             failed_step = running_step.fail(type(exc).__name__ + ": " + str(exc))
