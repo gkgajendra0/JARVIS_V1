@@ -443,3 +443,40 @@ async def test_single_brain_lease_honors_work_priority(tmp_path: Path) -> None:
 
     assert reasoner.max_active == 1
     assert reasoner.order == ["blocker", "urgent", "low"]
+
+
+@pytest.mark.asyncio
+async def test_repeated_step_failures_are_bounded(tmp_path: Path) -> None:
+    class FailingExecutor:
+        descriptor = BrainAction(
+            name="always_fail",
+            description="Always fail",
+            parameter_schema={"type": "object"},
+        )
+        work_types = frozenset({WorkType.GENERIC})
+
+        async def execute(self, *, work: WorkItem, parameters: dict) -> dict:
+            del work, parameters
+            raise RuntimeError("boom")
+
+    class AlwaysActReasoner:
+        async def decide(self, request: BrainRequest) -> BrainDecision:
+            del request
+            return BrainDecision(action="always_fail", summary="Try bounded action")
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(AlwaysActReasoner()),
+        actions=WorkActionRegistry((FailingExecutor(),)),
+    )
+    item = create_item(store, request="Fail safely")
+
+    first = await engine.advance(item.work_id)
+    second = await engine.advance(item.work_id)
+    third = await engine.advance(item.work_id)
+
+    assert first.state is WorkState.RETRYING
+    assert second.state is WorkState.RETRYING
+    assert third.state is WorkState.FAILED
+    assert len(store.list_pending_deliveries()) == 1
