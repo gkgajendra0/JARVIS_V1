@@ -302,6 +302,7 @@ class NativeOwnerTrackingObserver:
 
         try:
             direct_ack = self.client.set_target(decision.bounds)
+            self._authorized_owner_track_id = None
             self._pending_owner_track_id = fresh_owner_track_id
             self._target_attempts_without_native_lock += 1
             LOGGER.info(
