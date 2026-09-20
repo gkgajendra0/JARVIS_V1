@@ -28,6 +28,7 @@ from jarvis.identity.speaker_turn import SpeakerTurnAudio
 from jarvis.knowledge.research import CurrentResearchService
 from jarvis.memory.provider_verified_query import ProviderVerifiedMemoryQueryCoordinator
 from jarvis.memory.runtime import MemoryRuntime
+from jarvis.provider_retry import delivery_retry_delay_seconds, provider_retry_hint
 from jarvis.voice.capability_tools import LocalReadAgentTools
 from jarvis.voice.livekit_session import create_voice_session
 from jarvis.voice.memory_tools import MemoryAgentTools
@@ -241,12 +242,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 await asyncio.sleep(0.5)
                 continue
 
-            pending = runtime.store.list_pending_deliveries(limit=5)
-            if not pending:
+            due = runtime.store.list_due_deliveries(limit=5)
+            if not due:
                 await asyncio.sleep(0.5)
                 continue
 
-            delivery = pending[0]
+            delivery = due[0]
             if (
                 delivery.policy is DeliveryPolicy.WHEN_IDLE
                 and self._agent_state != "listening"
@@ -280,12 +281,49 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 )
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                LOGGER.exception(
-                    "Background work notification delivery failed | delivery_id=%s",
-                    delivery.delivery_id,
+            except Exception as exc:
+                hint = provider_retry_hint(exc)
+                retry_seconds = delivery_retry_delay_seconds(
+                    failed_attempts=delivery.failed_attempts,
+                    provider_hint=hint,
                 )
-                await asyncio.sleep(2.0)
+                if hint is not None:
+                    reason = (
+                        f"provider_{hint.reason}"
+                        if hint.status_code is None
+                        else f"provider_{hint.reason}_{hint.status_code}"
+                    )
+                else:
+                    reason = f"tts_{type(exc).__name__.casefold()}"
+
+                deferred = runtime.store.schedule_delivery_retry(
+                    delivery.delivery_id,
+                    delay_seconds=retry_seconds,
+                    reason=reason,
+                )
+                if hint is not None:
+                    LOGGER.warning(
+                        "Background work notification deferred for provider pressure | "
+                        "delivery_id=%s | failed_attempts=%s | retry_in=%.1fs | "
+                        "reason=%s | provider_status=%s | provider_retry_after=%s",
+                        delivery.delivery_id,
+                        deferred.failed_attempts,
+                        retry_seconds,
+                        reason,
+                        hint.status_code,
+                        hint.retry_after_seconds,
+                    )
+                else:
+                    LOGGER.exception(
+                        "Background work notification delivery failed; durable "
+                        "backoff scheduled | delivery_id=%s | failed_attempts=%s | "
+                        "retry_in=%.1fs | reason=%s",
+                        delivery.delivery_id,
+                        deferred.failed_attempts,
+                        retry_seconds,
+                        reason,
+                    )
+                await asyncio.sleep(0.2)
                 continue
 
             runtime.store.mark_delivery_delivered(delivery.delivery_id)
