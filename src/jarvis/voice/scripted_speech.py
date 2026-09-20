@@ -6,6 +6,7 @@ import asyncio
 from typing import Protocol
 
 from livekit.agents import tts
+from livekit.agents.types import APIConnectOptions
 from livekit.agents.voice import io
 from livekit.plugins import google, openai
 
@@ -16,7 +17,13 @@ from jarvis.config import JarvisConfig
 class ScriptedSpeech(Protocol):
     """Speak deterministic text without relying on realtime-model generation."""
 
-    async def speak(self, output: io.AudioOutput, text: str) -> None: ...
+    async def speak(
+        self,
+        output: io.AudioOutput,
+        text: str,
+        *,
+        max_provider_retries: int | None = None,
+    ) -> None: ...
 
     async def aclose(self) -> None: ...
 
@@ -32,10 +39,18 @@ class LiveKitScriptedSpeech:
         self._engine = engine
         self._playback_timeout_seconds = playback_timeout_seconds
 
-    async def speak(self, output: io.AudioOutput, text: str) -> None:
+    async def speak(
+        self,
+        output: io.AudioOutput,
+        text: str,
+        *,
+        max_provider_retries: int | None = None,
+    ) -> None:
         script = text.strip()
         if not script:
             raise ValueError("scripted speech text must not be empty")
+        if max_provider_retries is not None and max_provider_retries < 0:
+            raise ValueError("max_provider_retries must not be negative")
 
         playback_finished = asyncio.get_running_loop().create_future()
 
@@ -46,7 +61,14 @@ class LiveKitScriptedSpeech:
 
         output.on("playback_finished", on_playback_finished)
         try:
-            async with self._engine.synthesize(script) as stream:
+            if max_provider_retries is None:
+                stream_context = self._engine.synthesize(script)
+            else:
+                stream_context = self._engine.synthesize(
+                    script,
+                    conn_options=APIConnectOptions(max_retry=max_provider_retries),
+                )
+            async with stream_context as stream:
                 async for event in stream:
                     await output.capture_frame(event.frame)
             output.flush()
