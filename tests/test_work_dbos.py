@@ -8,6 +8,7 @@ from dbos import DBOS
 
 from jarvis.work.dbos_backend import (
     _consumes_reasoning_budget,
+    _waiting_resource_delay,
     initialize_dbos_work_runtime,
     shutdown_dbos_work_runtime,
 )
@@ -171,6 +172,13 @@ def test_waiting_states_do_not_consume_reasoning_budget(state: WorkState) -> Non
 )
 def test_active_states_consume_reasoning_budget(state: WorkState) -> None:
     assert _consumes_reasoning_budget(state) is True
+
+
+def test_waiting_resource_delay_honors_provider_backoff_and_defaults() -> None:
+    assert _waiting_resource_delay({}) == 0.25
+    assert _waiting_resource_delay({"retry_after_seconds": 5.0}) == 5.0
+    assert _waiting_resource_delay({"retry_after_seconds": 120.0}) == 60.0
+    assert _waiting_resource_delay({"retry_after_seconds": "bad"}) == 0.25
 
 
 def test_dbos_control_messages_use_idempotency_keys(
