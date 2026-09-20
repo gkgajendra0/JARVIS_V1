@@ -13,6 +13,7 @@ from jarvis.work.brain import (
     BrainPreempted,
     BrainRequest,
     InteractiveBrainGate,
+    ProviderPressure,
 )
 from jarvis.work.engine import (
     WorkActionRegistry,
@@ -29,6 +30,7 @@ from jarvis.work.models import (
     WorkType,
 )
 from jarvis.work.orchestrator import WorkOrchestrator
+from jarvis.work.reasoner import _provider_pressure_from_exception
 from jarvis.work.resources import ResourceLeaseManager
 from jarvis.work.store import SQLiteWorkStore, WorkStoreError
 
@@ -131,6 +133,81 @@ def test_public_work_status_preserves_canonical_owner_request() -> None:
 
     assert payload["request"] == "Research current DBOS workflow recovery behavior"
     assert payload["state"] == WorkState.QUEUED.value
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code", "reason"),
+    [
+        (RuntimeError("HTTP 429 Too Many Requests"), 429, "rate limit"),
+        (RuntimeError("service failed with status 503"), 503, "temporarily unavailable"),
+    ],
+)
+def test_provider_pressure_classification_is_provider_neutral(
+    error: Exception,
+    status_code: int,
+    reason: str,
+) -> None:
+    pressure = _provider_pressure_from_exception(error, provider="gemini")
+
+    assert pressure is not None
+    assert pressure.provider == "gemini"
+    assert pressure.status_code == status_code
+    assert pressure.reason == reason
+
+
+@pytest.mark.asyncio
+async def test_provider_pressure_uses_durable_backoff_without_failure_budget(
+    tmp_path: Path,
+) -> None:
+    class PressureThenSuccessReasoner:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def decide(self, request: BrainRequest) -> BrainDecision:
+            del request
+            self.calls += 1
+            if self.calls in {1, 2, 4}:
+                raise ProviderPressure(
+                    provider="gemini",
+                    status_code=429,
+                    reason="rate limit",
+                )
+            return BrainDecision(action="do_step", summary="Provider recovered")
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = PressureThenSuccessReasoner()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+    )
+    item = create_item(store, request="Survive provider pressure")
+
+    first = await engine.advance(item.work_id)
+    assert first.state is WorkState.WAITING_RESOURCE
+    assert first.retry_after_seconds == 5.0
+    assert "Gemini rate limit" in (store.require(item.work_id).status_detail or "")
+
+    second = await engine.advance(item.work_id)
+    assert second.state is WorkState.WAITING_RESOURCE
+    assert second.retry_after_seconds == 10.0
+
+    recovered = await engine.advance(item.work_id)
+    assert recovered.state is WorkState.RUNNING
+    assert recovered.retry_after_seconds is None
+
+    reset = await engine.advance(item.work_id)
+    assert reset.state is WorkState.WAITING_RESOURCE
+    assert reset.retry_after_seconds == 5.0
+
+    pressure_steps = [
+        step for step in store.list_steps(item.work_id)
+        if step.kind == "provider_pressure"
+    ]
+    assert [step.observation["attempt"] for step in pressure_steps] == [1, 2, 1]
+    assert all(step.state.value == "completed" for step in pressure_steps)
+    assert not any(step.state.value == "failed" for step in store.list_steps(item.work_id))
+    assert store.list_pending_deliveries() == ()
 
 
 def test_work_state_rejects_invalid_terminal_transition() -> None:
