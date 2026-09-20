@@ -295,10 +295,7 @@ class WorkEngine:
         )
 
     def _provider_pressure_attempt(self, work: WorkItem) -> int:
-        if (
-            work.state is not WorkState.WAITING_RESOURCE
-            or work.current_step_id is None
-        ):
+        if work.state is not WorkState.WAITING_RESOURCE or work.current_step_id is None:
             return 0
         step = next(
             (
