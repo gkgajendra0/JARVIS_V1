@@ -585,6 +585,60 @@ async def test_failed_dependency_fails_only_dependent_work(tmp_path: Path) -> No
     assert store.require(dependent.work_id).state is WorkState.FAILED
 
 
+def test_dependency_cycle_is_rejected_before_persistence(tmp_path: Path) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    future_id = "work_cycle_future"
+    first = WorkItem(
+        request="First half of a cycle",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-cycle",
+        source_turn_id="turn-cycle-a",
+        dependencies=(future_id,),
+    )
+    store.create(first)
+
+    second = WorkItem(
+        work_id=future_id,
+        request="Second half of a cycle",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-cycle",
+        source_turn_id="turn-cycle-b",
+        dependencies=(first.work_id,),
+    )
+
+    with pytest.raises(WorkStoreError, match="dependency cycle"):
+        store.create(second)
+
+    assert store.get(future_id) is None
+
+
+def test_cancel_backend_failure_does_not_claim_cancelled(tmp_path: Path) -> None:
+    class RejectingBackend(FakeBackend):
+        def cancel(
+            self,
+            execution_id: str,
+            *,
+            idempotency_key: str | None = None,
+        ) -> None:
+            super().cancel(execution_id, idempotency_key=idempotency_key)
+            raise RuntimeError("backend unavailable")
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = RejectingBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+    submission = orchestrator.start(
+        request="Remain active if cancellation cannot be sent",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-cancel-failure",
+        source_turn_id="turn-cancel-failure",
+    )
+
+    with pytest.raises(RuntimeError, match="backend unavailable"):
+        orchestrator.cancel(submission.work.work_id)
+
+    assert store.require(submission.work.work_id).state is WorkState.QUEUED
+
+
 def test_cancel_one_work_item_does_not_affect_another(tmp_path: Path) -> None:
     store = SQLiteWorkStore(tmp_path / "work.sqlite")
     backend = FakeBackend()
@@ -1216,7 +1270,7 @@ def test_interrupted_running_step_recovers_waiting_for_owner(
     assert reconciled == (item.work_id,)
     assert recovered.state is WorkState.WAITING_FOR_OWNER
     assert "outcome is unverified" in (recovered.status_detail or "")
-    assert recovered_step.state.value == "failed"
+    assert recovered_step.state.value == "interrupted"
     assert "interrupted" in (recovered_step.error or "")
     deliveries = store.list_pending_deliveries()
     assert len(deliveries) == 1
