@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
-
 _RETRYABLE_STATUS_CODES = {429, 503}
 _MAX_PROVIDER_RETRY_SECONDS = 24 * 60 * 60
 _DELIVERY_BACKOFF_BASE_SECONDS = 5.0
@@ -121,11 +119,15 @@ def _retry_delay_from_value(value: object) -> float | None:
 
     if isinstance(value, str):
         patterns = (
-            r"retry(?:ing)?\s+(?:in|after)\s+([0-9]+(?:\.[0-9]+)?)\s*"
-            r"(ms|milliseconds?|s|sec|secs|seconds?)",
-            r"retry(?:_|-)?delay[\"']?\s*[:=]\s*[\"']?"
-            r"([0-9]+(?:\.[0-9]+)?)\s*"
-            r"(ms|milliseconds?|s|sec|secs|seconds?)",
+            (
+                r"retry(?:ing)?\s+(?:in|after)\s+([0-9]+(?:\.[0-9]+)?)\s*"
+                r"(ms|milliseconds?|s|sec|secs|seconds?)"
+            ),
+            (
+                r"retry(?:_|-)?delay[\"']?\s*[:=]\s*[\"']?"
+                r"([0-9]+(?:\.[0-9]+)?)\s*"
+                r"(ms|milliseconds?|s|sec|secs|seconds?)"
+            ),
         )
         for pattern in patterns:
             match = re.search(pattern, value, flags=re.IGNORECASE)
