@@ -100,8 +100,8 @@ Full consolidated evidence and disposition history: `docs/research/POST_STEP_7_I
 | Issue #44 relative/provider volume fast-path semantics | **DEFERRED BUG** | Absolute provider aliasing and relative volume deltas need bounded normalization/current-volume resolution. |
 | Issue #45 false-interruption resume | **DEFERRED BUG** | Production audio output cannot pause, so configured resume behavior is unavailable. |
 | Issue #46 intermittent LiveKit AudioMixer timeout | **DEFERRED INVESTIGATION** | Warning has not yet been proven to cause a user-visible audio failure. |
-| Issue #56 Pocket OWNER continuity | **ACTIVE PRE-REPAIR CLEANUP — FIRST** | False confirmed OWNER absence can corrupt the health/failure evidence that Self-Repair would consume; fix continuity semantics before repair automation. |
-| Issue #57 durable work TTS retry backoff | **ACTIVE PRE-REPAIR CLEANUP — SECOND** | Repair notifications will reuse WorkDelivery; provider retry pressure must be bounded before repair starts generating additional background outcomes. |
+| Issue #56 Pocket OWNER continuity | **OWNER ACCEPTED — PR #61 READY TO MERGE** | Exact authorized visual-track continuity now bridges temporary biometric/head gaps without converting DJI tracking into identity evidence. Owner-machine acceptance is recorded in `docs/research/POCKET3_OWNER_CONTINUITY_ACCEPTANCE_2026-09-20.md`. |
+| Issue #57 durable work TTS retry backoff | **NEXT PRE-REPAIR CLEANUP** | Repair notifications will reuse WorkDelivery; provider retry pressure must be bounded before repair starts generating additional background outcomes. |
 | Issue #19 production voice isolation / turn ownership | **DEFERRED RESEARCH** | Accepted security evidence remains shadow-only; rejected isolation/target-speaker candidates are not production control. |
 | Persistent concurrent work orchestration | **OWNER ACCEPTED / PR #55 MERGED** | Durable WorkItems, DBOS recovery, single-brain voice priority, bounded resources, structured progress/status, deferred delivery and isolated development execution passed owner-machine acceptance on 2026-09-20. |
 | Proactive monitoring / event-driven background work | **PLANNED** | Step 15 remains the later product slice for proactive/event-driven behavior; it will reuse the orchestration foundation rather than invent a second background-work system. |
@@ -135,7 +135,7 @@ Owner-machine acceptance passed on 2026-09-20. Runtime head `b2ba211becdef1b1238
 
 Owner-approved sequence:
 
-1. **#56 Pocket OWNER continuity** — correct acquisition/reacquisition vs already-authorized continuity semantics so transient biometric/head gaps cannot create false confirmed OWNER absence;
+1. **#56 Pocket OWNER continuity — OWNER ACCEPTED / PR #61** — exact already-authorized visual-track continuity now survives transient biometric/head gaps without weakening fresh verification for acquisition/reacquisition;
 2. **#57 durable WorkDelivery TTS backoff** — respect provider retry delay or bounded exponential backoff without altering canonical completion truth;
 3. **#50 lifecycle/system speech resilience** — ensure startup/standby/readiness do not depend on cloud TTS success;
 4. execute the research-first **Self-Repair Foundation interlude** documented in `docs/research/SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`;
@@ -158,6 +158,6 @@ Step 8 must reuse the durable WorkItem foundation while remaining research-first
 
 ## Immediate Next Action
 
-**BEGIN ISSUE #56 — POCKET 3 OWNER CONTINUITY — AS AN ISOLATED CORRECTIVE PR.**
+**MERGE OWNER-ACCEPTED PR #61 / CLOSE ISSUE #56, THEN BEGIN ISSUE #57 — DURABLE WORKDELIVERY TTS RETRY/BACKOFF — AS THE NEXT ISOLATED CORRECTIVE PR.**
 
-Do not mix #57 or #50 into the #56 implementation unless evidence proves an inseparable root cause. After #56 closes, proceed to #57, then #50, then the Self-Repair Foundation research/ADR cycle.
+Do not mix #50 into #57 unless evidence proves an inseparable root cause. After #57 closes, proceed to #50, then the Self-Repair Foundation research/ADR cycle.

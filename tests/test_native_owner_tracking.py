@@ -91,7 +91,12 @@ def frame(frame_id: int, now: float) -> CapturedFrame:
     )
 
 
-def snapshot(frame_id: int, now: float, *tracks: Track) -> VisionSnapshot:
+def snapshot(
+    frame_id: int,
+    now: float,
+    *tracks: Track,
+    alive_track_ids: tuple[int, ...] = (),
+) -> VisionSnapshot:
     return VisionSnapshot(
         frame_id=frame_id,
         captured_at=now,
@@ -99,6 +104,7 @@ def snapshot(frame_id: int, now: float, *tracks: Track) -> VisionSnapshot:
         target=None,
         command=FollowCommand(),
         armed=False,
+        alive_track_ids=alive_track_ids,
     )
 
 
@@ -161,6 +167,127 @@ def test_observer_targets_confirmed_owner_and_reacquires_after_native_loss() -> 
 
     observer.close()
     assert client.closed is True
+
+
+def non_live_owner(
+    track_id: int,
+    observed_at: float,
+) -> OwnerLivenessBindingAssessment:
+    return OwnerLivenessBindingAssessment(
+        session_id="session-1",
+        visual_track_id=track_id,
+        state=OwnerLivenessBindingState.INSUFFICIENT,
+        identity_state=OwnerIdentityState.INSUFFICIENT,
+        liveness_state=PassiveLivenessState.INSUFFICIENT,
+        observed_at_monotonic=observed_at,
+        reason_codes=("test_temporarily_insufficient",),
+    )
+
+
+def test_observer_holds_authorized_track_through_transient_biometric_gap() -> None:
+    owner = OwnerContextState()
+    client = FakeNativeClient()
+    observer = NativeOwnerTrackingObserver(
+        owner_context=owner,
+        client=client,  # type: ignore[arg-type]
+    )
+    bounds = BoundingBox(0.20, 0.15, 0.55, 0.85)
+
+    owner.publish(live_owner(track_id=7, observed_at=10.0))
+    observer.observe(
+        frame(1, 10.0),
+        snapshot(
+            1,
+            10.0,
+            track(7, bounds, 10.0),
+            alive_track_ids=(7,),
+        ),
+    )
+
+    client.native_status = NativeTrackingStatus(
+        connected=True,
+        active=True,
+        last_poll_at=10.4,
+        last_subject_push_at=10.45,
+    )
+    owner.publish(live_owner(track_id=7, observed_at=10.5))
+    observer.observe(
+        frame(2, 10.5),
+        snapshot(
+            2,
+            10.5,
+            track(7, bounds, 10.5),
+            alive_track_ids=(7,),
+        ),
+    )
+    assert observer.controller.state is ReacquisitionState.LOCKED
+
+    # The biometric pipeline can publish a non-live/insufficient assessment while
+    # the exact already-authorized visual tracker ID remains alive. Continuity must
+    # come from the stored authorization, not from the current assessment state.
+    owner.publish(non_live_owner(track_id=7, observed_at=12.9))
+    client.native_status = NativeTrackingStatus(
+        connected=True,
+        active=True,
+        last_poll_at=12.95,
+        last_subject_push_at=12.95,
+    )
+    observer.observe(
+        frame(3, 13.0),
+        snapshot(3, 13.0, alive_track_ids=(7,)),
+    )
+    assert observer.controller.state is ReacquisitionState.LOCKED
+    assert observer._authorized_owner_track_id == 7
+    assert client.clears == 0
+    assert client.recenters == 0
+
+    owner.publish(non_live_owner(track_id=7, observed_at=15.9))
+    client.native_status = NativeTrackingStatus(
+        connected=True,
+        active=True,
+        last_poll_at=15.95,
+        last_subject_push_at=15.95,
+    )
+    observer.observe(
+        frame(4, 16.0),
+        snapshot(4, 16.0, alive_track_ids=(7,)),
+    )
+    assert observer.controller.state is ReacquisitionState.LOCKED
+    assert client.clears == 0
+    assert client.recenters == 0
+
+    # Once the bound visual track really expires, native tracking alone cannot
+    # preserve OWNER identity. Start a fresh bounded absence confirmation window.
+    owner.invalidate("owner_track_expired")
+    client.native_status = NativeTrackingStatus(
+        connected=True,
+        active=True,
+        last_poll_at=16.05,
+        last_subject_push_at=16.05,
+    )
+    observer.observe(frame(5, 16.1), snapshot(5, 16.1))
+    assert observer.controller.state is ReacquisitionState.LOCKED
+
+    client.native_status = NativeTrackingStatus(
+        connected=True,
+        active=True,
+        last_poll_at=18.15,
+        last_subject_push_at=18.15,
+    )
+    observer.observe(frame(6, 18.2), snapshot(6, 18.2))
+    assert observer.controller.state is ReacquisitionState.REACQUIRING
+    assert client.recenters == 0
+
+    client.native_status = NativeTrackingStatus(
+        connected=True,
+        active=True,
+        last_poll_at=19.25,
+        last_subject_push_at=19.25,
+    )
+    observer.observe(frame(7, 19.3), snapshot(7, 19.3))
+    assert client.clears == 1
+    assert client.recenters == 1
+    observer.close()
 
 
 def test_observer_recenters_after_confirmed_owner_loss() -> None:

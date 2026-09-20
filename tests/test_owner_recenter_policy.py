@@ -21,7 +21,7 @@ def native(
     )
 
 
-def test_confirmed_owner_loss_recenters_once_then_waits_for_return() -> None:
+def test_native_tracking_loss_recenters_once_then_waits_for_return() -> None:
     controller = OwnerReacquisitionController(
         ReacquisitionConfig(
             recenter_after_loss_seconds=1.0,
@@ -66,7 +66,8 @@ def test_confirmed_owner_loss_recenters_once_then_waits_for_return() -> None:
         native=native(active=False, poll_at=13.05, push_at=10.5),
     )
     assert recenter.action is ReacquisitionAction.RECENTER_GIMBAL
-    assert recenter.reason == "confirmed_owner_loss_recenter"
+    assert recenter.reason == "native_tracking_loss_recenter"
+    assert recenter.owner_absence_confirmed is False
 
     no_repeat = controller.step(
         now=14.2,

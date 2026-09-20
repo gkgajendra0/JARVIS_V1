@@ -26,3 +26,5 @@ The final owner-machine/CI acceptance record for persistent concurrent work orch
 The owner-approved sequencing decision for reliability cleanup followed by the bounded Self-Repair Foundation interlude is `SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`.
 
 Do not research future subsystems merely because they are interesting. Research the active product slice unless a demonstrated blocker or owner-approved interlude requires a detour.
+
+- `POCKET3_OWNER_CONTINUITY_ACCEPTANCE_2026-09-20.md` — owner-machine acceptance evidence for issue #56 / PR #61: fresh OWNER acquisition, persisted exact visual-track authorization, biometric/head-gap continuity, and no false confirmed OWNER loss.

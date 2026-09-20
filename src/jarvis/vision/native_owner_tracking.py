@@ -106,6 +106,9 @@ class NativeOwnerTrackingObserver:
         self._last_connect_attempt_at: float | None = None
         self._last_logged_state: ReacquisitionState | None = None
         self._owner_observed_in_latest_snapshot = False
+        self._pending_owner_track_id: int | None = None
+        self._authorized_owner_track_id: int | None = None
+        self._continuity_gap_active = False
         self._target_attempts_without_native_lock = 0
         self._last_session_recovery_at: float | None = None
         self._recovery_thread: threading.Thread | None = None
@@ -177,6 +180,7 @@ class NativeOwnerTrackingObserver:
 
         owner_bounds = None
         owner_observed_at = None
+        fresh_owner_track_id: int | None = None
         context = self.owner_context.snapshot()
         assessment = context.assessment
         if (
@@ -192,9 +196,20 @@ class NativeOwnerTrackingObserver:
                 None,
             )
             if track is not None:
+                fresh_owner_track_id = assessment.visual_track_id
                 owner_bounds = track.bounds
                 owner_observed_at = assessment.observed_at_monotonic
         self._owner_observed_in_latest_snapshot = owner_bounds is not None
+
+        visible_track_ids = {candidate.track_id for candidate in snapshot.tracks}
+        authorized_track_id = self._authorized_owner_track_id
+        authorized_owner_track_alive = bool(
+            authorized_track_id is not None
+            and (
+                authorized_track_id in visible_track_ids
+                or authorized_track_id in snapshot.alive_track_ids
+            )
+        )
 
         native_status = self.client.status()
         if self._transport_rx_is_stale(now, native_status):
@@ -210,9 +225,45 @@ class NativeOwnerTrackingObserver:
             owner_bounds=owner_bounds,
             owner_observed_at=owner_observed_at,
             native=native_status,
+            authorized_owner_track_alive=authorized_owner_track_alive,
         )
         if decision.state is ReacquisitionState.LOCKED:
+            if (
+                self._authorized_owner_track_id is None
+                and self._pending_owner_track_id is not None
+            ):
+                self._authorized_owner_track_id = self._pending_owner_track_id
+                self._pending_owner_track_id = None
+                LOGGER.info(
+                    "Pocket 3 OWNER track continuity authorized: track_id=%s",
+                    self._authorized_owner_track_id,
+                )
             self._startup_lock_event.set()
+
+        if decision.owner_absence_confirmed:
+            if self._authorized_owner_track_id is not None:
+                LOGGER.info(
+                    "Pocket 3 OWNER track continuity released after confirmed absence: "
+                    "track_id=%s",
+                    self._authorized_owner_track_id,
+                )
+            self._authorized_owner_track_id = None
+            self._pending_owner_track_id = None
+            self._continuity_gap_active = False
+        elif (
+            decision.state is ReacquisitionState.LOCKED
+            and authorized_owner_track_alive
+            and owner_bounds is None
+        ):
+            if not self._continuity_gap_active:
+                LOGGER.info(
+                    "Pocket 3 preserving authorized OWNER continuity through "
+                    "biometric/head evidence gap: track_id=%s",
+                    self._authorized_owner_track_id,
+                )
+            self._continuity_gap_active = True
+        else:
+            self._continuity_gap_active = False
         if decision.state is not self._last_logged_state:
             LOGGER.info(
                 "Pocket 3 owner-tracking state: %s (%s)",
@@ -227,7 +278,10 @@ class NativeOwnerTrackingObserver:
                 self.client.clear_target()
                 self.client.recenter_gimbal()
                 LOGGER.info(
-                    "Pocket 3 native gimbal recenter sent after confirmed OWNER loss"
+                    "Pocket 3 native gimbal recenter sent: reason=%s "
+                    "owner_absence_confirmed=%s",
+                    decision.reason,
+                    decision.owner_absence_confirmed,
                 )
             except Exception:
                 LOGGER.exception("Pocket 3 native gimbal recenter failed")
@@ -236,6 +290,7 @@ class NativeOwnerTrackingObserver:
         if decision.action is not ReacquisitionAction.SET_OWNER_TARGET:
             return
         assert decision.bounds is not None
+        assert fresh_owner_track_id is not None
 
         if (
             self._target_attempts_without_native_lock
@@ -247,6 +302,8 @@ class NativeOwnerTrackingObserver:
 
         try:
             direct_ack = self.client.set_target(decision.bounds)
+            self._authorized_owner_track_id = None
+            self._pending_owner_track_id = fresh_owner_track_id
             self._target_attempts_without_native_lock += 1
             LOGGER.info(
                 "Pocket 3 A6 owner target sent: reason=%s direct_ack=%s "
@@ -275,6 +332,9 @@ class NativeOwnerTrackingObserver:
         self._recovery_thread = None
         self.controller.reset()
         self._owner_observed_in_latest_snapshot = False
+        self._pending_owner_track_id = None
+        self._authorized_owner_track_id = None
+        self._continuity_gap_active = False
         self._target_attempts_without_native_lock = 0
         self._startup_lock_event.clear()
 
@@ -366,6 +426,9 @@ class NativeOwnerTrackingObserver:
         self._last_connect_attempt_at = now
         if succeeded:
             self.controller.reset()
+            self._pending_owner_track_id = None
+            self._authorized_owner_track_id = None
+            self._continuity_gap_active = False
             self._last_logged_state = None
             LOGGER.info(
                 "Pocket 3 native tracking session recovered; OWNER reacquisition reset "
