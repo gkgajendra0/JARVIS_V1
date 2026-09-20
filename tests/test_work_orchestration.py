@@ -138,7 +138,9 @@ def test_public_work_status_preserves_canonical_owner_request(tmp_path: Path) ->
     assert payload["state"] == WorkState.QUEUED.value
     assert payload["progress_percent"] == 5
     assert payload["progress_is_approximate"] is True
-    assert "owner_status_summary" in payload
+    assert payload["remaining_summary"]
+    assert payload["completion_notification_expected"] is True
+    assert "owner_status_summary" not in payload
 
 
 @pytest.mark.parametrize(

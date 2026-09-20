@@ -5,7 +5,7 @@ from __future__ import annotations
 from livekit.agents import RunContext, function_tool
 
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
-from jarvis.work.estimates import estimate_work, owner_work_status_summary
+from jarvis.work.estimates import estimate_work
 from jarvis.work.models import DeliveryPolicy, WorkItem, WorkPriority, WorkType
 from jarvis.work.runtime import WorkRuntime
 from jarvis.work.store import WorkStoreError
@@ -39,11 +39,6 @@ def _public_work(item: WorkItem, runtime: WorkRuntime) -> dict[str, object]:
         "eta_confidence": estimate.eta_confidence,
         "eta_reason": estimate.eta_reason,
         "estimate_updated_at": estimate.estimate_updated_at,
-        "owner_status_summary": owner_work_status_summary(
-            item,
-            estimate,
-            completion_notification_expected=completion_notification_expected,
-        ),
     }
 
 
@@ -154,10 +149,10 @@ class WorkAgentTools:
 
         Use for questions such as "what are you working on?" Never infer task state from
         provider conversation history. Report progress_percent as approximate, use the ETA
-        range/confidence rather than inventing an exact completion time. For progress or
-        status questions, owner_status_summary is the canonical owner-facing wording: keep
-        its blocker, remaining-work description, ETA confidence, and completion-notification
-        promise rather than weakening them into generic language.
+        range/confidence rather than inventing an exact completion time. Treat the returned
+        fields as canonical facts, but phrase the answer naturally in JARVIS's own words.
+        Preserve the approximate qualifier, specific blocker, remaining work, ETA confidence,
+        and completion-notification expectation instead of weakening or omitting them.
         """
         del context
         items = self._runtime.orchestrator.list_active(limit=50)
@@ -193,10 +188,10 @@ class WorkAgentTools:
     ) -> dict[str, object]:
         """Read canonical state and JARVIS-owned progress/ETA for one WorkItem.
 
-        Treat progress_percent as approximate unless the task is terminal. For a progress
-        or status answer, use owner_status_summary as canonical owner-facing content. Do not
-        replace a specific blocked_reason with generic "resources", omit the remaining work,
-        drop ETA confidence, or invent a different completion time.
+        Treat progress_percent as approximate unless the task is terminal. The returned
+        fields are canonical facts, not a script. Speak naturally while preserving the
+        specific blocked_reason, remaining work, ETA range/confidence, and completion
+        notification expectation. Never invent a different completion time.
         """
         del context
         try:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from jarvis.work.estimates import estimate_work, owner_work_status_summary
+from jarvis.work.estimates import estimate_work
 from jarvis.work.models import WorkItem, WorkState, WorkStep, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
@@ -172,49 +172,3 @@ def test_paused_work_has_no_eta(tmp_path: Path) -> None:
     assert estimate.eta_low_seconds is None
     assert estimate.eta_high_seconds is None
     assert estimate.eta_confidence == "unavailable"
-
-
-def test_owner_status_summary_preserves_specific_blocker_remaining_eta_and_promise(
-    tmp_path: Path,
-) -> None:
-    store = SQLiteWorkStore(tmp_path / "work.sqlite")
-    item = _item(WorkType.RESEARCH)
-    store.create(item)
-    running = item.transition(WorkState.RUNNING, status_detail="reasoning")
-    store.save(running, expected_version=item.version)
-    pressure = _complete_step(
-        store,
-        running,
-        "provider_pressure",
-        {
-            "provider": "gemini",
-            "status_code": 429,
-            "reason": "rate limit",
-            "attempt": 2,
-            "retry_after_seconds": 10.0,
-        },
-    )
-    latest = store.require(item.work_id)
-    waiting = latest.transition(
-        WorkState.WAITING_RESOURCE,
-        status_detail="waiting for Gemini rate limit; retrying in 10 seconds",
-        current_step_id=pressure.step_id,
-    )
-    store.save(waiting, expected_version=latest.version)
-    estimate = estimate_work(
-        store,
-        waiting,
-        now=waiting.created_at + timedelta(seconds=30),
-    )
-
-    summary = owner_work_status_summary(
-        waiting,
-        estimate,
-        completion_notification_expected=True,
-    )
-
-    assert "approximately 20% complete" in summary
-    assert "waiting for Gemini rate limit; retrying in 10 seconds" in summary
-    assert "Remaining work:" in summary
-    assert "with low confidence" in summary
-    assert "I will let you know when it is complete." in summary
