@@ -8,7 +8,7 @@ The accepted runtime-code baseline produced by owner-accepted PRs #43, #49 and #
 
 PR #41 now adds the bounded read-only hierarchical whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, structured operational-evidence queries, typed Self-Awareness reads and resolved-incident/fix retrieval. Autonomous diagnosis/repair remains explicitly out of scope. Final acceptance evidence is recorded in `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
 
-**Persistent Concurrent Work Orchestration (issue #53 / PR #55) is OWNER ACCEPTED and merged to protected `main` on 2026-09-20 at `3980b212d657106abd45bfae119d2207551c409f`. Issue #53 is closed.** Independent durable research/development work, standby continuation, restart recovery, canonical progress/status, cancellation, and immediate foreground Hands while background work remains active were proven on the owner machine. Exact runtime-head CI passed; final reconciliation head must remain green.
+**Persistent Concurrent Work Orchestration (issue #53 / PR #55) is OWNER ACCEPTED and merged to protected `main` on 2026-09-20 at `3980b212d657106abd45bfae119d2207551c409f`. Issue #53 is closed.** Independent durable research/development work, standby continuation, restart recovery, canonical progress/status, cancellation, and immediate foreground Hands while background work remains active were proven on the owner machine. Exact runtime-head CI passed, final reconciliation CI passed, and the production merge result is recorded below.
 
 **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027, CAP-028) is now the next active numbered roadmap slice.** It must reuse the accepted WorkItem/WorkDelivery foundation rather than invent a separate task/background subsystem.
 
@@ -25,7 +25,7 @@ PR #41 now adds the bounded read-only hierarchical whole-JARVIS Self Model, dete
 - **Step 3:** canonical authority, risk, approval, audit, Windows-session invalidation and Windows Hello/T3 remain authoritative. CAM++ and LR-ASD remain shadow evidence. General biometric/voice-derived T2 is still deferred. Hands may reuse a bounded same-session T2 only after successful direct-user T3 verification; it never comes from face/voice evidence alone and never replaces a required T3 challenge.
 - **Step 4:** encrypted canonical memory, explicit lifecycle, FTS5/Qwen retrieval and bounded provider-assisted `recall_memory` are accepted. The strict independent 4.5D verifier and Phase-4.5E automatic semantic-memory injection remain deferred/disabled.
 - **Step 5:** deterministic provider-failure diagnosis, local truthful status speech and safe failed-session closure are accepted. Full local/offline conversation and automatic provider failover remain deferred.
-- **Step 6:** provider-neutral source-aware current research with Exa, provenance and fail-closed source sufficiency is accepted. Long-running/background research remains later work.
+- **Step 6:** provider-neutral source-aware current research with Exa, provenance and fail-closed source sufficiency is accepted. PR #55 now supplies the durable background execution foundation; proactive/event-driven research remains later Step-15 work.
 - **Step 7:** governed capability discovery/runtime, approved-root local reads, isolated MarkItDown document conversion, canonical authority binding and production `inspect_local` are accepted.
 - **Self-Awareness Foundation (PR #41):** owner-accepted bounded whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, redacted rotating operational evidence, local incident engineering memory and typed governed read-only Self-Awareness tools. A long synchronous realtime multi-tool delay discovered during acceptance was resolved structurally by the later concurrent-work foundation; the measured Self-Awareness evidence read itself completed in ~47 ms.
 - **Persistent Concurrent Work Orchestration (PR #55):** owner-accepted durable WorkItems/steps/deliveries, DBOS recovery, single-brain interactive priority, bounded resources, natural structured progress/ETA, restart-safe control, deferred result delivery, background research, and isolated repository development. Owner-machine acceptance proved parallel research/development state, standby continuation, restart recovery, cancellation, and verified Calculator Hands execution while background work remained active.
@@ -127,7 +127,7 @@ PR #55 implements the owner-accepted foundation from issue #53:
 8. production DBOS execution requires explicit Postgres; the canonical local JARVIS work store remains SQLite/WAL;
 9. no protected-main push/merge/deployment or Authority expansion is granted by this foundation.
 
-Owner-machine acceptance passed on 2026-09-20. Runtime head `b2ba211becdef1b123852a44e7d0c39ffe36cf58` passed Code Quality run #3929; the final reconciliation descendant must also pass exact-head CI before merge. Acceptance detail is in `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
+Owner-machine acceptance passed on 2026-09-20. Runtime head `b2ba211becdef1b123852a44e7d0c39ffe36cf58` passed Code Quality run #3929, final PR head `a38b2e5dd3f1e4c31f08bd7efbcd0457617eee91` passed Code Quality run #3951, and PR #55 merged to protected `main` as `3980b212d657106abd45bfae119d2207551c409f`. Acceptance detail is in `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
 
 ## Step 8 — queued after orchestration foundation
 
@@ -144,6 +144,6 @@ Step 8 must then reuse that durable work foundation while remaining research-fir
 
 ## Immediate Next Action
 
-**MERGE OWNER-ACCEPTED PR #55 AFTER THE FINAL DOCUMENTATION-ONLY HEAD PASSES EXACT-HEAD CI.**
+**BEGIN STEP 8 — NOTES / TASKS / REMINDERS / SCHEDULING — REQUIREMENTS AND RESEARCH** on top of the merged durable WorkItem model.
 
-Then begin **STEP 8 — NOTES / TASKS / REMINDERS / SCHEDULING** requirements and research on top of the accepted durable WorkItem model. Keep issue #56 (Pocket OWNER continuity) and issue #57 (TTS delivery retry backoff) as separate corrective work; neither expands the Step-8 scope.
+Keep issue #56 (Pocket OWNER continuity) and issue #57 (TTS delivery retry backoff) as separate corrective work; neither expands the Step-8 scope.
