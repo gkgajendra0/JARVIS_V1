@@ -33,6 +33,9 @@ from jarvis.voice.livekit_session import create_voice_session
 from jarvis.voice.memory_tools import MemoryAgentTools
 from jarvis.voice.research_tools import ResearchAgentTools
 from jarvis.voice.runtime import VoiceRuntimeController
+from jarvis.voice.work_tools import WorkAgentTools
+from jarvis.work.models import DeliveryPolicy, WorkDeliveryKind
+from jarvis.work.runtime import WorkRuntime
 
 LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +52,7 @@ class _SessionToolBundle:
         memory_query_coordinator: ProviderVerifiedMemoryQueryCoordinator | None,
         research_service: CurrentResearchService | None,
         capability_runtime: CapabilityRuntime | None,
+        work_runtime: WorkRuntime | None = None,
     ) -> None:
         self._vision_tools = vision_tools
         self._conversation_getter = conversation_getter
@@ -56,6 +60,7 @@ class _SessionToolBundle:
         self._memory_query_coordinator = memory_query_coordinator
         self._research_service = research_service
         self._capability_runtime = capability_runtime
+        self._work_runtime = work_runtime
 
     @property
     def tools(self) -> list:
@@ -77,6 +82,8 @@ class _SessionToolBundle:
             tools.extend(
                 LocalReadAgentTools(self._capability_runtime, conversation).tools
             )
+        if self._work_runtime is not None:
+            tools.extend(WorkAgentTools(self._work_runtime, conversation).tools)
         return tools
 
 
@@ -91,20 +98,38 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         memory_query_coordinator: ProviderVerifiedMemoryQueryCoordinator | None = None,
         research_service: CurrentResearchService | None = None,
         capability_runtime: CapabilityRuntime | None = None,
+        work_runtime: WorkRuntime | None = None,
         **kwargs: Any,
     ) -> None:
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
         self._session_conversation: ConversationSession | None = None
         self._user_is_speaking = False
         self._session_ready_for_inactivity = False
+        self._agent_state = "unavailable"
+        self._live_session: Any | None = None
 
         def capture_session(config: JarvisConfig):
             session, bridge = original_session_factory(config)
+            self._live_session = session
             self._session_conversation = bridge.conversation
             self._user_is_speaking = False
             self._session_ready_for_inactivity = False
+            self._agent_state = "unavailable"
+            if work_runtime is not None:
+                work_runtime.set_interactive_brain_active(False)
+
+            def sync_interactive_brain_gate() -> None:
+                if work_runtime is None:
+                    return
+                interactive = self._user_is_speaking or self._agent_state in {
+                    "thinking",
+                    "speaking",
+                }
+                work_runtime.set_interactive_brain_active(interactive)
 
             def track_agent_state(event: AgentStateChangedEvent) -> None:
+                self._agent_state = event.new_state
+                sync_interactive_brain_gate()
                 LOGGER.info(
                     "Voice agent state changed: %s -> %s",
                     event.old_state,
@@ -131,12 +156,14 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     if bridge.conversation.status is ConversationStatus.ACTIVE:
                         bridge.conversation.begin_user_activity()
                     self._user_is_speaking = True
+                    sync_interactive_brain_gate()
                     self._cancel_timeout()
                     return
                 if event.new_state != "listening":
                     return
 
                 self._user_is_speaking = False
+                sync_interactive_brain_gate()
                 if not self._session_ready_for_inactivity:
                     return
                 has_user_turn = any(
@@ -150,8 +177,18 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 )
                 self._arm_timeout(timeout)
 
+            def clear_live_session(event) -> None:
+                del event
+                if self._live_session is session:
+                    self._live_session = None
+                    self._agent_state = "unavailable"
+                    self._user_is_speaking = False
+                    if work_runtime is not None:
+                        work_runtime.set_interactive_brain_active(False)
+
             session.on("agent_state_changed", track_agent_state)
             session.on("user_state_changed", track_user_activity)
+            session.on("close", clear_live_session)
             return session, bridge
 
         super().__init__(*args, session_factory=capture_session, **kwargs)
@@ -164,10 +201,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._memory_query_coordinator = memory_query_coordinator
         self._research_service = research_service
         self._capability_runtime = capability_runtime
+        self._work_runtime = work_runtime
         if (
             memory_runtime is not None
             or research_service is not None
             or capability_runtime is not None
+            or work_runtime is not None
         ):
             self._vision_tools = _SessionToolBundle(
                 self._vision_tools,
@@ -176,7 +215,89 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 memory_query_coordinator=memory_query_coordinator,
                 research_service=research_service,
                 capability_runtime=capability_runtime,
+                work_runtime=work_runtime,
             )
+
+    @staticmethod
+    def _work_delivery_text(kind: WorkDeliveryKind, message: str) -> str:
+        normalized = " ".join(message.split())
+        if kind is WorkDeliveryKind.OWNER_INPUT:
+            return f"Sir, I need your input on a background task. {normalized}"
+        if kind is WorkDeliveryKind.FAILURE:
+            return f"Sir, a background task failed. {normalized}"
+        return f"Sir, {normalized}"
+
+    async def _deliver_pending_work(self) -> None:
+        while not self._shutdown.is_set():
+            runtime = self._work_runtime
+            output = self.audio.output
+            active = (
+                runtime is not None
+                and output is not None
+                and self._state.value == "active"
+                and not self._user_is_speaking
+            )
+            if not active:
+                await asyncio.sleep(0.5)
+                continue
+
+            pending = runtime.store.list_pending_deliveries(limit=5)
+            if not pending:
+                await asyncio.sleep(0.5)
+                continue
+
+            delivery = pending[0]
+            if (
+                delivery.policy is DeliveryPolicy.WHEN_IDLE
+                and self._agent_state != "listening"
+            ):
+                await asyncio.sleep(0.25)
+                continue
+
+            if (
+                delivery.policy is DeliveryPolicy.INTERRUPT
+                and self._agent_state != "listening"
+            ):
+                session = self._live_session
+                if session is None:
+                    await asyncio.sleep(0.25)
+                    continue
+                try:
+                    await session.interrupt(force=True)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    LOGGER.exception(
+                        "Could not interrupt realtime response for urgent work delivery"
+                    )
+                    await asyncio.sleep(0.5)
+                    continue
+
+            try:
+                await self._get_scripted_speech().speak(
+                    output,
+                    self._work_delivery_text(delivery.kind, delivery.message),
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                LOGGER.exception(
+                    "Background work notification delivery failed | delivery_id=%s",
+                    delivery.delivery_id,
+                )
+                await asyncio.sleep(2.0)
+                continue
+
+            runtime.store.mark_delivery_delivered(delivery.delivery_id)
+            LOGGER.info(
+                "Background work notification delivered | delivery_id=%s | "
+                "work_id=%s | kind=%s | policy=%s",
+                delivery.delivery_id,
+                delivery.work_id,
+                delivery.kind.value,
+                delivery.policy.value,
+            )
+            await asyncio.sleep(0.2)
 
     def _arm_timeout(self, seconds: float) -> None:
         """Arm inactivity shutdown only after startup and only while user is silent."""
@@ -215,6 +336,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
     async def run(self) -> None:
         memory_runtime = self._memory_runtime
         capability_runtime = self._capability_runtime
+        delivery_task: asyncio.Task[None] | None = None
         if memory_runtime is not None:
             await memory_runtime.start()
             LOGGER.info(
@@ -233,6 +355,16 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 "active_brain_independent=True",
                 self._research_service.provider_name,
             )
+        if self._work_runtime is not None:
+            LOGGER.info(
+                "Persistent concurrent work orchestration is active | "
+                "supported_types=%s | voice_session_ownership=False",
+                ",".join(
+                    sorted(
+                        item.value for item in self._work_runtime.supported_work_types
+                    )
+                ),
+            )
         if capability_runtime is not None:
             capability_catalog = capability_runtime.refresh_catalog()
             browser_hands = capability_catalog.by_key("browser:playwright")
@@ -242,12 +374,26 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 "browser_control=%s | raw_shell=False",
                 bool(browser_hands and browser_hands.execution_enabled),
             )
+        if self._work_runtime is not None:
+            delivery_task = asyncio.create_task(
+                self._deliver_pending_work(),
+                name="jarvis-work-delivery",
+            )
         try:
             await super().run()
         finally:
+            if delivery_task is not None:
+                delivery_task.cancel()
+                await asyncio.gather(delivery_task, return_exceptions=True)
             self._session_ready_for_inactivity = False
             self._user_is_speaking = False
             self._session_conversation = None
+            self._agent_state = "unavailable"
+            self._live_session = None
+            if self._work_runtime is not None:
+                self._work_runtime.set_interactive_brain_active(False)
+            if self._work_runtime is not None:
+                self._work_runtime.close()
             if capability_runtime is not None:
                 capability_runtime.close()
             if self._research_service is not None:

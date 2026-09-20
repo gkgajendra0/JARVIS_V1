@@ -8,13 +8,13 @@ The accepted runtime-code baseline produced by owner-accepted PRs #43, #49 and #
 
 PR #41 now adds the bounded read-only hierarchical whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, structured operational-evidence queries, typed Self-Awareness reads and resolved-incident/fix retrieval. Autonomous diagnosis/repair remains explicitly out of scope. Final acceptance evidence is recorded in `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
 
-**Persistent Concurrent Work Orchestration is now the next architecture foundation (issue #53).** It will be researched and designed before Step 8 implementation so long-running development, research, diagnostics, monitoring and later scheduled work can run as durable concurrent work items without monopolizing the live voice turn.
+**Persistent Concurrent Work Orchestration (issue #53 / PR #55) is OWNER ACCEPTED on 2026-09-20 and approved for protected-main merge.** Independent durable research/development work, standby continuation, restart recovery, canonical progress/status, cancellation, and immediate foreground Hands while background work remains active were proven on the owner machine. Exact runtime-head CI passed; final reconciliation head must remain green.
 
-**Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027, CAP-028) remains the next numbered roadmap slice, queued to build on that orchestration foundation.**
+**Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027, CAP-028) is now the next active numbered roadmap slice.** It must reuse the accepted WorkItem/WorkDelivery foundation rather than invent a separate task/background subsystem.
 
 ## Current Stage
 
-**STEPS 0–3 DONE — STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 BOUNDED COMPLETE — STEP 7 DONE — POST-STEP-7 HANDS / POCKET / PERFORMANCE / STABILITY / SAFETY INTERLUDE ACCEPTED — SELF-AWARENESS FOUNDATION OWNER ACCEPTED — PERSISTENT CONCURRENT WORK ORCHESTRATION REQUIREMENTS / RESEARCH NEXT — STEP 8 QUEUED AFTER THAT FOUNDATION.**
+**STEPS 0–3 DONE — STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 BOUNDED COMPLETE — STEP 7 DONE — POST-STEP-7 HANDS / POCKET / PERFORMANCE / STABILITY / SAFETY INTERLUDE ACCEPTED — SELF-AWARENESS FOUNDATION OWNER ACCEPTED — PERSISTENT CONCURRENT WORK ORCHESTRATION OWNER ACCEPTED / MERGE APPROVED — STEP 8 IS NEXT.**
 
 `PRODUCT.md` owns permanent product intent/status, `ROADMAP.md` owns sequence, `CURRENT_ARCHITECTURE.md` owns accepted running architecture, and `docs/research/` owns detailed evidence.
 
@@ -27,9 +27,10 @@ PR #41 now adds the bounded read-only hierarchical whole-JARVIS Self Model, dete
 - **Step 5:** deterministic provider-failure diagnosis, local truthful status speech and safe failed-session closure are accepted. Full local/offline conversation and automatic provider failover remain deferred.
 - **Step 6:** provider-neutral source-aware current research with Exa, provenance and fail-closed source sufficiency is accepted. Long-running/background research remains later work.
 - **Step 7:** governed capability discovery/runtime, approved-root local reads, isolated MarkItDown document conversion, canonical authority binding and production `inspect_local` are accepted.
-- **Self-Awareness Foundation (PR #41):** owner-accepted bounded whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, redacted rotating operational evidence, local incident engineering memory and typed governed read-only Self-Awareness tools. A long synchronous realtime multi-tool delay discovered during acceptance is classified as a missing concurrent-work/orchestration capability rather than an evidence-query defect; the measured evidence read itself completed in ~47 ms.
+- **Self-Awareness Foundation (PR #41):** owner-accepted bounded whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, redacted rotating operational evidence, local incident engineering memory and typed governed read-only Self-Awareness tools. A long synchronous realtime multi-tool delay discovered during acceptance was resolved structurally by the later concurrent-work foundation; the measured Self-Awareness evidence read itself completed in ~47 ms.
+- **Persistent Concurrent Work Orchestration (PR #55):** owner-accepted durable WorkItems/steps/deliveries, DBOS recovery, single-brain interactive priority, bounded resources, natural structured progress/ETA, restart-safe control, deferred result delivery, background research, and isolated repository development. Owner-machine acceptance proved parallel research/development state, standby continuation, restart recovery, cancellation, and verified Calculator Hands execution while background work remained active.
 
-Detailed acceptance: `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
+Detailed acceptance: `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md` and `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
 
 ---
 
@@ -100,7 +101,7 @@ Full consolidated evidence and disposition history: `docs/research/POST_STEP_7_I
 | Issue #45 false-interruption resume | **DEFERRED BUG** | Production audio output cannot pause, so configured resume behavior is unavailable. |
 | Issue #46 intermittent LiveKit AudioMixer timeout | **DEFERRED INVESTIGATION** | Warning has not yet been proven to cause a user-visible audio failure. |
 | Issue #19 production voice isolation / turn ownership | **DEFERRED RESEARCH** | Accepted security evidence remains shadow-only; rejected isolation/target-speaker candidates are not production control. |
-| Persistent concurrent work orchestration | **NEXT FOUNDATION** | Durable multi-work execution, progress/state, bounded concurrency and deferred result delivery are now prerequisites before Step 8 implementation. |
+| Persistent concurrent work orchestration | **OWNER ACCEPTED / PR #55 MERGE APPROVED** | Durable WorkItems, DBOS recovery, single-brain voice priority, bounded resources, structured progress/status, deferred delivery and isolated development execution passed owner-machine acceptance on 2026-09-20. |
 | Proactive monitoring / event-driven background work | **PLANNED** | Step 15 remains the later product slice for proactive/event-driven behavior; it will reuse the orchestration foundation rather than invent a second background-work system. |
 | PR #27 | **SUPERSEDED** | Replaced by accepted Step-7 PR #28. |
 | PR #31 | **SUPERSEDED** | Profiler work recovered cleanly in PR #36. |
@@ -112,18 +113,21 @@ Full consolidated evidence and disposition history: `docs/research/POST_STEP_7_I
 
 ---
 
-## Persistent Concurrent Work Orchestration — next foundation
+## Persistent Concurrent Work Orchestration — accepted foundation
 
-This foundation must start research-first from the accepted Self-Awareness baseline:
+PR #55 implements the owner-accepted foundation from issue #53:
 
-1. define durable provider-neutral work-item truth separately from any one voice/model session;
-2. define lifecycle states such as QUEUED, RUNNING, WAITING, WAITING_FOR_OWNER, COMPLETED, FAILED and CANCELLED;
-3. define bounded worker registration, concurrency/resource leases, dependencies, priorities, cancellation, retries and restart recovery;
-4. define conversational progress and completion delivery such as SILENT, WHEN_IDLE and INTERRUPT;
-5. preserve Authority for privileged/destructive work and never let background execution expand permissions;
-6. define isolated development-work execution (for example Git worktrees) before multiple coding jobs can run concurrently;
-7. research mature orchestration/runtime technology before implementation;
-8. obtain owner architecture approval before implementation.
+1. JARVIS-owned provider-neutral WorkItems/steps/deliveries persist independently of voice/model sessions;
+2. DBOS supplies durable workflow recovery and messaging while JARVIS retains canonical semantic state;
+3. live owner conversation has absolute priority over background model reasoning; already-running deterministic work may continue;
+4. dependencies, priorities, resource leases, pause/resume/cancel/retry and WAITING_FOR_OWNER are explicit canonical states;
+5. SILENT / WHEN_IDLE / INTERRUPT delivery is persisted and only marked delivered after speech succeeds;
+6. current worker support is deliberately bounded to research and isolated development rather than pretending all future WorkTypes exist;
+7. development work uses per-WorkItem Git worktrees, locked-down Docker pytest, disabled Git hooks/textconv, secret-content filtering, and ordered proof of latest edit -> passing sandbox tests -> final diff -> clean isolated commit;
+8. production DBOS execution requires explicit Postgres; the canonical local JARVIS work store remains SQLite/WAL;
+9. no protected-main push/merge/deployment or Authority expansion is granted by this foundation.
+
+Owner-machine acceptance passed on 2026-09-20. Runtime head `b2ba211becdef1b123852a44e7d0c39ffe36cf58` passed Code Quality run #3929; the final reconciliation descendant must also pass exact-head CI before merge. Acceptance detail is in `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
 
 ## Step 8 — queued after orchestration foundation
 
@@ -140,8 +144,6 @@ Step 8 must then reuse that durable work foundation while remaining research-fir
 
 ## Immediate Next Action
 
-**PR #41 IS MERGED. ISSUE #53 — PERSISTENT CONCURRENT WORK ORCHESTRATION FOUNDATION — IS THE ACTIVE NEXT WORK ITEM.**
+**MERGE OWNER-ACCEPTED PR #55 AFTER THE FINAL DOCUMENTATION-ONLY HEAD PASSES EXACT-HEAD CI.**
 
-Begin **REQUIREMENTS RECOVERY -> FRESH RESEARCH -> TECHNOLOGY DECISION -> ARCHITECTURE PROPOSAL -> OWNER APPROVAL BEFORE IMPLEMENTATION**.
-
-After that foundation is accepted, continue **STEP 8 TASKS / REMINDERS / SCHEDULING** on top of the same durable work model.
+Then begin **STEP 8 — NOTES / TASKS / REMINDERS / SCHEDULING** requirements and research on top of the accepted durable WorkItem model. Keep issue #56 (Pocket OWNER continuity) and issue #57 (TTS delivery retry backoff) as separate corrective work; neither expands the Step-8 scope.

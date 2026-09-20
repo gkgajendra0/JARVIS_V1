@@ -2,7 +2,7 @@
 
 ## Status
 
-**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS FOUNDATION PR #41 IS OWNER ACCEPTED AND MERGED. PERSISTENT CONCURRENT WORK ORCHESTRATION (ISSUE #53) IS THE NEXT ARCHITECTURE FOUNDATION; STEP 8 IS QUEUED AFTER IT.**
+**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS FOUNDATION PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED FOR THIS PRODUCTION MERGE. STEP 8 IS NEXT.**
 
 Protected-main production baseline after the Self-Awareness merge: `e5484cb9d599783e7f715bc6fb435af459dc49a0`. PR #41 adds the accepted bounded Self-Awareness runtime; later documentation-only reconciliation commits do not change that implementation behavior.
 
@@ -33,6 +33,12 @@ AEC/NS/HPF/AGC          RF-DETR/OC-SORT     risk + OPA
                              |
                Self Model + health + dependencies
                rotating evidence + incident memory
+                             |
+                    DURABLE WORK ORCHESTRATION
+                             |
+          WorkItem / WorkStep / WorkDelivery truth
+          SQLite protected payloads + DBOS/Postgres
+          bounded research + isolated development
 
 canonical USER turns
    +-> LiveContext / MemoryService
@@ -214,6 +220,31 @@ Old PRs #31/#32 are historical performance experiments; accepted pieces were sel
 
 ---
 
+## Persistent concurrent work orchestration
+
+PR #55 adds the owner-accepted durable work foundation.
+
+Canonical JARVIS architecture now includes:
+
+- provider-neutral `WorkItem`, `WorkStep` and `WorkDelivery` truth persisted independently of any voice/model session;
+- DBOS as durable workflow/recovery/messaging mechanics while JARVIS remains semantic owner;
+- explicit Postgres system state for production DBOS plus local SQLite/WAL canonical work truth;
+- protected sensitive WorkStore payloads on the Windows production path using a separate AES-GCM key sealed through the existing DPAPI boundary;
+- live owner conversation as absolute priority for shared model reasoning, with background reasoning preempted/yielded and already-started deterministic bounded executor work allowed to continue;
+- bounded concurrency/resource admission, dependencies, priorities, pause/resume/cancel/reprioritize, owner-input waits and bounded reasoning cycles;
+- restart-safe reconciliation: a RUNNING executor step with unknown crash outcome becomes `INTERRUPTED` and the WorkItem moves to `WAITING_FOR_OWNER` instead of silently replaying a possibly side-effecting action;
+- structured JARVIS-owned progress/ETA facts exposed to the voice brain, which speaks naturally without hardcoded status sentences or model-invented progress;
+- durable `SILENT` / `WHEN_IDLE` / `INTERRUPT` delivery records that are marked delivered only after speech succeeds;
+- bounded background research and isolated repository-development workers;
+- per-development-WorkItem Git worktrees plus locked-down Docker pytest, disabled hooks/textconv/external diff, final diff inspection and clean isolated commit proof;
+- no background-worker permission to push, merge, deploy, mutate protected main, or bypass canonical Authority.
+
+Owner-machine acceptance on 2026-09-20 proved independent research/development WorkItems, standby continuation, truthful status/progress, clean restart recovery, cancellation, and verified `Open Calculator` foreground Hands execution while durable background work remained active.
+
+The scripted-TTS quota path remains a delivery-reliability residual: failed speech keeps delivery pending truthfully, but issue #57 tracks provider-aware retry/backoff. Pocket 3 false OWNER-loss continuity is tracked separately in issue #56 and is not part of orchestration semantics.
+
+Detailed acceptance: `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
+
 ## Known residuals / deliberate deferrals
 
 Not currently claimed as solved:
@@ -226,8 +257,9 @@ Not currently claimed as solved:
 - issue #44: provider alias / relative volume fast-path semantics;
 - issue #45: false-interruption resume is configured although production audio cannot pause;
 - issue #46: intermittent LiveKit AudioMixer timeout investigation;
+- issue #56: Pocket 3 OWNER continuity can falsely drop an already-authorized lock during transient biometric/head evidence gaps;
+- issue #57: durable work notification speech keeps truth correctly on TTS failure, but retry timing should respect provider backoff;
 - full offline conversation or automatic provider failover;
-- persistent concurrent work orchestration: long-running work can still monopolize a realtime tool turn until the new durable work foundation is implemented;
 - full future Steps 9, 10 and 12 beyond accepted Hands foundations;
 - calendar/email communication, proactive/event-driven automation, plugin lifecycle, world-awareness/HUD end state, or autonomous self-repair/self-improvement.
 
@@ -238,8 +270,6 @@ Repository-wide reconciliation evidence: `docs/research/PRODUCTION_RECONCILIATIO
 
 ## Next architecture acceptance
 
-The next architecture foundation is **Persistent Concurrent Work Orchestration (issue #53)**.
+The next numbered product slice is **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027/CAP-028)**.
 
-It is not implemented yet. The requirements/research phase must define durable provider-neutral work items, lifecycle/state, bounded concurrent workers, dependency/priority/resource management, restart recovery, Authority-preserving execution, progress/status and deferred completion delivery while normal conversation remains available.
-
-This foundation must be architecture-approved before implementation. Step 8 — Notes, Tasks, Reminders, and Scheduling — will then reuse the same durable work model rather than introduce a separate task/background subsystem.
+Step 8 must reuse the accepted durable WorkItem/WorkDelivery foundation for scheduled/recurring execution while keeping task/reminder truth separate from provider reasoning and platform notification state. Its requirements/research/technology/architecture cycle begins from this merged production baseline.

@@ -21,4 +21,6 @@ For the accepted work after formal Step 7, including JARVIS Hands, Pocket 3 nati
 
 The focused owner-machine/CI acceptance record for PR #40 is `POCKET3_BLE_STARTUP_ACCEPTANCE_2026-09-14.md`.
 
+The final owner-machine/CI acceptance record for persistent concurrent work orchestration PR #55 is `PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
+
 Do not research future subsystems merely because they are interesting. Research the active product slice unless a demonstrated blocker or owner-approved interlude requires a detour.

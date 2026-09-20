@@ -485,3 +485,48 @@ async def test_update_approval_uses_scripted_speech_then_real_spoken_yes() -> No
     assert audio.activated is True
     assert audio.deactivated is True
     assert session.closed is True
+
+
+@pytest.mark.asyncio
+async def test_startup_greeting_timeout_does_not_block_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Detector:
+        async def wait_for_detection(self):
+            await asyncio.Event().wait()
+
+    class StartupAudio(FakeAudio):
+        def __init__(self) -> None:
+            super().__init__()
+            self.detector = Detector()
+
+        def set_overflow_handler(self, handler) -> None:
+            del handler
+
+        async def start(self) -> None:
+            return None
+
+        async def resume_wake(self, *, cooldown_seconds: float) -> None:
+            del cooldown_seconds
+
+        async def aclose(self) -> None:
+            return None
+
+    audio = StartupAudio()
+    scripted_speech = FakeScriptedSpeech()
+    runtime = VoiceRuntimeController(
+        JarvisConfig(),
+        audio,  # type: ignore[arg-type]
+        scripted_speech=scripted_speech,
+        startup_readiness_waiter=lambda _timeout: True,
+    )
+    monkeypatch.setattr("jarvis.voice.runtime._STARTUP_GREETING_TIMEOUT_SECONDS", 0.01)
+
+    task = asyncio.create_task(runtime.run())
+    await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
+    await asyncio.sleep(0.05)
+
+    assert runtime.state is VoiceRuntimeState.IDLE
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
