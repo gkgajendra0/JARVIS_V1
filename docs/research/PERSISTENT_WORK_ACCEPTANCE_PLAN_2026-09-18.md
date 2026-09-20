@@ -2,7 +2,7 @@
 
 Date: 2026-09-18
 Scope: draft PR #55 / issue #53
-Status: **NOT YET OWNER-ACCEPTED**
+Status: **OWNER ACCEPTED 2026-09-20 — PR #55 APPROVED FOR MERGE**
 
 ## Purpose
 
@@ -147,3 +147,47 @@ Any serial voice blocking, brain competition with active conversation, duplicate
 Record exact PR head SHA, Postgres/Docker versions, A-J pass/fail, corrections, representative non-secret WorkItem IDs/states, proof main stayed clean, and the owner’s explicit acceptance statement.
 
 Only then reconcile `CURRENT_ARCHITECTURE.md` and product capability status and make PR #55 merge-ready.
+
+
+---
+
+## Acceptance result — 2026-09-20
+
+Owner-machine acceptance completed against the production `jarvis-voice` / `jarvis-dev` path with Postgres DBOS and the approved Docker development sandbox.
+
+### Proven on the owner machine
+
+- independent research and development WorkItems coexisted with separate canonical states;
+- voice remained responsive while durable work existed;
+- standby did not stop background work, and development progress advanced while the cloud voice session was closed;
+- `Open Calculator` executed through Hands and was verified while background work remained active;
+- canonical progress/status used structured WorkItem truth rather than provider conversation history or hardcoded owner-facing sentences;
+- clean restart recovered durable work without duplicate identity;
+- bounded DBOS shutdown eliminated the earlier restart teardown/retry failure chain;
+- cancellation reached the durable backend and canonical state did not resurrect the cancelled task;
+- `jarvis-dev` update approval recovered from transient approval-channel timeouts instead of treating transport failure as an owner decline.
+
+### Automated hardening accepted as part of the same exact-head suite
+
+The suite covers pause/resume/cancel isolation, WAITING_FOR_OWNER behavior, dependency-cycle rejection, resource/RAM admission, bounded reasoning cycles, unknown RUNNING-step reconciliation to `INTERRUPTED` + `WAITING_FOR_OWNER`, cancellation-backend failure truthfulness, durable-delivery reconstruction, protected WorkStore encryption/migration behavior, and isolated development worktree/Docker/diff/commit proof gates.
+
+### Exact candidate evidence
+
+- runtime acceptance head: `b2ba211becdef1b123852a44e7d0c39ffe36cf58`;
+- Code Quality run: #3929;
+- pytest: PASS;
+- Ruff: PASS;
+- Windows DPAPI: PASS;
+- Windows Hello helper: PASS.
+
+The final documentation-only descendant of that runtime head must also pass exact-head CI before merge.
+
+### Residuals intentionally separated from PR #55
+
+- **Issue #56:** Pocket 3 OWNER continuity can falsely drop an already-authorized lock during transient biometric/head evidence gaps.
+- **Issue #57:** scripted TTS 429/quota failures keep durable delivery pending correctly, but retry scheduling should respect provider retry/backoff.
+- Exa credentials were unavailable during one research acceptance run. The WorkItem correctly reported the dependency instead of inventing completion; provider credentials are environment configuration, not orchestration correctness.
+
+### Owner decision
+
+On 2026-09-20 the owner explicitly accepted the concurrent-work foundation and approved PR #55 for protected-main merge, with #56 and #57 tracked separately.
