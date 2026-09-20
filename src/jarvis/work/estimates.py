@@ -204,7 +204,13 @@ def _development_progress(
             25,
             "repository_inspected",
             ("workspace_preparation", "repository_inspection"),
-            ("implementation", "sandbox_tests", "diff_review", "isolated_commit", "finalization"),
+            (
+                "implementation",
+                "sandbox_tests",
+                "diff_review",
+                "isolated_commit",
+                "finalization",
+            ),
         )
     if prepare_index >= 0:
         return (
