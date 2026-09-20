@@ -243,7 +243,6 @@ async def test_dbos_fails_runaway_work_after_reasoning_budget(tmp_path) -> None:
         shutdown_dbos_work_runtime()
 
 
-
 def test_dbos_shutdown_forwards_bounded_workflow_drain_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

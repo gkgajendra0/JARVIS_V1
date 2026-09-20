@@ -1549,7 +1549,6 @@ def test_apply_owner_input_is_idempotent_after_canonical_save(
     assert len(owner_steps) == 1
 
 
-
 def test_work_runtime_close_preempts_reasoning_before_bounded_dbos_drain(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -174,7 +174,6 @@ def test_paused_work_has_no_eta(tmp_path: Path) -> None:
     assert estimate.eta_confidence == "unavailable"
 
 
-
 def test_owner_status_summary_preserves_specific_blocker_remaining_eta_and_promise(
     tmp_path: Path,
 ) -> None:
