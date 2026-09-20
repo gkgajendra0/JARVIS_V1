@@ -116,42 +116,53 @@ class DevControlClient:
         approval_handler: ApprovalHandler,
         shutdown_handler: ShutdownHandler,
     ) -> None:
-        reader, writer = await asyncio.open_connection(
-            self.config.host,
-            self.config.port,
-        )
-        try:
-            await _write_message(
-                writer,
-                {"type": "hello", "token": self.config.token},
-            )
-            while True:
-                line = await reader.readline()
-                if not line:
-                    return
-                message = json.loads(line)
-                message_type = message.get("type")
-                request_id = str(message.get("request_id", ""))
-                if message_type == "update_approval_request":
-                    approved = await approval_handler(
-                        str(message.get("local_sha", "")),
-                        str(message.get("remote_sha", "")),
-                    )
-                    await _write_message(
-                        writer,
-                        {
-                            "type": "update_approval_response",
-                            "request_id": request_id,
-                            "approved": approved,
-                        },
-                    )
-                elif message_type == "shutdown_request":
-                    await _write_message(
-                        writer,
-                        {"type": "shutdown_ack", "request_id": request_id},
-                    )
-                    shutdown_handler()
-                    return
-        finally:
-            writer.close()
-            await writer.wait_closed()
+        while True:
+            writer: asyncio.StreamWriter | None = None
+            try:
+                reader, writer = await asyncio.open_connection(
+                    self.config.host,
+                    self.config.port,
+                )
+                await _write_message(
+                    writer,
+                    {"type": "hello", "token": self.config.token},
+                )
+                while True:
+                    line = await reader.readline()
+                    if not line:
+                        break
+                    message = json.loads(line)
+                    message_type = message.get("type")
+                    request_id = str(message.get("request_id", ""))
+                    if message_type == "update_approval_request":
+                        approved = await approval_handler(
+                            str(message.get("local_sha", "")),
+                            str(message.get("remote_sha", "")),
+                        )
+                        await _write_message(
+                            writer,
+                            {
+                                "type": "update_approval_response",
+                                "request_id": request_id,
+                                "approved": approved,
+                            },
+                        )
+                    elif message_type == "shutdown_request":
+                        await _write_message(
+                            writer,
+                            {"type": "shutdown_ack", "request_id": request_id},
+                        )
+                        shutdown_handler()
+                        return
+            except asyncio.CancelledError:
+                raise
+            except (OSError, TimeoutError, ConnectionError, json.JSONDecodeError):
+                await asyncio.sleep(1.0)
+            finally:
+                if writer is not None:
+                    writer.close()
+                    try:
+                        await writer.wait_closed()
+                    except OSError:
+                        pass
+            await asyncio.sleep(1.0)

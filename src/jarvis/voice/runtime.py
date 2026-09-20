@@ -71,6 +71,7 @@ _UPDATE_APPROVAL_PROMPT = (
     "Please answer yes or no."
 )
 _STANDBY_ACKNOWLEDGEMENT = "Of course. I'll be standing by if you need me."
+_STARTUP_GREETING_TIMEOUT_SECONDS = 12.0
 
 
 class VoiceRuntimeState(str, Enum):
@@ -203,10 +204,18 @@ class VoiceRuntimeController:
             )
             return
         try:
-            await self._get_scripted_speech().speak(output, greeting)
+            await asyncio.wait_for(
+                self._get_scripted_speech().speak(output, greeting),
+                timeout=_STARTUP_GREETING_TIMEOUT_SECONDS,
+            )
             LOGGER.info("JARVIS startup greeting finished playing")
         except asyncio.CancelledError:
             raise
+        except TimeoutError:
+            LOGGER.warning(
+                "JARVIS startup greeting timed out after %.1fs; continuing without it",
+                _STARTUP_GREETING_TIMEOUT_SECONDS,
+            )
         except Exception:
             LOGGER.exception("JARVIS startup greeting failed; continuing without it")
 

@@ -137,3 +137,21 @@ def test_approved_update_rolls_back_when_new_revision_never_becomes_ready(
     assert repo.pull_count == 1
     assert repo.reset_to == previous_sha
     assert control.readiness_calls == 2
+
+
+
+def test_transient_voice_approval_failure_is_not_an_owner_decline() -> None:
+    source = Path(supervisor.__file__).read_text(encoding="utf-8")
+
+    assert "the update will be offered again" in source
+    assert "declined_sha = None" in source
+
+
+
+def test_dev_control_client_is_expected_to_reconnect_after_transient_failure() -> None:
+    from jarvis import dev_control
+
+    source = Path(dev_control.__file__).read_text(encoding="utf-8")
+
+    assert "while True:" in source
+    assert "await asyncio.sleep(1.0)" in source

@@ -489,8 +489,11 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                     timeout_seconds=config.approval_timeout_seconds,
                 )
             except RuntimeError as exc:
-                print(f"{exc}. Current JARVIS keeps running.")
-                declined_sha = remote_sha
+                print(
+                    f"{exc}. Current JARVIS keeps running; "
+                    "the update will be offered again."
+                )
+                declined_sha = None
                 continue
 
             if not approved:
