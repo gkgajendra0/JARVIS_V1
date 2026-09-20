@@ -121,18 +121,23 @@ def create_item(store: SQLiteWorkStore, *, request: str = "Do work") -> WorkItem
     return item
 
 
-def test_public_work_status_preserves_canonical_owner_request() -> None:
+def test_public_work_status_preserves_canonical_owner_request(tmp_path: Path) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
     item = WorkItem(
         request="Research current DBOS workflow recovery behavior",
         work_type=WorkType.RESEARCH,
         source_session_id="session-public-work",
         source_turn_id="turn-public-work",
     )
+    store.create(item)
 
-    payload = _public_work(item)
+    runtime = type("RuntimeStub", (), {"store": store})()
+    payload = _public_work(item, runtime)
 
     assert payload["request"] == "Research current DBOS workflow recovery behavior"
     assert payload["state"] == WorkState.QUEUED.value
+    assert payload["progress_percent"] == 5
+    assert payload["progress_is_approximate"] is True
 
 
 @pytest.mark.parametrize(
