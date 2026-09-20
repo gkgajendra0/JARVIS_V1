@@ -8,13 +8,13 @@ The accepted runtime-code baseline produced by owner-accepted PRs #43, #49 and #
 
 PR #41 now adds the bounded read-only hierarchical whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, structured operational-evidence queries, typed Self-Awareness reads and resolved-incident/fix retrieval. Autonomous diagnosis/repair remains explicitly out of scope. Final acceptance evidence is recorded in `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
 
-**Persistent Concurrent Work Orchestration (issue #53 / PR #55) is OWNER ACCEPTED on 2026-09-20 and approved for protected-main merge.** Independent durable research/development work, standby continuation, restart recovery, canonical progress/status, cancellation, and immediate foreground Hands while background work remains active were proven on the owner machine. Exact runtime-head CI passed; final reconciliation head must remain green.
+**Persistent Concurrent Work Orchestration (issue #53 / PR #55) is OWNER ACCEPTED and merged to protected `main` on 2026-09-20 at `3980b212d657106abd45bfae119d2207551c409f`. Issue #53 is closed.** Independent durable research/development work, standby continuation, restart recovery, canonical progress/status, cancellation, and immediate foreground Hands while background work remains active were proven on the owner machine. Exact runtime-head CI passed; final reconciliation head must remain green.
 
 **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027, CAP-028) is now the next active numbered roadmap slice.** It must reuse the accepted WorkItem/WorkDelivery foundation rather than invent a separate task/background subsystem.
 
 ## Current Stage
 
-**STEPS 0–3 DONE — STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 BOUNDED COMPLETE — STEP 7 DONE — POST-STEP-7 HANDS / POCKET / PERFORMANCE / STABILITY / SAFETY INTERLUDE ACCEPTED — SELF-AWARENESS FOUNDATION OWNER ACCEPTED — PERSISTENT CONCURRENT WORK ORCHESTRATION OWNER ACCEPTED / MERGE APPROVED — STEP 8 IS NEXT.**
+**STEPS 0–3 DONE — STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 BOUNDED COMPLETE — STEP 7 DONE — POST-STEP-7 HANDS / POCKET / PERFORMANCE / STABILITY / SAFETY INTERLUDE ACCEPTED — SELF-AWARENESS FOUNDATION OWNER ACCEPTED — PERSISTENT CONCURRENT WORK ORCHESTRATION OWNER ACCEPTED AND MERGED — STEP 8 IS NEXT.**
 
 `PRODUCT.md` owns permanent product intent/status, `ROADMAP.md` owns sequence, `CURRENT_ARCHITECTURE.md` owns accepted running architecture, and `docs/research/` owns detailed evidence.
 
@@ -101,7 +101,7 @@ Full consolidated evidence and disposition history: `docs/research/POST_STEP_7_I
 | Issue #45 false-interruption resume | **DEFERRED BUG** | Production audio output cannot pause, so configured resume behavior is unavailable. |
 | Issue #46 intermittent LiveKit AudioMixer timeout | **DEFERRED INVESTIGATION** | Warning has not yet been proven to cause a user-visible audio failure. |
 | Issue #19 production voice isolation / turn ownership | **DEFERRED RESEARCH** | Accepted security evidence remains shadow-only; rejected isolation/target-speaker candidates are not production control. |
-| Persistent concurrent work orchestration | **OWNER ACCEPTED / PR #55 MERGE APPROVED** | Durable WorkItems, DBOS recovery, single-brain voice priority, bounded resources, structured progress/status, deferred delivery and isolated development execution passed owner-machine acceptance on 2026-09-20. |
+| Persistent concurrent work orchestration | **OWNER ACCEPTED / PR #55 MERGED** | Durable WorkItems, DBOS recovery, single-brain voice priority, bounded resources, structured progress/status, deferred delivery and isolated development execution passed owner-machine acceptance on 2026-09-20. |
 | Proactive monitoring / event-driven background work | **PLANNED** | Step 15 remains the later product slice for proactive/event-driven behavior; it will reuse the orchestration foundation rather than invent a second background-work system. |
 | PR #27 | **SUPERSEDED** | Replaced by accepted Step-7 PR #28. |
 | PR #31 | **SUPERSEDED** | Profiler work recovered cleanly in PR #36. |

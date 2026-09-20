@@ -2,7 +2,7 @@
 
 ## Status
 
-**OWNER ACCEPTED — PRODUCTION FOUNDATION APPROVED FOR PROTECTED-MAIN MERGE IN PR #55 (2026-09-20).**
+**OWNER ACCEPTED — MERGED TO PROTECTED `main` IN PR #55 ON 2026-09-20 (`3980b212d657106abd45bfae119d2207551c409f`).**
 
 This ADR records the accepted production boundary for issue #53. It does not mark Step 8, Step 15, autonomous repair, protected-main mutation by background workers, or later proactive/event-driven automation complete.
 
