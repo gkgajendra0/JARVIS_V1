@@ -12,7 +12,7 @@ from jarvis.work.models import (
     WorkState,
     WorkType,
 )
-from jarvis.work.store import SQLiteWorkStore
+from jarvis.work.store import SQLiteWorkStore, WorkStoreError
 
 
 class WorkExecutionBackend(Protocol):
@@ -130,17 +130,38 @@ class WorkOrchestrator:
         item = self._store.require(work_id)
         if item.state.terminal:
             return item
-        cancelled = item.transition(
-            WorkState.CANCELLED,
-            status_detail="cancelled by owner",
-            current_step_id=item.current_step_id,
-        )
-        saved = self._store.save(cancelled, expected_version=item.version)
+
+        # First make the durable cancellation request. If that fails, canonical
+        # truth must remain active instead of falsely claiming terminal cancel.
         self._backend.cancel(
             work_id,
-            idempotency_key=f"cancel:{saved.version}",
+            idempotency_key=f"cancel:{item.version}",
         )
-        return saved
+
+        # The engine may advance one optimistic version while cancellation is
+        # being requested. Re-read and CAS the latest non-terminal state so an
+        # already-running atomic executor cannot later resurrect the WorkItem.
+        for _ in range(8):
+            latest = self._store.require(work_id)
+            if latest.state.terminal:
+                return latest
+            cancelled = latest.transition(
+                WorkState.CANCELLED,
+                status_detail="cancelled by owner",
+                current_step_id=latest.current_step_id,
+            )
+            try:
+                return self._store.save(
+                    cancelled,
+                    expected_version=latest.version,
+                )
+            except WorkStoreError as exc:
+                if "stale work update rejected" not in str(exc):
+                    raise
+
+        raise WorkStoreError(
+            f"could not persist cancellation after repeated concurrent updates: {work_id}"
+        )
 
     def pause(self, work_id: str) -> WorkItem:
         item = self._store.require(work_id)
