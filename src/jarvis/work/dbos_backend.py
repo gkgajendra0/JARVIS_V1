@@ -91,6 +91,19 @@ def _queue_priority(priority: WorkPriority) -> int:
     }[priority]
 
 
+def _waiting_resource_delay(payload: dict[str, Any]) -> float:
+    raw = payload.get("retry_after_seconds")
+    if raw is None:
+        return 0.25
+    try:
+        delay = float(raw)
+    except (TypeError, ValueError):
+        return 0.25
+    if delay <= 0:
+        return 0.25
+    return min(delay, 60.0)
+
+
 @DBOS.step(retries_allowed=True, max_attempts=3, interval_seconds=1.0)
 def _advance_work(work_id: str) -> dict[str, Any]:
     """Run one async JARVIS cycle on the canonical production event loop."""
@@ -105,6 +118,7 @@ def _advance_work(work_id: str) -> dict[str, Any]:
         "state": result.state.value,
         "progressed": result.progressed,
         "owner_question": result.owner_question,
+        "retry_after_seconds": result.retry_after_seconds,
     }
 
 
@@ -155,7 +169,7 @@ def durable_workflow(
                 _apply_owner_input(work_id, str(owner_input))
 
         elif state is WorkState.WAITING_RESOURCE:
-            DBOS.sleep(0.25)
+            DBOS.sleep(_waiting_resource_delay(payload))
 
         elif state in {
             WorkState.WAITING_DEPENDENCY,
