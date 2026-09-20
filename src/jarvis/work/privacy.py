@@ -78,7 +78,7 @@ class ProtectedWorkPayloadCodec:
                 _AAD,
             )
             return plaintext.decode("utf-8")
-        except Exception as exc:  # noqa: BLE001 - corrupted storage must fail closed
+        except Exception as exc:
             raise WorkPayloadProtectionError(
                 "persistent work payload could not be decrypted"
             ) from exc
