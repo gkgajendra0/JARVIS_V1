@@ -119,7 +119,7 @@ def _fail_bounded_work(work_id: str) -> str:
         _engine()
         .fail(
             work_id,
-            "bounded reasoning cycle limit exceeded",
+            "bounded reasoning cycle budget exceeded",
         )
         .state.value
     )
