@@ -205,14 +205,14 @@ async def test_provider_pressure_uses_durable_backoff_without_failure_budget(
     assert reset.retry_after_seconds == 5.0
 
     pressure_steps = [
-        step for step in store.list_steps(item.work_id)
+        step
+        for step in store.list_steps(item.work_id)
         if step.kind == "provider_pressure"
     ]
     assert [step.observation["attempt"] for step in pressure_steps] == [1, 2, 1]
     assert all(step.state.value == "completed" for step in pressure_steps)
     assert not any(
-        step.state.value == "failed"
-        for step in store.list_steps(item.work_id)
+        step.state.value == "failed" for step in store.list_steps(item.work_id)
     )
     assert store.list_pending_deliveries() == ()
 
