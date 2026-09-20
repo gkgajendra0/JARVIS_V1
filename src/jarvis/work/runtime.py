@@ -115,6 +115,8 @@ def build_work_runtime(
     research_service: CurrentResearchService,
     model: str | None = None,
     global_concurrency: int = 4,
+    max_reasoning_cycles: int = 64,
+    min_available_memory_mb: int = 768,
     development_test_image: str | None = None,
     store_path: str | Path | None = None,
     dbos_database_url: str | None = None,
@@ -145,7 +147,12 @@ def build_work_runtime(
             "cpu": max(1, min(2, global_concurrency)),
             "git": 1,
             "network": max(1, global_concurrency),
-        }
+            "gpu": 1,
+            "browser": 1,
+            "desktop": 1,
+            "provider_api": 1,
+        },
+        min_available_memory_mb=min_available_memory_mb,
     )
     engine = WorkEngine(
         store=store,
@@ -161,6 +168,7 @@ def build_work_runtime(
         application_version=_application_version(),
         queue_concurrency=None,
         system_database_url=dbos_database_url,
+        max_reasoning_cycles=max_reasoning_cycles,
     )
     orchestrator = WorkOrchestrator(store, backend)
     orchestrator.reconcile_active()
