@@ -107,7 +107,13 @@ class WorkRuntime:
         if self._closed:
             return
         self._closed = True
-        shutdown_dbos_work_runtime()
+
+        # A jarvis-dev restart must not tear DBOS down while a provider reasoning
+        # cycle is still using the canonical event loop. Preempt background
+        # reasoning first, then give already-running DBOS workflow code a bounded
+        # window to checkpoint before database connections are closed.
+        self._interactive_brain_gate.set_interactive_active(True)
+        shutdown_dbos_work_runtime(workflow_completion_timeout_sec=5)
 
 
 def build_work_runtime(

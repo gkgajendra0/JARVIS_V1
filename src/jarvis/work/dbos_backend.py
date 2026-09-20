@@ -330,10 +330,22 @@ def initialize_dbos_work_runtime(
     )
 
 
-def shutdown_dbos_work_runtime() -> None:
+def shutdown_dbos_work_runtime(
+    *,
+    workflow_completion_timeout_sec: int = 0,
+) -> None:
+    """Stop DBOS after a bounded drain window for already-running workflows."""
+
     global _ENGINE, _JARVIS_EVENT_LOOP
+    if (
+        isinstance(workflow_completion_timeout_sec, bool)
+        or workflow_completion_timeout_sec < 0
+    ):
+        raise ValueError("workflow completion timeout must be a non-negative integer")
     try:
-        DBOS.destroy()
+        DBOS.destroy(
+            workflow_completion_timeout_sec=int(workflow_completion_timeout_sec),
+        )
     finally:
         _ENGINE = None
         _JARVIS_EVENT_LOOP = None

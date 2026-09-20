@@ -241,3 +241,25 @@ async def test_dbos_fails_runaway_work_after_reasoning_budget(tmp_path) -> None:
         assert result["state"] == WorkState.FAILED.value
     finally:
         shutdown_dbos_work_runtime()
+
+
+
+def test_dbos_shutdown_forwards_bounded_workflow_drain_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[int] = []
+
+    def fake_destroy(*, workflow_completion_timeout_sec: int = 0, **kwargs) -> None:
+        del kwargs
+        calls.append(workflow_completion_timeout_sec)
+
+    monkeypatch.setattr("jarvis.work.dbos_backend.DBOS.destroy", fake_destroy)
+
+    shutdown_dbos_work_runtime(workflow_completion_timeout_sec=5)
+
+    assert calls == [5]
+
+
+def test_dbos_shutdown_rejects_invalid_drain_timeout() -> None:
+    with pytest.raises(ValueError, match="workflow completion timeout"):
+        shutdown_dbos_work_runtime(workflow_completion_timeout_sec=-1)

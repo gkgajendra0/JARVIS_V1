@@ -138,6 +138,7 @@ def test_public_work_status_preserves_canonical_owner_request(tmp_path: Path) ->
     assert payload["state"] == WorkState.QUEUED.value
     assert payload["progress_percent"] == 5
     assert payload["progress_is_approximate"] is True
+    assert "owner_status_summary" in payload
 
 
 @pytest.mark.parametrize(
@@ -1546,3 +1547,34 @@ def test_apply_owner_input_is_idempotent_after_canonical_save(
         step for step in store.list_steps(item.work_id) if step.kind == "owner_input"
     ]
     assert len(owner_steps) == 1
+
+
+
+def test_work_runtime_close_preempts_reasoning_before_bounded_dbos_drain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jarvis.work.runtime import WorkRuntime
+
+    class Gate:
+        def __init__(self) -> None:
+            self.calls: list[bool] = []
+
+        def set_interactive_active(self, active: bool) -> None:
+            self.calls.append(active)
+
+    drain_timeouts: list[int] = []
+
+    def fake_shutdown(*, workflow_completion_timeout_sec: int = 0) -> None:
+        drain_timeouts.append(workflow_completion_timeout_sec)
+
+    monkeypatch.setattr("jarvis.work.runtime.shutdown_dbos_work_runtime", fake_shutdown)
+
+    runtime = object.__new__(WorkRuntime)
+    runtime._closed = False
+    runtime._interactive_brain_gate = Gate()
+
+    runtime.close()
+    runtime.close()
+
+    assert runtime._interactive_brain_gate.calls == [True]
+    assert drain_timeouts == [5]

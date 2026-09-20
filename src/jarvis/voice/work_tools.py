@@ -5,7 +5,7 @@ from __future__ import annotations
 from livekit.agents import RunContext, function_tool
 
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
-from jarvis.work.estimates import estimate_work
+from jarvis.work.estimates import estimate_work, owner_work_status_summary
 from jarvis.work.models import DeliveryPolicy, WorkItem, WorkPriority, WorkType
 from jarvis.work.runtime import WorkRuntime
 from jarvis.work.store import WorkStoreError
@@ -17,6 +17,7 @@ class WorkToolGroundingError(ValueError):
 
 def _public_work(item: WorkItem, runtime: WorkRuntime) -> dict[str, object]:
     estimate = estimate_work(runtime.store, item)
+    completion_notification_expected = item.delivery_policy is not DeliveryPolicy.SILENT
     return {
         "work_id": item.work_id,
         "type": item.work_type.value,
@@ -27,9 +28,7 @@ def _public_work(item: WorkItem, runtime: WorkRuntime) -> dict[str, object]:
         "current_step_id": item.current_step_id,
         "result": item.result if item.state.terminal else {},
         "delivery_policy": item.delivery_policy.value,
-        "completion_notification_expected": (
-            item.delivery_policy is not DeliveryPolicy.SILENT
-        ),
+        "completion_notification_expected": completion_notification_expected,
         "progress_percent": estimate.progress_percent,
         "progress_is_approximate": estimate.progress_is_approximate,
         "progress_summary": estimate.progress_summary,
@@ -40,6 +39,11 @@ def _public_work(item: WorkItem, runtime: WorkRuntime) -> dict[str, object]:
         "eta_confidence": estimate.eta_confidence,
         "eta_reason": estimate.eta_reason,
         "estimate_updated_at": estimate.estimate_updated_at,
+        "owner_status_summary": owner_work_status_summary(
+            item,
+            estimate,
+            completion_notification_expected=completion_notification_expected,
+        ),
     }
 
 
@@ -150,8 +154,10 @@ class WorkAgentTools:
 
         Use for questions such as "what are you working on?" Never infer task state from
         provider conversation history. Report progress_percent as approximate, use the ETA
-        range/confidence rather than inventing an exact completion time, and mention the
-        canonical blocked_reason when one is present.
+        range/confidence rather than inventing an exact completion time. For progress or
+        status questions, owner_status_summary is the canonical owner-facing wording: keep
+        its blocker, remaining-work description, ETA confidence, and completion-notification
+        promise rather than weakening them into generic language.
         """
         del context
         items = self._runtime.orchestrator.list_active(limit=50)
@@ -187,9 +193,10 @@ class WorkAgentTools:
     ) -> dict[str, object]:
         """Read canonical state and JARVIS-owned progress/ETA for one WorkItem.
 
-        Treat progress_percent as approximate unless the task is terminal. Prefer the ETA
-        range and confidence over false precision. If blocked_reason is present, explain it
-        explicitly rather than replacing it with a generic resource message.
+        Treat progress_percent as approximate unless the task is terminal. For a progress
+        or status answer, use owner_status_summary as canonical owner-facing content. Do not
+        replace a specific blocked_reason with generic "resources", omit the remaining work,
+        drop ETA confidence, or invent a different completion time.
         """
         del context
         try:
