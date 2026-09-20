@@ -76,6 +76,32 @@ class BrainPreempted(RuntimeError):
     """Interactive voice took precedence over background model reasoning."""
 
 
+class ProviderPressure(RuntimeError):
+    """Transient provider pressure that should pause durable work, not fail it."""
+
+    def __init__(
+        self,
+        *,
+        provider: str,
+        status_code: int,
+        reason: str,
+    ) -> None:
+        normalized_provider = provider.strip().lower()
+        normalized_reason = reason.strip()
+        if not normalized_provider:
+            raise ValueError("provider pressure requires a provider")
+        if status_code not in {429, 503}:
+            raise ValueError("provider pressure status must be 429 or 503")
+        if not normalized_reason:
+            raise ValueError("provider pressure requires a reason")
+        super().__init__(
+            f"{normalized_provider} provider pressure {status_code}: {normalized_reason}"
+        )
+        self.provider = normalized_provider
+        self.status_code = status_code
+        self.reason = normalized_reason
+
+
 class InteractiveBrainGate:
     """Give live owner conversation absolute priority over background reasoning."""
 
