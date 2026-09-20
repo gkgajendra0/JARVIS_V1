@@ -40,6 +40,7 @@ class WorkStepState(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    INTERRUPTED = "interrupted"
     CANCELLED = "cancelled"
 
 
@@ -196,7 +197,12 @@ class WorkStep:
         if self.state is WorkStepState.RUNNING and self.started_at is None:
             raise ValueError("running step requires started_at")
         if (
-            self.state in {WorkStepState.COMPLETED, WorkStepState.FAILED}
+            self.state
+            in {
+                WorkStepState.COMPLETED,
+                WorkStepState.FAILED,
+                WorkStepState.INTERRUPTED,
+            }
             and self.completed_at is None
         ):
             raise ValueError("finished step requires completed_at")
@@ -225,6 +231,21 @@ class WorkStep:
         return replace(
             self,
             state=WorkStepState.FAILED,
+            error=normalized,
+            completed_at=_utc_now(),
+        )
+
+    def interrupt(self, reason: str) -> WorkStep:
+        """Record an executor outcome that became unknowable after interruption."""
+
+        if self.state is not WorkStepState.RUNNING:
+            raise ValueError("only running steps can be interrupted")
+        normalized = reason.strip()
+        if not normalized:
+            raise ValueError("step interruption reason must not be empty")
+        return replace(
+            self,
+            state=WorkStepState.INTERRUPTED,
             error=normalized,
             completed_at=_utc_now(),
         )
