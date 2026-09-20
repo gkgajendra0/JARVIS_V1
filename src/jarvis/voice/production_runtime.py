@@ -397,6 +397,7 @@ def build_production_voice_runtime(
         capability_runtime=capability_runtime,
         work_runtime=work_runtime,
         session_factory=production_session_factory,
+        local_status_speech=local_status_speech,
         startup_readiness_waiter=(
             tracking_observer.wait_for_startup_lock
             if tracking_observer is not None

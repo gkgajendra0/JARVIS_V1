@@ -47,11 +47,19 @@ def test_startup_greeting_chooser_receives_multiple_variants() -> None:
 class FakeScriptedSpeech:
     def __init__(self, *, error: Exception | None = None) -> None:
         self.spoken: list[str] = []
+        self.max_provider_retries: list[int | None] = []
         self.error = error
 
-    async def speak(self, output, text: str) -> None:
+    async def speak(
+        self,
+        output,
+        text: str,
+        *,
+        max_provider_retries: int | None = None,
+    ) -> None:
         del output
         self.spoken.append(text)
+        self.max_provider_retries.append(max_provider_retries)
         if self.error is not None:
             raise self.error
 
@@ -73,6 +81,7 @@ async def test_runtime_speaks_selected_startup_greeting() -> None:
     await runtime._speak_startup_greeting()
 
     assert speech.spoken == ["Systems are ready, sir."]
+    assert speech.max_provider_retries == [0]
 
 
 @pytest.mark.asyncio
@@ -105,3 +114,4 @@ async def test_startup_greeting_failure_does_not_block_runtime_startup() -> None
     await runtime._speak_startup_greeting()
 
     assert speech.spoken == ["Good morning, sir."]
+    assert speech.max_provider_retries == [0]

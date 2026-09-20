@@ -50,6 +50,7 @@ from jarvis.voice.livekit_session import (
     LiveKitConversationBridge,
     create_voice_session,
 )
+from jarvis.voice.local_status_speech import LocalStatusSpeech
 from jarvis.voice.observed_audio import ObservedSessionAudioInput
 from jarvis.voice.paired_audio import PairedAudioRuntime
 from jarvis.voice.scripted_speech import ScriptedSpeech, build_scripted_speech
@@ -71,7 +72,8 @@ _UPDATE_APPROVAL_PROMPT = (
     "Please answer yes or no."
 )
 _STANDBY_ACKNOWLEDGEMENT = "Of course. I'll be standing by if you need me."
-_STARTUP_GREETING_TIMEOUT_SECONDS = 12.0
+_LIFECYCLE_CLOUD_PRIMARY_TIMEOUT_SECONDS = 8.0
+_LIFECYCLE_LOCAL_FALLBACK_TIMEOUT_SECONDS = 8.0
 
 
 class VoiceRuntimeState(str, Enum):
@@ -106,6 +108,7 @@ class VoiceRuntimeController:
         active_speaker_av_source: GStreamerPairedAVSource | None = None,
         speech_region_detector: SpeechRegionDetector | None = None,
         scripted_speech: ScriptedSpeech | None = None,
+        local_status_speech: LocalStatusSpeech | None = None,
         startup_greeting_factory: StartupGreetingFactory = select_startup_greeting,
         startup_readiness_waiter: StartupReadinessWaiter | None = None,
         startup_readiness_timeout_seconds: float = 30.0,
@@ -133,6 +136,7 @@ class VoiceRuntimeController:
         )
         self._scripted_speech = scripted_speech
         self._owns_scripted_speech = False
+        self._local_status_speech = local_status_speech
         self._startup_greeting_factory = startup_greeting_factory
         if startup_readiness_timeout_seconds <= 0:
             raise ValueError("startup_readiness_timeout_seconds must be positive")
@@ -169,6 +173,80 @@ class VoiceRuntimeController:
             self._owns_scripted_speech = True
         return self._scripted_speech
 
+    async def _speak_lifecycle_message(
+        self,
+        output,
+        text: str,
+        *,
+        label: str,
+    ) -> bool:
+        """Prefer configured cloud voice, then fall back locally without retries."""
+
+        try:
+            await asyncio.wait_for(
+                self._get_scripted_speech().speak(
+                    output,
+                    text,
+                    max_provider_retries=0,
+                ),
+                timeout=_LIFECYCLE_CLOUD_PRIMARY_TIMEOUT_SECONDS,
+            )
+            LOGGER.info(
+                "JARVIS %s finished playing via primary cloud speech",
+                label,
+            )
+            return True
+        except asyncio.CancelledError:
+            raise
+        except TimeoutError:
+            LOGGER.warning(
+                "JARVIS %s primary cloud speech timed out after %.1fs; "
+                "falling back to local lifecycle speech",
+                label,
+                _LIFECYCLE_CLOUD_PRIMARY_TIMEOUT_SECONDS,
+            )
+        except Exception:
+            LOGGER.exception(
+                "JARVIS %s primary cloud speech failed; "
+                "falling back to local lifecycle speech",
+                label,
+            )
+
+        if self._local_status_speech is None:
+            LOGGER.warning(
+                "JARVIS %s local lifecycle fallback is unavailable; "
+                "continuing lifecycle transition",
+                label,
+            )
+            return False
+
+        try:
+            await asyncio.wait_for(
+                self._local_status_speech.speak(output, text),
+                timeout=_LIFECYCLE_LOCAL_FALLBACK_TIMEOUT_SECONDS,
+            )
+            LOGGER.info(
+                "JARVIS %s finished playing via local lifecycle fallback",
+                label,
+            )
+            return True
+        except asyncio.CancelledError:
+            raise
+        except TimeoutError:
+            LOGGER.warning(
+                "JARVIS %s local lifecycle fallback timed out after %.1fs; "
+                "continuing lifecycle transition",
+                label,
+                _LIFECYCLE_LOCAL_FALLBACK_TIMEOUT_SECONDS,
+            )
+        except Exception:
+            LOGGER.exception(
+                "JARVIS %s local lifecycle fallback failed; "
+                "continuing lifecycle transition",
+                label,
+            )
+        return False
+
     async def _wait_for_startup_readiness(self) -> bool:
         if self._startup_readiness_waiter is None:
             return True
@@ -203,21 +281,11 @@ class VoiceRuntimeController:
                 "JARVIS startup greeting skipped because no greeting was selected"
             )
             return
-        try:
-            await asyncio.wait_for(
-                self._get_scripted_speech().speak(output, greeting),
-                timeout=_STARTUP_GREETING_TIMEOUT_SECONDS,
-            )
-            LOGGER.info("JARVIS startup greeting finished playing")
-        except asyncio.CancelledError:
-            raise
-        except TimeoutError:
-            LOGGER.warning(
-                "JARVIS startup greeting timed out after %.1fs; continuing without it",
-                _STARTUP_GREETING_TIMEOUT_SECONDS,
-            )
-        except Exception:
-            LOGGER.exception("JARVIS startup greeting failed; continuing without it")
+        await self._speak_lifecycle_message(
+            output,
+            greeting,
+            label="startup greeting",
+        )
 
     def _on_audio_overflow(self) -> None:
         LOGGER.error("Voice session stopped because its microphone queue overflowed")
@@ -750,18 +818,11 @@ class VoiceRuntimeController:
                         "Realtime speech could not be interrupted before standby acknowledgement"
                     )
 
-                try:
-                    await self._get_scripted_speech().speak(
-                        output,
-                        _STANDBY_ACKNOWLEDGEMENT,
-                    )
-                    LOGGER.info("JARVIS standby acknowledgement finished playing")
-                except asyncio.CancelledError:
-                    raise
-                except Exception:
-                    LOGGER.exception(
-                        "JARVIS standby acknowledgement failed; returning to local wake detection"
-                    )
+                await self._speak_lifecycle_message(
+                    output,
+                    _STANDBY_ACKNOWLEDGEMENT,
+                    label="standby acknowledgement",
+                )
             finally:
                 active_end.set()
 

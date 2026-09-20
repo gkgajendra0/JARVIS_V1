@@ -100,8 +100,9 @@ Full consolidated evidence and disposition history: `docs/research/POST_STEP_7_I
 | Issue #44 relative/provider volume fast-path semantics | **DEFERRED BUG** | Absolute provider aliasing and relative volume deltas need bounded normalization/current-volume resolution. |
 | Issue #45 false-interruption resume | **DEFERRED BUG** | Production audio output cannot pause, so configured resume behavior is unavailable. |
 | Issue #46 intermittent LiveKit AudioMixer timeout | **DEFERRED INVESTIGATION** | Warning has not yet been proven to cause a user-visible audio failure. |
-| Issue #56 Pocket OWNER continuity | **OWNER ACCEPTED — PR #61 READY TO MERGE** | Exact authorized visual-track continuity now bridges temporary biometric/head gaps without converting DJI tracking into identity evidence. Owner-machine acceptance is recorded in `docs/research/POCKET3_OWNER_CONTINUITY_ACCEPTANCE_2026-09-20.md`. |
-| Issue #57 durable work TTS retry backoff | **NEXT PRE-REPAIR CLEANUP** | Repair notifications will reuse WorkDelivery; provider retry pressure must be bounded before repair starts generating additional background outcomes. |
+| Issue #56 Pocket OWNER continuity | **OWNER ACCEPTED / PR #61 MERGED** | Exact authorized visual-track continuity bridges temporary biometric/head gaps without converting DJI tracking into identity evidence. PR #61 merged to protected `main` at `a4668ea2708d58b703296f522887d1d6f5ffd085`; owner-machine acceptance is recorded in `docs/research/POCKET3_OWNER_CONTINUITY_ACCEPTANCE_2026-09-20.md`. |
+| Issue #57 durable work TTS retry backoff | **OWNER ACCEPTED / PR #62 MERGED** | WorkDelivery now persists retry metadata, respects provider RetryInfo, uses bounded fallback backoff, suppresses premature retries and disables nested LiveKit retries only for WorkDelivery speech. Owner-machine acceptance proved 24.8s then 59.2s provider-directed cooldowns with no 2-second retry hammering. PR #62 merged to protected `main` at `9a3cd00ac24d57b8692b771cccae93f8621e4d5d`. |
+| Issue #63 blocked background-work status truth | **DEFERRED FOLLOW-UP** | Owner-machine testing exposed stale 15% progress/ETA language while research was blocked by missing Exa credentials and Gemini provider pressure. Status responses must surface canonical blockers and avoid normal ETA claims when recovery time is unknown. |
 | Issue #19 production voice isolation / turn ownership | **DEFERRED RESEARCH** | Accepted security evidence remains shadow-only; rejected isolation/target-speaker candidates are not production control. |
 | Persistent concurrent work orchestration | **OWNER ACCEPTED / PR #55 MERGED** | Durable WorkItems, DBOS recovery, single-brain voice priority, bounded resources, structured progress/status, deferred delivery and isolated development execution passed owner-machine acceptance on 2026-09-20. |
 | Proactive monitoring / event-driven background work | **PLANNED** | Step 15 remains the later product slice for proactive/event-driven behavior; it will reuse the orchestration foundation rather than invent a second background-work system. |
@@ -135,9 +136,9 @@ Owner-machine acceptance passed on 2026-09-20. Runtime head `b2ba211becdef1b1238
 
 Owner-approved sequence:
 
-1. **#56 Pocket OWNER continuity — OWNER ACCEPTED / PR #61** — exact already-authorized visual-track continuity now survives transient biometric/head gaps without weakening fresh verification for acquisition/reacquisition;
-2. **#57 durable WorkDelivery TTS backoff** — respect provider retry delay or bounded exponential backoff without altering canonical completion truth;
-3. **#50 lifecycle/system speech resilience** — ensure startup/standby/readiness do not depend on cloud TTS success;
+1. **#56 Pocket OWNER continuity — OWNER ACCEPTED / PR #61 MERGED** — exact already-authorized visual-track continuity now survives transient biometric/head gaps without weakening fresh verification for acquisition/reacquisition;
+2. **#57 durable WorkDelivery TTS backoff — OWNER ACCEPTED / PR #62 MERGED** — provider RetryInfo and durable bounded backoff now govern failed WorkDelivery speech without altering canonical completion truth;
+3. **#50 lifecycle/system speech resilience — ACTIVE** — preserve the configured cloud/JARVIS voice as primary, but make startup/standby/readiness independent of cloud TTS success by disabling lifecycle provider retries and falling back to the accepted Step-5 local status speech path;
 4. execute the research-first **Self-Repair Foundation interlude** documented in `docs/research/SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`;
 5. only then begin formal Step 8 requirements/research.
 
@@ -158,6 +159,6 @@ Step 8 must reuse the durable WorkItem foundation while remaining research-first
 
 ## Immediate Next Action
 
-**MERGE OWNER-ACCEPTED PR #61 / CLOSE ISSUE #56, THEN BEGIN ISSUE #57 — DURABLE WORKDELIVERY TTS RETRY/BACKOFF — AS THE NEXT ISOLATED CORRECTIVE PR.**
+**COMPLETE ISSUE #50 — LIFECYCLE/SYSTEM SPEECH RESILIENCE — ON ITS ISOLATED CORRECTIVE BRANCH, THEN BEGIN THE SELF-REPAIR FOUNDATION RESEARCH/ADR CYCLE.**
 
-Do not mix #50 into #57 unless evidence proves an inseparable root cause. After #57 closes, proceed to #50, then the Self-Repair Foundation research/ADR cycle.
+Keep issue #63 separate from #50: blocked-work status truth is a follow-up orchestration UX/canonical-status correction, not a lifecycle speech concern.
