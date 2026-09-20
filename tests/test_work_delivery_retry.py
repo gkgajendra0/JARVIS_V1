@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.work.provider_retry import (
-    delivery_retry_delay_seconds,
-    provider_retry_hint,
-)
 from jarvis.work.models import (
     DeliveryPolicy,
     WorkDeliveryKind,
     WorkDeliveryState,
     WorkItem,
     WorkType,
+)
+from jarvis.work.provider_retry import (
+    delivery_retry_delay_seconds,
+    provider_retry_hint,
 )
 from jarvis.work.store import SQLiteWorkStore
 
