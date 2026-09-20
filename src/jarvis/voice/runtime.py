@@ -72,8 +72,8 @@ _UPDATE_APPROVAL_PROMPT = (
     "Please answer yes or no."
 )
 _STANDBY_ACKNOWLEDGEMENT = "Of course. I'll be standing by if you need me."
-_LIFECYCLE_LOCAL_SPEECH_TIMEOUT_SECONDS = 8.0
-_LIFECYCLE_CLOUD_FALLBACK_TIMEOUT_SECONDS = 4.0
+_LIFECYCLE_CLOUD_PRIMARY_TIMEOUT_SECONDS = 8.0
+_LIFECYCLE_LOCAL_FALLBACK_TIMEOUT_SECONDS = 8.0
 
 
 class VoiceRuntimeState(str, Enum):
@@ -180,34 +180,7 @@ class VoiceRuntimeController:
         *,
         label: str,
     ) -> bool:
-        """Speak lifecycle text without making cloud TTS a liveness dependency."""
-
-        if self._local_status_speech is not None:
-            try:
-                await asyncio.wait_for(
-                    self._local_status_speech.speak(output, text),
-                    timeout=_LIFECYCLE_LOCAL_SPEECH_TIMEOUT_SECONDS,
-                )
-                LOGGER.info(
-                    "JARVIS %s finished playing via local lifecycle speech",
-                    label,
-                )
-                return True
-            except asyncio.CancelledError:
-                raise
-            except TimeoutError:
-                LOGGER.warning(
-                    "JARVIS %s local lifecycle speech timed out after %.1fs; "
-                    "trying one bounded cloud fallback",
-                    label,
-                    _LIFECYCLE_LOCAL_SPEECH_TIMEOUT_SECONDS,
-                )
-            except Exception:
-                LOGGER.exception(
-                    "JARVIS %s local lifecycle speech failed; "
-                    "trying one bounded cloud fallback",
-                    label,
-                )
+        """Prefer configured cloud voice, then fall back locally without retries."""
 
         try:
             await asyncio.wait_for(
@@ -216,10 +189,10 @@ class VoiceRuntimeController:
                     text,
                     max_provider_retries=0,
                 ),
-                timeout=_LIFECYCLE_CLOUD_FALLBACK_TIMEOUT_SECONDS,
+                timeout=_LIFECYCLE_CLOUD_PRIMARY_TIMEOUT_SECONDS,
             )
             LOGGER.info(
-                "JARVIS %s finished playing via bounded cloud fallback",
+                "JARVIS %s finished playing via primary cloud speech",
                 label,
             )
             return True
@@ -227,14 +200,49 @@ class VoiceRuntimeController:
             raise
         except TimeoutError:
             LOGGER.warning(
-                "JARVIS %s cloud fallback timed out after %.1fs; "
-                "continuing lifecycle transition",
+                "JARVIS %s primary cloud speech timed out after %.1fs; "
+                "falling back to local lifecycle speech",
                 label,
-                _LIFECYCLE_CLOUD_FALLBACK_TIMEOUT_SECONDS,
+                _LIFECYCLE_CLOUD_PRIMARY_TIMEOUT_SECONDS,
             )
         except Exception:
             LOGGER.exception(
-                "JARVIS %s cloud fallback failed; continuing lifecycle transition",
+                "JARVIS %s primary cloud speech failed; "
+                "falling back to local lifecycle speech",
+                label,
+            )
+
+        if self._local_status_speech is None:
+            LOGGER.warning(
+                "JARVIS %s local lifecycle fallback is unavailable; "
+                "continuing lifecycle transition",
+                label,
+            )
+            return False
+
+        try:
+            await asyncio.wait_for(
+                self._local_status_speech.speak(output, text),
+                timeout=_LIFECYCLE_LOCAL_FALLBACK_TIMEOUT_SECONDS,
+            )
+            LOGGER.info(
+                "JARVIS %s finished playing via local lifecycle fallback",
+                label,
+            )
+            return True
+        except asyncio.CancelledError:
+            raise
+        except TimeoutError:
+            LOGGER.warning(
+                "JARVIS %s local lifecycle fallback timed out after %.1fs; "
+                "continuing lifecycle transition",
+                label,
+                _LIFECYCLE_LOCAL_FALLBACK_TIMEOUT_SECONDS,
+            )
+        except Exception:
+            LOGGER.exception(
+                "JARVIS %s local lifecycle fallback failed; "
+                "continuing lifecycle transition",
                 label,
             )
         return False
