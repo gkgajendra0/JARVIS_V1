@@ -71,15 +71,19 @@ class OwnerReacquisitionController:
 
     A native DJI tracking signal is not an identity signal. Native tracking may
     confirm a LOCK_PENDING target that JARVIS selected from fresh live-OWNER
-    evidence, and it may maintain that already-authorized lock while OWNER
-    evidence is only briefly missing. It may never promote SEARCHING or
-    REACQUIRING to LOCKED by itself.
+    evidence, but it may never authorize a new OWNER target by itself.
 
-    Native-tracking loss and OWNER absence are separate signals. Losing DJI's
-    subject box may require reacquisition/recenter, but it must never by itself be
-    treated as proof that the OWNER left the workstation. ``owner_absence_confirmed``
-    is raised only after live OWNER evidence has remained absent for the configured
-    confirmation window.
+    Once that OWNER target has been authorized, the caller may provide continuity
+    evidence for the same already-bound visual track. That continuity can bridge a
+    temporary face/head/liveness refresh gap without refreshing biometric evidence
+    or authorizing a different track.
+
+    Native-tracking loss, authorized visual-track continuity, and OWNER absence are
+    separate signals. Losing DJI's subject box may require native reacquisition or
+    recenter, but it must never by itself be treated as proof that the OWNER left.
+    ``owner_absence_confirmed`` is raised only after both fresh OWNER evidence and
+    same-track continuity have remained absent for the configured confirmation
+    window.
     """
 
     def __init__(self, config: ReacquisitionConfig | None = None) -> None:
@@ -108,6 +112,7 @@ class OwnerReacquisitionController:
         owner_bounds: BoundingBox | None,
         owner_observed_at: float | None,
         native: NativeTrackingStatus,
+        authorized_owner_track_alive: bool = False,
     ) -> ReacquisitionDecision:
         if now < 0:
             raise ValueError("now must be non-negative")
@@ -118,8 +123,17 @@ class OwnerReacquisitionController:
             owner_observed_at=owner_observed_at,
         )
         native_healthy = self._native_is_healthy(now=now, native=native)
+        authorized_continuity = bool(
+            authorized_owner_track_alive
+            and self._ever_locked
+            and self.state
+            in (
+                ReacquisitionState.LOCKED,
+                ReacquisitionState.REACQUIRING,
+            )
+        )
 
-        if owner_fresh:
+        if owner_fresh or authorized_continuity:
             self._owner_missing_since = None
         elif (
             self._ever_locked
@@ -139,7 +153,9 @@ class OwnerReacquisitionController:
             self._lock_pending_since = None
             self._lost_since = None
             self._recenter_sent_at = None
-            self._owner_missing_since = None if owner_fresh else now
+            self._owner_missing_since = (
+                None if owner_fresh or authorized_owner_track_alive else now
+            )
             self._ever_locked = True
             return ReacquisitionDecision(
                 state=self.state,
@@ -171,6 +187,8 @@ class OwnerReacquisitionController:
                     reason=(
                         "native_tracking_healthy"
                         if owner_fresh
+                        else "authorized_owner_track_continuity"
+                        if authorized_continuity
                         else "awaiting_owner_loss_confirmation"
                     ),
                 )
@@ -248,7 +266,11 @@ class OwnerReacquisitionController:
                 return ReacquisitionDecision(
                     state=self.state,
                     action=ReacquisitionAction.RECENTER_GIMBAL,
-                    reason="confirmed_owner_loss_recenter",
+                    reason=(
+                        "confirmed_owner_loss_recenter"
+                        if owner_absence_confirmed
+                        else "native_tracking_loss_recenter"
+                    ),
                     owner_absence_confirmed=owner_absence_confirmed,
                 )
 
