@@ -143,6 +143,9 @@ class SQLiteWorkStore:
                     state TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     delivered_at TEXT,
+                    failed_attempts INTEGER NOT NULL DEFAULT 0,
+                    next_attempt_at TEXT,
+                    last_failure_reason TEXT,
                     FOREIGN KEY(work_id) REFERENCES work_items(work_id),
                     UNIQUE(work_id, event_key)
                 );
@@ -188,6 +191,30 @@ class SQLiteWorkStore:
                     "ALTER TABLE work_items ADD COLUMN paused_from_state TEXT"
                 )
 
+            delivery_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(work_deliveries)"
+                ).fetchall()
+            }
+            if "failed_attempts" not in delivery_columns:
+                connection.execute(
+                    "ALTER TABLE work_deliveries "
+                    "ADD COLUMN failed_attempts INTEGER NOT NULL DEFAULT 0"
+                )
+            if "next_attempt_at" not in delivery_columns:
+                connection.execute(
+                    "ALTER TABLE work_deliveries ADD COLUMN next_attempt_at TEXT"
+                )
+            if "last_failure_reason" not in delivery_columns:
+                connection.execute(
+                    "ALTER TABLE work_deliveries ADD COLUMN last_failure_reason TEXT"
+                )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_work_deliveries_due "
+                "ON work_deliveries(state, next_attempt_at, created_at)"
+            )
+
     def _item_from_row(self, row: sqlite3.Row) -> WorkItem:
         created_at = _parse_dt(row["created_at"])
         updated_at = _parse_dt(row["updated_at"])
@@ -230,6 +257,9 @@ class SQLiteWorkStore:
             state=WorkDeliveryState(row["state"]),
             created_at=created_at,
             delivered_at=_parse_dt(row["delivered_at"]),
+            failed_attempts=int(row["failed_attempts"]),
+            next_attempt_at=_parse_dt(row["next_attempt_at"]),
+            last_failure_reason=row["last_failure_reason"],
         )
 
     def _step_from_row(self, row: sqlite3.Row) -> WorkStep:
@@ -480,8 +510,9 @@ class SQLiteWorkStore:
                 """
                 INSERT INTO work_deliveries (
                     delivery_id, work_id, kind, message, policy, event_key,
-                    state, created_at, delivered_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    state, created_at, delivered_at, failed_attempts,
+                    next_attempt_at, last_failure_reason
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     delivery.delivery_id,
@@ -493,6 +524,9 @@ class SQLiteWorkStore:
                     delivery.state.value,
                     _dt(delivery.created_at),
                     _dt(delivery.delivered_at),
+                    delivery.failed_attempts,
+                    _dt(delivery.next_attempt_at),
+                    delivery.last_failure_reason,
                 ),
             )
         return delivery
@@ -518,6 +552,73 @@ class SQLiteWorkStore:
             ).fetchall()
         return tuple(self._delivery_from_row(row) for row in rows)
 
+    def list_due_deliveries(
+        self,
+        *,
+        now: datetime | None = None,
+        limit: int = 20,
+    ) -> tuple[WorkDelivery, ...]:
+        if limit <= 0:
+            raise ValueError("delivery limit must be positive")
+        due_at = (now or datetime.now(UTC)).astimezone(UTC)
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM work_deliveries
+                WHERE state = ?
+                  AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+                ORDER BY
+                    CASE policy
+                        WHEN 'interrupt' THEN 0
+                        WHEN 'when_idle' THEN 1
+                        ELSE 2
+                    END,
+                    created_at ASC
+                LIMIT ?
+                """,
+                (
+                    WorkDeliveryState.PENDING.value,
+                    _dt(due_at),
+                    limit,
+                ),
+            ).fetchall()
+        return tuple(self._delivery_from_row(row) for row in rows)
+
+    def schedule_delivery_retry(
+        self,
+        delivery_id: str,
+        *,
+        delay_seconds: float,
+        reason: str,
+    ) -> WorkDelivery:
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM work_deliveries WHERE delivery_id = ?",
+                (delivery_id,),
+            ).fetchone()
+            if row is None:
+                raise WorkStoreError(f"unknown work delivery: {delivery_id}")
+            delivery = self._delivery_from_row(row)
+            updated = delivery.retry_after(delay_seconds, reason=reason)
+            if updated is delivery:
+                return delivery
+            connection.execute(
+                """
+                UPDATE work_deliveries
+                SET failed_attempts = ?, next_attempt_at = ?,
+                    last_failure_reason = ?
+                WHERE delivery_id = ? AND state = ?
+                """,
+                (
+                    updated.failed_attempts,
+                    _dt(updated.next_attempt_at),
+                    updated.last_failure_reason,
+                    updated.delivery_id,
+                    WorkDeliveryState.PENDING.value,
+                ),
+            )
+        return updated
+
     def mark_delivery_delivered(self, delivery_id: str) -> WorkDelivery:
         with self._lock, self._connect() as connection:
             row = connection.execute(
@@ -531,7 +632,8 @@ class SQLiteWorkStore:
             connection.execute(
                 """
                 UPDATE work_deliveries
-                SET state = ?, delivered_at = ?
+                SET state = ?, delivered_at = ?, next_attempt_at = NULL,
+                    last_failure_reason = NULL
                 WHERE delivery_id = ?
                 """,
                 (
