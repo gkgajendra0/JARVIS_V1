@@ -308,6 +308,41 @@ async def test_resource_leases_bound_execution_and_surface_waiting_state(
 
 
 @pytest.mark.asyncio
+async def test_memory_pressure_waits_without_starting_executor(
+    tmp_path: Path,
+) -> None:
+    class CpuExecutor(ConcurrentExecutor):
+        def resource_keys(self, work: WorkItem, parameters: dict) -> tuple[str, ...]:
+            del work, parameters
+            return ("cpu",)
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = ScriptedReasoner()
+    executor = CpuExecutor()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((executor,)),
+        resources=ResourceLeaseManager(
+            {"cpu": 1},
+            min_available_memory_mb=1024,
+            available_memory_bytes=lambda: 512 * 1024 * 1024,
+        ),
+    )
+    item = create_item(store, request="Wait for memory")
+    reasoner.decisions[item.work_id] = [
+        BrainDecision(action="do_step", summary="Use CPU")
+    ]
+
+    result = await engine.advance(item.work_id)
+
+    assert result.state is WorkState.WAITING_RESOURCE
+    assert executor.max_active == 0
+    assert "memory" in (store.require(item.work_id).status_detail or "").casefold()
+    assert store.list_steps(item.work_id) == ()
+
+
+@pytest.mark.asyncio
 async def test_development_completion_requires_passing_tests(tmp_path: Path) -> None:
     store = SQLiteWorkStore(tmp_path / "work.sqlite")
     reasoner = ScriptedReasoner()
