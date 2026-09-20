@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.provider_retry import (
+from jarvis.work.provider_retry import (
     delivery_retry_delay_seconds,
     provider_retry_hint,
 )
