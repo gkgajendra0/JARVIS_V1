@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from livekit.agents.types import APIConnectOptions
 
 from jarvis.voice.scripted_speech import LiveKitScriptedSpeech
 
@@ -76,7 +77,8 @@ async def test_scripted_speech_can_disable_nested_provider_retries() -> None:
     text, kwargs = engine.calls[0]
     assert text == "Background work completed."
     conn_options = kwargs["conn_options"]
-    assert getattr(conn_options, "max_retry") == 0
+    assert isinstance(conn_options, APIConnectOptions)
+    assert conn_options.max_retry == 0
     assert len(output.frames) == 1
 
 
