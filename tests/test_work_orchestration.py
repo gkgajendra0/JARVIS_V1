@@ -378,9 +378,26 @@ async def test_resource_leases_bound_execution_and_surface_waiting_state(
     tmp_path: Path,
 ) -> None:
     class CpuExecutor(ConcurrentExecutor):
+        def __init__(self) -> None:
+            super().__init__()
+            self.first_started = asyncio.Event()
+            self.release_first = asyncio.Event()
+
         def resource_keys(self, work: WorkItem, parameters: dict) -> tuple[str, ...]:
             del work, parameters
             return ("cpu",)
+
+        async def execute(self, *, work: WorkItem, parameters: dict) -> dict:
+            del parameters
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            try:
+                if not self.first_started.is_set():
+                    self.first_started.set()
+                    await self.release_first.wait()
+                return {"work_id": work.work_id, "verified": True}
+            finally:
+                self.active -= 1
 
     store = SQLiteWorkStore(tmp_path / "work.sqlite")
     reasoner = ScriptedReasoner()
@@ -405,12 +422,16 @@ async def test_resource_leases_bound_execution_and_surface_waiting_state(
         ]
 
     first_task = asyncio.create_task(engine.advance(first.work_id))
-    await asyncio.sleep(0.02)
+    await asyncio.wait_for(executor.first_started.wait(), timeout=1.0)
     second_task = asyncio.create_task(engine.advance(second.work_id))
-    await asyncio.sleep(0.02)
 
+    for _ in range(100):
+        if store.require(second.work_id).state is WorkState.WAITING_RESOURCE:
+            break
+        await asyncio.sleep(0.001)
     assert store.require(second.work_id).state is WorkState.WAITING_RESOURCE
 
+    executor.release_first.set()
     await asyncio.gather(first_task, second_task)
     assert executor.max_active == 1
     assert store.require(first.work_id).state is WorkState.RUNNING
