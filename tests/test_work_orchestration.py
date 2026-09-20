@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from jarvis.voice.work_tools import _public_work
 from jarvis.work.brain import (
     BrainAction,
     BrainCoordinator,
@@ -29,7 +30,6 @@ from jarvis.work.models import (
 )
 from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.resources import ResourceLeaseManager
-from jarvis.voice.work_tools import _public_work
 from jarvis.work.store import SQLiteWorkStore, WorkStoreError
 
 
