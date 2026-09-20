@@ -13,7 +13,7 @@ This roadmap owns **sequence only**. It does not select technology, define curre
 | 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | DONE (BOUNDED); full offline conversation deferred |
 | 6 | Knowledge, Current Research, Truthfulness | CAP-014–017 | DONE (BOUNDED) |
 | 7 | Governed Capability Runtime + Safe Local Reads | CAP-018, CAP-021, CAP-022, CAP-032 | DONE — OWNER ACCEPTED 2026-09-09 |
-| 8 | Notes, Tasks, Reminders, Scheduling | CAP-027, CAP-028 | QUEUED AFTER CONCURRENT-WORK FOUNDATION |
+| 8 | Notes, Tasks, Reminders, Scheduling | CAP-027, CAP-028 | NEXT — REQUIREMENTS / RESEARCH |
 | 9 | Computer, Application, Device Control | CAP-023, CAP-024 | PLANNED — PARTIAL HANDS FOUNDATION EXISTS |
 | 10 | Browser and Web Interaction | CAP-025 | PLANNED — PARTIAL PLAYWRIGHT FOUNDATION EXISTS |
 | 11 | Calendar, Email, External Communication | CAP-029, CAP-030 | PLANNED |
@@ -47,7 +47,7 @@ Detailed acceptance: `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
 
 Owner-approved sequence change on 2026-09-18: durable concurrent work orchestration is pulled forward as the **architecture foundation before Step 8 implementation**. This does not renumber the roadmap.
 
-Draft PR #55 now contains the implementation: provider-neutral durable WorkItems, explicit lifecycle/state, DBOS restart recovery, single-brain live-voice priority, priorities/dependencies/resource leases, pause/resume/cancel/owner-input semantics, persisted deferred delivery, bounded research work, and isolated sandboxed development work. It remains **not production-accepted** until exact-head automated validation and the real owner-machine acceptance matrix pass.
+PR #55 contains the owner-accepted implementation: provider-neutral durable WorkItems, explicit lifecycle/state, DBOS restart recovery, single-brain live-voice priority, priorities/dependencies/resource leases, pause/resume/cancel/owner-input semantics, persisted deferred delivery, structured progress/ETA facts, bounded research work, and isolated sandboxed development work. Owner-machine acceptance passed on 2026-09-20 and the owner approved protected-main merge.
 
 Step 8 tasks/reminders/scheduling and later Step 15 proactive/event-driven work must reuse this foundation rather than create separate task/background systems.
 
@@ -74,7 +74,6 @@ Current major deferrals:
 - strict independent Step-4 semantic-memory verifier;
 - Phase-4.5E automatic memory injection;
 - full Step-5 offline conversation/provider failover;
-- long-running/background Step-6 research until the new concurrent-work foundation is accepted;
 - later proactive monitoring/plugin/self-repair/self-improvement capabilities.
 
 A deferred capability is not a hidden failure and must not be represented as working.
@@ -127,9 +126,9 @@ Research for future slices is intentionally deferred until that slice becomes ac
 
 ## Current next step
 
-Persistent Concurrent Work Orchestration (issue #53) is the active **requirements / research** foundation. It must reuse conversation, lifecycle, Authority, capability runtime, Hands, Self-Awareness and observability while defining durable work truth, bounded concurrency, dependencies/resources, restart recovery, progress/status and non-blocking result delivery.
+Persistent Concurrent Work Orchestration (issue #53 / PR #55) is owner accepted and becomes the reusable background-work foundation in this merge.
 
-After that foundation is accepted, Step 8 begins formal tasks/reminders/scheduling requirements and implementation on top of the same work model.
+**Step 8 is now next:** begin formal notes/tasks/reminders/scheduling requirements and research on top of the same durable WorkItem model. Issue #56 (Pocket OWNER continuity) and issue #57 (TTS delivery retry backoff) remain separate corrective tracks.
 
 ## Roadmap change rule
 
