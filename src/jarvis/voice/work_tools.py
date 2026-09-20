@@ -282,7 +282,11 @@ class WorkAgentTools:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
         except ValueError as exc:
             return {"ok": False, "status": "invalid_state", "reason": str(exc)}
-        return {"ok": True, "status": "reprioritized", **_public_work(item, self._runtime)}
+        return {
+            "ok": True,
+            "status": "reprioritized",
+            **_public_work(item, self._runtime),
+        }
 
     @function_tool()
     async def continue_background_work(

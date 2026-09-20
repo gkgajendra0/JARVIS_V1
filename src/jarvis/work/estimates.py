@@ -214,7 +214,10 @@ def _history_seconds(store: SQLiteWorkStore, work: WorkItem) -> tuple[float, int
     for item in store.list(limit=100):
         if item.work_id == work.work_id:
             continue
-        if item.work_type is not work.work_type or item.state is not WorkState.COMPLETED:
+        if (
+            item.work_type is not work.work_type
+            or item.state is not WorkState.COMPLETED
+        ):
             continue
         duration = (item.updated_at - item.created_at).total_seconds()
         if duration <= 0:
@@ -261,7 +264,12 @@ def _eta(
     if work.state is WorkState.COMPLETED:
         return 0, 0, "high", "The WorkItem is complete."
     if work.state in {WorkState.FAILED, WorkState.CANCELLED}:
-        return None, None, "unavailable", "Terminal unsuccessful work has no completion ETA."
+        return (
+            None,
+            None,
+            "unavailable",
+            "Terminal unsuccessful work has no completion ETA.",
+        )
     if work.state is WorkState.PAUSED:
         return None, None, "unavailable", "The task is paused by the owner."
     if work.state is WorkState.WAITING_FOR_OWNER:
@@ -325,10 +333,7 @@ def _eta(
         f"{history_phrase}. "
         "Provider pressure is currently reducing ETA confidence."
         if provider_blocked
-        else (
-            "Based on canonical milestone progress, elapsed time"
-            f"{history_phrase}."
-        )
+        else (f"Based on canonical milestone progress, elapsed time{history_phrase}.")
     )
     return low, high, confidence, reason
 
