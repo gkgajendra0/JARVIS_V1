@@ -96,6 +96,68 @@ def test_short_owner_evidence_gap_does_not_false_trigger_reacquisition() -> None
     assert waiting.owner_absence_confirmed is False
 
 
+def test_authorized_visual_track_continuity_holds_lock_through_biometric_gap() -> (
+    None
+):
+    controller = OwnerReacquisitionController(
+        ReacquisitionConfig(owner_evidence_max_age_seconds=2.0)
+    )
+    controller.step(
+        now=1.0,
+        owner_bounds=OWNER_BOX,
+        owner_observed_at=0.9,
+        native=native(),
+    )
+    controller.step(
+        now=1.2,
+        owner_bounds=OWNER_BOX,
+        owner_observed_at=1.1,
+        native=native(active=True, poll_at=1.15, push_at=1.1),
+    )
+
+    held = controller.step(
+        now=4.0,
+        owner_bounds=None,
+        owner_observed_at=None,
+        native=native(active=True, poll_at=3.95, push_at=3.9),
+        authorized_owner_track_alive=True,
+    )
+    assert held.state is ReacquisitionState.LOCKED
+    assert held.reason == "authorized_owner_track_continuity"
+    assert held.owner_absence_confirmed is False
+
+    still_held = controller.step(
+        now=7.0,
+        owner_bounds=None,
+        owner_observed_at=None,
+        native=native(active=True, poll_at=6.95, push_at=6.9),
+        authorized_owner_track_alive=True,
+    )
+    assert still_held.state is ReacquisitionState.LOCKED
+    assert still_held.owner_absence_confirmed is False
+
+    continuity_lost = controller.step(
+        now=7.1,
+        owner_bounds=None,
+        owner_observed_at=None,
+        native=native(active=True, poll_at=7.05, push_at=7.0),
+        authorized_owner_track_alive=False,
+    )
+    assert continuity_lost.state is ReacquisitionState.LOCKED
+    assert continuity_lost.reason == "awaiting_owner_loss_confirmation"
+
+    confirmed = controller.step(
+        now=9.2,
+        owner_bounds=None,
+        owner_observed_at=None,
+        native=native(active=True, poll_at=9.15, push_at=9.1),
+        authorized_owner_track_alive=False,
+    )
+    assert confirmed.state is ReacquisitionState.REACQUIRING
+    assert confirmed.reason == "confirmed_owner_absence"
+    assert confirmed.owner_absence_confirmed is True
+
+
 def test_stale_subject_push_reacquires_without_claiming_owner_absence() -> None:
     controller = OwnerReacquisitionController()
     controller.step(
