@@ -5,7 +5,8 @@ from __future__ import annotations
 from livekit.agents import RunContext, function_tool
 
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
-from jarvis.work.models import DeliveryPolicy, WorkPriority, WorkType
+from jarvis.work.estimates import estimate_work
+from jarvis.work.models import DeliveryPolicy, WorkItem, WorkPriority, WorkType
 from jarvis.work.runtime import WorkRuntime
 from jarvis.work.store import WorkStoreError
 
@@ -14,7 +15,8 @@ class WorkToolGroundingError(ValueError):
     pass
 
 
-def _public_work(item) -> dict[str, object]:
+def _public_work(item: WorkItem, runtime: WorkRuntime) -> dict[str, object]:
+    estimate = estimate_work(runtime.store, item)
     return {
         "work_id": item.work_id,
         "type": item.work_type.value,
@@ -25,6 +27,19 @@ def _public_work(item) -> dict[str, object]:
         "current_step_id": item.current_step_id,
         "result": item.result if item.state.terminal else {},
         "delivery_policy": item.delivery_policy.value,
+        "completion_notification_expected": (
+            item.delivery_policy is not DeliveryPolicy.SILENT
+        ),
+        "progress_percent": estimate.progress_percent,
+        "progress_is_approximate": estimate.progress_is_approximate,
+        "progress_summary": estimate.progress_summary,
+        "remaining_summary": estimate.remaining_summary,
+        "blocked_reason": estimate.blocked_reason,
+        "eta_low_seconds": estimate.eta_low_seconds,
+        "eta_high_seconds": estimate.eta_high_seconds,
+        "eta_confidence": estimate.eta_confidence,
+        "eta_reason": estimate.eta_reason,
+        "estimate_updated_at": estimate.estimate_updated_at,
     }
 
 
@@ -118,7 +133,7 @@ class WorkAgentTools:
         return {
             "ok": True,
             "status": "accepted",
-            **_public_work(submission.work),
+            **_public_work(submission.work, self._runtime),
             "canonical_user_turn_id": turn.turn_id,
             "truth_note": (
                 "accepted means durable work was queued; do not claim completion until "
@@ -134,14 +149,16 @@ class WorkAgentTools:
         """List JARVIS's canonical active background WorkItems.
 
         Use for questions such as "what are you working on?" Never infer task state from
-        provider conversation history.
+        provider conversation history. Report progress_percent as approximate, use the ETA
+        range/confidence rather than inventing an exact completion time, and mention the
+        canonical blocked_reason when one is present.
         """
         del context
         items = self._runtime.orchestrator.list_active(limit=50)
         return {
             "ok": True,
             "status": "listed",
-            "work": [_public_work(item) for item in items],
+            "work": [_public_work(item, self._runtime) for item in items],
         }
 
     @function_tool()
@@ -159,7 +176,7 @@ class WorkAgentTools:
         return {
             "ok": True,
             "status": "listed",
-            "work": [_public_work(item) for item in items],
+            "work": [_public_work(item, self._runtime) for item in items],
         }
 
     @function_tool()
@@ -168,13 +185,18 @@ class WorkAgentTools:
         context: RunContext,
         work_id: str,
     ) -> dict[str, object]:
-        """Read canonical state for one known JARVIS WorkItem."""
+        """Read canonical state and JARVIS-owned progress/ETA for one WorkItem.
+
+        Treat progress_percent as approximate unless the task is terminal. Prefer the ETA
+        range and confidence over false precision. If blocked_reason is present, explain it
+        explicitly rather than replacing it with a generic resource message.
+        """
         del context
         try:
             item = self._runtime.orchestrator.get(work_id)
         except WorkStoreError:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
-        return {"ok": True, "status": "found", **_public_work(item)}
+        return {"ok": True, "status": "found", **_public_work(item, self._runtime)}
 
     @function_tool()
     async def cancel_background_work(
@@ -188,7 +210,7 @@ class WorkAgentTools:
             item = self._runtime.orchestrator.cancel(work_id)
         except WorkStoreError:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
-        return {"ok": True, "status": "cancelled", **_public_work(item)}
+        return {"ok": True, "status": "cancelled", **_public_work(item, self._runtime)}
 
     @function_tool()
     async def pause_background_work(
@@ -208,7 +230,7 @@ class WorkAgentTools:
                 "status": "owner_input_target_unresolved",
                 "reason": str(exc),
             }
-        return {"ok": True, "status": "paused", **_public_work(item)}
+        return {"ok": True, "status": "paused", **_public_work(item, self._runtime)}
 
     @function_tool()
     async def resume_background_work(
@@ -224,7 +246,7 @@ class WorkAgentTools:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
         except ValueError as exc:
             return {"ok": False, "status": "invalid_state", "reason": str(exc)}
-        return {"ok": True, "status": "resumed", **_public_work(item)}
+        return {"ok": True, "status": "resumed", **_public_work(item, self._runtime)}
 
     @function_tool()
     async def reprioritize_background_work(
@@ -260,7 +282,7 @@ class WorkAgentTools:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
         except ValueError as exc:
             return {"ok": False, "status": "invalid_state", "reason": str(exc)}
-        return {"ok": True, "status": "reprioritized", **_public_work(item)}
+        return {"ok": True, "status": "reprioritized", **_public_work(item, self._runtime)}
 
     @function_tool()
     async def continue_background_work(
@@ -290,6 +312,6 @@ class WorkAgentTools:
         return {
             "ok": True,
             "status": "owner_input_submitted",
-            **_public_work(waiting),
+            **_public_work(waiting, self._runtime),
             "canonical_user_turn_id": turn.turn_id,
         }
