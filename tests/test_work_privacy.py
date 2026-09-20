@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from jarvis.work.models import WorkDeliveryKind, WorkItem, WorkStep, WorkType
+from jarvis.work.models import (
+    WorkDeliveryKind,
+    WorkItem,
+    WorkState,
+    WorkStep,
+    WorkType,
+)
 from jarvis.work.privacy import build_protected_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore
 
@@ -46,7 +52,7 @@ def test_protected_work_store_round_trips_without_plaintext_payloads(
     )
     store.create(item)
     running = item.transition(
-        item.state.RUNNING,
+        WorkState.RUNNING,
         status_detail="private status detail",
     )
     store.save(running, expected_version=item.version)
