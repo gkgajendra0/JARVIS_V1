@@ -13,7 +13,7 @@ This roadmap owns **sequence only**. It does not select technology, define curre
 | 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | DONE (BOUNDED); full offline conversation deferred |
 | 6 | Knowledge, Current Research, Truthfulness | CAP-014–017 | DONE (BOUNDED) |
 | 7 | Governed Capability Runtime + Safe Local Reads | CAP-018, CAP-021, CAP-022, CAP-032 | DONE — OWNER ACCEPTED 2026-09-09 |
-| 8 | Notes, Tasks, Reminders, Scheduling | CAP-027, CAP-028 | NEXT — REQUIREMENTS / RESEARCH |
+| 8 | Notes, Tasks, Reminders, Scheduling | CAP-027, CAP-028 | NEXT NUMBERED SLICE — QUEUED AFTER APPROVED SELF-REPAIR FOUNDATION INTERLUDE |
 | 9 | Computer, Application, Device Control | CAP-023, CAP-024 | PLANNED — PARTIAL HANDS FOUNDATION EXISTS |
 | 10 | Browser and Web Interaction | CAP-025 | PLANNED — PARTIAL PLAYWRIGHT FOUNDATION EXISTS |
 | 11 | Calendar, Email, External Communication | CAP-029, CAP-030 | PLANNED |
@@ -51,6 +51,16 @@ PR #55 contains the owner-accepted implementation: provider-neutral durable Work
 
 Step 8 tasks/reminders/scheduling and later Step 15 proactive/event-driven work must reuse this foundation rather than create separate task/background systems.
 
+### Approved Self-Repair Foundation interlude — pending reliability cleanup
+
+Owner-approved sequence change on 2026-09-20: before formal Step 8 implementation, first close reliability issues #56, #57 and #50, then pull forward a bounded Self-Repair Foundation interlude. This does not renumber the roadmap and does not mark Step 19 complete.
+
+The interlude exists because Self-Awareness, incident engineering memory, persistent WorkItems/DBOS, isolated development worktrees, Docker testing, rollback supervision and protected-main governance now provide the necessary substrate for a repair control plane. The goal is to establish shared repair infrastructure before later roadmap capabilities increase the runtime failure surface.
+
+Scope is research-first and bounded: repair contracts/policy, process-external supervision with restart budgets/readiness/rollback, deterministic known repairs, then AI-assisted diagnostics and sandboxed code-repair PRs. Autonomous protected-main merge/deployment, Authority expansion, evaluator/ruleset mutation and self-evolution remain out of scope.
+
+Detailed decision: `docs/research/SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`.
+
 ### Post-Step-7 production integration interlude
 
 After Step 7, owner-approved work intentionally pulled forward **bounded foundations** needed for real daily usability and stability without declaring later roadmap slices complete:
@@ -74,7 +84,7 @@ Current major deferrals:
 - strict independent Step-4 semantic-memory verifier;
 - Phase-4.5E automatic memory injection;
 - full Step-5 offline conversation/provider failover;
-- later proactive monitoring/plugin/self-repair/self-improvement capabilities.
+- later proactive monitoring/plugin/full Step-19 self-repair/full Step-20 self-improvement capabilities. The approved Self-Repair Foundation interlude is a bounded prerequisite only, not completion of Step 19.
 
 A deferred capability is not a hidden failure and must not be represented as working.
 
@@ -126,9 +136,11 @@ Research for future slices is intentionally deferred until that slice becomes ac
 
 ## Current next step
 
-Persistent Concurrent Work Orchestration (issue #53 / PR #55) is owner accepted and becomes the reusable background-work foundation in this merge.
+Persistent Concurrent Work Orchestration (issue #53 / PR #55) is owner accepted and is the reusable background-work foundation.
 
-**Step 8 is now next:** begin formal notes/tasks/reminders/scheduling requirements and research on top of the same durable WorkItem model. Issue #56 (Pocket OWNER continuity) and issue #57 (TTS delivery retry backoff) remain separate corrective tracks.
+**Current work is the owner-approved pre-repair reliability cleanup:** #56 Pocket OWNER continuity -> #57 durable WorkDelivery TTS backoff -> #50 lifecycle/system speech resilience.
+
+After those corrections, execute the bounded Self-Repair Foundation interlude documented in `docs/research/SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`. **Step 8 remains the next numbered product slice after that interlude.**
 
 ## Roadmap change rule
 
