@@ -28,6 +28,24 @@ class ImmediateCompleteEngine:
         return SimpleNamespace(state=WorkState.FAILED)
 
 
+class RunningForeverEngine:
+    async def advance(self, work_id: str) -> WorkAdvanceResult:
+        return WorkAdvanceResult(
+            work_id,
+            WorkState.RUNNING,
+            progressed=True,
+        )
+
+    def apply_owner_input(self, work_id: str, response: str):
+        del work_id, response
+        return SimpleNamespace(state=WorkState.RUNNING)
+
+    def fail(self, work_id: str, reason: str):
+        del work_id
+        assert "reasoning cycle budget" in reason
+        return SimpleNamespace(state=WorkState.FAILED)
+
+
 class WaitingEngine:
     def __init__(self) -> None:
         self.waiting = asyncio.Event()
@@ -195,3 +213,23 @@ def test_dbos_backend_rejects_invalid_reasoning_budget() -> None:
 
     with pytest.raises(ValueError, match="max reasoning cycles"):
         DBOSWorkExecutionBackend(max_reasoning_cycles=0)
+
+
+@pytest.mark.asyncio
+async def test_dbos_fails_runaway_work_after_reasoning_budget(tmp_path) -> None:
+    backend = initialize_dbos_work_runtime(
+        engine=RunningForeverEngine(),  # type: ignore[arg-type]
+        event_loop=asyncio.get_running_loop(),
+        application_version="test-work-budget-v1",
+        queue_concurrency=None,
+        system_database_url=f"sqlite:///{(tmp_path / 'dbos-budget.sqlite3').as_posix()}",
+        max_reasoning_cycles=1,
+    )
+    work_id = "work_dbos_budget"
+    try:
+        assert backend.submit(work_id, priority=WorkPriority.NORMAL) == work_id
+        handle = await DBOS.retrieve_workflow_async(work_id)
+        result = await asyncio.wait_for(handle.get_result(), timeout=10.0)
+        assert result["state"] == WorkState.FAILED.value
+    finally:
+        shutdown_dbos_work_runtime()
