@@ -10,11 +10,11 @@ PR #41 now adds the bounded read-only hierarchical whole-JARVIS Self Model, dete
 
 **Persistent Concurrent Work Orchestration (issue #53 / PR #55) is OWNER ACCEPTED and merged to protected `main` on 2026-09-20 at `3980b212d657106abd45bfae119d2207551c409f`. Issue #53 is closed.** Independent durable research/development work, standby continuation, restart recovery, canonical progress/status, cancellation, and immediate foreground Hands while background work remains active were proven on the owner machine. Exact runtime-head CI passed, final reconciliation CI passed, and the production merge result is recorded below.
 
-**Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027, CAP-028) is now the next active numbered roadmap slice.** It must reuse the accepted WorkItem/WorkDelivery foundation rather than invent a separate task/background subsystem.
+**Owner-approved sequence change (2026-09-20): complete reliability cleanup issues #56 -> #57 -> #50, then execute a bounded Self-Repair Foundation interlude before formal Step 8 implementation.** This does not renumber the roadmap or mark Step 19 complete. Step 8 remains the next numbered product slice after the interlude. Detailed rationale and scope: `docs/research/SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`.
 
 ## Current Stage
 
-**STEPS 0–3 DONE — STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 BOUNDED COMPLETE — STEP 7 DONE — POST-STEP-7 HANDS / POCKET / PERFORMANCE / STABILITY / SAFETY INTERLUDE ACCEPTED — SELF-AWARENESS FOUNDATION OWNER ACCEPTED — PERSISTENT CONCURRENT WORK ORCHESTRATION OWNER ACCEPTED AND MERGED — STEP 8 IS NEXT.**
+**STEPS 0–3 DONE — STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 BOUNDED COMPLETE — STEP 7 DONE — POST-STEP-7 HANDS / POCKET / PERFORMANCE / STABILITY / SAFETY INTERLUDE ACCEPTED — SELF-AWARENESS FOUNDATION OWNER ACCEPTED — PERSISTENT CONCURRENT WORK ORCHESTRATION OWNER ACCEPTED AND MERGED — RELIABILITY CLEANUP IS ACTIVE — SELF-REPAIR FOUNDATION INTERLUDE FOLLOWS — STEP 8 REMAINS THE NEXT NUMBERED SLICE.**
 
 `PRODUCT.md` owns permanent product intent/status, `ROADMAP.md` owns sequence, `CURRENT_ARCHITECTURE.md` owns accepted running architecture, and `docs/research/` owns detailed evidence.
 
@@ -96,10 +96,12 @@ Full consolidated evidence and disposition history: `docs/research/POST_STEP_7_I
 | Phase 4.5E.1 shadow context branch | **FUNCTIONAL PASS / NOT PRODUCTION-ACCEPTED** | Owner-machine functional shadow behavior passed, but the resource-profile gate was explicitly deferred; do not merge the branch as accepted production. |
 | Phase 4.5E.2 Qwen utility gate | **REJECTED** | Multilingual holdout produced unsafe false influence and zero ESSENTIAL recall; no provider-context injection was authorized. |
 | Full local/offline conversation | **DEFERRED** | Minimal truthful provider-failure survival solved the immediate need without a second unvalidated conversation stack. |
-| Issue #50 fixed lifecycle/system speech | **DEFERRED RELIABILITY** | Startup/standby scripted phrases can still depend on cloud TTS quota; lifecycle transitions must remain independent of TTS success. |
+| Issue #50 fixed lifecycle/system speech | **ACTIVE PRE-REPAIR CLEANUP** | Startup/standby scripted phrases can still depend on cloud TTS quota; lifecycle/readiness must remain independent of TTS success before outer repair supervision. |
 | Issue #44 relative/provider volume fast-path semantics | **DEFERRED BUG** | Absolute provider aliasing and relative volume deltas need bounded normalization/current-volume resolution. |
 | Issue #45 false-interruption resume | **DEFERRED BUG** | Production audio output cannot pause, so configured resume behavior is unavailable. |
 | Issue #46 intermittent LiveKit AudioMixer timeout | **DEFERRED INVESTIGATION** | Warning has not yet been proven to cause a user-visible audio failure. |
+| Issue #56 Pocket OWNER continuity | **ACTIVE PRE-REPAIR CLEANUP — FIRST** | False confirmed OWNER absence can corrupt the health/failure evidence that Self-Repair would consume; fix continuity semantics before repair automation. |
+| Issue #57 durable work TTS retry backoff | **ACTIVE PRE-REPAIR CLEANUP — SECOND** | Repair notifications will reuse WorkDelivery; provider retry pressure must be bounded before repair starts generating additional background outcomes. |
 | Issue #19 production voice isolation / turn ownership | **DEFERRED RESEARCH** | Accepted security evidence remains shadow-only; rejected isolation/target-speaker candidates are not production control. |
 | Persistent concurrent work orchestration | **OWNER ACCEPTED / PR #55 MERGED** | Durable WorkItems, DBOS recovery, single-brain voice priority, bounded resources, structured progress/status, deferred delivery and isolated development execution passed owner-machine acceptance on 2026-09-20. |
 | Proactive monitoring / event-driven background work | **PLANNED** | Step 15 remains the later product slice for proactive/event-driven behavior; it will reuse the orchestration foundation rather than invent a second background-work system. |
@@ -129,9 +131,21 @@ PR #55 implements the owner-accepted foundation from issue #53:
 
 Owner-machine acceptance passed on 2026-09-20. Runtime head `b2ba211becdef1b123852a44e7d0c39ffe36cf58` passed Code Quality run #3929, final PR head `a38b2e5dd3f1e4c31f08bd7efbcd0457617eee91` passed Code Quality run #3951, and PR #55 merged to protected `main` as `3980b212d657106abd45bfae119d2207551c409f`. Acceptance detail is in `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
 
-## Step 8 — queued after orchestration foundation
+## Reliability cleanup + Self-Repair Foundation — queued before Step 8
 
-Step 8 must then reuse that durable work foundation while remaining research-first from the reconciled production baseline:
+Owner-approved sequence:
+
+1. **#56 Pocket OWNER continuity** — correct acquisition/reacquisition vs already-authorized continuity semantics so transient biometric/head gaps cannot create false confirmed OWNER absence;
+2. **#57 durable WorkDelivery TTS backoff** — respect provider retry delay or bounded exponential backoff without altering canonical completion truth;
+3. **#50 lifecycle/system speech resilience** — ensure startup/standby/readiness do not depend on cloud TTS success;
+4. execute the research-first **Self-Repair Foundation interlude** documented in `docs/research/SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`;
+5. only then begin formal Step 8 requirements/research.
+
+The Self-Repair interlude must reuse Self-Awareness, incidents, WorkItems/DBOS, isolated development worktrees, Docker pytest and repository governance. It must begin with deterministic repair contracts and an outer supervision boundary. AI-assisted diagnosis and sandboxed source repair come later; autonomous protected-main merge/deployment and self-evolution remain out of scope.
+
+## Step 8 — next numbered product slice after the interlude
+
+Step 8 must reuse the durable WorkItem foundation while remaining research-first from the reconciled production baseline:
 
 1. recover CAP-027/CAP-028 requirements and privacy/authority constraints;
 2. inspect conversation, memory, authority, capability-runtime, Hands and lifecycle boundaries;
@@ -144,6 +158,6 @@ Step 8 must then reuse that durable work foundation while remaining research-fir
 
 ## Immediate Next Action
 
-**BEGIN STEP 8 — NOTES / TASKS / REMINDERS / SCHEDULING — REQUIREMENTS AND RESEARCH** on top of the merged durable WorkItem model.
+**BEGIN ISSUE #56 — POCKET 3 OWNER CONTINUITY — AS AN ISOLATED CORRECTIVE PR.**
 
-Keep issue #56 (Pocket OWNER continuity) and issue #57 (TTS delivery retry backoff) as separate corrective work; neither expands the Step-8 scope.
+Do not mix #57 or #50 into the #56 implementation unless evidence proves an inseparable root cause. After #56 closes, proceed to #57, then #50, then the Self-Repair Foundation research/ADR cycle.
