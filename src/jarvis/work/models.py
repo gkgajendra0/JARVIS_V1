@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import Enum, IntEnum
 from typing import Any
 
@@ -152,6 +152,9 @@ class WorkDelivery:
     state: WorkDeliveryState = WorkDeliveryState.PENDING
     created_at: datetime = field(default_factory=_utc_now)
     delivered_at: datetime | None = None
+    failed_attempts: int = 0
+    next_attempt_at: datetime | None = None
+    last_failure_reason: str | None = None
 
     def __post_init__(self) -> None:
         if not self.work_id.strip():
@@ -160,8 +163,35 @@ class WorkDelivery:
             raise ValueError("delivery message must not be empty")
         if not self.event_key.strip():
             raise ValueError("delivery event_key must not be empty")
+        if self.failed_attempts < 0:
+            raise ValueError("delivery failed_attempts must not be negative")
         if self.state is WorkDeliveryState.DELIVERED and self.delivered_at is None:
             raise ValueError("delivered notification requires delivered_at")
+        if (
+            self.state is WorkDeliveryState.DELIVERED
+            and self.next_attempt_at is not None
+        ):
+            raise ValueError("delivered notification cannot have a next attempt")
+        if self.next_attempt_at is not None and (
+            self.next_attempt_at.tzinfo is None
+            or self.next_attempt_at.utcoffset() is None
+        ):
+            raise ValueError("delivery next_attempt_at must be timezone-aware")
+
+    def retry_after(self, seconds: float, *, reason: str) -> WorkDelivery:
+        if self.state is WorkDeliveryState.DELIVERED:
+            return self
+        if seconds <= 0:
+            raise ValueError("delivery retry delay must be positive")
+        normalized_reason = reason.strip()
+        if not normalized_reason:
+            raise ValueError("delivery retry reason must not be empty")
+        return replace(
+            self,
+            failed_attempts=self.failed_attempts + 1,
+            next_attempt_at=_utc_now() + timedelta(seconds=seconds),
+            last_failure_reason=normalized_reason,
+        )
 
     def delivered(self) -> WorkDelivery:
         if self.state is WorkDeliveryState.DELIVERED:
@@ -170,6 +200,8 @@ class WorkDelivery:
             self,
             state=WorkDeliveryState.DELIVERED,
             delivered_at=_utc_now(),
+            next_attempt_at=None,
+            last_failure_reason=None,
         )
 
 
