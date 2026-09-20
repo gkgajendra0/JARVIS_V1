@@ -126,11 +126,16 @@ def _fail_bounded_work(work_id: str) -> str:
 
 
 @DBOS.workflow(max_recovery_attempts=20)
-def durable_workflow(work_id: str) -> dict[str, Any]:
+def durable_workflow(
+    work_id: str,
+    max_reasoning_cycles: int = _MAX_REASONING_CYCLES,
+) -> dict[str, Any]:
     """Durable outer loop. Waiting time never consumes semantic-work budget."""
 
+    if max_reasoning_cycles <= 0:
+        raise ValueError("max reasoning cycles must be positive")
     reasoning_cycles = 0
-    while reasoning_cycles < _MAX_REASONING_CYCLES:
+    while reasoning_cycles < max_reasoning_cycles:
         payload = _advance_work(work_id)
         state = WorkState(payload["state"])
         DBOS.set_event(_EVENT_STATE, payload)
@@ -187,13 +192,27 @@ def durable_workflow(work_id: str) -> dict[str, Any]:
 class DBOSWorkExecutionBackend:
     """Queue/recovery mechanics only; canonical work truth remains in JARVIS store."""
 
+    def __init__(
+        self,
+        *,
+        max_reasoning_cycles: int = _MAX_REASONING_CYCLES,
+    ) -> None:
+        if isinstance(max_reasoning_cycles, bool) or max_reasoning_cycles <= 0:
+            raise ValueError("max reasoning cycles must be positive")
+        self._max_reasoning_cycles = int(max_reasoning_cycles)
+
     def submit(self, work_id: str, *, priority: WorkPriority) -> str:
         def enqueue():
             with (
                 SetWorkflowID(work_id),
                 SetEnqueueOptions(priority=_queue_priority(priority)),
             ):
-                return DBOS.enqueue_workflow(_QUEUE_NAME, durable_workflow, work_id)
+                return DBOS.enqueue_workflow(
+                    _QUEUE_NAME,
+                    durable_workflow,
+                    work_id,
+                    self._max_reasoning_cycles,
+                )
 
         handle = _run_dbos_sync(enqueue)
         workflow_id = handle.get_workflow_id()
@@ -265,9 +284,12 @@ def initialize_dbos_work_runtime(
     application_version: str,
     queue_concurrency: int | None = None,
     system_database_url: str | None = None,
+    max_reasoning_cycles: int = _MAX_REASONING_CYCLES,
 ) -> DBOSWorkExecutionBackend:
     if queue_concurrency is not None and queue_concurrency <= 0:
         raise ValueError("DBOS queue concurrency must be positive when configured")
+    if isinstance(max_reasoning_cycles, bool) or max_reasoning_cycles <= 0:
+        raise ValueError("max reasoning cycles must be positive")
     configure_work_engine(engine, event_loop)
 
     config: DBOSConfig = {
@@ -289,7 +311,9 @@ def initialize_dbos_work_runtime(
             _QUEUE_NAME,
             global_concurrency=queue_concurrency,
         ).result()
-    return DBOSWorkExecutionBackend()
+    return DBOSWorkExecutionBackend(
+        max_reasoning_cycles=max_reasoning_cycles,
+    )
 
 
 def shutdown_dbos_work_runtime() -> None:
