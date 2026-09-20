@@ -891,6 +891,47 @@ async def test_interactive_voice_preempts_inflight_background_reasoning() -> Non
 
 
 @pytest.mark.asyncio
+async def test_interactive_preemption_cause_survives_rapid_idle_transition(
+    tmp_path: Path,
+) -> None:
+    class BlockingReasoner:
+        def __init__(self) -> None:
+            self.started = asyncio.Event()
+
+        async def decide(self, request: BrainRequest) -> BrainDecision:
+            del request
+            self.started.set()
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = BlockingReasoner()
+    gate = InteractiveBrainGate()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner, interactive_gate=gate),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+    )
+    item = create_item(store, request="Background task with rapid voice transition")
+
+    advance = asyncio.create_task(engine.advance(item.work_id))
+    await reasoner.started.wait()
+
+    # This matches the real LiveKit ordering seen on the owner machine:
+    # user speaking preempts background reasoning, then the user state can return
+    # to listening before the cancelled reasoning task observes cancellation.
+    gate.set_interactive_active(True)
+    gate.set_interactive_active(False)
+
+    result = await advance
+
+    assert result.state is WorkState.WAITING_RESOURCE
+    assert store.require(item.work_id).state is WorkState.WAITING_RESOURCE
+    assert store.list_steps(item.work_id) == ()
+    assert store.list_pending_deliveries() == ()
+
+
+@pytest.mark.asyncio
 async def test_brain_preemption_waits_without_consuming_failure_budget(
     tmp_path: Path,
 ) -> None:
