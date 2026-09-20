@@ -336,11 +336,14 @@ async def test_lifecycle_speech_falls_back_locally_after_one_cloud_attempt() -> 
     runtime._scripted_speech = scripted_speech  # type: ignore[attr-defined]
     runtime._local_status_speech = local_speech  # type: ignore[attr-defined]
 
-    assert await runtime._speak_lifecycle_message(
-        audio.output,
-        "Lifecycle message.",
-        label="test lifecycle",
-    ) is True
+    assert (
+        await runtime._speak_lifecycle_message(
+            audio.output,
+            "Lifecycle message.",
+            label="test lifecycle",
+        )
+        is True
+    )
 
     assert scripted_speech.spoken == ["Lifecycle message."]
     assert scripted_speech.max_provider_retries == [0]
