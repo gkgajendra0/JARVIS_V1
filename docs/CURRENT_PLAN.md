@@ -138,7 +138,7 @@ Owner-approved sequence:
 
 1. **#56 Pocket OWNER continuity — OWNER ACCEPTED / PR #61 MERGED** — exact already-authorized visual-track continuity now survives transient biometric/head gaps without weakening fresh verification for acquisition/reacquisition;
 2. **#57 durable WorkDelivery TTS backoff — OWNER ACCEPTED / PR #62 MERGED** — provider RetryInfo and durable bounded backoff now govern failed WorkDelivery speech without altering canonical completion truth;
-3. **#50 lifecycle/system speech resilience — ACTIVE** — startup/standby/readiness must not depend on cloud TTS success or provider retry behavior; reuse Step-5 local status speech before adding any new TTS subsystem;
+3. **#50 lifecycle/system speech resilience — ACTIVE** — preserve the configured cloud/JARVIS voice as primary, but make startup/standby/readiness independent of cloud TTS success by disabling lifecycle provider retries and falling back to the accepted Step-5 local status speech path;
 4. execute the research-first **Self-Repair Foundation interlude** documented in `docs/research/SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`;
 5. only then begin formal Step 8 requirements/research.
 
