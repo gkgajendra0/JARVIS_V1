@@ -10,6 +10,7 @@ from jarvis.work.brain import (
     BrainCoordinator,
     BrainPreempted,
     BrainRequest,
+    ProviderPressure,
 )
 from jarvis.work.models import (
     WorkDeliveryKind,
@@ -22,6 +23,7 @@ from jarvis.work.resources import ResourceLeaseManager, ResourcePressure
 from jarvis.work.store import SQLiteWorkStore
 
 _MAX_CONSECUTIVE_FAILURES = 3
+_PROVIDER_BACKOFF_SECONDS = (5.0, 10.0, 20.0, 40.0, 60.0)
 
 
 class WorkOwnerInputRequired(RuntimeError):
@@ -87,6 +89,7 @@ class WorkAdvanceResult:
     state: WorkState
     progressed: bool
     owner_question: str | None = None
+    retry_after_seconds: float | None = None
 
 
 class WorkEngine:
@@ -291,6 +294,71 @@ class WorkEngine:
             current_step_id=step.step_id,
         )
 
+    def _provider_pressure_attempt(self, work: WorkItem) -> int:
+        if (
+            work.state is not WorkState.WAITING_RESOURCE
+            or work.current_step_id is None
+        ):
+            return 0
+        step = next(
+            (
+                item
+                for item in reversed(self._store.list_steps(work.work_id))
+                if item.step_id == work.current_step_id
+            ),
+            None,
+        )
+        if step is None or step.kind != "provider_pressure":
+            return 0
+        attempt = step.observation.get("attempt")
+        return int(attempt) if isinstance(attempt, int) and attempt > 0 else 0
+
+    def _record_provider_pressure(
+        self,
+        work: WorkItem,
+        exc: ProviderPressure,
+        *,
+        previous_attempt: int,
+    ) -> WorkAdvanceResult:
+        attempt = previous_attempt + 1
+        retry_after = _PROVIDER_BACKOFF_SECONDS[
+            min(attempt - 1, len(_PROVIDER_BACKOFF_SECONDS) - 1)
+        ]
+        provider_label = exc.provider.capitalize()
+        step = WorkStep(
+            work_id=work.work_id,
+            kind="provider_pressure",
+            summary=f"{provider_label} provider pressure",
+            input_data={},
+        )
+        self._store.add_step(step)
+        completed = step.start().complete(
+            {
+                "provider": exc.provider,
+                "status_code": exc.status_code,
+                "reason": exc.reason,
+                "attempt": attempt,
+                "retry_after_seconds": retry_after,
+            }
+        )
+        self._store.save_step(completed)
+        latest = self._store.require(work.work_id)
+        waiting = latest.transition(
+            WorkState.WAITING_RESOURCE,
+            status_detail=(
+                f"waiting for {provider_label} {exc.reason}; "
+                f"retrying in {int(retry_after)} seconds"
+            ),
+            current_step_id=step.step_id,
+        )
+        saved = self._store.save(waiting, expected_version=latest.version)
+        return WorkAdvanceResult(
+            saved.work_id,
+            saved.state,
+            progressed=True,
+            retry_after_seconds=retry_after,
+        )
+
     def _check_dependencies(self, work: WorkItem) -> WorkAdvanceResult | None:
         if not work.dependencies:
             if work.state is WorkState.WAITING_DEPENDENCY:
@@ -465,6 +533,7 @@ class WorkEngine:
                 owner_question=work.status_detail,
             )
 
+        provider_pressure_attempt = self._provider_pressure_attempt(work)
         work = self._make_running(work)
         actions = self._actions.actions_for(work.work_type)
         if not actions:
@@ -506,6 +575,19 @@ class WorkEngine:
             )
             saved = self._store.save(waiting, expected_version=latest.version)
             return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
+        except ProviderPressure as exc:
+            latest = self._store.require(work.work_id)
+            if latest.state.terminal or latest.state is WorkState.PAUSED:
+                return WorkAdvanceResult(
+                    latest.work_id,
+                    latest.state,
+                    progressed=False,
+                )
+            return self._record_provider_pressure(
+                latest,
+                exc,
+                previous_attempt=provider_pressure_attempt,
+            )
         except Exception as exc:  # noqa: BLE001 - provider boundary must fail closed
             latest = self._store.require(work.work_id)
             if latest.state.terminal or latest.state is WorkState.PAUSED:
