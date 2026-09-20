@@ -167,7 +167,7 @@ class ProviderWorkReasoner:
                 },
                 response_model=_WorkDecisionModel,
             )
-        except Exception as exc:  # noqa: BLE001 - normalize provider SDK boundaries
+        except Exception as exc:
             pressure = _provider_pressure_from_exception(
                 exc,
                 provider=self._client.provider_name,
