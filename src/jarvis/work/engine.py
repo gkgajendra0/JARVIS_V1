@@ -412,7 +412,7 @@ class WorkEngine:
 
             for step in running_steps:
                 self._store.save_step(
-                    step.fail(
+                    step.interrupt(
                         "process interrupted before executor outcome was durably recorded"
                     )
                 )
