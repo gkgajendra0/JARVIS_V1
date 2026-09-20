@@ -96,9 +96,7 @@ def test_short_owner_evidence_gap_does_not_false_trigger_reacquisition() -> None
     assert waiting.owner_absence_confirmed is False
 
 
-def test_authorized_visual_track_continuity_holds_lock_through_biometric_gap() -> (
-    None
-):
+def test_authorized_visual_track_continuity_holds_lock_through_biometric_gap() -> None:
     controller = OwnerReacquisitionController(
         ReacquisitionConfig(owner_evidence_max_age_seconds=2.0)
     )
