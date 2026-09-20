@@ -18,7 +18,7 @@ from jarvis.work.models import (
     WorkStep,
     WorkType,
 )
-from jarvis.work.resources import ResourceLeaseManager
+from jarvis.work.resources import ResourceLeaseManager, ResourcePressure
 from jarvis.work.store import SQLiteWorkStore
 
 _MAX_CONSECUTIVE_FAILURES = 3
@@ -628,7 +628,28 @@ class WorkEngine:
                 status_detail="waiting for resources: " + ", ".join(resource_keys),
             )
             self._store.save(waiting, expected_version=work.version)
-            async with self._resources.lease(resource_keys):
+            try:
+                async with self._resources.lease(resource_keys):
+                    latest = self._store.require(work.work_id)
+                    if latest.state.terminal or latest.state is WorkState.PAUSED:
+                        return WorkAdvanceResult(
+                            latest.work_id,
+                            latest.state,
+                            progressed=False,
+                        )
+                    running = latest.transition(
+                        WorkState.RUNNING,
+                        status_detail=decision.summary,
+                    )
+                    work = self._store.save(running, expected_version=latest.version)
+                    return await self._execute_action(
+                        work=work,
+                        executor=executor,
+                        decision_action=decision.action,
+                        decision_summary=decision.summary,
+                        decision_parameters=dict(decision.parameters),
+                    )
+            except ResourcePressure as exc:
                 latest = self._store.require(work.work_id)
                 if latest.state.terminal or latest.state is WorkState.PAUSED:
                     return WorkAdvanceResult(
@@ -636,17 +657,17 @@ class WorkEngine:
                         latest.state,
                         progressed=False,
                     )
-                running = latest.transition(
-                    WorkState.RUNNING,
-                    status_detail=decision.summary,
-                )
-                work = self._store.save(running, expected_version=latest.version)
-                return await self._execute_action(
-                    work=work,
-                    executor=executor,
-                    decision_action=decision.action,
-                    decision_summary=decision.summary,
-                    decision_parameters=dict(decision.parameters),
+                if latest.state is WorkState.WAITING_RESOURCE:
+                    updated = latest.with_progress(
+                        current_step_id=latest.current_step_id,
+                        status_detail=f"waiting for resource pressure: {exc}",
+                    )
+                    self._store.save(updated, expected_version=latest.version)
+                    latest = updated
+                return WorkAdvanceResult(
+                    latest.work_id,
+                    latest.state,
+                    progressed=False,
                 )
 
         return await self._execute_action(
