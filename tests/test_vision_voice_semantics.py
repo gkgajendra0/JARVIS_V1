@@ -40,6 +40,7 @@ def test_voice_report_hides_detector_candidate_count() -> None:
     assert isinstance(status, dict)
     assert status["visible_people"] == 1
     assert "detector_persons" not in status
+    assert "armed" not in status
     assert "visible_people is the only canonical visible-person count" in str(
         report["count_semantics"]
     )
@@ -48,3 +49,9 @@ def test_voice_report_hides_detector_candidate_count() -> None:
     assert isinstance(events, list)
     assert "RF-DETR" not in str(events)
     assert "current visible_people=1" in str(events)
+
+
+def test_realtime_voice_surface_does_not_expose_manual_follow_control() -> None:
+    tools = VisionAgentTools(_FakeService())  # type: ignore[arg-type]
+
+    assert len(tools.tools) == 1
