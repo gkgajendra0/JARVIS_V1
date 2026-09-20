@@ -18,6 +18,7 @@ def _public_work(item) -> dict[str, object]:
     return {
         "work_id": item.work_id,
         "type": item.work_type.value,
+        "request": item.request,
         "state": item.state.value,
         "priority": item.priority.name.lower(),
         "status": item.status_detail,
