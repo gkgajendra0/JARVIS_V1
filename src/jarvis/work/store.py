@@ -318,9 +318,7 @@ class SQLiteWorkStore:
         with self._lock, self._connect() as connection:
             for table, primary_key, columns in tables:
                 selected = ", ".join((primary_key, *columns))
-                rows = connection.execute(
-                    f"SELECT {selected} FROM {table}"
-                ).fetchall()
+                rows = connection.execute(f"SELECT {selected} FROM {table}").fetchall()
                 for row in rows:
                     updates: dict[str, str] = {}
                     for column in columns:
@@ -330,12 +328,9 @@ class SQLiteWorkStore:
                         updates[column] = self._encode_text(raw)
                     if not updates:
                         continue
-                    assignments = ", ".join(
-                        f"{column} = ?" for column in updates
-                    )
+                    assignments = ", ".join(f"{column} = ?" for column in updates)
                     connection.execute(
-                        f"UPDATE {table} SET {assignments} "
-                        f"WHERE {primary_key} = ?",
+                        f"UPDATE {table} SET {assignments} WHERE {primary_key} = ?",
                         (*updates.values(), row[primary_key]),
                     )
                     migrated += 1
