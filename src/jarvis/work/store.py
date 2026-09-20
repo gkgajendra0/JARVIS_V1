@@ -224,8 +224,54 @@ class SQLiteWorkStore:
             completed_at=_parse_dt(row["completed_at"]),
         )
 
+    @staticmethod
+    def _validate_dependency_graph(
+        connection: sqlite3.Connection,
+        item: WorkItem,
+    ) -> None:
+        """Reject dependency chains that would deadlock by reaching the new item."""
+
+        stack: list[tuple[str, tuple[str, ...]]] = [
+            (dependency_id, (item.work_id, dependency_id))
+            for dependency_id in item.dependencies
+        ]
+        visited: set[str] = set()
+        while stack:
+            dependency_id, path = stack.pop()
+            if dependency_id == item.work_id:
+                raise WorkStoreError(
+                    "work dependency cycle detected: " + " -> ".join(path)
+                )
+            if dependency_id in visited:
+                continue
+            visited.add(dependency_id)
+            row = connection.execute(
+                "SELECT dependencies_json FROM work_items WHERE work_id = ?",
+                (dependency_id,),
+            ).fetchone()
+            if row is None:
+                continue
+            try:
+                dependencies = tuple(json.loads(row["dependencies_json"]))
+            except (TypeError, ValueError) as exc:
+                raise WorkStoreError(
+                    f"stored dependency graph is invalid for {dependency_id}"
+                ) from exc
+            for child in dependencies:
+                normalized = str(child).strip()
+                if not normalized:
+                    continue
+                if normalized == item.work_id:
+                    raise WorkStoreError(
+                        "work dependency cycle detected: "
+                        + " -> ".join((*path, normalized))
+                    )
+                if normalized not in visited:
+                    stack.append((normalized, (*path, normalized)))
+
     def create(self, item: WorkItem) -> WorkItem:
         with self._lock, self._connect() as connection:
+            self._validate_dependency_graph(connection, item)
             try:
                 connection.execute(
                     """
