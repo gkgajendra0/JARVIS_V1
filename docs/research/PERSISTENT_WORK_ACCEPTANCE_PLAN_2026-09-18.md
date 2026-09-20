@@ -87,7 +87,7 @@ Expected: truthful canonical WorkItem states; no progress inferred from provider
 
 Pause one task, verify the other remains active, resume it, then cancel one task.
 
-Expected: pause/cancel during in-flight reasoning prevents the next action from starting; cancelling one WorkItem does not affect another.
+Expected: pause/cancel during in-flight reasoning prevents the next action from starting; cancelling one WorkItem does not affect another. If the durable backend cannot accept a cancellation request, JARVIS must not falsely report that WorkItem as `CANCELLED`.
 
 ### F. WAITING_FOR_OWNER
 
@@ -107,7 +107,7 @@ Expected: same WorkItem identity; eligible DBOS workflow is reattached/recovered
 
 **G2 — forced mid-executor crash:** use a safe background task whose bounded executor can be observed running, then terminate the JARVIS process before that executor outcome is durably recorded and restart with the same state.
 
-Expected: JARVIS does **not** automatically replay the unknown side effect. Any persisted RUNNING WorkStep is marked interrupted/unverified and the WorkItem moves to `WAITING_FOR_OWNER` with a truthful recovery explanation. A natural owner response may then decide whether to retry/continue.
+Expected: JARVIS does **not** automatically replay the unknown side effect. Any persisted RUNNING WorkStep becomes explicit `INTERRUPTED`/unverified evidence rather than an ordinary failure, and the WorkItem moves to `WAITING_FOR_OWNER` with a truthful recovery explanation. A natural owner response may then decide whether to retry/continue.
 
 ### H. Standby continuity and completion delivery
 
@@ -123,12 +123,27 @@ Expected: `WHEN_IDLE` waits for listening/user-silent state, announces once, mar
 
 Verify latest edit -> passing Docker tests -> final diff -> clean isolated commit; no worker hook/textconv execution; no secret-like model-visible content; no push/merge/deployment; protected-main checkout remains clean.
 
+### J. Resource, budget, dependency and privacy hardening
+
+Verify the automated suite on the exact PR head covers:
+
+- dependency-cycle rejection before a deadlocking WorkItem is persisted;
+- RAM-pressure admission leaving work in `WAITING_RESOURCE` without starting its executor;
+- the bounded per-WorkItem reasoning-cycle guard failing runaway reasoning instead of allowing unbounded model calls;
+- crash-unknown WorkSteps becoming `INTERRUPTED`, not ordinary `FAILED`;
+- cancellation-backend failure leaving canonical work non-terminal;
+- protected WorkStore payload round-trip and legacy-plaintext migration.
+
+On the Windows owner machine, after orchestration has created at least one disposable test WorkItem containing a distinctive non-secret marker, stop JARVIS cleanly and confirm that marker is not visible as plaintext in the WorkStore database/WAL files. Do not inspect or publish real private task text as acceptance evidence.
+
+Resource classes for GPU/browser/desktop/provider API are admission primitives for workers that declare those resources; acceptance does not pretend currently unsupported worker types consume them. The 64-cycle default is a runaway model-call guard, not exact rupee/dollar cost accounting.
+
 ## Blockers
 
-Any serial voice blocking, brain competition with active conversation, duplicate/lost work after restart, automatic replay of an executor whose pre-crash outcome is unknown, waiting-time false failure, cross-task cancellation, premature success delivery, host execution of model-edited code, protected-main mutation, secret exposure, or production orchestration without explicit Postgres fails acceptance.
+Any serial voice blocking, brain competition with active conversation, duplicate/lost work after restart, automatic replay of an executor whose pre-crash outcome is unknown, ordinary-failure labeling of an unknown crash outcome, dependency cycles, waiting-time false failure, uncontrolled low-memory executor admission, cross-task cancellation, false terminal cancellation after backend rejection, unbounded background reasoning, plaintext sensitive WorkStore payloads on the Windows production path, premature success delivery, host execution of model-edited code, protected-main mutation, secret exposure, or production orchestration without explicit Postgres fails acceptance.
 
 ## Acceptance record
 
-Record exact PR head SHA, Postgres/Docker versions, A-I pass/fail, corrections, representative non-secret WorkItem IDs/states, proof main stayed clean, and the owner’s explicit acceptance statement.
+Record exact PR head SHA, Postgres/Docker versions, A-J pass/fail, corrections, representative non-secret WorkItem IDs/states, proof main stayed clean, and the owner’s explicit acceptance statement.
 
 Only then reconcile `CURRENT_ARCHITECTURE.md` and product capability status and make PR #55 merge-ready.
