@@ -59,6 +59,7 @@ LOGGER = logging.getLogger(__name__)
 _DEFAULT_ANALYSIS_INTERVAL_SECONDS = 0.10
 _DEFAULT_SESSION_POLL_INTERVAL_SECONDS = 0.25
 _DEFAULT_EVIDENCE_TTL_SECONDS = 2.0
+_OWNER_DIAGNOSTIC_INTERVAL_SECONDS = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,6 +165,8 @@ class OwnerContextObserver:
         self._liveness_window: TemporalPassiveLiveness | None = None
         self._last_analysis_at: float | None = None
         self._last_session_poll_at: float | None = None
+        self._last_diagnostic_at: float | None = None
+        self._last_diagnostic_signature: str | None = None
 
     def observe(self, frame: CapturedFrame, snapshot: VisionSnapshot) -> None:
         if snapshot.frame_id != frame.frame_id:
@@ -176,7 +179,29 @@ class OwnerContextObserver:
         selected = self._select_evidence_target(snapshot)
         if selected is None:
             if self._bound_track_is_alive(snapshot):
+                self._log_diagnostic(
+                    frame.captured_at,
+                    signature="bound_track_alive_without_head",
+                    message=(
+                        "OWNER evidence waiting: bound_track=%s remains alive; "
+                        "visible_tracks=%s heads=%s"
+                    ),
+                    args=(self._track_id, len(snapshot.tracks), len(snapshot.heads)),
+                )
                 return
+            self._log_diagnostic(
+                frame.captured_at,
+                signature="no_head_associated_subject",
+                message=(
+                    "OWNER evidence unavailable: no single head-associated subject; "
+                    "visible_tracks=%s heads=%s alive_track_ids=%s"
+                ),
+                args=(
+                    len(snapshot.tracks),
+                    len(snapshot.heads),
+                    snapshot.alive_track_ids,
+                ),
+            )
             self._invalidate("owner_context_requires_one_head_associated_subject")
             return
         target, head = selected
@@ -207,11 +232,23 @@ class OwnerContextObserver:
             self.face_detector.setInputSize((crop_width, crop_height))
             faces = _face_rows(self.face_detector.detect(crop.image))
             if not faces.size:
+                self._log_diagnostic(
+                    frame.captured_at,
+                    signature=f"no_face:{target.track_id}",
+                    message="OWNER evidence waiting: no face detected in head crop track_id=%s",
+                    args=(target.track_id,),
+                )
                 return
             face = _select_center_face(faces, width=crop_width, height=crop_height)
             aligned = self.face_recognizer.alignCrop(crop.image, face)
             feature = self.face_recognizer.feature(aligned)
             if feature is None or feature.size == 0 or not np.isfinite(feature).all():
+                self._log_diagnostic(
+                    frame.captured_at,
+                    signature=f"invalid_face_feature:{target.track_id}",
+                    message="OWNER evidence waiting: invalid face feature track_id=%s",
+                    args=(target.track_id,),
+                )
                 return
 
             similarity = max_prototype_cosine(self.owner_template.prototypes, feature)
@@ -242,13 +279,67 @@ class OwnerContextObserver:
                     real_probability=pad_score.real_probability,
                 )
             )
-            self.state.publish(bind_owner_liveness(identity, liveness))
+            fused = bind_owner_liveness(identity, liveness)
+            self.state.publish(fused)
+            self._log_diagnostic(
+                observed_at,
+                signature=(
+                    f"fused:{target.track_id}:{identity.state.value}:"
+                    f"{liveness.state.value}:{fused.state.value}"
+                ),
+                message=(
+                    "OWNER evidence track=%s identity=%s samples=%s/%s "
+                    "similarity=%s liveness=%s samples=%s/%s real_probability=%s "
+                    "fused=%s reasons=%s"
+                ),
+                args=(
+                    target.track_id,
+                    identity.state.value,
+                    identity.sample_count,
+                    identity.window_size,
+                    (
+                        "n/a"
+                        if identity.temporal_similarity is None
+                        else f"{identity.temporal_similarity:.3f}"
+                    ),
+                    liveness.state.value,
+                    liveness.sample_count,
+                    liveness.window_size,
+                    (
+                        "n/a"
+                        if liveness.temporal_real_probability is None
+                        else f"{liveness.temporal_real_probability:.3f}"
+                    ),
+                    fused.state.value,
+                    ",".join(fused.reason_codes),
+                ),
+            )
         except Exception:
             self._invalidate("owner_context_inference_failed")
             LOGGER.exception("Live OWNER context inference failed closed")
 
     def close(self) -> None:
         self._invalidate("owner_context_observer_closed")
+
+
+    def _log_diagnostic(
+        self,
+        now: float,
+        *,
+        signature: str,
+        message: str,
+        args: tuple[object, ...],
+    ) -> None:
+        last_at = self._last_diagnostic_at
+        if (
+            signature == self._last_diagnostic_signature
+            and last_at is not None
+            and now - last_at < _OWNER_DIAGNOSTIC_INTERVAL_SECONDS
+        ):
+            return
+        self._last_diagnostic_signature = signature
+        self._last_diagnostic_at = now
+        LOGGER.info(message, *args)
 
     def _refresh_windows_session(self, now: float) -> bool:
         if (
@@ -331,6 +422,7 @@ class OwnerContextObserver:
         self._identity_window = None
         self._liveness_window = None
         self._last_analysis_at = None
+        self._last_diagnostic_signature = None
         self.state.invalidate(reason)
 
 
