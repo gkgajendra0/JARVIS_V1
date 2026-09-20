@@ -22,6 +22,7 @@ from jarvis.work.development import (
 from jarvis.work.engine import WorkActionRegistry, WorkEngine
 from jarvis.work.models import WorkItem, WorkState, WorkType
 from jarvis.work.orchestrator import WorkOrchestrator
+from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.reasoner import ProviderWorkReasoner
 from jarvis.work.resources import ResourceLeaseManager
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
@@ -125,7 +126,13 @@ def build_work_runtime(
     """Build one durable work runtime around the configured JARVIS brain provider."""
 
     loop = event_loop or asyncio.get_running_loop()
-    store = SQLiteWorkStore(store_path or default_work_store_path())
+    resolved_store_path = Path(store_path or default_work_store_path())
+    payload_codec = build_default_work_payload_codec(resolved_store_path)
+    store = SQLiteWorkStore(
+        resolved_store_path,
+        payload_codec=payload_codec,
+    )
+    store.protect_existing_payloads()
     reasoner = ProviderWorkReasoner(provider=provider, model=model)
     interactive_brain_gate = InteractiveBrainGate()
     brain = BrainCoordinator(
