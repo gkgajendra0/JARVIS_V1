@@ -2,9 +2,9 @@
 
 ## Status
 
-**OWNER-APPROVED ARCHITECTURE IMPLEMENTED ON DRAFT PR #55 — OWNER-MACHINE ACCEPTANCE PENDING.**
+**OWNER ACCEPTED — PRODUCTION FOUNDATION APPROVED FOR PROTECTED-MAIN MERGE IN PR #55 (2026-09-20).**
 
-This ADR records the implemented boundary for issue #53. It does not mark Step 8, Step 15, autonomous repair, protected-main mutation, or production acceptance complete.
+This ADR records the accepted production boundary for issue #53. It does not mark Step 8, Step 15, autonomous repair, protected-main mutation by background workers, or later proactive/event-driven automation complete.
 
 ## Context
 
@@ -101,9 +101,17 @@ Persistent orchestration is assembled by the `jarvis-voice` production runtime. 
 - Provider-native asynchronous tool semantics: **REJECT AS CANONICAL ARCHITECTURE**.
 - Unrestricted shell / automatic push / merge / deployment: **REJECT**.
 
-## Acceptance gates
+## Acceptance result
 
-This foundation is not production-accepted until exact-head CI is green, the owner-machine production path starts with Postgres DBOS and the approved Docker image, concurrent research/development plus immediate voice/Hands behavior is proven, normal restart recovery and forced mid-executor crash recovery are proven, cancel isolation/deferred delivery are proven, development isolation is proven, and the owner explicitly accepts the behavior before protected-main merge.
+Owner-machine acceptance completed on 2026-09-20. The runtime candidate `b2ba211becdef1b123852a44e7d0c39ffe36cf58` proved independent durable research/development WorkItems, normal conversation while work remained active, standby continuation, truthful canonical status/progress, restart recovery, cancellation, and an immediate verified Hands `Open Calculator` action while background work remained active.
+
+The exact runtime head passed Code Quality run #3929 (pytest, Ruff, Windows DPAPI, Windows Hello helper). The automated suite additionally covers pause/resume/cancel isolation, resource/dependency limits, bounded reasoning budget, unknown mid-executor recovery to `INTERRUPTED` + `WAITING_FOR_OWNER`, backend-cancellation truthfulness, protected WorkStore round-trip/migration, and isolated development proof gates.
+
+The owner explicitly approved PR #55 for merge on 2026-09-20. Detailed acceptance and residual disposition are recorded in `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
+
+Two observed issues are deliberately separate follow-ups rather than blockers for this foundation:
+- #56 — Pocket 3 OWNER continuity can falsely declare absence during transient biometric/head evidence gaps;
+- #57 — scripted TTS 429 delivery retries should respect provider backoff.
 
 Detailed procedure: `docs/research/PERSISTENT_WORK_ACCEPTANCE_PLAN_2026-09-18.md`.
 
