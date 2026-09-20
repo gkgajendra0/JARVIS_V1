@@ -22,6 +22,7 @@ from jarvis.work.models import (
     WorkStepState,
     WorkType,
 )
+from jarvis.work.privacy import PlaintextWorkPayloadCodec, WorkPayloadCodec
 
 
 class WorkStoreError(RuntimeError):
@@ -68,11 +69,21 @@ def _parse_dt(value: str | None) -> datetime | None:
 class SQLiteWorkStore:
     """JARVIS-owned durable domain truth; DBOS remains the execution engine."""
 
-    def __init__(self, path: str | pathlib.Path) -> None:
+    def __init__(
+        self,
+        path: str | pathlib.Path,
+        *,
+        payload_codec: WorkPayloadCodec | None = None,
+    ) -> None:
         self.path = pathlib.Path(path).expanduser().resolve()
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._payload_codec = payload_codec or PlaintextWorkPayloadCodec()
         self._lock = threading.RLock()
         self._initialize()
+
+    @property
+    def payload_protected(self) -> bool:
+        return bool(self._payload_codec.protects_at_rest)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=30.0)
@@ -80,6 +91,24 @@ class SQLiteWorkStore:
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("PRAGMA journal_mode=WAL")
         return connection
+
+    def _encode_text(self, value: str) -> str:
+        return self._payload_codec.encode(value)
+
+    def _decode_text(self, value: str) -> str:
+        return self._payload_codec.decode(value)
+
+    def _encode_optional_text(self, value: str | None) -> str | None:
+        return None if value is None else self._encode_text(value)
+
+    def _decode_optional_text(self, value: str | None) -> str | None:
+        return None if value is None else self._decode_text(value)
+
+    def _encode_json(self, value: object) -> str:
+        return self._encode_text(json.dumps(value, sort_keys=True))
+
+    def _decode_json(self, value: str):
+        return json.loads(self._decode_text(value))
 
     def _initialize(self) -> None:
         with self._lock, self._connect() as connection:
@@ -159,15 +188,14 @@ class SQLiteWorkStore:
                     "ALTER TABLE work_items ADD COLUMN paused_from_state TEXT"
                 )
 
-    @staticmethod
-    def _item_from_row(row: sqlite3.Row) -> WorkItem:
+    def _item_from_row(self, row: sqlite3.Row) -> WorkItem:
         created_at = _parse_dt(row["created_at"])
         updated_at = _parse_dt(row["updated_at"])
         if created_at is None or updated_at is None:
             raise WorkStoreError("stored work item is missing timestamps")
         return WorkItem(
             work_id=row["work_id"],
-            request=row["request"],
+            request=self._decode_text(row["request"]),
             work_type=WorkType(row["work_type"]),
             source_session_id=row["source_session_id"],
             source_turn_id=row["source_turn_id"],
@@ -181,15 +209,14 @@ class SQLiteWorkStore:
                 else None
             ),
             current_step_id=row["current_step_id"],
-            result=json.loads(row["result_json"]),
-            status_detail=row["status_detail"],
+            result=self._decode_json(row["result_json"]),
+            status_detail=self._decode_optional_text(row["status_detail"]),
             created_at=created_at,
             updated_at=updated_at,
             version=row["version"],
         )
 
-    @staticmethod
-    def _delivery_from_row(row: sqlite3.Row) -> WorkDelivery:
+    def _delivery_from_row(self, row: sqlite3.Row) -> WorkDelivery:
         created_at = _parse_dt(row["created_at"])
         if created_at is None:
             raise WorkStoreError("stored work delivery is missing created_at")
@@ -197,7 +224,7 @@ class SQLiteWorkStore:
             delivery_id=row["delivery_id"],
             work_id=row["work_id"],
             kind=WorkDeliveryKind(row["kind"]),
-            message=row["message"],
+            message=self._decode_text(row["message"]),
             policy=DeliveryPolicy(row["policy"]),
             event_key=row["event_key"],
             state=WorkDeliveryState(row["state"]),
@@ -205,8 +232,7 @@ class SQLiteWorkStore:
             delivered_at=_parse_dt(row["delivered_at"]),
         )
 
-    @staticmethod
-    def _step_from_row(row: sqlite3.Row) -> WorkStep:
+    def _step_from_row(self, row: sqlite3.Row) -> WorkStep:
         created_at = _parse_dt(row["created_at"])
         if created_at is None:
             raise WorkStoreError("stored work step is missing created_at")
@@ -214,11 +240,11 @@ class SQLiteWorkStore:
             step_id=row["step_id"],
             work_id=row["work_id"],
             kind=row["kind"],
-            summary=row["summary"],
+            summary=self._decode_text(row["summary"]),
             state=WorkStepState(row["state"]),
-            input_data=json.loads(row["input_json"]),
-            observation=json.loads(row["observation_json"]),
-            error=row["error"],
+            input_data=self._decode_json(row["input_json"]),
+            observation=self._decode_json(row["observation_json"]),
+            error=self._decode_optional_text(row["error"]),
             created_at=created_at,
             started_at=_parse_dt(row["started_at"]),
             completed_at=_parse_dt(row["completed_at"]),
@@ -269,6 +295,61 @@ class SQLiteWorkStore:
                 if normalized not in visited:
                     stack.append((normalized, (*path, normalized)))
 
+    def protect_existing_payloads(self) -> int:
+        """Encrypt legacy plaintext payload fields when protection is enabled."""
+
+        if not self._payload_codec.protects_at_rest:
+            return 0
+
+        tables = (
+            (
+                "work_items",
+                "work_id",
+                ("request", "result_json", "status_detail"),
+            ),
+            ("work_deliveries", "delivery_id", ("message",)),
+            (
+                "work_steps",
+                "step_id",
+                ("summary", "input_json", "observation_json", "error"),
+            ),
+        )
+        migrated = 0
+        with self._lock, self._connect() as connection:
+            for table, primary_key, columns in tables:
+                selected = ", ".join((primary_key, *columns))
+                rows = connection.execute(
+                    f"SELECT {selected} FROM {table}"
+                ).fetchall()
+                for row in rows:
+                    updates: dict[str, str] = {}
+                    for column in columns:
+                        raw = row[column]
+                        if raw is None or self._payload_codec.is_protected(raw):
+                            continue
+                        updates[column] = self._encode_text(raw)
+                    if not updates:
+                        continue
+                    assignments = ", ".join(
+                        f"{column} = ?" for column in updates
+                    )
+                    connection.execute(
+                        f"UPDATE {table} SET {assignments} "
+                        f"WHERE {primary_key} = ?",
+                        (*updates.values(), row[primary_key]),
+                    )
+                    migrated += 1
+
+        if migrated:
+            with self._lock:
+                connection = self._connect()
+                try:
+                    connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                    connection.execute("VACUUM")
+                finally:
+                    connection.close()
+        return migrated
+
     def create(self, item: WorkItem) -> WorkItem:
         with self._lock, self._connect() as connection:
             self._validate_dependency_graph(connection, item)
@@ -284,7 +365,7 @@ class SQLiteWorkStore:
                     """,
                     (
                         item.work_id,
-                        item.request,
+                        self._encode_text(item.request),
                         item.work_type.value,
                         item.source_session_id,
                         item.source_turn_id,
@@ -298,8 +379,8 @@ class SQLiteWorkStore:
                             else None
                         ),
                         item.current_step_id,
-                        json.dumps(item.result, sort_keys=True),
-                        item.status_detail,
+                        self._encode_json(item.result),
+                        self._encode_optional_text(item.status_detail),
                         _dt(item.created_at),
                         _dt(item.updated_at),
                         item.version,
@@ -359,8 +440,8 @@ class SQLiteWorkStore:
                         else None
                     ),
                     item.current_step_id,
-                    json.dumps(item.result, sort_keys=True),
-                    item.status_detail,
+                    self._encode_json(item.result),
+                    self._encode_optional_text(item.status_detail),
                     _dt(item.updated_at),
                     item.version,
                     item.work_id,
@@ -411,7 +492,7 @@ class SQLiteWorkStore:
                     delivery.delivery_id,
                     delivery.work_id,
                     delivery.kind.value,
-                    delivery.message,
+                    self._encode_text(delivery.message),
                     delivery.policy.value,
                     delivery.event_key,
                     delivery.state.value,
@@ -480,11 +561,11 @@ class SQLiteWorkStore:
                         step.step_id,
                         step.work_id,
                         step.kind,
-                        step.summary,
+                        self._encode_text(step.summary),
                         step.state.value,
-                        json.dumps(step.input_data, sort_keys=True),
-                        json.dumps(step.observation, sort_keys=True),
-                        step.error,
+                        self._encode_json(step.input_data),
+                        self._encode_json(step.observation),
+                        self._encode_optional_text(step.error),
                         _dt(step.created_at),
                         _dt(step.started_at),
                         _dt(step.completed_at),
@@ -505,8 +586,8 @@ class SQLiteWorkStore:
                 """,
                 (
                     step.state.value,
-                    json.dumps(step.observation, sort_keys=True),
-                    step.error,
+                    self._encode_json(step.observation),
+                    self._encode_optional_text(step.error),
                     _dt(step.started_at),
                     _dt(step.completed_at),
                     step.step_id,
