@@ -139,7 +139,11 @@ def test_public_work_status_preserves_canonical_owner_request() -> None:
     ("error", "status_code", "reason"),
     [
         (RuntimeError("HTTP 429 Too Many Requests"), 429, "rate limit"),
-        (RuntimeError("service failed with status 503"), 503, "temporarily unavailable"),
+        (
+            RuntimeError("service failed with status 503"),
+            503,
+            "temporarily unavailable",
+        ),
     ],
 )
 def test_provider_pressure_classification_is_provider_neutral(
@@ -206,7 +210,10 @@ async def test_provider_pressure_uses_durable_backoff_without_failure_budget(
     ]
     assert [step.observation["attempt"] for step in pressure_steps] == [1, 2, 1]
     assert all(step.state.value == "completed" for step in pressure_steps)
-    assert not any(step.state.value == "failed" for step in store.list_steps(item.work_id))
+    assert not any(
+        step.state.value == "failed"
+        for step in store.list_steps(item.work_id)
+    )
     assert store.list_pending_deliveries() == ()
 
 
