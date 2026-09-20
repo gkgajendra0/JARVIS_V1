@@ -28,7 +28,7 @@ from jarvis.identity.speaker_turn import SpeakerTurnAudio
 from jarvis.knowledge.research import CurrentResearchService
 from jarvis.memory.provider_verified_query import ProviderVerifiedMemoryQueryCoordinator
 from jarvis.memory.runtime import MemoryRuntime
-from jarvis.provider_retry import delivery_retry_delay_seconds, provider_retry_hint
+from jarvis.work.provider_retry import delivery_retry_delay_seconds, provider_retry_hint
 from jarvis.voice.capability_tools import LocalReadAgentTools
 from jarvis.voice.livekit_session import create_voice_session
 from jarvis.voice.memory_tools import MemoryAgentTools
