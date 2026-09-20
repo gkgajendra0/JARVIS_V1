@@ -269,7 +269,7 @@ async def test_startup_readiness_timeout_skips_greeting() -> None:
 
 
 @pytest.mark.asyncio
-async def test_startup_greeting_prefers_local_lifecycle_speech() -> None:
+async def test_startup_greeting_prefers_primary_cloud_lifecycle_speech() -> None:
     class Detector:
         async def wait_for_detection(self):
             await asyncio.Event().wait()
@@ -302,36 +302,49 @@ async def test_startup_greeting_prefers_local_lifecycle_speech() -> None:
         startup_greeting_factory=lambda: "Good evening, sir.",
     )
     task = asyncio.create_task(runtime.run())
-    await asyncio.wait_for(local_speech.started.wait(), timeout=1)
+    await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
 
-    assert local_speech.spoken == ["Good evening, sir."]
-    assert scripted_speech.spoken == []
+    assert scripted_speech.spoken == ["Good evening, sir."]
+    assert scripted_speech.max_provider_retries == [0]
+    assert local_speech.spoken == []
 
+    scripted_speech.release.set()
+    await asyncio.sleep(0)
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)
 
 
 @pytest.mark.asyncio
-async def test_lifecycle_speech_uses_one_no_retry_cloud_fallback() -> None:
-    runtime, _, _, audio, scripted_speech = runtime_with_session()
-    local_speech = FakeLocalStatusSpeech(error=RuntimeError("local failed"))
+async def test_lifecycle_speech_falls_back_locally_after_one_cloud_attempt() -> None:
+    class FailingScriptedSpeech(FakeScriptedSpeech):
+        async def speak(
+            self,
+            output: LocalAudioOutput,
+            text: str,
+            *,
+            max_provider_retries: int | None = None,
+        ) -> None:
+            del output
+            self.spoken.append(text)
+            self.max_provider_retries.append(max_provider_retries)
+            self.started.set()
+            raise RuntimeError("cloud failed")
+
+    runtime, _, _, audio, _ = runtime_with_session()
+    scripted_speech = FailingScriptedSpeech()
+    local_speech = FakeLocalStatusSpeech()
+    runtime._scripted_speech = scripted_speech  # type: ignore[attr-defined]
     runtime._local_status_speech = local_speech  # type: ignore[attr-defined]
 
-    task = asyncio.create_task(
-        runtime._speak_lifecycle_message(
-            audio.output,
-            "Lifecycle message.",
-            label="test lifecycle",
-        )
-    )
-    await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
+    assert await runtime._speak_lifecycle_message(
+        audio.output,
+        "Lifecycle message.",
+        label="test lifecycle",
+    ) is True
 
-    assert local_speech.spoken == ["Lifecycle message."]
     assert scripted_speech.spoken == ["Lifecycle message."]
     assert scripted_speech.max_provider_retries == [0]
-
-    scripted_speech.release.set()
-    assert await asyncio.wait_for(task, timeout=1) is True
+    assert local_speech.spoken == ["Lifecycle message."]
 
 
 @pytest.mark.asyncio
@@ -674,7 +687,7 @@ async def test_startup_greeting_timeout_does_not_block_runtime(
         startup_readiness_waiter=lambda _timeout: True,
     )
     monkeypatch.setattr(
-        "jarvis.voice.runtime._LIFECYCLE_CLOUD_FALLBACK_TIMEOUT_SECONDS",
+        "jarvis.voice.runtime._LIFECYCLE_CLOUD_PRIMARY_TIMEOUT_SECONDS",
         0.01,
     )
 
