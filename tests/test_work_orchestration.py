@@ -29,6 +29,7 @@ from jarvis.work.models import (
 )
 from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.resources import ResourceLeaseManager
+from jarvis.voice.work_tools import _public_work
 from jarvis.work.store import SQLiteWorkStore, WorkStoreError
 
 
@@ -116,6 +117,20 @@ def create_item(store: SQLiteWorkStore, *, request: str = "Do work") -> WorkItem
     )
     store.create(item)
     return item
+
+
+def test_public_work_status_preserves_canonical_owner_request() -> None:
+    item = WorkItem(
+        request="Research current DBOS workflow recovery behavior",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-public-work",
+        source_turn_id="turn-public-work",
+    )
+
+    payload = _public_work(item)
+
+    assert payload["request"] == "Research current DBOS workflow recovery behavior"
+    assert payload["state"] == WorkState.QUEUED.value
 
 
 def test_work_state_rejects_invalid_terminal_transition() -> None:
