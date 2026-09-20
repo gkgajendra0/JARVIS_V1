@@ -673,7 +673,10 @@ async def test_startup_greeting_timeout_does_not_block_runtime(
         scripted_speech=scripted_speech,
         startup_readiness_waiter=lambda _timeout: True,
     )
-    monkeypatch.setattr("jarvis.voice.runtime._STARTUP_GREETING_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(
+        "jarvis.voice.runtime._LIFECYCLE_CLOUD_FALLBACK_TIMEOUT_SECONDS",
+        0.01,
+    )
 
     task = asyncio.create_task(runtime.run())
     await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
