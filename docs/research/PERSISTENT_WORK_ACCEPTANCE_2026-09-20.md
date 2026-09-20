@@ -2,7 +2,7 @@
 
 Date: 2026-09-20  
 Scope: issue #53 / PR #55  
-Decision: **OWNER ACCEPTED — APPROVED FOR PROTECTED-MAIN MERGE**
+Decision: **OWNER ACCEPTED — MERGED TO PROTECTED MAIN**
 
 ## What was accepted
 
@@ -54,4 +54,4 @@ Acceptance directly caused corrections for truthful durable cancellation orderin
 
 The owner explicitly approved merging PR #55 on 2026-09-20 after the central Iron-Man-style scenario was proven: independent background work remained alive while JARVIS continued conversation and executed an unrelated immediate foreground action.
 
-Issue #53 may close with PR #55. Step 8 can now build notes/tasks/reminders/scheduling on this accepted durable work foundation.
+PR #55 merged successfully to protected `main` as `3980b212d657106abd45bfae119d2207551c409f` on 2026-09-20, and issue #53 closed as completed. Step 8 can now build notes/tasks/reminders/scheduling on this accepted durable work foundation.

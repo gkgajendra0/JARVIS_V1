@@ -2,7 +2,7 @@
 
 ## Status
 
-**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS FOUNDATION PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED FOR THIS PRODUCTION MERGE. STEP 8 IS NEXT.**
+**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS FOUNDATION PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED AND MERGED TO PROTECTED `main` ON 2026-09-20. STEP 8 IS NEXT.**
 
 Protected-main production baseline after the Self-Awareness merge: `e5484cb9d599783e7f715bc6fb435af459dc49a0`. PR #41 adds the accepted bounded Self-Awareness runtime; later documentation-only reconciliation commits do not change that implementation behavior.
 
@@ -222,7 +222,7 @@ Old PRs #31/#32 are historical performance experiments; accepted pieces were sel
 
 ## Persistent concurrent work orchestration
 
-PR #55 adds the owner-accepted durable work foundation.
+PR #55 adds the owner-accepted durable work foundation and was merged to protected `main` at `3980b212d657106abd45bfae119d2207551c409f` on 2026-09-20.
 
 Canonical JARVIS architecture now includes:
 
