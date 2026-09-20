@@ -167,7 +167,10 @@ class WorkDelivery:
             raise ValueError("delivery failed_attempts must not be negative")
         if self.state is WorkDeliveryState.DELIVERED and self.delivered_at is None:
             raise ValueError("delivered notification requires delivered_at")
-        if self.state is WorkDeliveryState.DELIVERED and self.next_attempt_at is not None:
+        if (
+            self.state is WorkDeliveryState.DELIVERED
+            and self.next_attempt_at is not None
+        ):
             raise ValueError("delivered notification cannot have a next attempt")
         if self.next_attempt_at is not None:
             if (
