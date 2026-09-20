@@ -101,7 +101,7 @@ Step-4 bounded status reflects accepted encrypted lifecycle/retrieval/explicit r
 | CAP-019 | World Awareness | Maintain selected current context across world/user-interest domains. | 14 | PLANNED |
 | CAP-020 | Aware-but-Quiet Context | Use passive awareness without unsolicited noise or hidden authority. | 14 | PLANNED |
 
-The Step-6 bounded slice is synchronous/source-aware current research; long-running background research/proactivity remains later work.
+The Step-6 source-aware research slice remains bounded. PR #55 adds accepted durable background research execution and concurrent work truth, but proactive/event-driven monitoring and scheduled/recurring product behavior remain later Step-15 work.
 
 ### Local Computer, Files, Browser, Devices
 
@@ -146,10 +146,12 @@ CAP-031 is partial because bounded Git/project operations exist through Hands; t
 | CAP-038 | Health and Diagnostics | Explain degraded audio/network/provider/capability/runtime state and recovery options. | 13 | PARTIAL |
 | CAP-039 | HUD and Visual Workspace | Present conversation, status, context, world feed, memory, skills, execution, diagnostics. | 13 | PLANNED |
 | CAP-040 | Proactive Monitoring | Watch approved topics/conditions and surface meaningful changes. | 15 | PLANNED |
-| CAP-041 | Background Work | Explicit scheduled research, recurring summaries, bounded workflows. | 15 | PLANNED |
+| CAP-041 | Background Work | Explicit scheduled research, recurring summaries, bounded workflows. | 15 | PARTIAL |
 | CAP-042 | Multi-Capability Workflows | Sequence mature capabilities to achieve goals without an uncontrolled second brain. | 17 | PLANNED |
 
 CAP-038 is partial because provider-failure diagnostics, runtime telemetry/profiling, and bounded recovery already exist; the full user-facing diagnostics product slice does not.
+
+CAP-041 is partial because PR #55 now provides accepted persistent concurrent WorkItems, restart recovery, bounded research/development workers, owner controls, progress/status and durable delivery. Step 15 still owns proactive monitoring, event-driven triggers, scheduled/recurring background behavior and broader workflow productization.
 
 ### Learning, Repair, Resilience, Development
 
