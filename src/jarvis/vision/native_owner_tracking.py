@@ -177,6 +177,7 @@ class NativeOwnerTrackingObserver:
 
         owner_bounds = None
         owner_observed_at = None
+        authorized_owner_track_alive = False
         context = self.owner_context.snapshot()
         assessment = context.assessment
         if (
@@ -190,6 +191,10 @@ class NativeOwnerTrackingObserver:
                     if candidate.track_id == assessment.visual_track_id
                 ),
                 None,
+            )
+            authorized_owner_track_alive = bool(
+                track is not None
+                or assessment.visual_track_id in snapshot.alive_track_ids
             )
             if track is not None:
                 owner_bounds = track.bounds
@@ -210,6 +215,7 @@ class NativeOwnerTrackingObserver:
             owner_bounds=owner_bounds,
             owner_observed_at=owner_observed_at,
             native=native_status,
+            authorized_owner_track_alive=authorized_owner_track_alive,
         )
         if decision.state is ReacquisitionState.LOCKED:
             self._startup_lock_event.set()
@@ -227,7 +233,10 @@ class NativeOwnerTrackingObserver:
                 self.client.clear_target()
                 self.client.recenter_gimbal()
                 LOGGER.info(
-                    "Pocket 3 native gimbal recenter sent after confirmed OWNER loss"
+                    "Pocket 3 native gimbal recenter sent: reason=%s "
+                    "owner_absence_confirmed=%s",
+                    decision.reason,
+                    decision.owner_absence_confirmed,
                 )
             except Exception:
                 LOGGER.exception("Pocket 3 native gimbal recenter failed")
