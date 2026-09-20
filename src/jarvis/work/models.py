@@ -172,12 +172,11 @@ class WorkDelivery:
             and self.next_attempt_at is not None
         ):
             raise ValueError("delivered notification cannot have a next attempt")
-        if self.next_attempt_at is not None:
-            if (
-                self.next_attempt_at.tzinfo is None
-                or self.next_attempt_at.utcoffset() is None
-            ):
-                raise ValueError("delivery next_attempt_at must be timezone-aware")
+        if self.next_attempt_at is not None and (
+            self.next_attempt_at.tzinfo is None
+            or self.next_attempt_at.utcoffset() is None
+        ):
+            raise ValueError("delivery next_attempt_at must be timezone-aware")
 
     def retry_after(self, seconds: float, *, reason: str) -> WorkDelivery:
         if self.state is WorkDeliveryState.DELIVERED:
