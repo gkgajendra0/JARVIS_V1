@@ -38,7 +38,7 @@ Code Quality run #3929:
 - Windows DPAPI — PASS
 - Windows Hello helper — PASS
 
-The final documentation-only descendant must also pass exact-head CI before merge.
+The final reconciliation descendant must also pass exact-head CI before merge.
 
 ## Corrections made during acceptance
 

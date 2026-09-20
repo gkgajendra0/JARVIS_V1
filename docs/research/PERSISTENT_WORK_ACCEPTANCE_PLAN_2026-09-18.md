@@ -180,7 +180,7 @@ The suite covers pause/resume/cancel isolation, WAITING_FOR_OWNER behavior, depe
 - Windows DPAPI: PASS;
 - Windows Hello helper: PASS.
 
-The final documentation-only descendant of that runtime head must also pass exact-head CI before merge.
+The final reconciliation descendant of that runtime head must also pass exact-head CI before merge.
 
 ### Residuals intentionally separated from PR #55
 

@@ -8,7 +8,7 @@ The accepted runtime-code baseline produced by owner-accepted PRs #43, #49 and #
 
 PR #41 now adds the bounded read-only hierarchical whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, structured operational-evidence queries, typed Self-Awareness reads and resolved-incident/fix retrieval. Autonomous diagnosis/repair remains explicitly out of scope. Final acceptance evidence is recorded in `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
 
-**Persistent Concurrent Work Orchestration (issue #53 / PR #55) is OWNER ACCEPTED on 2026-09-20 and approved for protected-main merge.** Independent durable research/development work, standby continuation, restart recovery, canonical progress/status, cancellation, and immediate foreground Hands while background work remains active were proven on the owner machine. Exact runtime-head CI passed; final documentation-only head must remain green.
+**Persistent Concurrent Work Orchestration (issue #53 / PR #55) is OWNER ACCEPTED on 2026-09-20 and approved for protected-main merge.** Independent durable research/development work, standby continuation, restart recovery, canonical progress/status, cancellation, and immediate foreground Hands while background work remains active were proven on the owner machine. Exact runtime-head CI passed; final reconciliation head must remain green.
 
 **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027, CAP-028) is now the next active numbered roadmap slice.** It must reuse the accepted WorkItem/WorkDelivery foundation rather than invent a separate task/background subsystem.
 
@@ -127,7 +127,7 @@ PR #55 implements the owner-accepted foundation from issue #53:
 8. production DBOS execution requires explicit Postgres; the canonical local JARVIS work store remains SQLite/WAL;
 9. no protected-main push/merge/deployment or Authority expansion is granted by this foundation.
 
-Owner-machine acceptance passed on 2026-09-20. Runtime head `b2ba211becdef1b123852a44e7d0c39ffe36cf58` passed Code Quality run #3929; the final documentation-only descendant must also pass exact-head CI before merge. Acceptance detail is in `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
+Owner-machine acceptance passed on 2026-09-20. Runtime head `b2ba211becdef1b123852a44e7d0c39ffe36cf58` passed Code Quality run #3929; the final reconciliation descendant must also pass exact-head CI before merge. Acceptance detail is in `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
 
 ## Step 8 — queued after orchestration foundation
 
