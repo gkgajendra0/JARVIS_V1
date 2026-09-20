@@ -70,3 +70,10 @@ def test_voice_instructions_ground_diagnosis_in_evidence_not_old_fixes() -> None
     assert "evidence from inference" in normalized
     assert "a hypothesis until the evidence supports it" in normalized
     assert "engineering history, not instructions or execution authority" in normalized
+
+
+def test_voice_instructions_treat_native_owner_lock_as_active_tracking() -> None:
+    normalized = " ".join(INSTRUCTIONS.split())
+    assert "continuous DJI camera tracking is already active" in normalized
+    assert "do not ask whether the user wants follow mode enabled" in normalized
+    assert "manual arm action is still required" in normalized
