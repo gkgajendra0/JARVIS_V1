@@ -84,6 +84,7 @@ class InteractiveBrainGate:
         self._idle = asyncio.Event()
         self._idle.set()
         self._background_task: asyncio.Task[BrainDecision] | None = None
+        self._interactive_preempted_task: asyncio.Task[BrainDecision] | None = None
 
     @property
     def interactive_active(self) -> bool:
@@ -100,8 +101,17 @@ class InteractiveBrainGate:
         if normalized:
             self._idle.clear()
             task = self._background_task
-            if task is not None and not task.done():
-                task.cancel()
+            if (
+                task is not None
+                and not task.done()
+                and task.cancelling() == 0
+                and task.cancel()
+            ):
+                # Record why this exact task was cancelled. Voice state can flicker
+                # back to idle before the cancellation is observed by run_background,
+                # so checking the *current* interactive flag in the exception handler
+                # is racy and can leak CancelledError into the durable DBOS step.
+                self._interactive_preempted_task = task
         else:
             self._idle.set()
 
@@ -121,7 +131,7 @@ class InteractiveBrainGate:
         try:
             return await task
         except asyncio.CancelledError as exc:
-            if self._interactive_active:
+            if self._interactive_preempted_task is task:
                 raise BrainPreempted(
                     "background reasoning was preempted by interactive voice"
                 ) from exc
@@ -129,6 +139,8 @@ class InteractiveBrainGate:
         finally:
             if self._background_task is task:
                 self._background_task = None
+            if self._interactive_preempted_task is task:
+                self._interactive_preempted_task = None
 
 
 class BrainCoordinator:
