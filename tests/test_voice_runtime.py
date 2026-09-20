@@ -487,7 +487,6 @@ async def test_update_approval_uses_scripted_speech_then_real_spoken_yes() -> No
     assert session.closed is True
 
 
-
 @pytest.mark.asyncio
 async def test_startup_greeting_timeout_does_not_block_runtime(
     monkeypatch: pytest.MonkeyPatch,
