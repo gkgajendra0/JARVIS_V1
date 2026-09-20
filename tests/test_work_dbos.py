@@ -188,3 +188,10 @@ def test_dbos_control_messages_use_idempotency_keys(
         ("work_control", "resume", "resume:4"),
         ("work_control", "yes", "owner-input:7"),
     ]
+
+
+def test_dbos_backend_rejects_invalid_reasoning_budget() -> None:
+    from jarvis.work.dbos_backend import DBOSWorkExecutionBackend
+
+    with pytest.raises(ValueError, match="max reasoning cycles"):
+        DBOSWorkExecutionBackend(max_reasoning_cycles=0)
