@@ -74,7 +74,7 @@ def test_research_estimate_exposes_provider_blocker_and_low_confidence(
     assert estimate.eta_high_seconds is not None
     assert estimate.eta_high_seconds >= estimate.eta_low_seconds
     assert estimate.eta_confidence == "low"
-    assert "Provider pressure" in estimate.eta_reason
+    assert "provider_pressure" in estimate.eta_basis
 
 
 def test_research_progress_advances_after_successful_web_evidence(
@@ -90,8 +90,9 @@ def test_research_progress_advances_after_successful_web_evidence(
     estimate = estimate_work(store, store.require(item.work_id))
 
     assert estimate.progress_percent == 70
-    assert "synthesis" in estimate.progress_summary
-    assert "finalize" in estimate.remaining_summary
+    assert estimate.milestone == "evidence_gathered"
+    assert "synthesis" in estimate.remaining_work
+    assert "finalization" in estimate.remaining_work
 
 
 def test_development_progress_follows_verified_milestones(tmp_path: Path) -> None:
@@ -153,7 +154,7 @@ def test_completed_work_is_exactly_100_percent_with_zero_eta(tmp_path: Path) -> 
 
     assert estimate.progress_percent == 100
     assert estimate.progress_is_approximate is False
-    assert estimate.remaining_summary == "No work remains."
+    assert estimate.remaining_work == ()
     assert estimate.eta_low_seconds == 0
     assert estimate.eta_high_seconds == 0
     assert estimate.eta_confidence == "high"

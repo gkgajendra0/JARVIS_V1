@@ -1,7 +1,8 @@
 """JARVIS-owned approximate progress and ETA for persistent WorkItems.
 
 Estimates are derived from canonical WorkItem/WorkStep truth. They deliberately do not
-ask the model provider to guess progress or completion time.
+ask the model provider to guess progress or completion time, and they expose semantic
+facts rather than pre-written owner-facing sentences.
 """
 
 from __future__ import annotations
@@ -25,13 +26,14 @@ _MAX_HISTORY_ITEMS = 10
 class WorkEstimate:
     progress_percent: int
     progress_is_approximate: bool
-    progress_summary: str
-    remaining_summary: str
+    milestone: str
+    completed_work: tuple[str, ...]
+    remaining_work: tuple[str, ...]
     blocked_reason: str | None
     eta_low_seconds: int | None
     eta_high_seconds: int | None
     eta_confidence: str
-    eta_reason: str
+    eta_basis: tuple[str, ...]
     estimate_updated_at: str
 
 
@@ -42,7 +44,7 @@ def _finished_successfully(step: WorkStep, kind: str) -> bool:
 def _research_progress(
     work: WorkItem,
     steps: tuple[WorkStep, ...],
-) -> tuple[int, str, str]:
+) -> tuple[int, str, tuple[str, ...], tuple[str, ...]]:
     successful_research = any(
         _finished_successfully(step, "research_web")
         and bool(step.observation.get("ok"))
@@ -56,38 +58,49 @@ def _research_progress(
     if successful_research:
         return (
             70,
-            "Current web evidence has been gathered; synthesis and final verification remain.",
-            "Synthesize and verify the gathered evidence, then finalize the summary.",
+            "evidence_gathered",
+            ("evidence_gathering",),
+            ("synthesis", "verification", "finalization"),
         )
     if current is not None and current.kind == "research_web":
         return (
             35,
-            "JARVIS is gathering current web evidence.",
-            "Finish evidence gathering, synthesize the findings, verify them, and finalize.",
+            "gathering_evidence",
+            ("research_planning",),
+            ("evidence_gathering", "synthesis", "verification", "finalization"),
         )
     if any(step.kind == "provider_pressure" for step in steps):
         return (
             20,
-            "The research is accepted but provider pressure is delaying evidence gathering.",
-            "Gather current evidence, synthesize the findings, verify them, and finalize.",
+            "provider_pressure_before_evidence",
+            ("work_accepted",),
+            ("evidence_gathering", "synthesis", "verification", "finalization"),
         )
     if work.state is WorkState.QUEUED:
         return (
             5,
-            "The research request is durably queued.",
-            "Plan the research, gather current evidence, synthesize, verify, and finalize.",
+            "queued",
+            (),
+            (
+                "research_planning",
+                "evidence_gathering",
+                "synthesis",
+                "verification",
+                "finalization",
+            ),
         )
     return (
         15,
-        "The research is active and preparing its evidence-gathering work.",
-        "Gather current evidence, synthesize the findings, verify them, and finalize.",
+        "preparing_evidence",
+        ("work_accepted",),
+        ("evidence_gathering", "synthesis", "verification", "finalization"),
     )
 
 
 def _development_progress(
     work: WorkItem,
     steps: tuple[WorkStep, ...],
-) -> tuple[int, str, str]:
+) -> tuple[int, str, tuple[str, ...], tuple[str, ...]]:
     completed = [
         (index, step)
         for index, step in enumerate(steps)
@@ -143,56 +156,105 @@ def _development_progress(
     if commit_index >= 0:
         return (
             95,
-            "The isolated change is committed cleanly and is nearly ready for review.",
-            "Finalize the WorkItem and prepare the owner-facing review result.",
+            "isolated_commit_ready",
+            (
+                "workspace_preparation",
+                "repository_inspection",
+                "implementation",
+                "sandbox_tests",
+                "diff_review",
+                "isolated_commit",
+            ),
+            ("finalization",),
         )
     if diff_index >= 0:
         return (
             85,
-            "Passing sandbox tests and the final diff have been verified.",
-            "Create the clean isolated review commit, then finalize the result.",
+            "diff_verified",
+            (
+                "workspace_preparation",
+                "repository_inspection",
+                "implementation",
+                "sandbox_tests",
+                "diff_review",
+            ),
+            ("isolated_commit", "finalization"),
         )
     if test_index >= 0:
         return (
             70,
-            "The latest edit has passed the required sandboxed tests.",
-            "Inspect the final diff, create a clean isolated commit, and finalize.",
+            "tests_passed",
+            (
+                "workspace_preparation",
+                "repository_inspection",
+                "implementation",
+                "sandbox_tests",
+            ),
+            ("diff_review", "isolated_commit", "finalization"),
         )
     if write_index >= 0:
         return (
             50,
-            "The source change is staged in the isolated worktree.",
-            "Run sandboxed tests, inspect the final diff, commit cleanly, and finalize.",
+            "implementation_written",
+            ("workspace_preparation", "repository_inspection", "implementation"),
+            ("sandbox_tests", "diff_review", "isolated_commit", "finalization"),
         )
     if inspect_index >= 0:
         return (
             25,
-            "The isolated repository context has been inspected.",
-            "Implement the change, test it in Docker, inspect the diff, and commit it.",
+            "repository_inspected",
+            ("workspace_preparation", "repository_inspection"),
+            ("implementation", "sandbox_tests", "diff_review", "isolated_commit", "finalization"),
         )
     if prepare_index >= 0:
         return (
             10,
-            "The isolated Git worktree is prepared.",
-            "Inspect the repository, implement the change, test, review the diff, and commit.",
+            "workspace_prepared",
+            ("workspace_preparation",),
+            (
+                "repository_inspection",
+                "implementation",
+                "sandbox_tests",
+                "diff_review",
+                "isolated_commit",
+                "finalization",
+            ),
         )
     if work.state is WorkState.QUEUED:
         return (
             5,
-            "The development request is durably queued.",
-            "Prepare an isolated worktree, inspect, implement, test, review, and commit.",
+            "queued",
+            (),
+            (
+                "workspace_preparation",
+                "repository_inspection",
+                "implementation",
+                "sandbox_tests",
+                "diff_review",
+                "isolated_commit",
+                "finalization",
+            ),
         )
     return (
         8,
-        "The development task is active and preparing its isolated workspace.",
-        "Prepare and inspect the worktree, implement, test, review, and commit.",
+        "preparing_workspace",
+        ("work_accepted",),
+        (
+            "workspace_preparation",
+            "repository_inspection",
+            "implementation",
+            "sandbox_tests",
+            "diff_review",
+            "isolated_commit",
+            "finalization",
+        ),
     )
 
 
 def _generic_progress(
     work: WorkItem,
     steps: tuple[WorkStep, ...],
-) -> tuple[int, str, str]:
+) -> tuple[int, str, tuple[str, ...], tuple[str, ...]]:
     completed = sum(
         1
         for step in steps
@@ -202,10 +264,12 @@ def _generic_progress(
     progress = min(90, 10 + completed * 15)
     if work.state is WorkState.QUEUED:
         progress = 5
+    completed_work = ("recorded_steps",) if completed else ()
     return (
         progress,
-        "JARVIS is advancing the durable task through its recorded work steps.",
-        "Continue the remaining recorded work steps and finalize the result.",
+        "queued" if work.state is WorkState.QUEUED else "advancing_recorded_steps",
+        completed_work,
+        ("remaining_recorded_steps", "finalization"),
     )
 
 
@@ -260,32 +324,17 @@ def _eta(
     *,
     progress: int,
     now: datetime,
-) -> tuple[int | None, int | None, str, str]:
+) -> tuple[int | None, int | None, str, tuple[str, ...]]:
     if work.state is WorkState.COMPLETED:
-        return 0, 0, "high", "The WorkItem is complete."
+        return 0, 0, "high", ("terminal_completed",)
     if work.state in {WorkState.FAILED, WorkState.CANCELLED}:
-        return (
-            None,
-            None,
-            "unavailable",
-            "Terminal unsuccessful work has no completion ETA.",
-        )
+        return None, None, "unavailable", ("terminal_unsuccessful",)
     if work.state is WorkState.PAUSED:
-        return None, None, "unavailable", "The task is paused by the owner."
+        return None, None, "unavailable", ("owner_paused",)
     if work.state is WorkState.WAITING_FOR_OWNER:
-        return (
-            None,
-            None,
-            "unavailable",
-            "Completion time depends on the owner's next decision or input.",
-        )
+        return None, None, "unavailable", ("owner_input_required",)
     if work.state is WorkState.WAITING_DEPENDENCY:
-        return (
-            None,
-            None,
-            "unavailable",
-            "Completion time depends on an unfinished prerequisite task.",
-        )
+        return None, None, "unavailable", ("dependency_incomplete",)
 
     baseline = _BASELINE_TOTAL_SECONDS.get(work.work_type, _DEFAULT_BASELINE_SECONDS)
     elapsed = max(1.0, (now - work.created_at).total_seconds())
@@ -325,17 +374,12 @@ def _eta(
 
     low = _round_seconds(remaining * low_factor)
     high = max(low, _round_seconds(remaining * high_factor))
-    history_phrase = (
-        f" and {history_count} similar completed task(s)" if history_count else ""
-    )
-    reason = (
-        "Based on canonical milestone progress, elapsed time"
-        f"{history_phrase}. "
-        "Provider pressure is currently reducing ETA confidence."
-        if provider_blocked
-        else (f"Based on canonical milestone progress, elapsed time{history_phrase}.")
-    )
-    return low, high, confidence, reason
+    basis = ["milestone_progress", "elapsed_time"]
+    if history_count:
+        basis.append(f"history_samples:{history_count}")
+    if provider_blocked:
+        basis.append("provider_pressure")
+    return low, high, confidence, tuple(basis)
 
 
 def estimate_work(
@@ -344,34 +388,33 @@ def estimate_work(
     *,
     now: datetime | None = None,
 ) -> WorkEstimate:
-    """Compute a provider-neutral approximate progress/ETA snapshot."""
+    """Compute a provider-neutral structured progress/ETA snapshot."""
 
     observed_now = now or datetime.now(UTC)
     steps = store.list_steps(work.work_id)
 
     if work.state is WorkState.COMPLETED:
         progress = 100
-        progress_summary = "The WorkItem has completed successfully."
-        remaining_summary = "No work remains."
+        milestone = "completed"
+        completed_work = ("all_work",)
+        remaining_work: tuple[str, ...] = ()
         approximate = False
     elif work.state in {WorkState.FAILED, WorkState.CANCELLED}:
-        progress, progress_summary, remaining_summary = _generic_progress(work, steps)
-        progress_summary = (
-            f"The WorkItem ended in state {work.state.value} after partial progress."
-        )
-        remaining_summary = "No completion ETA is available for this terminal state."
+        progress, _, completed_work, _ = _generic_progress(work, steps)
+        milestone = work.state.value
+        remaining_work = ()
         approximate = True
     else:
         if work.work_type is WorkType.RESEARCH:
-            progress, progress_summary, remaining_summary = _research_progress(
+            progress, milestone, completed_work, remaining_work = _research_progress(
                 work, steps
             )
         elif work.work_type is WorkType.DEVELOPMENT:
-            progress, progress_summary, remaining_summary = _development_progress(
+            progress, milestone, completed_work, remaining_work = _development_progress(
                 work, steps
             )
         else:
-            progress, progress_summary, remaining_summary = _generic_progress(
+            progress, milestone, completed_work, remaining_work = _generic_progress(
                 work, steps
             )
         approximate = True
@@ -389,7 +432,7 @@ def estimate_work(
         }
         else None
     )
-    eta_low, eta_high, confidence, eta_reason = _eta(
+    eta_low, eta_high, confidence, eta_basis = _eta(
         store,
         work,
         steps,
@@ -399,12 +442,13 @@ def estimate_work(
     return WorkEstimate(
         progress_percent=progress,
         progress_is_approximate=approximate,
-        progress_summary=progress_summary,
-        remaining_summary=remaining_summary,
+        milestone=milestone,
+        completed_work=completed_work,
+        remaining_work=remaining_work,
         blocked_reason=blocked_reason,
         eta_low_seconds=eta_low,
         eta_high_seconds=eta_high,
         eta_confidence=confidence,
-        eta_reason=eta_reason,
+        eta_basis=eta_basis,
         estimate_updated_at=observed_now.isoformat(),
     )

@@ -31,13 +31,14 @@ def _public_work(item: WorkItem, runtime: WorkRuntime) -> dict[str, object]:
         "completion_notification_expected": completion_notification_expected,
         "progress_percent": estimate.progress_percent,
         "progress_is_approximate": estimate.progress_is_approximate,
-        "progress_summary": estimate.progress_summary,
-        "remaining_summary": estimate.remaining_summary,
+        "milestone": estimate.milestone,
+        "completed_work": list(estimate.completed_work),
+        "remaining_work": list(estimate.remaining_work),
         "blocked_reason": estimate.blocked_reason,
         "eta_low_seconds": estimate.eta_low_seconds,
         "eta_high_seconds": estimate.eta_high_seconds,
         "eta_confidence": estimate.eta_confidence,
-        "eta_reason": estimate.eta_reason,
+        "eta_basis": list(estimate.eta_basis),
         "estimate_updated_at": estimate.estimate_updated_at,
     }
 
@@ -151,8 +152,10 @@ class WorkAgentTools:
         provider conversation history. Report progress_percent as approximate, use the ETA
         range/confidence rather than inventing an exact completion time. Treat the returned
         fields as canonical facts, but phrase the answer naturally in JARVIS's own words.
-        Preserve the approximate qualifier, specific blocker, remaining work, ETA confidence,
-        and completion-notification expectation instead of weakening or omitting them.
+        milestone/completed_work/remaining_work are semantic identifiers, not sentences to
+        quote. Preserve the approximate qualifier, specific blocker, remaining work, ETA
+        confidence, and completion-notification expectation instead of weakening or omitting
+        them.
         """
         del context
         items = self._runtime.orchestrator.list_active(limit=50)
@@ -189,8 +192,9 @@ class WorkAgentTools:
         """Read canonical state and JARVIS-owned progress/ETA for one WorkItem.
 
         Treat progress_percent as approximate unless the task is terminal. The returned
-        fields are canonical facts, not a script. Speak naturally while preserving the
-        specific blocked_reason, remaining work, ETA range/confidence, and completion
+        fields are canonical facts, not a script. milestone/completed_work/remaining_work
+        are semantic identifiers; turn them into natural speech rather than reading them
+        literally. Preserve the specific blocked_reason, ETA range/confidence, and completion
         notification expectation. Never invent a different completion time.
         """
         del context
