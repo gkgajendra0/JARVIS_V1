@@ -278,6 +278,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 await self._get_scripted_speech().speak(
                     output,
                     self._work_delivery_text(delivery.kind, delivery.message),
+                    max_provider_retries=0,
                 )
             except asyncio.CancelledError:
                 raise
