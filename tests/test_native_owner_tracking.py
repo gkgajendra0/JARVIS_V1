@@ -169,6 +169,21 @@ def test_observer_targets_confirmed_owner_and_reacquires_after_native_loss() -> 
     assert client.closed is True
 
 
+def non_live_owner(
+    track_id: int,
+    observed_at: float,
+) -> OwnerLivenessBindingAssessment:
+    return OwnerLivenessBindingAssessment(
+        session_id="session-1",
+        visual_track_id=track_id,
+        state=OwnerLivenessBindingState.INSUFFICIENT,
+        identity_state=OwnerIdentityState.INSUFFICIENT,
+        liveness_state=PassiveLivenessState.INSUFFICIENT,
+        observed_at_monotonic=observed_at,
+        reason_codes=("test_temporarily_insufficient",),
+    )
+
+
 def test_observer_holds_authorized_track_through_transient_biometric_gap() -> None:
     owner = OwnerContextState()
     client = FakeNativeClient()
@@ -207,8 +222,10 @@ def test_observer_holds_authorized_track_through_transient_biometric_gap() -> No
     )
     assert observer.controller.state is ReacquisitionState.LOCKED
 
-    # Face/head evidence can age out while the exact already-authorized tracker ID
-    # remains alive inside the tracker's bounded lost-track window.
+    # The biometric pipeline can publish a non-live/insufficient assessment while
+    # the exact already-authorized visual tracker ID remains alive. Continuity must
+    # come from the stored authorization, not from the current assessment state.
+    owner.publish(non_live_owner(track_id=7, observed_at=12.9))
     client.native_status = NativeTrackingStatus(
         connected=True,
         active=True,
@@ -220,9 +237,11 @@ def test_observer_holds_authorized_track_through_transient_biometric_gap() -> No
         snapshot(3, 13.0, alive_track_ids=(7,)),
     )
     assert observer.controller.state is ReacquisitionState.LOCKED
+    assert observer._authorized_owner_track_id == 7
     assert client.clears == 0
     assert client.recenters == 0
 
+    owner.publish(non_live_owner(track_id=7, observed_at=15.9))
     client.native_status = NativeTrackingStatus(
         connected=True,
         active=True,
