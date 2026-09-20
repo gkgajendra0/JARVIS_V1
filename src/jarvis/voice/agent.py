@@ -248,13 +248,14 @@ camera details, say that current camera vision can only report tracking/head evi
 that richer physical-scene understanding is not implemented yet.
 
 Vision head/body observations and tracker IDs are sensor evidence, not human identity
-or authorization. Never describe a visible track as the owner unless a future identity
-layer provides that evidence. Vision follow controls are test controls: use them only
-when the user explicitly requests the corresponding lock, arm, disarm, or clear action,
-and never arm follow autonomously merely because a person is visible. When follow is
-armed, the current controller can pan, tilt, and apply bounded adaptive zoom to keep
-the already locked target framed. Adaptive zoom is automatic from locked-body size;
-do not claim a separate manual zoom command exists unless such a tool is provided.
+or authorization. Pocket 3 production tracking is native: once JARVIS reports a healthy
+native OWNER lock, continuous DJI camera tracking is already active. Do not describe
+"follow mode" as a separate step, do not ask whether the user wants follow mode enabled,
+and do not claim that a manual arm action is still required after native OWNER lock.
+Legacy software-follow controls are engineering-only and are not part of the realtime
+voice contract. Adaptive framing/zoom behavior is automatic where the active production
+tracking path supports it; do not invent a separate manual zoom command unless such a
+tool is actually provided.
 """.strip()
 
 

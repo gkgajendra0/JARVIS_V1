@@ -1,4 +1,4 @@
-"""Voice-agent tools for inspecting and explicitly controlling local vision tests."""
+"""Voice-agent tools for inspecting local physical-camera vision state."""
 
 from __future__ import annotations
 
@@ -15,7 +15,10 @@ class VisionAgentTools:
 
     @property
     def tools(self) -> list:
-        return [self.inspect_vision, self.control_vision_follow]
+        # Manual software-follow controls are intentionally not exposed to the
+        # realtime agent. Native Pocket 3 OWNER lock already owns continuous
+        # camera tracking in production.
+        return [self.inspect_vision]
 
     def _voice_report(self, *, event_limit: int) -> dict[str, object]:
         """Expose tracker truth without detector-candidate telemetry to the LLM."""
@@ -23,6 +26,10 @@ class VisionAgentTools:
         raw_status = report.get("status", {})
         status = dict(raw_status) if isinstance(raw_status, dict) else {}
         status.pop("detector_persons", None)
+        # Legacy software-follow arming is an engineering-only state. Exposing
+        # armed=False makes the realtime model think native OWNER lock still
+        # needs a second "follow mode" step.
+        status.pop("armed", None)
 
         safe_events: list[dict[str, object]] = []
         raw_events = report.get("recent_events", [])
@@ -57,7 +64,7 @@ class VisionAgentTools:
         are currently visible to tracking. Detector candidate counts are intentionally
         hidden because multiple low-confidence boxes can belong to the same person.
         This tool does not expose image pixels or general scene understanding. Use it
-        for tracked-person count, head-detection count, target/follow state, current
+        for tracked-person count, head-detection count, target visibility, current
         framing source, adaptive zoom command state, and recent tracking transitions.
         `framing_source` may be `head`, `head_hold`, `body`, or null; do not describe
         a current head detection when the status says `head_hold` or `body`. Do not
@@ -71,7 +78,6 @@ class VisionAgentTools:
                 "person_track_count",
                 "head_detection_count",
                 "target_visibility",
-                "follow_armed_state",
                 "framing_source",
                 "adaptive_target_zoom",
                 "recent_tracking_transitions",
