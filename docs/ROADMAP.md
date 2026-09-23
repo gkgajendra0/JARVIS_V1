@@ -41,7 +41,7 @@ The Pocket 3 visual sensor/PTZ foundation was deliberately inserted before Step 
 
 PR #41 is owner-accepted and merged to protected `main` (2026-09-18) as a bounded read-only foundation: hierarchical whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, redacted local operational evidence, incident engineering memory and typed governed Self-Awareness reads. Autonomous diagnosis/repair remains later work.
 
-Detailed acceptance: `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
+Accepted status and merge history are summarized in `PROJECT_STATE.md`.
 
 ### Persistent Concurrent Work Orchestration foundation
 
@@ -89,7 +89,7 @@ After Step 7, owner-approved work intentionally pulled forward **bounded foundat
 
 These foundations are current production architecture. Steps 9, 10 and 12 remain roadmap slices because their full product requirements and completion boundaries have not yet been executed as formal steps.
 
-Detailed evidence: `docs/research/POST_STEP_7_INTEGRATION_ACCEPTANCE.md`.
+Accepted production status and superseded/rejected history are summarized in `PROJECT_STATE.md`.
 
 ## Bounded/deferred rule
 

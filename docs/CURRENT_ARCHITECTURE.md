@@ -6,7 +6,7 @@
 
 The latest owner-machine accepted Self-Repair runtime baseline is `6a0ba73f46f68d9d0c2e8fa2c20c5fccaed8378a`; later documentation-only reconciliation commits may advance protected `main` without changing that runtime behavior.
 
-This file describes architecture that actually exists on protected `main`. Historical proposals and experiments belong in `docs/research/`; active acceptance work belongs in `CURRENT_PLAN.md`.
+This file describes architecture that actually exists on protected `main`. Historical proposals and experiments belong to Git history; active work belongs in `CURRENT_PLAN.md`, and accepted/deferred/superseded status belongs in `PROJECT_STATE.md`.
 
 ---
 
@@ -193,7 +193,7 @@ Owner-machine acceptance proved natural architecture/component questions, provid
 
 A long synchronous Gemini Live multi-tool interaction originally exposed the need for durable concurrent work/result delivery. That limitation was resolved structurally by the later owner-accepted Persistent Concurrent Work Orchestration foundation rather than hidden inside Self-Awareness with special-case vocabulary or timeout behavior.
 
-Detailed acceptance: `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
+Acceptance/status history is summarized in `PROJECT_STATE.md`.
 
 ---
 
@@ -249,7 +249,7 @@ Owner-machine acceptance on 2026-09-20 proved independent research/development W
 
 WorkDelivery speech now persists provider-directed retry/backoff while preserving pending delivery truth, and Pocket 3 OWNER continuity has separate accepted handling for transient biometric/head evidence gaps. Neither condition is part of orchestration truth or runtime-liveness authorization.
 
-Detailed acceptance: `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
+Acceptance/status history is summarized in `PROJECT_STATE.md`.
 
 ---
 
@@ -287,8 +287,7 @@ execution surfaces.
 The complete forward program is defined in
 `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
 
-Detailed acceptance:
-`docs/research/SELF_REPAIR_PHASE5_ACCEPTANCE_2026-09-23.md`.
+Final acceptance/status history is summarized in `PROJECT_STATE.md`.
 
 ## Known residuals / deliberate deferrals
 
@@ -306,8 +305,7 @@ Not currently claimed as solved:
 - calendar/email communication, proactive/event-driven automation, plugin lifecycle and world-awareness/HUD end state;
 - AI-assisted diagnostics, RepairKnowledge execution promotion, sandboxed source repair, Repair Curriculum and governed self-improvement beyond the accepted deterministic Self-Repair foundation.
 
-Detailed accepted/deferred/superseded/rejected history: `docs/research/POST_STEP_7_INTEGRATION_ACCEPTANCE.md`.
-Repository-wide reconciliation evidence: `docs/research/PRODUCTION_RECONCILIATION_2026-09-18.md`.
+Repository-wide accepted/deferred/superseded/rejected truth is centralized in `PROJECT_STATE.md`.
 
 ---
 

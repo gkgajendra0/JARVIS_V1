@@ -9,15 +9,9 @@ Date established: 2026-09-23
 This document is the single planning source of truth for the long-term JARVIS
 Self-Repair, Self-Learning and governed Self-Evolution program.
 
-It consolidates and supersedes scattered sequencing descriptions in:
-
-- `docs/research/SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`;
-- `docs/research/SELF_REPAIR_FOUNDATION_RESEARCH_2026-09-20.md`;
-- `docs/decisions/ADR-019_SELF_REPAIR_FOUNDATION.md`;
-- `docs/research/SELF_REPAIR_PHASE5_ACCEPTANCE_2026-09-23.md`.
-
-Those documents remain valid historical research, architecture and acceptance
-evidence. This master plan owns the complete forward sequence.
+It consolidates the earlier Self-Repair sequence, research, ADR and acceptance work.
+Those detailed historical documents are preserved by Git history; this master plan
+owns the complete forward sequence in the current working tree.
 
 The deterministic R1/R2 production repair foundation is accepted on the owner
 machine. It is not the end of Self-Repair and does not complete roadmap Steps 18,
@@ -181,8 +175,7 @@ Current accepted properties include:
 - Windows venv process-tree fault handling and force cleanup;
 - fail-closed unknown/unregistered repair behavior.
 
-Owner-machine acceptance is recorded in
-`docs/research/SELF_REPAIR_PHASE5_ACCEPTANCE_2026-09-23.md`.
+Owner-machine acceptance and merge history are summarized in `PROJECT_STATE.md`; the detailed acceptance transcript remains available in Git history.
 
 ### Loop B — Repair Learning and Evolution Loop
 
