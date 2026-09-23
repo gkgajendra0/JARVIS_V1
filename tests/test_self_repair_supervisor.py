@@ -187,7 +187,6 @@ def test_provider_quota_does_not_match_runtime_restart_policy(tmp_path) -> None:
     store.close()
 
 
-
 def test_verified_recovery_resets_restart_budget_baseline(tmp_path) -> None:
     store, controller = _controller(
         tmp_path / "incidents.sqlite3",
