@@ -120,8 +120,8 @@ The Step-6 source-aware research slice remains bounded. PR #55 adds accepted dur
 
 | ID | Capability | Purpose | Step | Status |
 | --- | --- | --- | ---: | --- |
-| CAP-027 | Notes | Unified read/create/update/delete note lifecycle. | 8 | ACTIVE |
-| CAP-028 | Tasks, Reminders, Scheduling | Explicit future tasks, reminders, recurring checks and routines. | 8 | ACTIVE |
+| CAP-027 | Notes | Unified read/create/update/delete note lifecycle. | 8 | PLANNED |
+| CAP-028 | Tasks, Reminders, Scheduling | Explicit future tasks, reminders, recurring checks and routines. | 8 | PLANNED |
 | CAP-029 | Calendar | Read availability/events, later approved calendar writes. | 11 | PLANNED |
 | CAP-030 | Email and Communication | Search/read, draft/review, then explicitly approved sending. | 11 | PLANNED |
 | CAP-031 | Coding and Project Engineering | Repositories, code, tests, diffs, validation, approved development work. | 12 | PARTIAL |
