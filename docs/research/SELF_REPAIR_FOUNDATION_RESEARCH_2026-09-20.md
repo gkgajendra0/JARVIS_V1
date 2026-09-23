@@ -2,11 +2,15 @@
 
 ## Status
 
-**OWNER-APPROVED RESEARCH DIRECTION — REFINED WITH HERMES / ORNITH / NEMOTRON PATTERNS**
+**HISTORICAL RESEARCH BASIS — DETERMINISTIC FOUNDATION OWNER-ACCEPTED 2026-09-23**
 
-This document begins the bounded Self-Repair Foundation interlude approved in `SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`.
+This document is the research basis for the bounded Self-Repair Foundation interlude approved in `SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`.
 
-It does not complete roadmap Step 19 / CAP-046 and does not authorize autonomous self-modification.
+The deterministic R1/R2 foundation described here was implemented and owner-machine accepted on 2026-09-23. Final evidence is in `SELF_REPAIR_PHASE5_ACCEPTANCE_2026-09-23.md`.
+
+Forward sequencing is no longer owned by this research record. The authoritative continuation from RepairKnowledge through governed Self-Evolution is `../SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
+
+The accepted foundation does not complete roadmap Step 19 / CAP-046 and does not authorize autonomous self-modification.
 
 ## Research question
 
