@@ -225,7 +225,6 @@ def test_verified_recovery_resets_restart_budget_baseline(tmp_path) -> None:
     store.close()
 
 
-
 def test_liveness_failure_has_distinct_policy_and_incident(tmp_path) -> None:
     store = SqliteIncidentStore(tmp_path / "incidents.sqlite3")
     service = IncidentService(store)
