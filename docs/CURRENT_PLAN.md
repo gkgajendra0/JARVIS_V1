@@ -10,11 +10,11 @@ PR #41 now adds the bounded read-only hierarchical whole-JARVIS Self Model, dete
 
 **Persistent Concurrent Work Orchestration (issue #53 / PR #55) is OWNER ACCEPTED and merged to protected `main` on 2026-09-20 at `3980b212d657106abd45bfae119d2207551c409f`. Issue #53 is closed.** Independent durable research/development work, standby continuation, restart recovery, canonical progress/status, cancellation, and immediate foreground Hands while background work remains active were proven on the owner machine. Exact runtime-head CI passed, final reconciliation CI passed, and the production merge result is recorded below.
 
-**Owner-approved sequence change (2026-09-20): reliability cleanup issues #56 -> #57 -> #50 are complete; the bounded Self-Repair Foundation interlude is now active before formal Step 8 implementation.** This does not renumber the roadmap or mark Step 19 complete. Step 8 remains the next numbered product slice after the interlude. Detailed rationale and scope: `docs/research/SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`.
+**Self-Repair deterministic foundation is OWNER ACCEPTED and issue #65 is closed (2026-09-23).** Crash recovery, alive-but-unresponsive recovery, durable RepairAttempt evidence, restart budgets, startup readiness, liveness stabilization and Windows runtime-process-tree handling passed owner-machine acceptance. The complete forward Self-Repair -> Self-Learning -> Self-Evolution sequence is now owned by `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`. The active continuation is **Phase 2 RepairKnowledge Foundation**. Step 8 remains the next numbered product slice; this cross-cutting owner-approved program does not renumber the roadmap.
 
 ## Current Stage
 
-**STEPS 0–3 DONE — STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 BOUNDED COMPLETE — STEP 7 DONE — POST-STEP-7 HANDS / POCKET / PERFORMANCE / STABILITY / SAFETY INTERLUDE ACCEPTED — SELF-AWARENESS FOUNDATION OWNER ACCEPTED — PERSISTENT CONCURRENT WORK ORCHESTRATION OWNER ACCEPTED AND MERGED — RELIABILITY CLEANUP COMPLETE — SELF-REPAIR FOUNDATION INTERLUDE ACTIVE — STEP 8 REMAINS THE NEXT NUMBERED SLICE.**
+**STEPS 0–3 DONE — STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 BOUNDED COMPLETE — STEP 7 DONE — POST-STEP-7 HANDS / POCKET / PERFORMANCE / STABILITY / SAFETY INTERLUDE ACCEPTED — SELF-AWARENESS OWNER ACCEPTED — PERSISTENT CONCURRENT WORK ORCHESTRATION OWNER ACCEPTED — DETERMINISTIC SELF-REPAIR R1/R2 FOUNDATION OWNER ACCEPTED — SELF-REPAIR / SELF-EVOLUTION PROGRAM PHASE 2 (REPAIRKNOWLEDGE) NEXT — STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
 
 `PRODUCT.md` owns permanent product intent/status, `ROADMAP.md` owns sequence, `CURRENT_ARCHITECTURE.md` owns accepted running architecture, and `docs/research/` owns detailed evidence.
 
@@ -29,6 +29,7 @@ PR #41 now adds the bounded read-only hierarchical whole-JARVIS Self Model, dete
 - **Step 7:** governed capability discovery/runtime, approved-root local reads, isolated MarkItDown document conversion, canonical authority binding and production `inspect_local` are accepted.
 - **Self-Awareness Foundation (PR #41):** owner-accepted bounded whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, redacted rotating operational evidence, local incident engineering memory and typed governed read-only Self-Awareness tools. A long synchronous realtime multi-tool delay discovered during acceptance was resolved structurally by the later concurrent-work foundation; the measured Self-Awareness evidence read itself completed in ~47 ms.
 - **Persistent Concurrent Work Orchestration (PR #55):** owner-accepted durable WorkItems/steps/deliveries, DBOS recovery, single-brain interactive priority, bounded resources, natural structured progress/ETA, restart-safe control, deferred result delivery, background research, and isolated repository development. Owner-machine acceptance proved parallel research/development state, standby continuation, restart recovery, cancellation, and verified Calculator Hands execution while background work remained active.
+- **Deterministic Self-Repair Foundation (issue #65 / PRs #73–#86):** owner-accepted R1/R2 repair contracts, durable RepairAttempts, process-external crash/hang supervision, durable budgets/cooldowns, explicit startup readiness, authenticated liveness stabilization, provider-degradation separation, fault injection, and Windows runtime-process-tree handling. The final owner-machine hang attempt completed as `recovered` with six stabilization probes. This is a partial foundation for CAP-046, not completion of Step 19.
 
 Detailed acceptance: `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md` and `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
 
@@ -112,7 +113,7 @@ Full consolidated evidence and disposition history: `docs/research/POST_STEP_7_I
 | Workstation auto-lock experiment | **REJECTED / NOT PRODUCTION** | Explicitly excluded from accepted Pocket/performance recovery; OWNER absence affects tracking/recenter, not Windows locking. |
 | PR #37 | **SUPERSEDED AS STANDALONE** | Its canonical generation fix is retained in PR #38. |
 | Steps 9/10/12 | **PLANNED WITH PARTIAL FOUNDATIONS** | Hands pulled forward bounded foundations, not the complete future product slices. |
-| Steps 13–20 | **PLANNED** | Awareness, proactivity, extensibility, self-repair and self-improvement remain future governed work. |
+| Steps 13–20 | **PLANNED / PARTIAL FOUNDATIONS** | Self-Awareness and deterministic R1/R2 Self-Repair foundations already exist; full proactive, learning, repair and self-improvement roadmap slices remain future governed work. |
 
 ---
 
@@ -132,17 +133,36 @@ PR #55 implements the owner-accepted foundation from issue #53:
 
 Owner-machine acceptance passed on 2026-09-20. Runtime head `b2ba211becdef1b123852a44e7d0c39ffe36cf58` passed Code Quality run #3929, final PR head `a38b2e5dd3f1e4c31f08bd7efbcd0457617eee91` passed Code Quality run #3951, and PR #55 merged to protected `main` as `3980b212d657106abd45bfae119d2207551c409f`. Acceptance detail is in `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
 
-## Reliability cleanup + Self-Repair Foundation — queued before Step 8
+## Self-Repair and Self-Evolution program — active cross-cutting continuation
 
-Owner-approved sequence:
+The deterministic Self-Repair foundation is complete and owner accepted. The original
+bounded interlude has therefore ended.
 
-1. **#56 Pocket OWNER continuity — OWNER ACCEPTED / PR #61 MERGED** — exact already-authorized visual-track continuity now survives transient biometric/head gaps without weakening fresh verification for acquisition/reacquisition;
-2. **#57 durable WorkDelivery TTS backoff — OWNER ACCEPTED / PR #62 MERGED** — provider RetryInfo and durable bounded backoff now govern failed WorkDelivery speech without altering canonical completion truth;
-3. **#50 lifecycle/system speech resilience — OWNER ACCEPTED / PR #64 MERGED** — Gemini/JARVIS lifecycle speech remains primary while local deterministic speech is the bounded fallback;
-4. **Self-Repair Foundation interlude — ACTIVE / issue #65** — ADR-019 is owner-approved and refined with Hermes-style staged repair knowledge, Ornith-style repair curriculum, and Nemotron/NeMo-style model routing + verifiable training patterns while deterministic repair authority remains JARVIS-owned;
-5. only after the bounded Self-Repair Foundation is accepted, begin formal Step 8 requirements/research.
+The complete forward program is now defined only by
+`docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
 
-The Self-Repair interlude must reuse Self-Awareness, incidents, WorkItems/DBOS, isolated development worktrees, Docker pytest and repository governance. It must begin with deterministic repair contracts and an outer supervision boundary. AI-assisted diagnosis and sandboxed source repair come later; autonomous protected-main merge/deployment and self-evolution remain out of scope.
+Current sequence:
+
+1. **Phase 1 deterministic R1/R2 Self-Repair — DONE / OWNER ACCEPTED**;
+2. **Phase 2 RepairKnowledge Foundation — NEXT**;
+3. DiagnosticModelRouter;
+4. AI-assisted DIAGNOSTICS WorkItems;
+5. sandboxed source-repair candidates;
+6. governed deployment / production verification / rollback;
+7. closed-loop repair learning;
+8. Repair Curriculum;
+9. specialist model benchmarking when sufficient verified data exists;
+10. capability-gap / weakness detection;
+11. shadow self-improvement and baseline comparison;
+12. governed self-evolution.
+
+This program must reuse Self-Awareness, engineering incidents, WorkItems/DBOS,
+isolated development worktrees, sandboxed tests, canonical Authority, protected-main
+repository governance and the accepted external supervisor.
+
+RepairKnowledge and model reasoning remain separate from executable RepairPolicy
+authority. No phase inherits permission to silently merge/deploy, weaken
+Authority/CI/sandbox controls, expand permissions or self-declare verification.
 
 ## Step 8 — next numbered product slice after the interlude
 
@@ -159,6 +179,12 @@ Step 8 must reuse the durable WorkItem foundation while remaining research-first
 
 ## Immediate Next Action
 
-**BEGIN ISSUE #65 IMPLEMENTATION FROM OWNER-APPROVED ADR-019: DETERMINISTIC REPAIR MODELS/REGISTRY -> REPAIRATTEMPT PERSISTENCE -> EXTERNAL SUPERVISOR CRASH BUDGET/RESTART -> LIVENESS VERIFICATION.**
+**AFTER THIS DOCUMENTATION RECONCILIATION IS ACCEPTED, BEGIN PHASE 2 — REPAIRKNOWLEDGE FOUNDATION.**
 
-Then add staged RepairKnowledge and the provider-neutral DiagnosticModelRouter. AI diagnostics, synthetic Repair Curriculum and source repair remain later gated phases. Keep issue #63 separate: blocked-work status truth is not itself a Self-Repair restart trigger.
+Implementation must start from the master plan and stop at the Phase-2 exit criteria:
+canonical RepairKnowledge contracts, durable lifecycle/provenance, retrieval and
+proof that learned knowledge cannot execute or mutate RepairPolicy authority.
+
+Do not start DiagnosticModelRouter or source repair in the same implementation slice.
+Keep issue #63 separate: blocked-work status truth is not itself a Self-Repair
+restart trigger.

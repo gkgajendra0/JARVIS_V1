@@ -178,9 +178,12 @@ cleanup so a frozen interpreter cannot survive as an orphan.
 ### Final status
 
 Self-Repair Phase 5 / the deterministic R1/R2 foundation is accepted on the owner
-machine. Issue #65 may be closed.
+machine. Issue #65 was closed as completed on 2026-09-23.
+
+Forward RepairKnowledge, diagnostics, source-repair, learning and self-evolution
+sequencing is owned by `../SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
 
 This acceptance does not expand authority beyond the already documented registered
-R1/R2 repair boundary. Source mutation, autonomous PR creation, protected-main
-changes, Authority modification, and model-selected effectors remain outside this
+R1/R2 repair boundary. Source mutation, autonomous protected-main promotion,
+Authority modification, and model-selected live effectors remain outside this
 foundation.

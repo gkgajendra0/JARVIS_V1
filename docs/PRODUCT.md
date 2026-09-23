@@ -120,8 +120,8 @@ The Step-6 source-aware research slice remains bounded. PR #55 adds accepted dur
 
 | ID | Capability | Purpose | Step | Status |
 | --- | --- | --- | ---: | --- |
-| CAP-027 | Notes | Unified read/create/update/delete note lifecycle. | 8 | ACTIVE |
-| CAP-028 | Tasks, Reminders, Scheduling | Explicit future tasks, reminders, recurring checks and routines. | 8 | ACTIVE |
+| CAP-027 | Notes | Unified read/create/update/delete note lifecycle. | 8 | PLANNED |
+| CAP-028 | Tasks, Reminders, Scheduling | Explicit future tasks, reminders, recurring checks and routines. | 8 | PLANNED |
 | CAP-029 | Calendar | Read availability/events, later approved calendar writes. | 11 | PLANNED |
 | CAP-030 | Email and Communication | Search/read, draft/review, then explicitly approved sending. | 11 | PLANNED |
 | CAP-031 | Coding and Project Engineering | Repositories, code, tests, diffs, validation, approved development work. | 12 | PARTIAL |
@@ -160,11 +160,15 @@ CAP-041 is partial because PR #55 now provides accepted persistent concurrent Wo
 | CAP-043 | Outcome Learning | Learn useful routing/recommendation patterns from confirmed results. | 18 | PLANNED |
 | CAP-044 | Capability Gap Detection | Recognize missing abilities instead of hallucinating capability. | 18 | PLANNED |
 | CAP-045 | Governed Skill Creation | Propose, generate, validate, test, stage and approve new capabilities. | 18 | PLANNED |
-| CAP-046 | Self-Diagnostics and Repair | Diagnose, propose, sandbox/dry-run, backup, approve, apply, verify, rollback. | 19 | PLANNED |
+| CAP-046 | Self-Diagnostics and Repair | Diagnose, propose, sandbox/dry-run, backup, approve, apply, verify, rollback. | 19 | PARTIAL |
 | CAP-047 | Governed Self-Improvement | Research/propose upgrades without silently rewriting itself or expanding authority. | 20 | PLANNED |
 | CAP-048 | Local and Offline Survival | Preserve useful functionality during cloud/network/provider failure where practical. | 5 | BOUNDED |
 | CAP-049 | Provider and Model Replaceability | Keep speech/model/search/memory/browser providers replaceable. | all | BOUNDED |
 | CAP-050 | Development Health and Research-First Evolution | Tests, benchmarks, architecture checks, project health, research-first development. | all | ACTIVE |
+
+CAP-046 is partial because the deterministic R1/R2 production Self-Repair foundation is owner accepted: registered repair policies, durable RepairAttempts, external crash/hang supervision, budgets/cooldowns, startup readiness, authenticated liveness verification and Windows process-tree recovery are production proven. RepairKnowledge, AI-assisted diagnostics, sandboxed source repair, closed-loop repair learning and the later self-evolution layers remain incomplete.
+
+CAP-047 remains planned. No current capability may silently rewrite protected main, weaken Authority/governance, expand permissions or self-declare an improvement successful.
 
 CAP-048 is bounded because truthful local failure survival exists but full offline conversation does not. CAP-049 is bounded because major provider boundaries are replaceable while complete replaceability across future capabilities remains ongoing.
 
@@ -180,6 +184,7 @@ The user should be able to understand what JARVIS knows, what it inferred, what 
 - `ROADMAP.md` — sequence.
 - `CURRENT_PLAN.md` — active slice and work disposition.
 - `CURRENT_ARCHITECTURE.md` — accepted running architecture only.
+- `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — authoritative staged program plan for Self-Repair, Repair Learning and governed Self-Evolution.
 - `QUALITY_GATES.md` — universal completion/validation rules.
 - `LEGACY_REQUIREMENTS_MAP.md` — one-time old-JARVIS migration reference.
 - `docs/research/` — research, experiments, benchmarks and acceptance evidence.

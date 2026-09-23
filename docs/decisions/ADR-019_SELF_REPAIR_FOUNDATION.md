@@ -2,17 +2,19 @@
 
 ## Status
 
-**OWNER-APPROVED ARCHITECTURE — REFINED 2026-09-23; IMPLEMENTATION MAY BEGIN**
+**OWNER-ACCEPTED FOUNDATION — IMPLEMENTED AND OWNER-MACHINE ACCEPTED 2026-09-23**
 
 Date: 2026-09-20
 Refined: 2026-09-23
 
 Related:
-- issue #65
+- issue #65 — closed / completed
 - `docs/research/SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`
 - `docs/research/SELF_REPAIR_FOUNDATION_RESEARCH_2026-09-20.md`
+- `docs/research/SELF_REPAIR_PHASE5_ACCEPTANCE_2026-09-23.md`
+- `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`
 
-This ADR defines the first bounded Self-Repair Foundation interlude. It does not complete roadmap Step 19 / CAP-046.
+This ADR defines the accepted deterministic R1/R2 production Self-Repair foundation. It does not complete roadmap Step 19 / CAP-046. The complete forward RepairKnowledge -> diagnostics -> source-repair -> learning -> self-evolution sequence is owned by `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
 
 ## Context
 
@@ -192,6 +194,30 @@ Initial flow ends at a candidate commit/PR for owner review.
 
 Automatic protected-main merge/deploy, Authority changes, CI/ruleset changes, sandbox weakening and permission expansion remain forbidden.
 
+## Accepted implementation result
+
+The deterministic foundation described by this ADR is now implemented and production-accepted on the owner machine.
+
+Accepted evidence includes:
+
+- durable incident-linked RepairAttempts;
+- bounded same-version crash recovery;
+- alive-but-unresponsive detection using liveness threshold plus confirmation;
+- explicit startup readiness separate from liveness;
+- repeated authenticated liveness stabilization before `RECOVERED`;
+- durable crash/liveness budgets and cooldowns;
+- provider/TTS/search degradation excluded from runtime restart truth;
+- one external restart owner in `jarvis-dev`;
+- watchdog isolation from background Git polling;
+- Windows virtual-environment launcher/interpreter process-tree fault handling and cleanup.
+
+Final owner-machine hang acceptance completed with
+`execution_result = unresponsive child restart stabilized`,
+`verifier_result = readiness_and_liveness_stable:6_probes`, and
+`verdict = recovered`.
+
+Issue #65 is closed. Future phases must not reopen or reinterpret this ADR as permission for model-selected live mutation.
+
 ## Consequences
 
 ### Benefits
@@ -247,7 +273,7 @@ Implementation may be production-accepted only after proving:
 
 ## Reconsider when
 
-Revisit this ADR after deterministic R1/R2 repairs are production-accepted, when introducing AI-assisted diagnostics/R4 source-repair proposals, or when a local specialist model/router has enough JARVIS-specific benchmark evidence to justify becoming a preferred diagnostic target.
+The deterministic R1/R2 foundation is now accepted. Revisit or add a new ADR only when a later phase changes an authority boundary: AI-assisted diagnostics, R4 source-repair execution, automated deployment/promotion, or adoption of a specialist model/router with production consequences. RepairKnowledge and DiagnosticModelRouter implementation sequencing is governed by the master plan and does not itself expand this ADR's authority.
 
 ## Reference technologies
 

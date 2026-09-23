@@ -2,9 +2,9 @@
 
 ## Status
 
-**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS FOUNDATION PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED AND MERGED TO PROTECTED `main` ON 2026-09-20. STEP 8 IS NEXT.**
+**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC R1/R2 SELF-REPAIR FOUNDATION IS OWNER ACCEPTED ON 2026-09-23. REPAIRKNOWLEDGE IS THE NEXT ACTIVE CROSS-CUTTING DEVELOPMENT SLICE; STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
 
-Protected-main production baseline after the Self-Awareness merge: `e5484cb9d599783e7f715bc6fb435af459dc49a0`. PR #41 adds the accepted bounded Self-Awareness runtime; later documentation-only reconciliation commits do not change that implementation behavior.
+The latest owner-machine accepted Self-Repair runtime baseline is `6a0ba73f46f68d9d0c2e8fa2c20c5fccaed8378a`; later documentation-only reconciliation commits may advance protected `main` without changing that runtime behavior.
 
 This file describes architecture that actually exists on protected `main`. Historical proposals and experiments belong in `docs/research/`; active acceptance work belongs in `CURRENT_PLAN.md`.
 
@@ -39,6 +39,12 @@ AEC/NS/HPF/AGC          RF-DETR/OC-SORT     risk + OPA
           WorkItem / WorkStep / WorkDelivery truth
           SQLite protected payloads + DBOS/Postgres
           bounded research + isolated development
+                             |
+                EXTERNAL SELF-REPAIR SUPERVISION
+                             |
+          RepairPolicy / RepairAttempt / budgets
+          startup readiness + authenticated liveness
+          bounded same-version recovery + verification
 
 canonical USER turns
    +-> LiveContext / MemoryService
@@ -75,7 +81,7 @@ Accepted hardening includes:
 - JARVIS standby is explicitly distinct from Windows sleep/restart/shutdown/lock/sign-out;
 - low-CPU wake uses an openWakeWord streaming proposal stage followed by the bounded exact verifier.
 
-Fixed lifecycle/system speech still has a deferred reliability dependency on cloud scripted TTS quota. That is tracked in issue #50. TTS failure must not be interpreted as standby/lifecycle failure.
+Fixed lifecycle/system speech now uses cloud scripted TTS as primary with bounded local Windows speech fallback. TTS quota failure remains dependency degradation and must not be interpreted as standby/lifecycle or runtime-liveness failure.
 
 ---
 
@@ -185,7 +191,7 @@ Self-Awareness is evidence/truth infrastructure, not execution authority. Incide
 
 Owner-machine acceptance proved natural architecture/component questions, provider/blast-radius inspection, operational Pocket evidence reads and normal live Pocket recovery. The evidence query itself completed in ~47 ms.
 
-A long synchronous Gemini Live multi-tool interaction exposed that durable concurrent work/result delivery is not yet implemented. That limitation is deliberately assigned to the next Persistent Concurrent Work Orchestration foundation rather than hidden inside Self-Awareness with special-case vocabulary or timeout behavior.
+A long synchronous Gemini Live multi-tool interaction originally exposed the need for durable concurrent work/result delivery. That limitation was resolved structurally by the later owner-accepted Persistent Concurrent Work Orchestration foundation rather than hidden inside Self-Awareness with special-case vocabulary or timeout behavior.
 
 Detailed acceptance: `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
 
@@ -241,9 +247,48 @@ Canonical JARVIS architecture now includes:
 
 Owner-machine acceptance on 2026-09-20 proved independent research/development WorkItems, standby continuation, truthful status/progress, clean restart recovery, cancellation, and verified `Open Calculator` foreground Hands execution while durable background work remained active.
 
-The scripted-TTS quota path remains a delivery-reliability residual: failed speech keeps delivery pending truthfully, but issue #57 tracks provider-aware retry/backoff. Pocket 3 false OWNER-loss continuity is tracked separately in issue #56 and is not part of orchestration semantics.
+WorkDelivery speech now persists provider-directed retry/backoff while preserving pending delivery truth, and Pocket 3 OWNER continuity has separate accepted handling for transient biometric/head evidence gaps. Neither condition is part of orchestration truth or runtime-liveness authorization.
 
 Detailed acceptance: `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
+
+---
+
+## Deterministic Self-Repair production foundation
+
+Issue #65 and PRs #73–#86 establish the owner-accepted deterministic R1/R2
+Self-Repair foundation.
+
+Current production architecture includes:
+
+- typed `RepairTrigger`, `RepairPolicy`, `RepairAction`, `RepairAttempt` and
+  `RepairVerdict` contracts;
+- a version-controlled fail-closed repair registry;
+- durable RepairAttempt persistence linked to engineering incidents;
+- one process-external runtime-restart owner in `jarvis-dev`;
+- independent crash and alive-but-unresponsive policies;
+- durable attempt budgets/cooldowns and crash-loop exhaustion;
+- explicit startup readiness separate from control-channel connection;
+- authenticated liveness probes and stabilization before `RECOVERED`;
+- same-version runtime restart;
+- provider/search/TTS degradation excluded from runtime-liveness truth;
+- background Git update polling isolated from the liveness watchdog;
+- Windows virtual-environment runtime-tree fault injection and child-first force cleanup.
+
+The final owner-machine hang acceptance suspended both Windows runtime-tree
+processes, observed three failed liveness probes plus confirmation, force-cleaned
+the frozen tree, started a same-revision replacement, completed startup readiness
+and six authenticated stabilization probes, and persisted the RepairAttempt as
+`recovered`.
+
+This architecture is deliberately bounded. RepairKnowledge, DiagnosticModelRouter,
+AI-assisted diagnosis, source repair and self-evolution are not current production
+execution surfaces.
+
+The complete forward program is defined in
+`docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
+
+Detailed acceptance:
+`docs/research/SELF_REPAIR_PHASE5_ACCEPTANCE_2026-09-23.md`.
 
 ## Known residuals / deliberate deferrals
 
@@ -253,15 +298,13 @@ Not currently claimed as solved:
 - turn-specific spoken actor binding and general biometric T2 promotion;
 - CAM++/LR-ASD authority thresholds and complete ambient false-turn elimination;
 - strict independent semantic-memory release and automatic memory injection;
-- issue #50: fixed startup/standby lifecycle speech can still depend on cloud TTS quota;
 - issue #44: provider alias / relative volume fast-path semantics;
 - issue #45: false-interruption resume is configured although production audio cannot pause;
 - issue #46: intermittent LiveKit AudioMixer timeout investigation;
-- issue #56: Pocket 3 OWNER continuity can falsely drop an already-authorized lock during transient biometric/head evidence gaps;
-- issue #57: durable work notification speech keeps truth correctly on TTS failure, but retry timing should respect provider backoff;
 - full offline conversation or automatic provider failover;
 - full future Steps 9, 10 and 12 beyond accepted Hands foundations;
-- calendar/email communication, proactive/event-driven automation, plugin lifecycle, world-awareness/HUD end state, or autonomous self-repair/self-improvement.
+- calendar/email communication, proactive/event-driven automation, plugin lifecycle and world-awareness/HUD end state;
+- AI-assisted diagnostics, RepairKnowledge execution promotion, sandboxed source repair, Repair Curriculum and governed self-improvement beyond the accepted deterministic Self-Repair foundation.
 
 Detailed accepted/deferred/superseded/rejected history: `docs/research/POST_STEP_7_INTEGRATION_ACCEPTANCE.md`.
 Repository-wide reconciliation evidence: `docs/research/PRODUCTION_RECONCILIATION_2026-09-18.md`.
@@ -270,6 +313,13 @@ Repository-wide reconciliation evidence: `docs/research/PRODUCTION_RECONCILIATIO
 
 ## Next architecture acceptance
 
-The next numbered product slice is **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027/CAP-028)**.
+The next active cross-cutting architecture slice is **RepairKnowledge Foundation**
+from `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
 
-Step 8 must reuse the accepted durable WorkItem/WorkDelivery foundation for scheduled/recurring execution while keeping task/reminder truth separate from provider reasoning and platform notification state. Its requirements/research/technology/architecture cycle begins from this merged production baseline.
+That slice must add durable staged engineering knowledge with provenance and
+lifecycle, while proving that learned knowledge cannot execute, grant authority or
+mutate RepairPolicy by itself.
+
+**Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027/CAP-028)** remains
+the next numbered product slice and must still reuse the accepted durable
+WorkItem/WorkDelivery foundation when numbered roadmap work resumes.

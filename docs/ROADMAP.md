@@ -13,7 +13,7 @@ This roadmap owns **sequence only**. It does not select technology, define curre
 | 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | DONE (BOUNDED); full offline conversation deferred |
 | 6 | Knowledge, Current Research, Truthfulness | CAP-014–017 | DONE (BOUNDED) |
 | 7 | Governed Capability Runtime + Safe Local Reads | CAP-018, CAP-021, CAP-022, CAP-032 | DONE — OWNER ACCEPTED 2026-09-09 |
-| 8 | Notes, Tasks, Reminders, Scheduling | CAP-027, CAP-028 | NEXT NUMBERED SLICE — QUEUED AFTER APPROVED SELF-REPAIR FOUNDATION INTERLUDE |
+| 8 | Notes, Tasks, Reminders, Scheduling | CAP-027, CAP-028 | NEXT NUMBERED PRODUCT SLICE — currently paused behind owner-approved Self-Repair/Evolution continuation |
 | 9 | Computer, Application, Device Control | CAP-023, CAP-024 | PLANNED — PARTIAL HANDS FOUNDATION EXISTS |
 | 10 | Browser and Web Interaction | CAP-025 | PLANNED — PARTIAL PLAYWRIGHT FOUNDATION EXISTS |
 | 11 | Calendar, Email, External Communication | CAP-029, CAP-030 | PLANNED |
@@ -24,7 +24,7 @@ This roadmap owns **sequence only**. It does not select technology, define curre
 | 16 | Extensibility and Plugin/Skill Lifecycle | CAP-033 | PLANNED |
 | 17 | Daily Assistant and Multi-Capability Workflows | CAP-042 | PLANNED |
 | 18 | Learning, Gap Detection, Governed Skill Creation | CAP-043–045 | PLANNED |
-| 19 | Governed Self-Diagnostics and Repair | CAP-046 | PLANNED |
+| 19 | Governed Self-Diagnostics and Repair | CAP-046 | PARTIAL — deterministic R1/R2 foundation accepted early; RepairKnowledge next |
 | 20 | Governed Self-Improvement and Advanced Autonomy | CAP-047 | PLANNED |
 
 ## Accepted interludes that do not renumber the roadmap
@@ -51,15 +51,32 @@ PR #55 contains the owner-accepted implementation: provider-neutral durable Work
 
 Step 8 tasks/reminders/scheduling and later Step 15 proactive/event-driven work must reuse this foundation rather than create separate task/background systems.
 
-### Approved Self-Repair Foundation interlude — pending reliability cleanup
+### Self-Repair and Self-Evolution cross-cutting program
 
-Owner-approved sequence change on 2026-09-20: before formal Step 8 implementation, first close reliability issues #56, #57 and #50, then pull forward a bounded Self-Repair Foundation interlude. This does not renumber the roadmap and does not mark Step 19 complete.
+The 2026-09-20 Self-Repair Foundation interlude completed on 2026-09-23 with owner-machine acceptance of the deterministic R1/R2 production repair loop. Issue #65 is closed.
 
-The interlude exists because Self-Awareness, incident engineering memory, persistent WorkItems/DBOS, isolated development worktrees, Docker testing, rollback supervision and protected-main governance now provide the necessary substrate for a repair control plane. The goal is to establish shared repair infrastructure before later roadmap capabilities increase the runtime failure surface.
+Accepted early Step-19 foundation now includes deterministic repair contracts, durable RepairAttempts, external crash/hang supervision, restart budgets/cooldowns, startup readiness, authenticated liveness stabilization, provider-degradation separation and Windows runtime-process-tree handling.
 
-Scope is research-first and bounded: repair contracts/policy, process-external supervision with restart budgets/readiness/rollback, deterministic known repairs, then AI-assisted diagnostics and sandboxed code-repair PRs. Autonomous protected-main merge/deployment, Authority expansion, evaluator/ruleset mutation and self-evolution remain out of scope.
+The owner-approved cross-cutting continuation now proceeds through the staged program defined in `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`:
 
-Detailed decision: `docs/research/SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`.
+```text
+deterministic R1/R2 repair — DONE
+-> RepairKnowledge — NEXT
+-> DiagnosticModelRouter
+-> AI-assisted diagnostics
+-> sandboxed source repair
+-> governed deployment/rollback
+-> closed-loop repair learning
+-> Repair Curriculum
+-> specialist model evaluation when enough data exists
+-> capability-gap / weakness detection
+-> shadow self-improvement
+-> governed self-evolution
+```
+
+This continuation does not renumber the roadmap. Step 8 remains the next numbered product slice, while the currently active owner-approved cross-cutting work continues to build bounded foundations for Steps 18–20.
+
+The program never inherits automatic permission to weaken Authority, CI/rulesets, sandbox/evaluator policy, protected-main governance, credentials or permissions.
 
 ### Post-Step-7 production integration interlude
 
@@ -84,7 +101,7 @@ Current major deferrals:
 - strict independent Step-4 semantic-memory verifier;
 - Phase-4.5E automatic memory injection;
 - full Step-5 offline conversation/provider failover;
-- later proactive monitoring/plugin/full Step-19 self-repair/full Step-20 self-improvement capabilities. The approved Self-Repair Foundation interlude is a bounded prerequisite only, not completion of Step 19.
+- later proactive monitoring/plugin capabilities; AI-assisted/full Step-19 repair and Step-20 self-improvement remain incomplete. The deterministic R1/R2 Self-Repair foundation is an accepted partial Step-19 foundation, not completion of Step 19.
 
 A deferred capability is not a hidden failure and must not be represented as working.
 
@@ -136,11 +153,11 @@ Research for future slices is intentionally deferred until that slice becomes ac
 
 ## Current next step
 
-Persistent Concurrent Work Orchestration (issue #53 / PR #55) is owner accepted and is the reusable background-work foundation.
+Persistent Concurrent Work Orchestration and the deterministic R1/R2 Self-Repair foundation are owner accepted.
 
-**Current work is the owner-approved pre-repair reliability cleanup:** #56 Pocket OWNER continuity -> #57 durable WorkDelivery TTS backoff -> #50 lifecycle/system speech resilience.
+**Current active cross-cutting work, after documentation reconciliation, is Phase 2 — RepairKnowledge Foundation**, defined by `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
 
-After those corrections, execute the bounded Self-Repair Foundation interlude documented in `docs/research/SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`. **Step 8 remains the next numbered product slice after that interlude.**
+Step 8 remains the next numbered product slice. The Self-Repair/Evolution continuation is an owner-approved cross-cutting program and does not renumber Steps 8–20.
 
 ## Roadmap change rule
 
