@@ -97,22 +97,56 @@ def discover_supervised_runtime() -> ProcessSnapshot:
     return select_supervised_runtime(snapshots)
 
 
-def inject_fault(kind: FaultKind, target: ProcessSnapshot) -> None:
-    process = psutil.Process(target.pid)
-    if abs(float(process.create_time()) - target.create_time) > 0.001:
+def _validated_runtime_tree(target: ProcessSnapshot) -> tuple[psutil.Process, ...]:
+    root = psutil.Process(target.pid)
+    if abs(float(root.create_time()) - target.create_time) > 0.001:
         raise RuntimeError(
             "target process identity changed before fault injection; refusing to act"
         )
 
+    descendants = tuple(root.children(recursive=True))
+    return (*descendants, root)
+
+
+def inject_fault(kind: FaultKind, target: ProcessSnapshot) -> int:
+    """Inject one owner-requested fault into only the supervised runtime tree."""
+
+    processes = _validated_runtime_tree(target)
     if kind is FaultKind.CRASH:
-        process.kill()
-        return
+        acted = 0
+        for process in processes:
+            try:
+                process.kill()
+                acted += 1
+            except psutil.NoSuchProcess:
+                continue
+        return acted
+
     if kind is FaultKind.HANG:
-        process.suspend()
-        return
+        suspended: list[psutil.Process] = []
+        try:
+            for process in processes:
+                process.suspend()
+                suspended.append(process)
+        except psutil.Error:
+            for process in reversed(suspended):
+                try:
+                    process.resume()
+                except psutil.Error:
+                    pass
+            raise
+        return len(suspended)
+
     if kind is FaultKind.RESUME:
-        process.resume()
-        return
+        resumed = 0
+        for process in reversed(processes):
+            try:
+                process.resume()
+                resumed += 1
+            except psutil.NoSuchProcess:
+                continue
+        return resumed
+
     raise RuntimeError(f"unsupported fault kind: {kind}")
 
 
@@ -139,24 +173,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         target = discover_supervised_runtime()
         kind = FaultKind(args.fault)
-        inject_fault(kind, target)
+        affected = inject_fault(kind, target)
     except (RuntimeError, psutil.Error) as exc:
         print(f"self-repair fault injection refused: {exc}", file=sys.stderr)
         return 2
 
     if kind is FaultKind.CRASH:
         print(
-            f"Injected abrupt crash into supervised JARVIS runtime pid={target.pid}. "
+            "Injected abrupt crash into supervised JARVIS runtime tree "
+            f"rooted at pid={target.pid} ({affected} process(es)). "
             "jarvis-dev should apply the registered bounded crash-recovery policy."
         )
     elif kind is FaultKind.HANG:
         print(
-            f"Suspended supervised JARVIS runtime pid={target.pid}. "
+            "Suspended supervised JARVIS runtime tree "
+            f"rooted at pid={target.pid} ({affected} process(es)). "
             "jarvis-dev should require watchdog threshold + confirmation before "
             "bounded liveness recovery."
         )
     else:
-        print(f"Resumed supervised JARVIS runtime pid={target.pid}.")
+        print(
+            "Resumed supervised JARVIS runtime tree "
+            f"rooted at pid={target.pid} ({affected} process(es))."
+        )
     return 0
 
 

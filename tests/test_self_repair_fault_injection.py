@@ -50,38 +50,47 @@ def test_select_supervised_runtime_refuses_ambiguous_targets() -> None:
 
 
 @pytest.mark.parametrize(
-    ("kind", "method_name"),
+    ("kind", "method_name", "expected_order"),
     (
-        (faults.FaultKind.CRASH, "kill"),
-        (faults.FaultKind.HANG, "suspend"),
-        (faults.FaultKind.RESUME, "resume"),
+        (faults.FaultKind.CRASH, "kill", (31, 32, 30)),
+        (faults.FaultKind.HANG, "suspend", (31, 32, 30)),
+        (faults.FaultKind.RESUME, "resume", (30, 32, 31)),
     ),
 )
-def test_inject_fault_only_invokes_requested_process_action(
+def test_inject_fault_targets_only_supervised_runtime_tree(
     monkeypatch: pytest.MonkeyPatch,
     kind: faults.FaultKind,
     method_name: str,
+    expected_order: tuple[int, ...],
 ) -> None:
-    calls: list[str] = []
+    calls: list[tuple[str, int]] = []
 
     class FakeProcess:
+        def __init__(self, pid: int) -> None:
+            self.pid = pid
+
         def create_time(self) -> float:
             return 100.0
 
+        def children(self, *, recursive: bool) -> list[FakeProcess]:
+            assert recursive is True
+            return [FakeProcess(31), FakeProcess(32)] if self.pid == 30 else []
+
         def kill(self) -> None:
-            calls.append("kill")
+            calls.append(("kill", self.pid))
 
         def suspend(self) -> None:
-            calls.append("suspend")
+            calls.append(("suspend", self.pid))
 
         def resume(self) -> None:
-            calls.append("resume")
+            calls.append(("resume", self.pid))
 
-    monkeypatch.setattr(faults.psutil, "Process", lambda pid: FakeProcess())
+    monkeypatch.setattr(faults.psutil, "Process", FakeProcess)
 
-    faults.inject_fault(kind, _snapshot(30))
+    affected = faults.inject_fault(kind, _snapshot(30))
 
-    assert calls == [method_name]
+    assert affected == 3
+    assert calls == [(method_name, pid) for pid in expected_order]
 
 
 def test_inject_fault_revalidates_process_identity(
@@ -91,7 +100,46 @@ def test_inject_fault_revalidates_process_identity(
         def create_time(self) -> float:
             return 200.0
 
+        def children(self, *, recursive: bool) -> list[object]:
+            return []
+
     monkeypatch.setattr(faults.psutil, "Process", lambda pid: ReusedPid())
 
     with pytest.raises(RuntimeError, match="identity changed"):
         faults.inject_fault(faults.FaultKind.CRASH, _snapshot(30))
+
+
+def test_partial_hang_rolls_back_already_suspended_descendants(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, int]] = []
+
+    class FakeProcess:
+        def __init__(self, pid: int) -> None:
+            self.pid = pid
+
+        def create_time(self) -> float:
+            return 100.0
+
+        def children(self, *, recursive: bool) -> list[FakeProcess]:
+            assert recursive is True
+            return [FakeProcess(31), FakeProcess(32)] if self.pid == 30 else []
+
+        def suspend(self) -> None:
+            calls.append(("suspend", self.pid))
+            if self.pid == 32:
+                raise faults.psutil.AccessDenied(self.pid)
+
+        def resume(self) -> None:
+            calls.append(("resume", self.pid))
+
+    monkeypatch.setattr(faults.psutil, "Process", FakeProcess)
+
+    with pytest.raises(faults.psutil.AccessDenied):
+        faults.inject_fault(faults.FaultKind.HANG, _snapshot(30))
+
+    assert calls == [
+        ("suspend", 31),
+        ("suspend", 32),
+        ("resume", 31),
+    ]
