@@ -39,6 +39,12 @@ AEC/NS/HPF/AGC          RF-DETR/OC-SORT     risk + OPA
           WorkItem / WorkStep / WorkDelivery truth
           SQLite protected payloads + DBOS/Postgres
           bounded research + isolated development
+                             |
+                EXTERNAL SELF-REPAIR SUPERVISION
+                             |
+          RepairPolicy / RepairAttempt / budgets
+          startup readiness + authenticated liveness
+          bounded same-version recovery + verification
 
 canonical USER turns
    +-> LiveContext / MemoryService
@@ -75,7 +81,7 @@ Accepted hardening includes:
 - JARVIS standby is explicitly distinct from Windows sleep/restart/shutdown/lock/sign-out;
 - low-CPU wake uses an openWakeWord streaming proposal stage followed by the bounded exact verifier.
 
-Fixed lifecycle/system speech still has a deferred reliability dependency on cloud scripted TTS quota. That is tracked in issue #50. TTS failure must not be interpreted as standby/lifecycle failure.
+Fixed lifecycle/system speech now uses cloud scripted TTS as primary with bounded local Windows speech fallback. TTS quota failure remains dependency degradation and must not be interpreted as standby/lifecycle or runtime-liveness failure.
 
 ---
 
@@ -185,7 +191,7 @@ Self-Awareness is evidence/truth infrastructure, not execution authority. Incide
 
 Owner-machine acceptance proved natural architecture/component questions, provider/blast-radius inspection, operational Pocket evidence reads and normal live Pocket recovery. The evidence query itself completed in ~47 ms.
 
-A long synchronous Gemini Live multi-tool interaction exposed that durable concurrent work/result delivery is not yet implemented. That limitation is deliberately assigned to the next Persistent Concurrent Work Orchestration foundation rather than hidden inside Self-Awareness with special-case vocabulary or timeout behavior.
+A long synchronous Gemini Live multi-tool interaction originally exposed the need for durable concurrent work/result delivery. That limitation was resolved structurally by the later owner-accepted Persistent Concurrent Work Orchestration foundation rather than hidden inside Self-Awareness with special-case vocabulary or timeout behavior.
 
 Detailed acceptance: `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
 
@@ -241,7 +247,7 @@ Canonical JARVIS architecture now includes:
 
 Owner-machine acceptance on 2026-09-20 proved independent research/development WorkItems, standby continuation, truthful status/progress, clean restart recovery, cancellation, and verified `Open Calculator` foreground Hands execution while durable background work remained active.
 
-The scripted-TTS quota path remains a delivery-reliability residual: failed speech keeps delivery pending truthfully, but issue #57 tracks provider-aware retry/backoff. Pocket 3 false OWNER-loss continuity is tracked separately in issue #56 and is not part of orchestration semantics.
+WorkDelivery speech now persists provider-directed retry/backoff while preserving pending delivery truth, and Pocket 3 OWNER continuity has separate accepted handling for transient biometric/head evidence gaps. Neither condition is part of orchestration truth or runtime-liveness authorization.
 
 Detailed acceptance: `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
 
