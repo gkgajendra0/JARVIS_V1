@@ -246,38 +246,40 @@ class SqliteIncidentStore:
         )
 
     def upsert_repair_attempt(self, attempt: RepairAttempt) -> None:
-        existing = self.get_repair_attempt(attempt.attempt_id)
-        if existing is not None:
-            existing_identity = (
-                existing.incident_id,
-                existing.trigger_id,
-                existing.policy_id,
-                existing.policy_version,
-                existing.action,
-                existing.attempt_number,
-                existing.started_at_epoch,
-                existing.pre_repair_evidence,
-            )
-            incoming_identity = (
-                attempt.incident_id,
-                attempt.trigger_id,
-                attempt.policy_id,
-                attempt.policy_version,
-                attempt.action,
-                attempt.attempt_number,
-                attempt.started_at_epoch,
-                attempt.pre_repair_evidence,
-            )
-            if existing_identity != incoming_identity:
-                raise ValueError(
-                    "repair attempt identity cannot change after persistence"
-                )
-            if existing.finished_at_epoch is not None:
-                if existing != attempt:
-                    raise ValueError("completed repair attempt cannot be overwritten")
-                return
-
         with self._lock, self._connection:
+            existing = self._get_repair_attempt_unlocked(attempt.attempt_id)
+            if existing is not None:
+                existing_identity = (
+                    existing.incident_id,
+                    existing.trigger_id,
+                    existing.policy_id,
+                    existing.policy_version,
+                    existing.action,
+                    existing.attempt_number,
+                    existing.started_at_epoch,
+                    existing.pre_repair_evidence,
+                )
+                incoming_identity = (
+                    attempt.incident_id,
+                    attempt.trigger_id,
+                    attempt.policy_id,
+                    attempt.policy_version,
+                    attempt.action,
+                    attempt.attempt_number,
+                    attempt.started_at_epoch,
+                    attempt.pre_repair_evidence,
+                )
+                if existing_identity != incoming_identity:
+                    raise ValueError(
+                        "repair attempt identity cannot change after persistence"
+                    )
+                if existing.finished_at_epoch is not None:
+                    if existing != attempt:
+                        raise ValueError(
+                            "completed repair attempt cannot be overwritten"
+                        )
+                    return
+
             self._connection.execute(
                 """
                 INSERT INTO engineering_repair_attempt (
@@ -333,15 +335,20 @@ class SqliteIncidentStore:
 
     def get_repair_attempt(self, attempt_id: str) -> RepairAttempt | None:
         with self._lock:
-            cursor = self._connection.execute(
-                "SELECT * FROM engineering_repair_attempt WHERE attempt_id = ?",
-                (attempt_id,),
-            )
-            row = cursor.fetchone()
-            if row is None:
-                return None
-            columns = [item[0] for item in cursor.description or ()]
-        return self._repair_attempt_from_payload(dict(zip(columns, row, strict=True)))
+            return self._get_repair_attempt_unlocked(attempt_id)
+
+    def _get_repair_attempt_unlocked(self, attempt_id: str) -> RepairAttempt | None:
+        cursor = self._connection.execute(
+            "SELECT * FROM engineering_repair_attempt WHERE attempt_id = ?",
+            (attempt_id,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        columns = [item[0] for item in cursor.description or ()]
+        return self._repair_attempt_from_payload(
+            dict(zip(columns, row, strict=True))
+        )
 
     def list_repair_attempts(
         self,
