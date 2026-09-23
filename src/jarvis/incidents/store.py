@@ -246,6 +246,39 @@ class SqliteIncidentStore:
         )
 
     def upsert_repair_attempt(self, attempt: RepairAttempt) -> None:
+        existing = self.get_repair_attempt(attempt.attempt_id)
+        if existing is not None:
+            existing_identity = (
+                existing.incident_id,
+                existing.trigger_id,
+                existing.policy_id,
+                existing.policy_version,
+                existing.action,
+                existing.attempt_number,
+                existing.started_at_epoch,
+                existing.pre_repair_evidence,
+            )
+            incoming_identity = (
+                attempt.incident_id,
+                attempt.trigger_id,
+                attempt.policy_id,
+                attempt.policy_version,
+                attempt.action,
+                attempt.attempt_number,
+                attempt.started_at_epoch,
+                attempt.pre_repair_evidence,
+            )
+            if existing_identity != incoming_identity:
+                raise ValueError(
+                    "repair attempt identity cannot change after persistence"
+                )
+            if existing.finished_at_epoch is not None:
+                if existing != attempt:
+                    raise ValueError(
+                        "completed repair attempt cannot be overwritten"
+                    )
+                return
+
         with self._lock, self._connection:
             self._connection.execute(
                 """
