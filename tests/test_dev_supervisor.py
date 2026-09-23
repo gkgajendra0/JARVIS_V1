@@ -293,6 +293,94 @@ def test_remote_update_poller_publishes_latest_snapshot(
         poller.thread.join(timeout=1.0)
 
 
+def test_force_runtime_tree_cleanup_targets_descendants_before_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, int]] = []
+
+    class FakePsProcess:
+        def __init__(self, pid: int) -> None:
+            self.pid = pid
+
+        def children(self, *, recursive: bool) -> list[FakePsProcess]:
+            assert recursive is True
+            return [FakePsProcess(31), FakePsProcess(32)] if self.pid == 30 else []
+
+        def is_running(self) -> bool:
+            return True
+
+        def kill(self) -> None:
+            calls.append(("kill", self.pid))
+
+    monkeypatch.setattr(supervisor.psutil, "Process", FakePsProcess)
+
+    tree = supervisor._snapshot_runtime_process_tree(30)
+    killed = supervisor._kill_runtime_process_tree(tree)
+
+    assert tuple(process.pid for process in tree) == (31, 32, 30)
+    assert killed == 3
+    assert calls == [("kill", 31), ("kill", 32), ("kill", 30)]
+
+
+def test_stop_jarvis_force_cleans_captured_runtime_tree(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[object] = []
+    runtime_tree = ("child", "root")
+
+    class FakeProcess:
+        pid = 30
+
+        def __init__(self) -> None:
+            self.wait_calls = 0
+
+        def poll(self):
+            return None
+
+        def send_signal(self, signal_value) -> None:
+            calls.append(("signal", signal_value))
+
+        def wait(self, timeout: float) -> None:
+            self.wait_calls += 1
+            if self.wait_calls == 1:
+                raise supervisor.subprocess.TimeoutExpired("jarvis", timeout)
+            calls.append(("wait", timeout))
+
+        def kill(self) -> None:
+            calls.append("popen-kill")
+
+    class FakeStopControl:
+        def request_shutdown(self) -> bool:
+            return False
+
+        def child_stopped(self) -> None:
+            calls.append("child-stopped")
+
+    monkeypatch.setattr(
+        supervisor,
+        "_snapshot_runtime_process_tree",
+        lambda pid: runtime_tree,
+    )
+
+    def fake_tree_kill(tree) -> int:
+        assert tree == runtime_tree
+        calls.append("tree-kill")
+        return 2
+
+    monkeypatch.setattr(supervisor, "_kill_runtime_process_tree", fake_tree_kill)
+    monkeypatch.setattr(supervisor.os, "name", "posix")
+
+    supervisor._stop_jarvis(
+        FakeProcess(),  # type: ignore[arg-type]
+        timeout_seconds=1.0,
+        control=FakeStopControl(),  # type: ignore[arg-type]
+    )
+
+    assert "tree-kill" in calls
+    assert "popen-kill" not in calls
+    assert calls[-1] == "child-stopped"
+
+
 class FakeRepo:
     def __init__(self, *, updated_sha: str = "b" * 40) -> None:
         self.updated_sha = updated_sha
