@@ -364,7 +364,6 @@ def test_readiness_failures_exhaust_restart_budget(
     store.close()
 
 
-
 def test_liveness_failures_consume_budget_and_stop_restarting(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
@@ -427,8 +426,7 @@ def test_liveness_failures_consume_budget_and_stop_restarting(
     assert len(attempts) == 2
     assert all(attempt.verdict is RepairVerdict.NOT_RECOVERED for attempt in attempts)
     assert all(
-        attempt.verifier_result == "liveness_probe_failed"
-        for attempt in attempts
+        attempt.verifier_result == "liveness_probe_failed" for attempt in attempts
     )
     assert stopped == ["restart-1", "restart-2"]
     store.close()
