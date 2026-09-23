@@ -7,6 +7,7 @@ import os
 import secrets
 import signal
 import socket
+import sqlite3
 import subprocess
 import sys
 import time
@@ -18,6 +19,13 @@ from jarvis.dev_control import (
     DEV_CONTROL_HOST_ENV,
     DEV_CONTROL_PORT_ENV,
     DEV_CONTROL_TOKEN_ENV,
+)
+from jarvis.incidents import IncidentService, SqliteIncidentStore
+from jarvis.self_awareness import default_incident_store_path
+from jarvis.self_repair import RepairVerdict
+from jarvis.self_repair.supervisor import (
+    SupervisorRepairController,
+    build_runtime_child_exit_policy,
 )
 
 _BRANCH_ENV = "JARVIS_DEV_BRANCH"
@@ -31,6 +39,10 @@ class DevSupervisorConfig:
     shutdown_timeout_seconds: float = 10.0
     approval_timeout_seconds: float = 45.0
     startup_timeout_seconds: float = 45.0
+    crash_restart_max_attempts: int = 3
+    crash_restart_window_seconds: float = 300.0
+    crash_restart_cooldown_seconds: float = 2.0
+    crash_restart_backoff_multiplier: float = 2.0
 
     def __post_init__(self) -> None:
         if not self.remote.strip():
@@ -45,6 +57,18 @@ class DevSupervisorConfig:
             raise ValueError("approval_timeout_seconds must be positive")
         if self.startup_timeout_seconds <= 0:
             raise ValueError("startup_timeout_seconds must be positive")
+        if (
+            isinstance(self.crash_restart_max_attempts, bool)
+            or not isinstance(self.crash_restart_max_attempts, int)
+            or self.crash_restart_max_attempts <= 0
+        ):
+            raise ValueError("crash_restart_max_attempts must be a positive integer")
+        if self.crash_restart_window_seconds <= 0:
+            raise ValueError("crash_restart_window_seconds must be positive")
+        if self.crash_restart_cooldown_seconds < 0:
+            raise ValueError("crash_restart_cooldown_seconds must not be negative")
+        if self.crash_restart_backoff_multiplier < 1:
+            raise ValueError("crash_restart_backoff_multiplier must be at least 1")
 
 
 class GitRepo:
@@ -338,6 +362,132 @@ def _stop_jarvis(
         control.child_stopped()
 
 
+def _build_supervisor_repair_controller(
+    config: DevSupervisorConfig,
+) -> tuple[SupervisorRepairController | None, SqliteIncidentStore | None]:
+    """Build durable crash recovery; persistence failure disables auto-restart."""
+
+    try:
+        store = SqliteIncidentStore(default_incident_store_path())
+    except (OSError, sqlite3.Error) as exc:
+        print(
+            "Self-Repair incident persistence is unavailable; "
+            f"automatic runtime restart is disabled: {type(exc).__name__}"
+        )
+        return None, None
+
+    policy = build_runtime_child_exit_policy(
+        max_attempts=config.crash_restart_max_attempts,
+        rolling_window_seconds=config.crash_restart_window_seconds,
+        cooldown_seconds=config.crash_restart_cooldown_seconds,
+        backoff_multiplier=config.crash_restart_backoff_multiplier,
+    )
+    return SupervisorRepairController(
+        IncidentService(store),
+        policy=policy,
+    ), store
+
+
+def _recover_unexpected_exit(
+    repo: GitRepo,
+    root: Path,
+    process: subprocess.Popen[bytes],
+    control: VoiceControlServer,
+    config: DevSupervisorConfig,
+    repair: SupervisorRepairController,
+    *,
+    sleep_fn: Any = time.sleep,
+    now_fn: Any = time.time,
+) -> subprocess.Popen[bytes] | None:
+    """Perform the single supervisor-owned bounded same-version restart loop."""
+
+    exit_code = process.returncode
+    control.child_stopped()
+    commit_sha = repo.local_sha()
+
+    while True:
+        plan = repair.plan_unexpected_exit(
+            exit_code=exit_code,
+            commit_sha=commit_sha,
+            now_epoch=float(now_fn()),
+        )
+        if plan.exhausted:
+            print(
+                "JARVIS runtime restart budget exhausted for crash "
+                f"{plan.fingerprint.fingerprint_id[:12]}; stopping automatic "
+                "restart and escalating."
+            )
+            return None
+
+        wait_seconds = plan.budget.wait_seconds
+        attempt_number = plan.budget.attempt_number
+        print(
+            f"JARVIS exited unexpectedly with code {exit_code}; "
+            f"bounded same-version restart attempt {attempt_number}/"
+            f"{plan.policy.max_attempts} is eligible after {wait_seconds:g}s."
+        )
+        if wait_seconds > 0:
+            sleep_fn(wait_seconds)
+
+        if repo.local_sha() != commit_sha:
+            print(
+                "Local revision changed while crash recovery was waiting; "
+                "automatic restart aborted rather than repairing a different revision."
+            )
+            return None
+
+        attempt = repair.start_attempt(plan, now_epoch=float(now_fn()))
+        try:
+            restarted = _start_jarvis(root, control)
+        except OSError:
+            repair.complete_attempt(
+                plan,
+                attempt,
+                execution_result="same-version child restart failed to start",
+                verifier_result="process_start_failed",
+                verdict=RepairVerdict.NOT_RECOVERED,
+                post_repair_evidence=("supervisor:process_start_failed",),
+                now_epoch=float(now_fn()),
+            )
+            continue
+
+        try:
+            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+        except RuntimeError:
+            _stop_jarvis(
+                restarted,
+                timeout_seconds=config.shutdown_timeout_seconds,
+                control=control,
+            )
+            repair.complete_attempt(
+                plan,
+                attempt,
+                execution_result="same-version child restart attempted",
+                verifier_result="startup_readiness_failed",
+                verdict=RepairVerdict.NOT_RECOVERED,
+                post_repair_evidence=("supervisor:startup_readiness_failed",),
+                now_epoch=float(now_fn()),
+            )
+            continue
+
+        repair.complete_attempt(
+            plan,
+            attempt,
+            execution_result="same-version child restart started",
+            verifier_result=(
+                "startup readiness confirmed; liveness stabilization pending"
+            ),
+            verdict=RepairVerdict.INCONCLUSIVE,
+            post_repair_evidence=("supervisor:startup_readiness_confirmed",),
+            now_epoch=float(now_fn()),
+        )
+        print(
+            "Same-version JARVIS restart reached startup readiness. "
+            "Liveness stabilization remains a separate verification phase."
+        )
+        return restarted
+
+
 def _apply_approved_update(
     repo: GitRepo,
     root: Path,
@@ -438,17 +588,32 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
     print("Ambiguous speech, timeout, or unavailable voice approval means No.")
 
     control = VoiceControlServer()
+    repair, repair_store = _build_supervisor_repair_controller(config)
     process = _start_jarvis(root, control)
     declined_sha: str | None = None
 
     try:
         while True:
             if process.poll() is not None:
-                print(
-                    f"JARVIS exited unexpectedly with code {process.returncode}; "
-                    "automatic crash-loop restart is disabled."
+                if repair is None:
+                    print(
+                        f"JARVIS exited unexpectedly with code {process.returncode}; "
+                        "durable Self-Repair is unavailable, so automatic restart "
+                        "fails closed."
+                    )
+                    return int(process.returncode or 1)
+                restarted = _recover_unexpected_exit(
+                    repo,
+                    root,
+                    process,
+                    control,
+                    config,
+                    repair,
                 )
-                return int(process.returncode or 1)
+                if restarted is None:
+                    return int(process.returncode or 1)
+                process = restarted
+                continue
 
             time.sleep(config.poll_seconds)
             try:
@@ -525,6 +690,8 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
             control=control,
         )
         control.close()
+        if repair_store is not None:
+            repair_store.close()
 
 
 def main() -> int:

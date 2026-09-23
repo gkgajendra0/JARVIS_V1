@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -21,6 +22,16 @@ def test_supervisor_config_rejects_invalid_values() -> None:
         DevSupervisorConfig(approval_timeout_seconds=0)
     with pytest.raises(ValueError):
         DevSupervisorConfig(startup_timeout_seconds=0)
+    with pytest.raises(ValueError):
+        DevSupervisorConfig(crash_restart_max_attempts=0)
+    with pytest.raises(ValueError):
+        DevSupervisorConfig(crash_restart_max_attempts=True)
+    with pytest.raises(ValueError):
+        DevSupervisorConfig(crash_restart_window_seconds=0)
+    with pytest.raises(ValueError):
+        DevSupervisorConfig(crash_restart_cooldown_seconds=-1)
+    with pytest.raises(ValueError):
+        DevSupervisorConfig(crash_restart_backoff_multiplier=0.5)
 
 
 def test_environment_config_defaults_to_main(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -57,6 +68,10 @@ class FakeControl:
     def __init__(self, readiness_outcomes: list[Exception | None]) -> None:
         self.readiness_outcomes = list(readiness_outcomes)
         self.readiness_calls = 0
+        self.child_stopped_calls = 0
+
+    def child_stopped(self) -> None:
+        self.child_stopped_calls += 1
 
     def wait_for_child_ready(self, *, timeout_seconds: float) -> None:
         assert timeout_seconds > 0
@@ -153,3 +168,121 @@ def test_dev_control_client_is_expected_to_reconnect_after_transient_failure() -
 
     assert "while True:" in source
     assert "await asyncio.sleep(1.0)" in source
+
+
+def test_unexpected_exit_restarts_same_revision_and_persists_inconclusive(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jarvis.incidents import IncidentService, SqliteIncidentStore
+    from jarvis.self_repair import RepairVerdict
+    from jarvis.self_repair.supervisor import (
+        SupervisorRepairController,
+        build_runtime_child_exit_policy,
+    )
+
+    store = SqliteIncidentStore(tmp_path / "incidents.sqlite3")
+    incidents = IncidentService(store)
+    repair = SupervisorRepairController(
+        incidents,
+        policy=build_runtime_child_exit_policy(
+            max_attempts=2,
+            cooldown_seconds=0,
+        ),
+    )
+    repo = FakeRepo(updated_sha="a" * 40)
+    control = FakeControl([None])
+    process = SimpleNamespace(returncode=9)
+    monkeypatch.setattr(
+        supervisor,
+        "_start_jarvis",
+        lambda *_: "restarted-process",
+    )
+    now = iter([100.0, 100.0, 101.0])
+
+    restarted = supervisor._recover_unexpected_exit(
+        repo,  # type: ignore[arg-type]
+        Path("."),
+        process,  # type: ignore[arg-type]
+        control,  # type: ignore[arg-type]
+        DevSupervisorConfig(
+            crash_restart_max_attempts=2,
+            crash_restart_cooldown_seconds=0,
+        ),
+        repair,
+        sleep_fn=lambda _: None,
+        now_fn=lambda: next(now),
+    )
+
+    assert restarted == "restarted-process"
+    incident = incidents.list_recent(limit=1)[0]
+    attempts = incidents.list_repair_attempts(incident.incident_id)
+    assert len(attempts) == 1
+    assert attempts[0].verdict is RepairVerdict.INCONCLUSIVE
+    assert attempts[0].action.component_id == "voice_runtime"
+    assert control.child_stopped_calls == 1
+    store.close()
+
+
+def test_readiness_failures_exhaust_restart_budget(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jarvis.incidents import IncidentService, SqliteIncidentStore
+    from jarvis.self_repair import RepairVerdict
+    from jarvis.self_repair.supervisor import (
+        SupervisorRepairController,
+        build_runtime_child_exit_policy,
+    )
+
+    store = SqliteIncidentStore(tmp_path / "incidents.sqlite3")
+    incidents = IncidentService(store)
+    repair = SupervisorRepairController(
+        incidents,
+        policy=build_runtime_child_exit_policy(
+            max_attempts=2,
+            rolling_window_seconds=300,
+            cooldown_seconds=0,
+        ),
+    )
+    repo = FakeRepo(updated_sha="a" * 40)
+    control = FakeControl([RuntimeError("not ready"), RuntimeError("still not ready")])
+    process = SimpleNamespace(returncode=9)
+    started = iter(["restart-1", "restart-2"])
+    stopped: list[object] = []
+    monkeypatch.setattr(
+        supervisor,
+        "_start_jarvis",
+        lambda *_: next(started),
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "_stop_jarvis",
+        lambda candidate, **_: stopped.append(candidate),
+    )
+    now = iter([100.0, 100.0, 101.0, 102.0, 102.0, 103.0, 104.0])
+
+    restarted = supervisor._recover_unexpected_exit(
+        repo,  # type: ignore[arg-type]
+        Path("."),
+        process,  # type: ignore[arg-type]
+        control,  # type: ignore[arg-type]
+        DevSupervisorConfig(
+            crash_restart_max_attempts=2,
+            crash_restart_cooldown_seconds=0,
+        ),
+        repair,
+        sleep_fn=lambda _: None,
+        now_fn=lambda: next(now),
+    )
+
+    assert restarted is None
+    incident = incidents.list_recent(limit=1)[0]
+    attempts = incidents.list_repair_attempts(incident.incident_id)
+    assert len(attempts) == 2
+    assert all(attempt.verdict is RepairVerdict.NOT_RECOVERED for attempt in attempts)
+    assert stopped == ["restart-1", "restart-2"]
+    assert any(
+        evidence.kind == "repair_budget_exhausted" for evidence in incident.evidence
+    )
+    store.close()

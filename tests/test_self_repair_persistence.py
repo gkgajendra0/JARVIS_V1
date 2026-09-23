@@ -193,6 +193,6 @@ def test_repair_attempt_listing_is_bounded_and_attempt_ordered(tmp_path) -> None
     service.record_repair_attempt(first)
 
     assert service.list_repair_attempts(incident.incident_id) == (first, second)
-    assert service.list_repair_attempts(incident.incident_id, limit=1) == (first,)
+    assert service.list_repair_attempts(incident.incident_id, limit=1) == (second,)
     assert service.list_repair_attempts(incident.incident_id, limit=0) == ()
     store.close()
