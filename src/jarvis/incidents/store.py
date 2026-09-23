@@ -275,9 +275,7 @@ class SqliteIncidentStore:
                     )
                 if existing.finished_at_epoch is not None:
                     if existing != attempt:
-                        raise ValueError(
-                            "completed repair attempt cannot be overwritten"
-                        )
+                        raise ValueError("completed repair attempt cannot be overwritten")
                     return
 
             self._connection.execute(
@@ -346,9 +344,7 @@ class SqliteIncidentStore:
         if row is None:
             return None
         columns = [item[0] for item in cursor.description or ()]
-        return self._repair_attempt_from_payload(
-            dict(zip(columns, row, strict=True))
-        )
+        return self._repair_attempt_from_payload(dict(zip(columns, row, strict=True)))
 
     def list_repair_attempts(
         self,
