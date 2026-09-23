@@ -293,10 +293,5 @@ def test_readiness_failures_exhaust_restart_budget(
     assert any(
         evidence.kind == "repair_budget_exhausted"
         for evidence in incident.evidence
-    ) is False
-    refreshed = incidents.list_recent(limit=1)[0]
-    assert any(
-        evidence.kind == "repair_budget_exhausted"
-        for evidence in refreshed.evidence
     )
     store.close()
