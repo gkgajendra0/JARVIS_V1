@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
-from collections.abc import Iterable
 
 from jarvis.incidents import (
     EvidenceReference,
@@ -53,7 +53,7 @@ class CrashFingerprint:
         reason_code: str,
         component_ids: Iterable[str],
         commit_sha: str,
-    ) -> "CrashFingerprint":
+    ) -> CrashFingerprint:
         if not isinstance(phase, SupervisorFailurePhase):
             raise TypeError("crash phase must be a SupervisorFailurePhase")
         normalized_reason = str(reason_code).strip().lower()
