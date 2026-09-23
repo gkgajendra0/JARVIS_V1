@@ -163,9 +163,7 @@ def test_repair_attempt_identity_cannot_be_reparented(tmp_path) -> None:
     service.record_repair_attempt(attempt)
 
     with pytest.raises(ValueError, match="identity cannot change"):
-        service.record_repair_attempt(
-            replace(attempt, incident_id=second.incident_id)
-        )
+        service.record_repair_attempt(replace(attempt, incident_id=second.incident_id))
 
     assert service.get_repair_attempt(attempt.attempt_id) == attempt
     store.close()
