@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import secrets
 import signal
 import socket
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -156,6 +158,72 @@ class GitRepo:
     def reset_hard(self, sha: str) -> None:
         """Restore the clean repository to a previously known-good revision."""
         self._run("reset", "--hard", sha)
+
+
+@dataclass(frozen=True, slots=True)
+class RemotePollSnapshot:
+    sequence: int
+    local_sha: str | None
+    remote_sha: str | None
+    error: str | None = None
+
+
+class RemoteUpdatePoller:
+    """Run network-backed Git polling away from the watchdog control loop."""
+
+    def __init__(self, root: Path, config: DevSupervisorConfig) -> None:
+        self._repo = GitRepo(root, config)
+        self._config = config
+        self._stop = threading.Event()
+        self._results: queue.SimpleQueue[RemotePollSnapshot] = queue.SimpleQueue()
+        self._thread = threading.Thread(
+            target=self._run,
+            name="jarvis-update-poller",
+            daemon=True,
+        )
+
+    @property
+    def thread(self) -> threading.Thread:
+        return self._thread
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def latest(self) -> RemotePollSnapshot | None:
+        latest: RemotePollSnapshot | None = None
+        while True:
+            try:
+                latest = self._results.get_nowait()
+            except queue.Empty:
+                return latest
+
+    def _run(self) -> None:
+        sequence = 0
+        while not self._stop.is_set():
+            sequence += 1
+            try:
+                self._repo.fetch()
+                snapshot = RemotePollSnapshot(
+                    sequence=sequence,
+                    local_sha=self._repo.local_sha(),
+                    remote_sha=self._repo.remote_sha(),
+                )
+            except (
+                OSError,
+                subprocess.CalledProcessError,
+                subprocess.TimeoutExpired,
+            ) as exc:
+                snapshot = RemotePollSnapshot(
+                    sequence=sequence,
+                    local_sha=None,
+                    remote_sha=None,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+            self._results.put(snapshot)
+            self._stop.wait(self._config.poll_seconds)
 
 
 class VoiceControlServer:
@@ -895,6 +963,8 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
     control = VoiceControlServer()
     repair, repair_store = _build_supervisor_repair_controller(config)
     process = _start_jarvis(root, control)
+    update_poller = RemoteUpdatePoller(root, config)
+    update_poller_started = False
     declined_sha: str | None = None
     liveness_failure_streak = 0
 
@@ -904,6 +974,9 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
         except RuntimeError as exc:
             print(f"Initial JARVIS startup readiness failed: {exc}")
             return 1
+
+        update_poller.start()
+        update_poller_started = True
 
         while True:
             if process.poll() is not None:
@@ -959,20 +1032,25 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                 liveness_failure_streak = 0
                 continue
 
-            try:
-                repo.fetch()
-            except subprocess.TimeoutExpired:
+            remote_poll = update_poller.latest()
+            if remote_poll is None:
+                continue
+            if remote_poll.error is not None:
                 print(
-                    "Git fetch timed out; keeping current JARVIS running so "
-                    "the liveness watchdog remains bounded."
+                    "Git update poll failed in the background; "
+                    f"watchdog remains active: {remote_poll.error}"
                 )
                 continue
-            except subprocess.CalledProcessError as exc:
-                print(f"Git fetch failed; keeping current JARVIS running: {exc}")
+
+            local_sha = remote_poll.local_sha
+            remote_sha = remote_poll.remote_sha
+            if local_sha is None or remote_sha is None:
                 continue
 
-            local_sha = repo.local_sha()
-            remote_sha = repo.remote_sha()
+            if repo.local_sha() != local_sha:
+                # The snapshot became stale while an intentional local update changed
+                # the checked-out revision. Wait for the next background poll.
+                continue
             if local_sha == remote_sha:
                 declined_sha = None
                 continue
@@ -1033,6 +1111,8 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
         print("\nStopping JARVIS development supervisor...")
         return 0
     finally:
+        if update_poller_started:
+            update_poller.stop()
         _stop_jarvis(
             process,
             timeout_seconds=config.shutdown_timeout_seconds,

@@ -196,6 +196,103 @@ def test_git_fetch_uses_bounded_timeout(
     assert observed["kwargs"]["timeout"] == 7.5
 
 
+def test_remote_update_poller_cannot_block_liveness_watchdog(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import threading
+
+    fetch_started = threading.Event()
+    release_fetch = threading.Event()
+
+    class BlockingRepo:
+        def __init__(self, root: Path, config: DevSupervisorConfig) -> None:
+            self.root = root
+            self.config = config
+
+        def fetch(self) -> None:
+            fetch_started.set()
+            release_fetch.wait(timeout=2.0)
+
+        def local_sha(self) -> str:
+            return "a" * 40
+
+        def remote_sha(self) -> str:
+            return "a" * 40
+
+    class AliveControl:
+        def request_liveness(self, *, timeout_seconds: float) -> bool:
+            assert timeout_seconds > 0
+            return True
+
+    monkeypatch.setattr(supervisor, "GitRepo", BlockingRepo)
+    poller = supervisor.RemoteUpdatePoller(
+        tmp_path,
+        DevSupervisorConfig(poll_seconds=60),
+    )
+    poller.start()
+
+    try:
+        assert fetch_started.wait(timeout=0.5)
+        assert poller.thread.daemon is True
+        assert supervisor._liveness_restart_required(
+            AliveControl(),  # type: ignore[arg-type]
+            DevSupervisorConfig(),
+            0,
+        ) == (0, False)
+    finally:
+        release_fetch.set()
+        poller.stop()
+        poller.thread.join(timeout=1.0)
+
+
+def test_remote_update_poller_publishes_latest_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import threading
+
+    published = threading.Event()
+
+    class SnapshotRepo:
+        def __init__(self, root: Path, config: DevSupervisorConfig) -> None:
+            self.root = root
+            self.config = config
+
+        def fetch(self) -> None:
+            pass
+
+        def local_sha(self) -> str:
+            return "a" * 40
+
+        def remote_sha(self) -> str:
+            published.set()
+            return "b" * 40
+
+    monkeypatch.setattr(supervisor, "GitRepo", SnapshotRepo)
+    poller = supervisor.RemoteUpdatePoller(
+        tmp_path,
+        DevSupervisorConfig(poll_seconds=60),
+    )
+    poller.start()
+
+    try:
+        assert published.wait(timeout=0.5)
+        snapshot = None
+        for _ in range(20):
+            snapshot = poller.latest()
+            if snapshot is not None:
+                break
+            supervisor.time.sleep(0.01)
+        assert snapshot is not None
+        assert snapshot.local_sha == "a" * 40
+        assert snapshot.remote_sha == "b" * 40
+        assert snapshot.error is None
+    finally:
+        poller.stop()
+        poller.thread.join(timeout=1.0)
+
+
 class FakeRepo:
     def __init__(self, *, updated_sha: str = "b" * 40) -> None:
         self.updated_sha = updated_sha
