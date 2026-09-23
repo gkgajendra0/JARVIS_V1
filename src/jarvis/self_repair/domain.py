@@ -10,7 +10,7 @@ import time
 import uuid
 from dataclasses import dataclass, replace
 from enum import Enum, IntEnum
-from typing import Iterable
+from collections.abc import Iterable
 
 from jarvis.self_model.health import HealthState
 
@@ -153,7 +153,7 @@ class RepairTrigger:
         session_id: str | None = None,
         work_id: str | None = None,
         trigger_id: str | None = None,
-    ) -> "RepairTrigger":
+    ) -> RepairTrigger:
         return cls(
             trigger_id=trigger_id or str(uuid.uuid4()),
             component_id=component_id,
@@ -313,7 +313,7 @@ class RepairAction:
         *,
         now_epoch: float | None = None,
         action_id: str | None = None,
-    ) -> "RepairAction":
+    ) -> RepairAction:
         if not policy.matches(trigger):
             raise RepairAuthorizationError(
                 "policy does not match the supplied repair trigger"
@@ -383,7 +383,7 @@ class RepairAttempt:
         attempt_number: int,
         now_epoch: float | None = None,
         attempt_id: str | None = None,
-    ) -> "RepairAttempt":
+    ) -> RepairAttempt:
         if not policy.matches(trigger):
             raise RepairAuthorizationError(
                 "attempt policy does not match the supplied trigger"
@@ -429,7 +429,7 @@ class RepairAttempt:
         post_repair_evidence: Iterable[str] = (),
         next_retry_eligible_epoch: float | None = None,
         now_epoch: float | None = None,
-    ) -> "RepairAttempt":
+    ) -> RepairAttempt:
         return replace(
             self,
             finished_at_epoch=time.time() if now_epoch is None else now_epoch,
