@@ -159,9 +159,7 @@ def build_runtime_child_exit_policy(
 def _delay_for_budget_index(policy: RepairPolicy, budget_index: int) -> float:
     if budget_index <= 0:
         raise ValueError("budget_index must be positive")
-    return policy.cooldown_seconds * (
-        policy.backoff_multiplier ** (budget_index - 1)
-    )
+    return policy.cooldown_seconds * (policy.backoff_multiplier ** (budget_index - 1))
 
 
 def evaluate_restart_budget(
@@ -218,9 +216,7 @@ def evaluate_restart_budget(
             )
             wait_seconds = max(
                 0.0,
-                base_epoch
-                + _delay_for_budget_index(policy, budget_index)
-                - now_epoch,
+                base_epoch + _delay_for_budget_index(policy, budget_index) - now_epoch,
             )
     else:
         wait_seconds = _delay_for_budget_index(policy, budget_index)
