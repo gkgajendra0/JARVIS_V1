@@ -7,16 +7,20 @@ The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARV
 ## Current production status
 
 - Steps 0–3: **DONE**.
-- Step 4 memory/context: **BOUNDED COMPLETE** — explicit encrypted memory lifecycle and bounded semantic recall are accepted; the strict independent semantic verifier and automatic Phase-4.5E memory injection remain deferred.
-- Step 5 provider resilience: **BOUNDED COMPLETE** — truthful local failure diagnosis/status/recovery is accepted; full offline conversation and automatic provider failover remain deferred.
-- Step 6 current research/truthfulness: **BOUNDED COMPLETE**.
+- Step 4 memory/context: **BOUNDED**.
+- Step 5 provider resilience: **BOUNDED**.
+- Step 6 current research/truthfulness: **BOUNDED**.
 - Step 7 governed capability runtime + safe local reads: **DONE**.
-- Post-Step-7 production interlude: **ACCEPTED** — governed JARVIS Hands, Pocket 3 native OWNER tracking/reacquisition, selective runtime-performance recovery, and the PR #38 stability pass are integrated.
-- Step 8 notes/tasks/reminders/scheduling: **ACTIVE REQUIREMENTS / RESEARCH; implementation not yet authorized**.
+- JARVIS Hands / browser / file / device foundations: **PARTIAL** for later Steps 9/10/12.
+- Pocket 3 native OWNER tracking/recovery: **ACCEPTED** for the current defined scope.
+- Self-Awareness: **ACCEPTED FOUNDATION**.
+- Persistent Concurrent Work Orchestration: **ACCEPTED FOUNDATION**.
+- Deterministic R1/R2 Self-Repair: **ACCEPTED FOUNDATION**.
+- Self-Repair / Self-Evolution program: **ACTIVE — Phase 2 RepairKnowledge is next**.
+- Step 8 notes/tasks/reminders/scheduling remains the **next numbered product slice** when numbered roadmap work resumes.
 
-Hands provides accepted bounded foundations for app/window control, browser execution, file/document actions, device surfaces and Git/project operations. Those foundations do **not** mark future Steps 9, 10 or 12 complete. Turn-specific spoken actor binding also remains deferred; CAM++/LR-ASD are not independent authority.
-
-See `docs/CURRENT_PLAN.md` for the detailed completed/deferred/superseded/rejected ledger and `docs/research/POST_STEP_7_INTEGRATION_ACCEPTANCE.md` for the accepted post-Step-7 integration record.
+Current accepted/deferred/superseded/rejected truth is centralized in
+`docs/PROJECT_STATE.md`.
 
 ## Setup
 
@@ -102,12 +106,15 @@ Protected CI additionally covers Playwright Chromium provisioning/smoke, Windows
 
 ## Documentation
 
-- [Product definition and capability status](docs/PRODUCT.md)
-- [Current plan and work disposition](docs/CURRENT_PLAN.md)
+Current documentation is intentionally small:
+
+- [Product definition and capability catalogue](docs/PRODUCT.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Current accepted architecture](docs/CURRENT_ARCHITECTURE.md)
+- [Current active plan](docs/CURRENT_PLAN.md)
+- [Canonical project-state ledger](docs/PROJECT_STATE.md)
 - [Quality gates](docs/QUALITY_GATES.md)
-- [Research and acceptance records](docs/research/README.md)
-- [Post-Step-7 integration acceptance](docs/research/POST_STEP_7_INTEGRATION_ACCEPTANCE.md)
-- [Architecture decisions](docs/decisions/README.md)
-- [Legacy requirements map](docs/LEGACY_REQUIREMENTS_MAP.md)
+- [Self-Repair and Self-Evolution master plan](docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md)
+
+Detailed old experiments, superseded ADRs, benchmark notes and acceptance transcripts
+remain available through Git history rather than competing with current truth.
