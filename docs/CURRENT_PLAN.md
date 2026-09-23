@@ -1,190 +1,78 @@
 # JARVIS V1 Current Plan
 
-## Active Work
+## Current state
 
-**PR #41 — Self-Awareness Foundation is OWNER ACCEPTED and merged to protected `main` (2026-09-18) at `e5484cb9d599783e7f715bc6fb435af459dc49a0`.**
+The repository is reconciled around one accepted production baseline.
 
-The accepted runtime-code baseline produced by owner-accepted PRs #43, #49 and #48 is `e2ff21e78480a09eb243cdd2c121b39e47620d0f`; later documentation-only reconciliation commits may advance protected `main` without changing that earlier runtime state.
+- Steps 0–3: DONE.
+- Step 4 memory/context: BOUNDED.
+- Step 5 provider resilience: BOUNDED.
+- Step 6 current research/truthfulness: BOUNDED.
+- Step 7 governed capability runtime: DONE.
+- JARVIS Hands / browser / file / device foundations: PARTIAL for later Steps 9/10/12.
+- Self-Awareness: accepted foundation.
+- Persistent Concurrent Work Orchestration: accepted foundation.
+- Deterministic R1/R2 Self-Repair: accepted foundation.
+- Self-Repair issue #65: CLOSED / COMPLETED.
+- Open pull requests at reconciliation start: none.
 
-PR #41 now adds the bounded read-only hierarchical whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, structured operational-evidence queries, typed Self-Awareness reads and resolved-incident/fix retrieval. Autonomous diagnosis/repair remains explicitly out of scope. Final acceptance evidence is recorded in `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md`.
+The authoritative completed/deferred/superseded/rejected ledger is
+`PROJECT_STATE.md`.
 
-**Persistent Concurrent Work Orchestration (issue #53 / PR #55) is OWNER ACCEPTED and merged to protected `main` on 2026-09-20 at `3980b212d657106abd45bfae119d2207551c409f`. Issue #53 is closed.** Independent durable research/development work, standby continuation, restart recovery, canonical progress/status, cancellation, and immediate foreground Hands while background work remains active were proven on the owner machine. Exact runtime-head CI passed, final reconciliation CI passed, and the production merge result is recorded below.
+## Active cross-cutting program
 
-**Self-Repair deterministic foundation is OWNER ACCEPTED and issue #65 is closed (2026-09-23).** Crash recovery, alive-but-unresponsive recovery, durable RepairAttempt evidence, restart budgets, startup readiness, liveness stabilization and Windows runtime-process-tree handling passed owner-machine acceptance. The complete forward Self-Repair -> Self-Learning -> Self-Evolution sequence is now owned by `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`. The active continuation is **Phase 2 RepairKnowledge Foundation**. Step 8 remains the next numbered product slice; this cross-cutting owner-approved program does not renumber the roadmap.
+The active development program is:
 
-## Current Stage
+**Self-Repair / Self-Evolution Phase 2 — RepairKnowledge Foundation**
 
-**STEPS 0–3 DONE — STEP 4 BOUNDED COMPLETE — STEP 5 BOUNDED COMPLETE — STEP 6 BOUNDED COMPLETE — STEP 7 DONE — POST-STEP-7 HANDS / POCKET / PERFORMANCE / STABILITY / SAFETY INTERLUDE ACCEPTED — SELF-AWARENESS OWNER ACCEPTED — PERSISTENT CONCURRENT WORK ORCHESTRATION OWNER ACCEPTED — DETERMINISTIC SELF-REPAIR R1/R2 FOUNDATION OWNER ACCEPTED — SELF-REPAIR / SELF-EVOLUTION PROGRAM PHASE 2 (REPAIRKNOWLEDGE) NEXT — STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
+The full staged program is defined in
+`SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
 
-`PRODUCT.md` owns permanent product intent/status, `ROADMAP.md` owns sequence, `CURRENT_ARCHITECTURE.md` owns accepted running architecture, and `docs/research/` owns detailed evidence.
+Phase 2 is intentionally limited to:
 
----
+1. canonical RepairKnowledge domain contracts;
+2. durable persistence and provenance;
+3. lifecycle states and transitions;
+4. links to incidents, RepairAttempts and repository evidence;
+5. deterministic retrieval by component/signature;
+6. candidate knowledge creation from verified incidents;
+7. proof that RepairKnowledge cannot execute, authorize or mutate RepairPolicy;
+8. repository tests and owner-machine acceptance.
 
-## Accepted state carried forward
+Do not start DiagnosticModelRouter, AI source repair or self-evolution in the same
+implementation slice.
 
-- **Step 3:** canonical authority, risk, approval, audit, Windows-session invalidation and Windows Hello/T3 remain authoritative. CAM++ and LR-ASD remain shadow evidence. General biometric/voice-derived T2 is still deferred. Hands may reuse a bounded same-session T2 only after successful direct-user T3 verification; it never comes from face/voice evidence alone and never replaces a required T3 challenge.
-- **Step 4:** encrypted canonical memory, explicit lifecycle, FTS5/Qwen retrieval and bounded provider-assisted `recall_memory` are accepted. The strict independent 4.5D verifier and Phase-4.5E automatic semantic-memory injection remain deferred/disabled.
-- **Step 5:** deterministic provider-failure diagnosis, local truthful status speech and safe failed-session closure are accepted. Full local/offline conversation and automatic provider failover remain deferred.
-- **Step 6:** provider-neutral source-aware current research with Exa, provenance and fail-closed source sufficiency is accepted. PR #55 now supplies the durable background execution foundation; proactive/event-driven research remains later Step-15 work.
-- **Step 7:** governed capability discovery/runtime, approved-root local reads, isolated MarkItDown document conversion, canonical authority binding and production `inspect_local` are accepted.
-- **Self-Awareness Foundation (PR #41):** owner-accepted bounded whole-JARVIS Self Model, deterministic health/dependency/blast-radius reasoning, redacted rotating operational evidence, local incident engineering memory and typed governed read-only Self-Awareness tools. A long synchronous realtime multi-tool delay discovered during acceptance was resolved structurally by the later concurrent-work foundation; the measured Self-Awareness evidence read itself completed in ~47 ms.
-- **Persistent Concurrent Work Orchestration (PR #55):** owner-accepted durable WorkItems/steps/deliveries, DBOS recovery, single-brain interactive priority, bounded resources, natural structured progress/ETA, restart-safe control, deferred result delivery, background research, and isolated repository development. Owner-machine acceptance proved parallel research/development state, standby continuation, restart recovery, cancellation, and verified Calculator Hands execution while background work remained active.
-- **Deterministic Self-Repair Foundation (issue #65 / PRs #73–#86):** owner-accepted R1/R2 repair contracts, durable RepairAttempts, process-external crash/hang supervision, durable budgets/cooldowns, explicit startup readiness, authenticated liveness stabilization, provider-degradation separation, fault injection, and Windows runtime-process-tree handling. The final owner-machine hang attempt completed as `recovered` with six stabilization probes. This is a partial foundation for CAP-046, not completion of Step 19.
+## Next numbered product slice
 
-Detailed acceptance: `docs/research/SELF_AWARENESS_ACCEPTANCE_2026-09-18.md` and `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
+Step 8 — Notes, Tasks, Reminders and Scheduling — remains the next numbered product
+slice when numbered roadmap work resumes.
 
----
+The active Self-Repair/Evolution program is cross-cutting and does not renumber the
+roadmap.
 
-## Accepted post-Step-7 integration interlude
+## Open deferred / parallel items
 
-These capabilities are production-accepted foundations but do **not** mean Steps 9, 10 or 12 are fully complete.
+Current open/deferred items are tracked only in `PROJECT_STATE.md`. The important
+open issues are #19, #44, #45, #46, #63 and #69.
 
-### JARVIS Hands — PR #30
+They remain separate unless evidence shows that one directly blocks the active
+RepairKnowledge slice.
 
-Accepted governed computer-operation foundation:
+## Documentation ownership
 
-- one voice-facing `use_computer` handoff;
-- canonical USER-generation binding, duplicate suppression, per-turn leases and stale-goal supersession;
-- native Windows audio/media/clipboard/window/app operations;
-- Microsoft `winapp` UI Automation for generic structured desktop work;
-- Playwright browser execution;
-- bounded file/document creation and editing;
-- display/Bluetooth/software surfaces within their implemented contracts;
-- bounded Git/development operations instead of arbitrary shell;
-- window-scoped visual Computer Use as last resort, with a deterministic CRITICAL authority floor;
-- generic multilingual grounding;
-- safe fast path for eligible simple reads/reversible actions;
-- postcondition verification and truthful failure/unverified states.
+- `PRODUCT.md` — durable product intent and capability catalogue.
+- `ROADMAP.md` — numbered sequence and high-level status.
+- `CURRENT_ARCHITECTURE.md` — architecture that exists on protected `main`.
+- `CURRENT_PLAN.md` — active work only.
+- `PROJECT_STATE.md` — accepted/deferred/superseded/rejected repository ledger.
+- `QUALITY_GATES.md` — universal validation and acceptance rules.
+- `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — active repair/evolution program.
 
-Unrestricted shell/PowerShell, destructive/security/credential authority and self-modification remain blocked.
+Historical experiments, old acceptance transcripts and superseded ADR/research
+documents are preserved by Git history rather than treated as current truth.
 
-### Pocket 3 native OWNER tracking — PRs #33–#35, #38, #40, #42 and #48
+## Immediate next action
 
-Accepted native DJI path includes BLE/Wi-Fi/DUML transport, A6 OWNER targeting, A5/0x89 native tracking evidence, leave/re-enter reacquisition, confirmed-loss clear/recenter, 10 FPS search/reacquisition -> 1 FPS healthy native lock, resilient session rebuild, stale-state invalidation, Wi-Fi AP settle handling, and startup greeting gated on trusted native lock when configured.
+After this repository reconciliation is merged:
 
-PR #40 additionally hardened cold/restart startup: FFF4 notification subscription must produce valid inbound DUML protocol evidence before pairing begins; the accepted pairing sequence then preserves session wake -> 0.4 s settle -> pair arm -> 0.2 s settle -> JARVIS authentication. BLE readiness/pairing/credential waits are shutdown-aware, one synchronous provisioning batch is bounded to two attempts, reconnect cooldown starts when a failed attempt actually finishes, and a slow successful connection discards the old pre-connection frame before OWNER targeting resumes on a fresh frame.
-
-PR #42 made BLE pairing confirmation reliable with bounded in-session authentication retransmission and service-settle pacing.
-
-PR #48 added transport-liveness evidence and recovery for the live failure where cached native `active=True` could remain stale. Fresh transport RX and fresh native subject evidence now govern recovery progress; stale transport triggers the existing bounded native-session rebuild path. Owner-machine tests proved recovery back to native OWNER lock after transport/Wi-Fi disruption.
-
-### Runtime performance — PR #36
-
-Accepted selective OPT-1 work includes bounded MiniFAS ONNX threading, low-CPU streaming wake proposal + exact verifier, opt-in vision preview, and `jarvis-runtime-profile`.
-
-### Runtime stability — PRs #38 and #43
-
-PR #38 accepted final-empty USER-generation cleanup, near-silent assistant-audio replay, immediate standby, Hands app-field normalization, structured-UI stagnation escalation to governed visual fallback, Pocket A6 ACK race removal, bounded native-session recovery, reliable clear/recenter sequencing and startup lock gating.
-
-PR #43 completed the canonical USER-grounding correction: raw VAD activity advances activity only, while only accepted canonical USER turns advance command identity/generation. It also replaced hardcoded standby phrase matching with provider-neutral semantic `enter_standby`; JARVIS remains the deterministic lifecycle owner, isolates realtime I/O before the local acknowledgement path, closes only the cloud conversation, and returns to local wake detection.
-
-### Power/session semantic safety — PR #49
-
-Power/session operations now fail closed unless the exact latest canonical USER evidence explicitly names both the proposed operation and the local computer/Windows target. The bound operation/evidence are part of the immutable Authority proposal and Windows Hello material, the native power executor rejects unbound/substituted calls, and bounded intent evidence is retained in Authority audit for incident reconstruction. Owner-machine acceptance proved canceling Windows Hello yields `user_canceled` and no restart.
-
-Full consolidated evidence and disposition history: `docs/research/POST_STEP_7_INTEGRATION_ACCEPTANCE.md`.
-
----
-
-## Deferred / unfinished / superseded / rejected ledger
-
-| Item | Disposition | Reason |
-| --- | --- | --- |
-| Turn-specific spoken actor binding | **DEFERRED** | OWNER presence does not prove who spoke a specific turn; speaker/ASD signals need separate calibration and acceptance before gaining authority. |
-| PR #18 Step-3 branch | **UNMERGED HISTORICAL** | Main has moved beyond it; useful actor-binding reasoning remains evidence, but the branch is not current architecture. |
-| Strict independent 4.5D verifier | **DEFERRED / UNRESOLVED** | Required independent release quality was not proven strongly enough. |
-| Phase 4.5E automatic memory influence | **DEFERRED / DISABLED** | Automatic injection would influence ordinary conversation before the release boundary is strong enough. |
-| Phase 4.5E.1 shadow context branch | **FUNCTIONAL PASS / NOT PRODUCTION-ACCEPTED** | Owner-machine functional shadow behavior passed, but the resource-profile gate was explicitly deferred; do not merge the branch as accepted production. |
-| Phase 4.5E.2 Qwen utility gate | **REJECTED** | Multilingual holdout produced unsafe false influence and zero ESSENTIAL recall; no provider-context injection was authorized. |
-| Full local/offline conversation | **DEFERRED** | Minimal truthful provider-failure survival solved the immediate need without a second unvalidated conversation stack. |
-| Issue #50 fixed lifecycle/system speech | **OWNER ACCEPTED / PR #64 MERGED** | Gemini/cloud lifecycle speech remains primary with provider retries disabled; local Windows speech is the bounded fallback. PR #64 merged to protected `main` at `b44376f6f4a8d94967c8740a34f1208d1fcdb1af`. |
-| Issue #44 relative/provider volume fast-path semantics | **DEFERRED BUG** | Absolute provider aliasing and relative volume deltas need bounded normalization/current-volume resolution. |
-| Issue #45 false-interruption resume | **DEFERRED BUG** | Production audio output cannot pause, so configured resume behavior is unavailable. |
-| Issue #46 intermittent LiveKit AudioMixer timeout | **DEFERRED INVESTIGATION** | Warning has not yet been proven to cause a user-visible audio failure. |
-| Issue #56 Pocket OWNER continuity | **OWNER ACCEPTED / PR #61 MERGED** | Exact authorized visual-track continuity bridges temporary biometric/head gaps without converting DJI tracking into identity evidence. PR #61 merged to protected `main` at `a4668ea2708d58b703296f522887d1d6f5ffd085`; owner-machine acceptance is recorded in `docs/research/POCKET3_OWNER_CONTINUITY_ACCEPTANCE_2026-09-20.md`. |
-| Issue #57 durable work TTS retry backoff | **OWNER ACCEPTED / PR #62 MERGED** | WorkDelivery now persists retry metadata, respects provider RetryInfo, uses bounded fallback backoff, suppresses premature retries and disables nested LiveKit retries only for WorkDelivery speech. Owner-machine acceptance proved 24.8s then 59.2s provider-directed cooldowns with no 2-second retry hammering. PR #62 merged to protected `main` at `9a3cd00ac24d57b8692b771cccae93f8621e4d5d`. |
-| Issue #63 blocked background-work status truth | **DEFERRED FOLLOW-UP** | Owner-machine testing exposed stale 15% progress/ETA language while research was blocked by missing Exa credentials and Gemini provider pressure. Status responses must surface canonical blockers and avoid normal ETA claims when recovery time is unknown. |
-| Issue #19 production voice isolation / turn ownership | **DEFERRED RESEARCH** | Accepted security evidence remains shadow-only; rejected isolation/target-speaker candidates are not production control. |
-| Persistent concurrent work orchestration | **OWNER ACCEPTED / PR #55 MERGED** | Durable WorkItems, DBOS recovery, single-brain voice priority, bounded resources, structured progress/status, deferred delivery and isolated development execution passed owner-machine acceptance on 2026-09-20. |
-| Proactive monitoring / event-driven background work | **PLANNED** | Step 15 remains the later product slice for proactive/event-driven behavior; it will reuse the orchestration foundation rather than invent a second background-work system. |
-| PR #27 | **SUPERSEDED** | Replaced by accepted Step-7 PR #28. |
-| PR #31 | **SUPERSEDED** | Profiler work recovered cleanly in PR #36. |
-| PR #32 | **SUPERSEDED / PARTIALLY RECOVERED** | Proven performance pieces were recovered; stale Pocket/runtime drift and rejected experiments were excluded. |
-| Workstation auto-lock experiment | **REJECTED / NOT PRODUCTION** | Explicitly excluded from accepted Pocket/performance recovery; OWNER absence affects tracking/recenter, not Windows locking. |
-| PR #37 | **SUPERSEDED AS STANDALONE** | Its canonical generation fix is retained in PR #38. |
-| Steps 9/10/12 | **PLANNED WITH PARTIAL FOUNDATIONS** | Hands pulled forward bounded foundations, not the complete future product slices. |
-| Steps 13–20 | **PLANNED / PARTIAL FOUNDATIONS** | Self-Awareness and deterministic R1/R2 Self-Repair foundations already exist; full proactive, learning, repair and self-improvement roadmap slices remain future governed work. |
-
----
-
-## Persistent Concurrent Work Orchestration — accepted foundation
-
-PR #55 implements the owner-accepted foundation from issue #53:
-
-1. JARVIS-owned provider-neutral WorkItems/steps/deliveries persist independently of voice/model sessions;
-2. DBOS supplies durable workflow recovery and messaging while JARVIS retains canonical semantic state;
-3. live owner conversation has absolute priority over background model reasoning; already-running deterministic work may continue;
-4. dependencies, priorities, resource leases, pause/resume/cancel/retry and WAITING_FOR_OWNER are explicit canonical states;
-5. SILENT / WHEN_IDLE / INTERRUPT delivery is persisted and only marked delivered after speech succeeds;
-6. current worker support is deliberately bounded to research and isolated development rather than pretending all future WorkTypes exist;
-7. development work uses per-WorkItem Git worktrees, locked-down Docker pytest, disabled Git hooks/textconv, secret-content filtering, and ordered proof of latest edit -> passing sandbox tests -> final diff -> clean isolated commit;
-8. production DBOS execution requires explicit Postgres; the canonical local JARVIS work store remains SQLite/WAL;
-9. no protected-main push/merge/deployment or Authority expansion is granted by this foundation.
-
-Owner-machine acceptance passed on 2026-09-20. Runtime head `b2ba211becdef1b123852a44e7d0c39ffe36cf58` passed Code Quality run #3929, final PR head `a38b2e5dd3f1e4c31f08bd7efbcd0457617eee91` passed Code Quality run #3951, and PR #55 merged to protected `main` as `3980b212d657106abd45bfae119d2207551c409f`. Acceptance detail is in `docs/research/PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
-
-## Self-Repair and Self-Evolution program — active cross-cutting continuation
-
-The deterministic Self-Repair foundation is complete and owner accepted. The original
-bounded interlude has therefore ended.
-
-The complete forward program is now defined only by
-`docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
-
-Current sequence:
-
-1. **Phase 1 deterministic R1/R2 Self-Repair — DONE / OWNER ACCEPTED**;
-2. **Phase 2 RepairKnowledge Foundation — NEXT**;
-3. DiagnosticModelRouter;
-4. AI-assisted DIAGNOSTICS WorkItems;
-5. sandboxed source-repair candidates;
-6. governed deployment / production verification / rollback;
-7. closed-loop repair learning;
-8. Repair Curriculum;
-9. specialist model benchmarking when sufficient verified data exists;
-10. capability-gap / weakness detection;
-11. shadow self-improvement and baseline comparison;
-12. governed self-evolution.
-
-This program must reuse Self-Awareness, engineering incidents, WorkItems/DBOS,
-isolated development worktrees, sandboxed tests, canonical Authority, protected-main
-repository governance and the accepted external supervisor.
-
-RepairKnowledge and model reasoning remain separate from executable RepairPolicy
-authority. No phase inherits permission to silently merge/deploy, weaken
-Authority/CI/sandbox controls, expand permissions or self-declare verification.
-
-## Step 8 — next numbered product slice after the interlude
-
-Step 8 must reuse the durable WorkItem foundation while remaining research-first from the reconciled production baseline:
-
-1. recover CAP-027/CAP-028 requirements and privacy/authority constraints;
-2. inspect conversation, memory, authority, capability-runtime, Hands and lifecycle boundaries;
-3. research mature notes/tasks/reminders/scheduling and platform notification/scheduling technology;
-4. define canonical JARVIS task/reminder truth separately from provider reasoning and platform delivery state;
-5. define timezone, recurrence, edit/cancel, acknowledgement, missed-run, restart/recovery and audit semantics;
-6. reuse canonical capability/authority boundaries;
-7. propose the smallest provider-neutral architecture;
-8. obtain owner architecture approval before implementation.
-
-## Immediate Next Action
-
-**AFTER THIS DOCUMENTATION RECONCILIATION IS ACCEPTED, BEGIN PHASE 2 — REPAIRKNOWLEDGE FOUNDATION.**
-
-Implementation must start from the master plan and stop at the Phase-2 exit criteria:
-canonical RepairKnowledge contracts, durable lifecycle/provenance, retrieval and
-proof that learned knowledge cannot execute or mutate RepairPolicy authority.
-
-Do not start DiagnosticModelRouter or source repair in the same implementation slice.
-Keep issue #63 separate: blocked-work status truth is not itself a Self-Repair
-restart trigger.
+**begin Phase 2 — RepairKnowledge Foundation.**
