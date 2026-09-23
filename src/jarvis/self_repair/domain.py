@@ -106,9 +106,9 @@ class RepairTrigger:
             raise ValueError("trigger_id must not be empty")
         if not isinstance(self.health_state, HealthState):
             raise TypeError("health_state must be a HealthState")
-        if self.process_exit_code is not None and isinstance(
-            self.process_exit_code,
-            bool,
+        if self.process_exit_code is not None and (
+            isinstance(self.process_exit_code, bool)
+            or not isinstance(self.process_exit_code, int)
         ):
             raise TypeError("process_exit_code must be an integer or None")
 
@@ -245,6 +245,12 @@ class RepairPolicy:
             ),
         )
 
+        if not isinstance(self.action_kind, RepairActionKind):
+            raise RepairPolicyError("action_kind must be a RepairActionKind")
+        if not isinstance(self.risk_class, RepairRiskClass):
+            raise RepairPolicyError("risk_class must be a RepairRiskClass")
+        if not isinstance(self.escalation, RepairEscalation):
+            raise RepairPolicyError("escalation must be a RepairEscalation")
         if self.version <= 0:
             raise RepairPolicyError("policy version must be positive")
         if self.max_attempts <= 0:
@@ -381,6 +387,34 @@ class RepairAttempt:
         now_epoch: float | None = None,
         attempt_id: str | None = None,
     ) -> "RepairAttempt":
+        if not policy.matches(trigger):
+            raise RepairAuthorizationError(
+                "attempt policy does not match the supplied trigger"
+            )
+        if action.trigger_id != trigger.trigger_id:
+            raise RepairAuthorizationError(
+                "attempt action belongs to a different trigger"
+            )
+        if action.policy_id != policy.policy_id:
+            raise RepairAuthorizationError(
+                "attempt action belongs to a different policy"
+            )
+        if action.policy_version != policy.version:
+            raise RepairAuthorizationError(
+                "attempt action policy version does not match"
+            )
+        if action.component_id != trigger.component_id:
+            raise RepairAuthorizationError(
+                "attempt action target does not match trigger component"
+            )
+        if action.kind is not policy.action_kind:
+            raise RepairAuthorizationError(
+                "attempt action kind does not match policy"
+            )
+        if action.risk_class is not policy.risk_class:
+            raise RepairAuthorizationError(
+                "attempt action risk does not match policy"
+            )
         return cls(
             attempt_id=attempt_id or str(uuid.uuid4()),
             incident_id=str(incident_id).strip(),
