@@ -4,6 +4,10 @@ Related:
 - issue #65
 - ADR-019 Self-Repair Foundation
 - PR #77 bounded runtime liveness watchdog
+- PR #82 bounded direct control I/O and Git polling timeout
+- PR #83 watchdog isolation from background update polling
+- PR #84 Windows runtime process-tree fault injection
+- PR #85 Windows runtime process-tree force cleanup
 
 ## Purpose
 
@@ -28,6 +32,8 @@ Authority changes, model-selected effectors, or unregistered repair actions.
 | Crash and liveness policies have independent restart budgets | `test_crash_and_liveness_restart_budgets_are_independent` |
 | Existing owner-approved update rollback remains unchanged | `test_approved_update_rolls_back_when_new_revision_never_becomes_ready` |
 | Fault injection cannot target an unrelated process | `test_select_supervised_runtime_refuses_unsupervised_process` and `test_select_supervised_runtime_refuses_ambiguous_targets` |
+| Windows venv launcher + interpreter are faulted as one supervised runtime tree | `test_inject_fault_targets_only_supervised_runtime_tree` and `test_partial_hang_rolls_back_already_suspended_descendants` |
+| Forced recovery cleanup removes surviving runtime descendants before the root wrapper | `test_force_runtime_tree_cleanup_targets_descendants_before_root` and `test_stop_jarvis_force_cleans_captured_runtime_tree` |
 | PID reuse is revalidated before destructive fault injection | `test_inject_fault_revalidates_process_identity` |
 
 Repository gate:
@@ -118,3 +124,63 @@ Phase 5 passes only when:
 The deterministic Self-Repair foundation remains bounded to registered R1/R2
 policies. RepairKnowledge, DiagnosticModelRouter and sandbox curriculum remain
 separate later layers and cannot expand execution authority.
+
+
+## Owner-machine acceptance result — PASS
+
+Final accepted revision: `6a0ba73f46f68d9d0c2e8fa2c20c5fccaed8378a`.
+
+### Crash recovery
+
+Owner-machine crash injection passed before the final hang retest:
+- the supervised runtime exited unexpectedly;
+- the registered same-version crash policy performed the bounded restart;
+- the replacement published startup readiness;
+- repeated authenticated liveness probes stabilized;
+- the durable RepairAttempt completed as `RECOVERED`.
+
+### Hang recovery
+
+The final Windows owner-machine hang test used the corrected process-tree injector and
+reported that two runtime processes were suspended: the venv launcher and the
+underlying Python interpreter.
+
+Observed supervisor sequence:
+- liveness probe failed `1/3`;
+- liveness probe failed `2/3`;
+- liveness probe failed `3/3`;
+- the confirmation probe failed;
+- the registered `supervisor-runtime-unresponsive-v1` policy became eligible;
+- graceful shutdown timed out, as expected for the fully suspended runtime;
+- exactly two runtime-tree processes were force-terminated;
+- a same-revision replacement child started;
+- startup readiness completed;
+- repeated authenticated liveness stabilization completed;
+- the supervisor reported `JARVIS liveness recovery succeeded`.
+
+Durable incident evidence completed with:
+- `execution_result = unresponsive child restart stabilized`;
+- `verifier_result = readiness_and_liveness_stable:6_probes`;
+- `verdict = recovered`.
+
+### Windows process-tree finding
+
+The acceptance run exposed an important Windows-specific behavior: launching the
+runtime through the virtual-environment executable creates a launcher process plus
+the underlying Python interpreter. Earlier hang injections suspended only the
+launcher, so the real interpreter remained responsive and the watchdog correctly
+treated the runtime as healthy.
+
+PR #84 corrected the acceptance injector to operate on only the selected supervised
+runtime tree. PR #85 applied the same process-tree ownership model to forced recovery
+cleanup so a frozen interpreter cannot survive as an orphan.
+
+### Final status
+
+Self-Repair Phase 5 / the deterministic R1/R2 foundation is accepted on the owner
+machine. Issue #65 may be closed.
+
+This acceptance does not expand authority beyond the already documented registered
+R1/R2 repair boundary. Source mutation, autonomous PR creation, protected-main
+changes, Authority modification, and model-selected effectors remain outside this
+foundation.
