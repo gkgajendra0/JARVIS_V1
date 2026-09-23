@@ -137,9 +137,7 @@ def test_liveness_timeout_resets_direct_socket_connection() -> None:
         control.close()
 
     assert connection.closed is True
-    assert connection.writes == [
-        b'{"type":"liveness_probe","request_id":"1"}\n'
-    ]
+    assert connection.writes == [b'{"type":"liveness_probe","request_id":"1"}\n']
 
 
 def test_direct_socket_receive_handles_fragmented_control_frame() -> None:
