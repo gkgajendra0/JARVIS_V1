@@ -10,6 +10,7 @@ from jarvis.incidents.models import (
 )
 from jarvis.incidents.store import SqliteIncidentStore
 from jarvis.self_model.health import HealthSnapshot, HealthState
+from jarvis.self_repair.domain import RepairAttempt
 
 
 class IncidentService:
@@ -122,6 +123,25 @@ class IncidentService:
         )
         self._store.upsert(resolved)
         return resolved
+
+    def record_repair_attempt(self, attempt: RepairAttempt) -> RepairAttempt:
+        """Persist a repair attempt under its canonical incident."""
+
+        self._require(attempt.incident_id)
+        self._store.upsert_repair_attempt(attempt)
+        return attempt
+
+    def get_repair_attempt(self, attempt_id: str) -> RepairAttempt | None:
+        return self._store.get_repair_attempt(attempt_id)
+
+    def list_repair_attempts(
+        self,
+        incident_id: str,
+        *,
+        limit: int = 100,
+    ) -> tuple[RepairAttempt, ...]:
+        self._require(incident_id)
+        return self._store.list_repair_attempts(incident_id, limit=limit)
 
     def similar_resolved(
         self,
