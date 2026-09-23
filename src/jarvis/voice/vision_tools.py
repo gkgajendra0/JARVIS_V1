@@ -30,6 +30,8 @@ class VisionAgentTools:
         # armed=False makes the realtime model think native OWNER lock still
         # needs a second "follow mode" step.
         status.pop("armed", None)
+        status.pop("target_id", None)
+        status.pop("target_visible", None)
 
         safe_events: list[dict[str, object]] = []
         raw_events = report.get("recent_events", [])
@@ -64,8 +66,8 @@ class VisionAgentTools:
         are currently visible to tracking. Detector candidate counts are intentionally
         hidden because multiple low-confidence boxes can belong to the same person.
         This tool does not expose image pixels or general scene understanding. Use it
-        for tracked-person count, head-detection count, target visibility, current
-        framing source, adaptive zoom command state, and recent tracking transitions.
+        for tracked-person count, head-detection count, current framing source,
+        adaptive zoom command state, and recent tracking transitions.
         `framing_source` may be `head`, `head_hold`, `body`, or null; do not describe
         a current head detection when the status says `head_hold` or `body`. Do not
         use this tool to infer clothing colour, arbitrary objects, text, furniture,
@@ -77,7 +79,6 @@ class VisionAgentTools:
             "capabilities": [
                 "person_track_count",
                 "head_detection_count",
-                "target_visibility",
                 "framing_source",
                 "adaptive_target_zoom",
                 "recent_tracking_transitions",
