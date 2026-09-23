@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from jarvis.incidents import IncidentService, SqliteIncidentStore
 from jarvis.self_model import HealthState
-from jarvis.self_repair import RepairTrigger, RepairVerdict
+from jarvis.self_repair import RepairActionKind, RepairTrigger, RepairVerdict
 from jarvis.self_repair.supervisor import (
     CrashFingerprint,
     SupervisorFailurePhase,
