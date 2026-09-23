@@ -22,9 +22,7 @@ def _snapshot(
         ),
         parent_pid=1,
         parent_cmdline=(
-            ("python", "jarvis-dev")
-            if supervised
-            else ("python", "unrelated-parent")
+            ("python", "jarvis-dev") if supervised else ("python", "unrelated-parent")
         ),
     )
 
