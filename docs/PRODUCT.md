@@ -47,7 +47,7 @@ No implementation is protected by sunk cost. Historical branches are evidence, n
 - A shared capability/authority boundary is reused rather than creating separate permission systems per feature.
 - Development/repair tooling does not automatically gain normal user-facing runtime authority.
 
-The old `gkgajendra0/JARVIS` repository remains engineering reference only. `LEGACY_REQUIREMENTS_MAP.md` maps useful old intent into V1.
+The old `gkgajendra0/JARVIS` repository remains engineering reference only. Any migrated intent that still matters is represented in this capability catalogue or `PROJECT_STATE.md`; Git history is the archive for obsolete migration notes.
 
 ## Capability Status Vocabulary
 
@@ -186,8 +186,7 @@ The user should be able to understand what JARVIS knows, what it inferred, what 
 - `CURRENT_ARCHITECTURE.md` — accepted running architecture only.
 - `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — authoritative staged program plan for Self-Repair, Repair Learning and governed Self-Evolution.
 - `QUALITY_GATES.md` — universal completion/validation rules.
-- `LEGACY_REQUIREMENTS_MAP.md` — one-time old-JARVIS migration reference.
-- `docs/research/` — research, experiments, benchmarks and acceptance evidence.
-- `docs/decisions/` — durable architecture decisions.
+- `PROJECT_STATE.md` — canonical accepted/deferred/superseded/rejected repository ledger.
+- `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — active staged repair/evolution program.
 
-For the accepted post-Step-7 Hands/Pocket/performance/stability baseline and explicit completed/deferred/superseded/rejected ledger, see `docs/research/POST_STEP_7_INTEGRATION_ACCEPTANCE.md`.
+For accepted, deferred, superseded and rejected repository state, see `PROJECT_STATE.md`.
