@@ -158,6 +158,35 @@ def build_runtime_child_exit_policy(
     )
 
 
+
+def build_runtime_liveness_policy(
+    *,
+    max_attempts: int = 3,
+    rolling_window_seconds: float = 300.0,
+    cooldown_seconds: float = 2.0,
+    backoff_multiplier: float = 2.0,
+) -> RepairPolicy:
+    return RepairPolicy(
+        policy_id="supervisor-runtime-unresponsive-v1",
+        version=1,
+        trigger_source="dev_supervisor",
+        component_id="voice_runtime",
+        reason_code="runtime_unresponsive",
+        action_kind=RepairActionKind.RESTART_RUNTIME_CHILD,
+        risk_class=RepairRiskClass.R2_RESTART,
+        preconditions=("same_local_revision", "restart_budget_available"),
+        max_attempts=max_attempts,
+        rolling_window_seconds=rolling_window_seconds,
+        cooldown_seconds=cooldown_seconds,
+        backoff_multiplier=backoff_multiplier,
+        verification_contract="startup_readiness_and_liveness_stabilization",
+        health_states=(HealthState.FAILED,),
+        idempotent=False,
+        reversible=True,
+        automatic=True,
+    )
+
+
 def _delay_for_budget_index(policy: RepairPolicy, budget_index: int) -> float:
     if budget_index <= 0:
         raise ValueError("budget_index must be positive")
@@ -259,10 +288,12 @@ class SupervisorRepairController:
         incidents: IncidentService,
         *,
         policy: RepairPolicy | None = None,
+        additional_policies: Iterable[RepairPolicy] = (),
     ) -> None:
         self._incidents = incidents
         self.policy = policy or build_runtime_child_exit_policy()
-        self.registry = RepairRegistry((self.policy,))
+        policies = (self.policy, *tuple(additional_policies))
+        self.registry = RepairRegistry(policies)
 
     def plan_unexpected_exit(
         self,
@@ -271,20 +302,56 @@ class SupervisorRepairController:
         commit_sha: str,
         now_epoch: float,
     ) -> SupervisorRepairPlan:
+        return self._plan_runtime_failure(
+            reason_code="unexpected_child_exit",
+            exit_code=exit_code,
+            commit_sha=commit_sha,
+            now_epoch=now_epoch,
+            title="JARVIS runtime child exited unexpectedly",
+            symptom=f"voice runtime child exited unexpectedly (exit_code={exit_code})",
+        )
+
+    def plan_liveness_failure(
+        self,
+        *,
+        commit_sha: str,
+        now_epoch: float,
+    ) -> SupervisorRepairPlan:
+        return self._plan_runtime_failure(
+            reason_code="runtime_unresponsive",
+            exit_code=None,
+            commit_sha=commit_sha,
+            now_epoch=now_epoch,
+            title="JARVIS runtime became unresponsive",
+            symptom="authenticated runtime liveness probes repeatedly failed",
+        )
+
+    def _plan_runtime_failure(
+        self,
+        *,
+        reason_code: str,
+        exit_code: int | None,
+        commit_sha: str,
+        now_epoch: float,
+        title: str,
+        symptom: str,
+    ) -> SupervisorRepairPlan:
         fingerprint = CrashFingerprint.create(
             exit_code=exit_code,
             phase=SupervisorFailurePhase.RUNTIME,
-            reason_code="unexpected_child_exit",
+            reason_code=reason_code,
             component_ids=("voice_runtime",),
             commit_sha=commit_sha,
         )
         incident = self._find_or_create_incident(
             fingerprint,
+            title=title,
+            symptom=symptom,
             now_epoch=now_epoch,
         )
         trigger = RepairTrigger.create(
             component_id="voice_runtime",
-            reason_code="unexpected_child_exit",
+            reason_code=reason_code,
             source="dev_supervisor",
             health_state=HealthState.FAILED,
             process_exit_code=exit_code,
@@ -294,11 +361,13 @@ class SupervisorRepairController:
         )
         matched = self.registry.match(trigger)
         if matched is None:
-            raise RuntimeError("runtime child exit repair policy is not registered")
+            raise RuntimeError(
+                f"runtime repair policy is not registered: {reason_code}"
+            )
 
         attempts = self._incidents.list_repair_attempts(
             incident.incident_id,
-            limit=max(self.policy.max_attempts * 10, 100),
+            limit=max(matched.max_attempts * 10, 100),
         )
         budget = evaluate_restart_budget(
             matched,
@@ -392,6 +461,8 @@ class SupervisorRepairController:
         self,
         fingerprint: CrashFingerprint,
         *,
+        title: str,
+        symptom: str,
         now_epoch: float,
     ) -> IncidentRecord:
         for incident in self._incidents.list_recent(limit=100):
@@ -410,11 +481,8 @@ class SupervisorRepairController:
                 return incident
 
         incident = self._incidents.create_manual(
-            title="JARVIS runtime child exited unexpectedly",
-            symptom=(
-                "voice runtime child exited unexpectedly "
-                f"(exit_code={fingerprint.exit_code})"
-            ),
+            title=title,
+            symptom=symptom,
             affected_components=("voice_runtime",),
             severity=IncidentSeverity.ERROR,
             now_epoch=now_epoch,
@@ -423,7 +491,8 @@ class SupervisorRepairController:
             kind="crash_fingerprint",
             reference=fingerprint.evidence_reference,
             summary=(
-                f"runtime exit code={fingerprint.exit_code}; "
+                f"reason={fingerprint.reason_code}; "
+                f"exit_code={fingerprint.exit_code}; "
                 f"commit={fingerprint.commit_sha[:12]}"
             ),
             component_id="voice_runtime",
