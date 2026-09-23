@@ -77,10 +77,7 @@ def _evidence_references(values: Iterable[object]) -> tuple[str, ...]:
         if reference and reference not in normalized:
             normalized.append(reference)
     if len(normalized) > MAX_EVIDENCE_REFERENCES:
-        raise ValueError(
-            "repair evidence references exceed "
-            f"{MAX_EVIDENCE_REFERENCES}"
-        )
+        raise ValueError(f"repair evidence references exceed {MAX_EVIDENCE_REFERENCES}")
     return tuple(normalized)
 
 
@@ -408,13 +405,9 @@ class RepairAttempt:
                 "attempt action target does not match trigger component"
             )
         if action.kind is not policy.action_kind:
-            raise RepairAuthorizationError(
-                "attempt action kind does not match policy"
-            )
+            raise RepairAuthorizationError("attempt action kind does not match policy")
         if action.risk_class is not policy.risk_class:
-            raise RepairAuthorizationError(
-                "attempt action risk does not match policy"
-            )
+            raise RepairAuthorizationError("attempt action risk does not match policy")
         return cls(
             attempt_id=attempt_id or str(uuid.uuid4()),
             incident_id=str(incident_id).strip(),
