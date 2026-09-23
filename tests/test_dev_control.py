@@ -82,6 +82,13 @@ async def test_dev_control_client_answers_authenticated_liveness_probe() -> None
         writer: asyncio.StreamWriter,
     ) -> None:
         observed["hello"] = json.loads(await reader.readline())
+        writer.write(b'{"type":"readiness_probe","request_id":"ready-1"}\n')
+        await writer.drain()
+        observed["readiness_before"] = json.loads(await reader.readline())
+        client.mark_ready()
+        writer.write(b'{"type":"readiness_probe","request_id":"ready-2"}\n')
+        await writer.drain()
+        observed["readiness_after"] = json.loads(await reader.readline())
         writer.write(b'{"type":"liveness_probe","request_id":"probe-1"}\n')
         await writer.drain()
         observed["liveness"] = json.loads(await reader.readline())
@@ -113,6 +120,16 @@ async def test_dev_control_client_answers_authenticated_liveness_probe() -> None
     assert observed["hello"] == {
         "type": "hello",
         "token": "test-token",
+    }
+    assert observed["readiness_before"] == {
+        "type": "readiness_response",
+        "request_id": "ready-1",
+        "ready": False,
+    }
+    assert observed["readiness_after"] == {
+        "type": "readiness_response",
+        "request_id": "ready-2",
+        "ready": True,
     }
     assert observed["liveness"] == {
         "type": "liveness_response",

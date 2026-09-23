@@ -18,7 +18,7 @@ Authority changes, model-selected effectors, or unregistered repair actions.
 | ADR / issue property | Automated evidence |
 | --- | --- |
 | Unexpected child exit uses only the registered bounded R2 restart | `test_unexpected_exit_requires_stabilization_before_recovered` |
-| Recovery requires startup readiness plus authenticated liveness stabilization | `test_stabilization_requires_repeated_liveness_probes` and `test_stabilization_fails_when_authenticated_liveness_fails` |
+| Recovery requires explicit core-runtime readiness plus authenticated liveness stabilization | `test_wait_for_child_ready_requires_explicit_runtime_ready`, `test_dev_control_connects_before_audio_start_and_marks_ready_after_audio`, `test_stabilization_requires_repeated_liveness_probes`, and `test_stabilization_fails_when_authenticated_liveness_fails` |
 | Repeated identical failure exhausts durable budget and stops | `test_restart_budget_survives_store_reopen_and_exhausts`, `test_readiness_failures_exhaust_restart_budget`, and `test_liveness_failures_consume_budget_and_stop_restarting` |
 | Provider quota/degradation cannot authorize runtime restart | `test_phase5_provider_quota_has_no_registered_runtime_restart` |
 | Changed local revision aborts the old repair plan | `test_phase5_revision_change_aborts_before_any_restart_attempt` |
@@ -44,7 +44,10 @@ Hello gates.
 Preconditions:
 - use a clean repository on the accepted Self-Repair revision;
 - run JARVIS through `jarvis-dev`, not `jarvis-voice` directly;
-- confirm the initial authenticated child readiness completes;
+- confirm the child establishes authenticated control and then publishes explicit
+  core-runtime readiness after vision/audio initialization;
+- startup readiness is bounded to 120 seconds so hardware/model initialization can
+  complete without treating mere control-channel connection as readiness;
 - keep a second PowerShell terminal open for the injector.
 
 ### A. Unexpected child crash
