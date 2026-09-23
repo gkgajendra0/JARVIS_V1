@@ -39,7 +39,7 @@ class DevSupervisorConfig:
     poll_seconds: float = 5.0
     shutdown_timeout_seconds: float = 10.0
     approval_timeout_seconds: float = 45.0
-    startup_timeout_seconds: float = 45.0
+    startup_timeout_seconds: float = 120.0
     crash_restart_max_attempts: int = 3
     crash_restart_window_seconds: float = 300.0
     crash_restart_cooldown_seconds: float = 2.0
@@ -230,9 +230,38 @@ class VoiceControlServer:
             raise
 
     def wait_for_child_ready(self, *, timeout_seconds: float) -> None:
-        """Require the child to establish its authenticated control connection."""
+        """Require authenticated control plus explicit core-runtime readiness."""
+        deadline = time.monotonic() + timeout_seconds
         try:
             self._ensure_child(timeout_seconds=timeout_seconds)
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("runtime readiness timed out")
+
+                connection = self._connection
+                if connection is None:
+                    raise RuntimeError("JARVIS voice control connection is unavailable")
+                connection.settimeout(min(3.0, remaining))
+
+                request_id = self._next_request_id()
+                self._send(
+                    {"type": "readiness_probe", "request_id": request_id}
+                )
+                response = self._receive()
+                if (
+                    response.get("type") != "readiness_response"
+                    or response.get("request_id") != request_id
+                ):
+                    raise RuntimeError("unexpected JARVIS readiness response")
+
+                ready = response.get("ready")
+                if ready is True:
+                    return
+                if ready is not False:
+                    raise TypeError("invalid JARVIS readiness state")
+
+                time.sleep(min(0.5, max(0.0, deadline - time.monotonic())))
         except (
             OSError,
             TimeoutError,
