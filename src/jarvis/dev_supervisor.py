@@ -243,11 +243,14 @@ class VoiceControlServer:
             request_id = self._next_request_id()
             self._send({"type": "liveness_probe", "request_id": request_id})
             response = self._receive()
-            return (
+            valid = (
                 response.get("type") == "liveness_response"
                 and response.get("request_id") == request_id
                 and response.get("alive") is True
             )
+            if not valid:
+                self._reset_child()
+            return valid
         except (
             OSError,
             TimeoutError,
