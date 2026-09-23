@@ -75,8 +75,7 @@ def test_trigger_is_normalized_and_immutable() -> None:
 
 def test_trigger_rejects_unbounded_evidence() -> None:
     references = tuple(
-        f"evidence:{index}"
-        for index in range(MAX_EVIDENCE_REFERENCES + 1)
+        f"evidence:{index}" for index in range(MAX_EVIDENCE_REFERENCES + 1)
     )
 
     with pytest.raises(ValueError, match="evidence references exceed"):
@@ -116,9 +115,7 @@ def test_unknown_reason_returns_no_repair() -> None:
     registry = RepairRegistry((_restart_policy(),))
 
     assert registry.match(_trigger(reason_code="provider_quota_exhausted")) is None
-    assert registry.action_for(
-        _trigger(reason_code="provider_quota_exhausted")
-    ) is None
+    assert registry.action_for(_trigger(reason_code="provider_quota_exhausted")) is None
 
 
 def test_unregistered_action_cannot_execute() -> None:
