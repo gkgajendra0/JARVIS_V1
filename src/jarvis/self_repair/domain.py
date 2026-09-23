@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from enum import Enum, IntEnum
-from collections.abc import Iterable
 
 from jarvis.self_model.health import HealthState
 
