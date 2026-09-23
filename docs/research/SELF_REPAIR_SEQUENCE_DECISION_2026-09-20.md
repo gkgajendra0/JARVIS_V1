@@ -2,11 +2,15 @@
 
 ## Status
 
-**OWNER-APPROVED SEQUENCE CHANGE — DOCUMENTATION / PLANNING ONLY**
+**HISTORICAL OWNER-APPROVED SEQUENCE — COMPLETED 2026-09-23**
 
-This record captures the decision to perform a bounded reliability cleanup and then pull a **Self-Repair Foundation interlude** forward before formal Step 8 implementation.
+This record captures the historical decision to perform a bounded reliability cleanup and then pull a **Self-Repair Foundation interlude** forward before formal Step 8 implementation.
 
-This does **not** mark Step 19 (CAP-046) complete, does not authorize autonomous self-modification, and does not change the numbered roadmap. Step 8 remains the next numbered product slice after the interlude.
+That sequence is complete: issues #56, #57 and #50 were accepted, the deterministic Self-Repair foundation was implemented and owner-machine accepted on 2026-09-23, and issue #65 is closed.
+
+This document no longer owns forward sequencing. The complete continuation from RepairKnowledge through governed Self-Evolution is owned by `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
+
+The accepted foundation does **not** mark Step 19 (CAP-046) complete and does not authorize autonomous self-modification.
 
 ## Why this sequence changes now
 
@@ -163,6 +167,24 @@ Persistent Concurrent Work Orchestration — accepted
 
 This follows the same foundation-first pattern already used for Self-Awareness and Persistent Concurrent Work Orchestration without renumbering the roadmap.
 
-## Immediate action
+## Outcome
 
-Begin cleanup issue **#56** in its own branch/PR. Do not mix #57 or #50 into the same change unless evidence proves they share one inseparable root cause.
+The sequence completed successfully:
+
+```text
+Persistent Concurrent Work Orchestration — accepted
+-> reliability cleanup #56 — accepted
+-> #57 — accepted
+-> #50 — accepted
+-> deterministic Self-Repair R1/R2 foundation — accepted
+-> issue #65 closed
+```
+
+Owner-machine acceptance evidence is recorded in
+`SELF_REPAIR_PHASE5_ACCEPTANCE_2026-09-23.md`.
+
+The next active cross-cutting development slice is **RepairKnowledge Foundation**,
+as defined by `../SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
+
+Step 8 remains the next numbered product slice; the continuing Self-Repair/Evolution
+program does not renumber the roadmap.
