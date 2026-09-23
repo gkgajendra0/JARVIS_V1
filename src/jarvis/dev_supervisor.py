@@ -452,9 +452,7 @@ def _recover_unexpected_exit(
             continue
 
         try:
-            control.wait_for_child_ready(
-                timeout_seconds=config.startup_timeout_seconds
-            )
+            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
         except RuntimeError:
             _stop_jarvis(
                 restarted,
