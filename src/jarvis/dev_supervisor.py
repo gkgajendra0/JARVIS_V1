@@ -530,8 +530,7 @@ def _stop_jarvis(
 
     killed = _kill_runtime_process_tree(runtime_tree)
     print(
-        "Graceful shutdown timed out; force-terminated "
-        f"{killed} runtime process(es)."
+        f"Graceful shutdown timed out; force-terminated {killed} runtime process(es)."
     )
     try:
         process.wait(timeout=3.0)
