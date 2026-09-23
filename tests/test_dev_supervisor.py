@@ -42,6 +42,8 @@ def test_supervisor_config_rejects_invalid_values() -> None:
         DevSupervisorConfig(liveness_failure_threshold=0)
     with pytest.raises(ValueError):
         DevSupervisorConfig(liveness_failure_threshold=True)
+    with pytest.raises(ValueError):
+        DevSupervisorConfig(git_fetch_timeout_seconds=0)
 
 
 def test_environment_config_defaults_to_main(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -69,39 +71,28 @@ def test_wait_for_child_ready_requires_explicit_runtime_ready(
         def __init__(self) -> None:
             self.timeouts: list[float] = []
             self.closed = False
-
-        def settimeout(self, timeout: float) -> None:
-            self.timeouts.append(timeout)
-
-        def close(self) -> None:
-            self.closed = True
-
-    class FakeStream:
-        def __init__(self) -> None:
             self.responses = [
                 b'{"type":"readiness_response","request_id":"1","ready":false}\n',
                 b'{"type":"readiness_response","request_id":"2","ready":true}\n',
             ]
             self.writes: list[bytes] = []
-            self.closed = False
 
-        def write(self, data: bytes) -> None:
+        def settimeout(self, timeout: float) -> None:
+            self.timeouts.append(timeout)
+
+        def sendall(self, data: bytes) -> None:
             self.writes.append(data)
 
-        def flush(self) -> None:
-            pass
-
-        def readline(self) -> bytes:
+        def recv(self, size: int) -> bytes:
+            assert size > 0
             return self.responses.pop(0)
 
         def close(self) -> None:
             self.closed = True
 
     connection = FakeConnection()
-    stream = FakeStream()
     control = supervisor.VoiceControlServer()
     control._connection = connection
-    control._stream = stream
     monkeypatch.setattr(supervisor.time, "sleep", lambda _: None)
 
     try:
@@ -109,12 +100,102 @@ def test_wait_for_child_ready_requires_explicit_runtime_ready(
     finally:
         control.close()
 
-    assert stream.writes == [
+    assert connection.writes == [
         b'{"type":"readiness_probe","request_id":"1"}\n',
         b'{"type":"readiness_probe","request_id":"2"}\n',
     ]
     assert connection.closed is True
-    assert stream.closed is True
+
+
+def test_liveness_timeout_resets_direct_socket_connection() -> None:
+    class FrozenConnection:
+        def __init__(self) -> None:
+            self.closed = False
+            self.writes: list[bytes] = []
+
+        def settimeout(self, timeout: float) -> None:
+            assert timeout > 0
+
+        def sendall(self, data: bytes) -> None:
+            self.writes.append(data)
+
+        def recv(self, size: int) -> bytes:
+            assert size > 0
+            raise TimeoutError("frozen runtime")
+
+        def close(self) -> None:
+            self.closed = True
+
+    connection = FrozenConnection()
+    control = supervisor.VoiceControlServer()
+    control._connection = connection
+
+    try:
+        assert control.request_liveness(timeout_seconds=0.1) is False
+        assert control._connection is None
+    finally:
+        control.close()
+
+    assert connection.closed is True
+    assert connection.writes == [
+        b'{"type":"liveness_probe","request_id":"1"}\n'
+    ]
+
+
+def test_direct_socket_receive_handles_fragmented_control_frame() -> None:
+    class FragmentedConnection:
+        def __init__(self) -> None:
+            self.fragments = [
+                b'{"type":"liveness_',
+                b'response","request_id":"1","alive":true}\n',
+            ]
+            self.closed = False
+
+        def settimeout(self, timeout: float) -> None:
+            assert timeout > 0
+
+        def sendall(self, data: bytes) -> None:
+            assert data == b'{"type":"liveness_probe","request_id":"1"}\n'
+
+        def recv(self, size: int) -> bytes:
+            assert size > 0
+            return self.fragments.pop(0)
+
+        def close(self) -> None:
+            self.closed = True
+
+    connection = FragmentedConnection()
+    control = supervisor.VoiceControlServer()
+    control._connection = connection
+
+    try:
+        assert control.request_liveness(timeout_seconds=0.1) is True
+    finally:
+        control.close()
+
+    assert connection.closed is True
+
+
+def test_git_fetch_uses_bounded_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_run(*args, **kwargs):
+        observed["args"] = args
+        observed["kwargs"] = kwargs
+        return SimpleNamespace(stdout="", returncode=0)
+
+    monkeypatch.setattr(supervisor.subprocess, "run", fake_run)
+    repo = supervisor.GitRepo(
+        tmp_path,
+        DevSupervisorConfig(git_fetch_timeout_seconds=7.5),
+    )
+
+    repo.fetch()
+
+    assert observed["kwargs"]["timeout"] == 7.5
 
 
 class FakeRepo:
