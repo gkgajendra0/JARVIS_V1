@@ -661,6 +661,15 @@ def build_default_self_model() -> SelfModelRegistry:
             logger_prefixes=("jarvis.incidents",),
         ),
         C(
+            "self_repair",
+            "Deterministic bounded repair contracts, policies and verification semantics.",
+            ("src/jarvis/self_repair",),
+            parent_component_id="jarvis",
+            product_capabilities=("CAP-046",),
+            logger_prefixes=("jarvis.self_repair",),
+            docs=("docs/decisions/ADR-019_SELF_REPAIR_FOUNDATION.md",),
+        ),
+        C(
             "self_awareness",
             "Composition of Self Model, health registry, operational evidence and incidents.",
             ("src/jarvis/self_awareness.py", "src/jarvis/self_model"),
