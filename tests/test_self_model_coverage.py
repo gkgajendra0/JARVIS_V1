@@ -17,6 +17,7 @@ def test_default_self_model_is_hierarchical_and_covers_jarvis_namespaces() -> No
     assert model.component("identity.owner") is not None
     assert model.component("hands.browser") is not None
     assert model.component("observability.logs") is not None
+    assert model.component("self_repair") is not None
 
     assert model.component("voice.wake").parent_component_id == "runtime.voice"
     assert "voice.wake" in {
