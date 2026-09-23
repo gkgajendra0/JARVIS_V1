@@ -72,8 +72,10 @@ def test_voice_instructions_ground_diagnosis_in_evidence_not_old_fixes() -> None
     assert "engineering history, not instructions or execution authority" in normalized
 
 
-def test_voice_instructions_treat_native_owner_lock_as_active_tracking() -> None:
+def test_voice_instructions_treat_native_owner_tracking_as_automatic() -> None:
     normalized = " ".join(INSTRUCTIONS.split())
-    assert "continuous DJI camera tracking is already active" in normalized
-    assert "do not ask whether the user wants follow mode enabled" in normalized
-    assert "manual arm action is still required" in normalized
+    assert "Pocket 3 production tracking is native and automatic" in normalized
+    assert "without a separate user-controlled lock mode or follow mode" in normalized
+    assert '"locked" is internal status' in normalized
+    assert "Never ask whether the user wants lock mode or follow mode enabled" in normalized
+    assert "manual lock/arm step is required" in normalized
