@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from jarvis.incidents import IncidentService, SqliteIncidentStore
 from jarvis.self_model import HealthState
-from jarvis.self_repair import RepairTrigger, RepairVerdict
+from jarvis.self_repair import RepairActionKind, RepairTrigger, RepairVerdict
 from jarvis.self_repair.supervisor import (
     CrashFingerprint,
     SupervisorFailurePhase,
     SupervisorRepairController,
     build_runtime_child_exit_policy,
+    build_runtime_liveness_policy,
 )
 
 
@@ -221,4 +222,82 @@ def test_verified_recovery_resets_restart_budget_baseline(tmp_path) -> None:
     assert next_plan.budget.budget_index == 1
     assert next_plan.budget.attempt_number == 2
     assert next_plan.budget.recent_attempts == 0
+    store.close()
+
+
+def test_liveness_failure_has_distinct_policy_and_incident(tmp_path) -> None:
+    store = SqliteIncidentStore(tmp_path / "incidents.sqlite3")
+    service = IncidentService(store)
+    controller = SupervisorRepairController(
+        service,
+        policy=build_runtime_child_exit_policy(
+            max_attempts=1,
+            cooldown_seconds=0,
+        ),
+        additional_policies=(
+            build_runtime_liveness_policy(
+                max_attempts=1,
+                cooldown_seconds=0,
+            ),
+        ),
+    )
+
+    plan = controller.plan_liveness_failure(
+        commit_sha="a" * 40,
+        now_epoch=100,
+    )
+
+    assert plan.policy.policy_id == "supervisor-runtime-unresponsive-v1"
+    assert plan.trigger.reason_code == "runtime_unresponsive"
+    assert plan.trigger.process_exit_code is None
+    assert plan.incident.title == "JARVIS runtime became unresponsive"
+    assert plan.action is not None
+    assert plan.action.kind is RepairActionKind.RESTART_RUNTIME_CHILD
+    store.close()
+
+
+def test_crash_and_liveness_restart_budgets_are_independent(tmp_path) -> None:
+    store = SqliteIncidentStore(tmp_path / "incidents.sqlite3")
+    service = IncidentService(store)
+    controller = SupervisorRepairController(
+        service,
+        policy=build_runtime_child_exit_policy(
+            max_attempts=1,
+            cooldown_seconds=0,
+        ),
+        additional_policies=(
+            build_runtime_liveness_policy(
+                max_attempts=1,
+                cooldown_seconds=0,
+            ),
+        ),
+    )
+
+    crash_plan = controller.plan_unexpected_exit(
+        exit_code=9,
+        commit_sha="a" * 40,
+        now_epoch=100,
+    )
+    crash_attempt = controller.start_attempt(crash_plan, now_epoch=100)
+    controller.complete_attempt(
+        crash_plan,
+        crash_attempt,
+        execution_result="restart failed",
+        verifier_result="startup_readiness_failed",
+        verdict=RepairVerdict.NOT_RECOVERED,
+        now_epoch=101,
+    )
+    exhausted_crash = controller.plan_unexpected_exit(
+        exit_code=9,
+        commit_sha="a" * 40,
+        now_epoch=102,
+    )
+    liveness_plan = controller.plan_liveness_failure(
+        commit_sha="a" * 40,
+        now_epoch=102,
+    )
+
+    assert exhausted_crash.exhausted is True
+    assert liveness_plan.exhausted is False
+    assert liveness_plan.budget.attempt_number == 1
     store.close()
