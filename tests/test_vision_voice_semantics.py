@@ -41,6 +41,8 @@ def test_voice_report_hides_detector_candidate_count() -> None:
     assert status["visible_people"] == 1
     assert "detector_persons" not in status
     assert "armed" not in status
+    assert "target_id" not in status
+    assert "target_visible" not in status
     assert "visible_people is the only canonical visible-person count" in str(
         report["count_semantics"]
     )
