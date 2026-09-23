@@ -332,7 +332,7 @@ class RepairAction:
 
 @dataclass(frozen=True, slots=True)
 class RepairAttempt:
-    """Immutable execution record; persistence is added in the next phase."""
+    """Immutable execution record persisted under the canonical incident."""
 
     attempt_id: str
     incident_id: str
