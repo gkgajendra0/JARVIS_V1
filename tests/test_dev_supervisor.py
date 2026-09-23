@@ -58,6 +58,65 @@ def test_environment_config_allows_explicit_development_branch(
     assert _config_from_environment().branch == "feature/jarvis-dev-supervisor"
 
 
+def test_supervisor_startup_timeout_allows_heavy_hardware_initialization() -> None:
+    assert DevSupervisorConfig().startup_timeout_seconds == 120.0
+
+
+def test_wait_for_child_ready_requires_explicit_runtime_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeConnection:
+        def __init__(self) -> None:
+            self.timeouts: list[float] = []
+            self.closed = False
+
+        def settimeout(self, timeout: float) -> None:
+            self.timeouts.append(timeout)
+
+        def close(self) -> None:
+            self.closed = True
+
+    class FakeStream:
+        def __init__(self) -> None:
+            self.responses = [
+                b'{"type":"readiness_response","request_id":"1","ready":false}\n',
+                b'{"type":"readiness_response","request_id":"2","ready":true}\n',
+            ]
+            self.writes: list[bytes] = []
+            self.closed = False
+
+        def write(self, data: bytes) -> None:
+            self.writes.append(data)
+
+        def flush(self) -> None:
+            pass
+
+        def readline(self) -> bytes:
+            return self.responses.pop(0)
+
+        def close(self) -> None:
+            self.closed = True
+
+    connection = FakeConnection()
+    stream = FakeStream()
+    control = supervisor.VoiceControlServer()
+    control._connection = connection  # noqa: SLF001 - protocol unit test
+    control._stream = stream  # noqa: SLF001 - protocol unit test
+    monkeypatch.setattr(supervisor.time, "sleep", lambda _: None)
+
+    try:
+        control.wait_for_child_ready(timeout_seconds=2.0)
+    finally:
+        control.close()
+
+    assert stream.writes == [
+        b'{"type":"readiness_probe","request_id":"1"}\n',
+        b'{"type":"readiness_probe","request_id":"2"}\n',
+    ]
+    assert connection.closed is True
+    assert stream.closed is True
+
+
 class FakeRepo:
     def __init__(self, *, updated_sha: str = "b" * 40) -> None:
         self.updated_sha = updated_sha
