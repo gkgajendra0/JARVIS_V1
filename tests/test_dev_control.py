@@ -73,7 +73,6 @@ def test_spoken_update_decision_rejects_ambiguous_or_conflicting_speech(
     assert parse_explicit_update_decision(text) is None
 
 
-
 @pytest.mark.asyncio
 async def test_dev_control_client_answers_authenticated_liveness_probe() -> None:
     observed: dict[str, object] = {}
@@ -83,14 +82,10 @@ async def test_dev_control_client_answers_authenticated_liveness_probe() -> None
         writer: asyncio.StreamWriter,
     ) -> None:
         observed["hello"] = json.loads(await reader.readline())
-        writer.write(
-            b'{"type":"liveness_probe","request_id":"probe-1"}\n'
-        )
+        writer.write(b'{"type":"liveness_probe","request_id":"probe-1"}\n')
         await writer.drain()
         observed["liveness"] = json.loads(await reader.readline())
-        writer.write(
-            b'{"type":"shutdown_request","request_id":"shutdown-1"}\n'
-        )
+        writer.write(b'{"type":"shutdown_request","request_id":"shutdown-1"}\n')
         await writer.drain()
         observed["shutdown"] = json.loads(await reader.readline())
         writer.close()
