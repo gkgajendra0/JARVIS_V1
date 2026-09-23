@@ -496,7 +496,6 @@ def test_liveness_failures_consume_budget_and_stop_restarting(
     store.close()
 
 
-
 def test_unresponsive_runtime_uses_separate_registered_repair_policy(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
