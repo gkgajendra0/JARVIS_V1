@@ -100,8 +100,8 @@ def test_wait_for_child_ready_requires_explicit_runtime_ready(
     connection = FakeConnection()
     stream = FakeStream()
     control = supervisor.VoiceControlServer()
-    control._connection = connection  # noqa: SLF001 - protocol unit test
-    control._stream = stream  # noqa: SLF001 - protocol unit test
+    control._connection = connection
+    control._stream = stream
     monkeypatch.setattr(supervisor.time, "sleep", lambda _: None)
 
     try:
