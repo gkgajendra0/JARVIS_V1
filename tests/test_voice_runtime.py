@@ -230,6 +230,70 @@ async def test_startup_greeting_waits_for_tracking_readiness() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dev_control_connects_before_audio_start_and_marks_ready_after_audio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jarvis.dev_control import DevControlClient
+
+    class Detector:
+        async def wait_for_detection(self):
+            await asyncio.Event().wait()
+
+    class FakeDevControl:
+        def __init__(self) -> None:
+            self.connected = asyncio.Event()
+            self.ready = asyncio.Event()
+
+        async def run(self, *, approval_handler, shutdown_handler) -> None:
+            del approval_handler, shutdown_handler
+            self.connected.set()
+            await asyncio.Event().wait()
+
+        def mark_ready(self) -> None:
+            assert audio.started is True
+            self.ready.set()
+
+    class StartupAudio(FakeAudio):
+        def __init__(self) -> None:
+            super().__init__()
+            self.detector = Detector()
+            self.started = False
+
+        def set_overflow_handler(self, handler) -> None:
+            del handler
+
+        async def start(self) -> None:
+            await asyncio.wait_for(control.connected.wait(), timeout=1)
+            self.started = True
+
+        async def resume_wake(self, *, cooldown_seconds: float) -> None:
+            del cooldown_seconds
+
+        async def aclose(self) -> None:
+            return None
+
+    control = FakeDevControl()
+    audio = StartupAudio()
+    monkeypatch.setattr(
+        DevControlClient,
+        "from_environment",
+        classmethod(lambda cls: control),
+    )
+    runtime = VoiceRuntimeController(
+        JarvisConfig(startup_greeting_enabled=False),
+        audio,  # type: ignore[arg-type]
+    )
+
+    task = asyncio.create_task(runtime.run())
+    await asyncio.wait_for(control.ready.wait(), timeout=1)
+    assert control.connected.is_set() is True
+    assert audio.started is True
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
 async def test_startup_readiness_timeout_skips_greeting() -> None:
     class Detector:
         async def wait_for_detection(self):
