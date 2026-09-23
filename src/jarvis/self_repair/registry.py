@@ -36,29 +36,21 @@ class RepairRegistry:
         self._policies[policy.policy_id] = policy
 
     def get(self, policy_id: str) -> RepairPolicy | None:
-        return self._policies.get(
-            _required_token(policy_id, field="policy_id")
-        )
+        return self._policies.get(_required_token(policy_id, field="policy_id"))
 
     def policies(self) -> tuple[RepairPolicy, ...]:
-        return tuple(
-            self._policies[key]
-            for key in sorted(self._policies)
-        )
+        return tuple(self._policies[key] for key in sorted(self._policies))
 
     def match(self, trigger: RepairTrigger) -> RepairPolicy | None:
         matches = tuple(
-            policy
-            for policy in self._policies.values()
-            if policy.matches(trigger)
+            policy for policy in self._policies.values() if policy.matches(trigger)
         )
         if not matches:
             return None
         if len(matches) > 1:
             policy_ids = ", ".join(sorted(policy.policy_id for policy in matches))
             raise RepairPolicyConflictError(
-                "multiple repair policies matched one trigger: "
-                f"{policy_ids}"
+                f"multiple repair policies matched one trigger: {policy_ids}"
             )
         return matches[0]
 
@@ -137,14 +129,9 @@ class RepairRegistry:
             _required_token(item, field="satisfied_precondition")
             for item in satisfied_preconditions
         }
-        missing = tuple(
-            item
-            for item in policy.preconditions
-            if item not in satisfied
-        )
+        missing = tuple(item for item in policy.preconditions if item not in satisfied)
         if missing:
             raise RepairAuthorizationError(
-                "repair preconditions are not satisfied: "
-                + ", ".join(missing)
+                "repair preconditions are not satisfied: " + ", ".join(missing)
             )
         return policy
