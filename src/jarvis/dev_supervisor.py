@@ -245,9 +245,7 @@ class VoiceControlServer:
                 connection.settimeout(min(3.0, remaining))
 
                 request_id = self._next_request_id()
-                self._send(
-                    {"type": "readiness_probe", "request_id": request_id}
-                )
+                self._send({"type": "readiness_probe", "request_id": request_id})
                 response = self._receive()
                 if (
                     response.get("type") != "readiness_response"
