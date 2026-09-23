@@ -72,7 +72,7 @@ def test_inject_fault_targets_only_supervised_runtime_tree(
         def create_time(self) -> float:
             return 100.0
 
-        def children(self, *, recursive: bool) -> list["FakeProcess"]:
+        def children(self, *, recursive: bool) -> list[FakeProcess]:
             assert recursive is True
             return [FakeProcess(31), FakeProcess(32)] if self.pid == 30 else []
 
@@ -121,7 +121,7 @@ def test_partial_hang_rolls_back_already_suspended_descendants(
         def create_time(self) -> float:
             return 100.0
 
-        def children(self, *, recursive: bool) -> list["FakeProcess"]:
+        def children(self, *, recursive: bool) -> list[FakeProcess]:
             assert recursive is True
             return [FakeProcess(31), FakeProcess(32)] if self.pid == 30 else []
 
