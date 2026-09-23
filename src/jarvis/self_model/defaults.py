@@ -650,7 +650,7 @@ def build_default_self_model() -> SelfModelRegistry:
         ),
         C(
             "incidents.store",
-            "SQLite engineering incident/evidence persistence and resolved-fix history.",
+            "SQLite incident/evidence/repair-attempt persistence and resolved-fix history.",
             (
                 "src/jarvis/incidents/store.py",
                 "src/jarvis/incidents/service.py",
