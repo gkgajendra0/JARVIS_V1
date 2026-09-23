@@ -275,7 +275,9 @@ class SqliteIncidentStore:
                     )
                 if existing.finished_at_epoch is not None:
                     if existing != attempt:
-                        raise ValueError("completed repair attempt cannot be overwritten")
+                        raise ValueError(
+                            "completed repair attempt cannot be overwritten"
+                        )
                     return
 
             self._connection.execute(
