@@ -43,6 +43,9 @@ class DevSupervisorConfig:
     crash_restart_window_seconds: float = 300.0
     crash_restart_cooldown_seconds: float = 2.0
     crash_restart_backoff_multiplier: float = 2.0
+    liveness_timeout_seconds: float = 3.0
+    stabilization_seconds: float = 10.0
+    liveness_interval_seconds: float = 2.0
 
     def __post_init__(self) -> None:
         if not self.remote.strip():
@@ -69,6 +72,12 @@ class DevSupervisorConfig:
             raise ValueError("crash_restart_cooldown_seconds must not be negative")
         if self.crash_restart_backoff_multiplier < 1:
             raise ValueError("crash_restart_backoff_multiplier must be at least 1")
+        if self.liveness_timeout_seconds <= 0:
+            raise ValueError("liveness_timeout_seconds must be positive")
+        if self.stabilization_seconds <= 0:
+            raise ValueError("stabilization_seconds must be positive")
+        if self.liveness_interval_seconds <= 0:
+            raise ValueError("liveness_interval_seconds must be positive")
 
 
 class GitRepo:
@@ -225,6 +234,29 @@ class VoiceControlServer:
         ) as exc:
             self._reset_child()
             raise RuntimeError(f"JARVIS startup readiness failed: {exc}") from exc
+
+    def request_liveness(self, *, timeout_seconds: float) -> bool:
+        """Probe only authenticated runtime responsiveness, not dependency health."""
+
+        try:
+            self._ensure_child(timeout_seconds=timeout_seconds)
+            request_id = self._next_request_id()
+            self._send({"type": "liveness_probe", "request_id": request_id})
+            response = self._receive()
+            return (
+                response.get("type") == "liveness_response"
+                and response.get("request_id") == request_id
+                and response.get("alive") is True
+            )
+        except (
+            OSError,
+            TimeoutError,
+            RuntimeError,
+            TypeError,
+            json.JSONDecodeError,
+        ):
+            self._reset_child()
+            return False
 
     def request_update_approval(
         self,
@@ -388,6 +420,36 @@ def _build_supervisor_repair_controller(
     ), store
 
 
+def _verify_child_stabilization(
+    process: subprocess.Popen[bytes],
+    control: VoiceControlServer,
+    config: DevSupervisorConfig,
+    *,
+    sleep_fn: Any = time.sleep,
+    monotonic_fn: Any = time.monotonic,
+) -> tuple[bool, str]:
+    """Require a live process and repeated authenticated probes for a stable window."""
+
+    deadline = float(monotonic_fn()) + config.stabilization_seconds
+    probes = 0
+    while True:
+        return_code = process.poll()
+        if return_code is not None:
+            return False, f"process_exited_during_stabilization:{return_code}"
+
+        if not control.request_liveness(
+            timeout_seconds=config.liveness_timeout_seconds
+        ):
+            return False, "liveness_probe_failed"
+
+        probes += 1
+        remaining = deadline - float(monotonic_fn())
+        if remaining <= 0:
+            return True, f"readiness_and_liveness_stable:{probes}_probes"
+
+        sleep_fn(min(config.liveness_interval_seconds, remaining))
+
+
 def _recover_unexpected_exit(
     repo: GitRepo,
     root: Path,
@@ -398,6 +460,7 @@ def _recover_unexpected_exit(
     *,
     sleep_fn: Any = time.sleep,
     now_fn: Any = time.time,
+    stabilization_verifier: Any = _verify_child_stabilization,
 ) -> subprocess.Popen[bytes] | None:
     """Perform the single supervisor-owned bounded same-version restart loop."""
 
@@ -470,20 +533,47 @@ def _recover_unexpected_exit(
             )
             continue
 
+        stable, verifier_result = stabilization_verifier(
+            restarted,
+            control,
+            config,
+            sleep_fn=sleep_fn,
+        )
+        if not stable:
+            _stop_jarvis(
+                restarted,
+                timeout_seconds=config.shutdown_timeout_seconds,
+                control=control,
+            )
+            repair.complete_attempt(
+                plan,
+                attempt,
+                execution_result="same-version child restart reached readiness",
+                verifier_result=verifier_result,
+                verdict=RepairVerdict.NOT_RECOVERED,
+                post_repair_evidence=(
+                    "supervisor:startup_readiness_confirmed",
+                    f"supervisor:{verifier_result}",
+                ),
+                now_epoch=float(now_fn()),
+            )
+            continue
+
         repair.complete_attempt(
             plan,
             attempt,
-            execution_result="same-version child restart started",
-            verifier_result=(
-                "startup readiness confirmed; liveness stabilization pending"
+            execution_result="same-version child restart stabilized",
+            verifier_result=verifier_result,
+            verdict=RepairVerdict.RECOVERED,
+            post_repair_evidence=(
+                "supervisor:startup_readiness_confirmed",
+                "supervisor:liveness_stabilized",
             ),
-            verdict=RepairVerdict.INCONCLUSIVE,
-            post_repair_evidence=("supervisor:startup_readiness_confirmed",),
             now_epoch=float(now_fn()),
         )
         print(
-            "Same-version JARVIS restart reached startup readiness. "
-            "Liveness stabilization remains a separate verification phase."
+            "Same-version JARVIS restart recovered: startup readiness and "
+            "liveness stabilization confirmed."
         )
         return restarted
 
