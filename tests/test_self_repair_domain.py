@@ -306,3 +306,46 @@ def test_only_recovered_verdict_marks_attempt_recovered() -> None:
     )
 
     assert recovered.recovered is True
+
+
+def test_trigger_rejects_non_integer_exit_code() -> None:
+    with pytest.raises(TypeError, match="process_exit_code"):
+        RepairTrigger.create(
+            component_id="voice_runtime",
+            reason_code="child_exited",
+            source="dev_supervisor",
+            health_state=HealthState.FAILED,
+            process_exit_code="1",  # type: ignore[arg-type]
+        )
+
+
+def test_attempt_rejects_action_from_different_policy() -> None:
+    trigger = _trigger()
+    policy = _restart_policy()
+    other_policy = _restart_policy(
+        policy_id="different-policy",
+        reason_code="different_reason",
+    )
+    action = RepairAction(
+        action_id="wrong-policy-action",
+        policy_id=other_policy.policy_id,
+        policy_version=other_policy.version,
+        trigger_id=trigger.trigger_id,
+        component_id=trigger.component_id,
+        kind=RepairActionKind.RESTART_RUNTIME_CHILD,
+        risk_class=RepairRiskClass.R2_RESTART,
+        created_at_epoch=101,
+    )
+
+    with pytest.raises(
+        RepairAuthorizationError,
+        match="different policy",
+    ):
+        RepairAttempt.start(
+            incident_id="incident-1",
+            trigger=trigger,
+            policy=policy,
+            action=action,
+            attempt_number=1,
+            now_epoch=101,
+        )
