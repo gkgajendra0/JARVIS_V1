@@ -77,5 +77,8 @@ def test_voice_instructions_treat_native_owner_tracking_as_automatic() -> None:
     assert "Pocket 3 production tracking is native and automatic" in normalized
     assert "without a separate user-controlled lock mode or follow mode" in normalized
     assert '"locked" is internal status' in normalized
-    assert "Never ask whether the user wants lock mode or follow mode enabled" in normalized
+    assert (
+        "Never ask whether the user wants lock mode or follow mode enabled"
+        in normalized
+    )
     assert "manual lock/arm step is required" in normalized
