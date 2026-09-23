@@ -205,9 +205,7 @@ def evaluate_restart_budget(
     )
     cutoff = now_epoch - policy.rolling_window_seconds
     recent = tuple(
-        attempt
-        for attempt in budget_attempts
-        if attempt.started_at_epoch >= cutoff
+        attempt for attempt in budget_attempts if attempt.started_at_epoch >= cutoff
     )
     if len(recent) >= policy.max_attempts:
         return RestartBudgetDecision(
