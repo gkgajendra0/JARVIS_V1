@@ -104,6 +104,11 @@ class DevControlClient:
 
     def __init__(self, config: DevControlClientConfig) -> None:
         self.config = config
+        self._runtime_ready = False
+
+    def mark_ready(self) -> None:
+        """Publish that core runtime initialization completed successfully."""
+        self._runtime_ready = True
 
     @classmethod
     def from_environment(cls) -> DevControlClient | None:
@@ -134,7 +139,16 @@ class DevControlClient:
                     message = json.loads(line)
                     message_type = message.get("type")
                     request_id = str(message.get("request_id", ""))
-                    if message_type == "liveness_probe":
+                    if message_type == "readiness_probe":
+                        await _write_message(
+                            writer,
+                            {
+                                "type": "readiness_response",
+                                "request_id": request_id,
+                                "ready": self._runtime_ready,
+                            },
+                        )
+                    elif message_type == "liveness_probe":
                         await _write_message(
                             writer,
                             {
