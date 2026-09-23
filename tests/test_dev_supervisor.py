@@ -170,7 +170,6 @@ def test_dev_control_client_is_expected_to_reconnect_after_transient_failure() -
     assert "await asyncio.sleep(1.0)" in source
 
 
-
 def test_unexpected_exit_restarts_same_revision_and_persists_inconclusive(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
@@ -247,9 +246,7 @@ def test_readiness_failures_exhaust_restart_budget(
         ),
     )
     repo = FakeRepo(updated_sha="a" * 40)
-    control = FakeControl(
-        [RuntimeError("not ready"), RuntimeError("still not ready")]
-    )
+    control = FakeControl([RuntimeError("not ready"), RuntimeError("still not ready")])
     process = SimpleNamespace(returncode=9)
     started = iter(["restart-1", "restart-2"])
     stopped: list[object] = []
@@ -263,9 +260,7 @@ def test_readiness_failures_exhaust_restart_budget(
         "_stop_jarvis",
         lambda candidate, **_: stopped.append(candidate),
     )
-    now = iter(
-        [100.0, 100.0, 101.0, 102.0, 102.0, 103.0, 104.0]
-    )
+    now = iter([100.0, 100.0, 101.0, 102.0, 102.0, 103.0, 104.0])
 
     restarted = supervisor._recover_unexpected_exit(
         repo,  # type: ignore[arg-type]
@@ -285,13 +280,9 @@ def test_readiness_failures_exhaust_restart_budget(
     incident = incidents.list_recent(limit=1)[0]
     attempts = incidents.list_repair_attempts(incident.incident_id)
     assert len(attempts) == 2
-    assert all(
-        attempt.verdict is RepairVerdict.NOT_RECOVERED
-        for attempt in attempts
-    )
+    assert all(attempt.verdict is RepairVerdict.NOT_RECOVERED for attempt in attempts)
     assert stopped == ["restart-1", "restart-2"]
     assert any(
-        evidence.kind == "repair_budget_exhausted"
-        for evidence in incident.evidence
+        evidence.kind == "repair_budget_exhausted" for evidence in incident.evidence
     )
     store.close()
