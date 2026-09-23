@@ -185,3 +185,41 @@ def test_provider_quota_does_not_match_runtime_restart_policy(tmp_path) -> None:
 
     assert controller.registry.match(trigger) is None
     store.close()
+
+
+
+def test_verified_recovery_resets_restart_budget_baseline(tmp_path) -> None:
+    store, controller = _controller(
+        tmp_path / "incidents.sqlite3",
+        max_attempts=1,
+        window=300,
+        cooldown=2,
+        backoff=2,
+    )
+    first_plan = controller.plan_unexpected_exit(
+        exit_code=5,
+        commit_sha="a" * 40,
+        now_epoch=100,
+    )
+    first = controller.start_attempt(first_plan, now_epoch=102)
+    controller.complete_attempt(
+        first_plan,
+        first,
+        execution_result="same-version child restart stabilized",
+        verifier_result="readiness_and_liveness_stable:4_probes",
+        verdict=RepairVerdict.RECOVERED,
+        now_epoch=112,
+    )
+
+    next_plan = controller.plan_unexpected_exit(
+        exit_code=5,
+        commit_sha="a" * 40,
+        now_epoch=120,
+    )
+
+    assert next_plan.budget.allowed is True
+    assert next_plan.budget.exhausted is False
+    assert next_plan.budget.budget_index == 1
+    assert next_plan.budget.attempt_number == 2
+    assert next_plan.budget.recent_attempts == 0
+    store.close()
