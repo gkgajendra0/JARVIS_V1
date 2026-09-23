@@ -6,7 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable
+from collections.abc import Iterable
 
 from jarvis.incidents import (
     EvidenceReference,
@@ -54,6 +54,8 @@ class CrashFingerprint:
         component_ids: Iterable[str],
         commit_sha: str,
     ) -> "CrashFingerprint":
+        if not isinstance(phase, SupervisorFailurePhase):
+            raise TypeError("crash phase must be a SupervisorFailurePhase")
         normalized_reason = str(reason_code).strip().lower()
         normalized_components = tuple(
             sorted(
