@@ -48,6 +48,7 @@ class DevSupervisorConfig:
     stabilization_seconds: float = 10.0
     liveness_interval_seconds: float = 2.0
     liveness_failure_threshold: int = 3
+    git_fetch_timeout_seconds: float = 10.0
 
     def __post_init__(self) -> None:
         if not self.remote.strip():
@@ -86,6 +87,8 @@ class DevSupervisorConfig:
             or self.liveness_failure_threshold <= 0
         ):
             raise ValueError("liveness_failure_threshold must be a positive integer")
+        if self.git_fetch_timeout_seconds <= 0:
+            raise ValueError("git_fetch_timeout_seconds must be positive")
 
 
 class GitRepo:
@@ -99,6 +102,7 @@ class GitRepo:
         self,
         *args: str,
         check: bool = True,
+        timeout_seconds: float | None = None,
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ["git", *args],
@@ -106,6 +110,7 @@ class GitRepo:
             check=check,
             capture_output=True,
             text=True,
+            timeout=timeout_seconds,
         )
 
     def current_branch(self) -> str:
@@ -127,6 +132,7 @@ class GitRepo:
             "--quiet",
             self.config.remote,
             self.config.branch,
+            timeout_seconds=self.config.git_fetch_timeout_seconds,
         )
 
     def remote_is_fast_forward(self) -> bool:
@@ -163,7 +169,7 @@ class VoiceControlServer:
         self._host, self._port = self._listener.getsockname()
         self._token = secrets.token_urlsafe(32)
         self._connection: socket.socket | None = None
-        self._stream: Any = None
+        self._receive_buffer = bytearray()
         self._request_sequence = 0
 
     def child_environment(self) -> dict[str, str]:
@@ -178,15 +184,9 @@ class VoiceControlServer:
         return str(self._request_sequence)
 
     def _reset_child(self) -> None:
-        stream = self._stream
         connection = self._connection
-        self._stream = None
         self._connection = None
-        if stream is not None:
-            try:
-                stream.close()
-            except OSError:
-                pass
+        self._receive_buffer.clear()
         if connection is not None:
             try:
                 connection.close()
@@ -194,18 +194,27 @@ class VoiceControlServer:
                 pass
 
     def _send(self, payload: dict[str, object]) -> None:
-        if self._stream is None:
+        connection = self._connection
+        if connection is None:
             raise RuntimeError("JARVIS voice control connection is unavailable")
         data = (json.dumps(payload, separators=(",", ":")) + "\n").encode()
-        self._stream.write(data)
-        self._stream.flush()
+        connection.sendall(data)
 
     def _receive(self) -> dict[str, object]:
-        if self._stream is None:
+        connection = self._connection
+        if connection is None:
             raise RuntimeError("JARVIS voice control connection is unavailable")
-        line = self._stream.readline()
-        if not line:
-            raise RuntimeError("JARVIS voice control connection closed")
+
+        while b"\n" not in self._receive_buffer:
+            chunk = connection.recv(4096)
+            if not chunk:
+                raise RuntimeError("JARVIS voice control connection closed")
+            self._receive_buffer.extend(chunk)
+            if len(self._receive_buffer) > 65536:
+                raise RuntimeError("JARVIS voice control frame exceeded 64 KiB")
+
+        line, _, remainder = self._receive_buffer.partition(b"\n")
+        self._receive_buffer[:] = remainder
         payload = json.loads(line.decode())
         if not isinstance(payload, dict):
             raise TypeError("invalid JARVIS voice control response")
@@ -218,9 +227,8 @@ class VoiceControlServer:
         self._listener.settimeout(timeout_seconds)
         connection, _ = self._listener.accept()
         connection.settimeout(timeout_seconds)
-        stream = connection.makefile("rwb")
         self._connection = connection
-        self._stream = stream
+        self._receive_buffer.clear()
         try:
             hello = self._receive()
             if hello.get("type") != "hello" or hello.get("token") != self._token:
@@ -631,13 +639,24 @@ def _liveness_restart_required(
     """Require consecutive failures plus one confirmation probe before restart."""
 
     if control.request_liveness(timeout_seconds=config.liveness_timeout_seconds):
+        if failure_streak:
+            print(
+                "JARVIS liveness probe recovered after "
+                f"{failure_streak} consecutive failure(s)."
+            )
         return 0, False
 
     next_streak = failure_streak + 1
+    print(
+        "JARVIS liveness probe failed "
+        f"({next_streak}/{config.liveness_failure_threshold})."
+    )
     if next_streak < config.liveness_failure_threshold:
         return next_streak, False
 
+    print("JARVIS liveness threshold reached; running confirmation probe.")
     if control.request_liveness(timeout_seconds=config.liveness_timeout_seconds):
+        print("JARVIS liveness confirmation succeeded; restart cancelled.")
         return 0, False
     return next_streak, True
 
@@ -942,6 +961,12 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
 
             try:
                 repo.fetch()
+            except subprocess.TimeoutExpired:
+                print(
+                    "Git fetch timed out; keeping current JARVIS running so "
+                    "the liveness watchdog remains bounded."
+                )
+                continue
             except subprocess.CalledProcessError as exc:
                 print(f"Git fetch failed; keeping current JARVIS running: {exc}")
                 continue
