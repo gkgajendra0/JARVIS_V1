@@ -26,6 +26,7 @@ from jarvis.self_repair import RepairVerdict
 from jarvis.self_repair.supervisor import (
     SupervisorRepairController,
     build_runtime_child_exit_policy,
+    build_runtime_liveness_policy,
 )
 
 _BRANCH_ENV = "JARVIS_DEV_BRANCH"
@@ -46,6 +47,7 @@ class DevSupervisorConfig:
     liveness_timeout_seconds: float = 3.0
     stabilization_seconds: float = 10.0
     liveness_interval_seconds: float = 2.0
+    liveness_failure_threshold: int = 3
 
     def __post_init__(self) -> None:
         if not self.remote.strip():
@@ -78,6 +80,12 @@ class DevSupervisorConfig:
             raise ValueError("stabilization_seconds must be positive")
         if self.liveness_interval_seconds <= 0:
             raise ValueError("liveness_interval_seconds must be positive")
+        if (
+            isinstance(self.liveness_failure_threshold, bool)
+            or not isinstance(self.liveness_failure_threshold, int)
+            or self.liveness_failure_threshold <= 0
+        ):
+            raise ValueError("liveness_failure_threshold must be a positive integer")
 
 
 class GitRepo:
@@ -417,9 +425,16 @@ def _build_supervisor_repair_controller(
         cooldown_seconds=config.crash_restart_cooldown_seconds,
         backoff_multiplier=config.crash_restart_backoff_multiplier,
     )
+    liveness_policy = build_runtime_liveness_policy(
+        max_attempts=config.crash_restart_max_attempts,
+        rolling_window_seconds=config.crash_restart_window_seconds,
+        cooldown_seconds=config.crash_restart_cooldown_seconds,
+        backoff_multiplier=config.crash_restart_backoff_multiplier,
+    )
     return SupervisorRepairController(
         IncidentService(store),
         policy=policy,
+        additional_policies=(liveness_policy,),
     ), store
 
 
@@ -581,6 +596,157 @@ def _recover_unexpected_exit(
         return restarted
 
 
+def _liveness_restart_required(
+    control: VoiceControlServer,
+    config: DevSupervisorConfig,
+    failure_streak: int,
+) -> tuple[int, bool]:
+    """Require consecutive failures plus one confirmation probe before restart."""
+
+    if control.request_liveness(timeout_seconds=config.liveness_timeout_seconds):
+        return 0, False
+
+    next_streak = failure_streak + 1
+    if next_streak < config.liveness_failure_threshold:
+        return next_streak, False
+
+    if control.request_liveness(timeout_seconds=config.liveness_timeout_seconds):
+        return 0, False
+    return next_streak, True
+
+
+def _recover_liveness_failure(
+    repo: GitRepo,
+    root: Path,
+    process: subprocess.Popen[bytes],
+    control: VoiceControlServer,
+    config: DevSupervisorConfig,
+    repair: SupervisorRepairController,
+    *,
+    sleep_fn: Any = time.sleep,
+    now_fn: Any = time.time,
+    stabilization_verifier: Any = _verify_child_stabilization,
+) -> subprocess.Popen[bytes] | None:
+    """Restart an alive-but-unresponsive runtime under the registered R2 policy."""
+
+    commit_sha = repo.local_sha()
+
+    while True:
+        plan = repair.plan_liveness_failure(
+            commit_sha=commit_sha,
+            now_epoch=float(now_fn()),
+        )
+        if plan.exhausted:
+            print(
+                "JARVIS liveness restart budget exhausted for failure "
+                f"{plan.fingerprint.fingerprint_id[:12]}; stopping automatic "
+                "restart and escalating."
+            )
+            return None
+
+        wait_seconds = plan.budget.wait_seconds
+        attempt_number = plan.budget.attempt_number
+        print(
+            "JARVIS runtime is unresponsive; bounded same-version restart "
+            f"attempt {attempt_number}/{plan.policy.max_attempts} is eligible "
+            f"after {wait_seconds:g}s."
+        )
+        if wait_seconds > 0:
+            sleep_fn(wait_seconds)
+
+        if repo.local_sha() != commit_sha:
+            print(
+                "Local revision changed while liveness recovery was waiting; "
+                "automatic restart aborted rather than repairing a different revision."
+            )
+            return None
+
+        attempt = repair.start_attempt(plan, now_epoch=float(now_fn()))
+        _stop_jarvis(
+            process,
+            timeout_seconds=config.shutdown_timeout_seconds,
+            control=control,
+        )
+        try:
+            restarted = _start_jarvis(root, control)
+        except OSError:
+            repair.complete_attempt(
+                plan,
+                attempt,
+                execution_result="unresponsive child restart failed to start",
+                verifier_result="process_start_failed",
+                verdict=RepairVerdict.NOT_RECOVERED,
+                post_repair_evidence=("supervisor:process_start_failed",),
+                now_epoch=float(now_fn()),
+            )
+            continue
+
+        try:
+            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+        except RuntimeError:
+            _stop_jarvis(
+                restarted,
+                timeout_seconds=config.shutdown_timeout_seconds,
+                control=control,
+            )
+            repair.complete_attempt(
+                plan,
+                attempt,
+                execution_result="unresponsive child restart attempted",
+                verifier_result="startup_readiness_failed",
+                verdict=RepairVerdict.NOT_RECOVERED,
+                post_repair_evidence=("supervisor:startup_readiness_failed",),
+                now_epoch=float(now_fn()),
+            )
+            process = restarted
+            continue
+
+        stable, verifier_result = stabilization_verifier(
+            restarted,
+            control,
+            config,
+            sleep_fn=sleep_fn,
+        )
+        if not stable:
+            _stop_jarvis(
+                restarted,
+                timeout_seconds=config.shutdown_timeout_seconds,
+                control=control,
+            )
+            repair.complete_attempt(
+                plan,
+                attempt,
+                execution_result="unresponsive child restart reached readiness",
+                verifier_result=verifier_result,
+                verdict=RepairVerdict.NOT_RECOVERED,
+                post_repair_evidence=(
+                    "supervisor:startup_readiness_confirmed",
+                    f"supervisor:{verifier_result}",
+                ),
+                now_epoch=float(now_fn()),
+            )
+            process = restarted
+            continue
+
+        repair.complete_attempt(
+            plan,
+            attempt,
+            execution_result="unresponsive child restart stabilized",
+            verifier_result=verifier_result,
+            verdict=RepairVerdict.RECOVERED,
+            post_repair_evidence=(
+                "supervisor:startup_readiness_confirmed",
+                "supervisor:liveness_stabilized",
+            ),
+            now_epoch=float(now_fn()),
+        )
+        print(
+            "JARVIS liveness recovery succeeded: startup readiness and "
+            "liveness stabilization confirmed."
+        )
+        return restarted
+
+
 def _apply_approved_update(
     repo: GitRepo,
     root: Path,
@@ -684,8 +850,15 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
     repair, repair_store = _build_supervisor_repair_controller(config)
     process = _start_jarvis(root, control)
     declined_sha: str | None = None
+    liveness_failure_streak = 0
 
     try:
+        try:
+            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+        except RuntimeError as exc:
+            print(f"Initial JARVIS startup readiness failed: {exc}")
+            return 1
+
         while True:
             if process.poll() is not None:
                 if repair is None:
@@ -709,6 +882,37 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                 continue
 
             time.sleep(config.poll_seconds)
+            if process.poll() is not None:
+                continue
+
+            liveness_failure_streak, restart_required = _liveness_restart_required(
+                control,
+                config,
+                liveness_failure_streak,
+            )
+            if restart_required:
+                if process.poll() is not None:
+                    continue
+                if repair is None:
+                    print(
+                        "JARVIS runtime failed the liveness watchdog, but durable "
+                        "Self-Repair is unavailable; automatic restart fails closed."
+                    )
+                    return 1
+                restarted = _recover_liveness_failure(
+                    repo,
+                    root,
+                    process,
+                    control,
+                    config,
+                    repair,
+                )
+                if restarted is None:
+                    return 1
+                process = restarted
+                liveness_failure_streak = 0
+                continue
+
             try:
                 repo.fetch()
             except subprocess.CalledProcessError as exc:
