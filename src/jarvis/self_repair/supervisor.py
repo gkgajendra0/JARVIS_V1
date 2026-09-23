@@ -185,9 +185,27 @@ def evaluate_restart_budget(
             ),
         )
     )
+    recovered_at = max(
+        (
+            attempt.finished_at_epoch
+            for attempt in all_attempts
+            if attempt.verdict is RepairVerdict.RECOVERED
+            and attempt.finished_at_epoch is not None
+        ),
+        default=None,
+    )
+    budget_attempts = (
+        tuple(
+            attempt
+            for attempt in all_attempts
+            if attempt.started_at_epoch > recovered_at
+        )
+        if recovered_at is not None
+        else all_attempts
+    )
     cutoff = now_epoch - policy.rolling_window_seconds
     recent = tuple(
-        attempt for attempt in all_attempts if attempt.started_at_epoch >= cutoff
+        attempt for attempt in budget_attempts if attempt.started_at_epoch >= cutoff
     )
     if len(recent) >= policy.max_attempts:
         return RestartBudgetDecision(

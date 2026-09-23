@@ -134,7 +134,16 @@ class DevControlClient:
                     message = json.loads(line)
                     message_type = message.get("type")
                     request_id = str(message.get("request_id", ""))
-                    if message_type == "update_approval_request":
+                    if message_type == "liveness_probe":
+                        await _write_message(
+                            writer,
+                            {
+                                "type": "liveness_response",
+                                "request_id": request_id,
+                                "alive": True,
+                            },
+                        )
+                    elif message_type == "update_approval_request":
                         approved = await approval_handler(
                             str(message.get("local_sha", "")),
                             str(message.get("remote_sha", "")),

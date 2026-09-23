@@ -32,6 +32,12 @@ def test_supervisor_config_rejects_invalid_values() -> None:
         DevSupervisorConfig(crash_restart_cooldown_seconds=-1)
     with pytest.raises(ValueError):
         DevSupervisorConfig(crash_restart_backoff_multiplier=0.5)
+    with pytest.raises(ValueError):
+        DevSupervisorConfig(liveness_timeout_seconds=0)
+    with pytest.raises(ValueError):
+        DevSupervisorConfig(stabilization_seconds=0)
+    with pytest.raises(ValueError):
+        DevSupervisorConfig(liveness_interval_seconds=0)
 
 
 def test_environment_config_defaults_to_main(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -65,9 +71,15 @@ class FakeRepo:
 
 
 class FakeControl:
-    def __init__(self, readiness_outcomes: list[Exception | None]) -> None:
+    def __init__(
+        self,
+        readiness_outcomes: list[Exception | None],
+        liveness_outcomes: list[bool] | None = None,
+    ) -> None:
         self.readiness_outcomes = list(readiness_outcomes)
+        self.liveness_outcomes = list(liveness_outcomes or ())
         self.readiness_calls = 0
+        self.liveness_calls = 0
         self.child_stopped_calls = 0
 
     def child_stopped(self) -> None:
@@ -79,6 +91,13 @@ class FakeControl:
         outcome = self.readiness_outcomes.pop(0)
         if outcome is not None:
             raise outcome
+
+    def request_liveness(self, *, timeout_seconds: float) -> bool:
+        assert timeout_seconds > 0
+        self.liveness_calls += 1
+        if not self.liveness_outcomes:
+            return True
+        return self.liveness_outcomes.pop(0)
 
 
 def test_approved_update_keeps_new_revision_after_readiness(
@@ -170,7 +189,7 @@ def test_dev_control_client_is_expected_to_reconnect_after_transient_failure() -
     assert "await asyncio.sleep(1.0)" in source
 
 
-def test_unexpected_exit_restarts_same_revision_and_persists_inconclusive(
+def test_unexpected_exit_requires_stabilization_before_recovered(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -212,16 +231,73 @@ def test_unexpected_exit_restarts_same_revision_and_persists_inconclusive(
         repair,
         sleep_fn=lambda _: None,
         now_fn=lambda: next(now),
+        stabilization_verifier=lambda *_, **__: (
+            True,
+            "readiness_and_liveness_stable:3_probes",
+        ),
     )
 
     assert restarted == "restarted-process"
     incident = incidents.list_recent(limit=1)[0]
     attempts = incidents.list_repair_attempts(incident.incident_id)
     assert len(attempts) == 1
-    assert attempts[0].verdict is RepairVerdict.INCONCLUSIVE
+    assert attempts[0].verdict is RepairVerdict.RECOVERED
+    assert attempts[0].verifier_result == "readiness_and_liveness_stable:3_probes"
     assert attempts[0].action.component_id == "voice_runtime"
     assert control.child_stopped_calls == 1
     store.close()
+
+
+def test_stabilization_requires_repeated_liveness_probes() -> None:
+    class FakeClock:
+        def __init__(self) -> None:
+            self.now = 0.0
+            self.sleeps: list[float] = []
+
+        def monotonic(self) -> float:
+            return self.now
+
+        def sleep(self, seconds: float) -> None:
+            self.sleeps.append(seconds)
+            self.now += seconds
+
+    clock = FakeClock()
+    control = FakeControl([], [True, True, True, True])
+    process = SimpleNamespace(poll=lambda: None)
+
+    stable, verifier = supervisor._verify_child_stabilization(
+        process,  # type: ignore[arg-type]
+        control,  # type: ignore[arg-type]
+        DevSupervisorConfig(
+            liveness_timeout_seconds=1,
+            stabilization_seconds=5,
+            liveness_interval_seconds=2,
+        ),
+        sleep_fn=clock.sleep,
+        monotonic_fn=clock.monotonic,
+    )
+
+    assert stable is True
+    assert verifier == "readiness_and_liveness_stable:4_probes"
+    assert control.liveness_calls == 4
+    assert clock.sleeps == [2, 2, 1]
+
+
+def test_stabilization_fails_when_authenticated_liveness_fails() -> None:
+    control = FakeControl([], [False])
+    process = SimpleNamespace(poll=lambda: None)
+
+    stable, verifier = supervisor._verify_child_stabilization(
+        process,  # type: ignore[arg-type]
+        control,  # type: ignore[arg-type]
+        DevSupervisorConfig(),
+        sleep_fn=lambda _: None,
+        monotonic_fn=lambda: 0.0,
+    )
+
+    assert stable is False
+    assert verifier == "liveness_probe_failed"
+    assert control.liveness_calls == 1
 
 
 def test_readiness_failures_exhaust_restart_budget(
@@ -285,4 +361,72 @@ def test_readiness_failures_exhaust_restart_budget(
     assert any(
         evidence.kind == "repair_budget_exhausted" for evidence in incident.evidence
     )
+    store.close()
+
+
+def test_liveness_failures_consume_budget_and_stop_restarting(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jarvis.incidents import IncidentService, SqliteIncidentStore
+    from jarvis.self_repair import RepairVerdict
+    from jarvis.self_repair.supervisor import (
+        SupervisorRepairController,
+        build_runtime_child_exit_policy,
+    )
+
+    store = SqliteIncidentStore(tmp_path / "incidents.sqlite3")
+    incidents = IncidentService(store)
+    repair = SupervisorRepairController(
+        incidents,
+        policy=build_runtime_child_exit_policy(
+            max_attempts=2,
+            rolling_window_seconds=300,
+            cooldown_seconds=0,
+        ),
+    )
+    repo = FakeRepo(updated_sha="a" * 40)
+    control = FakeControl([None, None])
+    process = SimpleNamespace(returncode=9)
+    started = iter(["restart-1", "restart-2"])
+    stopped: list[object] = []
+    monkeypatch.setattr(
+        supervisor,
+        "_start_jarvis",
+        lambda *_: next(started),
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "_stop_jarvis",
+        lambda candidate, **_: stopped.append(candidate),
+    )
+    now = iter([100.0, 100.0, 101.0, 102.0, 102.0, 103.0, 104.0])
+
+    restarted = supervisor._recover_unexpected_exit(
+        repo,  # type: ignore[arg-type]
+        Path("."),
+        process,  # type: ignore[arg-type]
+        control,  # type: ignore[arg-type]
+        DevSupervisorConfig(
+            crash_restart_max_attempts=2,
+            crash_restart_cooldown_seconds=0,
+        ),
+        repair,
+        sleep_fn=lambda _: None,
+        now_fn=lambda: next(now),
+        stabilization_verifier=lambda *_, **__: (
+            False,
+            "liveness_probe_failed",
+        ),
+    )
+
+    assert restarted is None
+    incident = incidents.list_recent(limit=1)[0]
+    attempts = incidents.list_repair_attempts(incident.incident_id)
+    assert len(attempts) == 2
+    assert all(attempt.verdict is RepairVerdict.NOT_RECOVERED for attempt in attempts)
+    assert all(
+        attempt.verifier_result == "liveness_probe_failed" for attempt in attempts
+    )
+    assert stopped == ["restart-1", "restart-2"]
     store.close()
