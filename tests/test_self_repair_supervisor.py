@@ -131,8 +131,7 @@ def test_restart_budget_survives_store_reopen_and_exhausts(tmp_path) -> None:
     incident = reopened_store.get(incident_id)
     assert incident is not None
     assert any(
-        evidence.kind == "repair_budget_exhausted"
-        for evidence in incident.evidence
+        evidence.kind == "repair_budget_exhausted" for evidence in incident.evidence
     )
     reopened_store.close()
 
