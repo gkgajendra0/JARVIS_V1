@@ -38,6 +38,10 @@ def test_supervisor_config_rejects_invalid_values() -> None:
         DevSupervisorConfig(stabilization_seconds=0)
     with pytest.raises(ValueError):
         DevSupervisorConfig(liveness_interval_seconds=0)
+    with pytest.raises(ValueError):
+        DevSupervisorConfig(liveness_failure_threshold=0)
+    with pytest.raises(ValueError):
+        DevSupervisorConfig(liveness_failure_threshold=True)
 
 
 def test_environment_config_defaults_to_main(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -98,6 +102,66 @@ class FakeControl:
         if not self.liveness_outcomes:
             return True
         return self.liveness_outcomes.pop(0)
+
+
+def test_liveness_watchdog_ignores_transient_failure() -> None:
+    control = FakeControl([], [False, True])
+    config = DevSupervisorConfig(liveness_failure_threshold=3)
+
+    streak, restart = supervisor._liveness_restart_required(
+        control,  # type: ignore[arg-type]
+        config,
+        0,
+    )
+    assert (streak, restart) == (1, False)
+
+    streak, restart = supervisor._liveness_restart_required(
+        control,  # type: ignore[arg-type]
+        config,
+        streak,
+    )
+    assert (streak, restart) == (0, False)
+
+
+def test_liveness_watchdog_requires_threshold_and_confirmation() -> None:
+    control = FakeControl([], [False, False, False, False])
+    config = DevSupervisorConfig(liveness_failure_threshold=3)
+
+    streak, restart = supervisor._liveness_restart_required(
+        control,  # type: ignore[arg-type]
+        config,
+        0,
+    )
+    assert (streak, restart) == (1, False)
+
+    streak, restart = supervisor._liveness_restart_required(
+        control,  # type: ignore[arg-type]
+        config,
+        streak,
+    )
+    assert (streak, restart) == (2, False)
+
+    streak, restart = supervisor._liveness_restart_required(
+        control,  # type: ignore[arg-type]
+        config,
+        streak,
+    )
+    assert (streak, restart) == (3, True)
+    assert control.liveness_calls == 4
+
+
+def test_liveness_watchdog_confirmation_can_cancel_restart() -> None:
+    control = FakeControl([], [False, True])
+    config = DevSupervisorConfig(liveness_failure_threshold=3)
+
+    streak, restart = supervisor._liveness_restart_required(
+        control,  # type: ignore[arg-type]
+        config,
+        2,
+    )
+
+    assert (streak, restart) == (0, False)
+    assert control.liveness_calls == 2
 
 
 def test_approved_update_keeps_new_revision_after_readiness(
@@ -429,4 +493,77 @@ def test_liveness_failures_consume_budget_and_stop_restarting(
         attempt.verifier_result == "liveness_probe_failed" for attempt in attempts
     )
     assert stopped == ["restart-1", "restart-2"]
+    store.close()
+
+
+
+def test_unresponsive_runtime_uses_separate_registered_repair_policy(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jarvis.incidents import IncidentService, SqliteIncidentStore
+    from jarvis.self_repair import RepairVerdict
+    from jarvis.self_repair.supervisor import (
+        SupervisorRepairController,
+        build_runtime_child_exit_policy,
+        build_runtime_liveness_policy,
+    )
+
+    store = SqliteIncidentStore(tmp_path / "incidents.sqlite3")
+    incidents = IncidentService(store)
+    repair = SupervisorRepairController(
+        incidents,
+        policy=build_runtime_child_exit_policy(
+            max_attempts=2,
+            cooldown_seconds=0,
+        ),
+        additional_policies=(
+            build_runtime_liveness_policy(
+                max_attempts=2,
+                cooldown_seconds=0,
+            ),
+        ),
+    )
+    repo = FakeRepo(updated_sha="a" * 40)
+    control = FakeControl([None])
+    process = SimpleNamespace(poll=lambda: None)
+    stopped: list[object] = []
+    monkeypatch.setattr(
+        supervisor,
+        "_stop_jarvis",
+        lambda candidate, **_: stopped.append(candidate),
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "_start_jarvis",
+        lambda *_: "restarted-process",
+    )
+    now = iter([100.0, 100.0, 101.0])
+
+    restarted = supervisor._recover_liveness_failure(
+        repo,  # type: ignore[arg-type]
+        Path("."),
+        process,  # type: ignore[arg-type]
+        control,  # type: ignore[arg-type]
+        DevSupervisorConfig(
+            crash_restart_max_attempts=2,
+            crash_restart_cooldown_seconds=0,
+        ),
+        repair,
+        sleep_fn=lambda _: None,
+        now_fn=lambda: next(now),
+        stabilization_verifier=lambda *_, **__: (
+            True,
+            "readiness_and_liveness_stable:3_probes",
+        ),
+    )
+
+    assert restarted == "restarted-process"
+    incident = incidents.list_recent(limit=1)[0]
+    assert incident.title == "JARVIS runtime became unresponsive"
+    attempts = incidents.list_repair_attempts(incident.incident_id)
+    assert len(attempts) == 1
+    assert attempts[0].policy_id == "supervisor-runtime-unresponsive-v1"
+    assert attempts[0].verdict is RepairVerdict.RECOVERED
+    assert stopped == [process]
     store.close()
