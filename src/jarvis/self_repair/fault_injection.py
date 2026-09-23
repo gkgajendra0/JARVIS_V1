@@ -70,9 +70,7 @@ def select_supervised_runtime(
 
 def discover_supervised_runtime() -> ProcessSnapshot:
     snapshots: list[ProcessSnapshot] = []
-    for process in psutil.process_iter(
-        attrs=["pid", "create_time", "cmdline", "ppid"]
-    ):
+    for process in psutil.process_iter(attrs=["pid", "create_time", "cmdline", "ppid"]):
         try:
             info = process.info
             cmdline = _normalize_cmdline(info.get("cmdline"))
