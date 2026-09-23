@@ -361,17 +361,18 @@ class SqliteIncidentStore:
                 """
                 SELECT * FROM engineering_repair_attempt
                 WHERE incident_id = ?
-                ORDER BY attempt_number, started_at_epoch, attempt_id
+                ORDER BY attempt_number DESC, started_at_epoch DESC, attempt_id DESC
                 LIMIT ?
                 """,
                 (incident_id, limit),
             )
             columns = [item[0] for item in cursor.description or ()]
             rows = cursor.fetchall()
-        return tuple(
+        attempts = tuple(
             self._repair_attempt_from_payload(dict(zip(columns, row, strict=True)))
             for row in rows
         )
+        return tuple(reversed(attempts))
 
     @staticmethod
     def _repair_attempt_from_payload(payload: dict[str, object]) -> RepairAttempt:
