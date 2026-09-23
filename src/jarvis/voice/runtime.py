@@ -519,6 +519,18 @@ class VoiceRuntimeController:
         vision_started = False
         control_task: asyncio.Task[None] | None = None
         try:
+            if self._dev_control is not None:
+                control_task = asyncio.create_task(
+                    self._dev_control.run(
+                        approval_handler=self._queue_update_approval,
+                        shutdown_handler=self.request_shutdown,
+                    ),
+                    name="jarvis-dev-control",
+                )
+                LOGGER.info(
+                    "JARVIS development voice-control channel is connecting during startup"
+                )
+
             if self._vision_service is not None:
                 await asyncio.to_thread(self._vision_service.start)
                 vision_started = True
@@ -548,14 +560,11 @@ class VoiceRuntimeController:
                     "DJI PCM remains available only for synchronized LR-ASD evidence"
                 )
             if self._dev_control is not None:
-                control_task = asyncio.create_task(
-                    self._dev_control.run(
-                        approval_handler=self._queue_update_approval,
-                        shutdown_handler=self.request_shutdown,
-                    ),
-                    name="jarvis-dev-control",
+                self._dev_control.mark_ready()
+                LOGGER.info(
+                    "JARVIS development supervisor readiness published after "
+                    "vision/audio initialization"
                 )
-                LOGGER.info("JARVIS development voice-control channel is active")
 
             startup_ready = await self._wait_for_startup_readiness()
             if startup_ready:
