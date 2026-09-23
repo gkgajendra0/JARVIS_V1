@@ -23,8 +23,12 @@ The focused owner-machine/CI acceptance record for PR #40 is `POCKET3_BLE_STARTU
 
 The final owner-machine/CI acceptance record for persistent concurrent work orchestration PR #55 is `PERSISTENT_WORK_ACCEPTANCE_2026-09-20.md`.
 
-The owner-approved sequencing decision for reliability cleanup followed by the bounded Self-Repair Foundation interlude is `SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`.
+The historical owner-approved sequencing decision for reliability cleanup followed by the bounded Self-Repair Foundation interlude is `SELF_REPAIR_SEQUENCE_DECISION_2026-09-20.md`. That sequence completed on 2026-09-23.
 
-Do not research future subsystems merely because they are interesting. Research the active product slice unless a demonstrated blocker or owner-approved interlude requires a detour.
+The deterministic foundation research is `SELF_REPAIR_FOUNDATION_RESEARCH_2026-09-20.md`, and final owner-machine acceptance is `SELF_REPAIR_PHASE5_ACCEPTANCE_2026-09-23.md`.
+
+The authoritative forward Self-Repair -> Repair Learning -> Self-Evolution program plan is `../SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`. Historical research files remain evidence and must not override that master plan's current phase/status.
+
+Do not research future subsystems merely because they are interesting. Research the active product slice or the explicitly active cross-cutting program phase unless a demonstrated blocker or owner-approved sequence change requires a detour.
 
 - `POCKET3_OWNER_CONTINUITY_ACCEPTANCE_2026-09-20.md` — owner-machine acceptance evidence for issue #56 / PR #61: fresh OWNER acquisition, persisted exact visual-track authorization, biometric/head-gap continuity, and no false confirmed OWNER loss.
