@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import psutil
+
 from jarvis.dev_control import (
     DEV_CONTROL_HOST_ENV,
     DEV_CONTROL_PORT_ENV,
@@ -467,13 +469,40 @@ def _start_jarvis(
     return process
 
 
+def _snapshot_runtime_process_tree(root_pid: int) -> tuple[psutil.Process, ...]:
+    """Capture only the supervised runtime root and its current descendants."""
+
+    try:
+        root = psutil.Process(root_pid)
+    except psutil.NoSuchProcess:
+        return ()
+    return (*tuple(root.children(recursive=True)), root)
+
+
+def _kill_runtime_process_tree(processes: tuple[psutil.Process, ...]) -> int:
+    """Force-stop a previously captured runtime tree without touching siblings."""
+
+    killed = 0
+    for candidate in processes:
+        try:
+            if not candidate.is_running():
+                continue
+            candidate.kill()
+            killed += 1
+        except psutil.NoSuchProcess:
+            continue
+    return killed
+
+
 def _stop_jarvis(
     process: subprocess.Popen[bytes],
     *,
     timeout_seconds: float,
     control: VoiceControlServer,
 ) -> None:
+    runtime_tree = _snapshot_runtime_process_tree(process.pid)
     if process.poll() is not None:
+        _kill_runtime_process_tree(runtime_tree)
         control.child_stopped()
         return
 
@@ -481,6 +510,7 @@ def _stop_jarvis(
     if control.request_shutdown():
         try:
             process.wait(timeout=timeout_seconds)
+            _kill_runtime_process_tree(runtime_tree)
             control.child_stopped()
             return
         except subprocess.TimeoutExpired:
@@ -492,13 +522,17 @@ def _stop_jarvis(
         else:
             process.send_signal(signal.SIGINT)
         process.wait(timeout=timeout_seconds)
+        _kill_runtime_process_tree(runtime_tree)
         control.child_stopped()
         return
     except (OSError, subprocess.TimeoutExpired):
         pass
 
-    print("Graceful shutdown timed out; terminating child process.")
-    process.terminate()
+    killed = _kill_runtime_process_tree(runtime_tree)
+    print(
+        "Graceful shutdown timed out; force-terminated "
+        f"{killed} runtime process(es)."
+    )
     try:
         process.wait(timeout=3.0)
     except subprocess.TimeoutExpired:
