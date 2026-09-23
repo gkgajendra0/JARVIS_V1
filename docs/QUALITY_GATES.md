@@ -115,7 +115,7 @@ Before a step or major integration/stabilization interlude is considered closed:
 - `CURRENT_ARCHITECTURE.md` reflects what actually runs;
 - `ROADMAP.md` distinguishes complete steps from partial foundations pulled forward;
 - `PRODUCT.md` capability statuses match reality (`DONE`, `BOUNDED`, `PARTIAL`, `ACTIVE`, `PLANNED`, `RETIRED`);
-- relevant research/acceptance evidence records **why** work was accepted, deferred, superseded or rejected;
+- `PROJECT_STATE.md` records whether work is accepted, deferred, superseded or rejected, while detailed historical evidence remains available in Git history;
 - durable architecture decisions receive an ADR when future work could otherwise misunderstand the boundary;
 - README-level status is not materially stale;
 - historical research files may retain their original experimental status, but a later accepted record must clearly supersede them for current truth.
