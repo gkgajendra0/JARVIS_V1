@@ -62,6 +62,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 "src/jarvis/conversation.py",
                 "src/jarvis/dev_control.py",
                 "src/jarvis/dev_supervisor.py",
+                "src/jarvis/runtime_supervisor.py",
                 "src/jarvis/health_adapters.py",
                 "src/jarvis/logging_config.py",
                 "src/jarvis/machine_config.py",
