@@ -22,6 +22,7 @@ from jarvis.self_repair import (
     RepairVerificationStatus,
 )
 
+
 def _trigger(*, reason_code: str = "child_exited") -> RepairTrigger:
     return RepairTrigger.create(
         trigger_id="trigger-1",
@@ -36,6 +37,7 @@ def _trigger(*, reason_code: str = "child_exited") -> RepairTrigger:
         work_id="work-1",
         observed_at_epoch=100,
     )
+
 
 def _restart_policy(
     *,
@@ -62,6 +64,7 @@ def _restart_policy(
         automatic=True,
     )
 
+
 def _verification(
     policy: RepairPolicy,
     status: RepairVerificationStatus,
@@ -79,6 +82,7 @@ def _verification(
         observed_at_epoch=now_epoch,
     )
 
+
 def test_trigger_is_normalized_and_immutable() -> None:
     trigger = _trigger()
 
@@ -89,6 +93,7 @@ def test_trigger_is_normalized_and_immutable() -> None:
 
     with pytest.raises(AttributeError):
         trigger.reason_code = "different"  # type: ignore[misc]
+
 
 def test_trigger_rejects_unbounded_evidence() -> None:
     references = tuple(
@@ -103,6 +108,7 @@ def test_trigger_rejects_unbounded_evidence() -> None:
             health_state=HealthState.FAILED,
             evidence_references=references,
         )
+
 
 def test_registered_policy_matches_known_reason_and_authorizes_typed_action() -> None:
     trigger = _trigger()
@@ -127,11 +133,13 @@ def test_registered_policy_matches_known_reason_and_authorizes_typed_action() ->
     )
     assert authorized is policy
 
+
 def test_unknown_reason_returns_no_repair() -> None:
     registry = RepairRegistry((_restart_policy(),))
 
     assert registry.match(_trigger(reason_code="provider_quota_exhausted")) is None
     assert registry.action_for(_trigger(reason_code="provider_quota_exhausted")) is None
+
 
 def test_unregistered_action_cannot_execute() -> None:
     trigger = _trigger()
@@ -161,6 +169,7 @@ def test_unregistered_action_cannot_execute() -> None:
             ),
         )
 
+
 def test_missing_precondition_fails_closed() -> None:
     trigger = _trigger()
     registry = RepairRegistry((_restart_policy(),))
@@ -180,6 +189,7 @@ def test_missing_precondition_fails_closed() -> None:
                 restart_budget_available=False,
             ),
         )
+
 
 def test_invalid_policy_action_risk_pair_fails_closed() -> None:
     with pytest.raises(
@@ -202,6 +212,7 @@ def test_invalid_policy_action_risk_pair_fails_closed() -> None:
             verification_contract="operation_succeeds",
             reversible=True,
         )
+
 
 def test_non_reversible_automatic_policy_fails_closed() -> None:
     with pytest.raises(
@@ -226,6 +237,7 @@ def test_non_reversible_automatic_policy_fails_closed() -> None:
             automatic=True,
         )
 
+
 def test_ambiguous_policy_match_fails_closed() -> None:
     registry = RepairRegistry(
         (
@@ -239,6 +251,7 @@ def test_ambiguous_policy_match_fails_closed() -> None:
         match="multiple repair policies matched",
     ):
         registry.match(_trigger())
+
 
 def test_no_action_escalate_is_never_an_executable_effect() -> None:
     trigger = _trigger(reason_code="unknown_runtime_failure")
@@ -273,6 +286,7 @@ def test_no_action_escalate_is_never_an_executable_effect() -> None:
             execution_context=RepairExecutionContext(),
         )
 
+
 def test_successful_execution_does_not_imply_recovered_verdict() -> None:
     trigger = _trigger()
     policy = _restart_policy()
@@ -302,6 +316,7 @@ def test_successful_execution_does_not_imply_recovered_verdict() -> None:
     assert completed.verdict is RepairVerdict.NOT_RECOVERED
     assert completed.recovered is False
 
+
 def test_only_recovered_verdict_marks_attempt_recovered() -> None:
     trigger = _trigger()
     policy = _restart_policy()
@@ -327,6 +342,7 @@ def test_only_recovered_verdict_marks_attempt_recovered() -> None:
 
     assert recovered.recovered is True
 
+
 def test_trigger_rejects_non_integer_exit_code() -> None:
     with pytest.raises(TypeError, match="process_exit_code"):
         RepairTrigger.create(
@@ -336,6 +352,7 @@ def test_trigger_rejects_non_integer_exit_code() -> None:
             health_state=HealthState.FAILED,
             process_exit_code="1",  # type: ignore[arg-type]
         )
+
 
 def test_attempt_rejects_action_from_different_policy() -> None:
     trigger = _trigger()
@@ -367,6 +384,7 @@ def test_attempt_rejects_action_from_different_policy() -> None:
             attempt_number=1,
             now_epoch=101,
         )
+
 
 def test_verification_contract_mismatch_cannot_mark_recovery() -> None:
     trigger = _trigger()
