@@ -125,12 +125,17 @@ class Qwen3EmbeddingEncoder:
         *,
         device: str | None = "cuda",
         contract: EmbeddingContract = QWEN3_EMBEDDING_CONTRACT,
+        query_instruction: str = JARVIS_MEMORY_RETRIEVAL_INSTRUCTION,
         model_factory: Callable[..., Any] | None = None,
     ) -> None:
         if device is not None and not isinstance(device, str):
             raise TypeError("device must be a string or None")
         self._device = device
         self._contract = contract
+        self._query_instruction = _text(
+            query_instruction,
+            name="query instruction",
+        )
         self._model_factory = model_factory
         self._model: Any | None = None
         self._lock = threading.RLock()
@@ -143,13 +148,17 @@ class Qwen3EmbeddingEncoder:
     def loaded(self) -> bool:
         return self._model is not None
 
+    @property
+    def query_instruction(self) -> str:
+        return self._query_instruction
+
     def encode_query(self, text: str) -> np.ndarray:
         query = _text(text, name="query text")
         with self._lock:
             model = self._require_model()
             output = model.encode_query(
                 [query],
-                prompt=JARVIS_MEMORY_RETRIEVAL_INSTRUCTION,
+                prompt=self._query_instruction,
                 normalize_embeddings=True,
                 convert_to_numpy=True,
                 show_progress_bar=False,
