@@ -94,6 +94,16 @@ from jarvis.engineering_knowledge.retrieval import (
     EngineeringKnowledgeRetrievalQueryError,
     build_engineering_qwen_encoder,
 )
+from jarvis.engineering_knowledge.security import (
+    EngineeringEvidenceAdmissionGate,
+    EngineeringKnowledgeIntegrityDecision,
+    EngineeringKnowledgeIntegrityVerifier,
+    EngineeringKnowledgeSecurityError,
+    EvidenceAdmissionDecision,
+    EvidenceAdmissionOutcome,
+    EvidenceAdmissionRequest,
+    EvidenceTrustClass,
+)
 
 __all__ = [
     "CANONICALIZATION_RFC8785",
@@ -119,6 +129,7 @@ __all__ = [
     "EngineeringApplicabilityRegistry",
     "EngineeringAttestation",
     "EngineeringEvidence",
+    "EngineeringEvidenceAdmissionGate",
     "EngineeringKnowledgeApplicabilityService",
     "EngineeringKnowledgeCandidateBundle",
     "EngineeringKnowledgeCandidateWriteResult",
@@ -129,6 +140,8 @@ __all__ = [
     "EngineeringKnowledgeFacetRegistry",
     "EngineeringKnowledgeIdentity",
     "EngineeringKnowledgeIndexResult",
+    "EngineeringKnowledgeIntegrityDecision",
+    "EngineeringKnowledgeIntegrityVerifier",
     "EngineeringKnowledgePersistenceConflictError",
     "EngineeringKnowledgeRetrievalCandidate",
     "EngineeringKnowledgeRetrievalError",
@@ -136,6 +149,11 @@ __all__ = [
     "EngineeringKnowledgeRetrievalPolicy",
     "EngineeringKnowledgeRetrievalQueryError",
     "EngineeringKnowledgeRevision",
+    "EngineeringKnowledgeSecurityError",
+    "EvidenceAdmissionDecision",
+    "EvidenceAdmissionOutcome",
+    "EvidenceAdmissionRequest",
+    "EvidenceTrustClass",
     "ExactIdentityMatcher",
     "ExactVersionMatcher",
     "FacetApplicabilityConstraint",
