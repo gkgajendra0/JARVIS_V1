@@ -32,6 +32,10 @@ from jarvis.self_repair.supervisor import (
     build_runtime_child_exit_policy,
     build_runtime_liveness_policy,
 )
+from jarvis.self_repair.windows_job import (
+    WindowsJobObjectError,
+    WindowsRuntimeJob,
+)
 
 _BRANCH_ENV = "JARVIS_DEV_BRANCH"
 
@@ -471,8 +475,76 @@ def _start_jarvis(
         [sys.executable, "-m", "jarvis.voice.production_runtime"],
         **kwargs,
     )
+    try:
+        _attach_windows_runtime_job(process)
+    except WindowsJobObjectError:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=3.0)
+        raise
     print(f"JARVIS started (pid={process.pid}).")
     return process
+
+
+def _attach_windows_runtime_job(process: subprocess.Popen[bytes]) -> None:
+    """Assign the runtime and any already-created descendants to one Windows job."""
+
+    if os.name != "nt":
+        return
+
+    job = WindowsRuntimeJob()
+    try:
+        job.assign_pid(process.pid)
+        try:
+            descendants = psutil.Process(process.pid).children(recursive=True)
+        except psutil.NoSuchProcess:
+            descendants = ()
+        for descendant in descendants:
+            try:
+                job.assign_pid(descendant.pid)
+            except psutil.NoSuchProcess:
+                continue
+        setattr(process, "_jarvis_runtime_job", job)
+    except Exception:
+        job.close()
+        raise
+
+
+def _runtime_job(process: subprocess.Popen[bytes]) -> WindowsRuntimeJob | None:
+    candidate = getattr(process, "_jarvis_runtime_job", None)
+    return candidate if isinstance(candidate, WindowsRuntimeJob) else None
+
+
+def _release_runtime_job(process: subprocess.Popen[bytes]) -> None:
+    job = _runtime_job(process)
+    if job is None:
+        return
+    try:
+        job.close()
+    finally:
+        try:
+            delattr(process, "_jarvis_runtime_job")
+        except AttributeError:
+            pass
+
+
+def _force_cleanup_runtime(
+    process: subprocess.Popen[bytes],
+    runtime_tree: tuple[psutil.Process, ...],
+) -> tuple[bool, int]:
+    """Prefer OS-owned Windows job termination; fall back to captured psutil tree."""
+
+    job = _runtime_job(process)
+    if job is not None:
+        try:
+            job.terminate(exit_code=1)
+            return True, 0
+        except WindowsJobObjectError as exc:
+            print(
+                "Windows Job Object termination failed; falling back to captured "
+                f"runtime tree cleanup: {exc}"
+            )
+    return False, _kill_runtime_process_tree(runtime_tree)
 
 
 def _snapshot_runtime_process_tree(root_pid: int) -> tuple[psutil.Process, ...]:
@@ -507,17 +579,25 @@ def _stop_jarvis(
     control: VoiceControlServer,
 ) -> None:
     runtime_tree = _snapshot_runtime_process_tree(process.pid)
-    if process.poll() is not None:
-        _kill_runtime_process_tree(runtime_tree)
+
+    def finish_cleanup() -> None:
+        used_job, killed = _force_cleanup_runtime(process, runtime_tree)
+        if used_job:
+            print("Windows Job Object runtime tree cleanup completed.")
+        elif killed:
+            print(f"Force-terminated {killed} captured runtime process(es).")
+        _release_runtime_job(process)
         control.child_stopped()
+
+    if process.poll() is not None:
+        finish_cleanup()
         return
 
     print("Stopping JARVIS gracefully...")
     if control.request_shutdown():
         try:
             process.wait(timeout=timeout_seconds)
-            _kill_runtime_process_tree(runtime_tree)
-            control.child_stopped()
+            finish_cleanup()
             return
         except subprocess.TimeoutExpired:
             pass
@@ -528,22 +608,26 @@ def _stop_jarvis(
         else:
             process.send_signal(signal.SIGINT)
         process.wait(timeout=timeout_seconds)
-        _kill_runtime_process_tree(runtime_tree)
-        control.child_stopped()
+        finish_cleanup()
         return
     except (OSError, subprocess.TimeoutExpired):
         pass
 
-    killed = _kill_runtime_process_tree(runtime_tree)
-    print(
-        f"Graceful shutdown timed out; force-terminated {killed} runtime process(es)."
-    )
+    used_job, killed = _force_cleanup_runtime(process, runtime_tree)
+    if used_job:
+        print("Graceful shutdown timed out; terminated Windows runtime Job Object.")
+    else:
+        print(
+            "Graceful shutdown timed out; force-terminated "
+            f"{killed} runtime process(es)."
+        )
     try:
         process.wait(timeout=3.0)
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=3.0)
     finally:
+        _release_runtime_job(process)
         control.child_stopped()
 
 
@@ -666,7 +750,7 @@ def _recover_unexpected_exit(
         )
         try:
             restarted = _start_jarvis(root, control)
-        except OSError:
+        except (OSError, WindowsJobObjectError):
             repair.complete_attempt(
                 plan,
                 attempt,
@@ -830,7 +914,7 @@ def _recover_liveness_failure(
         )
         try:
             restarted = _start_jarvis(root, control)
-        except OSError:
+        except (OSError, WindowsJobObjectError):
             repair.complete_attempt(
                 plan,
                 attempt,
