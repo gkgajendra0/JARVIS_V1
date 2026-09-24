@@ -7,7 +7,14 @@ import sqlite3
 from pathlib import Path
 from threading import RLock
 
-from jarvis.engineering_knowledge.models import EngineeringKnowledgeFacet
+from jarvis.engineering_knowledge.models import (
+    EngineeringKnowledgeFacet,
+)
+from jarvis.engineering_knowledge.persistence import (
+    EngineeringKnowledgeCandidateBundle,
+    EngineeringKnowledgeCandidateWriteResult,
+    EngineeringKnowledgePersistenceConflictError,
+)
 from jarvis.incidents.migration_runner import EngineeringMigrationRunner
 from jarvis.incidents.models import (
     EvidenceReference,
@@ -476,6 +483,329 @@ class SqliteIncidentStore:
                 RepairVerdict(str(verdict_value)) if verdict_value is not None else None
             ),
         )
+
+    def persist_engineering_knowledge_candidate(
+        self,
+        candidate: EngineeringKnowledgeCandidateBundle,
+    ) -> EngineeringKnowledgeCandidateWriteResult:
+        """Atomically persist one deterministic immutable candidate or verify replay."""
+
+        if not isinstance(candidate, EngineeringKnowledgeCandidateBundle):
+            raise TypeError("candidate must be an EngineeringKnowledgeCandidateBundle")
+
+        identity = candidate.identity
+        revision = candidate.revision
+        inserted_after_existing_revision = False
+
+        with self._lock, self._connection:
+            self._insert_immutable_row(
+                table="engineering_knowledge_identity",
+                columns=(
+                    "knowledge_id",
+                    "stable_label",
+                    "created_at_epoch",
+                    "created_by",
+                ),
+                values=(
+                    identity.knowledge_id,
+                    identity.stable_label,
+                    identity.created_at_epoch,
+                    identity.created_by,
+                ),
+                identity_columns=("knowledge_id",),
+                identity_values=(identity.knowledge_id,),
+            )
+            revision_created = self._insert_immutable_row(
+                table="engineering_knowledge_revision",
+                columns=(
+                    "revision_id",
+                    "knowledge_id",
+                    "revision_number",
+                    "parent_revision_id",
+                    "supersedes_revision_id",
+                    "kind_namespace",
+                    "normalized_summary",
+                    "valid_from_epoch",
+                    "valid_to_epoch",
+                    "system_from_epoch",
+                    "system_to_epoch",
+                    "sensitivity",
+                    "freshness_state",
+                    "canonicalization",
+                    "digest_algorithm",
+                    "canonical_digest",
+                    "created_at_epoch",
+                    "created_by",
+                ),
+                values=(
+                    revision.revision_id,
+                    revision.knowledge_id,
+                    revision.revision_number,
+                    revision.parent_revision_id,
+                    revision.supersedes_revision_id,
+                    revision.kind_namespace,
+                    revision.normalized_summary,
+                    revision.valid_from_epoch,
+                    revision.valid_to_epoch,
+                    revision.system_from_epoch,
+                    revision.system_to_epoch,
+                    revision.sensitivity.value,
+                    revision.freshness_state.value,
+                    revision.canonicalization,
+                    revision.digest_algorithm,
+                    revision.canonical_digest,
+                    revision.created_at_epoch,
+                    revision.created_by,
+                ),
+                identity_columns=("revision_id",),
+                identity_values=(revision.revision_id,),
+            )
+
+            for facet in candidate.facets:
+                inserted = self._insert_immutable_row(
+                    table="engineering_knowledge_facet",
+                    columns=(
+                        "facet_id",
+                        "revision_id",
+                        "facet_type",
+                        "schema_id",
+                        "schema_version",
+                        "schema_digest",
+                        "producer",
+                        "payload_json",
+                        "protected_payload_ref",
+                        "payload_digest",
+                        "created_at_epoch",
+                    ),
+                    values=(
+                        facet.facet_id,
+                        facet.revision_id,
+                        facet.facet_type,
+                        facet.schema_id,
+                        facet.schema_version,
+                        facet.schema_digest,
+                        facet.producer,
+                        facet.payload_json,
+                        facet.protected_payload_ref,
+                        facet.payload_digest,
+                        facet.created_at_epoch,
+                    ),
+                    identity_columns=("facet_id",),
+                    identity_values=(facet.facet_id,),
+                )
+                inserted_after_existing_revision |= inserted and not revision_created
+
+            for item in candidate.applicability:
+                inserted = self._insert_immutable_row(
+                    table="engineering_knowledge_applicability",
+                    columns=(
+                        "applicability_id",
+                        "revision_id",
+                        "target_namespace",
+                        "target_identity",
+                        "matcher_type",
+                        "constraint_json",
+                        "required",
+                        "created_at_epoch",
+                    ),
+                    values=(
+                        item.applicability_id,
+                        item.revision_id,
+                        item.target_namespace,
+                        item.target_identity,
+                        item.matcher_type,
+                        item.constraint_json,
+                        int(item.required),
+                        item.created_at_epoch,
+                    ),
+                    identity_columns=("applicability_id",),
+                    identity_values=(item.applicability_id,),
+                )
+                inserted_after_existing_revision |= inserted and not revision_created
+
+            for evidence in candidate.evidence:
+                inserted = self._insert_immutable_row(
+                    table="engineering_evidence",
+                    columns=(
+                        "evidence_id",
+                        "evidence_type",
+                        "source_class",
+                        "canonical_reference",
+                        "summary",
+                        "occurred_at_epoch",
+                        "observed_at_epoch",
+                        "sensitivity",
+                        "producer",
+                        "integrity_algorithm",
+                        "integrity_digest",
+                        "created_at_epoch",
+                    ),
+                    values=(
+                        evidence.evidence_id,
+                        evidence.evidence_type,
+                        evidence.source_class,
+                        evidence.canonical_reference,
+                        evidence.summary,
+                        evidence.occurred_at_epoch,
+                        evidence.observed_at_epoch,
+                        evidence.sensitivity.value,
+                        evidence.producer,
+                        evidence.integrity_algorithm,
+                        evidence.integrity_digest,
+                        evidence.created_at_epoch,
+                    ),
+                    identity_columns=("evidence_id",),
+                    identity_values=(evidence.evidence_id,),
+                )
+                inserted_after_existing_revision |= inserted and not revision_created
+
+            for link in candidate.evidence_links:
+                inserted = self._insert_immutable_row(
+                    table="engineering_knowledge_evidence_link",
+                    columns=(
+                        "revision_id",
+                        "evidence_id",
+                        "relation_type",
+                        "created_at_epoch",
+                    ),
+                    values=(
+                        link.revision_id,
+                        link.evidence_id,
+                        link.relation_type,
+                        link.created_at_epoch,
+                    ),
+                    identity_columns=("revision_id", "evidence_id", "relation_type"),
+                    identity_values=(
+                        link.revision_id,
+                        link.evidence_id,
+                        link.relation_type,
+                    ),
+                )
+                inserted_after_existing_revision |= inserted and not revision_created
+
+            event = candidate.lifecycle_event
+            inserted = self._insert_immutable_row(
+                table="engineering_knowledge_lifecycle_event",
+                columns=(
+                    "event_id",
+                    "revision_id",
+                    "from_state",
+                    "to_state",
+                    "reason_code",
+                    "actor",
+                    "policy_id",
+                    "evidence_ids_json",
+                    "occurred_at_epoch",
+                ),
+                values=(
+                    event.event_id,
+                    event.revision_id,
+                    event.from_state.value if event.from_state is not None else None,
+                    event.to_state.value,
+                    event.reason_code,
+                    event.actor,
+                    event.policy_id,
+                    json.dumps(
+                        event.evidence_ids,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
+                    event.occurred_at_epoch,
+                ),
+                identity_columns=("event_id",),
+                identity_values=(event.event_id,),
+            )
+            inserted_after_existing_revision |= inserted and not revision_created
+
+            for attestation in candidate.attestations:
+                inserted = self._insert_immutable_row(
+                    table="engineering_attestation",
+                    columns=(
+                        "attestation_id",
+                        "subject_type",
+                        "subject_id",
+                        "subject_digest",
+                        "predicate_type",
+                        "producer",
+                        "expected_contract_json",
+                        "observed_result_json",
+                        "verdict",
+                        "evidence_ids_json",
+                        "observed_at_epoch",
+                        "created_at_epoch",
+                    ),
+                    values=(
+                        attestation.attestation_id,
+                        attestation.subject_type,
+                        attestation.subject_id,
+                        attestation.subject_digest,
+                        attestation.predicate_type,
+                        attestation.producer,
+                        attestation.expected_contract_json,
+                        attestation.observed_result_json,
+                        attestation.verdict.value,
+                        json.dumps(
+                            attestation.evidence_ids,
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                        ),
+                        attestation.observed_at_epoch,
+                        attestation.created_at_epoch,
+                    ),
+                    identity_columns=("attestation_id",),
+                    identity_values=(attestation.attestation_id,),
+                )
+                inserted_after_existing_revision |= inserted and not revision_created
+
+            if inserted_after_existing_revision:
+                raise EngineeringKnowledgePersistenceConflictError(
+                    "existing candidate revision was incomplete; replay refused"
+                )
+
+        return EngineeringKnowledgeCandidateWriteResult(
+            knowledge_id=identity.knowledge_id,
+            revision_id=revision.revision_id,
+            created=revision_created,
+        )
+
+    def _insert_immutable_row(
+        self,
+        *,
+        table: str,
+        columns: tuple[str, ...],
+        values: tuple[object, ...],
+        identity_columns: tuple[str, ...],
+        identity_values: tuple[object, ...],
+    ) -> bool:
+        placeholders = ", ".join("?" for _ in columns)
+        cursor = self._connection.execute(
+            f"""
+            INSERT OR IGNORE INTO {table} ({", ".join(columns)})
+            VALUES ({placeholders})
+            """,
+            values,
+        )
+        if cursor.rowcount == 1:
+            return True
+
+        where_clause = " AND ".join(f"{column} = ?" for column in identity_columns)
+        existing = self._connection.execute(
+            f"""
+            SELECT {", ".join(columns)}
+            FROM {table}
+            WHERE {where_clause}
+            """,
+            identity_values,
+        ).fetchone()
+        if existing is None:
+            raise EngineeringKnowledgePersistenceConflictError(
+                f"{table} immutable unique-key conflict"
+            )
+        if tuple(existing) != values:
+            raise EngineeringKnowledgePersistenceConflictError(
+                f"{table} immutable identity exists with different content"
+            )
+        return False
 
     def insert_engineering_knowledge_facet(
         self,
