@@ -90,9 +90,7 @@ def test_exact_component_mismatch_blocks_required_knowledge() -> None:
 
 
 def test_missing_required_context_fails_closed_as_unknown() -> None:
-    service = EngineeringKnowledgeApplicabilityService(
-        _Store((_constraint(),))
-    )
+    service = EngineeringKnowledgeApplicabilityService(_Store((_constraint(),)))
 
     decision = service.evaluate("revision-1", ApplicabilityContext(()))
 
