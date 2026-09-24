@@ -1069,6 +1069,15 @@ def _apply_approved_update(
     return process, True
 
 
+def _escalation_exit_code(
+    config: DevSupervisorConfig,
+    fallback_code: int = 1,
+) -> int:
+    """Production guardian mode must not restart after intentional fail-closed stop."""
+
+    return fallback_code if config.git_updates_enabled else 0
+
+
 def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
     config = config or _config_from_environment()
     root = _find_repo_root()
@@ -1112,7 +1121,7 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
             control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
         except RuntimeError as exc:
             print(f"Initial JARVIS startup readiness failed: {exc}")
-            return 1
+            return _escalation_exit_code(config)
 
         if update_poller is not None:
             update_poller.start()
@@ -1126,7 +1135,10 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                         "durable Self-Repair is unavailable, so automatic restart "
                         "fails closed."
                     )
-                    return int(process.returncode or 1)
+                    return _escalation_exit_code(
+                        config,
+                        int(process.returncode or 1),
+                    )
                 restarted = _recover_unexpected_exit(
                     repo,
                     root,
@@ -1136,7 +1148,10 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                     repair,
                 )
                 if restarted is None:
-                    return int(process.returncode or 1)
+                    return _escalation_exit_code(
+                        config,
+                        int(process.returncode or 1),
+                    )
                 process = restarted
                 continue
 
@@ -1157,7 +1172,7 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                         "JARVIS runtime failed the liveness watchdog, but durable "
                         "Self-Repair is unavailable; automatic restart fails closed."
                     )
-                    return 1
+                    return _escalation_exit_code(config)
                 restarted = _recover_liveness_failure(
                     repo,
                     root,
@@ -1167,7 +1182,7 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                     repair,
                 )
                 if restarted is None:
-                    return 1
+                    return _escalation_exit_code(config)
                 process = restarted
                 liveness_failure_streak = 0
                 continue
