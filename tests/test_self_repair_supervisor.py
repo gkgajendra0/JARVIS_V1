@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from jarvis.incidents import IncidentService, SqliteIncidentStore
 from jarvis.self_model import HealthState
-from jarvis.self_repair import RepairActionKind, RepairTrigger, RepairVerdict
+from jarvis.self_repair import (
+    RepairActionKind,
+    RepairTrigger,
+    RepairVerificationStatus,
+)
 from jarvis.self_repair.supervisor import (
     CrashFingerprint,
     SupervisorFailurePhase,
@@ -80,13 +84,13 @@ def test_restart_budget_survives_store_reopen_and_exhausts(tmp_path) -> None:
     assert first_plan.budget.budget_index == 1
     assert first_plan.budget.wait_seconds == 2
 
-    first = controller.start_attempt(first_plan, now_epoch=102)
+    first = controller.start_attempt(first_plan, current_revision="a" * 40, now_epoch=102)
     controller.complete_attempt(
         first_plan,
         first,
         execution_result="same-version child restart started",
-        verifier_result="startup readiness confirmed; liveness pending",
-        verdict=RepairVerdict.INCONCLUSIVE,
+        verification_status=RepairVerificationStatus.INCONCLUSIVE,
+        verification_summary="startup readiness confirmed; liveness pending",
         now_epoch=103,
     )
     incident_id = first_plan.incident.incident_id
@@ -110,13 +114,13 @@ def test_restart_budget_survives_store_reopen_and_exhausts(tmp_path) -> None:
     assert second_plan.budget.budget_index == 2
     assert second_plan.budget.wait_seconds == 3
 
-    second = reopened.start_attempt(second_plan, now_epoch=107)
+    second = reopened.start_attempt(second_plan, current_revision="a" * 40, now_epoch=107)
     reopened.complete_attempt(
         second_plan,
         second,
         execution_result="same-version child restart started",
-        verifier_result="startup readiness failed",
-        verdict=RepairVerdict.NOT_RECOVERED,
+        verification_status=RepairVerificationStatus.FAIL,
+        verification_summary="startup readiness failed",
         now_epoch=108,
     )
 
@@ -152,13 +156,13 @@ def test_budget_resets_after_rolling_window_without_reusing_attempt_number(
         commit_sha="a" * 40,
         now_epoch=100,
     )
-    first = controller.start_attempt(first_plan, now_epoch=102)
+    first = controller.start_attempt(first_plan, current_revision="a" * 40, now_epoch=102)
     controller.complete_attempt(
         first_plan,
         first,
         execution_result="restart started",
-        verifier_result="readiness confirmed",
-        verdict=RepairVerdict.INCONCLUSIVE,
+        verification_status=RepairVerificationStatus.INCONCLUSIVE,
+        verification_summary="readiness confirmed",
         now_epoch=103,
     )
 
@@ -203,13 +207,13 @@ def test_verified_recovery_does_not_forgive_restart_storm_history(
         commit_sha="a" * 40,
         now_epoch=100,
     )
-    first = controller.start_attempt(first_plan, now_epoch=102)
+    first = controller.start_attempt(first_plan, current_revision="a" * 40, now_epoch=102)
     controller.complete_attempt(
         first_plan,
         first,
         execution_result="same-version child restart stabilized",
-        verifier_result="readiness_and_liveness_stable:4_probes",
-        verdict=RepairVerdict.RECOVERED,
+        verification_status=RepairVerificationStatus.PASS,
+        verification_summary="readiness_and_liveness_stable:4_probes",
         now_epoch=112,
     )
 
@@ -279,13 +283,13 @@ def test_shared_restart_circuit_breaker_spans_crash_and_liveness(tmp_path) -> No
         commit_sha="a" * 40,
         now_epoch=100,
     )
-    crash_attempt = controller.start_attempt(crash_plan, now_epoch=100)
+    crash_attempt = controller.start_attempt(crash_plan, current_revision="a" * 40, now_epoch=100)
     controller.complete_attempt(
         crash_plan,
         crash_attempt,
         execution_result="restart failed",
-        verifier_result="startup_readiness_failed",
-        verdict=RepairVerdict.NOT_RECOVERED,
+        verification_status=RepairVerificationStatus.FAIL,
+        verification_summary="startup_readiness_failed",
         now_epoch=101,
     )
 
@@ -313,13 +317,13 @@ def test_shared_restart_circuit_breaker_spans_crash_fingerprints(tmp_path) -> No
         commit_sha="a" * 40,
         now_epoch=100,
     )
-    first = controller.start_attempt(first_plan, now_epoch=100)
+    first = controller.start_attempt(first_plan, current_revision="a" * 40, now_epoch=100)
     controller.complete_attempt(
         first_plan,
         first,
         execution_result="restart failed",
-        verifier_result="startup_readiness_failed",
-        verdict=RepairVerdict.NOT_RECOVERED,
+        verification_status=RepairVerificationStatus.FAIL,
+        verification_summary="startup_readiness_failed",
         now_epoch=101,
     )
 
