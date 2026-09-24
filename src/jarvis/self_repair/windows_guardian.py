@@ -1,7 +1,10 @@
 """Explicit Windows Task Scheduler guardian setup for jarvis-supervisor.
 
-This is owner-invoked installation tooling. Importing this module never creates,
-changes or starts a scheduled task.
+Task Scheduler provides the current-user interactive launch boundary. A tiny
+bounded guardian wrapper owns jarvis.runtime_supervisor and restarts only
+unexpected non-zero supervisor exits. This avoids relying on Task Scheduler's
+RestartOnFailure interpretation of child/action exit codes while preserving a
+strict outer restart budget.
 """
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,8 +23,10 @@ from xml.sax.saxutils import escape
 TASK_NAME = "JARVIS Runtime Supervisor"
 DEFAULT_RESTART_COUNT = 3
 DEFAULT_RESTART_INTERVAL = "PT1M"
+DEFAULT_RESTART_DELAY_SECONDS = 60.0
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
+Sleeper = Callable[[float], None]
 
 
 class WindowsGuardianError(RuntimeError):
@@ -58,8 +64,8 @@ def render_guardian_task_xml(spec: GuardianTaskSpec) -> str:
     working_directory = escape(str(spec.repo_root))
     branch = escape(spec.branch)
     description = escape(
-        "Starts the local-only JARVIS runtime supervisor at owner logon and "
-        "restarts only supervisor process failures under a bounded outer budget."
+        "Starts a bounded current-user JARVIS guardian at owner logon; the "
+        "guardian owns and restarts only unexpected supervisor failures."
     )
     return f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -93,20 +99,93 @@ def render_guardian_task_xml(spec: GuardianTaskSpec) -> str:
     <WakeToRun>false</WakeToRun>
     <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
     <Priority>7</Priority>
-    <RestartOnFailure>
-      <Interval>{spec.restart_interval}</Interval>
-      <Count>{spec.restart_count}</Count>
-    </RestartOnFailure>
   </Settings>
   <Actions Context="Author">
     <Exec>
       <Command>{command}</Command>
-      <Arguments>-m jarvis.runtime_supervisor --branch {branch}</Arguments>
+      <Arguments>-m jarvis.self_repair.windows_guardian run --branch {branch}</Arguments>
       <WorkingDirectory>{working_directory}</WorkingDirectory>
     </Exec>
   </Actions>
 </Task>
 """
+
+
+def run_bounded_supervisor_guardian(
+    *,
+    branch: str,
+    python_executable: Path | None = None,
+    repo_root: Path | None = None,
+    restart_count: int = DEFAULT_RESTART_COUNT,
+    restart_delay_seconds: float = DEFAULT_RESTART_DELAY_SECONDS,
+    runner: Runner = subprocess.run,
+    sleeper: Sleeper = time.sleep,
+) -> int:
+    """Own the production supervisor and restart only unexpected failures.
+
+    A clean supervisor exit (0) is authoritative and stops the guardian. This
+    preserves production fail-closed semantics after the supervisor's own repair
+    budget is exhausted. Non-zero exits receive a bounded outer restart budget.
+    """
+
+    normalized_branch = branch.strip()
+    if not normalized_branch:
+        raise ValueError("branch must not be empty")
+    if not 1 <= restart_count <= 255:
+        raise ValueError("restart_count must be between 1 and 255")
+    if restart_delay_seconds < 0:
+        raise ValueError("restart_delay_seconds must not be negative")
+
+    python = Path(sys.executable) if python_executable is None else python_executable
+    working_directory = Path.cwd() if repo_root is None else repo_root
+    command = (
+        str(python),
+        "-m",
+        "jarvis.runtime_supervisor",
+        "--branch",
+        normalized_branch,
+    )
+
+    failures = 0
+    while True:
+        try:
+            result = runner(
+                list(command),
+                cwd=str(working_directory),
+                check=False,
+            )
+            return_code = int(result.returncode)
+        except OSError as exc:
+            failures += 1
+            return_code = 1
+            print(
+                "JARVIS outer guardian could not launch the runtime supervisor: "
+                f"{exc}",
+                file=sys.stderr,
+            )
+        else:
+            if return_code == 0:
+                print(
+                    "JARVIS runtime supervisor exited cleanly; "
+                    "outer guardian is stopping."
+                )
+                return 0
+            failures += 1
+
+        if failures > restart_count:
+            print(
+                "JARVIS outer guardian restart budget exhausted; "
+                f"last supervisor exit code={return_code}.",
+                file=sys.stderr,
+            )
+            return return_code if return_code != 0 else 1
+
+        print(
+            "JARVIS runtime supervisor exited unexpectedly with code "
+            f"{return_code}; outer guardian restart "
+            f"{failures}/{restart_count} in {restart_delay_seconds:g}s."
+        )
+        sleeper(restart_delay_seconds)
 
 
 def _require_windows() -> None:
@@ -240,7 +319,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "operation",
-        choices=("install", "remove", "start", "query"),
+        choices=("install", "remove", "start", "query", "run"),
+    )
+    parser.add_argument(
+        "--branch",
+        default="",
+        help="Pinned local branch used by the internal guardian run operation.",
     )
     return parser
 
@@ -248,13 +332,16 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        if args.operation == "run":
+            branch = str(args.branch).strip() or current_repo_branch()
+            return run_bounded_supervisor_guardian(branch=branch)
         if args.operation == "install":
             spec = build_current_guardian_spec()
             install_guardian_task(spec)
             print(
                 f"Installed {spec.task_name!r} for {spec.principal}; "
-                f"restart_count={spec.restart_count} "
-                f"restart_interval={spec.restart_interval}."
+                f"outer_restart_count={spec.restart_count} "
+                f"outer_restart_interval={spec.restart_interval}."
             )
         elif args.operation == "remove":
             remove_guardian_task()
