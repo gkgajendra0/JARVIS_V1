@@ -949,3 +949,23 @@ def test_unresponsive_runtime_uses_separate_registered_repair_policy(
     assert attempts[0].verdict is RepairVerdict.RECOVERED
     assert stopped == [process]
     store.close()
+
+
+
+def test_production_supervisor_escalation_does_not_trigger_outer_restart() -> None:
+    production = DevSupervisorConfig(git_updates_enabled=False)
+    development = DevSupervisorConfig(git_updates_enabled=True)
+
+    assert supervisor._escalation_exit_code(production, 17) == 0
+    assert supervisor._escalation_exit_code(development, 17) == 17
+
+
+def test_runtime_supervisor_configuration_disables_git_updates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("JARVIS_DEV_BRANCH", raising=False)
+
+    config = supervisor._runtime_supervisor_config_from_environment()
+
+    assert config.branch == "main"
+    assert config.git_updates_enabled is False
