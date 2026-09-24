@@ -8,7 +8,16 @@ from pathlib import Path
 from threading import RLock
 
 from jarvis.engineering_knowledge.models import (
+    AttestationVerdict,
+    EngineeringApplicability,
+    EngineeringAttestation,
     EngineeringKnowledgeFacet,
+    EngineeringKnowledgeRevision,
+    KnowledgeEvidenceLink,
+    KnowledgeFreshnessState,
+    KnowledgeLifecycleEvent,
+    KnowledgeLifecycleState,
+    KnowledgeSensitivity,
 )
 from jarvis.engineering_knowledge.persistence import (
     EngineeringKnowledgeCandidateBundle,
@@ -806,6 +815,260 @@ class SqliteIncidentStore:
                 f"{table} immutable identity exists with different content"
             )
         return False
+
+    def get_engineering_knowledge_revision(
+        self,
+        revision_id: str,
+    ) -> EngineeringKnowledgeRevision | None:
+        with self._lock:
+            cursor = self._connection.execute(
+                """
+                SELECT *
+                FROM engineering_knowledge_revision
+                WHERE revision_id = ?
+                """,
+                (str(revision_id).strip(),),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            columns = [item[0] for item in cursor.description or ()]
+        payload = dict(zip(columns, row, strict=True))
+        return EngineeringKnowledgeRevision(
+            revision_id=str(payload["revision_id"]),
+            knowledge_id=str(payload["knowledge_id"]),
+            revision_number=int(payload["revision_number"]),
+            parent_revision_id=(
+                str(payload["parent_revision_id"])
+                if payload["parent_revision_id"] is not None
+                else None
+            ),
+            supersedes_revision_id=(
+                str(payload["supersedes_revision_id"])
+                if payload["supersedes_revision_id"] is not None
+                else None
+            ),
+            kind_namespace=str(payload["kind_namespace"]),
+            normalized_summary=str(payload["normalized_summary"]),
+            valid_from_epoch=(
+                float(payload["valid_from_epoch"])
+                if payload["valid_from_epoch"] is not None
+                else None
+            ),
+            valid_to_epoch=(
+                float(payload["valid_to_epoch"])
+                if payload["valid_to_epoch"] is not None
+                else None
+            ),
+            system_from_epoch=float(payload["system_from_epoch"]),
+            system_to_epoch=(
+                float(payload["system_to_epoch"])
+                if payload["system_to_epoch"] is not None
+                else None
+            ),
+            sensitivity=KnowledgeSensitivity(str(payload["sensitivity"])),
+            freshness_state=KnowledgeFreshnessState(str(payload["freshness_state"])),
+            canonicalization=str(payload["canonicalization"]),
+            digest_algorithm=str(payload["digest_algorithm"]),
+            canonical_digest=str(payload["canonical_digest"]),
+            created_at_epoch=float(payload["created_at_epoch"]),
+            created_by=str(payload["created_by"]),
+        )
+
+    def get_engineering_knowledge_lifecycle_state(
+        self,
+        revision_id: str,
+    ) -> KnowledgeLifecycleState | None:
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT lifecycle_state
+                FROM engineering_knowledge_revision_state
+                WHERE revision_id = ?
+                """,
+                (str(revision_id).strip(),),
+            ).fetchone()
+        if row is None:
+            return None
+        return KnowledgeLifecycleState(str(row[0]))
+
+    def list_engineering_knowledge_evidence_links(
+        self,
+        revision_id: str,
+    ) -> tuple[KnowledgeEvidenceLink, ...]:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT revision_id, evidence_id, relation_type, created_at_epoch
+                FROM engineering_knowledge_evidence_link
+                WHERE revision_id = ?
+                ORDER BY relation_type, evidence_id
+                """,
+                (str(revision_id).strip(),),
+            ).fetchall()
+        return tuple(
+            KnowledgeEvidenceLink(
+                revision_id=str(row[0]),
+                evidence_id=str(row[1]),
+                relation_type=str(row[2]),
+                created_at_epoch=float(row[3]),
+            )
+            for row in rows
+        )
+
+    def list_engineering_knowledge_applicability(
+        self,
+        revision_id: str,
+    ) -> tuple[EngineeringApplicability, ...]:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT applicability_id, revision_id, target_namespace,
+                       target_identity, matcher_type, constraint_json,
+                       required, created_at_epoch
+                FROM engineering_knowledge_applicability
+                WHERE revision_id = ?
+                ORDER BY target_namespace, target_identity, matcher_type,
+                         applicability_id
+                """,
+                (str(revision_id).strip(),),
+            ).fetchall()
+        return tuple(
+            EngineeringApplicability(
+                applicability_id=str(row[0]),
+                revision_id=str(row[1]),
+                target_namespace=str(row[2]),
+                target_identity=str(row[3]),
+                matcher_type=str(row[4]),
+                constraint_json=str(row[5]),
+                required=bool(row[6]),
+                created_at_epoch=float(row[7]),
+            )
+            for row in rows
+        )
+
+    def list_engineering_attestations(
+        self,
+        *,
+        subject_type: str,
+        subject_id: str,
+    ) -> tuple[EngineeringAttestation, ...]:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT attestation_id, subject_type, subject_id, subject_digest,
+                       predicate_type, producer, expected_contract_json,
+                       observed_result_json, verdict, evidence_ids_json,
+                       observed_at_epoch, created_at_epoch
+                FROM engineering_attestation
+                WHERE subject_type = ? AND subject_id = ?
+                ORDER BY predicate_type, observed_at_epoch, attestation_id
+                """,
+                (str(subject_type).strip().lower(), str(subject_id).strip()),
+            ).fetchall()
+        return tuple(
+            EngineeringAttestation(
+                attestation_id=str(row[0]),
+                subject_type=str(row[1]),
+                subject_id=str(row[2]),
+                subject_digest=str(row[3]),
+                predicate_type=str(row[4]),
+                producer=str(row[5]),
+                expected_contract_json=str(row[6]),
+                observed_result_json=str(row[7]),
+                verdict=AttestationVerdict(str(row[8])),
+                evidence_ids=tuple(json.loads(str(row[9]))),
+                observed_at_epoch=float(row[10]),
+                created_at_epoch=float(row[11]),
+            )
+            for row in rows
+        )
+
+    def append_engineering_knowledge_lifecycle_event(
+        self,
+        event: KnowledgeLifecycleEvent,
+        *,
+        expected_from_state: KnowledgeLifecycleState,
+    ) -> bool:
+        """Append one lifecycle event under a same-transaction state precondition."""
+
+        if not isinstance(event, KnowledgeLifecycleEvent):
+            raise TypeError("event must be a KnowledgeLifecycleEvent")
+        if not isinstance(expected_from_state, KnowledgeLifecycleState):
+            raise TypeError("expected_from_state must be a KnowledgeLifecycleState")
+        if event.from_state is not expected_from_state:
+            raise ValueError("event.from_state must equal expected_from_state")
+
+        with self._lock, self._connection:
+            row = self._connection.execute(
+                """
+                SELECT lifecycle_state
+                FROM engineering_knowledge_revision_state
+                WHERE revision_id = ?
+                """,
+                (event.revision_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"unknown knowledge revision: {event.revision_id}")
+            current = KnowledgeLifecycleState(str(row[0]))
+            if current is event.to_state:
+                existing = self._connection.execute(
+                    """
+                    SELECT revision_id, from_state, to_state, reason_code, actor,
+                           policy_id, evidence_ids_json, occurred_at_epoch
+                    FROM engineering_knowledge_lifecycle_event
+                    WHERE event_id = ?
+                    """,
+                    (event.event_id,),
+                ).fetchone()
+                expected = (
+                    event.revision_id,
+                    event.from_state.value,
+                    event.to_state.value,
+                    event.reason_code,
+                    event.actor,
+                    event.policy_id,
+                    json.dumps(
+                        event.evidence_ids,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
+                    event.occurred_at_epoch,
+                )
+                if existing == expected:
+                    return False
+                raise ValueError(
+                    "lifecycle target already reached by a different transition"
+                )
+            if current is not expected_from_state:
+                raise ValueError(
+                    "knowledge lifecycle state changed before transition: "
+                    f"expected {expected_from_state.value}, found {current.value}"
+                )
+            self._connection.execute(
+                """
+                INSERT INTO engineering_knowledge_lifecycle_event (
+                    event_id, revision_id, from_state, to_state, reason_code,
+                    actor, policy_id, evidence_ids_json, occurred_at_epoch
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.event_id,
+                    event.revision_id,
+                    event.from_state.value,
+                    event.to_state.value,
+                    event.reason_code,
+                    event.actor,
+                    event.policy_id,
+                    json.dumps(
+                        event.evidence_ids,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
+                    event.occurred_at_epoch,
+                ),
+            )
+        return True
 
     def insert_engineering_knowledge_facet(
         self,

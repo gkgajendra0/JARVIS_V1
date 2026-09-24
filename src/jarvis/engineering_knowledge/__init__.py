@@ -9,6 +9,15 @@ from jarvis.engineering_knowledge.canonical import (
     parse_json_object,
 )
 from jarvis.engineering_knowledge.defaults import build_default_facet_registry
+from jarvis.engineering_knowledge.lifecycle import (
+    REPAIR_PROMOTION_POLICY_ID,
+    KnowledgeLifecycleError,
+    KnowledgeLifecycleService,
+    KnowledgePromotionDecision,
+    KnowledgePromotionError,
+    KnowledgeTransitionResult,
+    RepairKnowledgePromotionPolicy,
+)
 from jarvis.engineering_knowledge.models import (
     CANONICALIZATION_RFC8785,
     DIGEST_ALGORITHM_SHA256,
@@ -71,6 +80,7 @@ __all__ = [
     "REPAIR_FINDING_V1_SCHEMA_ID",
     "REPAIR_FINDING_V1_SCHEMA_VERSION",
     "REPAIR_KIND_NAMESPACE",
+    "REPAIR_PROMOTION_POLICY_ID",
     "ApplicabilityMatcherRegistry",
     "AttestationVerdict",
     "EngineeringApplicability",
@@ -94,13 +104,19 @@ __all__ = [
     "FacetValidationError",
     "KnowledgeEvidenceLink",
     "KnowledgeFreshnessState",
+    "KnowledgeLifecycleError",
     "KnowledgeLifecycleEvent",
+    "KnowledgeLifecycleService",
     "KnowledgeLifecycleState",
+    "KnowledgePromotionDecision",
+    "KnowledgePromotionError",
     "KnowledgeSensitivity",
+    "KnowledgeTransitionResult",
     "RepairFindingV1Handler",
     "RepairKnowledgeProjectionError",
     "RepairKnowledgeProjectionResult",
     "RepairKnowledgeProjector",
+    "RepairKnowledgePromotionPolicy",
     "UnsupportedApplicabilityMatcherError",
     "UnsupportedFacetSchemaError",
     "ValidatedFacet",
