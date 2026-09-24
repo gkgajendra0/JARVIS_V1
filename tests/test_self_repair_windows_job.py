@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+
 import pytest
 
 from jarvis.self_repair.windows_job import WindowsRuntimeJob
@@ -71,3 +75,38 @@ def test_windows_runtime_job_rejects_invalid_pid_and_closed_use() -> None:
     job.close()
     with pytest.raises(RuntimeError, match="already closed"):
         job.assign_pid(42)
+
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires real Windows Job Objects")
+def test_real_windows_job_terminate_kills_assigned_process() -> None:
+    job = WindowsRuntimeJob()
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"]
+    )
+    try:
+        job.assign_pid(process.pid)
+        job.terminate(exit_code=37)
+        assert process.wait(timeout=5.0) == 37
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5.0)
+        job.close()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires real Windows Job Objects")
+def test_real_windows_job_kill_on_close_prevents_orphan_runtime() -> None:
+    job = WindowsRuntimeJob()
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"]
+    )
+    try:
+        job.assign_pid(process.pid)
+        job.close()
+        assert process.wait(timeout=5.0) != 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5.0)
+        job.close()
