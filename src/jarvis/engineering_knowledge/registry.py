@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -114,6 +113,9 @@ class FacetHandler(Protocol):
 
     @property
     def schema_descriptor(self) -> dict[str, JSONValue]: ...
+
+    @property
+    def schema_digest(self) -> str: ...
 
     @property
     def protected_fields(self) -> tuple[str, ...]: ...
@@ -372,6 +374,3 @@ def _text(value: object, field: str) -> str:
 def _token(value: object, field: str) -> str:
     return _text(value, field).casefold()
 
-
-FacetHandlerFactory = Callable[[], FacetHandler]
-FacetHandlerMap = Mapping[FacetSchemaKey, FacetHandler]
