@@ -37,30 +37,21 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 ## Active cross-cutting program
 
-The active development slice remains:
+The active development slice is now:
 
-**Self-Repair / Self-Evolution Phase 1H — Self-Repair Foundation Hardening**
+**Phase 2 — EngineeringKnowledge Foundation**
 
-The hardening contract is defined in `SELF_REPAIR_PHASE1H_HARDENING.md`.
+Phase 1H is **DONE / OWNER-MACHINE ACCEPTED 2026-09-24**. Its final contract and evidence are recorded in `SELF_REPAIR_PHASE1H_HARDENING.md`.
 
-Phase 1H is intentionally focused on foundations required before repair history can safely feed future engineering knowledge:
+The accepted hardening covers sustained restart budgets, shared target/action circuit breaking, typed verification/preconditions, immutable repair provenance, versioned engineering persistence, Windows Job Object runtime ownership, local-only production supervision and the bounded Windows outer guardian.
 
-1. sustained restart-budget semantics;
-2. target/action-level restart circuit breaking;
-3. typed deterministic verifier proof;
-4. deterministic execution-precondition evaluation;
-5. immutable trigger/policy provenance and digests;
-6. versioned engineering-database migrations;
-7. Windows Job Object runtime ownership;
-8. local-only production supervisor separation from Git/network update polling;
-9. bounded Windows outer-supervisor guardian;
-10. truthful R1/R2 documentation and expanded acceptance.
+The final owner-machine breaker proof established three verified recent repairs and then blocked the fourth restart with zero new RepairAttempts and zero remaining guardian/supervisor/runtime processes. Automatic logon startup was also observed; temporary Pocket 3 device-enumeration timing remains a non-blocking resilience follow-up.
 
-Do not reopen the accepted Phase-1/R2 architecture merely because the north-star plan is broader. Only concrete Phase-1H evidence may justify a runtime correction.
+Do not reopen the accepted Phase-1/R2 or Phase-1H architecture without new concrete evidence.
 
 ## Phase 2 definition
 
-Phase 2 implementation remains **BLOCKED until Phase 1H owner-machine acceptance**.
+Phase 2 implementation is **UNBLOCKED** by completed Phase 1H owner-machine acceptance.
 
 The previous RepairKnowledge research/design remains useful evidence, but Phase 2 should now be implemented as:
 
@@ -72,7 +63,7 @@ This is a forward architecture correction before implementation, not a claim tha
 
 ## Next cross-cutting sequence
 
-After Phase 1H acceptance, follow the phased sequence in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`:
+Continue with the phased sequence in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`:
 
 ```text
 Phase 2  EngineeringKnowledge
@@ -121,8 +112,6 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Complete Phase 1H automated and owner-machine acceptance.**
+**Begin Phase 2 — EngineeringKnowledge Foundation.**
 
-Do not start Phase 2 implementation before that gate passes.
-
-After Phase 1H acceptance, begin **Phase 2 — EngineeringKnowledge Foundation**, preserving repair as the first implemented vertical and the north-star autonomy/governance invariants.
+Preserve repair as the first implemented vertical, generalize the underlying provenance/lifecycle/retrieval substrate for later engineering knowledge kinds, and keep EngineeringKnowledge advisory rather than executable Authority.
