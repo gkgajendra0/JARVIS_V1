@@ -18,8 +18,11 @@ from jarvis.self_repair.domain import (
     RepairAction,
     RepairActionKind,
     RepairAttempt,
+    RepairPolicySnapshot,
     RepairRiskClass,
+    RepairTriggerSnapshot,
     RepairVerdict,
+    RepairVerificationResult,
 )
 
 
@@ -181,6 +184,8 @@ class SqliteIncidentStore:
                     existing.attempt_number,
                     existing.started_at_epoch,
                     existing.pre_repair_evidence,
+                    existing.trigger_snapshot,
+                    existing.policy_snapshot,
                 )
                 incoming_identity = (
                     attempt.incident_id,
@@ -191,6 +196,8 @@ class SqliteIncidentStore:
                     attempt.attempt_number,
                     attempt.started_at_epoch,
                     attempt.pre_repair_evidence,
+                    attempt.trigger_snapshot,
+                    attempt.policy_snapshot,
                 )
                 if existing_identity != incoming_identity:
                     raise ValueError(
@@ -203,16 +210,54 @@ class SqliteIncidentStore:
                         )
                     return
 
+            trigger_snapshot_json = (
+                json.dumps(
+                    attempt.trigger_snapshot.to_payload(),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                if attempt.trigger_snapshot is not None
+                else None
+            )
+            policy_snapshot_json = (
+                json.dumps(
+                    attempt.policy_snapshot.to_payload(),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                if attempt.policy_snapshot is not None
+                else None
+            )
+            policy_digest = (
+                attempt.policy_snapshot.digest
+                if attempt.policy_snapshot is not None
+                else None
+            )
+            verification_json = (
+                json.dumps(
+                    attempt.verification.to_payload(),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                if attempt.verification is not None
+                else None
+            )
+
             self._connection.execute(
                 """
                 INSERT INTO engineering_repair_attempt (
                     attempt_id, incident_id, trigger_id, policy_id, policy_version,
                     action_id, action_kind, risk_class, component_id,
                     action_created_at_epoch, attempt_number, started_at_epoch,
-                    pre_repair_evidence_json, finished_at_epoch, execution_result,
-                    post_repair_evidence_json, verifier_result,
+                    pre_repair_evidence_json, trigger_snapshot_json,
+                    policy_snapshot_json, policy_digest,
+                    finished_at_epoch, execution_result,
+                    post_repair_evidence_json, verifier_result, verification_json,
                     next_retry_eligible_epoch, verdict
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?
+                )
                 ON CONFLICT(attempt_id) DO UPDATE SET
                     incident_id=excluded.incident_id,
                     trigger_id=excluded.trigger_id,
@@ -226,10 +271,14 @@ class SqliteIncidentStore:
                     attempt_number=excluded.attempt_number,
                     started_at_epoch=excluded.started_at_epoch,
                     pre_repair_evidence_json=excluded.pre_repair_evidence_json,
+                    trigger_snapshot_json=excluded.trigger_snapshot_json,
+                    policy_snapshot_json=excluded.policy_snapshot_json,
+                    policy_digest=excluded.policy_digest,
                     finished_at_epoch=excluded.finished_at_epoch,
                     execution_result=excluded.execution_result,
                     post_repair_evidence_json=excluded.post_repair_evidence_json,
                     verifier_result=excluded.verifier_result,
+                    verification_json=excluded.verification_json,
                     next_retry_eligible_epoch=excluded.next_retry_eligible_epoch,
                     verdict=excluded.verdict
                 """,
@@ -247,10 +296,14 @@ class SqliteIncidentStore:
                     attempt.attempt_number,
                     attempt.started_at_epoch,
                     json.dumps(attempt.pre_repair_evidence),
+                    trigger_snapshot_json,
+                    policy_snapshot_json,
+                    policy_digest,
                     attempt.finished_at_epoch,
                     attempt.execution_result,
                     json.dumps(attempt.post_repair_evidence),
                     attempt.verifier_result,
+                    verification_json,
                     attempt.next_retry_eligible_epoch,
                     attempt.verdict.value if attempt.verdict is not None else None,
                 ),
@@ -349,6 +402,34 @@ class SqliteIncidentStore:
             risk_class=RepairRiskClass(int(payload["risk_class"])),
             created_at_epoch=float(payload["action_created_at_epoch"]),
         )
+
+        trigger_snapshot = None
+        trigger_snapshot_value = payload.get("trigger_snapshot_json")
+        if trigger_snapshot_value is not None:
+            trigger_snapshot = RepairTriggerSnapshot.from_payload(
+                json.loads(str(trigger_snapshot_value))
+            )
+
+        policy_snapshot = None
+        policy_snapshot_value = payload.get("policy_snapshot_json")
+        if policy_snapshot_value is not None:
+            policy_snapshot = RepairPolicySnapshot.from_payload(
+                json.loads(str(policy_snapshot_value))
+            )
+            persisted_digest = payload.get("policy_digest")
+            if (
+                persisted_digest is not None
+                and str(persisted_digest) != policy_snapshot.digest
+            ):
+                raise ValueError("persisted repair policy digest does not match snapshot")
+
+        verification = None
+        verification_value = payload.get("verification_json")
+        if verification_value is not None:
+            verification = RepairVerificationResult.from_payload(
+                json.loads(str(verification_value))
+            )
+
         verdict_value = payload["verdict"]
         return RepairAttempt(
             attempt_id=str(payload["attempt_id"]),
@@ -362,6 +443,8 @@ class SqliteIncidentStore:
             pre_repair_evidence=tuple(
                 json.loads(str(payload["pre_repair_evidence_json"]))
             ),
+            trigger_snapshot=trigger_snapshot,
+            policy_snapshot=policy_snapshot,
             finished_at_epoch=(
                 float(payload["finished_at_epoch"])
                 if payload["finished_at_epoch"] is not None
@@ -380,6 +463,7 @@ class SqliteIncidentStore:
                 if payload["verifier_result"] is not None
                 else None
             ),
+            verification=verification,
             next_retry_eligible_epoch=(
                 float(payload["next_retry_eligible_epoch"])
                 if payload["next_retry_eligible_epoch"] is not None
