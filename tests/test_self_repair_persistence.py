@@ -13,7 +13,8 @@ from jarvis.self_repair import (
     RepairPolicy,
     RepairRiskClass,
     RepairTrigger,
-    RepairVerdict,
+    RepairVerificationResult,
+    RepairVerificationStatus,
 )
 
 
@@ -73,6 +74,23 @@ def _attempt(
     )
 
 
+def _verification(
+    status: RepairVerificationStatus,
+    *,
+    summary: str,
+    now_epoch: float,
+) -> RepairVerificationResult:
+    return RepairVerificationResult.create(
+        verifier_id="test-verifier",
+        verifier_version=1,
+        contract_id=_policy().verification_contract,
+        status=status,
+        summary=summary,
+        evidence_references=("test:verification",),
+        observed_at_epoch=now_epoch,
+    )
+
+
 def test_repair_attempt_persists_completion_with_canonical_incident(tmp_path) -> None:
     path = tmp_path / "incidents.sqlite3"
     store = SqliteIncidentStore(path)
@@ -89,8 +107,11 @@ def test_repair_attempt_persists_completion_with_canonical_incident(tmp_path) ->
 
     completed = attempt.complete(
         execution_result="same revision child restarted",
-        verifier_result="readiness and liveness stable",
-        verdict=RepairVerdict.RECOVERED,
+        verification=_verification(
+            RepairVerificationStatus.PASS,
+            summary="readiness and liveness stable",
+            now_epoch=110,
+        ),
         post_repair_evidence=("health:runtime.voice:healthy",),
         now_epoch=110,
     )
@@ -129,8 +150,11 @@ def test_completed_repair_attempt_cannot_be_overwritten_by_stale_state(
     started = _attempt(incident.incident_id)
     completed = started.complete(
         execution_result="child restarted",
-        verifier_result="readiness failed",
-        verdict=RepairVerdict.NOT_RECOVERED,
+        verification=_verification(
+            RepairVerificationStatus.FAIL,
+            summary="readiness failed",
+            now_epoch=110,
+        ),
         next_retry_eligible_epoch=120,
         now_epoch=110,
     )
