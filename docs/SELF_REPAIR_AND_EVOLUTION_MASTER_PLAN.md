@@ -462,12 +462,20 @@ Hardening includes:
 - engineering persistence uses versioned/checksummed migrations;
 - Windows Job Objects own runtime process lifetime with psutil fallback;
 - a local-only production supervisor mode removes Git/network polling from Loop A;
-- a bounded current-user Task Scheduler guardian can restart supervisor failures
-  without overriding an intentional repair-budget escalation;
+- Task Scheduler provides the current-user interactive guardian launch boundary;
+- a bounded guardian wrapper owns the production supervisor, restarts only unexpected
+  non-zero supervisor exits, and stops on an intentional clean supervisor exit so the
+  outer layer cannot override repair-budget escalation;
 - canonical docs distinguish the R1/R2 framework from accepted R2 behavior.
 
 Exit condition: repository gates and the expanded owner-machine fault matrix pass,
 including supervisor death and repeated cross-signature restart-storm cases.
+
+Owner-machine hardening note (2026-09-24): direct reliance on Task Scheduler
+RestartOnFailure did not restart the task after forced supervisor/action failure on the
+owner workstation, despite the restart settings being registered. Phase 1H therefore
+uses Task Scheduler only for the interactive current-user launch boundary and keeps the
+three-attempt outer restart authority inside the guardian wrapper.
 
 Required owner-machine Phase 1H acceptance matrix:
 
@@ -475,7 +483,7 @@ Required owner-machine Phase 1H acceptance matrix:
 - full runtime hang;
 - launcher-only death;
 - interpreter-only death;
-- supervisor death and bounded Task Scheduler recovery;
+- supervisor death and bounded recovery by the Task-Scheduler-hosted guardian wrapper;
 - alternating crash/liveness faults;
 - different exit-code fingerprints;
 - recover -> crash -> recover loop within the rolling window;
@@ -496,7 +504,7 @@ Implementation findings H1-H10 are preserved by this master plan and PR #90:
 6. versioned/checksummed engineering DB migrations;
 7. Windows Job Object runtime ownership;
 8. production supervisor separated from Git/network polling;
-9. bounded current-user Task Scheduler guardian;
+9. bounded current-user Task-Scheduler-hosted guardian wrapper;
 10. truthful distinction between typed R1/R2 framework and accepted automatic R2
     behavior.
 
