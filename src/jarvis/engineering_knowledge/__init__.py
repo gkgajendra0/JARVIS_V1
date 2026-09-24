@@ -9,6 +9,19 @@ from jarvis.engineering_knowledge.canonical import (
     parse_json_object,
 )
 from jarvis.engineering_knowledge.defaults import build_default_facet_registry
+from jarvis.engineering_knowledge.persistence import (
+    EngineeringKnowledgeCandidateBundle,
+    EngineeringKnowledgeCandidateWriteResult,
+    EngineeringKnowledgePersistenceConflictError,
+)
+from jarvis.engineering_knowledge.projector import (
+    PROJECTOR_ID,
+    PROJECTION_POLICY_ID,
+    REPAIR_KIND_NAMESPACE,
+    RepairKnowledgeProjectionError,
+    RepairKnowledgeProjectionResult,
+    RepairKnowledgeProjector,
+)
 from jarvis.engineering_knowledge.models import (
     CANONICALIZATION_RFC8785,
     DIGEST_ALGORITHM_SHA256,
@@ -78,6 +91,15 @@ __all__ = [
     "KnowledgeLifecycleEvent",
     "KnowledgeLifecycleState",
     "KnowledgeSensitivity",
+    "EngineeringKnowledgeCandidateBundle",
+    "EngineeringKnowledgeCandidateWriteResult",
+    "EngineeringKnowledgePersistenceConflictError",
+    "PROJECTOR_ID",
+    "PROJECTION_POLICY_ID",
+    "REPAIR_KIND_NAMESPACE",
+    "RepairKnowledgeProjectionError",
+    "RepairKnowledgeProjectionResult",
+    "RepairKnowledgeProjector",
     "RepairFindingV1Handler",
     "UnsupportedApplicabilityMatcherError",
     "UnsupportedFacetSchemaError",
