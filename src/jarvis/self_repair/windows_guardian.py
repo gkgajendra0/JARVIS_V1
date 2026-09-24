@@ -33,6 +33,7 @@ class GuardianTaskSpec:
     principal: str
     python_executable: Path
     repo_root: Path
+    branch: str
     restart_count: int = DEFAULT_RESTART_COUNT
     restart_interval: str = DEFAULT_RESTART_INTERVAL
 
@@ -41,6 +42,8 @@ class GuardianTaskSpec:
             raise ValueError("task_name must not be empty")
         if not self.principal.strip():
             raise ValueError("principal must not be empty")
+        if not self.branch.strip():
+            raise ValueError("branch must not be empty")
         if not 1 <= self.restart_count <= 255:
             raise ValueError("restart_count must be between 1 and 255")
         if self.restart_interval != "PT1M":
@@ -53,6 +56,7 @@ def render_guardian_task_xml(spec: GuardianTaskSpec) -> str:
     principal = escape(spec.principal)
     command = escape(str(spec.python_executable))
     working_directory = escape(str(spec.repo_root))
+    branch = escape(spec.branch)
     description = escape(
         "Starts the local-only JARVIS runtime supervisor at owner logon and "
         "restarts only supervisor process failures under a bounded outer budget."
@@ -97,7 +101,7 @@ def render_guardian_task_xml(spec: GuardianTaskSpec) -> str:
   <Actions Context="Author">
     <Exec>
       <Command>{command}</Command>
-      <Arguments>-m jarvis.runtime_supervisor</Arguments>
+      <Arguments>-m jarvis.runtime_supervisor --branch {branch}</Arguments>
       <WorkingDirectory>{working_directory}</WorkingDirectory>
     </Exec>
   </Actions>
@@ -148,6 +152,17 @@ def current_repo_root(*, runner: Runner = subprocess.run) -> Path:
     return Path(root_text)
 
 
+def current_repo_branch(*, runner: Runner = subprocess.run) -> str:
+    result = _run_checked(
+        ("git", "branch", "--show-current"),
+        runner=runner,
+    )
+    branch = result.stdout.strip()
+    if not branch:
+        raise WindowsGuardianError("Git returned an empty current branch")
+    return branch
+
+
 def build_current_guardian_spec(
     *,
     runner: Runner = subprocess.run,
@@ -157,6 +172,7 @@ def build_current_guardian_spec(
         principal=current_windows_principal(runner=runner),
         python_executable=Path(sys.executable),
         repo_root=current_repo_root(runner=runner),
+        branch=current_repo_branch(runner=runner),
     )
 
 
