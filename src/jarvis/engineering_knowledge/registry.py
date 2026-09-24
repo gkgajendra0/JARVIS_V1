@@ -373,4 +373,3 @@ def _text(value: object, field: str) -> str:
 
 def _token(value: object, field: str) -> str:
     return _text(value, field).casefold()
-
