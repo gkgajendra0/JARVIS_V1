@@ -56,6 +56,12 @@ def test_phase5_revision_change_aborts_before_any_restart_attempt(
         lambda *_: pytest.fail("changed revision must not restart"),
     )
 
+    def stop_stale_runtime(candidate, **_) -> None:
+        assert candidate is process
+        control.child_stopped()
+
+    monkeypatch.setattr(supervisor, "_stop_jarvis", stop_stale_runtime)
+
     restarted = supervisor._recover_unexpected_exit(
         repo,  # type: ignore[arg-type]
         Path("."),
