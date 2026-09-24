@@ -521,9 +521,7 @@ def _build_evidence(
             occurred_at_epoch=verification.observed_at_epoch,
             observed_at_epoch=verification.observed_at_epoch,
             created_at_epoch=created_at_epoch,
-            producer=(
-                f"{verification.verifier_id}:v{verification.verifier_version}"
-            ),
+            producer=(f"{verification.verifier_id}:v{verification.verifier_version}"),
         ),
     )
 
