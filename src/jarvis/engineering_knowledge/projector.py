@@ -332,9 +332,7 @@ class RepairKnowledgeProjector:
             subject_id=revision_id,
             subject_digest=revision_digest,
             predicate_type=REPAIR_VERIFICATION_PREDICATE,
-            producer=(
-                f"{verification.verifier_id}:v{verification.verifier_version}"
-            ),
+            producer=(f"{verification.verifier_id}:v{verification.verifier_version}"),
             expected_contract_json=canonicalize_json(
                 {
                     "contract_id": verification.contract_id,
@@ -345,9 +343,7 @@ class RepairKnowledgeProjector:
                 {
                     "status": verification.status.value,
                     "summary": verification.summary,
-                    "evidence_references": list(
-                        verification.evidence_references
-                    ),
+                    "evidence_references": list(verification.evidence_references),
                 }
             ).decode("utf-8"),
             verdict=AttestationVerdict.PASS,
@@ -392,9 +388,7 @@ def _assert_projectable(
             "recovered repair attempt has no typed verification proof"
         )
     if attempt.verification.status is not RepairVerificationStatus.PASS:
-        raise RepairKnowledgeProjectionError(
-            "repair verification status must be PASS"
-        )
+        raise RepairKnowledgeProjectionError("repair verification status must be PASS")
     if attempt.trigger_snapshot is None:
         raise RepairKnowledgeProjectionError(
             "repair attempt has no immutable trigger snapshot"
@@ -404,9 +398,7 @@ def _assert_projectable(
             "repair attempt has no immutable policy snapshot"
         )
     if attempt.execution_result is None or not attempt.execution_result.strip():
-        raise RepairKnowledgeProjectionError(
-            "repair attempt has no execution result"
-        )
+        raise RepairKnowledgeProjectionError("repair attempt has no execution result")
     if (
         attempt.verification.contract_id
         != attempt.policy_snapshot.verification_contract
@@ -510,9 +502,7 @@ def _build_evidence(
         _evidence(
             revision_id=revision_id,
             role="repair_policy_snapshot",
-            canonical_reference=(
-                f"repair-policy:{policy.policy_id}:v{policy.version}"
-            ),
+            canonical_reference=(f"repair-policy:{policy.policy_id}:v{policy.version}"),
             summary=(
                 f"{policy.action_kind.value} under {policy.verification_contract}"
             ),
