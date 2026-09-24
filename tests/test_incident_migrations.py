@@ -227,3 +227,57 @@ def test_phase1h_database_upgrades_to_phase2a_without_repair_data_loss(
         assert "engineering_attestation" in tables
     finally:
         connection.close()
+
+
+
+def test_phase2a_engineering_knowledge_rows_are_immutable(tmp_path) -> None:
+    path = tmp_path / "incidents.sqlite3"
+    store = SqliteIncidentStore(path)
+    store.close()
+
+    connection = sqlite3.connect(path)
+    connection.execute(
+        """
+        INSERT INTO engineering_knowledge_identity (
+            knowledge_id, stable_label, created_at_epoch, created_by
+        ) VALUES ('knowledge-1', 'runtime recovery', 1.0, 'test')
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO engineering_knowledge_revision (
+            revision_id, knowledge_id, revision_number,
+            kind_namespace, normalized_summary,
+            system_from_epoch, sensitivity, freshness_state,
+            canonicalization, digest_algorithm, canonical_digest,
+            created_at_epoch, created_by
+        ) VALUES (
+            'revision-1', 'knowledge-1', 1,
+            'jarvis.repair', 'repair summary',
+            1.0, 'standard', 'current',
+            'rfc8785', 'sha256',
+            ?, 1.0, 'test'
+        )
+        """,
+        ("a" * 64,),
+    )
+    connection.commit()
+
+    with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+        connection.execute(
+            """
+            UPDATE engineering_knowledge_revision
+            SET normalized_summary = 'mutated'
+            WHERE revision_id = 'revision-1'
+            """
+        )
+
+    with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+        connection.execute(
+            """
+            DELETE FROM engineering_knowledge_revision
+            WHERE revision_id = 'revision-1'
+            """
+        )
+
+    connection.close()
