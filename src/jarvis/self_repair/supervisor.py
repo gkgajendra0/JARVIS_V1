@@ -213,27 +213,12 @@ def evaluate_restart_budget(
             ),
         )
     )
-    recovered_at = max(
-        (
-            attempt.finished_at_epoch
-            for attempt in all_attempts
-            if attempt.verdict is RepairVerdict.RECOVERED
-            and attempt.finished_at_epoch is not None
-        ),
-        default=None,
-    )
-    budget_attempts = (
-        tuple(
-            attempt
-            for attempt in all_attempts
-            if attempt.started_at_epoch > recovered_at
-        )
-        if recovered_at is not None
-        else all_attempts
-    )
+    # A short successful stabilization proves one repair attempt recovered the
+    # runtime. It does not forgive crash-loop history. Attempts age out only after
+    # the configured rolling window has passed.
     cutoff = now_epoch - policy.rolling_window_seconds
     recent = tuple(
-        attempt for attempt in budget_attempts if attempt.started_at_epoch >= cutoff
+        attempt for attempt in all_attempts if attempt.started_at_epoch >= cutoff
     )
     if len(recent) >= policy.max_attempts:
         return RestartBudgetDecision(
@@ -293,6 +278,21 @@ class SupervisorRepairController:
         self.policy = policy or build_runtime_child_exit_policy()
         policies = (self.policy, *tuple(additional_policies))
         self.registry = RepairRegistry(policies)
+
+        restart_policies = tuple(
+            candidate
+            for candidate in policies
+            if candidate.component_id == "voice_runtime"
+            and candidate.action_kind is RepairActionKind.RESTART_RUNTIME_CHILD
+        )
+        if not restart_policies:
+            raise ValueError("supervisor requires at least one runtime restart policy")
+        self._restart_circuit_breaker_max_attempts = min(
+            candidate.max_attempts for candidate in restart_policies
+        )
+        self._restart_circuit_breaker_window_seconds = max(
+            candidate.rolling_window_seconds for candidate in restart_policies
+        )
 
     def plan_unexpected_exit(
         self,
@@ -364,6 +364,22 @@ class SupervisorRepairController:
                 f"runtime repair policy is not registered: {reason_code}"
             )
 
+        target_budget = self._target_restart_circuit_breaker(now_epoch=now_epoch)
+        if target_budget is not None:
+            self._record_budget_exhaustion(
+                incident,
+                fingerprint,
+                now_epoch=now_epoch,
+            )
+            return SupervisorRepairPlan(
+                fingerprint=fingerprint,
+                incident=incident,
+                trigger=trigger,
+                policy=matched,
+                action=None,
+                budget=target_budget,
+            )
+
         attempts = self._incidents.list_repair_attempts(
             incident.incident_id,
             limit=max(matched.max_attempts * 10, 100),
@@ -406,6 +422,33 @@ class SupervisorRepairController:
             policy=matched,
             action=action,
             budget=budget,
+        )
+
+    def _target_restart_circuit_breaker(
+        self,
+        *,
+        now_epoch: float,
+    ) -> RestartBudgetDecision | None:
+        """Stop restart storms across policies, incidents and crash fingerprints."""
+
+        attempts = self._incidents.list_component_repair_attempts(
+            "voice_runtime",
+            action_kind=RepairActionKind.RESTART_RUNTIME_CHILD,
+            limit=max(self._restart_circuit_breaker_max_attempts * 50, 500),
+        )
+        cutoff = now_epoch - self._restart_circuit_breaker_window_seconds
+        recent = tuple(
+            attempt for attempt in attempts if attempt.started_at_epoch >= cutoff
+        )
+        if len(recent) < self._restart_circuit_breaker_max_attempts:
+            return None
+        return RestartBudgetDecision(
+            allowed=False,
+            exhausted=True,
+            attempt_number=None,
+            budget_index=None,
+            wait_seconds=0.0,
+            recent_attempts=len(recent),
         )
 
     def start_attempt(
