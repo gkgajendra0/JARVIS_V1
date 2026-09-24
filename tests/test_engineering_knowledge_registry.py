@@ -121,9 +121,9 @@ def test_rfc8785_uses_utf16_property_ordering() -> None:
 
     ordered_pairs = json.loads(canonical, object_pairs_hook=lambda pairs: pairs)
     assert [key for key, _ in ordered_pairs] == [
-        "\\r",
+        "\r",
         "1",
-        "\\u0080",
+        "\u0080",
         "ö",
         "€",
         "😀",
