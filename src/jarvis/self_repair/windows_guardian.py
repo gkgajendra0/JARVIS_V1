@@ -159,8 +159,7 @@ def run_bounded_supervisor_guardian(
             failures += 1
             return_code = 1
             print(
-                "JARVIS outer guardian could not launch the runtime supervisor: "
-                f"{exc}",
+                f"JARVIS outer guardian could not launch the runtime supervisor: {exc}",
                 file=sys.stderr,
             )
         else:
