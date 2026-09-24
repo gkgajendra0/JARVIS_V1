@@ -6,6 +6,7 @@ import json
 import math
 from dataclasses import dataclass
 from enum import StrEnum
+
 CANONICALIZATION_RFC8785 = "rfc8785"
 DIGEST_ALGORITHM_SHA256 = "sha256"
 MAX_EVIDENCE_IDS = 32
