@@ -154,6 +154,23 @@ Docs should distinguish:
 - future R1 policies only after an actual policy/effector/verifier is implemented and
   accepted.
 
+## Implementation candidate status
+
+| Finding | PR #90 candidate status |
+| --- | --- |
+| H1 restart-budget semantics | implemented; automated/owner acceptance pending |
+| H2 target/action circuit breaker | implemented; automated/owner acceptance pending |
+| H3 typed verification | implemented; automated/owner acceptance pending |
+| H4 deterministic precondition gate | implemented; automated/owner acceptance pending |
+| H5 immutable trigger/policy provenance | implemented; automated/owner acceptance pending |
+| H6 engineering DB migrations | implemented; legacy-upgrade proof pending CI |
+| H7 Windows Job Object ownership | implemented; real Windows CI + owner acceptance pending |
+| H8 production supervisor boundary | local-only no-network mode implemented; shared local revision code remains intentionally reused |
+| H9 outer supervisor guardian | Task Scheduler candidate implemented; owner install/failure acceptance pending |
+| H10 truthfulness/documentation | reconciliation in progress in this PR |
+
+None of the rows above are production-accepted merely because implementation exists.
+
 ## Implementation order
 
 1. H1 restart-budget semantics.
