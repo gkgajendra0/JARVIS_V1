@@ -344,4 +344,3 @@ def test_phase2a_database_upgrades_to_retrieval_schema_without_canonical_loss(
         assert "engineering_knowledge_fts" in tables
     finally:
         connection.close()
-
