@@ -786,17 +786,6 @@ class SqliteIncidentStore:
         identity_columns: tuple[str, ...],
         identity_values: tuple[object, ...],
     ) -> bool:
-        placeholders = ", ".join("?" for _ in columns)
-        cursor = self._connection.execute(
-            f"""
-            INSERT OR IGNORE INTO {table} ({", ".join(columns)})
-            VALUES ({placeholders})
-            """,
-            values,
-        )
-        if cursor.rowcount == 1:
-            return True
-
         where_clause = " AND ".join(f"{column} = ?" for column in identity_columns)
         existing = self._connection.execute(
             f"""
@@ -806,15 +795,27 @@ class SqliteIncidentStore:
             """,
             identity_values,
         ).fetchone()
-        if existing is None:
-            raise EngineeringKnowledgePersistenceConflictError(
-                f"{table} immutable unique-key conflict"
+        if existing is not None:
+            if tuple(existing) != values:
+                raise EngineeringKnowledgePersistenceConflictError(
+                    f"{table} immutable identity exists with different content"
+                )
+            return False
+
+        placeholders = ", ".join("?" for _ in columns)
+        try:
+            self._connection.execute(
+                f"""
+                INSERT INTO {table} ({", ".join(columns)})
+                VALUES ({placeholders})
+                """,
+                values,
             )
-        if tuple(existing) != values:
+        except sqlite3.IntegrityError as exc:
             raise EngineeringKnowledgePersistenceConflictError(
-                f"{table} immutable identity exists with different content"
-            )
-        return False
+                f"{table} immutable unique-key or freeze conflict"
+            ) from exc
+        return True
 
     def get_engineering_knowledge_revision(
         self,
