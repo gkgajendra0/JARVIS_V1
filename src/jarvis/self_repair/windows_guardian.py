@@ -57,13 +57,10 @@ def render_guardian_task_xml(spec: GuardianTaskSpec) -> str:
         "Starts the local-only JARVIS runtime supervisor at owner logon and "
         "restarts only supervisor process failures under a bounded outer budget."
     )
-    task_name = escape(spec.task_name)
-
     return f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Description>{description}</Description>
-    <URI>\\{task_name}</URI>
   </RegistrationInfo>
   <Triggers>
     <LogonTrigger>
