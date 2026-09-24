@@ -14,6 +14,7 @@ from jarvis.engineering_knowledge import (
     EngineeringKnowledgeRetrievalIndex,
     EngineeringKnowledgeRetrievalPolicy,
     KnowledgeLifecycleService,
+    KnowledgeSensitivity,
     RepairKnowledgeProjector,
     canonical_sha256,
 )
@@ -329,7 +330,7 @@ def test_private_knowledge_is_local_but_excluded_from_external_context(
     _, _, candidate = _build_candidate(store)
     private_revision = replace(
         candidate.revision,
-        sensitivity=candidate.revision.sensitivity.PRIVATE,
+        sensitivity=KnowledgeSensitivity.PRIVATE,
     )
     private_candidate = replace(candidate, revision=private_revision)
     write = store.persist_engineering_knowledge_candidate(private_candidate)
