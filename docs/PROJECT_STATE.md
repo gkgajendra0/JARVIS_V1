@@ -47,8 +47,8 @@ Snapshot reconciled from protected `main` at
 | Pocket 3 OWNER tracking | DONE for current defined scope | native targeting/tracking, reacquisition, recenter, transport recovery and continuity accepted |
 | Self-Awareness | PARTIAL foundation for later diagnostics | Self Model, deterministic health/dependencies/blast radius, operational evidence and incident engineering memory |
 | Persistent concurrent work | DONE foundation | durable WorkItems/steps/deliveries, restart recovery, background research/development, priority/resource control |
-| Deterministic Self-Repair | PARTIAL foundation for Step 19 | registered R1/R2 repair policies, durable RepairAttempts, crash/hang recovery, budgets, readiness/liveness verification |
-| Self-Repair / Self-Evolution program | ACTIVE | Phase 1 complete; Phase 2 RepairKnowledge is next |
+| Deterministic Self-Repair | PARTIAL foundation for Step 19 | R1/R2 typed framework; owner-accepted automatic production behavior is R2 runtime crash/hang recovery with durable RepairAttempts, budgets and readiness/liveness verification |
+| Self-Repair / Self-Evolution program | ACTIVE | Phase 1 R2 foundation accepted; Phase 1H hardening is active before Phase 2 RepairKnowledge implementation |
 | Step 8 notes/tasks/reminders | PLANNED | still the next numbered product slice when numbered roadmap work resumes |
 
 ---
@@ -217,9 +217,12 @@ separately after state/document reconciliation.
 
 ## Current active work
 
-After this repository reconciliation is merged, the next development slice is:
+The active development slice is:
 
-**Self-Repair / Self-Evolution Phase 2 — RepairKnowledge Foundation**
+**Self-Repair / Self-Evolution Phase 1H — Self-Repair Foundation Hardening**
+
+Phase-2 RepairKnowledge research/design is preserved, but its implementation is
+blocked until Phase 1H is independently accepted.
 
 Scope is intentionally limited to:
 
