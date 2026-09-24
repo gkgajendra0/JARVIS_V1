@@ -59,9 +59,7 @@ class ApplicabilityContext:
 
     def facts_for_namespace(self, namespace: str) -> tuple[ApplicabilityFact, ...]:
         normalized = str(namespace).strip().casefold()
-        return tuple(
-            fact for fact in self.facts if fact.target_namespace == normalized
-        )
+        return tuple(fact for fact in self.facts if fact.target_namespace == normalized)
 
     def facts_for_identity(
         self,
@@ -248,12 +246,9 @@ class ExactVersionMatcher:
                 "target_namespace_not_observed",
             )
 
-        observed_versions = tuple(
-            fact.attributes.get("version") for fact in facts
-        )
+        observed_versions = tuple(fact.attributes.get("version") for fact in facts)
         if any(
-            version is not None
-            and version.casefold() == expected.strip().casefold()
+            version is not None and version.casefold() == expected.strip().casefold()
             for version in observed_versions
         ):
             return _result(
@@ -414,9 +409,7 @@ class EngineeringKnowledgeApplicabilityService:
         revision_id: str,
         context: ApplicabilityContext,
     ) -> ApplicabilityDecision:
-        constraints = self._store.list_engineering_knowledge_applicability(
-            revision_id
-        )
+        constraints = self._store.list_engineering_knowledge_applicability(revision_id)
         if not constraints:
             return ApplicabilityDecision(
                 eligible=False,
@@ -424,9 +417,7 @@ class EngineeringKnowledgeApplicabilityService:
                 blocking_applicability_ids=("missing_applicability",),
             )
 
-        results = tuple(
-            self._registry.evaluate(item, context) for item in constraints
-        )
+        results = tuple(self._registry.evaluate(item, context) for item in constraints)
         blocking = tuple(
             result.applicability_id
             for result in results
