@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import pytest
-
 import jarvis.engineering_knowledge as ek
+import pytest
 
 
 SHA_A = "a" * 64
