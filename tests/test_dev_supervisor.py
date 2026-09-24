@@ -976,3 +976,45 @@ def test_runtime_supervisor_configuration_disables_git_updates(
 
     assert config.branch == "main"
     assert config.git_updates_enabled is False
+
+
+def test_crash_recovery_logs_rolling_budget_index_not_lifetime_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan = SimpleNamespace(
+        exhausted=False,
+        budget=SimpleNamespace(wait_seconds=0.0, budget_index=1, attempt_number=4),
+        policy=SimpleNamespace(max_attempts=3),
+    )
+    repair = SimpleNamespace(
+        plan_unexpected_exit=lambda **_: plan,
+        start_attempt=lambda *_, **__: object(),
+        complete_attempt=lambda *_, **__: None,
+    )
+    repo = SimpleNamespace(local_sha=lambda: "a" * 40)
+    process = SimpleNamespace(returncode=15)
+    control = SimpleNamespace(wait_for_child_ready=lambda **_: None)
+
+    monkeypatch.setattr(supervisor, "_stop_jarvis", lambda *_, **__: None)
+    monkeypatch.setattr(supervisor, "_start_jarvis", lambda *_, **__: "restarted")
+
+    restarted = supervisor._recover_unexpected_exit(
+        repo,
+        Path("."),
+        process,
+        control,
+        DevSupervisorConfig(),
+        repair,
+        sleep_fn=lambda _: None,
+        now_fn=lambda: 100.0,
+        stabilization_verifier=lambda *_, **__: (
+            True,
+            "readiness_and_liveness_stable:3_probes",
+        ),
+    )
+
+    output = capsys.readouterr().out
+    assert restarted == "restarted"
+    assert "restart attempt 1/3" in output
+    assert "restart attempt 4/3" not in output
