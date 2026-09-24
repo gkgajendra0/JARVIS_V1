@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from jarvis.dev_supervisor import DevSupervisorConfig
 from jarvis import runtime_supervisor
+from jarvis.dev_supervisor import DevSupervisorConfig
 
 
 def test_runtime_supervisor_branch_override_preserves_local_only_mode(
