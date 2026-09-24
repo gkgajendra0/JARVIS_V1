@@ -201,3 +201,6 @@ jobs:
 
       - name: Run Windows DPAPI smoke test
         run: python -m pytest -q tests/test_windows_dpapi.py
+
+      - name: Run Windows Self-Repair Job Object smoke tests
+        run: python -m pytest -q tests/test_self_repair_windows_job.py
