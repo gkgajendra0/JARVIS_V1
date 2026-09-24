@@ -467,8 +467,7 @@ class RepairPolicySnapshot:
             verification_contract=str(payload["verification_contract"]),
             escalation=RepairEscalation(str(payload["escalation"])),
             health_states=tuple(
-                HealthState(str(value))
-                for value in payload.get("health_states") or ()
+                HealthState(str(value)) for value in payload.get("health_states") or ()
             ),
             idempotent=bool(payload["idempotent"]),
             reversible=bool(payload["reversible"]),
@@ -713,18 +712,16 @@ class RepairAttempt:
         if verification is not None:
             if (
                 policy_snapshot is not None
-                and verification.contract_id
-                != policy_snapshot.verification_contract
+                and verification.contract_id != policy_snapshot.verification_contract
             ):
                 raise ValueError("verification contract does not match policy snapshot")
             if self.verdict is not verification.verdict:
                 raise ValueError("repair verdict does not match verification status")
             if self.verifier_result != verification.summary:
-                raise ValueError("verifier_result must match typed verification summary")
-        elif (
-            self.verdict is RepairVerdict.RECOVERED
-            and policy_snapshot is not None
-        ):
+                raise ValueError(
+                    "verifier_result must match typed verification summary"
+                )
+        elif self.verdict is RepairVerdict.RECOVERED and policy_snapshot is not None:
             raise ValueError("RECOVERED requires typed verification proof")
 
     @classmethod
