@@ -4,20 +4,7 @@ import sqlite3
 
 import pytest
 
-from jarvis.engineering_knowledge import (
-    AttestationVerdict,
-    EngineeringApplicability,
-    EngineeringAttestation,
-    EngineeringEvidence,
-    EngineeringKnowledgeFacet,
-    EngineeringKnowledgeIdentity,
-    EngineeringKnowledgeRevision,
-    KnowledgeFreshnessState,
-    KnowledgeLifecycleEvent,
-    KnowledgeLifecycleState,
-    KnowledgeSensitivity,
-    lifecycle_evidence_json,
-)
+from jarvis import engineering_knowledge as ek
 from jarvis.incidents import SqliteIncidentStore
 
 
@@ -25,7 +12,7 @@ SHA_A = "a" * 64
 SHA_B = "b" * 64
 
 
-def _revision(**overrides: object) -> EngineeringKnowledgeRevision:
+def _revision(**overrides: object) -> ek.EngineeringKnowledgeRevision:
     values: dict[str, object] = {
         "revision_id": "revision-1",
         "knowledge_id": "knowledge-1",
@@ -33,25 +20,25 @@ def _revision(**overrides: object) -> EngineeringKnowledgeRevision:
         "kind_namespace": "JARVIS.REPAIR",
         "normalized_summary": "runtime child restart recovered readiness",
         "system_from_epoch": 100.0,
-        "sensitivity": KnowledgeSensitivity.STANDARD,
-        "freshness_state": KnowledgeFreshnessState.CURRENT,
+        "sensitivity": ek.KnowledgeSensitivity.STANDARD,
+        "freshness_state": ek.KnowledgeFreshnessState.CURRENT,
         "canonical_digest": SHA_A,
         "created_at_epoch": 100.0,
         "created_by": "repair-projector",
     }
     values.update(overrides)
-    return EngineeringKnowledgeRevision(**values)  # type: ignore[arg-type]
+    return ek.EngineeringKnowledgeRevision(**values)  # type: ignore[arg-type]
 
 
 def test_engineering_knowledge_contracts_normalize_open_namespaces() -> None:
-    identity = EngineeringKnowledgeIdentity(
+    identity = ek.EngineeringKnowledgeIdentity(
         knowledge_id=" knowledge-1 ",
         stable_label=" Runtime recovery ",
         created_at_epoch=100,
         created_by=" phase2-test ",
     )
     revision = _revision()
-    applicability = EngineeringApplicability(
+    applicability = ek.EngineeringApplicability(
         applicability_id="app-1",
         revision_id=revision.revision_id,
         target_namespace=" JARVIS.COMPONENT ",
@@ -84,7 +71,7 @@ def test_revision_enforces_temporal_and_digest_contract() -> None:
 
 
 def test_facet_requires_exactly_one_payload_form() -> None:
-    facet = EngineeringKnowledgeFacet(
+    facet = ek.EngineeringKnowledgeFacet(
         facet_id="facet-1",
         revision_id="revision-1",
         facet_type="JARVIS.REPAIR.PLAYBOOK",
@@ -99,7 +86,7 @@ def test_facet_requires_exactly_one_payload_form() -> None:
     assert facet.facet_type == "jarvis.repair.playbook"
 
     with pytest.raises(ValueError, match="exactly one"):
-        EngineeringKnowledgeFacet(
+        ek.EngineeringKnowledgeFacet(
             facet_id="facet-2",
             revision_id="revision-1",
             facet_type="jarvis.repair.playbook",
@@ -112,7 +99,7 @@ def test_facet_requires_exactly_one_payload_form() -> None:
         )
 
     with pytest.raises(ValueError, match="exactly one"):
-        EngineeringKnowledgeFacet(
+        ek.EngineeringKnowledgeFacet(
             facet_id="facet-3",
             revision_id="revision-1",
             facet_type="jarvis.repair.playbook",
@@ -128,7 +115,7 @@ def test_facet_requires_exactly_one_payload_form() -> None:
 
 
 def test_evidence_and_attestation_keep_verification_separate_from_confidence() -> None:
-    evidence = EngineeringEvidence(
+    evidence = ek.EngineeringEvidence(
         evidence_id="evidence-1",
         evidence_type="repair_verifier",
         source_class="authoritative_runtime",
@@ -136,13 +123,13 @@ def test_evidence_and_attestation_keep_verification_separate_from_confidence() -
         summary="readiness and liveness passed",
         observed_at_epoch=110,
         occurred_at_epoch=110,
-        sensitivity=KnowledgeSensitivity.STANDARD,
+        sensitivity=ek.KnowledgeSensitivity.STANDARD,
         producer="runtime-verifier",
         integrity_algorithm="SHA256",
         integrity_digest=SHA_A,
         created_at_epoch=110,
     )
-    attestation = EngineeringAttestation(
+    attestation = ek.EngineeringAttestation(
         attestation_id="attestation-1",
         subject_type="knowledge_revision",
         subject_id="revision-1",
@@ -151,23 +138,23 @@ def test_evidence_and_attestation_keep_verification_separate_from_confidence() -
         producer="runtime-verifier",
         expected_contract_json='{"contract":"runtime_ready_and_live"}',
         observed_result_json='{"status":"pass"}',
-        verdict=AttestationVerdict.PASS,
+        verdict=ek.AttestationVerdict.PASS,
         evidence_ids=(evidence.evidence_id,),
         observed_at_epoch=110,
         created_at_epoch=110,
     )
 
     assert evidence.integrity_algorithm == "sha256"
-    assert attestation.verdict is AttestationVerdict.PASS
+    assert attestation.verdict is ek.AttestationVerdict.PASS
     assert attestation.evidence_ids == ("evidence-1",)
 
 
 def test_lifecycle_event_is_typed_and_evidence_serialization_is_deterministic() -> None:
-    event = KnowledgeLifecycleEvent(
+    event = ek.KnowledgeLifecycleEvent(
         event_id="event-1",
         revision_id="revision-1",
         from_state=None,
-        to_state=KnowledgeLifecycleState.CANDIDATE,
+        to_state=ek.KnowledgeLifecycleState.CANDIDATE,
         reason_code=" VERIFIED_REPAIR_PROJECTED ",
         actor="repair-projector",
         evidence_ids=("evidence-1", "evidence-1", "evidence-2"),
@@ -176,14 +163,14 @@ def test_lifecycle_event_is_typed_and_evidence_serialization_is_deterministic() 
 
     assert event.reason_code == "verified_repair_projected"
     assert event.evidence_ids == ("evidence-1", "evidence-2")
-    assert lifecycle_evidence_json(event) == '["evidence-1","evidence-2"]'
+    assert ek.lifecycle_evidence_json(event) == '["evidence-1","evidence-2"]'
 
     with pytest.raises(ValueError, match="same state"):
-        KnowledgeLifecycleEvent(
+        ek.KnowledgeLifecycleEvent(
             event_id="event-2",
             revision_id="revision-1",
-            from_state=KnowledgeLifecycleState.STAGED,
-            to_state=KnowledgeLifecycleState.STAGED,
+            from_state=ek.KnowledgeLifecycleState.STAGED,
+            to_state=ek.KnowledgeLifecycleState.STAGED,
             reason_code="invalid",
             actor="test",
             evidence_ids=(),
@@ -195,7 +182,7 @@ def test_phase2a_schema_is_added_without_mutating_phase1_tables(tmp_path) -> Non
     path = tmp_path / "incidents.sqlite3"
     store = SqliteIncidentStore(path)
     try:
-        store._connection.execute(  # noqa: SLF001 - schema acceptance probe
+        store._connection.execute(
             """
             INSERT INTO engineering_knowledge_identity (
                 knowledge_id, stable_label, created_at_epoch, created_by
@@ -203,7 +190,7 @@ def test_phase2a_schema_is_added_without_mutating_phase1_tables(tmp_path) -> Non
             """,
             ("knowledge-1", "runtime recovery", 100.0, "phase2-test"),
         )
-        store._connection.execute(  # noqa: SLF001 - schema acceptance probe
+        store._connection.execute(
             """
             INSERT INTO engineering_knowledge_revision (
                 revision_id, knowledge_id, revision_number,
@@ -229,7 +216,7 @@ def test_phase2a_schema_is_added_without_mutating_phase1_tables(tmp_path) -> Non
                 "phase2-test",
             ),
         )
-        store._connection.execute(  # noqa: SLF001 - schema acceptance probe
+        store._connection.execute(
             """
             INSERT INTO engineering_knowledge_lifecycle_event (
                 event_id, revision_id, from_state, to_state,
@@ -249,9 +236,9 @@ def test_phase2a_schema_is_added_without_mutating_phase1_tables(tmp_path) -> Non
                 100.0,
             ),
         )
-        store._connection.commit()  # noqa: SLF001 - schema acceptance probe
+        store._connection.commit()
 
-        state = store._connection.execute(  # noqa: SLF001 - schema acceptance probe
+        state = store._connection.execute(
             """
             SELECT lifecycle_state
             FROM engineering_knowledge_revision_state
@@ -262,7 +249,7 @@ def test_phase2a_schema_is_added_without_mutating_phase1_tables(tmp_path) -> Non
         assert state == ("candidate",)
 
         with pytest.raises(sqlite3.IntegrityError, match="immutable"):
-            store._connection.execute(  # noqa: SLF001 - schema acceptance probe
+            store._connection.execute(
                 """
                 UPDATE engineering_knowledge_revision
                 SET normalized_summary = 'mutated'
@@ -277,7 +264,7 @@ def test_phase2a_revision_delete_is_fail_closed(tmp_path) -> None:
     path = tmp_path / "incidents.sqlite3"
     store = SqliteIncidentStore(path)
     try:
-        connection = store._connection  # noqa: SLF001 - schema acceptance probe
+        connection = store._connection
         connection.execute(
             """
             INSERT INTO engineering_knowledge_identity (
