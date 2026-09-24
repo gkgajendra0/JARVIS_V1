@@ -149,7 +149,6 @@ def test_legacy_incident_database_is_adopted_without_data_loss(tmp_path) -> None
         connection.close()
 
 
-
 def test_phase1h_database_upgrades_to_phase2a_without_repair_data_loss(
     tmp_path,
 ) -> None:
