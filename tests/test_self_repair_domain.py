@@ -9,6 +9,7 @@ from jarvis.self_repair import (
     RepairActionKind,
     RepairAttempt,
     RepairAuthorizationError,
+    RepairExecutionContext,
     RepairPolicy,
     RepairPolicyConflictError,
     RepairPolicyError,
@@ -16,6 +17,8 @@ from jarvis.self_repair import (
     RepairRiskClass,
     RepairTrigger,
     RepairVerdict,
+    RepairVerificationResult,
+    RepairVerificationStatus,
 )
 
 
@@ -61,6 +64,24 @@ def _restart_policy(
     )
 
 
+def _verification(
+    policy: RepairPolicy,
+    status: RepairVerificationStatus,
+    *,
+    summary: str,
+    now_epoch: float = 102,
+) -> RepairVerificationResult:
+    return RepairVerificationResult.create(
+        verifier_id="test-verifier",
+        verifier_version=1,
+        contract_id=policy.verification_contract,
+        status=status,
+        summary=summary,
+        evidence_references=("test:verification",),
+        observed_at_epoch=now_epoch,
+    )
+
+
 def test_trigger_is_normalized_and_immutable() -> None:
     trigger = _trigger()
 
@@ -103,10 +124,11 @@ def test_registered_policy_matches_known_reason_and_authorizes_typed_action() ->
     authorized = registry.assert_executable(
         trigger,
         action,
-        satisfied_preconditions={
-            "same_local_revision",
-            "restart_budget_available",
-        },
+        execution_context=RepairExecutionContext(
+            expected_revision="a" * 40,
+            current_revision="a" * 40,
+            restart_budget_available=True,
+        ),
     )
     assert authorized is policy
 
@@ -139,10 +161,11 @@ def test_unregistered_action_cannot_execute() -> None:
         registry.assert_executable(
             trigger,
             action,
-            satisfied_preconditions={
-                "same_local_revision",
-                "restart_budget_available",
-            },
+            execution_context=RepairExecutionContext(
+                expected_revision="a" * 40,
+                current_revision="a" * 40,
+                restart_budget_available=True,
+            ),
         )
 
 
@@ -159,7 +182,11 @@ def test_missing_precondition_fails_closed() -> None:
         registry.assert_executable(
             trigger,
             action,
-            satisfied_preconditions={"same_local_revision"},
+            execution_context=RepairExecutionContext(
+                expected_revision="a" * 40,
+                current_revision="a" * 40,
+                restart_budget_available=False,
+            ),
         )
 
 
@@ -252,7 +279,11 @@ def test_no_action_escalate_is_never_an_executable_effect() -> None:
         RepairAuthorizationError,
         match="not an executable repair effect",
     ):
-        registry.assert_executable(trigger, action)
+        registry.assert_executable(
+            trigger,
+            action,
+            execution_context=RepairExecutionContext(),
+        )
 
 
 def test_successful_execution_does_not_imply_recovered_verdict() -> None:
@@ -270,8 +301,11 @@ def test_successful_execution_does_not_imply_recovered_verdict() -> None:
 
     completed = attempt.complete(
         execution_result="child process started",
-        verifier_result="readiness probe failed",
-        verdict=RepairVerdict.NOT_RECOVERED,
+        verification=_verification(
+            policy,
+            RepairVerificationStatus.FAIL,
+            summary="readiness probe failed",
+        ),
         post_repair_evidence=("health:voice_runtime:failed",),
         next_retry_eligible_epoch=105,
         now_epoch=102,
@@ -297,8 +331,11 @@ def test_only_recovered_verdict_marks_attempt_recovered() -> None:
 
     recovered = attempt.complete(
         execution_result="child process started",
-        verifier_result="readiness and liveness stable",
-        verdict=RepairVerdict.RECOVERED,
+        verification=_verification(
+            policy,
+            RepairVerificationStatus.PASS,
+            summary="readiness and liveness stable",
+        ),
         now_epoch=102,
     )
 
@@ -345,4 +382,34 @@ def test_attempt_rejects_action_from_different_policy() -> None:
             action=action,
             attempt_number=1,
             now_epoch=101,
+        )
+
+
+
+def test_verification_contract_mismatch_cannot_mark_recovery() -> None:
+    trigger = _trigger()
+    policy = _restart_policy()
+    action = RepairAction.create(policy, trigger, now_epoch=101)
+    attempt = RepairAttempt.start(
+        incident_id="incident-1",
+        trigger=trigger,
+        policy=policy,
+        action=action,
+        attempt_number=1,
+        now_epoch=101,
+    )
+    wrong = RepairVerificationResult.create(
+        verifier_id="test-verifier",
+        verifier_version=1,
+        contract_id="different_contract",
+        status=RepairVerificationStatus.PASS,
+        summary="looks healthy",
+        observed_at_epoch=102,
+    )
+
+    with pytest.raises(ValueError, match="verification contract"):
+        attempt.complete(
+            execution_result="child process started",
+            verification=wrong,
+            now_epoch=102,
         )
