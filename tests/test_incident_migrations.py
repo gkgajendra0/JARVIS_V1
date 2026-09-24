@@ -147,3 +147,136 @@ def test_legacy_incident_database_is_adopted_without_data_loss(tmp_path) -> None
         }.issubset(columns)
     finally:
         connection.close()
+
+
+def test_phase1h_database_upgrades_to_phase2a_without_repair_data_loss(
+    tmp_path,
+) -> None:
+    path = tmp_path / "incidents.sqlite3"
+    connection = sqlite3.connect(path)
+    migrations = discover_engineering_migrations()
+    assert len(migrations) >= 3
+    phase1h_runner = EngineeringMigrationRunner(migrations[:2])
+    phase1h_runner.apply(connection)
+    connection.execute(
+        """
+        INSERT INTO engineering_incident (
+            incident_id, title, symptom, severity, status,
+            created_at_epoch, updated_at_epoch, affected_components_json,
+            root_cause, accepted_fix, regression_tests_json, commit_sha,
+            pr_number, deployment_result, rollback_status, lessons_json
+        ) VALUES (
+            'incident-phase1h', 'Phase 1H incident', 'runtime exited',
+            'warning', 'open', 10.0, 10.0, '["runtime.voice"]',
+            NULL, NULL, '[]', NULL, NULL, NULL, NULL, '[]'
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO engineering_repair_attempt (
+            attempt_id, incident_id, trigger_id, policy_id, policy_version,
+            action_id, action_kind, risk_class, component_id,
+            action_created_at_epoch, attempt_number, started_at_epoch,
+            pre_repair_evidence_json, trigger_snapshot_json,
+            policy_snapshot_json, policy_digest,
+            finished_at_epoch, execution_result,
+            post_repair_evidence_json, verifier_result, verification_json,
+            next_retry_eligible_epoch, verdict
+        ) VALUES (
+            'attempt-phase1h', 'incident-phase1h', 'trigger-phase1h',
+            'runtime-child-exit-v1', 1, 'action-phase1h',
+            'restart_runtime_child', 2, 'runtime.voice',
+            11.0, 1, 11.0, '[]', NULL, NULL, NULL,
+            NULL, NULL, '[]', NULL, NULL, NULL, NULL
+        )
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    store = SqliteIncidentStore(path)
+    try:
+        incident = store.get("incident-phase1h")
+        attempt = store.get_repair_attempt("attempt-phase1h")
+        assert incident is not None
+        assert incident.title == "Phase 1H incident"
+        assert attempt is not None
+        assert attempt.attempt_id == "attempt-phase1h"
+        assert attempt.action.component_id == "runtime.voice"
+    finally:
+        store.close()
+
+    connection = sqlite3.connect(path)
+    try:
+        version = connection.execute("PRAGMA user_version").fetchone()
+        assert version is not None
+        assert int(version[0]) == EngineeringMigrationRunner().latest_version
+        tables = {
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table'
+                """
+            ).fetchall()
+        }
+        assert "engineering_knowledge_revision" in tables
+        assert "engineering_knowledge_facet" in tables
+        assert "engineering_attestation" in tables
+    finally:
+        connection.close()
+
+
+def test_phase2a_engineering_knowledge_rows_are_immutable(tmp_path) -> None:
+    path = tmp_path / "incidents.sqlite3"
+    store = SqliteIncidentStore(path)
+    store.close()
+
+    connection = sqlite3.connect(path)
+    connection.execute(
+        """
+        INSERT INTO engineering_knowledge_identity (
+            knowledge_id, stable_label, created_at_epoch, created_by
+        ) VALUES ('knowledge-1', 'runtime recovery', 1.0, 'test')
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO engineering_knowledge_revision (
+            revision_id, knowledge_id, revision_number,
+            kind_namespace, normalized_summary,
+            system_from_epoch, sensitivity, freshness_state,
+            canonicalization, digest_algorithm, canonical_digest,
+            created_at_epoch, created_by
+        ) VALUES (
+            'revision-1', 'knowledge-1', 1,
+            'jarvis.repair', 'repair summary',
+            1.0, 'standard', 'current',
+            'rfc8785', 'sha256',
+            ?, 1.0, 'test'
+        )
+        """,
+        ("a" * 64,),
+    )
+    connection.commit()
+
+    with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+        connection.execute(
+            """
+            UPDATE engineering_knowledge_revision
+            SET normalized_summary = 'mutated'
+            WHERE revision_id = 'revision-1'
+            """
+        )
+
+    with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+        connection.execute(
+            """
+            DELETE FROM engineering_knowledge_revision
+            WHERE revision_id = 'revision-1'
+            """
+        )
+
+    connection.close()
