@@ -52,6 +52,17 @@ def build_default_self_model() -> SelfModelRegistry:
             docs=("docs/QUALITY_GATES.md",),
         ),
         C(
+            "engineering.knowledge",
+            "Durable provenance-linked EngineeringKnowledge contracts and shared "
+            "learning substrate.",
+            ("src/jarvis/engineering_knowledge",),
+            parent_component_id="jarvis",
+            docs=(
+                "docs/PHASE2_ENGINEERING_KNOWLEDGE_ARCHITECTURE.md",
+                "docs/PHASE2_ENGINEERING_KNOWLEDGE_IMPLEMENTATION_PLAN.md",
+            ),
+        ),
+        C(
             "runtime.core",
             "Process bootstrap, configuration, preflight and core conversation lifecycle.",
             (
