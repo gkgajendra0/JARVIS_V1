@@ -93,9 +93,7 @@ class EngineeringKnowledgeCandidateBundle:
                         "knowledge revision attestation digest must match revision"
                     )
             if not set(attestation.evidence_ids).issubset(evidence_ids):
-                raise ValueError(
-                    "attestation references unknown candidate evidence"
-                )
+                raise ValueError("attestation references unknown candidate evidence")
 
 
 @dataclass(frozen=True, slots=True)
