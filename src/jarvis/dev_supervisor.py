@@ -736,10 +736,10 @@ def _recover_unexpected_exit(
             return None
 
         wait_seconds = plan.budget.wait_seconds
-        attempt_number = plan.budget.attempt_number
+        budget_index = plan.budget.budget_index
         print(
             f"JARVIS exited unexpectedly with code {exit_code}; "
-            f"bounded same-version restart attempt {attempt_number}/"
+            f"bounded same-version restart attempt {budget_index}/"
             f"{plan.policy.max_attempts} is eligible after {wait_seconds:g}s."
         )
         if wait_seconds > 0:
@@ -895,10 +895,10 @@ def _recover_liveness_failure(
             return None
 
         wait_seconds = plan.budget.wait_seconds
-        attempt_number = plan.budget.attempt_number
+        budget_index = plan.budget.budget_index
         print(
             "JARVIS runtime is unresponsive; bounded same-version restart "
-            f"attempt {attempt_number}/{plan.policy.max_attempts} is eligible "
+            f"attempt {budget_index}/{plan.policy.max_attempts} is eligible "
             f"after {wait_seconds:g}s."
         )
         if wait_seconds > 0:
