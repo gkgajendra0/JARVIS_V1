@@ -9,19 +9,6 @@ from jarvis.engineering_knowledge.canonical import (
     parse_json_object,
 )
 from jarvis.engineering_knowledge.defaults import build_default_facet_registry
-from jarvis.engineering_knowledge.persistence import (
-    EngineeringKnowledgeCandidateBundle,
-    EngineeringKnowledgeCandidateWriteResult,
-    EngineeringKnowledgePersistenceConflictError,
-)
-from jarvis.engineering_knowledge.projector import (
-    PROJECTOR_ID,
-    PROJECTION_POLICY_ID,
-    REPAIR_KIND_NAMESPACE,
-    RepairKnowledgeProjectionError,
-    RepairKnowledgeProjectionResult,
-    RepairKnowledgeProjector,
-)
 from jarvis.engineering_knowledge.models import (
     CANONICALIZATION_RFC8785,
     DIGEST_ALGORITHM_SHA256,
@@ -38,6 +25,19 @@ from jarvis.engineering_knowledge.models import (
     KnowledgeLifecycleState,
     KnowledgeSensitivity,
     lifecycle_evidence_json,
+)
+from jarvis.engineering_knowledge.persistence import (
+    EngineeringKnowledgeCandidateBundle,
+    EngineeringKnowledgeCandidateWriteResult,
+    EngineeringKnowledgePersistenceConflictError,
+)
+from jarvis.engineering_knowledge.projector import (
+    PROJECTION_POLICY_ID,
+    PROJECTOR_ID,
+    REPAIR_KIND_NAMESPACE,
+    RepairKnowledgeProjectionError,
+    RepairKnowledgeProjectionResult,
+    RepairKnowledgeProjector,
 )
 from jarvis.engineering_knowledge.registry import (
     ApplicabilityMatcherRegistry,
@@ -64,20 +64,26 @@ from jarvis.engineering_knowledge.repair_facets import (
 __all__ = [
     "CANONICALIZATION_RFC8785",
     "DIGEST_ALGORITHM_SHA256",
+    "PROJECTION_POLICY_ID",
+    "PROJECTOR_ID",
     "REPAIR_FINDING_FACET_TYPE",
     "REPAIR_FINDING_V1_SCHEMA_DIGEST",
     "REPAIR_FINDING_V1_SCHEMA_ID",
     "REPAIR_FINDING_V1_SCHEMA_VERSION",
+    "REPAIR_KIND_NAMESPACE",
     "ApplicabilityMatcherRegistry",
     "AttestationVerdict",
     "EngineeringApplicability",
     "EngineeringAttestation",
     "EngineeringEvidence",
+    "EngineeringKnowledgeCandidateBundle",
+    "EngineeringKnowledgeCandidateWriteResult",
     "EngineeringKnowledgeCanonicalizationError",
     "EngineeringKnowledgeDuplicateKeyError",
     "EngineeringKnowledgeFacet",
     "EngineeringKnowledgeFacetRegistry",
     "EngineeringKnowledgeIdentity",
+    "EngineeringKnowledgePersistenceConflictError",
     "EngineeringKnowledgeRevision",
     "FacetApplicabilityConstraint",
     "FacetDecisionAssessment",
@@ -91,16 +97,10 @@ __all__ = [
     "KnowledgeLifecycleEvent",
     "KnowledgeLifecycleState",
     "KnowledgeSensitivity",
-    "EngineeringKnowledgeCandidateBundle",
-    "EngineeringKnowledgeCandidateWriteResult",
-    "EngineeringKnowledgePersistenceConflictError",
-    "PROJECTOR_ID",
-    "PROJECTION_POLICY_ID",
-    "REPAIR_KIND_NAMESPACE",
+    "RepairFindingV1Handler",
     "RepairKnowledgeProjectionError",
     "RepairKnowledgeProjectionResult",
     "RepairKnowledgeProjector",
-    "RepairFindingV1Handler",
     "UnsupportedApplicabilityMatcherError",
     "UnsupportedFacetSchemaError",
     "ValidatedFacet",
