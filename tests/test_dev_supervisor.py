@@ -322,6 +322,66 @@ def test_force_runtime_tree_cleanup_targets_descendants_before_root(
     assert calls == [("kill", 31), ("kill", 32), ("kill", 30)]
 
 
+def test_windows_runtime_job_is_attached_to_root_and_existing_descendants(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+
+    class FakeJob:
+        def assign_pid(self, pid: int) -> None:
+            calls.append(("assign", pid))
+
+        def close(self) -> None:
+            calls.append(("close",))
+
+    class FakeRoot:
+        def children(self, *, recursive: bool):
+            assert recursive is True
+            return [SimpleNamespace(pid=31), SimpleNamespace(pid=32)]
+
+    process = SimpleNamespace(pid=30)
+    monkeypatch.setattr(supervisor.os, "name", "nt")
+    monkeypatch.setattr(supervisor, "WindowsRuntimeJob", FakeJob)
+    monkeypatch.setattr(supervisor.psutil, "Process", lambda pid: FakeRoot())
+
+    supervisor._attach_windows_runtime_job(process)  # type: ignore[arg-type]
+
+    assert calls == [("assign", 30), ("assign", 31), ("assign", 32)]
+    assert isinstance(process._jarvis_runtime_job, FakeJob)
+
+
+def test_force_cleanup_prefers_windows_runtime_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+
+    class FakeJob:
+        def terminate(self, *, exit_code: int) -> None:
+            calls.append(("terminate", exit_code))
+
+        def close(self) -> None:
+            calls.append(("close",))
+
+    monkeypatch.setattr(supervisor, "WindowsRuntimeJob", FakeJob)
+    monkeypatch.setattr(
+        supervisor,
+        "_kill_runtime_process_tree",
+        lambda tree: (_ for _ in ()).throw(AssertionError("psutil fallback used")),
+    )
+    process = SimpleNamespace(_jarvis_runtime_job=FakeJob())
+
+    used_job, killed = supervisor._force_cleanup_runtime(
+        process,  # type: ignore[arg-type]
+        ("captured",),  # type: ignore[arg-type]
+    )
+    supervisor._release_runtime_job(process)  # type: ignore[arg-type]
+
+    assert used_job is True
+    assert killed == 0
+    assert calls == [("terminate", 1), ("close",)]
+    assert not hasattr(process, "_jarvis_runtime_job")
+
+
 def test_stop_jarvis_force_cleans_captured_runtime_tree(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
