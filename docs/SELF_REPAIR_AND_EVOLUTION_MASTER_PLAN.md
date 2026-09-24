@@ -2,7 +2,7 @@
 
 ## Status
 
-**AUTHORITATIVE PROGRAM PLAN — deterministic Self-Repair foundation accepted; Repair Learning is next**
+**AUTHORITATIVE PROGRAM PLAN — R2 Self-Repair foundation accepted; Phase 1H hardening precedes Repair Learning**
 
 Date established: 2026-09-23
 
@@ -13,9 +13,11 @@ It consolidates the earlier Self-Repair sequence, research, ADR and acceptance w
 Those detailed historical documents are preserved by Git history; this master plan
 owns the complete forward sequence in the current working tree.
 
-The deterministic R1/R2 production repair foundation is accepted on the owner
-machine. It is not the end of Self-Repair and does not complete roadmap Steps 18,
-19 or 20.
+The deterministic repair framework and bounded automatic R2 runtime crash/hang
+recovery are accepted on the owner machine. R1 remains a typed risk/action class but
+has no owner-accepted automatic production policy yet. Phase 1H hardening is required
+before repair history is used as learned engineering knowledge. This does not complete
+roadmap Steps 18, 19 or 20.
 
 ---
 
@@ -97,7 +99,7 @@ truth remain JARVIS-owned deterministic surfaces.
 The live system must remain able to recover from already-known faults even when all
 cloud/model providers are unavailable.
 
-No future learning component may become a hard dependency for the accepted R1/R2
+No future learning component may become a hard dependency for the accepted bounded
 production repair loop.
 
 ### 2.3 Evidence before action, verification before recovery
@@ -130,7 +132,7 @@ protected production state.
 
 ### Loop A — Production Repair Loop
 
-**Status: ACCEPTED / PRODUCTION FOUNDATION COMPLETE**
+**Status: ACCEPTED R2 BASELINE / PHASE 1H HARDENING ACTIVE**
 
 This is the only loop currently allowed to mutate live runtime state automatically.
 
@@ -419,7 +421,7 @@ Established before Self-Repair:
 Exit condition: repair work has trustworthy evidence, durable work and a safe
 development/deployment substrate.
 
-### Phase 1 — deterministic R1/R2 Self-Repair foundation
+### Phase 1 — deterministic repair framework + R2 runtime Self-Repair foundation
 
 **STATUS: DONE / OWNER-MACHINE ACCEPTED 2026-09-23**
 
@@ -438,12 +440,38 @@ Includes:
 - owner-machine crash/hang fault injection;
 - Windows process-tree corrections.
 
-Exit condition: known registered R1/R2 faults recover under budget and deterministic
-verification, while unknown/dependency failures cannot trigger guessed live repair.
+Exit condition: the registered owner-accepted R2 runtime crash/hang faults recover
+under budget and deterministic verification, while unknown/dependency failures cannot
+trigger guessed live repair.
+
+### Phase 1H — Self-Repair foundation hardening
+
+**STATUS: ACTIVE — REQUIRED BEFORE PHASE 2 IMPLEMENTATION**
+
+A post-acceptance audit found that the original R2 foundation worked on real crash/hang
+faults but needed stronger system-level invariants before its history could safely feed
+RepairKnowledge.
+
+Hardening includes:
+
+- restart history is not forgiven by a short RECOVERED stabilization window;
+- one target/action circuit breaker spans crash/liveness policies and fingerprints;
+- RECOVERED derives from typed verifier proof tied to the policy contract;
+- execution preconditions are computed from typed deterministic state;
+- RepairAttempts retain immutable trigger/policy snapshots and policy digests;
+- engineering persistence uses versioned/checksummed migrations;
+- Windows Job Objects own runtime process lifetime with psutil fallback;
+- a local-only production supervisor mode removes Git/network polling from Loop A;
+- a bounded current-user Task Scheduler guardian can restart supervisor failures
+  without overriding an intentional repair-budget escalation;
+- canonical docs distinguish the R1/R2 framework from accepted R2 behavior.
+
+Exit condition: repository gates and the expanded owner-machine fault matrix pass,
+including supervisor death and repeated cross-signature restart-storm cases.
 
 ### Phase 2 — RepairKnowledge foundation
 
-**STATUS: NEXT**
+**STATUS: BLOCKED UNTIL PHASE 1H ACCEPTANCE**
 
 Build the durable repair-engineering memory layer.
 
@@ -951,8 +979,9 @@ As of 2026-09-23:
 | Program phase | Status |
 | --- | --- |
 | Phase 0 prerequisites | DONE |
-| Phase 1 deterministic R1/R2 Self-Repair | DONE / OWNER ACCEPTED |
-| Phase 2 RepairKnowledge | **NEXT** |
+| Phase 1 deterministic framework + R2 runtime Self-Repair | DONE / OWNER ACCEPTED |
+| Phase 1H Self-Repair foundation hardening | **ACTIVE** |
+| Phase 2 RepairKnowledge | BLOCKED UNTIL PHASE 1H ACCEPTANCE |
 | Phase 3 DiagnosticModelRouter | PLANNED |
 | Phase 4 AI-assisted diagnostics | PLANNED |
 | Phase 5 sandboxed source repair | PLANNED |
@@ -970,7 +999,14 @@ As of 2026-09-23:
 
 **Do not start implementation from this documentation PR.**
 
-The next development slice, after this documentation is accepted, is:
+The active development slice is:
+
+### Phase 1H — Self-Repair Foundation Hardening
+
+Complete automated gates and the owner-machine fault matrix defined in
+`SELF_REPAIR_PHASE1H_HARDENING.md`.
+
+After Phase 1H is independently accepted, the next slice is:
 
 ### Phase 2 — RepairKnowledge Foundation
 
