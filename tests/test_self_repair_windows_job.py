@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -98,8 +99,17 @@ def test_real_windows_job_kill_on_close_prevents_orphan_runtime() -> None:
     process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
     try:
         job.assign_pid(process.pid)
+        started = time.monotonic()
         job.close()
-        assert process.wait(timeout=5.0) != 0
+        return_code = process.wait(timeout=5.0)
+        elapsed = time.monotonic() - started
+
+        # KILL_ON_JOB_CLOSE guarantees termination, not a particular exit code.
+        # Returning within this short bound proves the 30-second child did not
+        # survive as an orphan after the last job handle closed.
+        assert return_code is not None
+        assert elapsed < 5.0
+        assert process.poll() is not None
     finally:
         if process.poll() is None:
             process.kill()
