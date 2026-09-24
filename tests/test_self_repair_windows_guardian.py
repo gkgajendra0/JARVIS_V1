@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -80,7 +81,7 @@ def test_install_guardian_uses_schtasks_xml_and_cleans_temp_file(
             assert "RestartOnFailure" in path.read_text(encoding="utf-16")
         return subprocess.CompletedProcess(call, 0, stdout="", stderr="")
 
-    monkeypatch.setattr(windows_guardian.os, "name", "nt")
+    monkeypatch.setattr(windows_guardian, "os", SimpleNamespace(name="nt"))
     windows_guardian.install_guardian_task(_spec(), runner=fake_run)
 
     assert calls[0][:4] == [
@@ -95,7 +96,7 @@ def test_install_guardian_uses_schtasks_xml_and_cleans_temp_file(
 def test_guardian_setup_fails_closed_off_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(windows_guardian.os, "name", "posix")
+    monkeypatch.setattr(windows_guardian, "os", SimpleNamespace(name="posix"))
 
     with pytest.raises(WindowsGuardianError, match="requires Windows"):
         windows_guardian.install_guardian_task(_spec())
