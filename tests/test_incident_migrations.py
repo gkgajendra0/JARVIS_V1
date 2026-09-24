@@ -34,10 +34,7 @@ def test_incident_store_applies_versioned_engineering_schema(tmp_path) -> None:
             """
         ).fetchall()
         migrations = discover_engineering_migrations()
-        assert rows == [
-            (item.version, item.name, item.sha256)
-            for item in migrations
-        ]
+        assert rows == [(item.version, item.name, item.sha256) for item in migrations]
     finally:
         connection.close()
 
