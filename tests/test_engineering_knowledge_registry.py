@@ -139,6 +139,18 @@ def test_duplicate_json_property_names_fail_closed() -> None:
         ek.parse_json_object('{"component":"a","component":"b"}')
 
 
+
+
+def test_registered_schema_identity_is_stable_against_descriptor_mutation() -> None:
+    handler = ek.RepairFindingV1Handler()
+    descriptor = handler.schema_descriptor
+    descriptor["facet_type"] = "mutated"
+
+    assert handler.schema_digest == ek.REPAIR_FINDING_V1_SCHEMA_DIGEST
+    assert handler.schema_descriptor["facet_type"] == ek.REPAIR_FINDING_FACET_TYPE
+    registry = ek.EngineeringKnowledgeFacetRegistry()
+    registry.register(handler)
+
 def test_default_registry_validates_repair_finding_v1() -> None:
     registry = ek.build_default_facet_registry()
     facet = _repair_facet()
