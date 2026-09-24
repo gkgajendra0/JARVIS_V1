@@ -11,6 +11,7 @@ from jarvis.engineering_knowledge.models import (
     AttestationVerdict,
     EngineeringApplicability,
     EngineeringAttestation,
+    EngineeringEvidence,
     EngineeringKnowledgeFacet,
     EngineeringKnowledgeRevision,
     KnowledgeEvidenceLink,
@@ -913,6 +914,51 @@ class SqliteIncidentStore:
                 evidence_id=str(row[1]),
                 relation_type=str(row[2]),
                 created_at_epoch=float(row[3]),
+            )
+            for row in rows
+        )
+
+    def list_engineering_knowledge_evidence(
+        self,
+        revision_id: str,
+    ) -> tuple[EngineeringEvidence, ...]:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT DISTINCT evidence.evidence_id, evidence.evidence_type,
+                       evidence.source_class, evidence.canonical_reference,
+                       evidence.summary, evidence.occurred_at_epoch,
+                       evidence.observed_at_epoch, evidence.sensitivity,
+                       evidence.producer, evidence.integrity_algorithm,
+                       evidence.integrity_digest, evidence.created_at_epoch
+                FROM engineering_knowledge_evidence_link AS link
+                JOIN engineering_evidence AS evidence
+                  ON evidence.evidence_id = link.evidence_id
+                WHERE link.revision_id = ?
+                ORDER BY evidence.canonical_reference, evidence.evidence_id
+                """,
+                (str(revision_id).strip(),),
+            ).fetchall()
+        return tuple(
+            EngineeringEvidence(
+                evidence_id=str(row[0]),
+                evidence_type=str(row[1]),
+                source_class=str(row[2]),
+                canonical_reference=str(row[3]),
+                summary=str(row[4]),
+                occurred_at_epoch=(
+                    float(row[5]) if row[5] is not None else None
+                ),
+                observed_at_epoch=float(row[6]),
+                sensitivity=KnowledgeSensitivity(str(row[7])),
+                producer=str(row[8]),
+                integrity_algorithm=(
+                    str(row[9]) if row[9] is not None else None
+                ),
+                integrity_digest=(
+                    str(row[10]) if row[10] is not None else None
+                ),
+                created_at_epoch=float(row[11]),
             )
             for row in rows
         )
