@@ -6,8 +6,6 @@ import json
 import math
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
-
 CANONICALIZATION_RFC8785 = "rfc8785"
 DIGEST_ALGORITHM_SHA256 = "sha256"
 MAX_EVIDENCE_IDS = 32
@@ -92,7 +90,7 @@ def _json_object_text(value: object, *, field: str) -> str:
     except (TypeError, ValueError, json.JSONDecodeError) as exc:
         raise ValueError(f"{field} must contain valid JSON") from exc
     if not isinstance(parsed, dict):
-        raise ValueError(f"{field} must contain a JSON object")
+        raise TypeError(f"{field} must contain a JSON object")
     return text
 
 
