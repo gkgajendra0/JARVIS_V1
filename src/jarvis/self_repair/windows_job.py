@@ -95,6 +95,15 @@ class _CtypesJobApi:
         )
         kernel32.SetInformationJobObject.restype = wintypes.BOOL
 
+        kernel32.QueryInformationJobObject.argtypes = (
+            wintypes.HANDLE,
+            ctypes.c_int,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+        )
+        kernel32.QueryInformationJobObject.restype = wintypes.BOOL
+
         kernel32.OpenProcess.argtypes = (
             wintypes.DWORD,
             wintypes.BOOL,
@@ -143,6 +152,25 @@ class _CtypesJobApi:
         )
         if not ok:
             self._raise_last_error("SetInformationJobObject")
+
+        verified = _JobObjectExtendedLimitInformation()
+        returned_length = wintypes.DWORD()
+        ok = self._kernel32.QueryInformationJobObject(
+            job,
+            _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
+            ctypes.byref(verified),
+            ctypes.sizeof(verified),
+            ctypes.byref(returned_length),
+        )
+        if not ok:
+            self._raise_last_error("QueryInformationJobObject")
+        if not (
+            verified.BasicLimitInformation.LimitFlags
+            & _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        ):
+            raise WindowsJobObjectError(
+                "Windows Job Object did not retain KILL_ON_JOB_CLOSE"
+            )
 
     def _open_process(self, pid: int) -> object:
         handle = self._kernel32.OpenProcess(
