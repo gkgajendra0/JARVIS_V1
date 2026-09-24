@@ -11,6 +11,7 @@ from jarvis.self_repair.windows_guardian import (
     GuardianTaskSpec,
     WindowsGuardianError,
     render_guardian_task_xml,
+    run_bounded_supervisor_guardian,
 )
 
 
@@ -32,11 +33,9 @@ def test_guardian_xml_is_interactive_bounded_and_local_only() -> None:
     assert "<LogonType>InteractiveToken</LogonType>" in xml
     assert "<RunLevel>LeastPrivilege</RunLevel>" in xml
     assert "<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>" in xml
-    assert "<RestartOnFailure>" in xml
-    assert "<Interval>PT1M</Interval>" in xml
-    assert "<Count>3</Count>" in xml
+    assert "<RestartOnFailure>" not in xml
     assert (
-        "-m jarvis.runtime_supervisor "
+        "-m jarvis.self_repair.windows_guardian run "
         "--branch fix/self-repair-phase1h-foundation-hardening"
     ) in xml
     assert "<WorkingDirectory>C:\\jarvis</WorkingDirectory>" in xml
@@ -65,6 +64,75 @@ def test_guardian_spec_rejects_unbounded_or_subminute_restart_configuration() ->
         )
 
 
+def test_bounded_guardian_stops_on_clean_supervisor_exit() -> None:
+    calls: list[list[str]] = []
+    sleeps: list[float] = []
+
+    def fake_run(args, **kwargs):
+        calls.append([str(item) for item in args])
+        return subprocess.CompletedProcess(args, 0)
+
+    result = run_bounded_supervisor_guardian(
+        branch="main",
+        python_executable=Path(r"C:\jarvis\.venv\Scripts\python.exe"),
+        repo_root=Path(r"C:\jarvis"),
+        runner=fake_run,
+        sleeper=sleeps.append,
+    )
+
+    assert result == 0
+    assert len(calls) == 1
+    assert sleeps == []
+
+
+def test_bounded_guardian_restarts_unexpected_supervisor_exit_then_recovers() -> None:
+    return_codes = iter((17, 0))
+    calls: list[list[str]] = []
+    sleeps: list[float] = []
+
+    def fake_run(args, **kwargs):
+        calls.append([str(item) for item in args])
+        return subprocess.CompletedProcess(args, next(return_codes))
+
+    result = run_bounded_supervisor_guardian(
+        branch="main",
+        python_executable=Path(r"C:\jarvis\.venv\Scripts\python.exe"),
+        repo_root=Path(r"C:\jarvis"),
+        restart_count=3,
+        restart_delay_seconds=60.0,
+        runner=fake_run,
+        sleeper=sleeps.append,
+    )
+
+    assert result == 0
+    assert len(calls) == 2
+    assert sleeps == [60.0]
+    assert calls[0][-3:] == ["jarvis.runtime_supervisor", "--branch", "main"]
+
+
+def test_bounded_guardian_exhausts_without_unbounded_restart() -> None:
+    calls: list[list[str]] = []
+    sleeps: list[float] = []
+
+    def fake_run(args, **kwargs):
+        calls.append([str(item) for item in args])
+        return subprocess.CompletedProcess(args, 23)
+
+    result = run_bounded_supervisor_guardian(
+        branch="main",
+        python_executable=Path(r"C:\jarvis\.venv\Scripts\python.exe"),
+        repo_root=Path(r"C:\jarvis"),
+        restart_count=3,
+        restart_delay_seconds=60.0,
+        runner=fake_run,
+        sleeper=sleeps.append,
+    )
+
+    assert result == 23
+    assert len(calls) == 4
+    assert sleeps == [60.0, 60.0, 60.0]
+
+
 def test_install_guardian_uses_schtasks_xml_and_cleans_temp_file(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -78,7 +146,9 @@ def test_install_guardian_uses_schtasks_xml_and_cleans_temp_file(
             path = Path(call[call.index("/XML") + 1])
             xml_paths.append(path)
             assert path.exists()
-            assert "RestartOnFailure" in path.read_text(encoding="utf-16")
+            xml = path.read_text(encoding="utf-16")
+            assert "jarvis.self_repair.windows_guardian run" in xml
+            assert "RestartOnFailure" not in xml
         return subprocess.CompletedProcess(call, 0, stdout="", stderr="")
 
     monkeypatch.setattr(windows_guardian, "os", SimpleNamespace(name="nt"))
