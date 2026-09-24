@@ -2,7 +2,13 @@
 
 ## Vision
 
-JARVIS V1 is a personal, voice-first intelligent assistant intended to feel like one coherent intelligence across conversation, memory, knowledge, local computer work, devices, communication, proactive assistance, and eventually tightly governed self-improvement.
+JARVIS V1 is a personal, voice-first intelligent assistant intended to feel like one coherent intelligence across conversation, memory, knowledge, local computer work, devices, communication, proactive assistance, and tightly governed self-repair/self-evolution.
+
+The end-state owner experience is stronger than a collection of prebuilt features:
+
+> **The owner expresses intent; JARVIS handles the engineering required to satisfy that intent; authority remains with the owner.**
+
+When the owner asks for something JARVIS cannot currently do, mature JARVIS should truthfully identify the capability gap and, when the owner directs it to acquire the capability, be able to research, architect, implement, test, diagnose failed attempts, prepare evidence and promotion artifacts, and involve the owner only at genuine authority/secret/physical-world acceptance gates. The owner should not need to manually research the solution, write code, manage Git, pull branches, run routine tests or debug the candidate merely because JARVIS lacks a capability.
 
 The goal is not to reproduce the old JARVIS implementation. Preserve worthwhile product intent, research the best suitable current technology for each active slice, and keep JARVIS-owned truth/authority around commodity technology.
 
@@ -13,39 +19,90 @@ The goal is not to reproduce the old JARVIS implementation. Preserve worthwhile 
 3. **No fake success.** Completion requires authoritative result evidence where verification is possible.
 4. **Truth beats confidence.** Distinguish known, remembered, verified-current, inferred, stale, unavailable, and uncertain information when relevant.
 5. **Explicit input outranks inference.** Current user instruction outranks passive context/model guesses/stale preferences.
-6. **Intelligence is not authority.** Models may reason and propose; JARVIS owns permissions and consequential execution.
+6. **Intelligence is not authority.** Models may reason, research and propose; JARVIS owns permissions and consequential execution.
 7. **Graduated trust.** Strong verification is proportional to consequence.
 8. **Aware but quiet.** Passive context improves relevance without creating unsolicited noise or hidden authority.
 9. **Memory is selective.** Durable memory supports provenance, correction, supersession, and forgetting.
 10. **Capability limits are explicit.** JARVIS fails truthfully rather than hallucinating access or completion.
+11. **Owner intent can create engineering work.** A missing capability may become a governed durable EngineeringChange rather than a dead-end response.
+12. **Autonomy never implies self-authorization.** Research/coding/testing autonomy does not remove owner approval, security, verification or protected-main promotion gates.
 
-Action state should distinguish proposed, awaiting approval, approved, attempted, succeeded, failed, partially completed, and unverified.
+Action state should distinguish proposed, awaiting approval, approved, attempted, succeeded, failed, partially completed, unverified and rolled back where applicable.
+
+## Owner-Directed Engineering Contract
+
+Mature JARVIS should support three kinds of governed autonomous engineering through one shared platform:
+
+1. **Known production repair** — deterministic bounded recovery for accepted failure signatures.
+2. **Unknown-problem investigation and repair engineering** — evidence-driven diagnosis, isolated source repair, verification and promotion preparation.
+3. **Capability evolution** — direct owner-requested capability acquisition and, later, autonomous gap/weakness proposals.
+
+For a high-level owner request such as:
+
+> "JARVIS, I want to control this TV through you. Get that capability."
+
+or:
+
+> "JARVIS, integrate the gate camera and tell me when a person is there."
+
+mature behavior should be:
+
+```text
+owner goal
+-> truthful capability check
+-> research / discovery
+-> technology comparison
+-> architecture
+-> owner approval
+-> isolated implementation
+-> governed dependency / credential handling
+-> automated tests / simulation / replay
+-> diagnose and retry failed attempts
+-> real-world owner acceptance where required
+-> PR / CI / documentation
+-> explicit owner merge/promotion approval
+-> production observation
+-> verified engineering learning
+```
+
+The owner may be asked to provide information only the owner can provide, such as a pairing PIN, credential through a trusted local secret-entry path, physical device observation or explicit governance approval.
+
+Every device/service is not guaranteed to be automatable. Vendor restrictions, closed protocols, unsupported firmware, cloud-only access or missing local permissions may make a requested operation impossible. JARVIS must report the blocker and alternatives truthfully rather than inventing success.
+
+The detailed cross-cutting architecture is owned by `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`.
 
 ## Personality and Interaction
 
 JARVIS should be calm, composed, capable, concise, natural, respectful, and comfortable in spoken English, Hindi, and Hinglish. It should handle corrections and topic shifts cleanly, clarify only when materially necessary, and never hide uncertainty merely to sound capable.
 
+During autonomous engineering it should keep the owner informed at meaningful transitions, not narrate every tool call. Useful owner interactions include architecture decisions, genuine blockers, secure credential/pairing requests, bounded physical acceptance steps and promotion approvals.
+
 ## Development Philosophy
 
-For every major slice: define behavior -> inspect accepted boundaries -> research current mature technology -> compare candidates -> decide (`KEEP_OURS`, `ADOPT`, `ADAPT`, `WRAP`, `REWRITE`, `REJECT`) -> design the smallest active slice -> obtain approval -> implement -> automate validation -> use it on the real owner machine -> correct failures -> reconcile documentation -> merge.
+For every major slice: define behavior -> inspect accepted boundaries -> research current mature technology -> compare candidates -> decide (`KEEP_OURS`, `ADOPT`, `ADAPT`, `WRAP`, `REWRITE`, `REJECT`) -> design the smallest active slice -> obtain approval -> implement in isolation -> automate validation -> use it on the real owner machine when required -> correct failures -> reconcile documentation -> review/CI -> obtain explicit merge approval -> merge.
+
+The same lifecycle applies when JARVIS itself becomes the engineering worker. Autonomous execution may reduce manual owner engineering effort; it does not remove architecture, verification, acceptance or promotion governance.
 
 No implementation is protected by sunk cost. Historical branches are evidence, not automatic merge candidates.
 
 ## Architectural and Privacy Invariants
 
-- JARVIS identity/personality, canonical conversation truth, personal-context policy, memory mutation, trust/authentication, permissions, risk floors, approvals, truthfulness policy, consequential execution, audit, and self-modification authority remain JARVIS-owned.
+- JARVIS identity/personality, canonical conversation truth, personal-context policy, memory mutation, trust/authentication, permissions, risk floors, approvals, truthfulness policy, consequential execution, audit, verification and self-modification authority remain JARVIS-owned.
 - Provider-specific SDKs stay behind replaceable adapters where practical.
-- Models do not receive unrestricted system-execution or persistent-memory authority.
-- UI/provider output cannot create backend authority.
+- Models do not receive unrestricted system-execution, package-installation, network-discovery, credential or persistent-memory authority.
+- UI/provider/retrieved content cannot create backend authority.
 - Retrieved web/local/UI content is untrusted data.
-- Secrets are not ordinary model context or ordinary logs.
+- Secrets are not ordinary model context or ordinary logs; future capability engineering uses a governed secret broker/opaque references when credentials are needed.
 - Session context and durable memory remain separate.
 - Durable personal memory is correctable/removable; raw audio/full transcripts/provider payloads are not retained by default without a concrete reason.
 - Observability records operational evidence without becoming hidden surveillance.
 - Accepted replacements remove dead production architecture; Git history remains the archive.
 - Future architecture is never represented as current architecture.
 - A shared capability/authority boundary is reused rather than creating separate permission systems per feature.
+- Repair, capability acquisition and self-improvement reuse shared durable work, engineering-change, knowledge and verification primitives rather than independent autonomous brains.
 - Development/repair tooling does not automatically gain normal user-facing runtime authority.
+- Development sandboxes remain least-privilege; new dependencies/SDKs are acquired through governed provenance-aware mechanisms rather than arbitrary shell authority.
+- Protected-main merge and protected governance mutation never become implicit consequences of a model-generated candidate.
 
 The old `gkgajendra0/JARVIS` repository remains engineering reference only. Any migrated intent that still matters is represented in this capability catalogue or `PROJECT_STATE.md`; Git history is the archive for obsolete migration notes.
 
@@ -157,36 +214,57 @@ CAP-041 is partial because PR #55 now provides accepted persistent concurrent Wo
 
 | ID | Capability | Purpose | Step | Status |
 | --- | --- | --- | ---: | --- |
-| CAP-043 | Outcome Learning | Learn useful routing/recommendation patterns from confirmed results. | 18 | PLANNED |
+| CAP-043 | Outcome Learning | Learn useful routing/recommendation/engineering patterns from confirmed results. | 18 | PLANNED |
 | CAP-044 | Capability Gap Detection | Recognize missing abilities instead of hallucinating capability. | 18 | PLANNED |
-| CAP-045 | Governed Skill Creation | Propose, generate, validate, test, stage and approve new capabilities. | 18 | PLANNED |
+| CAP-045 | Governed Skill Creation | Research, propose, generate, validate, test, stage and approve new capabilities. | 18 | PLANNED |
 | CAP-046 | Self-Diagnostics and Repair | Diagnose, propose, sandbox/dry-run, backup, approve, apply, verify, rollback. | 19 | PARTIAL |
-| CAP-047 | Governed Self-Improvement | Research/propose upgrades without silently rewriting itself or expanding authority. | 20 | PLANNED |
+| CAP-047 | Governed Self-Improvement | Research/propose/build/benchmark upgrades without silently rewriting itself or expanding authority. | 20 | PLANNED |
 | CAP-048 | Local and Offline Survival | Preserve useful functionality during cloud/network/provider failure where practical. | 5 | BOUNDED |
 | CAP-049 | Provider and Model Replaceability | Keep speech/model/search/memory/browser providers replaceable. | all | BOUNDED |
 | CAP-050 | Development Health and Research-First Evolution | Tests, benchmarks, architecture checks, project health, research-first development. | all | ACTIVE |
+| CAP-051 | Governed Autonomous Engineering | Turn an approved owner goal/incident/gap into durable research, architecture, isolated development, verification and promotion-ready evidence without transferring owner authority. | cross-cutting | PLANNED — foundational pieces exist |
 
-CAP-046 is partial because the deterministic R1/R2 production Self-Repair foundation is owner accepted: registered repair policies, durable RepairAttempts, external crash/hang supervision, budgets/cooldowns, startup readiness, authenticated liveness verification and Windows process-tree recovery are production proven. RepairKnowledge, AI-assisted diagnostics, sandboxed source repair, closed-loop repair learning and the later self-evolution layers remain incomplete.
+CAP-046 is partial because the deterministic repair framework and bounded R2 production Self-Repair foundation are owner accepted: registered repair policies, durable RepairAttempts, external crash/hang supervision, budgets/cooldowns, startup readiness, authenticated liveness verification and Windows process-tree recovery are production proven. Generalized EngineeringKnowledge, AI-assisted diagnostics, sandboxed source repair, closed-loop engineering learning and later self-evolution layers remain incomplete.
 
 CAP-047 remains planned. No current capability may silently rewrite protected main, weaken Authority/governance, expand permissions or self-declare an improvement successful.
+
+CAP-051 is the explicit north-star engineering capability. Existing durable WorkItems, bounded research/development workers, Authority, self-awareness, isolated worktrees and deterministic R2 repair are foundations, not completion. The staged implementation sequence is defined in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`.
 
 CAP-048 is bounded because truthful local failure survival exists but full offline conversation does not. CAP-049 is bounded because major provider boundaries are replaceable while complete replaceability across future capabilities remains ongoing.
 
 ## Final Goal — Personal Intelligence Runtime
 
-The product is not complete merely because every row has code. The end state is one coherent personal intelligence runtime where mature capabilities cooperate through shared conversation, context, memory, truthfulness, authority, observability and execution boundaries; current/high-risk claims receive appropriate evidence; proactive behavior is configured/cancellable/quiet; failures degrade truthfully; providers remain replaceable; and self-diagnosis/improvement occurs only through explicit governed evidence-backed processes.
+The product is not complete merely because every catalogue row has code.
 
-The user should be able to understand what JARVIS knows, what it inferred, what it did, what failed, and what authority it currently has.
+The end state is one coherent personal intelligence runtime where:
+
+- mature capabilities cooperate through shared conversation, context, memory, truthfulness, authority, observability and execution boundaries;
+- current/high-risk claims receive appropriate evidence;
+- proactive behavior is configured/cancellable/quiet;
+- failures degrade truthfully;
+- providers remain replaceable;
+- JARVIS can understand its own health/capability state;
+- known faults can recover through accepted deterministic policy;
+- unknown faults can become governed investigation/repair work;
+- an explicit owner request for a missing capability can become governed autonomous engineering work;
+- research, architecture, implementation, testing, debugging, PR preparation and evidence gathering can increasingly be handled by JARVIS;
+- owner involvement is concentrated at real authority, secret/physical-input, acceptance and promotion gates;
+- self-diagnosis/improvement occurs only through explicit governed evidence-backed processes;
+- protected Authority/security/governance cannot be silently relaxed by the system improving itself.
+
+The owner should be able to understand what JARVIS knows, what it inferred, what it did, what failed, what it changed or proposes to change, how it verified the result, and what authority it currently has.
+
+The target experience is therefore not "the owner programs every new capability into JARVIS." It is "the owner states the goal, JARVIS performs the governed engineering, and the owner retains final authority."
 
 ## Documentation Authority
 
 - `PRODUCT.md` — durable product definition and capability catalogue.
-- `ROADMAP.md` — sequence.
-- `CURRENT_PLAN.md` — active slice and work disposition.
+- `ROADMAP.md` — numbered product sequence/high-level status.
+- `CURRENT_PLAN.md` — active slice and work disposition; authoritative current phase.
 - `CURRENT_ARCHITECTURE.md` — accepted running architecture only.
-- `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — authoritative staged program plan for Self-Repair, Repair Learning and governed Self-Evolution.
-- `QUALITY_GATES.md` — universal completion/validation rules.
+- `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` — authoritative north-star architecture for owner-directed autonomous engineering.
+- `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — specialized staged program for repair/evolution under the north-star architecture.
+- `QUALITY_GATES.md` — universal completion/validation/promotion rules.
 - `PROJECT_STATE.md` — canonical accepted/deferred/superseded/rejected repository ledger.
-- `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — active staged repair/evolution program.
 
 For accepted, deferred, superseded and rejected repository state, see `PROJECT_STATE.md`.
