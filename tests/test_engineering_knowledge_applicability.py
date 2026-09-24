@@ -52,9 +52,7 @@ def _constraint(
 
 
 def test_exact_component_match_is_eligible() -> None:
-    service = EngineeringKnowledgeApplicabilityService(
-        _Store((_constraint(),))
-    )
+    service = EngineeringKnowledgeApplicabilityService(_Store((_constraint(),)))
     context = ApplicabilityContext(
         (
             ApplicabilityFact(
@@ -238,9 +236,7 @@ def test_invalid_numeric_range_constraint_fails_closed() -> None:
         constraint_json='{"min_inclusive":"4.0","max_exclusive":"3.0"}',
     )
 
-    decision = EngineeringKnowledgeApplicabilityService(
-        _Store((constraint,))
-    ).evaluate(
+    decision = EngineeringKnowledgeApplicabilityService(_Store((constraint,))).evaluate(
         "revision-1",
         ApplicabilityContext(
             (
