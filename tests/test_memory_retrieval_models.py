@@ -137,6 +137,21 @@ def test_embedding_adapter_is_lazy_revision_pinned_and_matches_measured_contract
     assert encode_kwargs["truncate_dim"] == QWEN3_EMBEDDING_CONTRACT.dimension
 
 
+def test_embedding_adapter_accepts_domain_specific_query_instruction() -> None:
+    model = FakeEmbeddingModel()
+    encoder = Qwen3EmbeddingEncoder(
+        query_instruction="Instruct: retrieve engineering knowledge\nQuery:",
+        model_factory=lambda *args, **kwargs: model,
+    )
+
+    encoder.encode_query("runtime child restart")
+
+    assert encoder.query_instruction == (
+        "Instruct: retrieve engineering knowledge\nQuery:"
+    )
+    assert model.query_calls[0][1]["prompt"] == encoder.query_instruction
+
+
 def test_embedding_adapter_documents_are_normalized_and_empty_batch_stays_lazy() -> (
     None
 ):
