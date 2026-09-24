@@ -709,7 +709,16 @@ def _recover_unexpected_exit(
     """Perform the single supervisor-owned bounded same-version restart loop."""
 
     exit_code = process.returncode
-    control.child_stopped()
+
+    # The supervised launcher may exit before one of its descendants (notably the
+    # Windows venv launcher -> base-interpreter shape). Always close/terminate the
+    # old runtime Job Object before starting any replacement so a dead root cannot
+    # leave an orphan interpreter beside the recovered runtime.
+    _stop_jarvis(
+        process,
+        timeout_seconds=config.shutdown_timeout_seconds,
+        control=control,
+    )
     commit_sha = repo.local_sha()
 
     while True:
