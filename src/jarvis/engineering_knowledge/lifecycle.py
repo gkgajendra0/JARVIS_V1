@@ -148,9 +148,7 @@ class RepairKnowledgePromotionPolicy:
             revision_id,
         )
         if not integrity.valid:
-            reasons.extend(
-                f"integrity:{reason}" for reason in integrity.reason_codes
-            )
+            reasons.extend(f"integrity:{reason}" for reason in integrity.reason_codes)
 
         if revision.kind_namespace != REPAIR_KIND_NAMESPACE:
             reasons.append("wrong_kind_namespace")
