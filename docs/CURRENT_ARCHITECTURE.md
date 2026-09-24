@@ -4,7 +4,7 @@
 
 **STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC REPAIR FRAMEWORK AND R2 RUNTIME CRASH/HANG RECOVERY FOUNDATION ARE OWNER ACCEPTED ON 2026-09-23. PHASE 1H FOUNDATION HARDENING IS THE NEXT ACCEPTANCE GATE BEFORE REPAIRKNOWLEDGE; STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
 
-The latest owner-machine accepted Self-Repair runtime baseline is `6a0ba73f46f68d9d0c2e8fa2c20c5fccaed8378a`; later documentation-only reconciliation commits may advance protected `main` without changing that runtime behavior.
+The latest owner-machine accepted Self-Repair runtime baseline includes Phase 1H foundation hardening promoted through PR #90 on 2026-09-24; later documentation-only reconciliation commits may advance protected `main` without changing that runtime behavior.
 
 This file describes architecture that actually exists on protected `main`. Historical proposals and experiments belong to Git history; active work belongs in `CURRENT_PLAN.md`, and accepted/deferred/superseded status belongs in `PROJECT_STATE.md`.
 
@@ -266,21 +266,26 @@ Current production architecture includes:
   `RepairVerdict` contracts;
 - a version-controlled fail-closed repair registry;
 - durable RepairAttempt persistence linked to engineering incidents;
-- one process-external runtime-restart owner in `jarvis-dev`;
-- independent crash and alive-but-unresponsive policies;
-- durable attempt budgets/cooldowns and crash-loop exhaustion;
+- one process-external runtime-restart owner shared by development supervision and the local-only production runtime supervisor;
+- independent crash and alive-but-unresponsive policies feeding one shared target/action restart circuit breaker;
+- durable rolling attempt budgets/cooldowns whose history is not forgiven by short successful stabilization;
 - explicit startup readiness separate from control-channel connection;
 - authenticated liveness probes and stabilization before `RECOVERED`;
 - same-version runtime restart;
+- typed execution-precondition evaluation plus immutable trigger/policy snapshots and policy digests;
+- typed verification bound to the registered verification contract before RECOVERED;
+- versioned/checksummed engineering-incident database migrations;
+- Windows Job Object runtime ownership with kill-on-close semantics and psutil fallback;
+- launcher/interpreter cleanup before replacement runtime creation;
+- bounded current-user Windows outer guardian for production-supervisor failures;
+- production fail-closed escalation that stops the outer guardian instead of bypassing the inner restart budget;
 - provider/search/TTS degradation excluded from runtime-liveness truth;
 - background Git update polling isolated from the liveness watchdog;
 - Windows virtual-environment runtime-tree fault injection and child-first force cleanup.
 
-The final owner-machine hang acceptance suspended both Windows runtime-tree
-processes, observed three failed liveness probes plus confirmation, force-cleaned
-the frozen tree, started a same-revision replacement, completed startup readiness
-and six authenticated stabilization probes, and persisted the RepairAttempt as
-`recovered`.
+Owner-machine acceptance covers crash/hang recovery, launcher-only death, interpreter-only death, supervisor death + bounded outer-guardian recovery and absence of an accepted duplicate/orphan runtime. The final shared circuit-breaker proof established three verified recent repairs and then injected a fourth crash; the fourth produced zero new RepairAttempts and left zero guardian/supervisor/runtime processes.
+
+Automatic Windows logon startup was observed. When Windows had not yet enumerated the configured Pocket 3 microphone, preflight failed closed rather than selecting another input. Once the configured device was available, the same production path passed preflight, initialized audio/vision and reached native owner-tracking lock.
 
 This architecture is deliberately bounded. RepairKnowledge, DiagnosticModelRouter,
 AI-assisted diagnosis, source repair and self-evolution are not current production
@@ -313,12 +318,9 @@ Repository-wide accepted/deferred/superseded/rejected truth is centralized in `P
 
 ## Next architecture acceptance
 
-The next active cross-cutting acceptance slice is **Phase 1H — Self-Repair
-Foundation Hardening** from `docs/SELF_REPAIR_PHASE1H_HARDENING.md`.
+Phase 1H is **DONE / OWNER-MACHINE ACCEPTED 2026-09-24**. Its final evidence is recorded in `docs/SELF_REPAIR_PHASE1H_HARDENING.md`.
 
-RepairKnowledge research is preserved separately, but implementation remains blocked
-until the repair foundation has hardened restart budgets, verification/provenance,
-engineering-DB migrations, Windows process ownership and supervisor survivability.
+The next active cross-cutting slice is **Phase 2 — EngineeringKnowledge Foundation**. The preserved RepairKnowledge research remains the REPAIR-specific design input, while the shared foundation must preserve provenance, lifecycle, supersession and retrieval for later engineering knowledge kinds without granting knowledge records execution Authority.
 
 **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027/CAP-028)** remains
 the next numbered product slice and must still reuse the accepted durable
