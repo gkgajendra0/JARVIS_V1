@@ -85,3 +85,66 @@ def test_packaged_engineering_migration_catalog_rejects_mutation() -> None:
 
     with pytest.raises(EngineeringMigrationIntegrityError, match="invalid SHA-256"):
         EngineeringMigrationRunner((changed,))
+
+
+
+def test_legacy_incident_database_is_adopted_without_data_loss(tmp_path) -> None:
+    path = tmp_path / "incidents.sqlite3"
+    connection = sqlite3.connect(path)
+    connection.executescript(
+        """
+        CREATE TABLE engineering_incident (
+            incident_id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            symptom TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at_epoch REAL NOT NULL,
+            updated_at_epoch REAL NOT NULL,
+            affected_components_json TEXT NOT NULL,
+            root_cause TEXT,
+            accepted_fix TEXT,
+            regression_tests_json TEXT NOT NULL,
+            commit_sha TEXT,
+            pr_number INTEGER,
+            deployment_result TEXT,
+            rollback_status TEXT,
+            lessons_json TEXT NOT NULL
+        );
+        INSERT INTO engineering_incident VALUES (
+            'legacy-1', 'Legacy incident', 'legacy symptom', 'warning', 'open',
+            1.0, 1.0, '["voice_runtime"]', NULL, NULL, '[]', NULL, NULL,
+            NULL, NULL, '[]'
+        );
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    store = SqliteIncidentStore(path)
+    try:
+        incident = store.get("legacy-1")
+        assert incident is not None
+        assert incident.title == "Legacy incident"
+    finally:
+        store.close()
+
+    connection = sqlite3.connect(path)
+    try:
+        version = connection.execute("PRAGMA user_version").fetchone()
+        assert version is not None
+        assert int(version[0]) == EngineeringMigrationRunner().latest_version
+        columns = {
+            row[1]
+            for row in connection.execute(
+                "PRAGMA table_info(engineering_repair_attempt)"
+            ).fetchall()
+        }
+        assert {
+            "trigger_snapshot_json",
+            "policy_snapshot_json",
+            "policy_digest",
+            "verification_json",
+        }.issubset(columns)
+    finally:
+        connection.close()
