@@ -71,9 +71,7 @@ def test_exact_component_match_is_eligible() -> None:
 
 
 def test_exact_component_mismatch_blocks_required_knowledge() -> None:
-    service = EngineeringKnowledgeApplicabilityService(
-        _Store((_constraint(),))
-    )
+    service = EngineeringKnowledgeApplicabilityService(_Store((_constraint(),)))
     context = ApplicabilityContext(
         (
             ApplicabilityFact(
