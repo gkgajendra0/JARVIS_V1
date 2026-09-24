@@ -17,9 +17,7 @@ class EngineeringKnowledgeCanonicalizationError(ValueError):
     """A JSON payload cannot be represented by the canonical integrity contract."""
 
 
-class EngineeringKnowledgeDuplicateKeyError(
-    EngineeringKnowledgeCanonicalizationError
-):
+class EngineeringKnowledgeDuplicateKeyError(EngineeringKnowledgeCanonicalizationError):
     """A JSON object contains duplicate property names."""
 
 
