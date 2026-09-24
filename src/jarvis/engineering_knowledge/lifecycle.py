@@ -129,9 +129,7 @@ class RepairKnowledgePromotionPolicy:
     ) -> KnowledgePromotionDecision:
         revision = store.get_engineering_knowledge_revision(revision_id)
         if revision is None:
-            raise KnowledgePromotionError(
-                f"unknown knowledge revision: {revision_id}"
-            )
+            raise KnowledgePromotionError(f"unknown knowledge revision: {revision_id}")
 
         reasons: list[str] = []
         evidence_ids: list[str] = []
@@ -227,8 +225,7 @@ class KnowledgeLifecycleService:
         decision = self._repair_policy.evaluate(self._store, revision_id)
         if not decision.eligible:
             raise KnowledgePromotionError(
-                "repair candidate cannot be staged: "
-                + ",".join(decision.reason_codes)
+                "repair candidate cannot be staged: " + ",".join(decision.reason_codes)
             )
         return self._transition(
             revision_id=revision_id,
@@ -262,8 +259,7 @@ class KnowledgeLifecycleService:
         decision = self._repair_policy.evaluate(self._store, revision_id)
         if not decision.eligible:
             raise KnowledgePromotionError(
-                "staged repair cannot be accepted: "
-                + ",".join(decision.reason_codes)
+                "staged repair cannot be accepted: " + ",".join(decision.reason_codes)
             )
         return self._transition(
             revision_id=revision_id,
@@ -386,9 +382,7 @@ class KnowledgeLifecycleService:
     def _require_state(self, revision_id: str) -> KnowledgeLifecycleState:
         current = self._store.get_engineering_knowledge_lifecycle_state(revision_id)
         if current is None:
-            raise KnowledgeLifecycleError(
-                f"unknown knowledge revision: {revision_id}"
-            )
+            raise KnowledgeLifecycleError(f"unknown knowledge revision: {revision_id}")
         return current
 
     def _transition(
