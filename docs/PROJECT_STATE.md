@@ -15,8 +15,8 @@ Detailed experiment notes, old acceptance transcripts, superseded architecture p
 and abandoned branches are historical evidence in Git history. They are not current
 documentation authority.
 
-Snapshot reconciled from protected `main` at
-`4036b2e58eb93136905a5c8c41654c10fb14a8d7` on 2026-09-23.
+Snapshot baseline verified from protected `main` at
+`7cd4ab241d4706130a82636657da25eaf639d961` on 2026-09-24.
 
 ---
 
@@ -224,16 +224,17 @@ The active development slice is:
 Phase-2 RepairKnowledge research/design is preserved, but its implementation is
 blocked until Phase 1H is independently accepted.
 
-Scope is intentionally limited to:
+Phase 1H scope is intentionally limited to hardening repair truth and supervision:
 
-1. canonical RepairKnowledge contracts;
-2. durable persistence and provenance;
-3. lifecycle transitions;
-4. retrieval by component/signature;
-5. candidate creation from verified incidents;
-6. proof that RepairKnowledge cannot execute or mutate RepairPolicy authority.
+1. restart-budget and target-level circuit-breaker correctness;
+2. typed verifier proof and deterministic execution preconditions;
+3. immutable trigger/policy provenance and versioned engineering DB migrations;
+4. authoritative Windows runtime-tree ownership;
+5. local-only production supervision and bounded outer-supervisor recovery;
+6. truthful R1/R2 status and expanded acceptance.
 
-DiagnosticModelRouter and source repair start only after Phase 2 is independently
-accepted.
+After Phase 1H is accepted, Phase-2 RepairKnowledge may begin under the separately
+preserved research/design contract. DiagnosticModelRouter and source repair remain
+later phases.
 
 Step 8 remains the next numbered product slice when numbered roadmap work resumes.
