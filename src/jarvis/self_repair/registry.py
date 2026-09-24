@@ -8,6 +8,7 @@ from jarvis.self_repair.domain import (
     RepairAction,
     RepairActionKind,
     RepairAuthorizationError,
+    RepairExecutionContext,
     RepairPolicy,
     RepairPolicyConflictError,
     RepairRiskClass,
@@ -74,7 +75,7 @@ class RepairRegistry:
         trigger: RepairTrigger,
         action: RepairAction,
         *,
-        satisfied_preconditions: Iterable[str] = (),
+        execution_context: RepairExecutionContext,
     ) -> RepairPolicy:
         policy = self._policies.get(action.policy_id)
         if policy is None:
@@ -125,11 +126,13 @@ class RepairRegistry:
                 "automatic repair must be declared reversible"
             )
 
-        satisfied = {
-            _required_token(item, field="satisfied_precondition")
-            for item in satisfied_preconditions
-        }
-        missing = tuple(item for item in policy.preconditions if item not in satisfied)
+        if not isinstance(execution_context, RepairExecutionContext):
+            raise TypeError("execution_context must be a RepairExecutionContext")
+        missing = tuple(
+            item
+            for item in policy.preconditions
+            if not execution_context.satisfies(item)
+        )
         if missing:
             raise RepairAuthorizationError(
                 "repair preconditions are not satisfied: " + ", ".join(missing)

@@ -15,8 +15,8 @@ Detailed experiment notes, old acceptance transcripts, superseded architecture p
 and abandoned branches are historical evidence in Git history. They are not current
 documentation authority.
 
-Snapshot reconciled from protected `main` at
-`4036b2e58eb93136905a5c8c41654c10fb14a8d7` on 2026-09-23.
+Snapshot baseline verified from protected `main` at
+`7cd4ab241d4706130a82636657da25eaf639d961` on 2026-09-24.
 
 ---
 
@@ -47,8 +47,8 @@ Snapshot reconciled from protected `main` at
 | Pocket 3 OWNER tracking | DONE for current defined scope | native targeting/tracking, reacquisition, recenter, transport recovery and continuity accepted |
 | Self-Awareness | PARTIAL foundation for later diagnostics | Self Model, deterministic health/dependencies/blast radius, operational evidence and incident engineering memory |
 | Persistent concurrent work | DONE foundation | durable WorkItems/steps/deliveries, restart recovery, background research/development, priority/resource control |
-| Deterministic Self-Repair | PARTIAL foundation for Step 19 | registered R1/R2 repair policies, durable RepairAttempts, crash/hang recovery, budgets, readiness/liveness verification |
-| Self-Repair / Self-Evolution program | ACTIVE | Phase 1 complete; Phase 2 RepairKnowledge is next |
+| Deterministic Self-Repair | PARTIAL foundation for Step 19 | R1/R2 typed framework plus Phase-1H-hardened R2 production recovery: sustained rolling budgets, shared target/action circuit breaker, typed verification/preconditions/provenance, versioned persistence, Windows Job Object runtime ownership and bounded production guardian |
+| Self-Repair / Self-Evolution program | ACTIVE | Phase 1 and Phase 1H are accepted; Phase 2 EngineeringKnowledge is now the active/next implementation slice with REPAIR as the first vertical |
 | Step 8 notes/tasks/reminders | PLANNED | still the next numbered product slice when numbered roadmap work resumes |
 
 ---
@@ -127,6 +127,7 @@ truth/status but not runtime behavior.
 - **#85** full runtime-tree force cleanup during recovery.
 - **#86** final owner-machine Self-Repair acceptance record.
 - **#87** complete Self-Repair/Self-Evolution master-plan reconciliation.
+- **#90** Phase-1H foundation hardening: sustained restart budget semantics, shared restart circuit breaker, typed verification/preconditions/provenance, versioned engineering DB migrations, Windows Job Object ownership, local-only production supervisor and bounded Windows guardian; owner-machine accepted 2026-09-24.
 
 Final deterministic Self-Repair acceptance:
 - crash recovery passed;
@@ -137,6 +138,9 @@ Final deterministic Self-Repair acceptance:
   `verifier_result = readiness_and_liveness_stable:6_probes`,
   `verdict = recovered`;
 - issue **#65** is closed.
+- Phase-1H owner-machine acceptance additionally passed launcher-only death, interpreter-only death, supervisor death + outer guardian recovery, no accepted duplicate/orphan runtime, mixed crash/liveness shared restart history, and the final shared circuit breaker test;
+- final breaker proof: 3 verified recent repairs were present, the fourth crash produced 0 new RepairAttempts, 0 guardian/supervisor/runtime processes remained, and the test reported `PASS - FOURTH RESTART WAS BLOCKED`;
+- automatic Windows logon startup was observed; an unavailable configured Pocket 3 microphone failed closed at preflight, while the same startup path succeeded once Windows enumerated the device.
 
 ---
 
@@ -157,7 +161,7 @@ These are intentionally not represented as completed.
 | full local/offline conversation | DEFERRED | current provider resilience is truthful survival, not a second full local conversation stack |
 | proactive/event-driven monitoring | PLANNED | later Step 15 |
 | full Steps 9/10/12 | PLANNED with partial foundations | Hands supplies foundations only |
-| RepairKnowledge and later repair-learning/evolution phases | ACTIVE / PLANNED | exact sequence lives in `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` |
+| EngineeringKnowledge and later repair-learning/evolution phases | ACTIVE / PLANNED | Phase 2 EngineeringKnowledge is now unblocked; exact sequence lives in `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` |
 
 ---
 
@@ -217,20 +221,12 @@ separately after state/document reconciliation.
 
 ## Current active work
 
-After this repository reconciliation is merged, the next development slice is:
+Phase 1H is **DONE / OWNER-MACHINE ACCEPTED 2026-09-24** and is promoted through PR #90.
 
-**Self-Repair / Self-Evolution Phase 2 — RepairKnowledge Foundation**
+The active/next cross-cutting slice is:
 
-Scope is intentionally limited to:
+**Phase 2 — EngineeringKnowledge Foundation**
 
-1. canonical RepairKnowledge contracts;
-2. durable persistence and provenance;
-3. lifecycle transitions;
-4. retrieval by component/signature;
-5. candidate creation from verified incidents;
-6. proof that RepairKnowledge cannot execute or mutate RepairPolicy authority.
+The preserved RepairKnowledge research/design remains the REPAIR-specific input, while the underlying provenance, lifecycle, supersession and retrieval substrate must be generic enough for later DIAGNOSTIC, CAPABILITY, INTEGRATION, ARCHITECTURE, EVALUATION and OPERATIONS knowledge.
 
-DiagnosticModelRouter and source repair start only after Phase 2 is independently
-accepted.
-
-Step 8 remains the next numbered product slice when numbered roadmap work resumes.
+DiagnosticModelRouter and source repair remain later phases. Step 8 remains the next numbered product slice when numbered roadmap work resumes.

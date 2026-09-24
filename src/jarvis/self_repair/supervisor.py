@@ -20,10 +20,12 @@ from jarvis.self_repair.domain import (
     RepairAction,
     RepairActionKind,
     RepairAttempt,
+    RepairExecutionContext,
     RepairPolicy,
     RepairRiskClass,
     RepairTrigger,
-    RepairVerdict,
+    RepairVerificationResult,
+    RepairVerificationStatus,
 )
 from jarvis.self_repair.registry import RepairRegistry
 
@@ -213,27 +215,12 @@ def evaluate_restart_budget(
             ),
         )
     )
-    recovered_at = max(
-        (
-            attempt.finished_at_epoch
-            for attempt in all_attempts
-            if attempt.verdict is RepairVerdict.RECOVERED
-            and attempt.finished_at_epoch is not None
-        ),
-        default=None,
-    )
-    budget_attempts = (
-        tuple(
-            attempt
-            for attempt in all_attempts
-            if attempt.started_at_epoch > recovered_at
-        )
-        if recovered_at is not None
-        else all_attempts
-    )
+    # A short successful stabilization proves one repair attempt recovered the
+    # runtime. It does not forgive crash-loop history. Attempts age out only after
+    # the configured rolling window has passed.
     cutoff = now_epoch - policy.rolling_window_seconds
     recent = tuple(
-        attempt for attempt in budget_attempts if attempt.started_at_epoch >= cutoff
+        attempt for attempt in all_attempts if attempt.started_at_epoch >= cutoff
     )
     if len(recent) >= policy.max_attempts:
         return RestartBudgetDecision(
@@ -293,6 +280,21 @@ class SupervisorRepairController:
         self.policy = policy or build_runtime_child_exit_policy()
         policies = (self.policy, *tuple(additional_policies))
         self.registry = RepairRegistry(policies)
+
+        restart_policies = tuple(
+            candidate
+            for candidate in policies
+            if candidate.component_id == "voice_runtime"
+            and candidate.action_kind is RepairActionKind.RESTART_RUNTIME_CHILD
+        )
+        if not restart_policies:
+            raise ValueError("supervisor requires at least one runtime restart policy")
+        self._restart_circuit_breaker_max_attempts = min(
+            candidate.max_attempts for candidate in restart_policies
+        )
+        self._restart_circuit_breaker_window_seconds = max(
+            candidate.rolling_window_seconds for candidate in restart_policies
+        )
 
     def plan_unexpected_exit(
         self,
@@ -364,6 +366,22 @@ class SupervisorRepairController:
                 f"runtime repair policy is not registered: {reason_code}"
             )
 
+        target_budget = self._target_restart_circuit_breaker(now_epoch=now_epoch)
+        if target_budget is not None:
+            self._record_budget_exhaustion(
+                incident,
+                fingerprint,
+                now_epoch=now_epoch,
+            )
+            return SupervisorRepairPlan(
+                fingerprint=fingerprint,
+                incident=incident,
+                trigger=trigger,
+                policy=matched,
+                action=None,
+                budget=target_budget,
+            )
+
         attempts = self._incidents.list_repair_attempts(
             incident.incident_id,
             limit=max(matched.max_attempts * 10, 100),
@@ -391,14 +409,6 @@ class SupervisorRepairController:
         action = self.registry.action_for(trigger, now_epoch=now_epoch)
         if action is None:
             raise RuntimeError("registered runtime repair produced no action")
-        self.registry.assert_executable(
-            trigger,
-            action,
-            satisfied_preconditions=(
-                "same_local_revision",
-                "restart_budget_available",
-            ),
-        )
         return SupervisorRepairPlan(
             fingerprint=fingerprint,
             incident=incident,
@@ -408,16 +418,57 @@ class SupervisorRepairController:
             budget=budget,
         )
 
+    def _target_restart_circuit_breaker(
+        self,
+        *,
+        now_epoch: float,
+    ) -> RestartBudgetDecision | None:
+        """Stop restart storms across policies, incidents and crash fingerprints."""
+
+        attempts = self._incidents.list_component_repair_attempts(
+            "voice_runtime",
+            action_kind=RepairActionKind.RESTART_RUNTIME_CHILD,
+            limit=max(self._restart_circuit_breaker_max_attempts * 50, 500),
+        )
+        cutoff = now_epoch - self._restart_circuit_breaker_window_seconds
+        recent = tuple(
+            attempt for attempt in attempts if attempt.started_at_epoch >= cutoff
+        )
+        if len(recent) < self._restart_circuit_breaker_max_attempts:
+            return None
+        return RestartBudgetDecision(
+            allowed=False,
+            exhausted=True,
+            attempt_number=None,
+            budget_index=None,
+            wait_seconds=0.0,
+            recent_attempts=len(recent),
+        )
+
     def start_attempt(
         self,
         plan: SupervisorRepairPlan,
         *,
+        current_revision: str,
         now_epoch: float,
     ) -> RepairAttempt:
         if plan.action is None:
             raise RuntimeError("cannot start an exhausted repair plan")
         if plan.budget.attempt_number is None:
             raise RuntimeError("repair plan has no attempt number")
+
+        self.registry.assert_executable(
+            plan.trigger,
+            plan.action,
+            execution_context=RepairExecutionContext(
+                expected_revision=plan.fingerprint.commit_sha,
+                current_revision=current_revision,
+                restart_budget_available=(
+                    plan.budget.allowed and not plan.budget.exhausted
+                ),
+            ),
+        )
+
         attempt = RepairAttempt.start(
             incident_id=plan.incident.incident_id,
             trigger=plan.trigger,
@@ -434,8 +485,8 @@ class SupervisorRepairController:
         attempt: RepairAttempt,
         *,
         execution_result: str,
-        verifier_result: str,
-        verdict: RepairVerdict,
+        verification_status: RepairVerificationStatus,
+        verification_summary: str,
         post_repair_evidence: Iterable[str] = (),
         now_epoch: float,
     ) -> RepairAttempt:
@@ -446,11 +497,20 @@ class SupervisorRepairController:
             plan.policy,
             budget_index + 1,
         )
+        evidence = tuple(post_repair_evidence)
+        verification = RepairVerificationResult.create(
+            verifier_id="external_runtime_supervisor",
+            verifier_version=1,
+            contract_id=plan.policy.verification_contract,
+            status=verification_status,
+            summary=verification_summary,
+            evidence_references=evidence,
+            observed_at_epoch=now_epoch,
+        )
         completed = attempt.complete(
             execution_result=execution_result,
-            verifier_result=verifier_result,
-            verdict=verdict,
-            post_repair_evidence=tuple(post_repair_evidence),
+            verification=verification,
+            post_repair_evidence=evidence,
             next_retry_eligible_epoch=next_retry_eligible_epoch,
             now_epoch=now_epoch,
         )

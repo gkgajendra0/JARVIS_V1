@@ -12,67 +12,106 @@ The repository is reconciled around one accepted production baseline.
 - JARVIS Hands / browser / file / device foundations: PARTIAL for later Steps 9/10/12.
 - Self-Awareness: accepted foundation.
 - Persistent Concurrent Work Orchestration: accepted foundation.
-- Deterministic R1/R2 Self-Repair: accepted foundation.
-- Self-Repair issue #65: CLOSED / COMPLETED.
-- Open pull requests at reconciliation start: none.
+- Deterministic repair framework: accepted foundation.
+- Automatic production Self-Repair currently accepted: bounded R2 runtime crash/hang recovery.
+- R1 exists in the typed repair vocabulary but has no owner-accepted automatic production policy yet.
+- Self-Repair issue #65: CLOSED / COMPLETED for the original R2 acceptance scope.
 
-The authoritative completed/deferred/superseded/rejected ledger is
-`PROJECT_STATE.md`.
+The authoritative completed/deferred/superseded/rejected ledger is `PROJECT_STATE.md`.
+
+## North-star program architecture
+
+The owner-approved long-term engineering direction is defined by:
+
+`GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`
+
+The target is not merely self-repair. JARVIS should ultimately accept owner intent and autonomously perform the governed engineering needed to investigate failures, repair itself and acquire missing capabilities, while owner authority remains explicit at architecture, secrets/physical-input, acceptance and promotion gates.
+
+The architecture uses one shared governed platform with three trigger loops:
+
+1. deterministic production repair;
+2. unknown-problem investigation and repair engineering;
+3. owner-requested or later autonomously detected capability evolution.
+
+These loops must reuse canonical WorkItems, Authority, research, development, verification, knowledge, acceptance and promotion boundaries rather than create parallel autonomous systems.
 
 ## Active cross-cutting program
 
-The active development program is:
+The active development slice is now:
 
-**Self-Repair / Self-Evolution Phase 2 — RepairKnowledge Foundation**
+**Phase 2 — EngineeringKnowledge Foundation**
 
-The full staged program is defined in
-`SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
+Phase 1H is **DONE / OWNER-MACHINE ACCEPTED 2026-09-24**. Its final contract and evidence are recorded in `SELF_REPAIR_PHASE1H_HARDENING.md`.
 
-Phase 2 is intentionally limited to:
+The accepted hardening covers sustained restart budgets, shared target/action circuit breaking, typed verification/preconditions, immutable repair provenance, versioned engineering persistence, Windows Job Object runtime ownership, local-only production supervision and the bounded Windows outer guardian.
 
-1. canonical RepairKnowledge domain contracts;
-2. durable persistence and provenance;
-3. lifecycle states and transitions;
-4. links to incidents, RepairAttempts and repository evidence;
-5. deterministic retrieval by component/signature;
-6. candidate knowledge creation from verified incidents;
-7. proof that RepairKnowledge cannot execute, authorize or mutate RepairPolicy;
-8. repository tests and owner-machine acceptance.
+The final owner-machine breaker proof established three verified recent repairs and then blocked the fourth restart with zero new RepairAttempts and zero remaining guardian/supervisor/runtime processes. Automatic logon startup was also observed; temporary Pocket 3 device-enumeration timing remains a non-blocking resilience follow-up.
 
-Do not start DiagnosticModelRouter, AI source repair or self-evolution in the same
-implementation slice.
+Do not reopen the accepted Phase-1/R2 or Phase-1H architecture without new concrete evidence.
+
+## Phase 2 definition
+
+Phase 2 implementation is **UNBLOCKED** by completed Phase 1H owner-machine acceptance.
+
+The previous RepairKnowledge research/design remains useful evidence, but Phase 2 should now be implemented as:
+
+**Phase 2 — EngineeringKnowledge Foundation**
+
+`REPAIR` is the first vertical, preserving all RepairKnowledge requirements for provenance, lifecycle, supersession and retrieval, but the underlying storage/schema should be able to represent later `DIAGNOSTIC`, `CAPABILITY`, `INTEGRATION`, `ARCHITECTURE`, `EVALUATION` and `OPERATIONS` engineering knowledge without creating parallel silos.
+
+This is a forward architecture correction before implementation, not a claim that generalized EngineeringKnowledge already exists in production.
+
+## Next cross-cutting sequence
+
+Continue with the phased sequence in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`:
+
+```text
+Phase 2  EngineeringKnowledge
+Phase 3  EngineeringChange lifecycle / mission orchestration
+Phase 4  Research + Diagnostic Model Router
+Phase 5  Secure autonomous engineering substrate
+Phase 6  Unknown-incident investigation + source repair
+Phase 7  Governed promotion / production verification / rollback
+Phase 8  Capability package + registry lifecycle
+Phase 9  Owner-requested capability acquisition
+Phase 10 Closed-loop engineering learning
+Phase 11 Autonomous capability-gap / weakness detection
+Phase 12 Shadow improvement + baseline benchmarking
+Phase 13 Engineering curriculum + specialist model evaluation
+Phase 14 Governed self-evolution
+```
+
+Owner-requested capability acquisition intentionally precedes autonomous gap detection: an explicit owner request to acquire a capability must not wait for repeated failures or repeated requests.
 
 ## Next numbered product slice
 
-Step 8 — Notes, Tasks, Reminders and Scheduling — remains the next numbered product
-slice when numbered roadmap work resumes.
+Step 8 — Notes, Tasks, Reminders and Scheduling — remains the next numbered product slice when numbered roadmap work resumes.
 
-The active Self-Repair/Evolution program is cross-cutting and does not renumber the
-roadmap.
+The active Self-Repair/Evolution/Autonomous-Engineering program is cross-cutting and does not renumber the product roadmap.
 
 ## Open deferred / parallel items
 
-Current open/deferred items are tracked only in `PROJECT_STATE.md`. The important
-open issues are #19, #44, #45, #46, #63 and #69.
+Current open/deferred items are tracked only in `PROJECT_STATE.md`. The important open issues are #19, #44, #45, #46, #63 and #69.
 
-They remain separate unless evidence shows that one directly blocks the active
-RepairKnowledge slice.
+They remain separate unless evidence shows that one directly blocks the active Phase 2 work.
 
 ## Documentation ownership
 
 - `PRODUCT.md` — durable product intent and capability catalogue.
 - `ROADMAP.md` — numbered sequence and high-level status.
-- `CURRENT_ARCHITECTURE.md` — architecture that exists on protected `main`.
-- `CURRENT_PLAN.md` — active work only.
+- `CURRENT_ARCHITECTURE.md` — architecture accepted on protected `main`; future design must not be written here as current truth.
+- `CURRENT_PLAN.md` — active work only and authoritative current phase.
 - `PROJECT_STATE.md` — accepted/deferred/superseded/rejected repository ledger.
-- `QUALITY_GATES.md` — universal validation and acceptance rules.
-- `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — active repair/evolution program.
+- `QUALITY_GATES.md` — universal validation, acceptance and promotion rules.
+- `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` — north-star architecture for autonomous governed engineering.
+- `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — specialized repair/evolution program aligned under the north-star plan.
+- `SELF_REPAIR_PHASE1H_HARDENING.md` — current hardening gate.
+- `REPAIR_KNOWLEDGE_RESEARCH_AND_DESIGN.md` — preserved Phase-2 repair-specific research/design input; not the complete future Phase-2 scope.
 
-Historical experiments, old acceptance transcripts and superseded ADR/research
-documents are preserved by Git history rather than treated as current truth.
+Historical experiments, old acceptance transcripts and superseded research remain available through Git history rather than becoming competing planning truth.
 
 ## Immediate next action
 
-After this repository reconciliation is merged:
+**Begin Phase 2 — EngineeringKnowledge Foundation.**
 
-**begin Phase 2 — RepairKnowledge Foundation.**
+Preserve repair as the first implemented vertical, generalize the underlying provenance/lifecycle/retrieval substrate for later engineering knowledge kinds, and keep EngineeringKnowledge advisory rather than executable Authority.

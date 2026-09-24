@@ -1,7 +1,8 @@
 """Owner-invoked fault injection for Self-Repair acceptance testing.
 
 This module is deliberately outside the automatic repair authority path. It can only
-act on one production runtime that is directly supervised by jarvis-dev.
+act on one production runtime directly owned by a recognized JARVIS supervisor
+(jarvis-dev or the local-only jarvis-supervisor).
 """
 
 from __future__ import annotations
@@ -43,7 +44,15 @@ def _looks_like_runtime(cmdline: Sequence[str]) -> bool:
 
 def _looks_like_supervisor(cmdline: Sequence[str]) -> bool:
     joined = " ".join(cmdline).lower()
-    return "jarvis-dev" in joined or "jarvis.dev_supervisor" in joined
+    return any(
+        marker in joined
+        for marker in (
+            "jarvis-dev",
+            "jarvis.dev_supervisor",
+            "jarvis-supervisor",
+            "jarvis.runtime_supervisor",
+        )
+    )
 
 
 def select_supervised_runtime(
@@ -57,7 +66,8 @@ def select_supervised_runtime(
     )
     if not candidates:
         raise RuntimeError(
-            "no production runtime directly supervised by jarvis-dev was found"
+            "no production runtime directly supervised by a recognized "
+            "JARVIS supervisor was found"
         )
     if len(candidates) != 1:
         pids = ", ".join(str(candidate.pid) for candidate in candidates)
@@ -154,7 +164,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Inject one explicit fault into the production runtime currently "
-            "supervised by jarvis-dev."
+            "owned by a recognized JARVIS supervisor."
         )
     )
     parser.add_argument(
@@ -182,14 +192,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             "Injected abrupt crash into supervised JARVIS runtime tree "
             f"rooted at pid={target.pid} ({affected} process(es)). "
-            "jarvis-dev should apply the registered bounded crash-recovery policy."
+            "the JARVIS supervisor should apply the registered bounded "
+            "crash-recovery policy."
         )
     elif kind is FaultKind.HANG:
         print(
             "Suspended supervised JARVIS runtime tree "
             f"rooted at pid={target.pid} ({affected} process(es)). "
-            "jarvis-dev should require watchdog threshold + confirmation before "
-            "bounded liveness recovery."
+            "the JARVIS supervisor should require watchdog threshold + "
+            "confirmation before bounded liveness recovery."
         )
     else:
         print(

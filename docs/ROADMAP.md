@@ -1,6 +1,6 @@
 # JARVIS V1 Roadmap
 
-This roadmap owns **sequence only**. It does not select technology, define current architecture, or authorize implementation. `CURRENT_PLAN.md` owns the active slice.
+This roadmap owns **numbered product sequence only**. It does not select technology, define current architecture, or authorize implementation. `CURRENT_PLAN.md` owns the active slice. `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` owns the long-term cross-cutting architecture for autonomous governed engineering.
 
 | Step | Product slice | Major capabilities | Status |
 | ---: | --- | --- | --- |
@@ -13,7 +13,7 @@ This roadmap owns **sequence only**. It does not select technology, define curre
 | 5 | Local/Offline Survival and Provider Resilience | CAP-048, CAP-049 | DONE (BOUNDED); full offline conversation deferred |
 | 6 | Knowledge, Current Research, Truthfulness | CAP-014–017 | DONE (BOUNDED) |
 | 7 | Governed Capability Runtime + Safe Local Reads | CAP-018, CAP-021, CAP-022, CAP-032 | DONE — OWNER ACCEPTED 2026-09-09 |
-| 8 | Notes, Tasks, Reminders, Scheduling | CAP-027, CAP-028 | NEXT NUMBERED PRODUCT SLICE — currently paused behind owner-approved Self-Repair/Evolution continuation |
+| 8 | Notes, Tasks, Reminders, Scheduling | CAP-027, CAP-028 | NEXT NUMBERED PRODUCT SLICE — currently paused behind owner-approved cross-cutting program |
 | 9 | Computer, Application, Device Control | CAP-023, CAP-024 | PLANNED — PARTIAL HANDS FOUNDATION EXISTS |
 | 10 | Browser and Web Interaction | CAP-025 | PLANNED — PARTIAL PLAYWRIGHT FOUNDATION EXISTS |
 | 11 | Calendar, Email, External Communication | CAP-029, CAP-030 | PLANNED |
@@ -24,7 +24,7 @@ This roadmap owns **sequence only**. It does not select technology, define curre
 | 16 | Extensibility and Plugin/Skill Lifecycle | CAP-033 | PLANNED |
 | 17 | Daily Assistant and Multi-Capability Workflows | CAP-042 | PLANNED |
 | 18 | Learning, Gap Detection, Governed Skill Creation | CAP-043–045 | PLANNED |
-| 19 | Governed Self-Diagnostics and Repair | CAP-046 | PARTIAL — deterministic R1/R2 foundation accepted early; RepairKnowledge next |
+| 19 | Governed Self-Diagnostics and Repair | CAP-046 | PARTIAL — deterministic R1/R2 foundation + Phase 1H hardening accepted; Phase 2 EngineeringKnowledge next |
 | 20 | Governed Self-Improvement and Advanced Autonomy | CAP-047 | PLANNED |
 
 ## Accepted interludes that do not renumber the roadmap
@@ -45,42 +45,57 @@ Accepted status and merge history are summarized in `PROJECT_STATE.md`.
 
 ### Persistent Concurrent Work Orchestration foundation
 
-Owner-approved sequence change on 2026-09-18: durable concurrent work orchestration is pulled forward as the **architecture foundation before Step 8 implementation**. This does not renumber the roadmap.
+Owner-approved sequence change on 2026-09-18: durable concurrent work orchestration was pulled forward as an architecture foundation before Step 8 implementation. This does not renumber the roadmap.
 
 PR #55 contains the owner-accepted implementation: provider-neutral durable WorkItems, explicit lifecycle/state, DBOS restart recovery, single-brain live-voice priority, priorities/dependencies/resource leases, pause/resume/cancel/owner-input semantics, persisted deferred delivery, structured progress/ETA facts, bounded research work, and isolated sandboxed development work. Owner-machine acceptance passed on 2026-09-20 and the owner approved protected-main merge.
 
-Step 8 tasks/reminders/scheduling and later Step 15 proactive/event-driven work must reuse this foundation rather than create separate task/background systems.
+Step 8 tasks/reminders/scheduling, later Step 15 proactive/event-driven work and the autonomous-engineering program must reuse this foundation rather than create separate task/background systems.
 
-### Self-Repair and Self-Evolution cross-cutting program
+### Governed autonomous engineering / Self-Repair / Self-Evolution cross-cutting program
 
-The 2026-09-20 Self-Repair Foundation interlude completed on 2026-09-23 with owner-machine acceptance of the deterministic R1/R2 production repair loop. Issue #65 is closed.
+The 2026-09-20 Self-Repair Foundation interlude completed on 2026-09-23 with owner-machine acceptance of the deterministic repair framework and bounded R2 runtime crash/hang recovery. Issue #65 is closed.
 
-Accepted early Step-19 foundation now includes deterministic repair contracts, durable RepairAttempts, external crash/hang supervision, restart budgets/cooldowns, startup readiness, authenticated liveness stabilization, provider-degradation separation and Windows runtime-process-tree handling.
+Accepted early Step-19 foundation includes deterministic repair contracts, durable RepairAttempts, external crash/hang supervision, restart budgets/cooldowns, startup readiness, authenticated liveness stabilization, provider-degradation separation and Windows runtime-process-tree handling.
 
-The owner-approved cross-cutting continuation now proceeds through the staged program defined in `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`:
+A 2026-09-24 architecture review confirmed that Phase 1/R2 remains the correct foundation for the longer JARVIS goal. The program is now explicitly governed by `docs/GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`: JARVIS should eventually accept owner intent and autonomously perform the required governed research, engineering, testing, diagnosis and candidate preparation while the owner retains architecture, secret/physical-input, acceptance and protected-main promotion authority.
+
+The shared program has three trigger loops:
+
+1. deterministic production repair;
+2. unknown-problem investigation and repair engineering;
+3. owner-requested or later autonomously detected capability evolution.
+
+The current exact sequence is:
 
 ```text
-deterministic R1/R2 repair — DONE
--> RepairKnowledge — NEXT
--> DiagnosticModelRouter
--> AI-assisted diagnostics
--> sandboxed source repair
--> governed deployment/rollback
--> closed-loop repair learning
--> Repair Curriculum
--> specialist model evaluation when enough data exists
--> capability-gap / weakness detection
--> shadow self-improvement
--> governed self-evolution
+Phase 1   deterministic repair + accepted R2 recovery — DONE
+Phase 1H  foundation hardening — DONE / OWNER-MACHINE ACCEPTED 2026-09-24
+Phase 2   EngineeringKnowledge — ACTIVE / NEXT
+Phase 3   EngineeringChange lifecycle / mission orchestration
+Phase 4   Research + Diagnostic Model Router
+Phase 5   Secure autonomous engineering substrate
+Phase 6   Unknown-incident investigation + source repair
+Phase 7   Governed promotion / production verification / rollback
+Phase 8   Capability package + registry lifecycle
+Phase 9   Owner-requested capability acquisition
+Phase 10  Closed-loop engineering learning
+Phase 11  Autonomous capability-gap / weakness detection
+Phase 12  Shadow improvement + baseline benchmarking
+Phase 13  Engineering curriculum + specialist model evaluation
+Phase 14  Governed self-evolution
 ```
 
-This continuation does not renumber the roadmap. Step 8 remains the next numbered product slice, while the currently active owner-approved cross-cutting work continues to build bounded foundations for Steps 18–20.
+Phase 2 generalizes the earlier RepairKnowledge design into shared `EngineeringKnowledge`, with `REPAIR` as the first implemented vertical. This avoids later parallel silos for capability/integration knowledge.
+
+Owner-requested capability acquisition intentionally comes before autonomous gap detection. If the owner explicitly says "get this capability", JARVIS should not need repeated failures or repeated requests before it can run the governed acquisition lifecycle.
+
+This continuation does not renumber Steps 8–20. It builds cross-cutting foundations that later Steps 16, 18, 19 and 20 consume.
 
 The program never inherits automatic permission to weaken Authority, CI/rulesets, sandbox/evaluator policy, protected-main governance, credentials or permissions.
 
 ### Post-Step-7 production integration interlude
 
-After Step 7, owner-approved work intentionally pulled forward **bounded foundations** needed for real daily usability and stability without declaring later roadmap slices complete:
+After Step 7, owner-approved work intentionally pulled forward bounded foundations needed for real daily usability and stability without declaring later roadmap slices complete:
 
 - **JARVIS Hands (PR #30):** native Windows semantics, Microsoft `winapp` UI Automation, Playwright browser execution, bounded file/document/device/Git operations, multilingual grounding, fast-path execution and window-scoped visual Computer Use under canonical authority.
 - **Pocket 3 native OWNER tracking (PRs #33–#35, #38):** native DJI targeting/evidence, reacquisition, recenter, adaptive perception and resilient session recovery.
@@ -91,17 +106,33 @@ These foundations are current production architecture. Steps 9, 10 and 12 remain
 
 Accepted production status and superseded/rejected history are summarized in `PROJECT_STATE.md`.
 
+## Relationship between numbered product work and autonomous engineering
+
+The numbered roadmap defines what JARVIS can do for the owner. The autonomous-engineering program defines how JARVIS can eventually repair, extend and improve those abilities itself under governance.
+
+Key relationships:
+
+- Step 9 defines stable device-control semantics that future device adapters reuse.
+- Step 12 matures coding/project-engineering capability rather than granting arbitrary shell authority.
+- Step 16 defines extensible skill/plugin lifecycle and registration.
+- Step 18 uses EngineeringKnowledge, capability-gap detection and governed skill creation.
+- Step 19 uses deterministic repair plus unknown-problem investigation/source repair.
+- Step 20 integrates learning, benchmarking and governed self-evolution.
+
+The existence of a future autonomous-engineering phase does not mark the corresponding numbered product step complete.
+
 ## Bounded/deferred rule
 
 A step may close bounded when an independently useful subset is accepted and continuing would require weakening an important safety/reliability boundary or building speculative scope.
 
-Current major deferrals:
+Current major deferrals include:
 
 - Step 3 turn-specific spoken actor binding and general biometric/voice-derived T2 promotion;
 - strict independent Step-4 semantic-memory verifier;
 - Phase-4.5E automatic memory injection;
 - full Step-5 offline conversation/provider failover;
-- later proactive monitoring/plugin capabilities; AI-assisted/full Step-19 repair and Step-20 self-improvement remain incomplete. The deterministic R1/R2 Self-Repair foundation is an accepted partial Step-19 foundation, not completion of Step 19.
+- later proactive monitoring/plugin capabilities;
+- AI-assisted/full Step-19 repair and Step-20 self-improvement beyond the accepted deterministic repair/R2 foundation.
 
 A deferred capability is not a hidden failure and must not be represented as working.
 
@@ -126,18 +157,20 @@ REQUIREMENTS
 -> RESEARCH
 -> TECHNOLOGY DECISION
 -> ARCHITECTURE
--> HUMAN APPROVAL
--> IMPLEMENTATION
+-> OWNER APPROVAL
+-> ISOLATED IMPLEMENTATION
 -> AUTOMATED VALIDATION
--> REAL HUMAN USE
+-> REAL HUMAN / HARDWARE ACCEPTANCE WHERE REQUIRED
 -> CORRECTION IF NEEDED
--> HUMAN ACCEPTANCE
+-> OWNER ACCEPTANCE
 -> DOCUMENTATION RECONCILIATION
+-> PR / EXACT-HEAD REQUIRED CHECKS
+-> EXPLICIT MERGE APPROVAL
 -> PROTECTED-MAIN MERGE
 -> DONE
 ```
 
-Research for future slices is intentionally deferred until that slice becomes active unless a demonstrated blocker requires an owner-approved interlude.
+The same lifecycle applies to JARVIS-generated engineering candidates; autonomy does not remove governance gates.
 
 ## Strategic milestones
 
@@ -148,17 +181,19 @@ Research for future slices is intentionally deferred until that slice becomes ac
 5. Reliable Daily Actions — Steps 8–12.
 6. Visible and Aware Assistant — Steps 13–15.
 7. Extensible Daily Assistant — Steps 16–17.
-8. Governed Learning and Improvement — Steps 18–20.
-9. Personal Intelligence Runtime — integrated end state.
+8. Governed Learning and Improvement — Steps 18–20 plus the cross-cutting autonomous-engineering program.
+9. Personal Intelligence Runtime — integrated end state where owner intent can drive governed autonomous engineering.
 
 ## Current next step
 
-Persistent Concurrent Work Orchestration and the deterministic R1/R2 Self-Repair foundation are owner accepted.
+Persistent Concurrent Work Orchestration and the deterministic repair/R2 foundation are owner accepted.
 
-**Current active cross-cutting work, after documentation reconciliation, is Phase 2 — RepairKnowledge Foundation**, defined by `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
+**Current active cross-cutting work is Phase 2 — EngineeringKnowledge Foundation.**
 
-Step 8 remains the next numbered product slice. The Self-Repair/Evolution continuation is an owner-approved cross-cutting program and does not renumber Steps 8–20.
+Phase 2 implementation is unblocked because Phase 1H automated and owner-machine acceptance passed on 2026-09-24.
+
+Step 8 remains the next numbered product slice when numbered roadmap work resumes.
 
 ## Roadmap change rule
 
-A future idea may be added when it represents real product intent, but it does not automatically interrupt the active step. Sequence changes require deliberate planning and owner approval.
+A future idea may be added when it represents real product intent, but it does not automatically interrupt the active step. Sequence changes require deliberate planning and owner approval. `CURRENT_PLAN.md` wins if any roadmap status summary becomes stale.

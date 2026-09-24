@@ -26,11 +26,15 @@ from jarvis.dev_control import (
 )
 from jarvis.incidents import IncidentService, SqliteIncidentStore
 from jarvis.self_awareness import default_incident_store_path
-from jarvis.self_repair import RepairVerdict
+from jarvis.self_repair import RepairVerificationStatus
 from jarvis.self_repair.supervisor import (
     SupervisorRepairController,
     build_runtime_child_exit_policy,
     build_runtime_liveness_policy,
+)
+from jarvis.self_repair.windows_job import (
+    WindowsJobObjectError,
+    WindowsRuntimeJob,
 )
 
 _BRANCH_ENV = "JARVIS_DEV_BRANCH"
@@ -53,6 +57,7 @@ class DevSupervisorConfig:
     liveness_interval_seconds: float = 2.0
     liveness_failure_threshold: int = 3
     git_fetch_timeout_seconds: float = 10.0
+    git_updates_enabled: bool = True
 
     def __post_init__(self) -> None:
         if not self.remote.strip():
@@ -442,6 +447,11 @@ def _config_from_environment() -> DevSupervisorConfig:
     return DevSupervisorConfig(branch=branch)
 
 
+def _runtime_supervisor_config_from_environment() -> DevSupervisorConfig:
+    branch = os.environ.get(_BRANCH_ENV, "main").strip() or "main"
+    return DevSupervisorConfig(branch=branch, git_updates_enabled=False)
+
+
 def _find_repo_root() -> Path:
     result = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
@@ -465,8 +475,76 @@ def _start_jarvis(
         [sys.executable, "-m", "jarvis.voice.production_runtime"],
         **kwargs,
     )
+    try:
+        _attach_windows_runtime_job(process)
+    except WindowsJobObjectError:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=3.0)
+        raise
     print(f"JARVIS started (pid={process.pid}).")
     return process
+
+
+def _attach_windows_runtime_job(process: subprocess.Popen[bytes]) -> None:
+    """Assign the runtime and any already-created descendants to one Windows job."""
+
+    if os.name != "nt":
+        return
+
+    job = WindowsRuntimeJob()
+    try:
+        job.assign_pid(process.pid)
+        try:
+            descendants = psutil.Process(process.pid).children(recursive=True)
+        except psutil.NoSuchProcess:
+            descendants = ()
+        for descendant in descendants:
+            try:
+                job.assign_pid(descendant.pid)
+            except psutil.NoSuchProcess:
+                continue
+        process._jarvis_runtime_job = job
+    except Exception:
+        job.close()
+        raise
+
+
+def _runtime_job(process: subprocess.Popen[bytes]) -> WindowsRuntimeJob | None:
+    candidate = getattr(process, "_jarvis_runtime_job", None)
+    return candidate if isinstance(candidate, WindowsRuntimeJob) else None
+
+
+def _release_runtime_job(process: subprocess.Popen[bytes]) -> None:
+    job = _runtime_job(process)
+    if job is None:
+        return
+    try:
+        job.close()
+    finally:
+        try:
+            delattr(process, "_jarvis_runtime_job")
+        except AttributeError:
+            pass
+
+
+def _force_cleanup_runtime(
+    process: subprocess.Popen[bytes],
+    runtime_tree: tuple[psutil.Process, ...],
+) -> tuple[bool, int]:
+    """Prefer OS-owned Windows job termination; fall back to captured psutil tree."""
+
+    job = _runtime_job(process)
+    if job is not None:
+        try:
+            job.terminate(exit_code=1)
+            return True, 0
+        except WindowsJobObjectError as exc:
+            print(
+                "Windows Job Object termination failed; falling back to captured "
+                f"runtime tree cleanup: {exc}"
+            )
+    return False, _kill_runtime_process_tree(runtime_tree)
 
 
 def _snapshot_runtime_process_tree(root_pid: int) -> tuple[psutil.Process, ...]:
@@ -501,17 +579,25 @@ def _stop_jarvis(
     control: VoiceControlServer,
 ) -> None:
     runtime_tree = _snapshot_runtime_process_tree(process.pid)
-    if process.poll() is not None:
-        _kill_runtime_process_tree(runtime_tree)
+
+    def finish_cleanup() -> None:
+        used_job, killed = _force_cleanup_runtime(process, runtime_tree)
+        if used_job:
+            print("Windows Job Object runtime tree cleanup completed.")
+        elif killed:
+            print(f"Force-terminated {killed} captured runtime process(es).")
+        _release_runtime_job(process)
         control.child_stopped()
+
+    if process.poll() is not None:
+        finish_cleanup()
         return
 
     print("Stopping JARVIS gracefully...")
     if control.request_shutdown():
         try:
             process.wait(timeout=timeout_seconds)
-            _kill_runtime_process_tree(runtime_tree)
-            control.child_stopped()
+            finish_cleanup()
             return
         except subprocess.TimeoutExpired:
             pass
@@ -522,22 +608,26 @@ def _stop_jarvis(
         else:
             process.send_signal(signal.SIGINT)
         process.wait(timeout=timeout_seconds)
-        _kill_runtime_process_tree(runtime_tree)
-        control.child_stopped()
+        finish_cleanup()
         return
     except (OSError, subprocess.TimeoutExpired):
         pass
 
-    killed = _kill_runtime_process_tree(runtime_tree)
-    print(
-        f"Graceful shutdown timed out; force-terminated {killed} runtime process(es)."
-    )
+    used_job, killed = _force_cleanup_runtime(process, runtime_tree)
+    if used_job:
+        print("Graceful shutdown timed out; terminated Windows runtime Job Object.")
+    else:
+        print(
+            "Graceful shutdown timed out; force-terminated "
+            f"{killed} runtime process(es)."
+        )
     try:
         process.wait(timeout=3.0)
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=3.0)
     finally:
+        _release_runtime_job(process)
         control.child_stopped()
 
 
@@ -619,7 +709,16 @@ def _recover_unexpected_exit(
     """Perform the single supervisor-owned bounded same-version restart loop."""
 
     exit_code = process.returncode
-    control.child_stopped()
+
+    # The supervised launcher may exit before one of its descendants (notably the
+    # Windows venv launcher -> base-interpreter shape). Always close/terminate the
+    # old runtime Job Object before starting any replacement so a dead root cannot
+    # leave an orphan interpreter beside the recovered runtime.
+    _stop_jarvis(
+        process,
+        timeout_seconds=config.shutdown_timeout_seconds,
+        control=control,
+    )
     commit_sha = repo.local_sha()
 
     while True:
@@ -637,10 +736,10 @@ def _recover_unexpected_exit(
             return None
 
         wait_seconds = plan.budget.wait_seconds
-        attempt_number = plan.budget.attempt_number
+        budget_index = plan.budget.budget_index
         print(
             f"JARVIS exited unexpectedly with code {exit_code}; "
-            f"bounded same-version restart attempt {attempt_number}/"
+            f"bounded same-version restart attempt {budget_index}/"
             f"{plan.policy.max_attempts} is eligible after {wait_seconds:g}s."
         )
         if wait_seconds > 0:
@@ -653,16 +752,20 @@ def _recover_unexpected_exit(
             )
             return None
 
-        attempt = repair.start_attempt(plan, now_epoch=float(now_fn()))
+        attempt = repair.start_attempt(
+            plan,
+            current_revision=repo.local_sha(),
+            now_epoch=float(now_fn()),
+        )
         try:
             restarted = _start_jarvis(root, control)
-        except OSError:
+        except (OSError, WindowsJobObjectError):
             repair.complete_attempt(
                 plan,
                 attempt,
                 execution_result="same-version child restart failed to start",
-                verifier_result="process_start_failed",
-                verdict=RepairVerdict.NOT_RECOVERED,
+                verification_status=RepairVerificationStatus.FAIL,
+                verification_summary="process_start_failed",
                 post_repair_evidence=("supervisor:process_start_failed",),
                 now_epoch=float(now_fn()),
             )
@@ -680,8 +783,8 @@ def _recover_unexpected_exit(
                 plan,
                 attempt,
                 execution_result="same-version child restart attempted",
-                verifier_result="startup_readiness_failed",
-                verdict=RepairVerdict.NOT_RECOVERED,
+                verification_status=RepairVerificationStatus.FAIL,
+                verification_summary="startup_readiness_failed",
                 post_repair_evidence=("supervisor:startup_readiness_failed",),
                 now_epoch=float(now_fn()),
             )
@@ -703,8 +806,8 @@ def _recover_unexpected_exit(
                 plan,
                 attempt,
                 execution_result="same-version child restart reached readiness",
-                verifier_result=verifier_result,
-                verdict=RepairVerdict.NOT_RECOVERED,
+                verification_status=RepairVerificationStatus.FAIL,
+                verification_summary=verifier_result,
                 post_repair_evidence=(
                     "supervisor:startup_readiness_confirmed",
                     f"supervisor:{verifier_result}",
@@ -717,8 +820,8 @@ def _recover_unexpected_exit(
             plan,
             attempt,
             execution_result="same-version child restart stabilized",
-            verifier_result=verifier_result,
-            verdict=RepairVerdict.RECOVERED,
+            verification_status=RepairVerificationStatus.PASS,
+            verification_summary=verifier_result,
             post_repair_evidence=(
                 "supervisor:startup_readiness_confirmed",
                 "supervisor:liveness_stabilized",
@@ -792,10 +895,10 @@ def _recover_liveness_failure(
             return None
 
         wait_seconds = plan.budget.wait_seconds
-        attempt_number = plan.budget.attempt_number
+        budget_index = plan.budget.budget_index
         print(
             "JARVIS runtime is unresponsive; bounded same-version restart "
-            f"attempt {attempt_number}/{plan.policy.max_attempts} is eligible "
+            f"attempt {budget_index}/{plan.policy.max_attempts} is eligible "
             f"after {wait_seconds:g}s."
         )
         if wait_seconds > 0:
@@ -808,7 +911,11 @@ def _recover_liveness_failure(
             )
             return None
 
-        attempt = repair.start_attempt(plan, now_epoch=float(now_fn()))
+        attempt = repair.start_attempt(
+            plan,
+            current_revision=repo.local_sha(),
+            now_epoch=float(now_fn()),
+        )
         _stop_jarvis(
             process,
             timeout_seconds=config.shutdown_timeout_seconds,
@@ -816,13 +923,13 @@ def _recover_liveness_failure(
         )
         try:
             restarted = _start_jarvis(root, control)
-        except OSError:
+        except (OSError, WindowsJobObjectError):
             repair.complete_attempt(
                 plan,
                 attempt,
                 execution_result="unresponsive child restart failed to start",
-                verifier_result="process_start_failed",
-                verdict=RepairVerdict.NOT_RECOVERED,
+                verification_status=RepairVerificationStatus.FAIL,
+                verification_summary="process_start_failed",
                 post_repair_evidence=("supervisor:process_start_failed",),
                 now_epoch=float(now_fn()),
             )
@@ -840,8 +947,8 @@ def _recover_liveness_failure(
                 plan,
                 attempt,
                 execution_result="unresponsive child restart attempted",
-                verifier_result="startup_readiness_failed",
-                verdict=RepairVerdict.NOT_RECOVERED,
+                verification_status=RepairVerificationStatus.FAIL,
+                verification_summary="startup_readiness_failed",
                 post_repair_evidence=("supervisor:startup_readiness_failed",),
                 now_epoch=float(now_fn()),
             )
@@ -864,8 +971,8 @@ def _recover_liveness_failure(
                 plan,
                 attempt,
                 execution_result="unresponsive child restart reached readiness",
-                verifier_result=verifier_result,
-                verdict=RepairVerdict.NOT_RECOVERED,
+                verification_status=RepairVerificationStatus.FAIL,
+                verification_summary=verifier_result,
                 post_repair_evidence=(
                     "supervisor:startup_readiness_confirmed",
                     f"supervisor:{verifier_result}",
@@ -879,8 +986,8 @@ def _recover_liveness_failure(
             plan,
             attempt,
             execution_result="unresponsive child restart stabilized",
-            verifier_result=verifier_result,
-            verdict=RepairVerdict.RECOVERED,
+            verification_status=RepairVerificationStatus.PASS,
+            verification_summary=verifier_result,
             post_repair_evidence=(
                 "supervisor:startup_readiness_confirmed",
                 "supervisor:liveness_stabilized",
@@ -971,6 +1078,15 @@ def _apply_approved_update(
     return process, True
 
 
+def _escalation_exit_code(
+    config: DevSupervisorConfig,
+    fallback_code: int = 1,
+) -> int:
+    """Production guardian mode must not restart after intentional fail-closed stop."""
+
+    return fallback_code if config.git_updates_enabled else 0
+
+
 def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
     config = config or _config_from_environment()
     root = _find_repo_root()
@@ -988,15 +1104,23 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
             "commit or stash them first"
         )
 
-    print("JARVIS development supervisor")
-    print(f"Watching {config.remote}/{config.branch} every {config.poll_seconds:g}s.")
-    print("Updates require one explicit spoken owner Yes/No decision.")
-    print("Ambiguous speech, timeout, or unavailable voice approval means No.")
+    if config.git_updates_enabled:
+        print("JARVIS development supervisor")
+        print(
+            f"Watching {config.remote}/{config.branch} every {config.poll_seconds:g}s."
+        )
+        print("Updates require one explicit spoken owner Yes/No decision.")
+        print("Ambiguous speech, timeout, or unavailable voice approval means No.")
+    else:
+        print("JARVIS production runtime supervisor")
+        print("Git/network update polling is disabled; Self-Repair remains local-only.")
 
     control = VoiceControlServer()
     repair, repair_store = _build_supervisor_repair_controller(config)
     process = _start_jarvis(root, control)
-    update_poller = RemoteUpdatePoller(root, config)
+    update_poller = (
+        RemoteUpdatePoller(root, config) if config.git_updates_enabled else None
+    )
     update_poller_started = False
     declined_sha: str | None = None
     liveness_failure_streak = 0
@@ -1006,10 +1130,11 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
             control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
         except RuntimeError as exc:
             print(f"Initial JARVIS startup readiness failed: {exc}")
-            return 1
+            return _escalation_exit_code(config)
 
-        update_poller.start()
-        update_poller_started = True
+        if update_poller is not None:
+            update_poller.start()
+            update_poller_started = True
 
         while True:
             if process.poll() is not None:
@@ -1019,7 +1144,10 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                         "durable Self-Repair is unavailable, so automatic restart "
                         "fails closed."
                     )
-                    return int(process.returncode or 1)
+                    return _escalation_exit_code(
+                        config,
+                        int(process.returncode or 1),
+                    )
                 restarted = _recover_unexpected_exit(
                     repo,
                     root,
@@ -1029,7 +1157,10 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                     repair,
                 )
                 if restarted is None:
-                    return int(process.returncode or 1)
+                    return _escalation_exit_code(
+                        config,
+                        int(process.returncode or 1),
+                    )
                 process = restarted
                 continue
 
@@ -1050,7 +1181,7 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                         "JARVIS runtime failed the liveness watchdog, but durable "
                         "Self-Repair is unavailable; automatic restart fails closed."
                     )
-                    return 1
+                    return _escalation_exit_code(config)
                 restarted = _recover_liveness_failure(
                     repo,
                     root,
@@ -1060,9 +1191,12 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                     repair,
                 )
                 if restarted is None:
-                    return 1
+                    return _escalation_exit_code(config)
                 process = restarted
                 liveness_failure_streak = 0
+                continue
+
+            if update_poller is None:
                 continue
 
             remote_poll = update_poller.latest()
@@ -1144,7 +1278,7 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
         print("\nStopping JARVIS development supervisor...")
         return 0
     finally:
-        if update_poller_started:
+        if update_poller_started and update_poller is not None:
             update_poller.stop()
         _stop_jarvis(
             process,
@@ -1154,6 +1288,14 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
         control.close()
         if repair_store is not None:
             repair_store.close()
+
+
+def runtime_supervisor_main() -> int:
+    try:
+        return run_supervisor(_runtime_supervisor_config_from_environment())
+    except (RuntimeError, subprocess.CalledProcessError) as exc:
+        print(f"jarvis-supervisor error: {exc}", file=sys.stderr)
+        return 2
 
 
 def main() -> int:

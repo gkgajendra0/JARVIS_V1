@@ -7,6 +7,7 @@ import sqlite3
 from pathlib import Path
 from threading import RLock
 
+from jarvis.incidents.migration_runner import EngineeringMigrationRunner
 from jarvis.incidents.models import (
     EvidenceReference,
     IncidentRecord,
@@ -17,8 +18,11 @@ from jarvis.self_repair.domain import (
     RepairAction,
     RepairActionKind,
     RepairAttempt,
+    RepairPolicySnapshot,
     RepairRiskClass,
+    RepairTriggerSnapshot,
     RepairVerdict,
+    RepairVerificationResult,
 )
 
 
@@ -29,86 +33,8 @@ class SqliteIncidentStore:
         self._connection = sqlite3.connect(self.path, check_same_thread=False)
         self._connection.execute("PRAGMA foreign_keys=ON")
         self._lock = RLock()
-        with self._connection:
-            self._connection.execute("PRAGMA journal_mode=WAL")
-            self._connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS engineering_incident (
-                    incident_id TEXT PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    symptom TEXT NOT NULL,
-                    severity TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    created_at_epoch REAL NOT NULL,
-                    updated_at_epoch REAL NOT NULL,
-                    affected_components_json TEXT NOT NULL,
-                    root_cause TEXT,
-                    accepted_fix TEXT,
-                    regression_tests_json TEXT NOT NULL,
-                    commit_sha TEXT,
-                    pr_number INTEGER,
-                    deployment_result TEXT,
-                    rollback_status TEXT,
-                    lessons_json TEXT NOT NULL
-                )
-                """
-            )
-            self._connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS engineering_incident_evidence (
-                    evidence_id TEXT PRIMARY KEY,
-                    incident_id TEXT NOT NULL,
-                    kind TEXT NOT NULL,
-                    reference TEXT NOT NULL,
-                    summary TEXT NOT NULL,
-                    occurred_at_epoch REAL NOT NULL,
-                    component_id TEXT,
-                    FOREIGN KEY(incident_id)
-                    REFERENCES engineering_incident(incident_id)
-                )
-                """
-            )
-            self._connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_incident_status_updated
-                ON engineering_incident(status, updated_at_epoch)
-                """
-            )
-            self._connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS engineering_repair_attempt (
-                    attempt_id TEXT PRIMARY KEY,
-                    incident_id TEXT NOT NULL,
-                    trigger_id TEXT NOT NULL,
-                    policy_id TEXT NOT NULL,
-                    policy_version INTEGER NOT NULL,
-                    action_id TEXT NOT NULL,
-                    action_kind TEXT NOT NULL,
-                    risk_class INTEGER NOT NULL,
-                    component_id TEXT NOT NULL,
-                    action_created_at_epoch REAL NOT NULL,
-                    attempt_number INTEGER NOT NULL,
-                    started_at_epoch REAL NOT NULL,
-                    pre_repair_evidence_json TEXT NOT NULL,
-                    finished_at_epoch REAL,
-                    execution_result TEXT,
-                    post_repair_evidence_json TEXT NOT NULL,
-                    verifier_result TEXT,
-                    next_retry_eligible_epoch REAL,
-                    verdict TEXT,
-                    FOREIGN KEY(incident_id)
-                    REFERENCES engineering_incident(incident_id)
-                )
-                """
-            )
-            self._connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_repair_attempt_incident
-                ON engineering_repair_attempt(
-                    incident_id, attempt_number, started_at_epoch
-                )
-                """
-            )
+        self._connection.execute("PRAGMA journal_mode=WAL")
+        EngineeringMigrationRunner().apply(self._connection)
 
     def upsert(self, incident: IncidentRecord) -> None:
         with self._lock, self._connection:
@@ -258,6 +184,8 @@ class SqliteIncidentStore:
                     existing.attempt_number,
                     existing.started_at_epoch,
                     existing.pre_repair_evidence,
+                    existing.trigger_snapshot,
+                    existing.policy_snapshot,
                 )
                 incoming_identity = (
                     attempt.incident_id,
@@ -268,6 +196,8 @@ class SqliteIncidentStore:
                     attempt.attempt_number,
                     attempt.started_at_epoch,
                     attempt.pre_repair_evidence,
+                    attempt.trigger_snapshot,
+                    attempt.policy_snapshot,
                 )
                 if existing_identity != incoming_identity:
                     raise ValueError(
@@ -280,16 +210,54 @@ class SqliteIncidentStore:
                         )
                     return
 
+            trigger_snapshot_json = (
+                json.dumps(
+                    attempt.trigger_snapshot.to_payload(),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                if attempt.trigger_snapshot is not None
+                else None
+            )
+            policy_snapshot_json = (
+                json.dumps(
+                    attempt.policy_snapshot.to_payload(),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                if attempt.policy_snapshot is not None
+                else None
+            )
+            policy_digest = (
+                attempt.policy_snapshot.digest
+                if attempt.policy_snapshot is not None
+                else None
+            )
+            verification_json = (
+                json.dumps(
+                    attempt.verification.to_payload(),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                if attempt.verification is not None
+                else None
+            )
+
             self._connection.execute(
                 """
                 INSERT INTO engineering_repair_attempt (
                     attempt_id, incident_id, trigger_id, policy_id, policy_version,
                     action_id, action_kind, risk_class, component_id,
                     action_created_at_epoch, attempt_number, started_at_epoch,
-                    pre_repair_evidence_json, finished_at_epoch, execution_result,
-                    post_repair_evidence_json, verifier_result,
+                    pre_repair_evidence_json, trigger_snapshot_json,
+                    policy_snapshot_json, policy_digest,
+                    finished_at_epoch, execution_result,
+                    post_repair_evidence_json, verifier_result, verification_json,
                     next_retry_eligible_epoch, verdict
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?
+                )
                 ON CONFLICT(attempt_id) DO UPDATE SET
                     incident_id=excluded.incident_id,
                     trigger_id=excluded.trigger_id,
@@ -303,10 +271,14 @@ class SqliteIncidentStore:
                     attempt_number=excluded.attempt_number,
                     started_at_epoch=excluded.started_at_epoch,
                     pre_repair_evidence_json=excluded.pre_repair_evidence_json,
+                    trigger_snapshot_json=excluded.trigger_snapshot_json,
+                    policy_snapshot_json=excluded.policy_snapshot_json,
+                    policy_digest=excluded.policy_digest,
                     finished_at_epoch=excluded.finished_at_epoch,
                     execution_result=excluded.execution_result,
                     post_repair_evidence_json=excluded.post_repair_evidence_json,
                     verifier_result=excluded.verifier_result,
+                    verification_json=excluded.verification_json,
                     next_retry_eligible_epoch=excluded.next_retry_eligible_epoch,
                     verdict=excluded.verdict
                 """,
@@ -324,10 +296,14 @@ class SqliteIncidentStore:
                     attempt.attempt_number,
                     attempt.started_at_epoch,
                     json.dumps(attempt.pre_repair_evidence),
+                    trigger_snapshot_json,
+                    policy_snapshot_json,
+                    policy_digest,
                     attempt.finished_at_epoch,
                     attempt.execution_result,
                     json.dumps(attempt.post_repair_evidence),
                     attempt.verifier_result,
+                    verification_json,
                     attempt.next_retry_eligible_epoch,
                     attempt.verdict.value if attempt.verdict is not None else None,
                 ),
@@ -374,6 +350,46 @@ class SqliteIncidentStore:
         )
         return tuple(reversed(attempts))
 
+    def list_repair_attempts_for_component(
+        self,
+        component_id: str,
+        *,
+        action_kind: RepairActionKind | None = None,
+        limit: int = 500,
+    ) -> tuple[RepairAttempt, ...]:
+        """Return bounded repair history across incidents for one repair target."""
+
+        normalized_component = str(component_id).strip().lower()
+        if not normalized_component or limit <= 0:
+            return ()
+        if action_kind is not None and not isinstance(action_kind, RepairActionKind):
+            raise TypeError("action_kind must be a RepairActionKind or None")
+
+        query = """
+            SELECT * FROM engineering_repair_attempt
+            WHERE component_id = ?
+        """
+        parameters: list[object] = [normalized_component]
+        if action_kind is not None:
+            query += " AND action_kind = ?"
+            parameters.append(action_kind.value)
+        query += """
+            ORDER BY started_at_epoch DESC, attempt_id DESC
+            LIMIT ?
+        """
+        parameters.append(limit)
+
+        with self._lock:
+            cursor = self._connection.execute(query, tuple(parameters))
+            columns = [item[0] for item in cursor.description or ()]
+            rows = cursor.fetchall()
+
+        attempts = tuple(
+            self._repair_attempt_from_payload(dict(zip(columns, row, strict=True)))
+            for row in rows
+        )
+        return tuple(reversed(attempts))
+
     @staticmethod
     def _repair_attempt_from_payload(payload: dict[str, object]) -> RepairAttempt:
         action = RepairAction(
@@ -386,6 +402,36 @@ class SqliteIncidentStore:
             risk_class=RepairRiskClass(int(payload["risk_class"])),
             created_at_epoch=float(payload["action_created_at_epoch"]),
         )
+
+        trigger_snapshot = None
+        trigger_snapshot_value = payload.get("trigger_snapshot_json")
+        if trigger_snapshot_value is not None:
+            trigger_snapshot = RepairTriggerSnapshot.from_payload(
+                json.loads(str(trigger_snapshot_value))
+            )
+
+        policy_snapshot = None
+        policy_snapshot_value = payload.get("policy_snapshot_json")
+        if policy_snapshot_value is not None:
+            policy_snapshot = RepairPolicySnapshot.from_payload(
+                json.loads(str(policy_snapshot_value))
+            )
+            persisted_digest = payload.get("policy_digest")
+            if (
+                persisted_digest is not None
+                and str(persisted_digest) != policy_snapshot.digest
+            ):
+                raise ValueError(
+                    "persisted repair policy digest does not match snapshot"
+                )
+
+        verification = None
+        verification_value = payload.get("verification_json")
+        if verification_value is not None:
+            verification = RepairVerificationResult.from_payload(
+                json.loads(str(verification_value))
+            )
+
         verdict_value = payload["verdict"]
         return RepairAttempt(
             attempt_id=str(payload["attempt_id"]),
@@ -399,6 +445,8 @@ class SqliteIncidentStore:
             pre_repair_evidence=tuple(
                 json.loads(str(payload["pre_repair_evidence_json"]))
             ),
+            trigger_snapshot=trigger_snapshot,
+            policy_snapshot=policy_snapshot,
             finished_at_epoch=(
                 float(payload["finished_at_epoch"])
                 if payload["finished_at_epoch"] is not None
@@ -417,6 +465,7 @@ class SqliteIncidentStore:
                 if payload["verifier_result"] is not None
                 else None
             ),
+            verification=verification,
             next_retry_eligible_epoch=(
                 float(payload["next_retry_eligible_epoch"])
                 if payload["next_retry_eligible_epoch"] is not None

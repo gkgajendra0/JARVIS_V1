@@ -322,6 +322,66 @@ def test_force_runtime_tree_cleanup_targets_descendants_before_root(
     assert calls == [("kill", 31), ("kill", 32), ("kill", 30)]
 
 
+def test_windows_runtime_job_is_attached_to_root_and_existing_descendants(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+
+    class FakeJob:
+        def assign_pid(self, pid: int) -> None:
+            calls.append(("assign", pid))
+
+        def close(self) -> None:
+            calls.append(("close",))
+
+    class FakeRoot:
+        def children(self, *, recursive: bool):
+            assert recursive is True
+            return [SimpleNamespace(pid=31), SimpleNamespace(pid=32)]
+
+    process = SimpleNamespace(pid=30)
+    monkeypatch.setattr(supervisor, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(supervisor, "WindowsRuntimeJob", FakeJob)
+    monkeypatch.setattr(supervisor.psutil, "Process", lambda pid: FakeRoot())
+
+    supervisor._attach_windows_runtime_job(process)  # type: ignore[arg-type]
+
+    assert calls == [("assign", 30), ("assign", 31), ("assign", 32)]
+    assert isinstance(process._jarvis_runtime_job, FakeJob)
+
+
+def test_force_cleanup_prefers_windows_runtime_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+
+    class FakeJob:
+        def terminate(self, *, exit_code: int) -> None:
+            calls.append(("terminate", exit_code))
+
+        def close(self) -> None:
+            calls.append(("close",))
+
+    monkeypatch.setattr(supervisor, "WindowsRuntimeJob", FakeJob)
+    monkeypatch.setattr(
+        supervisor,
+        "_kill_runtime_process_tree",
+        lambda tree: (_ for _ in ()).throw(AssertionError("psutil fallback used")),
+    )
+    process = SimpleNamespace(_jarvis_runtime_job=FakeJob())
+
+    used_job, killed = supervisor._force_cleanup_runtime(
+        process,  # type: ignore[arg-type]
+        ("captured",),  # type: ignore[arg-type]
+    )
+    supervisor._release_runtime_job(process)  # type: ignore[arg-type]
+
+    assert used_job is True
+    assert killed == 0
+    assert calls == [("terminate", 1), ("close",)]
+    assert not hasattr(process, "_jarvis_runtime_job")
+
+
 def test_stop_jarvis_force_cleans_captured_runtime_tree(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -368,7 +428,7 @@ def test_stop_jarvis_force_cleans_captured_runtime_tree(
         return 2
 
     monkeypatch.setattr(supervisor, "_kill_runtime_process_tree", fake_tree_kill)
-    monkeypatch.setattr(supervisor.os, "name", "posix")
+    monkeypatch.setattr(supervisor, "os", SimpleNamespace(name="posix"))
 
     supervisor._stop_jarvis(
         FakeProcess(),  # type: ignore[arg-type]
@@ -599,6 +659,13 @@ def test_unexpected_exit_requires_stabilization_before_recovered(
     repo = FakeRepo(updated_sha="a" * 40)
     control = FakeControl([None])
     process = SimpleNamespace(returncode=9)
+    stopped: list[object] = []
+
+    def stop_before_restart(candidate, **_) -> None:
+        stopped.append(candidate)
+        control.child_stopped()
+
+    monkeypatch.setattr(supervisor, "_stop_jarvis", stop_before_restart)
     monkeypatch.setattr(
         supervisor,
         "_start_jarvis",
@@ -631,6 +698,7 @@ def test_unexpected_exit_requires_stabilization_before_recovered(
     assert attempts[0].verdict is RepairVerdict.RECOVERED
     assert attempts[0].verifier_result == "readiness_and_liveness_stable:3_probes"
     assert attempts[0].action.component_id == "voice_runtime"
+    assert stopped == [process]
     assert control.child_stopped_calls == 1
     store.close()
 
@@ -744,7 +812,7 @@ def test_readiness_failures_exhaust_restart_budget(
     attempts = incidents.list_repair_attempts(incident.incident_id)
     assert len(attempts) == 2
     assert all(attempt.verdict is RepairVerdict.NOT_RECOVERED for attempt in attempts)
-    assert stopped == ["restart-1", "restart-2"]
+    assert stopped == [process, "restart-1", "restart-2"]
     assert any(
         evidence.kind == "repair_budget_exhausted" for evidence in incident.evidence
     )
@@ -815,7 +883,7 @@ def test_liveness_failures_consume_budget_and_stop_restarting(
     assert all(
         attempt.verifier_result == "liveness_probe_failed" for attempt in attempts
     )
-    assert stopped == ["restart-1", "restart-2"]
+    assert stopped == [process, "restart-1", "restart-2"]
     store.close()
 
 
@@ -889,3 +957,64 @@ def test_unresponsive_runtime_uses_separate_registered_repair_policy(
     assert attempts[0].verdict is RepairVerdict.RECOVERED
     assert stopped == [process]
     store.close()
+
+
+def test_production_supervisor_escalation_does_not_trigger_outer_restart() -> None:
+    production = DevSupervisorConfig(git_updates_enabled=False)
+    development = DevSupervisorConfig(git_updates_enabled=True)
+
+    assert supervisor._escalation_exit_code(production, 17) == 0
+    assert supervisor._escalation_exit_code(development, 17) == 17
+
+
+def test_runtime_supervisor_configuration_disables_git_updates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("JARVIS_DEV_BRANCH", raising=False)
+
+    config = supervisor._runtime_supervisor_config_from_environment()
+
+    assert config.branch == "main"
+    assert config.git_updates_enabled is False
+
+
+def test_crash_recovery_logs_rolling_budget_index_not_lifetime_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan = SimpleNamespace(
+        exhausted=False,
+        budget=SimpleNamespace(wait_seconds=0.0, budget_index=1, attempt_number=4),
+        policy=SimpleNamespace(max_attempts=3),
+    )
+    repair = SimpleNamespace(
+        plan_unexpected_exit=lambda **_: plan,
+        start_attempt=lambda *_, **__: object(),
+        complete_attempt=lambda *_, **__: None,
+    )
+    repo = SimpleNamespace(local_sha=lambda: "a" * 40)
+    process = SimpleNamespace(returncode=15)
+    control = SimpleNamespace(wait_for_child_ready=lambda **_: None)
+
+    monkeypatch.setattr(supervisor, "_stop_jarvis", lambda *_, **__: None)
+    monkeypatch.setattr(supervisor, "_start_jarvis", lambda *_, **__: "restarted")
+
+    restarted = supervisor._recover_unexpected_exit(
+        repo,
+        Path("."),
+        process,
+        control,
+        DevSupervisorConfig(),
+        repair,
+        sleep_fn=lambda _: None,
+        now_fn=lambda: 100.0,
+        stabilization_verifier=lambda *_, **__: (
+            True,
+            "readiness_and_liveness_stable:3_probes",
+        ),
+    )
+
+    output = capsys.readouterr().out
+    assert restarted == "restarted"
+    assert "restart attempt 1/3" in output
+    assert "restart attempt 4/3" not in output

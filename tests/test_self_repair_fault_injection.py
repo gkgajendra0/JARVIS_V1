@@ -11,6 +11,7 @@ def _snapshot(
     runtime: bool = True,
     supervised: bool = True,
     create_time: float = 100.0,
+    parent_cmdline: tuple[str, ...] | None = None,
 ) -> faults.ProcessSnapshot:
     return faults.ProcessSnapshot(
         pid=pid,
@@ -22,7 +23,13 @@ def _snapshot(
         ),
         parent_pid=1,
         parent_cmdline=(
-            ("python", "jarvis-dev") if supervised else ("python", "unrelated-parent")
+            parent_cmdline
+            if parent_cmdline is not None
+            else (
+                ("python", "jarvis-dev")
+                if supervised
+                else ("python", "unrelated-parent")
+            )
         ),
     )
 
@@ -37,6 +44,23 @@ def test_select_supervised_runtime_requires_exactly_one_target() -> None:
     )
 
     assert selected.pid == 30
+
+
+@pytest.mark.parametrize(
+    "parent_cmdline",
+    (
+        ("python", "-m", "jarvis.runtime_supervisor", "--branch", "feature/hardening"),
+        (r"C:\\jarvis\\.venv\\Scripts\\jarvis-supervisor.exe",),
+    ),
+)
+def test_select_supervised_runtime_accepts_production_supervisor(
+    parent_cmdline: tuple[str, ...],
+) -> None:
+    selected = faults.select_supervised_runtime(
+        (_snapshot(40, parent_cmdline=parent_cmdline),)
+    )
+
+    assert selected.pid == 40
 
 
 def test_select_supervised_runtime_refuses_unsupervised_process() -> None:
