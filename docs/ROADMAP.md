@@ -24,7 +24,7 @@ This roadmap owns **numbered product sequence only**. It does not select technol
 | 16 | Extensibility and Plugin/Skill Lifecycle | CAP-033 | PLANNED |
 | 17 | Daily Assistant and Multi-Capability Workflows | CAP-042 | PLANNED |
 | 18 | Learning, Gap Detection, Governed Skill Creation | CAP-043–045 | PLANNED |
-| 19 | Governed Self-Diagnostics and Repair | CAP-046 | PARTIAL — deterministic R1/R2 foundation accepted early; Phase 1H active |
+| 19 | Governed Self-Diagnostics and Repair | CAP-046 | PARTIAL — deterministic R1/R2 foundation + Phase 1H hardening accepted; Phase 2 EngineeringKnowledge next |
 | 20 | Governed Self-Improvement and Advanced Autonomy | CAP-047 | PLANNED |
 
 ## Accepted interludes that do not renumber the roadmap
@@ -69,8 +69,8 @@ The current exact sequence is:
 
 ```text
 Phase 1   deterministic repair + accepted R2 recovery — DONE
-Phase 1H  foundation hardening — ACTIVE
-Phase 2   EngineeringKnowledge — BLOCKED UNTIL 1H ACCEPTANCE
+Phase 1H  foundation hardening — DONE / OWNER-MACHINE ACCEPTED 2026-09-24
+Phase 2   EngineeringKnowledge — ACTIVE / NEXT
 Phase 3   EngineeringChange lifecycle / mission orchestration
 Phase 4   Research + Diagnostic Model Router
 Phase 5   Secure autonomous engineering substrate
@@ -188,9 +188,9 @@ The same lifecycle applies to JARVIS-generated engineering candidates; autonomy 
 
 Persistent Concurrent Work Orchestration and the deterministic repair/R2 foundation are owner accepted.
 
-**Current active cross-cutting work is Phase 1H — Self-Repair Foundation Hardening.**
+**Current active cross-cutting work is Phase 2 — EngineeringKnowledge Foundation.**
 
-Phase 2 implementation is blocked until Phase 1H automated and owner-machine acceptance passes.
+Phase 2 implementation is unblocked because Phase 1H automated and owner-machine acceptance passed on 2026-09-24.
 
 Step 8 remains the next numbered product slice when numbered roadmap work resumes.
 
