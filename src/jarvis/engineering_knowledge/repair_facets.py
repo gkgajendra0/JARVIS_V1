@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 
 from jarvis.engineering_knowledge.canonical import JSONValue, canonical_sha256
@@ -69,6 +70,8 @@ REPAIR_FINDING_V1_SCHEMA: dict[str, JSONValue] = {
     },
 }
 
+REPAIR_FINDING_V1_SCHEMA_DIGEST = canonical_sha256(REPAIR_FINDING_V1_SCHEMA)
+
 
 @dataclass(frozen=True, slots=True)
 class RepairFindingV1Handler:
@@ -84,11 +87,11 @@ class RepairFindingV1Handler:
 
     @property
     def schema_descriptor(self) -> dict[str, JSONValue]:
-        return REPAIR_FINDING_V1_SCHEMA
+        return deepcopy(REPAIR_FINDING_V1_SCHEMA)
 
     @property
     def schema_digest(self) -> str:
-        return canonical_sha256(self.schema_descriptor)
+        return REPAIR_FINDING_V1_SCHEMA_DIGEST
 
     @property
     def protected_fields(self) -> tuple[str, ...]:
