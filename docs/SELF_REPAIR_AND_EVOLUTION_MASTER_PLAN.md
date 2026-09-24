@@ -45,17 +45,23 @@ R1 remains part of the typed risk/action vocabulary but has no owner-accepted au
 
 ### Phase 1H — Self-Repair foundation hardening
 
-**ACTIVE**
+**DONE / OWNER-MACHINE ACCEPTED 2026-09-24**
 
-Phase 1H remains the active acceptance gate. Its detailed contract is `SELF_REPAIR_PHASE1H_HARDENING.md`.
+Phase 1H is accepted. Its hardening contract and owner-machine evidence are recorded in `SELF_REPAIR_PHASE1H_HARDENING.md`.
 
-Do not reopen the accepted Phase-1/R2 architecture merely because later program scope is broader. Runtime changes require concrete hardening evidence.
+Accepted hardening includes sustained rolling restart history, one target/action circuit breaker across crash/liveness failures, typed execution preconditions and verifier proof, immutable repair provenance, versioned engineering-DB migrations, Windows Job Object runtime ownership, a local-only production supervisor, and a bounded Windows outer guardian.
+
+Owner-machine acceptance proved crash/hang recovery, launcher/interpreter/supervisor failure handling, no accepted duplicate/orphan runtime, shared mixed-fault restart history, and a clean 3-of-3 rolling budget followed by a fourth crash that created zero new RepairAttempts and left zero guardian/supervisor/runtime processes.
+
+Automatic logon startup was also observed. A temporarily unavailable configured Pocket 3 microphone correctly caused fail-closed preflight; once Windows enumerated the device, the same production path started normally. Bounded hardware-readiness retry is a non-blocking future resilience improvement.
+
+Do not reopen the accepted Phase-1/R2 or Phase-1H architecture without new concrete evidence.
 
 ---
 
 ## 2. Canonical forward sequence
 
-After Phase 1H owner-machine acceptance, the cross-cutting program proceeds as follows:
+With Phase 1H owner-machine acceptance complete, the cross-cutting program proceeds as follows:
 
 ```text
 Phase 2   EngineeringKnowledge Foundation
