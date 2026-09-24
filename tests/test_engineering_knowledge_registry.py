@@ -119,12 +119,16 @@ def test_rfc8785_uses_utf16_property_ordering() -> None:
         }
     ).decode("utf-8")
 
-    assert canonical.index('"\\r"') < canonical.index('"1"')
-    assert canonical.index('"1"') < canonical.index('"\\u0080"')
-    assert canonical.index('"\\u0080"') < canonical.index('"ö"')
-    assert canonical.index('"ö"') < canonical.index('"€"')
-    assert canonical.index('"€"') < canonical.index('"😀"')
-    assert canonical.index('"😀"') < canonical.index('"דּ"')
+    ordered_pairs = json.loads(canonical, object_pairs_hook=lambda pairs: pairs)
+    assert [key for key, _ in ordered_pairs] == [
+        "\\r",
+        "1",
+        "\\u0080",
+        "ö",
+        "€",
+        "😀",
+        "דּ",
+    ]
 
 
 def test_duplicate_json_property_names_fail_closed() -> None:
