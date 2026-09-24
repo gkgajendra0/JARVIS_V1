@@ -212,6 +212,18 @@ class KnowledgeLifecycleService:
         *,
         now_epoch: float,
     ) -> KnowledgeTransitionResult:
+        current = self._require_state(revision_id)
+        if current is KnowledgeLifecycleState.STAGED:
+            return KnowledgeTransitionResult(
+                revision_id=revision_id,
+                from_state=KnowledgeLifecycleState.CANDIDATE,
+                to_state=KnowledgeLifecycleState.STAGED,
+                created=False,
+            )
+        if current is not KnowledgeLifecycleState.CANDIDATE:
+            raise KnowledgeLifecycleError(
+                f"cannot stage repair knowledge from {current.value}"
+            )
         decision = self._repair_policy.evaluate(self._store, revision_id)
         if not decision.eligible:
             raise KnowledgePromotionError(
@@ -235,6 +247,18 @@ class KnowledgeLifecycleService:
         *,
         now_epoch: float,
     ) -> KnowledgeTransitionResult:
+        current = self._require_state(revision_id)
+        if current is KnowledgeLifecycleState.ACCEPTED:
+            return KnowledgeTransitionResult(
+                revision_id=revision_id,
+                from_state=KnowledgeLifecycleState.STAGED,
+                to_state=KnowledgeLifecycleState.ACCEPTED,
+                created=False,
+            )
+        if current is not KnowledgeLifecycleState.STAGED:
+            raise KnowledgeLifecycleError(
+                f"cannot accept repair knowledge from {current.value}"
+            )
         decision = self._repair_policy.evaluate(self._store, revision_id)
         if not decision.eligible:
             raise KnowledgePromotionError(
