@@ -8,7 +8,6 @@ import pytest
 import jarvis.dev_supervisor as supervisor
 from jarvis.dev_supervisor import DevSupervisorConfig, _config_from_environment
 
-
 def test_supervisor_config_rejects_invalid_values() -> None:
     with pytest.raises(ValueError):
         DevSupervisorConfig(remote=" ")
@@ -45,12 +44,10 @@ def test_supervisor_config_rejects_invalid_values() -> None:
     with pytest.raises(ValueError):
         DevSupervisorConfig(git_fetch_timeout_seconds=0)
 
-
 def test_environment_config_defaults_to_main(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("JARVIS_DEV_BRANCH", raising=False)
 
     assert _config_from_environment().branch == "main"
-
 
 def test_environment_config_allows_explicit_development_branch(
     monkeypatch: pytest.MonkeyPatch,
@@ -59,10 +56,8 @@ def test_environment_config_allows_explicit_development_branch(
 
     assert _config_from_environment().branch == "feature/jarvis-dev-supervisor"
 
-
 def test_supervisor_startup_timeout_allows_heavy_hardware_initialization() -> None:
     assert DevSupervisorConfig().startup_timeout_seconds == 120.0
-
 
 def test_wait_for_child_ready_requires_explicit_runtime_ready(
     monkeypatch: pytest.MonkeyPatch,
@@ -106,7 +101,6 @@ def test_wait_for_child_ready_requires_explicit_runtime_ready(
     ]
     assert connection.closed is True
 
-
 def test_liveness_timeout_resets_direct_socket_connection() -> None:
     class FrozenConnection:
         def __init__(self) -> None:
@@ -138,7 +132,6 @@ def test_liveness_timeout_resets_direct_socket_connection() -> None:
 
     assert connection.closed is True
     assert connection.writes == [b'{"type":"liveness_probe","request_id":"1"}\n']
-
 
 def test_direct_socket_receive_handles_fragmented_control_frame() -> None:
     class FragmentedConnection:
@@ -173,7 +166,6 @@ def test_direct_socket_receive_handles_fragmented_control_frame() -> None:
 
     assert connection.closed is True
 
-
 def test_git_fetch_uses_bounded_timeout(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -194,7 +186,6 @@ def test_git_fetch_uses_bounded_timeout(
     repo.fetch()
 
     assert observed["kwargs"]["timeout"] == 7.5
-
 
 def test_remote_update_poller_cannot_block_liveness_watchdog(
     tmp_path: Path,
@@ -245,7 +236,6 @@ def test_remote_update_poller_cannot_block_liveness_watchdog(
         poller.stop()
         poller.thread.join(timeout=1.0)
 
-
 def test_remote_update_poller_publishes_latest_snapshot(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -292,7 +282,6 @@ def test_remote_update_poller_publishes_latest_snapshot(
         poller.stop()
         poller.thread.join(timeout=1.0)
 
-
 def test_force_runtime_tree_cleanup_targets_descendants_before_root(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -321,7 +310,6 @@ def test_force_runtime_tree_cleanup_targets_descendants_before_root(
     assert killed == 3
     assert calls == [("kill", 31), ("kill", 32), ("kill", 30)]
 
-
 def test_windows_runtime_job_is_attached_to_root_and_existing_descendants(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -348,7 +336,6 @@ def test_windows_runtime_job_is_attached_to_root_and_existing_descendants(
 
     assert calls == [("assign", 30), ("assign", 31), ("assign", 32)]
     assert isinstance(process._jarvis_runtime_job, FakeJob)
-
 
 def test_force_cleanup_prefers_windows_runtime_job(
     monkeypatch: pytest.MonkeyPatch,
@@ -380,7 +367,6 @@ def test_force_cleanup_prefers_windows_runtime_job(
     assert killed == 0
     assert calls == [("terminate", 1), ("close",)]
     assert not hasattr(process, "_jarvis_runtime_job")
-
 
 def test_stop_jarvis_force_cleans_captured_runtime_tree(
     monkeypatch: pytest.MonkeyPatch,
@@ -486,7 +472,6 @@ class FakeControl:
             return True
         return self.liveness_outcomes.pop(0)
 
-
 def test_liveness_watchdog_ignores_transient_failure() -> None:
     control = FakeControl([], [False, True])
     config = DevSupervisorConfig(liveness_failure_threshold=3)
@@ -504,7 +489,6 @@ def test_liveness_watchdog_ignores_transient_failure() -> None:
         streak,
     )
     assert (streak, restart) == (0, False)
-
 
 def test_liveness_watchdog_requires_threshold_and_confirmation() -> None:
     control = FakeControl([], [False, False, False, False])
@@ -532,7 +516,6 @@ def test_liveness_watchdog_requires_threshold_and_confirmation() -> None:
     assert (streak, restart) == (3, True)
     assert control.liveness_calls == 4
 
-
 def test_liveness_watchdog_confirmation_can_cancel_restart() -> None:
     control = FakeControl([], [False, True])
     config = DevSupervisorConfig(liveness_failure_threshold=3)
@@ -545,7 +528,6 @@ def test_liveness_watchdog_confirmation_can_cancel_restart() -> None:
 
     assert (streak, restart) == (0, False)
     assert control.liveness_calls == 2
-
 
 def test_approved_update_keeps_new_revision_after_readiness(
     monkeypatch: pytest.MonkeyPatch,
@@ -581,7 +563,6 @@ def test_approved_update_keeps_new_revision_after_readiness(
     assert repo.pull_count == 1
     assert repo.reset_to is None
     assert control.readiness_calls == 1
-
 
 def test_approved_update_rolls_back_when_new_revision_never_becomes_ready(
     monkeypatch: pytest.MonkeyPatch,
@@ -619,13 +600,11 @@ def test_approved_update_rolls_back_when_new_revision_never_becomes_ready(
     assert repo.reset_to == previous_sha
     assert control.readiness_calls == 2
 
-
 def test_transient_voice_approval_failure_is_not_an_owner_decline() -> None:
     source = Path(supervisor.__file__).read_text(encoding="utf-8")
 
     assert "the update will be offered again" in source
     assert "declined_sha = None" in source
-
 
 def test_dev_control_client_is_expected_to_reconnect_after_transient_failure() -> None:
     from jarvis import dev_control
@@ -634,7 +613,6 @@ def test_dev_control_client_is_expected_to_reconnect_after_transient_failure() -
 
     assert "while True:" in source
     assert "await asyncio.sleep(1.0)" in source
-
 
 def test_unexpected_exit_requires_stabilization_before_recovered(
     tmp_path,
@@ -694,7 +672,6 @@ def test_unexpected_exit_requires_stabilization_before_recovered(
     assert control.child_stopped_calls == 1
     store.close()
 
-
 def test_stabilization_requires_repeated_liveness_probes() -> None:
     class FakeClock:
         def __init__(self) -> None:
@@ -729,7 +706,6 @@ def test_stabilization_requires_repeated_liveness_probes() -> None:
     assert control.liveness_calls == 4
     assert clock.sleeps == [2, 2, 1]
 
-
 def test_stabilization_fails_when_authenticated_liveness_fails() -> None:
     control = FakeControl([], [False])
     process = SimpleNamespace(poll=lambda: None)
@@ -745,7 +721,6 @@ def test_stabilization_fails_when_authenticated_liveness_fails() -> None:
     assert stable is False
     assert verifier == "liveness_probe_failed"
     assert control.liveness_calls == 1
-
 
 def test_readiness_failures_exhaust_restart_budget(
     tmp_path,
@@ -809,7 +784,6 @@ def test_readiness_failures_exhaust_restart_budget(
         evidence.kind == "repair_budget_exhausted" for evidence in incident.evidence
     )
     store.close()
-
 
 def test_liveness_failures_consume_budget_and_stop_restarting(
     tmp_path,
@@ -877,7 +851,6 @@ def test_liveness_failures_consume_budget_and_stop_restarting(
     )
     assert stopped == ["restart-1", "restart-2"]
     store.close()
-
 
 def test_unresponsive_runtime_uses_separate_registered_repair_policy(
     tmp_path,
@@ -951,14 +924,12 @@ def test_unresponsive_runtime_uses_separate_registered_repair_policy(
     store.close()
 
 
-
 def test_production_supervisor_escalation_does_not_trigger_outer_restart() -> None:
     production = DevSupervisorConfig(git_updates_enabled=False)
     development = DevSupervisorConfig(git_updates_enabled=True)
 
     assert supervisor._escalation_exit_code(production, 17) == 0
     assert supervisor._escalation_exit_code(development, 17) == 17
-
 
 def test_runtime_supervisor_configuration_disables_git_updates(
     monkeypatch: pytest.MonkeyPatch,
