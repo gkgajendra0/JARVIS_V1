@@ -659,6 +659,13 @@ def test_unexpected_exit_requires_stabilization_before_recovered(
     repo = FakeRepo(updated_sha="a" * 40)
     control = FakeControl([None])
     process = SimpleNamespace(returncode=9)
+    stopped: list[object] = []
+
+    def stop_before_restart(candidate, **_) -> None:
+        stopped.append(candidate)
+        control.child_stopped()
+
+    monkeypatch.setattr(supervisor, "_stop_jarvis", stop_before_restart)
     monkeypatch.setattr(
         supervisor,
         "_start_jarvis",
@@ -691,6 +698,7 @@ def test_unexpected_exit_requires_stabilization_before_recovered(
     assert attempts[0].verdict is RepairVerdict.RECOVERED
     assert attempts[0].verifier_result == "readiness_and_liveness_stable:3_probes"
     assert attempts[0].action.component_id == "voice_runtime"
+    assert stopped == [process]
     assert control.child_stopped_calls == 1
     store.close()
 
@@ -804,7 +812,7 @@ def test_readiness_failures_exhaust_restart_budget(
     attempts = incidents.list_repair_attempts(incident.incident_id)
     assert len(attempts) == 2
     assert all(attempt.verdict is RepairVerdict.NOT_RECOVERED for attempt in attempts)
-    assert stopped == ["restart-1", "restart-2"]
+    assert stopped == [process, "restart-1", "restart-2"]
     assert any(
         evidence.kind == "repair_budget_exhausted" for evidence in incident.evidence
     )
@@ -875,7 +883,7 @@ def test_liveness_failures_consume_budget_and_stop_restarting(
     assert all(
         attempt.verifier_result == "liveness_probe_failed" for attempt in attempts
     )
-    assert stopped == ["restart-1", "restart-2"]
+    assert stopped == [process, "restart-1", "restart-2"]
     store.close()
 
 
