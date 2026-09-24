@@ -4,7 +4,7 @@ import sqlite3
 
 import pytest
 
-from jarvis import engineering_knowledge as ek
+import jarvis.engineering_knowledge as ek
 from jarvis.incidents import SqliteIncidentStore
 
 
