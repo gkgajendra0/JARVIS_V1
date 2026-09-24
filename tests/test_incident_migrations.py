@@ -229,7 +229,6 @@ def test_phase1h_database_upgrades_to_phase2a_without_repair_data_loss(
         connection.close()
 
 
-
 def test_phase2a_engineering_knowledge_rows_are_immutable(tmp_path) -> None:
     path = tmp_path / "incidents.sqlite3"
     store = SqliteIncidentStore(path)
