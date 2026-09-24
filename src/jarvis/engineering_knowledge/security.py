@@ -312,10 +312,7 @@ class EngineeringKnowledgeIntegrityVerifier:
         evidence_by_type: dict[str, list[EngineeringEvidence]] = {}
         for item in evidence:
             evidence_by_type.setdefault(item.evidence_type, []).append(item)
-            if (
-                item.integrity_algorithm != "sha256"
-                or item.integrity_digest is None
-            ):
+            if item.integrity_algorithm != "sha256" or item.integrity_digest is None:
                 reasons.append("evidence_missing_integrity_digest")
             if item.source_class != "authoritative_engineering_record":
                 reasons.append("unexpected_repair_evidence_source")
