@@ -203,7 +203,7 @@ def test_phase1h_database_upgrades_to_phase2a_without_repair_data_loss(
         assert incident.title == "Phase 1H incident"
         assert attempt is not None
         assert attempt.attempt_id == "attempt-phase1h"
-        assert attempt.component_id == "runtime.voice"
+        assert attempt.action.component_id == "runtime.voice"
     finally:
         store.close()
 
