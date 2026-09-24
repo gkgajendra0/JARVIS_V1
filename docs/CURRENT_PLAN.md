@@ -106,12 +106,16 @@ They remain separate unless evidence shows that one directly blocks the active P
 - `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` — north-star architecture for autonomous governed engineering.
 - `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — specialized repair/evolution program aligned under the north-star plan.
 - `SELF_REPAIR_PHASE1H_HARDENING.md` — current hardening gate.
-- `REPAIR_KNOWLEDGE_RESEARCH_AND_DESIGN.md` — preserved Phase-2 repair-specific research/design input; not the complete future Phase-2 scope.
+- `PHASE2_ENGINEERING_KNOWLEDGE_RESEARCH.md` — consolidated Phase-2 research findings and technology dispositions.
+- `PHASE2_ENGINEERING_KNOWLEDGE_ARCHITECTURE.md` — owner-approved Phase-2 architecture and invariants.
+- `PHASE2_ENGINEERING_KNOWLEDGE_IMPLEMENTATION_PLAN.md` — exact implementation sequence, gates and acceptance matrix.
 
 Historical experiments, old acceptance transcripts and superseded research remain available through Git history rather than becoming competing planning truth.
 
 ## Immediate next action
 
-**Begin Phase 2 — EngineeringKnowledge Foundation.**
+**Execute Phase 2 — EngineeringKnowledge Foundation from the owner-approved architecture.**
 
-Preserve repair as the first implemented vertical, generalize the underlying provenance/lifecycle/retrieval substrate for later engineering knowledge kinds, and keep EngineeringKnowledge advisory rather than executable Authority.
+First reconcile and merge the Phase-2 research/architecture/implementation documentation. Then implement from protected `main` on isolated Phase-2 branches, beginning with the stable EngineeringKnowledge core and REPAIR as the first deterministic vertical.
+
+Preserve the open-ended extension contract: today's repair, investigation and capability-acquisition processes are initial consumers, not a closed enumeration. EngineeringKnowledge remains advisory and can never become executable Authority merely by being stored, retrieved or accepted.
