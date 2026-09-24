@@ -280,3 +280,68 @@ def test_phase2a_engineering_knowledge_rows_are_immutable(tmp_path) -> None:
         )
 
     connection.close()
+
+
+def test_phase2a_database_upgrades_to_retrieval_schema_without_canonical_loss(
+    tmp_path,
+) -> None:
+    path = tmp_path / "incidents.sqlite3"
+    connection = sqlite3.connect(path)
+    migrations = discover_engineering_migrations()
+    assert len(migrations) >= 4
+    EngineeringMigrationRunner(migrations[:3]).apply(connection)
+    connection.execute(
+        """
+        INSERT INTO engineering_knowledge_identity (
+            knowledge_id, stable_label, created_at_epoch, created_by
+        ) VALUES ('knowledge-v3', 'preserve me', 1.0, 'test')
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO engineering_knowledge_revision (
+            revision_id, knowledge_id, revision_number,
+            kind_namespace, normalized_summary,
+            system_from_epoch, sensitivity, freshness_state,
+            canonicalization, digest_algorithm, canonical_digest,
+            created_at_epoch, created_by
+        ) VALUES (
+            'revision-v3', 'knowledge-v3', 1,
+            'jarvis.repair', 'canonical knowledge survives retrieval migration',
+            1.0, 'standard', 'current',
+            'rfc8785', 'sha256',
+            ?, 1.0, 'test'
+        )
+        """,
+        ("a" * 64,),
+    )
+    connection.commit()
+    connection.close()
+
+    store = SqliteIncidentStore(path)
+    store.close()
+
+    connection = sqlite3.connect(path)
+    try:
+        assert connection.execute(
+            """
+            SELECT knowledge_id, normalized_summary
+            FROM engineering_knowledge_revision
+            WHERE revision_id = 'revision-v3'
+            """
+        ).fetchone() == (
+            "knowledge-v3",
+            "canonical knowledge survives retrieval migration",
+        )
+        tables = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
+            ).fetchall()
+        }
+        assert "engineering_knowledge_search_document" in tables
+        assert "engineering_knowledge_embedding" in tables
+        assert "engineering_knowledge_fts" in tables
+    finally:
+        connection.close()
+
