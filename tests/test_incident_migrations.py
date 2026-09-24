@@ -14,6 +14,7 @@ from jarvis.incidents.migration_runner import (
     discover_engineering_migrations,
 )
 
+
 def test_incident_store_applies_versioned_engineering_schema(tmp_path) -> None:
     path = tmp_path / "incidents.sqlite3"
     store = SqliteIncidentStore(path)
@@ -36,6 +37,7 @@ def test_incident_store_applies_versioned_engineering_schema(tmp_path) -> None:
         assert rows == [(item.version, item.name, item.sha256) for item in migrations]
     finally:
         connection.close()
+
 
 def test_engineering_migration_history_rejects_checksum_drift() -> None:
     connection = sqlite3.connect(":memory:")
@@ -63,6 +65,7 @@ def test_engineering_migration_history_rejects_checksum_drift() -> None:
         runner.apply(connection)
     connection.close()
 
+
 def test_engineering_schema_newer_than_runtime_fails_closed() -> None:
     connection = sqlite3.connect(":memory:")
     runner = EngineeringMigrationRunner()
@@ -71,6 +74,7 @@ def test_engineering_schema_newer_than_runtime_fails_closed() -> None:
     with pytest.raises(EngineeringSchemaTooNewError):
         runner.apply(connection)
     connection.close()
+
 
 def test_packaged_engineering_migration_catalog_rejects_mutation() -> None:
     migrations = discover_engineering_migrations()
