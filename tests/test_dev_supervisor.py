@@ -340,7 +340,7 @@ def test_windows_runtime_job_is_attached_to_root_and_existing_descendants(
             return [SimpleNamespace(pid=31), SimpleNamespace(pid=32)]
 
     process = SimpleNamespace(pid=30)
-    monkeypatch.setattr(supervisor.os, "name", "nt")
+    monkeypatch.setattr(supervisor, "os", SimpleNamespace(name="nt"))
     monkeypatch.setattr(supervisor, "WindowsRuntimeJob", FakeJob)
     monkeypatch.setattr(supervisor.psutil, "Process", lambda pid: FakeRoot())
 
@@ -428,7 +428,7 @@ def test_stop_jarvis_force_cleans_captured_runtime_tree(
         return 2
 
     monkeypatch.setattr(supervisor, "_kill_runtime_process_tree", fake_tree_kill)
-    monkeypatch.setattr(supervisor.os, "name", "posix")
+    monkeypatch.setattr(supervisor, "os", SimpleNamespace(name="posix"))
 
     supervisor._stop_jarvis(
         FakeProcess(),  # type: ignore[arg-type]
