@@ -385,7 +385,6 @@ def test_attempt_rejects_action_from_different_policy() -> None:
         )
 
 
-
 def test_verification_contract_mismatch_cannot_mark_recovery() -> None:
     trigger = _trigger()
     policy = _restart_policy()
