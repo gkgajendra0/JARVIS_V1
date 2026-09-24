@@ -416,7 +416,7 @@ Require benchmark comparison against the accepted production baseline. "Tests pa
 
 ## 8. Program phases
 
-The accepted Phase 0, Phase 1 and active Phase 1H are preserved. No Phase 1/R2 rewrite is required by this architecture.
+The accepted Phase 0, Phase 1 and Phase 1H foundations are preserved. No Phase 1/R2 rewrite is required by this architecture.
 
 ### Phase 0 — prerequisites
 
@@ -432,13 +432,13 @@ Preserve the accepted deterministic repair foundation and bounded automatic R2 c
 
 ### Phase 1H — foundation hardening
 
-**STATUS: ACTIVE — MUST COMPLETE BEFORE PHASE 2 IMPLEMENTATION**
+**STATUS: DONE / OWNER-MACHINE ACCEPTED 2026-09-24**
 
 Preserve the current hardening contract. This architecture review does not reopen the accepted runtime design.
 
 ### Phase 2 — EngineeringKnowledge foundation
 
-**STATUS: NEXT AFTER PHASE 1H ACCEPTANCE**
+**STATUS: ACTIVE / NEXT IMPLEMENTATION SLICE**
 
 Generalize the already researched RepairKnowledge work into the shared durable engineering knowledge model, with `REPAIR` as the first implemented vertical.
 
@@ -655,10 +655,10 @@ Rules:
 
 ## 13. Immediate sequence from 2026-09-24
 
-1. Complete Phase 1H repository and owner-machine acceptance.
-2. Reconcile canonical docs to this north-star architecture.
-3. Do **not** reopen or rewrite accepted Phase 1/R2 unless Phase 1H evidence finds an actual defect.
-4. Before Phase 2 implementation, revise the Phase-2 design from repair-only persistence to shared `EngineeringKnowledge`, preserving repair as the first vertical.
+1. Phase 1H repository and owner-machine acceptance is complete.
+2. Canonical Phase-1H documentation is reconciled with the accepted hardening evidence.
+3. Begin Phase 2 as shared `EngineeringKnowledge`, preserving REPAIR as the first vertical and the previously researched RepairKnowledge semantics.
+4. Do **not** reopen or rewrite accepted Phase 1/R2 or Phase 1H without new concrete evidence.
 5. Define `EngineeringChange` before multi-stage autonomous source/capability engineering is implemented.
 6. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
 7. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.
