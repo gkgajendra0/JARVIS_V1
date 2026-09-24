@@ -295,9 +295,7 @@ class EngineeringKnowledgeFacetRegistry:
 
         revalidation_rules = handler.revalidation_rules(validated_payload)
         if not isinstance(revalidation_rules, dict):
-            raise FacetValidationError(
-                "facet revalidation rules must be a JSON object"
-            )
+            raise FacetValidationError("facet revalidation rules must be a JSON object")
 
         return ValidatedFacet(
             facet=facet,
@@ -357,9 +355,7 @@ class EngineeringKnowledgeFacetRegistry:
 def _handler_schema_digest(handler: FacetHandler) -> str:
     digest = getattr(handler, "schema_digest", None)
     if not isinstance(digest, str) or len(digest) != 64:
-        raise FacetRegistrationError(
-            "handler must expose a 64-character schema_digest"
-        )
+        raise FacetRegistrationError("handler must expose a 64-character schema_digest")
     normalized = digest.casefold()
     if any(char not in "0123456789abcdef" for char in normalized):
         raise FacetRegistrationError("handler schema_digest must be lowercase hex")
