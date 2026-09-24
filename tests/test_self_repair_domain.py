@@ -12,6 +12,7 @@ from jarvis.self_repair import (
     RepairExecutionContext,
     RepairPolicy,
     RepairPolicyConflictError,
+    RepairPolicySnapshot,
     RepairPolicyError,
     RepairRegistry,
     RepairRiskClass,
@@ -412,3 +413,13 @@ def test_verification_contract_mismatch_cannot_mark_recovery() -> None:
             verification=wrong,
             now_epoch=102,
         )
+
+
+
+def test_policy_snapshot_digest_is_stable_across_json_roundtrip() -> None:
+    policy = _restart_policy()
+    snapshot = RepairPolicySnapshot.from_policy(policy)
+    restored = RepairPolicySnapshot.from_payload(snapshot.to_payload())
+
+    assert restored == snapshot
+    assert restored.digest == snapshot.digest
