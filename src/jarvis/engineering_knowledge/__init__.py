@@ -1,9 +1,14 @@
-"""EngineeringKnowledge domain contracts.
+"""EngineeringKnowledge domain, registry and reviewed facet contracts."""
 
-Phase 2A intentionally exposes only immutable typed contracts. Persistence writers,
-facet registries, lifecycle promotion and retrieval are added in later Phase-2 slices.
-"""
-
+from jarvis.engineering_knowledge.canonical import (
+    EngineeringKnowledgeCanonicalizationError,
+    EngineeringKnowledgeDuplicateKeyError,
+    canonical_sha256,
+    canonicalize_json,
+    canonicalize_json_object_text,
+    parse_json_object,
+)
+from jarvis.engineering_knowledge.defaults import build_default_facet_registry
 from jarvis.engineering_knowledge.models import (
     CANONICALIZATION_RFC8785,
     DIGEST_ALGORITHM_SHA256,
@@ -21,21 +26,66 @@ from jarvis.engineering_knowledge.models import (
     KnowledgeSensitivity,
     lifecycle_evidence_json,
 )
+from jarvis.engineering_knowledge.registry import (
+    ApplicabilityMatcherRegistry,
+    EngineeringKnowledgeFacetRegistry,
+    FacetApplicabilityConstraint,
+    FacetDecisionAssessment,
+    FacetIntegrityError,
+    FacetPayloadUnavailableError,
+    FacetRegistrationError,
+    FacetSchemaKey,
+    FacetValidationError,
+    UnsupportedApplicabilityMatcherError,
+    UnsupportedFacetSchemaError,
+    ValidatedFacet,
+)
+from jarvis.engineering_knowledge.repair_facets import (
+    REPAIR_FINDING_FACET_TYPE,
+    REPAIR_FINDING_V1_SCHEMA,
+    REPAIR_FINDING_V1_SCHEMA_ID,
+    REPAIR_FINDING_V1_SCHEMA_VERSION,
+    RepairFindingV1Handler,
+)
 
 __all__ = [
     "CANONICALIZATION_RFC8785",
     "DIGEST_ALGORITHM_SHA256",
+    "REPAIR_FINDING_FACET_TYPE",
+    "REPAIR_FINDING_V1_SCHEMA",
+    "REPAIR_FINDING_V1_SCHEMA_ID",
+    "REPAIR_FINDING_V1_SCHEMA_VERSION",
+    "ApplicabilityMatcherRegistry",
     "AttestationVerdict",
     "EngineeringApplicability",
     "EngineeringAttestation",
     "EngineeringEvidence",
+    "EngineeringKnowledgeCanonicalizationError",
+    "EngineeringKnowledgeDuplicateKeyError",
     "EngineeringKnowledgeFacet",
+    "EngineeringKnowledgeFacetRegistry",
     "EngineeringKnowledgeIdentity",
     "EngineeringKnowledgeRevision",
+    "FacetApplicabilityConstraint",
+    "FacetDecisionAssessment",
+    "FacetIntegrityError",
+    "FacetPayloadUnavailableError",
+    "FacetRegistrationError",
+    "FacetSchemaKey",
+    "FacetValidationError",
     "KnowledgeEvidenceLink",
     "KnowledgeFreshnessState",
     "KnowledgeLifecycleEvent",
     "KnowledgeLifecycleState",
     "KnowledgeSensitivity",
+    "RepairFindingV1Handler",
+    "UnsupportedApplicabilityMatcherError",
+    "UnsupportedFacetSchemaError",
+    "ValidatedFacet",
+    "build_default_facet_registry",
+    "canonical_sha256",
+    "canonicalize_json",
+    "canonicalize_json_object_text",
     "lifecycle_evidence_json",
+    "parse_json_object",
 ]
