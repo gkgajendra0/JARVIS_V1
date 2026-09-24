@@ -209,7 +209,9 @@ def test_inapplicable_exact_reference_is_filtered_before_ranking(tmp_path) -> No
     store.close()
 
 
-def test_exact_evidence_reference_has_priority_and_provenance_envelope(tmp_path) -> None:
+def test_exact_evidence_reference_has_priority_and_provenance_envelope(
+    tmp_path,
+) -> None:
     path = tmp_path / "engineering.sqlite3"
     store = SqliteIncidentStore(path)
     revision_id, attempt_id = _candidate(store)
