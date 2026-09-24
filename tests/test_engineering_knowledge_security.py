@@ -195,9 +195,9 @@ def test_candidate_persistence_rejects_secret_in_source_evidence(tmp_path) -> No
     ):
         store.persist_engineering_knowledge_candidate(blocked)
 
-    assert store.get_engineering_knowledge_revision(
-        blocked.revision.revision_id
-    ) is None
+    assert (
+        store.get_engineering_knowledge_revision(blocked.revision.revision_id) is None
+    )
     store.close()
 
 
