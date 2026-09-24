@@ -1,4 +1,4 @@
-"""Separate SQLite persistence for operational engineering incidents."""
+"""Shared SQLite persistence for engineering incidents and knowledge facets."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import sqlite3
 from pathlib import Path
 from threading import RLock
 
+from jarvis.engineering_knowledge.models import EngineeringKnowledgeFacet
 from jarvis.incidents.migration_runner import EngineeringMigrationRunner
 from jarvis.incidents.models import (
     EvidenceReference,
@@ -474,6 +475,108 @@ class SqliteIncidentStore:
             verdict=(
                 RepairVerdict(str(verdict_value)) if verdict_value is not None else None
             ),
+        )
+
+    def insert_engineering_knowledge_facet(
+        self,
+        facet: EngineeringKnowledgeFacet,
+    ) -> None:
+        """Persist one immutable facet without requiring registered semantics."""
+
+        if not isinstance(facet, EngineeringKnowledgeFacet):
+            raise TypeError("facet must be an EngineeringKnowledgeFacet")
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO engineering_knowledge_facet (
+                    facet_id, revision_id, facet_type, schema_id, schema_version,
+                    schema_digest, producer, payload_json, protected_payload_ref,
+                    payload_digest, created_at_epoch
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    facet.facet_id,
+                    facet.revision_id,
+                    facet.facet_type,
+                    facet.schema_id,
+                    facet.schema_version,
+                    facet.schema_digest,
+                    facet.producer,
+                    facet.payload_json,
+                    facet.protected_payload_ref,
+                    facet.payload_digest,
+                    facet.created_at_epoch,
+                ),
+            )
+
+    def get_engineering_knowledge_facet(
+        self,
+        facet_id: str,
+    ) -> EngineeringKnowledgeFacet | None:
+        with self._lock:
+            cursor = self._connection.execute(
+                """
+                SELECT *
+                FROM engineering_knowledge_facet
+                WHERE facet_id = ?
+                """,
+                (str(facet_id).strip(),),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            columns = [item[0] for item in cursor.description or ()]
+        return self._engineering_knowledge_facet_from_payload(
+            dict(zip(columns, row, strict=True))
+        )
+
+    def list_engineering_knowledge_facets(
+        self,
+        revision_id: str,
+    ) -> tuple[EngineeringKnowledgeFacet, ...]:
+        with self._lock:
+            cursor = self._connection.execute(
+                """
+                SELECT *
+                FROM engineering_knowledge_facet
+                WHERE revision_id = ?
+                ORDER BY facet_type, schema_id, schema_version, facet_id
+                """,
+                (str(revision_id).strip(),),
+            )
+            columns = [item[0] for item in cursor.description or ()]
+            rows = cursor.fetchall()
+        return tuple(
+            self._engineering_knowledge_facet_from_payload(
+                dict(zip(columns, row, strict=True))
+            )
+            for row in rows
+        )
+
+    @staticmethod
+    def _engineering_knowledge_facet_from_payload(
+        payload: dict[str, object],
+    ) -> EngineeringKnowledgeFacet:
+        return EngineeringKnowledgeFacet(
+            facet_id=str(payload["facet_id"]),
+            revision_id=str(payload["revision_id"]),
+            facet_type=str(payload["facet_type"]),
+            schema_id=str(payload["schema_id"]),
+            schema_version=str(payload["schema_version"]),
+            schema_digest=str(payload["schema_digest"]),
+            producer=str(payload["producer"]),
+            payload_json=(
+                str(payload["payload_json"])
+                if payload["payload_json"] is not None
+                else None
+            ),
+            protected_payload_ref=(
+                str(payload["protected_payload_ref"])
+                if payload["protected_payload_ref"] is not None
+                else None
+            ),
+            payload_digest=str(payload["payload_digest"]),
+            created_at_epoch=float(payload["created_at_epoch"]),
         )
 
     def close(self) -> None:
