@@ -20,10 +20,12 @@ from jarvis.self_repair.domain import (
     RepairAction,
     RepairActionKind,
     RepairAttempt,
+    RepairExecutionContext,
     RepairPolicy,
     RepairRiskClass,
     RepairTrigger,
-    RepairVerdict,
+    RepairVerificationResult,
+    RepairVerificationStatus,
 )
 from jarvis.self_repair.registry import RepairRegistry
 
@@ -407,14 +409,6 @@ class SupervisorRepairController:
         action = self.registry.action_for(trigger, now_epoch=now_epoch)
         if action is None:
             raise RuntimeError("registered runtime repair produced no action")
-        self.registry.assert_executable(
-            trigger,
-            action,
-            satisfied_preconditions=(
-                "same_local_revision",
-                "restart_budget_available",
-            ),
-        )
         return SupervisorRepairPlan(
             fingerprint=fingerprint,
             incident=incident,
@@ -455,12 +449,26 @@ class SupervisorRepairController:
         self,
         plan: SupervisorRepairPlan,
         *,
+        current_revision: str,
         now_epoch: float,
     ) -> RepairAttempt:
         if plan.action is None:
             raise RuntimeError("cannot start an exhausted repair plan")
         if plan.budget.attempt_number is None:
             raise RuntimeError("repair plan has no attempt number")
+
+        self.registry.assert_executable(
+            plan.trigger,
+            plan.action,
+            execution_context=RepairExecutionContext(
+                expected_revision=plan.fingerprint.commit_sha,
+                current_revision=current_revision,
+                restart_budget_available=(
+                    plan.budget.allowed and not plan.budget.exhausted
+                ),
+            ),
+        )
+
         attempt = RepairAttempt.start(
             incident_id=plan.incident.incident_id,
             trigger=plan.trigger,
@@ -477,8 +485,8 @@ class SupervisorRepairController:
         attempt: RepairAttempt,
         *,
         execution_result: str,
-        verifier_result: str,
-        verdict: RepairVerdict,
+        verification_status: RepairVerificationStatus,
+        verification_summary: str,
         post_repair_evidence: Iterable[str] = (),
         now_epoch: float,
     ) -> RepairAttempt:
@@ -489,11 +497,20 @@ class SupervisorRepairController:
             plan.policy,
             budget_index + 1,
         )
+        evidence = tuple(post_repair_evidence)
+        verification = RepairVerificationResult.create(
+            verifier_id="external_runtime_supervisor",
+            verifier_version=1,
+            contract_id=plan.policy.verification_contract,
+            status=verification_status,
+            summary=verification_summary,
+            evidence_references=evidence,
+            observed_at_epoch=now_epoch,
+        )
         completed = attempt.complete(
             execution_result=execution_result,
-            verifier_result=verifier_result,
-            verdict=verdict,
-            post_repair_evidence=tuple(post_repair_evidence),
+            verification=verification,
+            post_repair_evidence=evidence,
             next_retry_eligible_epoch=next_retry_eligible_epoch,
             now_epoch=now_epoch,
         )
