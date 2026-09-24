@@ -188,7 +188,9 @@ def test_provider_quota_does_not_match_runtime_restart_policy(tmp_path) -> None:
     store.close()
 
 
-def test_verified_recovery_resets_restart_budget_baseline(tmp_path) -> None:
+def test_verified_recovery_does_not_forgive_restart_storm_history(
+    tmp_path,
+) -> None:
     store, controller = _controller(
         tmp_path / "incidents.sqlite3",
         max_attempts=1,
@@ -211,17 +213,16 @@ def test_verified_recovery_resets_restart_budget_baseline(tmp_path) -> None:
         now_epoch=112,
     )
 
-    next_plan = controller.plan_unexpected_exit(
+    blocked = controller.plan_unexpected_exit(
         exit_code=5,
         commit_sha="a" * 40,
         now_epoch=120,
     )
 
-    assert next_plan.budget.allowed is True
-    assert next_plan.budget.exhausted is False
-    assert next_plan.budget.budget_index == 1
-    assert next_plan.budget.attempt_number == 2
-    assert next_plan.budget.recent_attempts == 0
+    assert blocked.budget.allowed is False
+    assert blocked.budget.exhausted is True
+    assert blocked.action is None
+    assert blocked.budget.recent_attempts == 1
     store.close()
 
 
@@ -256,7 +257,7 @@ def test_liveness_failure_has_distinct_policy_and_incident(tmp_path) -> None:
     store.close()
 
 
-def test_crash_and_liveness_restart_budgets_are_independent(tmp_path) -> None:
+def test_shared_restart_circuit_breaker_spans_crash_and_liveness(tmp_path) -> None:
     store = SqliteIncidentStore(tmp_path / "incidents.sqlite3")
     service = IncidentService(store)
     controller = SupervisorRepairController(
@@ -287,17 +288,49 @@ def test_crash_and_liveness_restart_budgets_are_independent(tmp_path) -> None:
         verdict=RepairVerdict.NOT_RECOVERED,
         now_epoch=101,
     )
-    exhausted_crash = controller.plan_unexpected_exit(
-        exit_code=9,
-        commit_sha="a" * 40,
-        now_epoch=102,
-    )
+
     liveness_plan = controller.plan_liveness_failure(
         commit_sha="a" * 40,
         now_epoch=102,
     )
 
-    assert exhausted_crash.exhausted is True
-    assert liveness_plan.exhausted is False
-    assert liveness_plan.budget.attempt_number == 1
+    assert liveness_plan.exhausted is True
+    assert liveness_plan.action is None
+    assert liveness_plan.budget.recent_attempts == 1
+    store.close()
+
+
+def test_shared_restart_circuit_breaker_spans_crash_fingerprints(tmp_path) -> None:
+    store, controller = _controller(
+        tmp_path / "incidents.sqlite3",
+        max_attempts=1,
+        window=300,
+        cooldown=0,
+    )
+
+    first_plan = controller.plan_unexpected_exit(
+        exit_code=7,
+        commit_sha="a" * 40,
+        now_epoch=100,
+    )
+    first = controller.start_attempt(first_plan, now_epoch=100)
+    controller.complete_attempt(
+        first_plan,
+        first,
+        execution_result="restart failed",
+        verifier_result="startup_readiness_failed",
+        verdict=RepairVerdict.NOT_RECOVERED,
+        now_epoch=101,
+    )
+
+    different_fingerprint = controller.plan_unexpected_exit(
+        exit_code=8,
+        commit_sha="a" * 40,
+        now_epoch=102,
+    )
+
+    assert different_fingerprint.incident.incident_id != first_plan.incident.incident_id
+    assert different_fingerprint.exhausted is True
+    assert different_fingerprint.action is None
+    assert different_fingerprint.budget.recent_attempts == 1
     store.close()
