@@ -4,7 +4,6 @@ import pytest
 
 import jarvis.engineering_knowledge as ek
 
-
 SHA_A = "a" * 64
 SHA_B = "b" * 64
 
