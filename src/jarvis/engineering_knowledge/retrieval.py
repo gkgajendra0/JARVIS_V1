@@ -253,18 +253,12 @@ class EngineeringKnowledgeRetrievalIndex:
                 source_class=str(row[2]),
                 canonical_reference=str(row[3]),
                 summary=str(row[4]),
-                occurred_at_epoch=(
-                    float(row[5]) if row[5] is not None else None
-                ),
+                occurred_at_epoch=(float(row[5]) if row[5] is not None else None),
                 observed_at_epoch=float(row[6]),
                 sensitivity=KnowledgeSensitivity(str(row[7])),
                 producer=str(row[8]),
-                integrity_algorithm=(
-                    str(row[9]) if row[9] is not None else None
-                ),
-                integrity_digest=(
-                    str(row[10]) if row[10] is not None else None
-                ),
+                integrity_algorithm=(str(row[9]) if row[9] is not None else None),
+                integrity_digest=(str(row[10]) if row[10] is not None else None),
                 created_at_epoch=float(row[11]),
             )
             for row in rows
@@ -670,13 +664,8 @@ class EngineeringKnowledgeRetrievalIndex:
             canonical_text = self._build_searchable_text(revision)
         except EngineeringKnowledgeRetrievalError:
             return False
-        canonical_digest = hashlib.sha256(
-            canonical_text.encode("utf-8")
-        ).hexdigest()
-        return (
-            searchable_text == canonical_text
-            and stored_digest == canonical_digest
-        )
+        canonical_digest = hashlib.sha256(canonical_text.encode("utf-8")).hexdigest()
+        return searchable_text == canonical_text and stored_digest == canonical_digest
 
     def _search_document_with_hash(
         self,
