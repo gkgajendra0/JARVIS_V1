@@ -421,7 +421,9 @@ class SqliteIncidentStore:
                 persisted_digest is not None
                 and str(persisted_digest) != policy_snapshot.digest
             ):
-                raise ValueError("persisted repair policy digest does not match snapshot")
+                raise ValueError(
+                    "persisted repair policy digest does not match snapshot"
+                )
 
         verification = None
         verification_value = payload.get("verification_json")
