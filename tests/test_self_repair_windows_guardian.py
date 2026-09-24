@@ -19,6 +19,7 @@ def _spec() -> GuardianTaskSpec:
         principal=r"WORKSTATION\gajendra",
         python_executable=Path(r"C:\jarvis\.venv\Scripts\python.exe"),
         repo_root=Path(r"C:\jarvis"),
+        branch="fix/self-repair-phase1h-foundation-hardening",
         restart_count=3,
         restart_interval="PT1M",
     )
@@ -33,7 +34,10 @@ def test_guardian_xml_is_interactive_bounded_and_local_only() -> None:
     assert "<RestartOnFailure>" in xml
     assert "<Interval>PT1M</Interval>" in xml
     assert "<Count>3</Count>" in xml
-    assert "-m jarvis.runtime_supervisor" in xml
+    assert (
+        "-m jarvis.runtime_supervisor "
+        "--branch fix/self-repair-phase1h-foundation-hardening"
+    ) in xml
     assert "<WorkingDirectory>C:\\jarvis</WorkingDirectory>" in xml
     assert "jarvis-dev" not in xml
 
@@ -45,6 +49,7 @@ def test_guardian_spec_rejects_unbounded_or_subminute_restart_configuration() ->
             principal="user",
             python_executable=Path("python.exe"),
             repo_root=Path("."),
+            branch="main",
             restart_count=0,
         )
 
@@ -54,6 +59,7 @@ def test_guardian_spec_rejects_unbounded_or_subminute_restart_configuration() ->
             principal="user",
             python_executable=Path("python.exe"),
             repo_root=Path("."),
+            branch="main",
             restart_interval="PT10S",
         )
 
