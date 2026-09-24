@@ -1,4 +1,4 @@
-"""Separate SQLite persistence for operational engineering incidents."""
+"""Shared SQLite persistence for engineering incidents and knowledge facets."""
 
 from __future__ import annotations
 
