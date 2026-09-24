@@ -77,7 +77,9 @@ class _JobObjectExtendedLimitInformation(ctypes.Structure):
 class _CtypesJobApi:
     def __init__(self) -> None:
         if os.name != "nt":
-            raise WindowsJobObjectError("Windows Job Objects are available only on Windows")
+            raise WindowsJobObjectError(
+                "Windows Job Objects are available only on Windows"
+            )
 
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         self._kernel32 = kernel32
