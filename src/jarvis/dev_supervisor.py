@@ -504,7 +504,7 @@ def _attach_windows_runtime_job(process: subprocess.Popen[bytes]) -> None:
                 job.assign_pid(descendant.pid)
             except psutil.NoSuchProcess:
                 continue
-        setattr(process, "_jarvis_runtime_job", job)
+        process._jarvis_runtime_job = job
     except Exception:
         job.close()
         raise
