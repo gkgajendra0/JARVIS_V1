@@ -42,7 +42,7 @@ from jarvis.engineering_knowledge.registry import (
 )
 from jarvis.engineering_knowledge.repair_facets import (
     REPAIR_FINDING_FACET_TYPE,
-    REPAIR_FINDING_V1_SCHEMA,
+    REPAIR_FINDING_V1_SCHEMA_DIGEST,
     REPAIR_FINDING_V1_SCHEMA_ID,
     REPAIR_FINDING_V1_SCHEMA_VERSION,
     RepairFindingV1Handler,
@@ -52,7 +52,7 @@ __all__ = [
     "CANONICALIZATION_RFC8785",
     "DIGEST_ALGORITHM_SHA256",
     "REPAIR_FINDING_FACET_TYPE",
-    "REPAIR_FINDING_V1_SCHEMA",
+    "REPAIR_FINDING_V1_SCHEMA_DIGEST",
     "REPAIR_FINDING_V1_SCHEMA_ID",
     "REPAIR_FINDING_V1_SCHEMA_VERSION",
     "ApplicabilityMatcherRegistry",
