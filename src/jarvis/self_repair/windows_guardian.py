@@ -142,10 +142,10 @@ def current_repo_root(*, runner: Runner = subprocess.run) -> Path:
         ("git", "rev-parse", "--show-toplevel"),
         runner=runner,
     )
-    root = Path(result.stdout.strip())
-    if not str(root):
+    root_text = result.stdout.strip()
+    if not root_text:
         raise WindowsGuardianError("Git returned an empty repository root")
-    return root
+    return Path(root_text)
 
 
 def build_current_guardian_spec(
