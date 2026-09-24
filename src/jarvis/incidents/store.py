@@ -25,6 +25,7 @@ from jarvis.engineering_knowledge.persistence import (
     EngineeringKnowledgeCandidateWriteResult,
     EngineeringKnowledgePersistenceConflictError,
 )
+from jarvis.engineering_knowledge.security import EngineeringEvidenceAdmissionGate
 from jarvis.incidents.migration_runner import EngineeringMigrationRunner
 from jarvis.incidents.models import (
     EvidenceReference,
@@ -506,6 +507,10 @@ class SqliteIncidentStore:
         identity = candidate.identity
         revision = candidate.revision
         inserted_after_existing_revision = False
+
+        admission_gate = EngineeringEvidenceAdmissionGate()
+        for evidence in candidate.evidence:
+            admission_gate.require_admissible_evidence(evidence)
 
         with self._lock, self._connection:
             self._insert_immutable_row(
