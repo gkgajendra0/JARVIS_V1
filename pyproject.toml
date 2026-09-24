@@ -29,6 +29,7 @@ dependencies = [
     "opentelemetry-api==1.44.0",
     "opentelemetry-sdk==1.44.0",
     "opentelemetry-exporter-otlp-proto-grpc==1.44.0",
+    "rfc8785==0.1.4",
 ]
 
 [project.scripts]
