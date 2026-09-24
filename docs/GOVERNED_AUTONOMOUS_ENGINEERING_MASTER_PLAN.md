@@ -2,7 +2,7 @@
 
 ## Status
 
-**AUTHORITATIVE NORTH-STAR PROGRAM ARCHITECTURE — documentation-only proposal on isolated branch; no production behavior changed**
+**AUTHORITATIVE OWNER-APPROVED NORTH-STAR PROGRAM ARCHITECTURE — accepted on protected `main`; Phase 2 EngineeringKnowledge architecture approved 2026-09-24**
 
 Established: 2026-09-24
 
@@ -194,6 +194,26 @@ owner goal OR observed gap
 ```
 
 Direct owner-requested capability acquisition must exist before autonomous gap detection. JARVIS must not require repeated failure or repeated owner requests before acting on an explicit request to acquire a capability.
+
+### 3.4 Engineering processes are open-ended consumers, not a closed enumeration
+
+The three loops above are the first known consumers of the governed engineering substrate, not the permanent list of everything JARVIS may ever engineer.
+
+Future process families such as security remediation, model training, infrastructure evolution, hardware adaptation, data migration or categories not yet anticipated must be addable without creating parallel systems for Authority, EngineeringKnowledge, WorkItems, verification, promotion or provenance.
+
+The extension model is therefore:
+
+```text
+stable governed engineering core
+        |
+        +-- repair process
+        +-- unknown-investigation process
+        +-- capability-acquisition process
+        +-- future process type
+        +-- future unknown process type
+```
+
+New process semantics must enter through registered, versioned contracts and fail closed when the running JARVIS does not understand them. Extensibility must not become arbitrary unvalidated JSON or unrestricted execution.
 
 ---
 
@@ -438,7 +458,7 @@ Preserve the current hardening contract. This architecture review does not reope
 
 ### Phase 2 — EngineeringKnowledge foundation
 
-**STATUS: ACTIVE / NEXT IMPLEMENTATION SLICE**
+**STATUS: OWNER-APPROVED ARCHITECTURE / ACTIVE IMPLEMENTATION SLICE**
 
 Generalize the already researched RepairKnowledge work into the shared durable engineering knowledge model, with `REPAIR` as the first implemented vertical.
 
