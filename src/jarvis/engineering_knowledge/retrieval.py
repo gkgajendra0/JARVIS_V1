@@ -30,7 +30,6 @@ from jarvis.engineering_knowledge.models import (
     EngineeringKnowledgeFacet,
     EngineeringKnowledgeRevision,
     KnowledgeFreshnessState,
-    KnowledgeLifecycleState,
     KnowledgeSensitivity,
 )
 from jarvis.incidents.migration_runner import EngineeringMigrationRunner
@@ -43,7 +42,6 @@ from jarvis.memory.embeddings import (
 from jarvis.memory.retrieval import build_fts5_query, reciprocal_rank_fuse
 from jarvis.memory.retrieval_models import (
     LocalRetrievalModelError,
-    QueryEmbeddingEncoder,
     Qwen3EmbeddingEncoder,
 )
 
