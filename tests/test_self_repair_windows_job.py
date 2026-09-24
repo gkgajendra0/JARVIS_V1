@@ -91,6 +91,7 @@ def test_real_windows_job_terminate_kills_assigned_process() -> None:
             process.wait(timeout=5.0)
         job.close()
 
+
 @pytest.mark.skipif(os.name != "nt", reason="requires real Windows Job Objects")
 def test_real_windows_job_kill_on_close_prevents_orphan_runtime() -> None:
     job = WindowsRuntimeJob()
