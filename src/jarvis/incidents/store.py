@@ -374,6 +374,46 @@ class SqliteIncidentStore:
         )
         return tuple(reversed(attempts))
 
+    def list_repair_attempts_for_component(
+        self,
+        component_id: str,
+        *,
+        action_kind: RepairActionKind | None = None,
+        limit: int = 500,
+    ) -> tuple[RepairAttempt, ...]:
+        """Return bounded repair history across incidents for one repair target."""
+
+        normalized_component = str(component_id).strip().lower()
+        if not normalized_component or limit <= 0:
+            return ()
+        if action_kind is not None and not isinstance(action_kind, RepairActionKind):
+            raise TypeError("action_kind must be a RepairActionKind or None")
+
+        query = """
+            SELECT * FROM engineering_repair_attempt
+            WHERE component_id = ?
+        """
+        parameters: list[object] = [normalized_component]
+        if action_kind is not None:
+            query += " AND action_kind = ?"
+            parameters.append(action_kind.value)
+        query += """
+            ORDER BY started_at_epoch DESC, attempt_id DESC
+            LIMIT ?
+        """
+        parameters.append(limit)
+
+        with self._lock:
+            cursor = self._connection.execute(query, tuple(parameters))
+            columns = [item[0] for item in cursor.description or ()]
+            rows = cursor.fetchall()
+
+        attempts = tuple(
+            self._repair_attempt_from_payload(dict(zip(columns, row, strict=True)))
+            for row in rows
+        )
+        return tuple(reversed(attempts))
+
     @staticmethod
     def _repair_attempt_from_payload(payload: dict[str, object]) -> RepairAttempt:
         action = RepairAction(
