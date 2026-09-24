@@ -2,7 +2,7 @@
 
 ## Status
 
-**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC R1/R2 SELF-REPAIR FOUNDATION IS OWNER ACCEPTED ON 2026-09-23. REPAIRKNOWLEDGE IS THE NEXT ACTIVE CROSS-CUTTING DEVELOPMENT SLICE; STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
+**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC REPAIR FRAMEWORK AND R2 RUNTIME CRASH/HANG RECOVERY FOUNDATION ARE OWNER ACCEPTED ON 2026-09-23. PHASE 1H FOUNDATION HARDENING IS THE NEXT ACCEPTANCE GATE BEFORE REPAIRKNOWLEDGE; STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
 
 The latest owner-machine accepted Self-Repair runtime baseline is `6a0ba73f46f68d9d0c2e8fa2c20c5fccaed8378a`; later documentation-only reconciliation commits may advance protected `main` without changing that runtime behavior.
 
@@ -255,8 +255,10 @@ Acceptance/status history is summarized in `PROJECT_STATE.md`.
 
 ## Deterministic Self-Repair production foundation
 
-Issue #65 and PRs #73–#86 establish the owner-accepted deterministic R1/R2
-Self-Repair foundation.
+Issue #65 and PRs #73–#86 establish the owner-accepted deterministic repair
+framework and R2 runtime crash/hang Self-Repair foundation. R1 exists in the typed
+risk/action vocabulary but no automatic production R1 policy has yet been
+owner-accepted.
 
 Current production architecture includes:
 
@@ -311,12 +313,12 @@ Repository-wide accepted/deferred/superseded/rejected truth is centralized in `P
 
 ## Next architecture acceptance
 
-The next active cross-cutting architecture slice is **RepairKnowledge Foundation**
-from `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
+The next active cross-cutting acceptance slice is **Phase 1H — Self-Repair
+Foundation Hardening** from `docs/SELF_REPAIR_PHASE1H_HARDENING.md`.
 
-That slice must add durable staged engineering knowledge with provenance and
-lifecycle, while proving that learned knowledge cannot execute, grant authority or
-mutate RepairPolicy by itself.
+RepairKnowledge research is preserved separately, but implementation remains blocked
+until the repair foundation has hardened restart budgets, verification/provenance,
+engineering-DB migrations, Windows process ownership and supervisor survivability.
 
 **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027/CAP-028)** remains
 the next numbered product slice and must still reuse the accepted durable
