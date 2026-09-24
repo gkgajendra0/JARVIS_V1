@@ -4,8 +4,6 @@ import json
 import sqlite3
 
 import numpy as np
-import pytest
-
 from jarvis.engineering_knowledge import (
     ApplicabilityContext,
     ApplicabilityFact,
