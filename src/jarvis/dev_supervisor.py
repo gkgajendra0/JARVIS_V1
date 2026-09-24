@@ -1005,8 +1005,7 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
     if config.git_updates_enabled:
         print("JARVIS development supervisor")
         print(
-            f"Watching {config.remote}/{config.branch} every "
-            f"{config.poll_seconds:g}s."
+            f"Watching {config.remote}/{config.branch} every {config.poll_seconds:g}s."
         )
         print("Updates require one explicit spoken owner Yes/No decision.")
         print("Ambiguous speech, timeout, or unavailable voice approval means No.")
