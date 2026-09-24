@@ -10,7 +10,7 @@ from jarvis.incidents.models import (
 )
 from jarvis.incidents.store import SqliteIncidentStore
 from jarvis.self_model.health import HealthSnapshot, HealthState
-from jarvis.self_repair.domain import RepairAttempt
+from jarvis.self_repair.domain import RepairActionKind, RepairAttempt
 
 
 class IncidentService:
@@ -142,6 +142,21 @@ class IncidentService:
     ) -> tuple[RepairAttempt, ...]:
         self._require(incident_id)
         return self._store.list_repair_attempts(incident_id, limit=limit)
+
+    def list_component_repair_attempts(
+        self,
+        component_id: str,
+        *,
+        action_kind: RepairActionKind | None = None,
+        limit: int = 500,
+    ) -> tuple[RepairAttempt, ...]:
+        """Return bounded repair attempts across incidents for one component."""
+
+        return self._store.list_repair_attempts_for_component(
+            component_id,
+            action_kind=action_kind,
+            limit=limit,
+        )
 
     def similar_resolved(
         self,
