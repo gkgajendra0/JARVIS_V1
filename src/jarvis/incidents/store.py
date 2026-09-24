@@ -491,9 +491,7 @@ class SqliteIncidentStore:
         """Atomically persist one deterministic immutable candidate or verify replay."""
 
         if not isinstance(candidate, EngineeringKnowledgeCandidateBundle):
-            raise TypeError(
-                "candidate must be an EngineeringKnowledgeCandidateBundle"
-            )
+            raise TypeError("candidate must be an EngineeringKnowledgeCandidateBundle")
 
         identity = candidate.identity
         revision = candidate.revision
