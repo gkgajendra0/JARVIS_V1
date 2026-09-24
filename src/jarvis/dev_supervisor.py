@@ -26,7 +26,7 @@ from jarvis.dev_control import (
 )
 from jarvis.incidents import IncidentService, SqliteIncidentStore
 from jarvis.self_awareness import default_incident_store_path
-from jarvis.self_repair import RepairVerdict
+from jarvis.self_repair import RepairVerificationStatus
 from jarvis.self_repair.supervisor import (
     SupervisorRepairController,
     build_runtime_child_exit_policy,
@@ -653,7 +653,11 @@ def _recover_unexpected_exit(
             )
             return None
 
-        attempt = repair.start_attempt(plan, now_epoch=float(now_fn()))
+        attempt = repair.start_attempt(
+            plan,
+            current_revision=repo.local_sha(),
+            now_epoch=float(now_fn()),
+        )
         try:
             restarted = _start_jarvis(root, control)
         except OSError:
@@ -661,8 +665,8 @@ def _recover_unexpected_exit(
                 plan,
                 attempt,
                 execution_result="same-version child restart failed to start",
-                verifier_result="process_start_failed",
-                verdict=RepairVerdict.NOT_RECOVERED,
+                verification_status=RepairVerificationStatus.FAIL,
+                verification_summary="process_start_failed",
                 post_repair_evidence=("supervisor:process_start_failed",),
                 now_epoch=float(now_fn()),
             )
@@ -680,8 +684,8 @@ def _recover_unexpected_exit(
                 plan,
                 attempt,
                 execution_result="same-version child restart attempted",
-                verifier_result="startup_readiness_failed",
-                verdict=RepairVerdict.NOT_RECOVERED,
+                verification_status=RepairVerificationStatus.FAIL,
+                verification_summary="startup_readiness_failed",
                 post_repair_evidence=("supervisor:startup_readiness_failed",),
                 now_epoch=float(now_fn()),
             )
@@ -703,8 +707,8 @@ def _recover_unexpected_exit(
                 plan,
                 attempt,
                 execution_result="same-version child restart reached readiness",
-                verifier_result=verifier_result,
-                verdict=RepairVerdict.NOT_RECOVERED,
+                verification_status=RepairVerificationStatus.FAIL,
+                verification_summary=verifier_result,
                 post_repair_evidence=(
                     "supervisor:startup_readiness_confirmed",
                     f"supervisor:{verifier_result}",
@@ -717,8 +721,8 @@ def _recover_unexpected_exit(
             plan,
             attempt,
             execution_result="same-version child restart stabilized",
-            verifier_result=verifier_result,
-            verdict=RepairVerdict.RECOVERED,
+            verification_status=RepairVerificationStatus.PASS,
+            verification_summary=verifier_result,
             post_repair_evidence=(
                 "supervisor:startup_readiness_confirmed",
                 "supervisor:liveness_stabilized",
@@ -808,7 +812,11 @@ def _recover_liveness_failure(
             )
             return None
 
-        attempt = repair.start_attempt(plan, now_epoch=float(now_fn()))
+        attempt = repair.start_attempt(
+            plan,
+            current_revision=repo.local_sha(),
+            now_epoch=float(now_fn()),
+        )
         _stop_jarvis(
             process,
             timeout_seconds=config.shutdown_timeout_seconds,
@@ -821,8 +829,8 @@ def _recover_liveness_failure(
                 plan,
                 attempt,
                 execution_result="unresponsive child restart failed to start",
-                verifier_result="process_start_failed",
-                verdict=RepairVerdict.NOT_RECOVERED,
+                verification_status=RepairVerificationStatus.FAIL,
+                verification_summary="process_start_failed",
                 post_repair_evidence=("supervisor:process_start_failed",),
                 now_epoch=float(now_fn()),
             )
@@ -840,8 +848,8 @@ def _recover_liveness_failure(
                 plan,
                 attempt,
                 execution_result="unresponsive child restart attempted",
-                verifier_result="startup_readiness_failed",
-                verdict=RepairVerdict.NOT_RECOVERED,
+                verification_status=RepairVerificationStatus.FAIL,
+                verification_summary="startup_readiness_failed",
                 post_repair_evidence=("supervisor:startup_readiness_failed",),
                 now_epoch=float(now_fn()),
             )
@@ -864,8 +872,8 @@ def _recover_liveness_failure(
                 plan,
                 attempt,
                 execution_result="unresponsive child restart reached readiness",
-                verifier_result=verifier_result,
-                verdict=RepairVerdict.NOT_RECOVERED,
+                verification_status=RepairVerificationStatus.FAIL,
+                verification_summary=verifier_result,
                 post_repair_evidence=(
                     "supervisor:startup_readiness_confirmed",
                     f"supervisor:{verifier_result}",
@@ -879,8 +887,8 @@ def _recover_liveness_failure(
             plan,
             attempt,
             execution_result="unresponsive child restart stabilized",
-            verifier_result=verifier_result,
-            verdict=RepairVerdict.RECOVERED,
+            verification_status=RepairVerificationStatus.PASS,
+            verification_summary=verifier_result,
             post_repair_evidence=(
                 "supervisor:startup_readiness_confirmed",
                 "supervisor:liveness_stabilized",
