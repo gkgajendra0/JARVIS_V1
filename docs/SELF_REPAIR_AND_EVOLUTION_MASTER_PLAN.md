@@ -469,6 +469,37 @@ Hardening includes:
 Exit condition: repository gates and the expanded owner-machine fault matrix pass,
 including supervisor death and repeated cross-signature restart-storm cases.
 
+Required owner-machine Phase 1H acceptance matrix:
+
+- full runtime crash;
+- full runtime hang;
+- launcher-only death;
+- interpreter-only death;
+- supervisor death and bounded Task Scheduler recovery;
+- alternating crash/liveness faults;
+- different exit-code fingerprints;
+- recover -> crash -> recover loop within the rolling window;
+- restart budget survives supervisor restart;
+- persistence unavailable;
+- revision change during cooldown;
+- provider quota/degradation negative control;
+- no duplicate/orphan runtime survives cleanup;
+- healthy runtime does not false-trigger repair.
+
+Implementation findings H1-H10 are preserved by this master plan and PR #90:
+
+1. no immediate restart-budget forgiveness after RECOVERED;
+2. target/action-level restart circuit breaker;
+3. typed verifier proof;
+4. deterministic typed precondition evaluation;
+5. immutable trigger/policy provenance plus digest;
+6. versioned/checksummed engineering DB migrations;
+7. Windows Job Object runtime ownership;
+8. production supervisor separated from Git/network polling;
+9. bounded current-user Task Scheduler guardian;
+10. truthful distinction between typed R1/R2 framework and accepted automatic R2
+    behavior.
+
 ### Phase 2 — RepairKnowledge foundation
 
 **STATUS: BLOCKED UNTIL PHASE 1H ACCEPTANCE**
@@ -1003,8 +1034,8 @@ The active development slice is:
 
 ### Phase 1H — Self-Repair Foundation Hardening
 
-Complete automated gates and the owner-machine fault matrix defined in
-`SELF_REPAIR_PHASE1H_HARDENING.md`.
+Complete automated gates and the owner-machine fault matrix defined in the Phase 1H
+section of this authoritative master plan.
 
 After Phase 1H is independently accepted, the next slice is:
 
