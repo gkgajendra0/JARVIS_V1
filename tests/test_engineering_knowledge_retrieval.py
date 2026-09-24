@@ -340,6 +340,7 @@ def test_unknown_facet_payload_is_not_added_to_search_document(tmp_path) -> None
     path = tmp_path / "engineering.sqlite3"
     store = SqliteIncidentStore(path)
     revision_id, _ = _candidate(store)
+    _accept(store, revision_id)
     marker = "TOP_SECRET_POISON_MARKER"
     payload = {"untrusted_instruction": marker}
     unknown = EngineeringKnowledgeFacet(
@@ -355,7 +356,6 @@ def test_unknown_facet_payload_is_not_added_to_search_document(tmp_path) -> None
         created_at_epoch=111.0,
     )
     store.insert_engineering_knowledge_facet(unknown)
-    _accept(store, revision_id)
 
     index = EngineeringKnowledgeRetrievalIndex(path)
     index.refresh_revision(revision_id, now_epoch=122.0)
