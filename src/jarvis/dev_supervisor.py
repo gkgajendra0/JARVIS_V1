@@ -53,6 +53,7 @@ class DevSupervisorConfig:
     liveness_interval_seconds: float = 2.0
     liveness_failure_threshold: int = 3
     git_fetch_timeout_seconds: float = 10.0
+    git_updates_enabled: bool = True
 
     def __post_init__(self) -> None:
         if not self.remote.strip():
@@ -440,6 +441,11 @@ class VoiceControlServer:
 def _config_from_environment() -> DevSupervisorConfig:
     branch = os.environ.get(_BRANCH_ENV, "main").strip() or "main"
     return DevSupervisorConfig(branch=branch)
+
+
+def _runtime_supervisor_config_from_environment() -> DevSupervisorConfig:
+    branch = os.environ.get(_BRANCH_ENV, "main").strip() or "main"
+    return DevSupervisorConfig(branch=branch, git_updates_enabled=False)
 
 
 def _find_repo_root() -> Path:
@@ -996,15 +1002,24 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
             "commit or stash them first"
         )
 
-    print("JARVIS development supervisor")
-    print(f"Watching {config.remote}/{config.branch} every {config.poll_seconds:g}s.")
-    print("Updates require one explicit spoken owner Yes/No decision.")
-    print("Ambiguous speech, timeout, or unavailable voice approval means No.")
+    if config.git_updates_enabled:
+        print("JARVIS development supervisor")
+        print(
+            f"Watching {config.remote}/{config.branch} every "
+            f"{config.poll_seconds:g}s."
+        )
+        print("Updates require one explicit spoken owner Yes/No decision.")
+        print("Ambiguous speech, timeout, or unavailable voice approval means No.")
+    else:
+        print("JARVIS production runtime supervisor")
+        print("Git/network update polling is disabled; Self-Repair remains local-only.")
 
     control = VoiceControlServer()
     repair, repair_store = _build_supervisor_repair_controller(config)
     process = _start_jarvis(root, control)
-    update_poller = RemoteUpdatePoller(root, config)
+    update_poller = (
+        RemoteUpdatePoller(root, config) if config.git_updates_enabled else None
+    )
     update_poller_started = False
     declined_sha: str | None = None
     liveness_failure_streak = 0
@@ -1016,8 +1031,9 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
             print(f"Initial JARVIS startup readiness failed: {exc}")
             return 1
 
-        update_poller.start()
-        update_poller_started = True
+        if update_poller is not None:
+            update_poller.start()
+            update_poller_started = True
 
         while True:
             if process.poll() is not None:
@@ -1071,6 +1087,9 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                     return 1
                 process = restarted
                 liveness_failure_streak = 0
+                continue
+
+            if update_poller is None:
                 continue
 
             remote_poll = update_poller.latest()
@@ -1152,7 +1171,7 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
         print("\nStopping JARVIS development supervisor...")
         return 0
     finally:
-        if update_poller_started:
+        if update_poller_started and update_poller is not None:
             update_poller.stop()
         _stop_jarvis(
             process,
@@ -1162,6 +1181,14 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
         control.close()
         if repair_store is not None:
             repair_store.close()
+
+
+def runtime_supervisor_main() -> int:
+    try:
+        return run_supervisor(_runtime_supervisor_config_from_environment())
+    except (RuntimeError, subprocess.CalledProcessError) as exc:
+        print(f"jarvis-supervisor error: {exc}", file=sys.stderr)
+        return 2
 
 
 def main() -> int:
