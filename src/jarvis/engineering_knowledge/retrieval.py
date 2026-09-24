@@ -7,6 +7,7 @@ FTS rows and embeddings are derived, replaceable indexes that can be rebuilt.
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import sqlite3
 from dataclasses import dataclass
@@ -779,8 +780,6 @@ class EngineeringKnowledgeRetrievalIndex:
                 """,
                 (revision_id,),
             ).fetchall()
-        import json
-
         return tuple(
             EngineeringAttestation(
                 attestation_id=str(row[0]),
