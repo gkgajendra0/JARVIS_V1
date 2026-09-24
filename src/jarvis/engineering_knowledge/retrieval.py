@@ -81,9 +81,7 @@ class EngineeringKnowledgeRetrievalPolicy:
         if not isinstance(self.sensitivities, frozenset) or not all(
             isinstance(value, KnowledgeSensitivity) for value in self.sensitivities
         ):
-            raise TypeError(
-                "sensitivities must be a frozenset[KnowledgeSensitivity]"
-            )
+            raise TypeError("sensitivities must be a frozenset[KnowledgeSensitivity]")
 
     @classmethod
     def local(cls) -> EngineeringKnowledgeRetrievalPolicy:
@@ -380,9 +378,7 @@ class EngineeringKnowledgeRetrievalIndex:
         timestamp = _finite_epoch(now_epoch)
         resolved_policy = policy or EngineeringKnowledgeRetrievalPolicy.local()
         if not isinstance(resolved_policy, EngineeringKnowledgeRetrievalPolicy):
-            raise TypeError(
-                "policy must be an EngineeringKnowledgeRetrievalPolicy"
-            )
+            raise TypeError("policy must be an EngineeringKnowledgeRetrievalPolicy")
 
         eligible = self._eligible_revision_ids(
             context=context,
@@ -424,25 +420,20 @@ class EngineeringKnowledgeRetrievalIndex:
         )
         fused_score = {item.assertion_id: item.fused_score for item in fused}
         lexical_rank = {
-            revision_id: rank
-            for rank, (revision_id, _) in enumerate(lexical, start=1)
+            revision_id: rank for rank, (revision_id, _) in enumerate(lexical, start=1)
         }
         lexical_score = dict(lexical)
         dense_rank = {
-            revision_id: rank
-            for rank, (revision_id, _) in enumerate(dense, start=1)
+            revision_id: rank for rank, (revision_id, _) in enumerate(dense, start=1)
         }
         dense_score = dict(dense)
         exact_rank = {
-            revision_id: rank
-            for rank, revision_id in enumerate(exact_ids, start=1)
+            revision_id: rank for rank, revision_id in enumerate(exact_ids, start=1)
         }
 
         ordered: list[str] = list(exact_ids)
         ordered.extend(
-            item.assertion_id
-            for item in fused
-            if item.assertion_id not in exact_rank
+            item.assertion_id for item in fused if item.assertion_id not in exact_rank
         )
         selected = ordered[:limit]
         output: list[EngineeringKnowledgeRetrievalCandidate] = []
@@ -460,7 +451,9 @@ class EngineeringKnowledgeRetrievalIndex:
                     searchable_text=document,
                     rank=rank,
                     fused_score=(
-                        1.0 if revision_id in exact_rank else fused_score.get(
+                        1.0
+                        if revision_id in exact_rank
+                        else fused_score.get(
                             revision_id,
                             0.0,
                         )
@@ -486,9 +479,7 @@ class EngineeringKnowledgeRetrievalIndex:
     ) -> dict[str, ApplicabilityDecision]:
         if not policy.sensitivities:
             return {}
-        sensitivity_values = tuple(
-            sorted(item.value for item in policy.sensitivities)
-        )
+        sensitivity_values = tuple(sorted(item.value for item in policy.sensitivities))
         placeholders = ", ".join("?" for _ in sensitivity_values)
         with self._lock:
             rows = self._connection.execute(
@@ -549,9 +540,7 @@ class EngineeringKnowledgeRetrievalIndex:
             if not assessment.eligible or assessment.validated is None:
                 continue
             parts.append(assessment.validated.searchable_text)
-        normalized = " ".join(
-            part.strip() for part in parts if part and part.strip()
-        )
+        normalized = " ".join(part.strip() for part in parts if part and part.strip())
         if not normalized:
             raise EngineeringKnowledgeRetrievalError(
                 "knowledge revision produced no safe searchable text"
@@ -871,9 +860,7 @@ def _required_text(value: object, field: str) -> str:
         raise TypeError(f"{field} must be a string")
     normalized = value.strip()
     if not normalized:
-        raise EngineeringKnowledgeRetrievalQueryError(
-            f"{field} must not be empty"
-        )
+        raise EngineeringKnowledgeRetrievalQueryError(f"{field} must not be empty")
     return normalized
 
 
