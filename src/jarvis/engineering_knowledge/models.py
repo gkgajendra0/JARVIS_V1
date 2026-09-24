@@ -203,13 +203,9 @@ class EngineeringKnowledgeRevision:
             _sha256(self.canonical_digest, field="canonical_digest"),
         )
         if self.canonicalization != CANONICALIZATION_RFC8785:
-            raise ValueError(
-                f"canonicalization must be {CANONICALIZATION_RFC8785!r}"
-            )
+            raise ValueError(f"canonicalization must be {CANONICALIZATION_RFC8785!r}")
         if self.digest_algorithm != DIGEST_ALGORITHM_SHA256:
-            raise ValueError(
-                f"digest_algorithm must be {DIGEST_ALGORITHM_SHA256!r}"
-            )
+            raise ValueError(f"digest_algorithm must be {DIGEST_ALGORITHM_SHA256!r}")
 
         parent = _optional_text(self.parent_revision_id)
         supersedes = _optional_text(self.supersedes_revision_id)
