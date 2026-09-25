@@ -16,7 +16,7 @@ The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARV
 - Self-Awareness: **ACCEPTED FOUNDATION**.
 - Persistent Concurrent Work Orchestration: **ACCEPTED FOUNDATION**.
 - Deterministic repair framework + R2 runtime crash/hang recovery: **ACCEPTED FOUNDATION**.
-- Self-Repair / Self-Evolution program: **ACTIVE — Phase 1H foundation hardening precedes Phase 2 RepairKnowledge**.
+- Self-Repair / Self-Evolution program: **ACTIVE — Phase 2 EngineeringKnowledge owner-machine accepted 2026-09-25; Phase 3 EngineeringChange is next**.
 - Step 8 notes/tasks/reminders/scheduling remains the **next numbered product slice** when numbered roadmap work resumes.
 
 Current accepted/deferred/superseded/rejected truth is centralized in
