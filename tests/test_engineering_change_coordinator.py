@@ -51,6 +51,27 @@ def test_restart_reconciles_submission_without_duplicate_stage(tmp_path) -> None
     assert backend.submissions == [stages[0].work_id, stages[0].work_id]
 
 
+def test_independent_changes_can_have_ready_research_workitems_in_parallel(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+    backend = RecordingBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+
+    first = coordinator.start("Research camera transport", "session", "turn-1")
+    second = coordinator.start("Research phone gateway", "session", "turn-2")
+    first_stage = changes.list_stages(first.change_id)[0]
+    second_stage = changes.list_stages(second.change_id)[0]
+
+    assert first_stage.work_id != second_stage.work_id
+    assert backend.submissions == [first_stage.work_id, second_stage.work_id]
+    assert work.require(first_stage.work_id).dependencies == ()
+    assert work.require(second_stage.work_id).dependencies == ()
+    assert work.require(first_stage.work_id).state is WorkState.PENDING
+    assert work.require(second_stage.work_id).state is WorkState.PENDING
+
+
 def test_research_then_approved_build_uses_dependent_workitem(tmp_path) -> None:
     work = SQLiteWorkStore(tmp_path / "work.sqlite3")
     changes = ChangeStore(work)
