@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from jarvis.engineering_change import ChangeConflict, ChangeState, ChangeStore
-from jarvis.engineering_change.gates import GateKind, GateService
+from jarvis.engineering_change.gates import GateChallenge, GateKind, GateService
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -157,6 +157,35 @@ def test_owner_rejection_is_durable_and_free_text_work_input_is_not_a_gate(
         request_key="owner-session:reject-turn",
     )
     assert store.require(change.change_id).state is ChangeState.REJECTED
+
+
+def test_gate_decision_transaction_rolls_back_if_event_persistence_fails(
+    tmp_path, monkeypatch
+) -> None:
+    store, change, artifact = _architecture_ready(tmp_path)
+    gates = _trusted_gates(store)
+    challenge = gates.present(
+        change.change_id, GateKind.ARCHITECTURE, artifact.artifact_id
+    )
+
+    def fail_event(*args, **kwargs):
+        del args, kwargs
+        raise RuntimeError("injected decision boundary failure")
+
+    monkeypatch.setattr(store, "_event", fail_event)
+    with pytest.raises(RuntimeError, match="decision boundary"):
+        gates.decide(
+            challenge.gate_id,
+            approved=True,
+            artifact_digest=artifact.digest,
+            actor_id="owner",
+            source_session_id="owner-session",
+            source_turn_id="approval-turn",
+            request_key="owner-session:approval-turn",
+        )
+
+    assert store.require(change.change_id).state is ChangeState.WAITING_OWNER_APPROVAL
+    assert isinstance(gates.get(challenge.gate_id), GateChallenge)
 
 
 def test_promotion_decision_records_intent_without_claiming_promotion(tmp_path) -> None:
