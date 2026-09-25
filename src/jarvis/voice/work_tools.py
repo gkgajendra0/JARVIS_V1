@@ -209,22 +209,38 @@ class WorkAgentTools:
         if coordinator is None:
             return {"ok": False, "status": "unavailable"}
         change = coordinator.store.require(change_id)
+        stages: list[dict[str, object]] = []
+        for stage in coordinator.store.list_stages(change_id):
+            item = coordinator.store.work.require(stage.work_id)
+            estimate = estimate_work(coordinator.store.work, item)
+            stages.append(
+                {
+                    "stage": stage.stage_key,
+                    "attempt": stage.attempt,
+                    "work_id": stage.work_id,
+                    "work_state": item.state.value,
+                    "progress_percent": estimate.progress_percent,
+                    "progress_is_approximate": estimate.progress_is_approximate,
+                    "eta_low_seconds": estimate.eta_low_seconds,
+                    "eta_high_seconds": estimate.eta_high_seconds,
+                    "eta_confidence": estimate.eta_confidence,
+                }
+            )
         return {
             "ok": True,
             "change_id": change_id,
             "state": change.state.value,
             "version": change.version,
-            "stages": [
-                {
-                    "stage": stage.stage_key,
-                    "attempt": stage.attempt,
-                    "work_id": stage.work_id,
-                    "work_state": coordinator.store.work.require(
-                        stage.work_id
-                    ).state.value,
-                }
-                for stage in coordinator.store.list_stages(change_id)
+            "progress_percent": None,
+            "progress_is_approximate": True,
+            "eta_low_seconds": None,
+            "eta_high_seconds": None,
+            "eta_confidence": "unknown",
+            "eta_basis": [
+                "EngineeringChange spans multiple WorkItems and owner gates; "
+                "no validated aggregate duration model is available."
             ],
+            "stages": stages,
         }
 
     def _latest_user_turn(self) -> ConversationTurn:
