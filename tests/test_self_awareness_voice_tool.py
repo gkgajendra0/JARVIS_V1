@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -179,7 +179,7 @@ async def test_typed_operational_evidence_tool_is_read_only_and_bounded(
 ) -> None:
     log_path = tmp_path / "jarvis.jsonl"
     observed_at = (
-        (datetime.now(timezone.utc) - timedelta(minutes=1))
+        (datetime.now(UTC) - timedelta(minutes=1))
         .isoformat()
         .replace(
             "+00:00",
