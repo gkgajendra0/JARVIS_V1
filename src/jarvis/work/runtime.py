@@ -9,6 +9,18 @@ from pathlib import Path
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.knowledge.research import CurrentResearchService
+from jarvis.model_routing.eligibility import EligibilityPolicy
+from jarvis.model_routing.invoker import (
+    ModelInvoker,
+    build_default_model_adapter_registry,
+)
+from jarvis.model_routing.registry import RoutingStrategyRegistry
+from jarvis.model_routing.router import (
+    ModelRouter,
+    build_default_work_targets,
+)
+from jarvis.model_routing.store import ModelRoutingStore
+from jarvis.model_routing.strategy import EngineeringStageStrategy
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
 from jarvis.work.dbos_backend import (
@@ -26,7 +38,7 @@ from jarvis.work.engine import WorkActionRegistry, WorkEngine
 from jarvis.work.models import WorkItem, WorkState, WorkType
 from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.privacy import build_default_work_payload_codec
-from jarvis.work.reasoner import ProviderWorkReasoner
+from jarvis.work.reasoner import RoutedWorkReasoner
 from jarvis.work.resources import ResourceLeaseManager
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
@@ -51,6 +63,8 @@ class WorkRuntime:
         supported_work_types: frozenset[WorkType],
         interactive_brain_gate: InteractiveBrainGate,
         changes: ChangeCoordinator | None = None,
+        routing_store: ModelRoutingStore | None = None,
+        model_router: ModelRouter | None = None,
     ) -> None:
         self.store = store
         self.engine = engine
@@ -59,6 +73,8 @@ class WorkRuntime:
         self.supported_work_types = supported_work_types
         self._interactive_brain_gate = interactive_brain_gate
         self.changes = changes
+        self.routing_store = routing_store
+        self.model_router = model_router
         self._closed = False
 
     def supports(self, work_type: WorkType) -> bool:
@@ -145,7 +161,26 @@ def build_work_runtime(
     )
     store.protect_existing_payloads()
     change_store = ChangeStore(store)
-    reasoner = ProviderWorkReasoner(provider=provider, model=model)
+    adapter_registry = build_default_model_adapter_registry()
+    work_targets = build_default_work_targets(
+        configured_provider=provider,
+        configured_model=model,
+        adapter_registry=adapter_registry,
+    )
+    routing_store = ModelRoutingStore(store)
+    strategy_registry = RoutingStrategyRegistry((EngineeringStageStrategy(),))
+    model_router = ModelRouter(
+        target_registry=work_targets.registry,
+        adapter_registry=adapter_registry,
+        strategy_registry=strategy_registry,
+        routing_store=routing_store,
+        eligibility_policy=EligibilityPolicy(),
+    )
+    reasoner = RoutedWorkReasoner(
+        router=model_router,
+        invoker=ModelInvoker(adapter_registry),
+        primary_target_id=work_targets.primary_target_id,
+    )
     interactive_brain_gate = InteractiveBrainGate()
     brain = BrainCoordinator(
         reasoner,
@@ -203,4 +238,6 @@ def build_work_runtime(
         supported_work_types=actions.supported_work_types,
         interactive_brain_gate=interactive_brain_gate,
         changes=changes,
+        routing_store=routing_store,
+        model_router=model_router,
     )

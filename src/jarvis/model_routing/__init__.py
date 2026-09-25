@@ -16,6 +16,12 @@ from jarvis.model_routing.health import (
     TargetHealthRecord,
     apply_provider_failure,
 )
+from jarvis.model_routing.invoker import (
+    ModelInvocationContext,
+    ModelInvoker,
+    StructuredOutputModelAdapter,
+    build_default_model_adapter_registry,
+)
 from jarvis.model_routing.models import (
     BenchmarkStatus,
     CostProfile,
@@ -46,6 +52,16 @@ from jarvis.model_routing.registry import (
     UnknownModelTargetError,
     UnknownRoutingStrategyError,
 )
+from jarvis.model_routing.router import (
+    DefaultWorkTargets,
+    ModelRouter,
+    RoutedSelection,
+    RoutingProvenanceError,
+    RoutingUnavailableError,
+    build_default_work_targets,
+    build_work_routing_request,
+    reasoning_cycle_key,
+)
 from jarvis.model_routing.store import (
     ModelRoutingStore,
     PersistedRoutingDecision,
@@ -61,6 +77,7 @@ from jarvis.model_routing.strategy import (
 __all__ = [
     "BenchmarkStatus",
     "CostProfile",
+    "DefaultWorkTargets",
     "DuplicateRegistrationError",
     "EligibilityPolicy",
     "EligibilityReason",
@@ -76,7 +93,10 @@ __all__ = [
     "LocalityRequirement",
     "ModelAdapter",
     "ModelAdapterRegistry",
+    "ModelInvocationContext",
+    "ModelInvoker",
     "ModelLocality",
+    "ModelRouter",
     "ModelRoutingStore",
     "ModelTarget",
     "ModelTargetRegistry",
@@ -84,18 +104,22 @@ __all__ = [
     "PersistedRoutingDecision",
     "PrivacyClass",
     "ResponseContractResult",
+    "RoutedSelection",
     "RoutingAttempt",
     "RoutingAttemptKind",
     "RoutingDecision",
     "RoutingOutcome",
+    "RoutingProvenanceError",
     "RoutingRegistryError",
     "RoutingRequest",
     "RoutingStoreError",
     "RoutingStrategy",
     "RoutingStrategyRegistry",
     "RoutingStrategyResult",
+    "RoutingUnavailableError",
     "StageRoutingSignals",
     "StrategyNoCandidateError",
+    "StructuredOutputModelAdapter",
     "TargetExclusion",
     "TargetHealthEligibility",
     "TargetHealthRecord",
@@ -103,5 +127,9 @@ __all__ = [
     "UnknownModelTargetError",
     "UnknownRoutingStrategyError",
     "apply_provider_failure",
+    "build_default_model_adapter_registry",
+    "build_default_work_targets",
+    "build_work_routing_request",
     "derive_work_step_signals",
+    "reasoning_cycle_key",
 ]

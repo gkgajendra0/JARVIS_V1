@@ -610,6 +610,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 "tests/test_model_routing_registry.py",
                 "tests/test_model_routing_store.py",
                 "tests/test_model_routing_strategy.py",
+                "tests/test_routed_work_reasoner.py",
             ),
             logger_prefixes=("jarvis.model_routing",),
             docs=(
