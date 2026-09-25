@@ -486,6 +486,15 @@ class EngineeringKnowledgeRetrievalIndex:
         _positive_int(dense_window, "dense_window")
         _positive_int(rank_constant, "rank_constant")
         timestamp = _finite_epoch(now_epoch)
+        query_security = EngineeringEvidenceAdmissionGate().assess(
+            EvidenceAdmissionRequest(
+                source_class="external_research",
+                content=query,
+            )
+        )
+        if not query_security.admissible:
+            return ()
+
         resolved_policy = policy or EngineeringKnowledgeRetrievalPolicy.local()
         if not isinstance(resolved_policy, EngineeringKnowledgeRetrievalPolicy):
             raise TypeError("policy must be an EngineeringKnowledgeRetrievalPolicy")
