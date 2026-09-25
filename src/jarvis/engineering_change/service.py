@@ -119,3 +119,47 @@ class ChangeService:
         )
         self.coordinator.reconcile(challenge.change_id)
         return decision
+
+    def prepare_acceptance(self, change_id: str) -> GateChallenge:
+        """Present canonical development evidence; never trust a model pass claim."""
+        store = self.coordinator.store
+        change = store.require(change_id)
+        if change.state is not ChangeState.VERIFYING:
+            raise ChangeConflict("change has not reached verification")
+        stage = next(
+            (
+                s
+                for s in reversed(store.list_stages(change_id))
+                if s.stage_key == "development"
+            ),
+            None,
+        )
+        if stage is None:
+            raise ChangeConflict("development stage is missing")
+        work = store.work.require(stage.work_id)
+        result = work.result
+        if (
+            work.state is not WorkState.COMPLETED
+            or not isinstance(result.get("verification"), dict)
+            or result["verification"].get("passed") is not True
+            or not result.get("commit")
+            or not result.get("branch")
+        ):
+            raise ChangeConflict("canonical development has no verified commit")
+        payload = {"work_id": stage.work_id, "result": result}
+        artifact = store.add_artifact(change_id, kind="acceptance", payload=payload)
+        gate = GateService(store, verify_owner=lambda *_: False).present(
+            change_id, GateKind.ACCEPTANCE, artifact.artifact_id
+        )
+        store.work.enqueue_delivery(
+            work=work,
+            kind=WorkDeliveryKind.OWNER_INPUT,
+            message=(
+                f"Review EngineeringChange {change_id} acceptance: branch "
+                f"{result['branch']}, commit {result['commit']}, tests passed in "
+                f"{result['verification'].get('sandbox')}. Digest: {artifact.digest}. "
+                f"Say 'approve {gate.gate_id}' or 'reject {gate.gate_id}'."
+            ),
+            event_key=f"change:{change_id}:{gate.gate_id}:{artifact.digest}",
+        )
+        return gate

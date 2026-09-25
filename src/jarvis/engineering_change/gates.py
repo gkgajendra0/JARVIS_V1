@@ -8,6 +8,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
+from jarvis.work.models import WorkState
+
 from .models import ChangeConflict, ChangeState
 from .store import ChangeStore, _now
 
@@ -90,6 +92,27 @@ class GateService:
             or artifact.kind != kind.value
         ):
             raise ChangeConflict("gate artifact does not match kind or change")
+        if kind is GateKind.ACCEPTANCE:
+            stage = self.store.stage_for_work(str(artifact.payload.get("work_id", "")))
+            if (
+                stage is None
+                or stage.change_id != change_id
+                or stage.stage_key != "development"
+            ):
+                raise ChangeConflict("acceptance evidence has no development stage")
+            item = self.store.work.require(stage.work_id)
+            result = item.result
+            if (
+                item.state is not WorkState.COMPLETED
+                or artifact.payload.get("result") != result
+                or not isinstance(result.get("verification"), dict)
+                or result["verification"].get("passed") is not True
+                or not result.get("commit")
+                or not result.get("branch")
+            ):
+                raise ChangeConflict(
+                    "acceptance requires verified canonical development"
+                )
         work = self.store.work
         with work._lock, work._connect() as db:
             change = self._require_change(db, change_id)

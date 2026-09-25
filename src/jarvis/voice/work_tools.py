@@ -70,6 +70,7 @@ class WorkAgentTools:
             self.continue_background_work,
             self.start_engineering_change,
             self.propose_change_architecture,
+            self.prepare_change_acceptance,
             self.decide_change_gate,
             self.get_engineering_change_status,
         ]
@@ -112,6 +113,24 @@ class WorkAgentTools:
             "gate_id": gate.gate_id,
             "artifact_digest": gate.artifact_digest,
             "status": "awaiting_explicit_owner_architecture_decision",
+        }
+
+    @function_tool()
+    async def prepare_change_acceptance(
+        self, context: RunContext, change_id: str
+    ) -> dict[str, object]:
+        """Offer canonical verified development evidence for explicit owner acceptance.
+
+        Only a completed development WorkItem with a verified commit is eligible.
+        """
+        del context
+        gate = self._change_service().prepare_acceptance(change_id)
+        return {
+            "ok": True,
+            "change_id": change_id,
+            "gate_id": gate.gate_id,
+            "artifact_digest": gate.artifact_digest,
+            "status": "awaiting_explicit_owner_acceptance",
         }
 
     @function_tool()

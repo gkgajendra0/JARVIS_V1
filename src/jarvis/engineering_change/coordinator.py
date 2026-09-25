@@ -73,6 +73,13 @@ class ChangeCoordinator:
             # The gate is checked again before re-submitting after a restart.
             with self.store.work._lock, self.store.work._connect() as db:
                 self.store._admit_stage(db, change, stage_key)
+            if stage_key == "development" and (
+                architecture is None
+                or stage.plan_artifact_id != architecture.artifact_id
+            ):
+                raise ChangeConflict(
+                    "development attempt belongs to an older architecture"
+                )
         if not item.state.terminal:
             execution_id = self.backend.submit(item.work_id, priority=item.priority)
             if execution_id != item.work_id:
@@ -108,16 +115,37 @@ class ChangeCoordinator:
                     expected_version=change.version,
                 )
         elif change.state is ChangeState.APPROVED_FOR_BUILD:
-            self.submit_stage(change_id, "development", 1)
+            architecture = self.store.latest_artifact(change_id, "architecture")
+            if architecture is None:
+                raise ChangeConflict("approved architecture is missing")
+            attempts = [
+                s
+                for s in self.store.list_stages(change_id)
+                if s.stage_key == "development"
+            ]
+            matching = next(
+                (s for s in attempts if s.plan_artifact_id == architecture.artifact_id),
+                None,
+            )
+            self.submit_stage(
+                change_id,
+                "development",
+                matching.attempt
+                if matching is not None
+                else max((s.attempt for s in attempts), default=0) + 1,
+            )
             return self.store.transition(
                 change_id, ChangeState.DEVELOPING, expected_version=change.version
             )
         elif change.state is ChangeState.DEVELOPING:
+            architecture = self.store.latest_artifact(change_id, "architecture")
             stage = next(
                 (
                     s
-                    for s in self.store.list_stages(change_id)
+                    for s in reversed(self.store.list_stages(change_id))
                     if s.stage_key == "development"
+                    and architecture is not None
+                    and s.plan_artifact_id == architecture.artifact_id
                 ),
                 None,
             )

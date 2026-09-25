@@ -111,7 +111,7 @@ def test_conflicting_or_stale_owner_approval_cannot_unlock_build(tmp_path) -> No
             source_turn_id="approval-turn",
             request_key="owner-session:approval-turn",
         )
-    assert store.require(change.change_id).state is ChangeState.WAITING_OWNER_APPROVAL
+    assert store.require(change.change_id).state is ChangeState.ARCHITECTURE_READY
 
 
 def test_unverified_owner_source_cannot_decide(tmp_path) -> None:

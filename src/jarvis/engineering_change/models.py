@@ -103,3 +103,4 @@ class ChangeStage:
     stage_key: str
     attempt: int
     work_id: str
+    plan_artifact_id: str | None = None

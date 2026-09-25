@@ -166,6 +166,26 @@ def test_changed_architecture_cannot_verify_completed_old_development(tmp_path) 
     development = changes.list_stages(change.change_id)[1]
     _complete(work, work.require(development.work_id))
     changes.add_artifact(change.change_id, kind="architecture", payload={"v": 2})
-    with pytest.raises(ChangeConflict, match="current architecture"):
-        coordinator.reconcile_for_work(development.work_id)
-    assert changes.require(change.change_id).state is ChangeState.DEVELOPING
+    assert changes.require(change.change_id).state is ChangeState.ARCHITECTURE_READY
+    assert not changes.work_admitted(development.work_id)
+    coordinator.reconcile_for_work(development.work_id)
+    new_architecture = changes.latest_artifact(change.change_id, "architecture")
+    assert new_architecture is not None
+    new_gate = gates.present(
+        change.change_id, GateKind.ARCHITECTURE, new_architecture.artifact_id
+    )
+    gates.decide(
+        new_gate.gate_id,
+        approved=True,
+        artifact_digest=new_architecture.digest,
+        actor_id="owner",
+        source_session_id="session",
+        source_turn_id="new-approval",
+        request_key="session:new-approval",
+    )
+    coordinator.reconcile(change.change_id)
+    new_development = changes.list_stages(change.change_id)[2]
+    assert new_development.attempt == 2
+    assert new_development.work_id != development.work_id
+    assert not changes.work_admitted(development.work_id)
+    assert changes.work_admitted(new_development.work_id)

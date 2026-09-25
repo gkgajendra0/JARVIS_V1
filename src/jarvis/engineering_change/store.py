@@ -69,6 +69,7 @@ class ChangeStore:
                     stage_key TEXT NOT NULL,
                     attempt INTEGER NOT NULL CHECK(attempt > 0),
                     work_id TEXT NOT NULL UNIQUE REFERENCES work_items(work_id),
+                    plan_artifact_id TEXT REFERENCES engineering_change_artifacts(artifact_id),
                     PRIMARY KEY(change_id, stage_key, attempt)
                 );
                 CREATE TABLE IF NOT EXISTS engineering_change_events (
@@ -224,7 +225,11 @@ class ChangeStore:
             ).fetchall()
         return tuple(
             ChangeStage(
-                row["change_id"], row["stage_key"], row["attempt"], row["work_id"]
+                row["change_id"],
+                row["stage_key"],
+                row["attempt"],
+                row["work_id"],
+                row["plan_artifact_id"],
             )
             for row in rows
         )
@@ -238,7 +243,11 @@ class ChangeStore:
             None
             if row is None
             else ChangeStage(
-                row["change_id"], row["stage_key"], row["attempt"], row["work_id"]
+                row["change_id"],
+                row["stage_key"],
+                row["attempt"],
+                row["work_id"],
+                row["plan_artifact_id"],
             )
         )
 
@@ -246,7 +255,7 @@ class ChangeStore:
         """Existing direct WorkItems are unaffected; change WorkItems need current gates."""
         with self.work._lock, self.work._connect() as db:
             stage = db.execute(
-                "SELECT change_id, stage_key FROM engineering_change_stages WHERE work_id=?",
+                "SELECT change_id, stage_key, plan_artifact_id FROM engineering_change_stages WHERE work_id=?",
                 (work_id,),
             ).fetchone()
             if stage is None:
@@ -259,6 +268,18 @@ class ChangeStore:
                 return False
             try:
                 self._admit_stage(db, self._from_row(row), stage["stage_key"])
+                if stage["stage_key"] == "development":
+                    latest = db.execute(
+                        """SELECT artifact_id FROM engineering_change_artifacts
+                        WHERE change_id=? AND kind='architecture'
+                        ORDER BY revision DESC LIMIT 1""",
+                        (stage["change_id"],),
+                    ).fetchone()
+                    if (
+                        latest is None
+                        or latest["artifact_id"] != stage["plan_artifact_id"]
+                    ):
+                        return False
             except (ChangeConflict, UnsupportedProcess):
                 return False
             return True
@@ -335,7 +356,24 @@ class ChangeStore:
             raise ChangeConflict("artifact kind and object payload are required")
         digest = _digest(payload)
         with self.work._lock, self.work._connect() as connection:
-            self._require_row(connection, change_id)
+            change_row = connection.execute(
+                "SELECT * FROM engineering_changes WHERE change_id=?", (change_id,)
+            ).fetchone()
+            if change_row is None:
+                raise ChangeConflict("unknown change")
+            change = self._from_row(change_row)
+            if kind == "architecture" and change.state in {
+                ChangeState.PROMOTED,
+                ChangeState.OBSERVING,
+                ChangeState.CLOSED,
+                ChangeState.REJECTED,
+                ChangeState.FAILED,
+                ChangeState.SUPERSEDED,
+                ChangeState.ROLLED_BACK,
+            }:
+                raise ChangeConflict(
+                    "terminal or promoted change cannot revise architecture"
+                )
             revision = connection.execute(
                 """SELECT COALESCE(MAX(revision), 0) + 1
                 FROM engineering_change_artifacts WHERE change_id=? AND kind=?""",
@@ -362,6 +400,20 @@ class ChangeStore:
                     artifact.created_at,
                 ),
             )
+            if kind == "architecture" and change.state in {
+                ChangeState.WAITING_OWNER_APPROVAL,
+                ChangeState.APPROVED_FOR_BUILD,
+                ChangeState.DEVELOPING,
+                ChangeState.VERIFYING,
+                ChangeState.WAITING_OWNER_ACCEPTANCE,
+                ChangeState.READY_FOR_PROMOTION,
+                ChangeState.WAITING_PROMOTION_APPROVAL,
+            }:
+                connection.execute(
+                    """UPDATE engineering_changes SET state=?, version=version+1,
+                    updated_at=? WHERE change_id=?""",
+                    (ChangeState.ARCHITECTURE_READY.value, _now(), change_id),
+                )
             return artifact
 
     def get_artifact(self, artifact_id: str) -> ChangeArtifact | None:
@@ -417,14 +469,34 @@ class ChangeStore:
                     raise ChangeConflict(
                         "stage attempt already owns a different work item"
                     )
-                return ChangeStage(change_id, stage_key, attempt, item.work_id)
+                return ChangeStage(
+                    change_id,
+                    stage_key,
+                    attempt,
+                    item.work_id,
+                    connection.execute(
+                        """SELECT plan_artifact_id FROM engineering_change_stages
+                        WHERE change_id=? AND stage_key=? AND attempt=?""",
+                        (change_id, stage_key, attempt),
+                    ).fetchone()[0],
+                )
+            plan_artifact_id = None
+            if stage_key == "development":
+                plan_artifact_id = connection.execute(
+                    """SELECT artifact_id FROM engineering_change_artifacts
+                    WHERE change_id=? AND kind='architecture'
+                    ORDER BY revision DESC LIMIT 1""",
+                    (change_id,),
+                ).fetchone()[0]
             self.work._validate_dependency_graph(connection, item)
             try:
                 self.work._insert_item(connection, item)
                 connection.execute(
-                    "INSERT INTO engineering_change_stages VALUES (?, ?, ?, ?)",
-                    (change_id, stage_key, attempt, item.work_id),
+                    "INSERT INTO engineering_change_stages VALUES (?, ?, ?, ?, ?)",
+                    (change_id, stage_key, attempt, item.work_id, plan_artifact_id),
                 )
             except sqlite3.IntegrityError as exc:
                 raise ChangeConflict("stage WorkItem link violates identity") from exc
-            return ChangeStage(change_id, stage_key, attempt, item.work_id)
+            return ChangeStage(
+                change_id, stage_key, attempt, item.work_id, plan_artifact_id
+            )
