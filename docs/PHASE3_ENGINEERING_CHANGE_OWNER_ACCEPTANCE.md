@@ -28,6 +28,6 @@ Status: **PENDING**. Run this procedure on the tested PR head after CI passes an
 
 ## Result interpretation
 
-All `store_gates` must be PASS for the main change. The evidence command deliberately marks production PostgreSQL/restart, live voice gate delivery and isolated development review as PENDING: those need real owner-machine observation. Any FAIL or missing external proof blocks acceptance. The owner and reviewer then record the actual run, protected-main commit, evidence location and final disposition in a dated Phase-3 acceptance record.
+All `store_gates` must be PASS for the main change, and `tested_commit` must equal the green PR head. The evidence command deliberately marks production PostgreSQL/restart, live voice gate delivery and isolated development review as PENDING: those need real owner-machine observation. Any FAIL or missing external proof blocks acceptance. The owner and reviewer then record the actual run, tested PR head, evidence location and final disposition in a dated Phase-3 acceptance record before merging.
 
 R2 Self-Repair and Phase-2 EngineeringKnowledge retain their accepted independent baselines; this procedure does not repeat the Phase-2 live crash injection.

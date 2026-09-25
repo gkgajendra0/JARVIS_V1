@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -22,6 +23,18 @@ from .store import ChangeStore
 def inspect_change(store: ChangeStore, change_id: str) -> dict[str, object]:
     """Inspect persisted evidence; never echo requests, proposals or test output."""
     change = store.require(change_id)
+    source_root = Path(__file__).resolve().parents[3]
+    try:
+        revision = subprocess.run(
+            ["git", "-C", str(source_root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+        tested_commit = revision.stdout.strip() if revision.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired):
+        tested_commit = None
     stages = store.list_stages(change_id)
     research = [stage for stage in stages if stage.stage_key == "research"]
     development = [stage for stage in stages if stage.stage_key == "development"]
@@ -74,6 +87,7 @@ def inspect_change(store: ChangeStore, change_id: str) -> dict[str, object]:
     return {
         "phase": "3",
         "change_id": change_id,
+        "tested_commit": tested_commit,
         "process": f"{change.process_key}/{change.process_version}",
         "state": change.state.value,
         "store_gates": {
