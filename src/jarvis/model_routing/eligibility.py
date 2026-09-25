@@ -104,7 +104,9 @@ class EligibleTargets:
         expected = self.snapshot.eligible_target_ids
         actual = tuple(target.target_id for target in self.targets)
         if actual != expected:
-            raise ValueError("eligible target objects must match the eligibility snapshot")
+            raise ValueError(
+                "eligible target objects must match the eligibility snapshot"
+            )
         if not actual:
             raise ValueError("EligibleTargets requires at least one target")
 
