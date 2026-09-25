@@ -72,6 +72,7 @@ class WorkAgentTools:
             self.continue_background_work,
             self.start_engineering_change,
             self.propose_change_architecture,
+            self.revise_change_architecture,
             self.prepare_change_acceptance,
             self.decide_change_gate,
             self.get_engineering_change_status,
@@ -107,6 +108,30 @@ class WorkAgentTools:
         if not summary:
             raise ChangeConflict("architecture summary is empty")
         gate = self._change_service().propose_architecture(
+            change_id, {"summary": summary}
+        )
+        return {
+            "ok": True,
+            "change_id": change_id,
+            "gate_id": gate.gate_id,
+            "artifact_digest": gate.artifact_digest,
+            "status": "awaiting_explicit_owner_architecture_decision",
+        }
+
+    @function_tool()
+    async def revise_change_architecture(
+        self, context: RunContext, change_id: str, architecture_summary: str
+    ) -> dict[str, object]:
+        """Revise an already approved architecture and reopen exact owner review.
+
+        The prior development attempt loses admission immediately. Development for
+        the new revision can start only after the new digest-bound owner gate passes.
+        """
+        del context
+        summary = architecture_summary.strip()
+        if not summary:
+            raise ChangeConflict("architecture summary is empty")
+        gate = self._change_service().revise_architecture(
             change_id, {"summary": summary}
         )
         return {
