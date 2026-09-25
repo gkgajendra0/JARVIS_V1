@@ -7,40 +7,49 @@ Status: **PENDING**. Run this procedure on the tested PR head after CI passes an
 - Run from the owner Windows profile that holds the existing WorkStore DPAPI key.
 - Use an isolated Git worktree at the exact green PR head. Record that commit SHA and preserve the protected-main checkout. The acceptance evidence must identify this same tested commit.
 - Confirm Windows Hello verification is configured for the owner, the normal supervised JARVIS voice runtime is healthy, and DBOS uses the accepted production PostgreSQL configuration. Do not point this run at a throwaway SQLite DBOS backend.
-- Synchronize the current editable install with `python -m pip install -e ".[dev,phase45d-acceptance,hands,vision,active-speaker,speaker]"` using the project's supported Python environment. The live owner-machine runtime currently enables vision/active-speaker and enrolled-speaker paths, so a fresh acceptance venv must include those declared runtime extras rather than relying on packages left in an older environment.
-- On Windows, the normal package index can resolve `torch==2.13.0` to a CPU-only wheel even though the accepted RF-DETR production stack is configured for CUDA. Before starting the acceptance runtime, mirror the CUDA family used by the healthy protected-main JARVIS venv with the official PyTorch wheel index and verify `torch.cuda.is_available()` plus the detected GPU. PyTorch 2.13.0 supports the Windows CUDA 12.6, 13.0 and 13.2 wheel families used by this procedure. Fail closed if the protected-main environment reports no CUDA runtime or an unsupported family.
+- Owner-machine acceptance must use **production-fidelity dependencies**. Reuse the already accepted protected-main JARVIS virtual environment as a read-only dependency/runtime substrate, while loading JARVIS source from the isolated Phase-3 worktree through a process-local `PYTHONPATH` overlay. Do **not** install, uninstall, upgrade, downgrade, or editable-install packages in the protected-main virtual environment during acceptance.
+- A fresh acceptance virtual environment is not required for this live gate. Clean-environment/bootstrap reproducibility is a separate engineering concern and must not be mixed into Phase-3 functional acceptance.
+- Before starting the acceptance runtime, verify that `jarvis.__file__` resolves inside the isolated Phase-3 worktree while `sys.executable` resolves to the protected-main virtual environment. Also verify the protected-main CUDA/RF-DETR stack remains healthy.
 - Do not place secrets, access tokens or production credentials in an architecture proposal or evidence transcript.
 
-From the protected-main checkout, create a separate branch worktree at the PR head:
+From the protected-main checkout, create or update a separate branch worktree at the PR head:
 
 ```powershell
 cd C:\Users\gkgaj\Desktop\jarvis_v1
 git fetch origin refs/pull/108/head
-git worktree add -b phase3_acceptance ..\jarvis_phase3_acceptance FETCH_HEAD
-cd ..\jarvis_phase3_acceptance
-git rev-parse HEAD
-py -3.11 -m venv .venv
-.\.venv\Scripts\python -m pip install -e ".[dev,phase45d-acceptance,hands,vision,active-speaker,speaker]"
 
-$mainPython = "C:\Users\gkgaj\Desktop\jarvis_v1\.venv\Scripts\python.exe"
-$acceptancePython = (Resolve-Path ".\.venv\Scripts\python.exe").Path
-$cudaFamily = (& $mainPython -c "import torch; print(torch.version.cuda or '')").Trim()
-$cudaIndex = switch ($cudaFamily) {
-    "12.6" { "cu126" }
-    "13.0" { "cu130" }
-    "13.2" { "cu132" }
-    default { throw "Protected-main JARVIS does not expose a supported CUDA family: '$cudaFamily'" }
-}
-& $acceptancePython -m pip install --no-deps --force-reinstall torch==2.13.0 torchvision==0.28.0 --index-url "https://download.pytorch.org/whl/$cudaIndex"
-& $acceptancePython -c "import torch; assert torch.cuda.is_available(), 'CUDA unavailable'; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))"
+# First creation only:
+# git worktree add -b phase3_acceptance ..\jarvis_phase3_acceptance FETCH_HEAD
+
+cd ..\jarvis_phase3_acceptance
+git reset --hard FETCH_HEAD
+git rev-parse HEAD
 ```
 
-Stop the normal owner-machine supervisor cleanly before testing this worktree.
-From this worktree, run `.\.venv\Scripts\jarvis-supervisor --branch phase3_acceptance`.
-The production supervisor's local-only mode keeps Git update polling disabled and
-retains the configured PostgreSQL DBOS backend. Do not start two JARVIS voice
-runtimes against the same microphone and WorkStore concurrently. After the
-acceptance run, stop the test supervisor and resume the ordinary main runtime.
+For the live acceptance process, use the existing production virtual environment without modifying it:
+
+```powershell
+$mainPython = "C:\Users\gkgaj\Desktop\jarvis_v1\.venv\Scripts\python.exe"
+$acceptanceRoot = "C:\Users\gkgaj\Desktop\jarvis_phase3_acceptance"
+$previousPythonPath = $env:PYTHONPATH
+$env:PYTHONPATH = "$acceptanceRoot\src"
+
+Set-Location $acceptanceRoot
+
+& $mainPython -c "import sys,jarvis,torch; print('python=',sys.executable); print('jarvis=',jarvis.__file__); print('torch=',torch.__version__); print('cuda=',torch.version.cuda); print('cuda_available=',torch.cuda.is_available()); print('gpu=',torch.cuda.get_device_name(0) if torch.cuda.is_available() else None)"
+
+& $mainPython -c "from jarvis.vision.detector import RFDetrNanoDetector; RFDetrNanoDetector(); print('RF-DETR production dependency check: OK')"
+```
+
+Fail closed if the Python executable is not the protected-main virtual environment, if `jarvis.__file__` does not resolve under `jarvis_phase3_acceptance\src`, if CUDA is unavailable for the accepted GPU vision stack, or if RF-DETR initialization fails.
+
+Stop the normal owner-machine supervisor cleanly before testing the worktree. Then start the Phase-3 source through the production dependency environment:
+
+```powershell
+& $mainPython -m jarvis.runtime_supervisor --branch phase3_acceptance
+```
+
+The production supervisor's local-only mode keeps Git update polling disabled and retains the configured PostgreSQL DBOS backend. Do not start two JARVIS voice runtimes against the same microphone and WorkStore concurrently. After the acceptance run, stop the test supervisor, restore `PYTHONPATH` to `$previousPythonPath`, and resume the ordinary main runtime.
 
 ## Live sequence
 
@@ -53,7 +62,7 @@ acceptance run, stop the test supervisor and resume the ordinary main runtime.
 7. Run the evidence inspection from the same owner Windows profile:
 
    ```powershell
-   .\.venv\Scripts\python -m jarvis.engineering_change.acceptance --change-id CHANGE_ID
+   & $mainPython -m jarvis.engineering_change.acceptance --change-id CHANGE_ID
    ```
 
    The JSON evidence is written under `%LOCALAPPDATA%\JARVIS\operations\acceptance\`. It contains only IDs, states, digests, and summarized gate outcomes. Attach the file and the observed PostgreSQL/restart, voice-delivery, and isolated development results for review.
