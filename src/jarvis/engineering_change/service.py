@@ -262,9 +262,14 @@ class ChangeService:
             "result": acceptance.payload.get("result"),
         }
         if change.state is ChangeState.READY_FOR_PROMOTION:
-            promotion = store.add_artifact(
-                change_id, kind="promotion", payload=payload
-            )
+            if promotion is None:
+                promotion = store.add_artifact(
+                    change_id, kind="promotion", payload=payload
+                )
+            elif promotion.payload != payload:
+                raise ChangeConflict(
+                    "promotion review does not match current acceptance"
+                )
         elif promotion is None or promotion.payload != payload:
             raise ChangeConflict("promotion review does not match current acceptance")
         gate = GateService(store, verify_owner=lambda *_: False).present(
