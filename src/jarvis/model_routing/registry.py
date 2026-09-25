@@ -101,19 +101,14 @@ class ModelAdapterRegistry:
         try:
             return self._adapters[key]
         except KeyError as exc:
-            raise UnknownModelAdapterError(
-                f"unknown model adapter: {key}"
-            ) from exc
+            raise UnknownModelAdapterError(f"unknown model adapter: {key}") from exc
 
     def contains(self, adapter_id: str) -> bool:
         key = _token(adapter_id, field="adapter_id")
         return key in self._adapters
 
     def all(self) -> tuple[ModelAdapter, ...]:
-        return tuple(
-            self._adapters[key]
-            for key in sorted(self._adapters)
-        )
+        return tuple(self._adapters[key] for key in sorted(self._adapters))
 
 
 class RoutingStrategyRegistry:
@@ -188,9 +183,7 @@ class ModelTargetRegistry:
             adapter_registry,
             ModelAdapterRegistry,
         ):
-            raise TypeError(
-                "adapter_registry must be a ModelAdapterRegistry"
-            )
+            raise TypeError("adapter_registry must be a ModelAdapterRegistry")
         self._adapter_registry = adapter_registry
         self._targets: dict[str, ModelTarget] = {}
         for target in targets:
@@ -214,15 +207,10 @@ class ModelTargetRegistry:
         try:
             return self._targets[key]
         except KeyError as exc:
-            raise UnknownModelTargetError(
-                f"unknown model target: {key}"
-            ) from exc
+            raise UnknownModelTargetError(f"unknown model target: {key}") from exc
 
     def all(self) -> tuple[ModelTarget, ...]:
-        return tuple(
-            self._targets[key]
-            for key in sorted(self._targets)
-        )
+        return tuple(self._targets[key] for key in sorted(self._targets))
 
     def for_role(
         self,
@@ -232,11 +220,7 @@ class ModelTargetRegistry:
             role,
             field="role",
         )
-        return tuple(
-            target
-            for target in self.all()
-            if normalized in target.roles
-        )
+        return tuple(target for target in self.all() if normalized in target.roles)
 
     def for_capability(
         self,
@@ -247,7 +231,5 @@ class ModelTargetRegistry:
             field="capability",
         )
         return tuple(
-            target
-            for target in self.all()
-            if normalized in target.capabilities
+            target for target in self.all() if normalized in target.capabilities
         )
