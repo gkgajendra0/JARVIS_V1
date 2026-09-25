@@ -1,10 +1,11 @@
 # Phase 3 EngineeringChange Owner-Machine Acceptance
 
-Status: **PENDING**. This procedure applies after the implementation PR passes CI and is merged into protected main. Phase 3 is not accepted from CI alone.
+Status: **PENDING**. Run this procedure on the tested PR head after CI passes and before merging into protected main. Phase 3 is not accepted from CI alone.
 
 ## Prerequisites
 
 - Run from the owner Windows profile that holds the existing WorkStore DPAPI key.
+- Use an isolated Git worktree at the exact green PR head. Record that commit SHA and preserve the protected-main checkout. The acceptance evidence must identify this same tested commit.
 - Confirm Windows Hello verification is configured for the owner, the normal supervised JARVIS voice runtime is healthy, and DBOS uses the accepted production PostgreSQL configuration. Do not point this run at a throwaway SQLite DBOS backend.
 - Synchronize the current editable install with `python -m pip install -e ".[dev,phase45d-acceptance,hands]"` using the project's supported Python environment.
 - Do not place secrets, access tokens or production credentials in an architecture proposal or evidence transcript.
