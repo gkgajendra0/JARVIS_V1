@@ -237,8 +237,10 @@ class WorkAgentTools:
             "eta_high_seconds": None,
             "eta_confidence": "unknown",
             "eta_basis": [
-                "EngineeringChange spans multiple WorkItems and owner gates; "
-                "no validated aggregate duration model is available."
+                (
+                    "EngineeringChange spans multiple WorkItems and owner gates; "
+                    "no validated aggregate duration model is available."
+                )
             ],
             "stages": stages,
         }
