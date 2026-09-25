@@ -84,9 +84,6 @@ from jarvis.engineering_knowledge.persistence import (
     EngineeringKnowledgePersistenceConflictError,
 )
 from jarvis.engineering_knowledge.projector import (
-    PROJECTION_POLICY_ID,
-    PROJECTOR_ID,
-    REPAIR_KIND_NAMESPACE,
     RepairKnowledgeProjectionError,
     RepairKnowledgeProjectionResult,
     RepairKnowledgeProjector,
@@ -104,6 +101,12 @@ from jarvis.engineering_knowledge.registry import (
     UnsupportedApplicabilityMatcherError,
     UnsupportedFacetSchemaError,
     ValidatedFacet,
+)
+from jarvis.engineering_knowledge.repair_contracts import (
+    PROJECTION_POLICY_ID,
+    PROJECTOR_ID,
+    REPAIR_KIND_NAMESPACE,
+    REPAIR_VERIFICATION_PREDICATE,
 )
 from jarvis.engineering_knowledge.repair_facets import (
     REPAIR_FINDING_FACET_TYPE,
@@ -148,6 +151,7 @@ __all__ = [
     "REPAIR_FINDING_V1_SCHEMA_VERSION",
     "REPAIR_KIND_NAMESPACE",
     "REPAIR_PROMOTION_POLICY_ID",
+    "REPAIR_VERIFICATION_PREDICATE",
     "ApplicabilityConstraintResult",
     "ApplicabilityContext",
     "ApplicabilityDecision",

@@ -19,7 +19,7 @@ from jarvis.engineering_knowledge.models import (
     KnowledgeLifecycleEvent,
     KnowledgeLifecycleState,
 )
-from jarvis.engineering_knowledge.projector import (
+from jarvis.engineering_knowledge.repair_contracts import (
     REPAIR_KIND_NAMESPACE,
     REPAIR_VERIFICATION_PREDICATE,
 )

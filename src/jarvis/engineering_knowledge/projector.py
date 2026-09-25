@@ -28,6 +28,12 @@ from jarvis.engineering_knowledge.persistence import (
     EngineeringKnowledgeCandidateBundle,
     EngineeringKnowledgeCandidateWriteResult,
 )
+from jarvis.engineering_knowledge.repair_contracts import (
+    PROJECTION_POLICY_ID,
+    PROJECTOR_ID,
+    REPAIR_KIND_NAMESPACE,
+    REPAIR_VERIFICATION_PREDICATE,
+)
 from jarvis.engineering_knowledge.repair_facets import (
     REPAIR_FINDING_FACET_TYPE,
     REPAIR_FINDING_V1_SCHEMA_ID,
@@ -40,11 +46,6 @@ from jarvis.self_repair.domain import (
     RepairVerdict,
     RepairVerificationStatus,
 )
-
-PROJECTOR_ID = "repair-knowledge-projector:v1"
-PROJECTION_POLICY_ID = "verified-repair-to-candidate:v1"
-REPAIR_KIND_NAMESPACE = "jarvis.repair"
-REPAIR_VERIFICATION_PREDICATE = "urn:jarvis:attestation:repair-verification:v1"
 
 
 class RepairKnowledgeProjectionError(ValueError):
