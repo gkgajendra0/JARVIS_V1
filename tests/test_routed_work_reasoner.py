@@ -391,8 +391,6 @@ async def test_routed_reasoner_preserves_provider_pressure_behavior(
     )
     persisted = routing_store.find_decision_by_request(route_request.routing_request_id)
     assert persisted is not None
-    attempts = routing_store.list_attempts(
-        persisted.decision.decision_id
-    )
+    attempts = routing_store.list_attempts(persisted.decision.decision_id)
     assert len(attempts) == 1
     assert attempts[0].failure_class == "rate_limited"
