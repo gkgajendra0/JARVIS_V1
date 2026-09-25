@@ -14,13 +14,13 @@ from jarvis.model_routing.invoker import (
     ModelInvoker,
     build_default_model_adapter_registry,
 )
+from jarvis.model_routing.registry import RoutingStrategyRegistry
 from jarvis.model_routing.router import (
     ModelRouter,
     build_default_work_targets,
 )
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.model_routing.strategy import EngineeringStageStrategy
-from jarvis.model_routing.registry import RoutingStrategyRegistry
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
 from jarvis.work.dbos_backend import (
