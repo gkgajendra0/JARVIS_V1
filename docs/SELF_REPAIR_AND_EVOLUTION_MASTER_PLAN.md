@@ -61,12 +61,12 @@ Do not reopen the accepted Phase-1/R2 or Phase-1H architecture without new concr
 
 ## 2. Canonical forward sequence
 
-With Phase 2 owner-machine acceptance complete, the cross-cutting program proceeds as follows:
+With Phases 2 and 3 owner-machine accepted and Phase 4 research/architecture complete, the cross-cutting program proceeds as follows:
 
 ```text
 Phase 2   EngineeringKnowledge Foundation — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
-Phase 3   EngineeringChange Lifecycle / Mission Orchestration — ACTIVE
-Phase 4   Research + Diagnostic Model Router
+Phase 3   EngineeringChange Lifecycle / Mission Orchestration — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
+Phase 4   Research + Diagnostic Model Router — ACTIVE / ARCHITECTURE APPROVED; IMPLEMENTATION NEXT
 Phase 5   Secure Autonomous Engineering Substrate
 Phase 6   Unknown-Incident Investigation + Source Repair
 Phase 7   Governed Promotion / Production Verification / Rollback
@@ -80,6 +80,8 @@ Phase 14  Governed Self-Evolution
 ```
 
 The full requirements, objects, entry/exit gates and permanent governance invariants for these phases are defined in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`.
+
+Phase-4 implementation details are frozen in `PHASE4_MODEL_ROUTER_RESEARCH.md`, `PHASE4_MODEL_ROUTER_ARCHITECTURE.md`, and `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md`. Jev is deferred to a separate later optimization experiment.
 
 ---
 
