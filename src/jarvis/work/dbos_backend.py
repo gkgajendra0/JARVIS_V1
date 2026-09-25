@@ -120,8 +120,6 @@ def _advance_work(work_id: str) -> dict[str, Any]:
         _jarvis_loop(),
     )
     result = future.result()
-    if result.state.terminal and _ON_WORK_TERMINAL is not None:
-        _ON_WORK_TERMINAL(work_id)
     return {
         "work_id": result.work_id,
         "state": result.state.value,
@@ -161,6 +159,8 @@ def durable_workflow(
     while reasoning_cycles < max_reasoning_cycles:
         payload = _advance_work(work_id)
         state = WorkState(payload["state"])
+        if state.terminal and _ON_WORK_TERMINAL is not None:
+            _ON_WORK_TERMINAL(work_id)
         DBOS.set_event(_EVENT_STATE, payload)
 
         if state.terminal:
@@ -204,6 +204,8 @@ def durable_workflow(
                     }
 
     state = _fail_bounded_work(work_id)
+    if _ON_WORK_TERMINAL is not None:
+        _ON_WORK_TERMINAL(work_id)
     return {
         "work_id": work_id,
         "state": state,
