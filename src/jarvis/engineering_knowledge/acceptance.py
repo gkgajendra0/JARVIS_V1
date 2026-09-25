@@ -392,9 +392,8 @@ def _run_live_r2_negative_control(
             if attempt.finished_at_epoch is not None
             and attempt.verdict is not RepairVerdict.RECOVERED
         )
-        if (
-            len(terminal_failures) >= 3
-            and not _recognized_supervisor_alive(supervisor_pid)
+        if len(terminal_failures) >= 3 and not _recognized_supervisor_alive(
+            supervisor_pid
         ):
             break
         time.sleep(1.0)
@@ -426,8 +425,7 @@ def _run_live_r2_negative_control(
                 supervisor_alive=supervisor_alive,
                 runtime_state=runtime_state,
                 new_attempts=[
-                    _repair_attempt_diagnostic(attempt)
-                    for attempt in new_attempts
+                    _repair_attempt_diagnostic(attempt) for attempt in new_attempts
                 ],
             )
         )
