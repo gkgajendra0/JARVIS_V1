@@ -7,7 +7,8 @@ import os
 import pathlib
 import sqlite3
 import threading
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 
 from jarvis.work.models import (
@@ -84,6 +85,33 @@ class SQLiteWorkStore:
     @property
     def payload_protected(self) -> bool:
         return bool(self._payload_codec.protects_at_rest)
+
+    @contextmanager
+    def extension_transaction(self) -> Iterator[sqlite3.Connection]:
+        """Provide a locked transaction for additive JARVIS domain tables."""
+
+        with self._lock, self._connect() as connection:
+            yield connection
+
+    def encode_extension_text(self, value: str) -> str:
+        """Protect extension payload text with the canonical WorkStore codec."""
+
+        return self._encode_text(value)
+
+    def decode_extension_text(self, value: str) -> str:
+        """Decode extension payload text with the canonical WorkStore codec."""
+
+        return self._decode_text(value)
+
+    def encode_extension_json(self, value: object) -> str:
+        """Protect extension JSON with the canonical WorkStore codec."""
+
+        return self._encode_json(value)
+
+    def decode_extension_json(self, value: str):
+        """Decode extension JSON with the canonical WorkStore codec."""
+
+        return self._decode_json(value)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=30.0)
