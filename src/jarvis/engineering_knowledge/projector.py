@@ -47,6 +47,7 @@ from jarvis.self_repair.domain import (
     RepairVerificationStatus,
 )
 
+
 class RepairKnowledgeProjectionError(ValueError):
     """The source repair attempt is not eligible for deterministic projection."""
 
