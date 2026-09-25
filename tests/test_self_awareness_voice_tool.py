@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -177,8 +178,16 @@ async def test_typed_operational_evidence_tool_is_read_only_and_bounded(
     tmp_path: Path,
 ) -> None:
     log_path = tmp_path / "jarvis.jsonl"
+    observed_at = (
+        (datetime.now(UTC) - timedelta(minutes=1))
+        .isoformat()
+        .replace(
+            "+00:00",
+            "Z",
+        )
+    )
     log_path.write_text(
-        '{"timestamp":"2026-09-18T09:00:00Z","level":"warning",'
+        f'{{"timestamp":"{observed_at}","level":"warning",'
         '"logger":"jarvis.vision.pocket3_recovery","event":"stale transport",'
         '"reason_code":"stale_transport_rx"}\n',
         encoding="utf-8",

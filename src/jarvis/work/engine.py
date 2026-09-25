@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -103,12 +104,28 @@ class WorkEngine:
         actions: WorkActionRegistry,
         resources: ResourceLeaseManager | None = None,
         base_resource_keys: tuple[str, ...] = (),
+        action_admission: Callable[[str], bool] | None = None,
     ) -> None:
         self._store = store
         self._brain = brain
         self._actions = actions
         self._resources = resources or ResourceLeaseManager()
         self._base_resource_keys = self._resources.normalize(base_resource_keys)
+        self._action_admission = action_admission
+
+    def _check_action_admission(self, work: WorkItem) -> WorkAdvanceResult | None:
+        if self._action_admission is None or self._action_admission(work.work_id):
+            return None
+        latest = self._store.require(work.work_id)
+        if latest.state.terminal or latest.state is WorkState.PAUSED:
+            return WorkAdvanceResult(latest.work_id, latest.state, progressed=False)
+        paused = latest.transition(
+            WorkState.PAUSED,
+            status_detail="engineering change requires renewed owner review",
+            current_step_id=latest.current_step_id,
+        )
+        saved = self._store.save(paused, expected_version=latest.version)
+        return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
 
     def _make_running(self, work: WorkItem) -> WorkItem:
         if work.state in {
@@ -521,6 +538,9 @@ class WorkEngine:
 
         if work.state.terminal or work.state is WorkState.PAUSED:
             return WorkAdvanceResult(work.work_id, work.state, progressed=False)
+        admission = self._check_action_admission(work)
+        if admission is not None:
+            return admission
         if work.state is WorkState.WAITING_FOR_OWNER:
             self._ensure_state_delivery(work)
             return WorkAdvanceResult(
@@ -766,6 +786,9 @@ class WorkEngine:
         decision_summary: str,
         decision_parameters: dict[str, Any],
     ) -> WorkAdvanceResult:
+        admission = self._check_action_admission(work)
+        if admission is not None:
+            return admission
         persistence_provider = getattr(executor, "persisted_input", None)
         persisted_input = (
             dict(persistence_provider(dict(decision_parameters)))

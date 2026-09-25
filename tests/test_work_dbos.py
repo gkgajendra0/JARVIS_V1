@@ -9,6 +9,7 @@ from dbos import DBOS
 from jarvis.work.dbos_backend import (
     _consumes_reasoning_budget,
     _waiting_resource_delay,
+    configure_terminal_reconciliation,
     initialize_dbos_work_runtime,
     shutdown_dbos_work_runtime,
 )
@@ -110,6 +111,39 @@ async def test_dbos_executes_durable_work_without_blocking_event_loop(
         handle = await DBOS.retrieve_workflow_async(work_id)
         result = await handle.get_result()
         assert result["state"] == WorkState.COMPLETED.value
+    finally:
+        shutdown_dbos_work_runtime()
+
+
+@pytest.mark.asyncio
+async def test_terminal_reconcile_can_submit_following_work_from_dbos_step(
+    tmp_path,
+) -> None:
+    backend = initialize_dbos_work_runtime(
+        engine=ImmediateCompleteEngine(),  # type: ignore[arg-type]
+        event_loop=asyncio.get_running_loop(),
+        application_version="test-change-handoff-v1",
+        system_database_url=f"sqlite:///{(tmp_path / 'dbos-handoff.sqlite3').as_posix()}",
+    )
+    observed: list[str] = []
+
+    def reconcile(work_id: str) -> None:
+        observed.append(work_id)
+        if work_id == "work_research":
+            backend.submit("work_development", priority=WorkPriority.NORMAL)
+
+    configure_terminal_reconciliation(reconcile)
+    try:
+        backend.submit("work_research", priority=WorkPriority.NORMAL)
+        first = await DBOS.retrieve_workflow_async("work_research")
+        assert (await asyncio.wait_for(first.get_result(), timeout=15))[
+            "state"
+        ] == "completed"
+        second = await DBOS.retrieve_workflow_async("work_development")
+        assert (await asyncio.wait_for(second.get_result(), timeout=15))[
+            "state"
+        ] == "completed"
+        assert observed == ["work_research", "work_development"]
     finally:
         shutdown_dbos_work_runtime()
 
