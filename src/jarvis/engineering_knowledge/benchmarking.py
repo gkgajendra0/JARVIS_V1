@@ -271,6 +271,10 @@ def compare_retrieval_benchmark(
     candidate_report: EngineeringKnowledgeEvaluationReport,
     policy: RetrievalBenchmarkAdoptionPolicy,
 ) -> RetrievalBenchmarkComparison:
+    if baseline_variant.variant_id == candidate_variant.variant_id:
+        raise ValueError("baseline and candidate variants must be different")
+    if not baseline_report.metrics.safety_gate_passed:
+        raise ValueError("baseline benchmark must pass the zero-tolerance safety gate")
     if baseline_report.corpus_id != candidate_report.corpus_id:
         raise ValueError("benchmark reports must use the same corpus_id")
     if baseline_report.corpus_version != candidate_report.corpus_version:
@@ -414,7 +418,9 @@ def _missing_required_resources(
     ratios: dict[str, float | None],
     policy: RetrievalBenchmarkAdoptionPolicy,
 ) -> tuple[str, ...]:
-    missing: list[str] = []
+    missing: list[str] = [
+        name for name in ("latency", "cpu") if ratios[name] is None
+    ]
     for name, limit in (
         ("rss", policy.maximum_rss_ratio),
         ("vram", policy.maximum_vram_ratio),
