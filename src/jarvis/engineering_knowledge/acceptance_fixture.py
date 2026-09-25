@@ -66,8 +66,7 @@ class QrelFixture:
     @property
     def revision_to_document(self) -> dict[str, str]:
         return {
-            document.revision_id: document.document_key
-            for document in self.documents
+            document.revision_id: document.document_key for document in self.documents
         }
 
 
