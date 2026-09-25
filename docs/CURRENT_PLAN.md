@@ -126,8 +126,13 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Execute Phase 2 — EngineeringKnowledge Foundation from the owner-approved architecture.**
+**Finish Phase 3 EngineeringChange on PR #108, then run its owner-machine acceptance gate.**
 
-First reconcile and merge the Phase-2 research/architecture/implementation documentation. Then implement from protected `main` on isolated Phase-2 branches, beginning with the stable EngineeringKnowledge core and REPAIR as the first deterministic vertical.
+The implementation and recovery contracts must be green on the exact PR head before
+manual acceptance. Then run `PHASE3_ENGINEERING_CHANGE_OWNER_ACCEPTANCE.md` against
+the isolated tested worktree, record the real PostgreSQL/restart, voice/Windows Hello
+and isolated-development evidence, reconcile accepted documentation, and merge only
+if every required gate passes.
 
-Preserve the open-ended extension contract: today's repair, investigation and capability-acquisition processes are initial consumers, not a closed enumeration. EngineeringKnowledge remains advisory and can never become executable Authority merely by being stored, retrieved or accepted.
+Do not advance to Phase 4 or describe EngineeringChange as accepted production state
+until that owner-machine evidence is recorded.
