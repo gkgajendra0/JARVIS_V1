@@ -1,6 +1,6 @@
 # Phase 3 EngineeringChange Owner-Machine Acceptance
 
-Status: **PENDING**. Run this procedure on the tested PR head after CI passes and before merging into protected main. Phase 3 is not accepted from CI alone.
+Status: **OWNER-MACHINE ACCEPTED 2026-09-25 WITH EXTERNAL PROVIDER LIMITATION**. The canonical acceptance record is `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. This procedure remains the reference for the intended live sequence.
 
 ## Prerequisites
 
@@ -69,6 +69,6 @@ The production supervisor's local-only mode keeps Git update polling disabled an
 
 ## Result interpretation
 
-All `store_gates` must be PASS for the main change, and `tested_commit` must equal the green PR head. The evidence command deliberately marks production PostgreSQL/restart, live voice gate delivery and isolated development review as PENDING: those need real owner-machine observation. Any FAIL or missing external proof blocks acceptance. The owner and reviewer then record the actual run, tested PR head, evidence location and final disposition in a dated Phase-3 acceptance record before merging.
+The 2026-09-25 owner run verified same-turn idempotency, owner-input resume, live Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery on the exact tested implementation head. Persistent Gemini HTTP 429 provider pressure prevented that run from naturally reaching the downstream architecture/Windows-Hello/development/acceptance/promotion gates. The owner explicitly accepted Phase 3 with that external limitation documented rather than changing provider solely to force the run to completion. Those downstream contracts remain covered by the exact green automated suite. See `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md` for the evidence and final disposition.
 
 R2 Self-Repair and Phase-2 EngineeringKnowledge retain their accepted independent baselines; this procedure does not repeat the Phase-2 live crash injection.
