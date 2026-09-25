@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -485,6 +486,15 @@ class EngineeringKnowledgeRetrievalIndex:
         _positive_int(dense_window, "dense_window")
         _positive_int(rank_constant, "rank_constant")
         timestamp = _finite_epoch(now_epoch)
+        query_security = EngineeringEvidenceAdmissionGate().assess(
+            EvidenceAdmissionRequest(
+                source_class="external_research",
+                content=query,
+            )
+        )
+        if not query_security.admissible:
+            return ()
+
         resolved_policy = policy or EngineeringKnowledgeRetrievalPolicy.local()
         if not isinstance(resolved_policy, EngineeringKnowledgeRetrievalPolicy):
             raise TypeError("policy must be an EngineeringKnowledgeRetrievalPolicy")
@@ -498,8 +508,9 @@ class EngineeringKnowledgeRetrievalIndex:
             return ()
 
         exact_ids = self._exact_ids(query, eligible)
+        lexical_query = _query_without_applicability_identity_terms(query, context)
         lexical = self._lexical_rank(
-            query,
+            lexical_query,
             eligible,
             window=fts_window,
         )
@@ -985,6 +996,26 @@ def _facet_from_row(payload: dict[str, object]) -> EngineeringKnowledgeFacet:
         payload_digest=str(payload["payload_digest"]),
         created_at_epoch=float(payload["created_at_epoch"]),
     )
+
+
+def _query_without_applicability_identity_terms(
+    query: str,
+    context: ApplicabilityContext,
+) -> str:
+    """Remove target-identity terms already enforced by applicability gates."""
+
+    identity_tokens: set[str] = set()
+    for fact in context.facts:
+        identity_tokens.update(
+            token.casefold()
+            for token in re.findall(r"[^\W_]+", fact.target_identity, flags=re.UNICODE)
+            if len(token) >= 2
+        )
+    query_tokens = re.findall(r"[^\W_]+", query, flags=re.UNICODE)
+    remaining = [
+        token for token in query_tokens if token.casefold() not in identity_tokens
+    ]
+    return " ".join(remaining) if remaining else "__no_match__"
 
 
 def _required_text(value: object, field: str) -> str:
