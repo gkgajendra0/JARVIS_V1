@@ -13,6 +13,7 @@ from jarvis.engineering_change import (
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.models import ProcessContract
 from jarvis.work.models import WorkItem, WorkType
+from jarvis.work.privacy import build_protected_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -45,6 +46,73 @@ def test_one_owner_goal_has_durable_identity_and_rejects_duplicate(tmp_path) -> 
             process_version=1,
             source_session_id="session-1",
             source_turn_id="turn-1",
+        )
+
+
+def test_sensitive_change_payloads_follow_workstore_at_rest_protection(tmp_path) -> None:
+    class FakeKeyProtector:
+        protector_id = "phase3-test-protector"
+
+        def seal(self, plaintext: bytes, *, purpose: str) -> bytes:
+            return purpose.encode("utf-8") + b"|" + plaintext
+
+        def unseal(self, sealed: bytes, *, purpose: str) -> bytes:
+            prefix = purpose.encode("utf-8") + b"|"
+            assert sealed.startswith(prefix)
+            return sealed[len(prefix) :]
+
+    path = tmp_path / "work.sqlite3"
+    codec = build_protected_work_payload_codec(
+        path,
+        key_protector=FakeKeyProtector(),
+        random_bytes=lambda size: b"k" * size,
+    )
+    changes = ChangeStore(SQLiteWorkStore(path, payload_codec=codec))
+    marker = "PHASE3_PRIVATE_OWNER_GOAL_9017"
+    change = changes.create(
+        request=marker,
+        process_key="engineering.change",
+        process_version=1,
+        source_session_id="owner-private",
+        source_turn_id="turn-private",
+    )
+    artifact = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"proposal": marker},
+    )
+
+    raw = b"".join(
+        candidate.read_bytes()
+        for candidate in (path, path.with_name(path.name + "-wal"), path.with_name(path.name + "-shm"))
+        if candidate.exists()
+    )
+    assert marker.encode("utf-8") not in raw
+
+    reopened = ChangeStore(SQLiteWorkStore(path, payload_codec=codec))
+    assert reopened.require(change.change_id).request == marker
+    assert reopened.get_artifact(artifact.artifact_id).payload["proposal"] == marker
+
+
+def test_stale_change_version_cannot_win_cas_transition(tmp_path) -> None:
+    changes = ChangeStore(SQLiteWorkStore(tmp_path / "work.sqlite3"))
+    change = changes.create(
+        request="Goal",
+        process_key="engineering.change",
+        process_version=1,
+        source_session_id="s",
+        source_turn_id="t",
+    )
+    changes.transition(
+        change.change_id,
+        ChangeState.RESEARCHING,
+        expected_version=change.version,
+    )
+    with pytest.raises(ChangeConflict, match="stale or invalid"):
+        changes.transition(
+            change.change_id,
+            ChangeState.ARCHITECTURE_READY,
+            expected_version=change.version,
         )
 
 
