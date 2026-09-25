@@ -1,0 +1,326 @@
+{
+  "schema_version": 1,
+  "fixture_id": "phase4-routing-benchmark-v1",
+  "source_revision": "phase4h-replay-fixture-v1",
+  "cases": [
+    {
+      "case_id": "routine-development",
+      "category": "development",
+      "expected_role": "efficient",
+      "request": {
+        "routing_request_id": "benchmark-route-1",
+        "work_id": "benchmark-work-1",
+        "task_kind": "development",
+        "required_capabilities": ["engineering_reasoning", "structured_output"],
+        "privacy_class": "standard",
+        "locality_requirement": "any",
+        "estimated_context_tokens": 1800,
+        "evidence_size_class": "small",
+        "recent_progress_signals": ["plan_settled"],
+        "recent_failure_signals": [],
+        "routing_features": {}
+      },
+      "observations": [
+        {
+          "target_id": "current-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": true,
+          "verifier_reference": "fixture:routine-development:current-a",
+          "latency_ms": 900,
+          "input_tokens": 1600,
+          "output_tokens": 180,
+          "estimated_cost_usd": 0.018
+        },
+        {
+          "target_id": "efficient-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": true,
+          "verifier_reference": "fixture:routine-development:efficient-a",
+          "latency_ms": 420,
+          "input_tokens": 1500,
+          "output_tokens": 160,
+          "estimated_cost_usd": 0.006
+        },
+        {
+          "target_id": "capable-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": true,
+          "verifier_reference": "fixture:routine-development:capable-a",
+          "latency_ms": 1050,
+          "input_tokens": 1650,
+          "output_tokens": 190,
+          "estimated_cost_usd": 0.024
+        }
+      ]
+    },
+    {
+      "case_id": "unknown-diagnostic",
+      "category": "diagnostics",
+      "expected_role": "capable",
+      "request": {
+        "routing_request_id": "benchmark-route-2",
+        "work_id": "benchmark-work-2",
+        "task_kind": "diagnostics",
+        "required_capabilities": ["engineering_reasoning", "structured_output"],
+        "privacy_class": "standard",
+        "locality_requirement": "any",
+        "estimated_context_tokens": 5200,
+        "evidence_size_class": "medium",
+        "recent_progress_signals": [],
+        "recent_failure_signals": [],
+        "routing_features": {}
+      },
+      "observations": [
+        {
+          "target_id": "current-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": true,
+          "verifier_reference": "fixture:unknown-diagnostic:current-a",
+          "latency_ms": 1300,
+          "input_tokens": 5100,
+          "output_tokens": 390,
+          "estimated_cost_usd": 0.052
+        },
+        {
+          "target_id": "efficient-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": false,
+          "verifier_reference": "fixture:unknown-diagnostic:efficient-a",
+          "latency_ms": 650,
+          "input_tokens": 4900,
+          "output_tokens": 320,
+          "estimated_cost_usd": 0.019
+        },
+        {
+          "target_id": "capable-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": true,
+          "verifier_reference": "fixture:unknown-diagnostic:capable-a",
+          "latency_ms": 1450,
+          "input_tokens": 5200,
+          "output_tokens": 420,
+          "estimated_cost_usd": 0.061
+        }
+      ]
+    },
+    {
+      "case_id": "provider-pressure-fallback",
+      "category": "provider_pressure",
+      "expected_role": "efficient",
+      "request": {
+        "routing_request_id": "benchmark-route-3",
+        "work_id": "benchmark-work-3",
+        "task_kind": "development",
+        "required_capabilities": ["engineering_reasoning", "structured_output"],
+        "privacy_class": "standard",
+        "locality_requirement": "any",
+        "estimated_context_tokens": 2200,
+        "evidence_size_class": "small",
+        "recent_progress_signals": ["plan_settled"],
+        "recent_failure_signals": ["rate_limited"],
+        "routing_features": {"provider_pressure_count": 1}
+      },
+      "observations": [
+        {
+          "target_id": "current-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": true,
+          "verifier_reference": "fixture:provider-pressure-fallback:current-a",
+          "latency_ms": 850,
+          "input_tokens": 2000,
+          "output_tokens": 170,
+          "estimated_cost_usd": 0.021
+        },
+        {
+          "target_id": "efficient-a",
+          "invocation_succeeded": false,
+          "structured_output_valid": false,
+          "verified_success": false,
+          "verifier_reference": "fixture:provider-pressure-fallback:efficient-a",
+          "latency_ms": 120,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "estimated_cost_usd": 0.0,
+          "failure_class": "rate_limited"
+        },
+        {
+          "target_id": "capable-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": true,
+          "verifier_reference": "fixture:provider-pressure-fallback:capable-a",
+          "latency_ms": 990,
+          "input_tokens": 2100,
+          "output_tokens": 180,
+          "estimated_cost_usd": 0.029
+        }
+      ]
+    },
+    {
+      "case_id": "repeated-quality-failure",
+      "category": "verification",
+      "expected_role": "capable",
+      "request": {
+        "routing_request_id": "benchmark-route-4",
+        "work_id": "benchmark-work-4",
+        "task_kind": "development",
+        "required_capabilities": ["engineering_reasoning", "structured_output"],
+        "privacy_class": "standard",
+        "locality_requirement": "any",
+        "estimated_context_tokens": 3600,
+        "evidence_size_class": "small",
+        "recent_progress_signals": [],
+        "recent_failure_signals": ["quality_failure"],
+        "routing_features": {"quality_failure_count": 2}
+      },
+      "observations": [
+        {
+          "target_id": "current-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": true,
+          "verifier_reference": "fixture:repeated-quality-failure:current-a",
+          "latency_ms": 1120,
+          "input_tokens": 3500,
+          "output_tokens": 290,
+          "estimated_cost_usd": 0.039
+        },
+        {
+          "target_id": "efficient-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": false,
+          "verifier_reference": "fixture:repeated-quality-failure:efficient-a",
+          "latency_ms": 520,
+          "input_tokens": 3400,
+          "output_tokens": 240,
+          "estimated_cost_usd": 0.014
+        },
+        {
+          "target_id": "capable-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": true,
+          "verifier_reference": "fixture:repeated-quality-failure:capable-a",
+          "latency_ms": 1210,
+          "input_tokens": 3600,
+          "output_tokens": 310,
+          "estimated_cost_usd": 0.047
+        }
+      ]
+    },
+    {
+      "case_id": "healthy-diagnostic-progress",
+      "category": "diagnostics",
+      "expected_role": "efficient",
+      "request": {
+        "routing_request_id": "benchmark-route-5",
+        "work_id": "benchmark-work-5",
+        "task_kind": "diagnostics",
+        "required_capabilities": ["engineering_reasoning", "structured_output"],
+        "privacy_class": "standard",
+        "locality_requirement": "any",
+        "estimated_context_tokens": 2700,
+        "evidence_size_class": "small",
+        "recent_progress_signals": ["healthy_progress"],
+        "recent_failure_signals": [],
+        "routing_features": {}
+      },
+      "observations": [
+        {
+          "target_id": "current-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": true,
+          "verifier_reference": "fixture:healthy-diagnostic-progress:current-a",
+          "latency_ms": 820,
+          "input_tokens": 2500,
+          "output_tokens": 190,
+          "estimated_cost_usd": 0.023
+        },
+        {
+          "target_id": "efficient-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": true,
+          "verifier_reference": "fixture:healthy-diagnostic-progress:efficient-a",
+          "latency_ms": 390,
+          "input_tokens": 2400,
+          "output_tokens": 170,
+          "estimated_cost_usd": 0.008
+        },
+        {
+          "target_id": "capable-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": true,
+          "verifier_reference": "fixture:healthy-diagnostic-progress:capable-a",
+          "latency_ms": 980,
+          "input_tokens": 2600,
+          "output_tokens": 200,
+          "estimated_cost_usd": 0.031
+        }
+      ]
+    },
+    {
+      "case_id": "heterogeneous-evidence",
+      "category": "research",
+      "expected_role": "capable",
+      "request": {
+        "routing_request_id": "benchmark-route-6",
+        "work_id": "benchmark-work-6",
+        "task_kind": "research",
+        "required_capabilities": ["engineering_reasoning", "structured_output"],
+        "privacy_class": "standard",
+        "locality_requirement": "any",
+        "estimated_context_tokens": 18000,
+        "evidence_size_class": "heterogeneous",
+        "recent_progress_signals": [],
+        "recent_failure_signals": [],
+        "routing_features": {}
+      },
+      "observations": [
+        {
+          "target_id": "current-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": true,
+          "verifier_reference": "fixture:heterogeneous-evidence:current-a",
+          "latency_ms": 1700,
+          "input_tokens": 17500,
+          "output_tokens": 620,
+          "estimated_cost_usd": 0.112
+        },
+        {
+          "target_id": "efficient-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": false,
+          "verifier_reference": "fixture:heterogeneous-evidence:efficient-a",
+          "latency_ms": 850,
+          "input_tokens": 16800,
+          "output_tokens": 500,
+          "estimated_cost_usd": 0.043
+        },
+        {
+          "target_id": "capable-a",
+          "invocation_succeeded": true,
+          "structured_output_valid": true,
+          "verified_success": true,
+          "verifier_reference": "fixture:heterogeneous-evidence:capable-a",
+          "latency_ms": 1850,
+          "input_tokens": 18000,
+          "output_tokens": 650,
+          "estimated_cost_usd": 0.129
+        }
+      ]
+    }
+  ]
+}
