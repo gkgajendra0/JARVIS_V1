@@ -119,9 +119,7 @@ class RoutingStatusReader:
             final_target_id = outcome.final_target_id
         else:
             successful = [
-                attempt
-                for attempt in attempts
-                if attempt.failure_class is None
+                attempt for attempt in attempts if attempt.failure_class is None
             ]
             if successful:
                 final_target_id = successful[-1].target_id
