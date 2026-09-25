@@ -57,9 +57,7 @@ class StaticEngineeringStrategy:
     ) -> RoutingStrategyResult:
         del request, history
         return RoutingStrategyResult(
-            ordered_target_ids=tuple(
-                target.target_id for target in eligible_targets
-            ),
+            ordered_target_ids=tuple(target.target_id for target in eligible_targets),
             reason_codes=("test_static_order",),
             selected_role="efficient",
         )
@@ -381,9 +379,7 @@ async def test_restart_resumes_existing_fallback_lineage_without_duplicate_decis
 
     assert decision.action == "do_step"
     assert [target for target, _ in second_adapter.calls] == ["target-b"]
-    route = reopened_routing.find_decision_by_request(
-        route_request.routing_request_id
-    )
+    route = reopened_routing.find_decision_by_request(route_request.routing_request_id)
     assert route is not None
     attempts = reopened_routing.list_attempts(route.decision.decision_id)
     assert [attempt.attempt_ordinal for attempt in attempts] == [1, 2]
