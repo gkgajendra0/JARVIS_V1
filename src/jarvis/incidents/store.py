@@ -6,26 +6,24 @@ import json
 import sqlite3
 from pathlib import Path
 from threading import RLock
+from typing import TYPE_CHECKING
 
-from jarvis.engineering_knowledge.models import (
-    AttestationVerdict,
-    EngineeringApplicability,
-    EngineeringAttestation,
-    EngineeringEvidence,
-    EngineeringKnowledgeFacet,
-    EngineeringKnowledgeRevision,
-    KnowledgeEvidenceLink,
-    KnowledgeFreshnessState,
-    KnowledgeLifecycleEvent,
-    KnowledgeLifecycleState,
-    KnowledgeSensitivity,
-)
-from jarvis.engineering_knowledge.persistence import (
-    EngineeringKnowledgeCandidateBundle,
-    EngineeringKnowledgeCandidateWriteResult,
-    EngineeringKnowledgePersistenceConflictError,
-)
-from jarvis.engineering_knowledge.security import EngineeringEvidenceAdmissionGate
+if TYPE_CHECKING:
+    from jarvis.engineering_knowledge.models import (
+        EngineeringApplicability,
+        EngineeringAttestation,
+        EngineeringEvidence,
+        EngineeringKnowledgeFacet,
+        EngineeringKnowledgeRevision,
+        KnowledgeEvidenceLink,
+        KnowledgeLifecycleEvent,
+        KnowledgeLifecycleState,
+    )
+    from jarvis.engineering_knowledge.persistence import (
+        EngineeringKnowledgeCandidateBundle,
+        EngineeringKnowledgeCandidateWriteResult,
+    )
+
 from jarvis.incidents.migration_runner import EngineeringMigrationRunner
 from jarvis.incidents.models import (
     EvidenceReference,
@@ -501,6 +499,13 @@ class SqliteIncidentStore:
     ) -> EngineeringKnowledgeCandidateWriteResult:
         """Atomically persist one deterministic immutable candidate or verify replay."""
 
+        from jarvis.engineering_knowledge.persistence import (
+            EngineeringKnowledgeCandidateBundle,
+            EngineeringKnowledgeCandidateWriteResult,
+            EngineeringKnowledgePersistenceConflictError,
+        )
+        from jarvis.engineering_knowledge.security import EngineeringEvidenceAdmissionGate
+
         if not isinstance(candidate, EngineeringKnowledgeCandidateBundle):
             raise TypeError("candidate must be an EngineeringKnowledgeCandidateBundle")
 
@@ -792,6 +797,10 @@ class SqliteIncidentStore:
         identity_columns: tuple[str, ...],
         identity_values: tuple[object, ...],
     ) -> bool:
+        from jarvis.engineering_knowledge.persistence import (
+            EngineeringKnowledgePersistenceConflictError,
+        )
+
         where_clause = " AND ".join(f"{column} = ?" for column in identity_columns)
         existing = self._connection.execute(
             f"""
@@ -827,6 +836,12 @@ class SqliteIncidentStore:
         self,
         revision_id: str,
     ) -> EngineeringKnowledgeRevision | None:
+        from jarvis.engineering_knowledge.models import (
+            EngineeringKnowledgeRevision,
+            KnowledgeFreshnessState,
+            KnowledgeSensitivity,
+        )
+
         with self._lock:
             cursor = self._connection.execute(
                 """
@@ -886,6 +901,8 @@ class SqliteIncidentStore:
         self,
         revision_id: str,
     ) -> KnowledgeLifecycleState | None:
+        from jarvis.engineering_knowledge.models import KnowledgeLifecycleState
+
         with self._lock:
             row = self._connection.execute(
                 """
@@ -903,6 +920,8 @@ class SqliteIncidentStore:
         self,
         revision_id: str,
     ) -> tuple[KnowledgeEvidenceLink, ...]:
+        from jarvis.engineering_knowledge.models import KnowledgeEvidenceLink
+
         with self._lock:
             rows = self._connection.execute(
                 """
@@ -927,6 +946,11 @@ class SqliteIncidentStore:
         self,
         revision_id: str,
     ) -> tuple[EngineeringEvidence, ...]:
+        from jarvis.engineering_knowledge.models import (
+            EngineeringEvidence,
+            KnowledgeSensitivity,
+        )
+
         with self._lock:
             rows = self._connection.execute(
                 """
@@ -966,6 +990,8 @@ class SqliteIncidentStore:
         self,
         revision_id: str,
     ) -> tuple[EngineeringApplicability, ...]:
+        from jarvis.engineering_knowledge.models import EngineeringApplicability
+
         with self._lock:
             rows = self._connection.execute(
                 """
@@ -999,6 +1025,11 @@ class SqliteIncidentStore:
         subject_type: str,
         subject_id: str,
     ) -> tuple[EngineeringAttestation, ...]:
+        from jarvis.engineering_knowledge.models import (
+            AttestationVerdict,
+            EngineeringAttestation,
+        )
+
         with self._lock:
             rows = self._connection.execute(
                 """
@@ -1037,6 +1068,11 @@ class SqliteIncidentStore:
         expected_from_state: KnowledgeLifecycleState,
     ) -> bool:
         """Append one lifecycle event under a same-transaction state precondition."""
+
+        from jarvis.engineering_knowledge.models import (
+            KnowledgeLifecycleEvent,
+            KnowledgeLifecycleState,
+        )
 
         if not isinstance(event, KnowledgeLifecycleEvent):
             raise TypeError("event must be a KnowledgeLifecycleEvent")
@@ -1122,6 +1158,8 @@ class SqliteIncidentStore:
     ) -> None:
         """Persist one immutable facet without requiring registered semantics."""
 
+        from jarvis.engineering_knowledge.models import EngineeringKnowledgeFacet
+
         if not isinstance(facet, EngineeringKnowledgeFacet):
             raise TypeError("facet must be an EngineeringKnowledgeFacet")
         with self._lock, self._connection:
@@ -1196,6 +1234,8 @@ class SqliteIncidentStore:
     def _engineering_knowledge_facet_from_payload(
         payload: dict[str, object],
     ) -> EngineeringKnowledgeFacet:
+        from jarvis.engineering_knowledge.models import EngineeringKnowledgeFacet
+
         return EngineeringKnowledgeFacet(
             facet_id=str(payload["facet_id"]),
             revision_id=str(payload["revision_id"]),
