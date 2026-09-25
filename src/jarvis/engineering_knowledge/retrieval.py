@@ -570,16 +570,13 @@ class EngineeringKnowledgeRetrievalIndex:
             revision_id = item.assertion_id
             if revision_id in exact_rank:
                 continue
-            if revision_id in lexical_rank:
-                ordered.append(revision_id)
-                continue
             threshold = resolved_policy.minimum_dense_score
             score = dense_score.get(revision_id)
-            if (
-                threshold is not None
-                and score is not None
-                and score >= threshold
-            ):
+            if revision_id in lexical_rank:
+                if threshold is None or (score is not None and score >= threshold):
+                    ordered.append(revision_id)
+                continue
+            if threshold is not None and score is not None and score >= threshold:
                 ordered.append(revision_id)
         selected = ordered[:limit]
         output: list[EngineeringKnowledgeRetrievalCandidate] = []
