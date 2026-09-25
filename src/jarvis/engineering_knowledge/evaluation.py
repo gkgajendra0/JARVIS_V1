@@ -264,12 +264,16 @@ class EngineeringKnowledgeEvaluationRetriever(Protocol):
 
 
 class EvaluationResourceProbe(Protocol):
-    def snapshot(self) -> tuple[float | None, float | None, int | None]: ...
+    def snapshot(
+        self,
+    ) -> tuple[float | None, float | None, int | None, float | None]: ...
 
 
 class NullEvaluationResourceProbe:
-    def snapshot(self) -> tuple[float | None, float | None, int | None]:
-        return None, None, None
+    def snapshot(
+        self,
+    ) -> tuple[float | None, float | None, int | None, float | None]:
+        return None, None, None, None
 
 
 class EngineeringKnowledgeEvaluationHarness:
@@ -298,7 +302,7 @@ class EngineeringKnowledgeEvaluationHarness:
             hits = self._retriever.retrieve(case, limit=k)
             cpu_ms = (time.process_time() - cpu_start) * 1000.0
             wall_ms = (time.perf_counter() - wall_start) * 1000.0
-            rss_mb, vram_mb, disk_bytes = self._resource_probe.snapshot()
+            rss_mb, vram_mb, disk_bytes, rebuild_ms = self._resource_probe.snapshot()
             observations.append(
                 EngineeringKnowledgeEvaluationObservation(
                     query_id=case.query_id,
@@ -309,6 +313,7 @@ class EngineeringKnowledgeEvaluationHarness:
                         rss_mb=rss_mb,
                         vram_mb=vram_mb,
                         disk_bytes=disk_bytes,
+                        rebuild_ms=rebuild_ms,
                     ),
                 )
             )
