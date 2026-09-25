@@ -91,9 +91,7 @@ def _snapshot_from_payload(payload: dict[str, object]) -> EligibilitySnapshot:
             str(value) for value in payload["required_capabilities"]
         ),
         privacy_class=PrivacyClass(str(payload["privacy_class"])),
-        locality_requirement=LocalityRequirement(
-            str(payload["locality_requirement"])
-        ),
+        locality_requirement=LocalityRequirement(str(payload["locality_requirement"])),
         policy_version=int(payload["policy_version"]),
         policy_digest=str(payload["policy_digest"]),
     )
@@ -122,9 +120,7 @@ def _decision_from_payload(payload: dict[str, object]) -> RoutingDecision:
         strategy_key=str(payload["strategy_key"]),
         strategy_version=int(payload["strategy_version"]),
         strategy_digest=str(payload["strategy_digest"]),
-        ordered_target_ids=tuple(
-            str(value) for value in payload["ordered_target_ids"]
-        ),
+        ordered_target_ids=tuple(str(value) for value in payload["ordered_target_ids"]),
         selected_target_id=str(payload["selected_target_id"]),
         reason_codes=tuple(str(value) for value in payload["reason_codes"]),
         selected_role=str(payload["selected_role"]),
@@ -170,14 +166,9 @@ def _attempt_from_payload(payload: dict[str, object]) -> RoutingAttempt:
             None if payload["latency_ms"] is None else float(payload["latency_ms"])
         ),
         failure_class=(
-            None
-            if payload["failure_class"] is None
-            else str(payload["failure_class"])
+            None if payload["failure_class"] is None else str(payload["failure_class"])
         ),
-        usage={
-            str(key): float(value)
-            for key, value in dict(payload["usage"]).items()
-        },
+        usage={str(key): float(value) for key, value in dict(payload["usage"]).items()},
         estimated_cost_usd=(
             None
             if payload["estimated_cost_usd"] is None
@@ -324,12 +315,8 @@ class ModelRoutingStore:
                 eligibility.policy_version,
                 eligibility.policy_digest,
                 decision.selected_target_id,
-                self._work_store.encode_extension_json(
-                    _decision_payload(decision)
-                ),
-                self._work_store.encode_extension_json(
-                    _snapshot_payload(eligibility)
-                ),
+                self._work_store.encode_extension_json(_decision_payload(decision)),
+                self._work_store.encode_extension_json(_snapshot_payload(eligibility)),
                 decision.created_at_epoch,
             ),
         )
@@ -382,9 +369,7 @@ class ModelRoutingStore:
             (attempt.decision_id,),
         ).fetchone()
         if row is None:
-            raise RoutingStoreError(
-                f"unknown routing decision: {attempt.decision_id}"
-            )
+            raise RoutingStoreError(f"unknown routing decision: {attempt.decision_id}")
         if row["work_id"] != attempt.work_id:
             raise RoutingStoreError("routing attempt work_id does not match decision")
         decision = _decision_from_payload(
@@ -405,9 +390,7 @@ class ModelRoutingStore:
                 attempt.work_id,
                 attempt.target_id,
                 attempt.attempt_ordinal,
-                self._work_store.encode_extension_json(
-                    _attempt_payload(attempt)
-                ),
+                self._work_store.encode_extension_json(_attempt_payload(attempt)),
                 attempt.started_at_epoch,
             ),
         )
@@ -479,9 +462,7 @@ class ModelRoutingStore:
             work_id=row["work_id"],
             registry_digest=row["registry_digest"],
             eligibility=_snapshot_from_payload(
-                self._work_store.decode_extension_json(
-                    row["eligibility_json"]
-                )
+                self._work_store.decode_extension_json(row["eligibility_json"])
             ),
             decision=_decision_from_payload(
                 self._work_store.decode_extension_json(row["decision_json"])
