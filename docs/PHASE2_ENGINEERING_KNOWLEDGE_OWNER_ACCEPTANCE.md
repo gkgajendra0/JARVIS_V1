@@ -2,9 +2,11 @@
 
 ## Status
 
-**READY FOR OWNER-MACHINE ACCEPTANCE — NOT YET ACCEPTED**
+**PASS — OWNER-MACHINE ACCEPTED 2026-09-25**
 
-Phases 2A through 2I are implemented and merged on protected main. Phase 2 is not DONE until this owner-machine matrix passes and the final documentation reconciliation is accepted.
+Canonical final acceptance record: `PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
+
+Phases 2A through 2J are implemented. The integrated owner-machine matrix passed on protected-main baseline `3c5a2f732db171a9ad61a4531fecd66aed0d27c4`. This file remains the procedure; the canonical final result is recorded separately in the dated acceptance record.
 
 ## Why this run is required
 
