@@ -138,7 +138,9 @@ class ChangeService:
                 "architecture revision requires an approved or downstream change"
             )
         if current.payload == payload:
-            raise ChangeConflict(\n                "architecture revision must change the current proposal"\n            )
+            raise ChangeConflict(
+                "architecture revision must change the current proposal"
+            )
 
         store.add_artifact(change_id, kind="architecture", payload=payload)
         return self.propose_architecture(change_id, payload)
