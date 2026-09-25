@@ -27,6 +27,7 @@ from jarvis.model_routing.router import (
     ModelRouter,
     RoutedSelection,
     RoutingResourceBlocked,
+    RoutingUnavailableError,
     build_work_routing_request,
 )
 from jarvis.model_routing.store import RoutingStoreError
@@ -383,7 +384,14 @@ class RoutedWorkReasoner:
             request,
             primary_target_id=self._primary_target_id,
         )
-        selection = self._router.route(routing_request)
+        try:
+            selection = self._router.route(routing_request)
+        except RoutingUnavailableError as exc:
+            raise RoutingResourceBlocked(
+                routing_request_id=routing_request.routing_request_id,
+                reason="no approved routing target is currently eligible",
+                retry_after_seconds=30.0,
+            ) from exc
         attempts = list(
             self._router.routing_store.list_attempts(
                 selection.decision.decision_id
