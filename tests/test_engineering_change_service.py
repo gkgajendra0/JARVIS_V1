@@ -212,6 +212,53 @@ def test_verified_commit_requires_separate_owner_acceptance(tmp_path) -> None:
     assert set(report["store_gates"].values()) == {"PASS"}
 
 
+def test_revise_approved_architecture_reopens_gate_and_creates_fresh_build_attempt(
+    tmp_path,
+) -> None:
+    session = ConversationSession(session_id="owner-session")
+    session.start()
+    initial = session.accept_turn(ConversationRole.USER, "New adapter")
+    store = ChangeStore(SQLiteWorkStore(tmp_path / "work.sqlite3"))
+    service = _service(store, session)
+    change = service.start(initial)
+    research = store.list_stages(change.change_id)[0]
+    item = store.work.require(research.work_id)
+    running = store.work.save(
+        item.transition(WorkState.RUNNING), expected_version=item.version
+    )
+    store.work.save(
+        running.transition(WorkState.COMPLETED), expected_version=running.version
+    )
+
+    first_gate = service.propose_architecture(change.change_id, {"plan": "a"})
+    session.accept_turn(ConversationRole.USER, f"Approve {first_gate.gate_id}")
+    service.decide_latest(first_gate.gate_id)
+    first_development = store.list_stages(change.change_id)[1]
+    assert store.require(change.change_id).state is ChangeState.DEVELOPING
+
+    revised_gate = service.revise_architecture(change.change_id, {"plan": "b"})
+    assert store.require(change.change_id).state is ChangeState.WAITING_OWNER_APPROVAL
+    assert not store.work_admitted(first_development.work_id)
+    assert store.latest_artifact(change.change_id, "architecture").revision == 2
+
+    retry = service.revise_architecture(change.change_id, {"plan": "b"})
+    assert retry == revised_gate
+    assert store.latest_artifact(change.change_id, "architecture").revision == 2
+
+    session.accept_turn(ConversationRole.USER, f"Approve {revised_gate.gate_id}")
+    service.decide_latest(revised_gate.gate_id)
+    development_attempts = [
+        stage
+        for stage in store.list_stages(change.change_id)
+        if stage.stage_key == "development"
+    ]
+    assert len(development_attempts) == 2
+    assert development_attempts[0].work_id == first_development.work_id
+    assert development_attempts[1].work_id != first_development.work_id
+    assert development_attempts[1].attempt == 2
+    assert store.work_admitted(development_attempts[1].work_id)
+
+
 def test_restart_resends_same_architecture_gate_and_delivery(tmp_path) -> None:
     session = ConversationSession(session_id="owner-session")
     session.start()
