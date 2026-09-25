@@ -636,9 +636,7 @@ class ModelRoutingStore:
             raise TypeError("outcome must be a RoutingOutcome")
         persisted = self.get_decision(outcome.decision_id)
         if persisted is None:
-            raise RoutingStoreError(
-                f"unknown routing decision: {outcome.decision_id}"
-            )
+            raise RoutingStoreError(f"unknown routing decision: {outcome.decision_id}")
         if persisted.work_id != outcome.work_id:
             raise RoutingStoreError("routing outcome work_id does not match decision")
         try:
