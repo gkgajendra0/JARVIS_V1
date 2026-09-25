@@ -105,17 +105,13 @@ def test_phase2j_fixture_contains_terminal_and_private_controls(tmp_path) -> Non
     finally:
         connection.close()
 
-    assert (
-        state[document_to_revision["repair.runtime_voice.exit.stale"]]
-        == "retired"
-    )
+    assert state[document_to_revision["repair.runtime_voice.exit.stale"]] == "retired"
     assert (
         state[document_to_revision["repair.runtime_voice.exit.superseded"]]
         == "superseded"
     )
     assert (
-        state[document_to_revision["repair.runtime_voice.exit.refuted"]]
-        == "rejected"
+        state[document_to_revision["repair.runtime_voice.exit.refuted"]] == "rejected"
     )
     assert (
         sensitivity[document_to_revision["repair.runtime_voice.private_local"]]
