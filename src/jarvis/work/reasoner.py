@@ -172,7 +172,7 @@ def _brain_decision(
 
 
 def _attempt_id(decision_id: str, ordinal: int) -> str:
-    digest = hashlib.sha256(f"{decision_id}:{ordinal}".encode("utf-8")).hexdigest()[:24]
+    digest = hashlib.sha256(f"{decision_id}:{ordinal}".encode()).hexdigest()[:24]
     return f"attempt_{digest}"
 
 
