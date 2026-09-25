@@ -214,3 +214,44 @@ def test_registered_strategy_can_order_more_than_two_candidates() -> None:
         "target-b",
         "target-c",
     )
+
+
+def test_model_target_registry_digest_is_stable_and_order_independent() -> None:
+    adapters = ModelAdapterRegistry((DummyAdapter("openai"),))
+    first = ModelTargetRegistry(
+        adapters,
+        (_target("target-b"), _target("target-a")),
+    )
+    second = ModelTargetRegistry(
+        adapters,
+        (_target("target-a"), _target("target-b")),
+    )
+
+    assert first.digest() == second.digest()
+    assert len(first.digest()) == 64
+
+
+def test_model_target_registry_digest_changes_with_target_contract() -> None:
+    adapters = ModelAdapterRegistry((DummyAdapter("openai"),))
+    first = ModelTargetRegistry(adapters, (_target("target-a"),))
+    changed = _target("target-a")
+    changed = ModelTarget(
+        target_id=changed.target_id,
+        adapter_id=changed.adapter_id,
+        provider_id=changed.provider_id,
+        model_id="different-model",
+        locality=changed.locality,
+        capabilities=changed.capabilities,
+        roles=changed.roles,
+        max_context_tokens=changed.max_context_tokens,
+        supports_structured_output=changed.supports_structured_output,
+        supports_tools=changed.supports_tools,
+        supports_streaming=changed.supports_streaming,
+        latency_class=changed.latency_class,
+        benchmark_status=changed.benchmark_status,
+        registry_version=changed.registry_version,
+        credential_ref=changed.credential_ref,
+    )
+    second = ModelTargetRegistry(adapters, (changed,))
+
+    assert first.digest() != second.digest()
