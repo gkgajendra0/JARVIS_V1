@@ -39,11 +39,9 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 The active development slice is now:
 
-**Phase 3 — EngineeringChange Lifecycle / Mission Orchestration**
+**Phase 4 — Research + Diagnostic Model Router**
 
-Phase-3 implementation is tracked in PR #108. Its acceptance procedure is
-`PHASE3_ENGINEERING_CHANGE_OWNER_ACCEPTANCE.md`. CI and owner-machine proof are
-still required; do not label Phase 3 DONE before the real owner run passes.
+Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
 Phase 1H is **DONE / OWNER-MACHINE ACCEPTED 2026-09-24**. Its final contract and evidence are recorded in `SELF_REPAIR_PHASE1H_HARDENING.md`.
 
@@ -78,8 +76,8 @@ Continue with the phased sequence in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLA
 
 ```text
 Phase 2  EngineeringKnowledge — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
-Phase 3  EngineeringChange lifecycle / mission orchestration — ACTIVE
-Phase 4  Research + Diagnostic Model Router
+Phase 3  EngineeringChange lifecycle / mission orchestration — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
+Phase 4  Research + Diagnostic Model Router — ACTIVE
 Phase 5  Secure autonomous engineering substrate
 Phase 6  Unknown-incident investigation + source repair
 Phase 7  Governed promotion / production verification / rollback
@@ -104,7 +102,7 @@ The active Self-Repair/Evolution/Autonomous-Engineering program is cross-cutting
 
 Current open/deferred items are tracked only in `PROJECT_STATE.md`. The important open issues are #19, #44, #45, #46, #63 and #69.
 
-They remain separate unless evidence shows that one directly blocks the active Phase 3 work.
+They remain separate unless evidence shows that one directly blocks the active Phase 4 work.
 
 ## Documentation ownership
 
@@ -121,18 +119,12 @@ They remain separate unless evidence shows that one directly blocks the active P
 - `PHASE2_ENGINEERING_KNOWLEDGE_ARCHITECTURE.md` — owner-approved Phase-2 architecture and invariants.
 - `PHASE2_ENGINEERING_KNOWLEDGE_IMPLEMENTATION_PLAN.md` — completed Phase-2 implementation sequence, gates and acceptance matrix.
 - `PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md` — canonical Phase-2 owner-machine acceptance record.
+- `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md` — canonical Phase-3 owner-machine acceptance record.
 
 Historical experiments, old acceptance transcripts and superseded research remain available through Git history rather than becoming competing planning truth.
 
 ## Immediate next action
 
-**Finish Phase 3 EngineeringChange on PR #108, then run its owner-machine acceptance gate.**
+**Begin Phase 4 — Research + Diagnostic Model Router.**
 
-The implementation and recovery contracts must be green on the exact PR head before
-manual acceptance. Then run `PHASE3_ENGINEERING_CHANGE_OWNER_ACCEPTANCE.md` against
-the isolated tested worktree, record the real PostgreSQL/restart, voice/Windows Hello
-and isolated-development evidence, reconcile accepted documentation, and merge only
-if every required gate passes.
-
-Do not advance to Phase 4 or describe EngineeringChange as accepted production state
-until that owner-machine evidence is recorded.
+Follow the permanent engineering rule: research thoroughly, define the architecture, obtain owner approval, then implement on an isolated branch/PR with CI and owner-machine acceptance where required. Phase 4 must reuse the accepted EngineeringChange, EngineeringKnowledge, Authority and persistent WorkItem foundations; it must not introduce a parallel execution or governance system.
