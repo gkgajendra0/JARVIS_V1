@@ -1004,9 +1004,7 @@ def _query_without_applicability_identity_terms(
         )
     query_tokens = re.findall(r"[^\W_]+", query, flags=re.UNICODE)
     remaining = [
-        token
-        for token in query_tokens
-        if token.casefold() not in identity_tokens
+        token for token in query_tokens if token.casefold() not in identity_tokens
     ]
     return " ".join(remaining) if remaining else "__no_match__"
 
