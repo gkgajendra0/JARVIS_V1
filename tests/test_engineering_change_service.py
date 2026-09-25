@@ -135,6 +135,34 @@ def test_explicit_turn_cannot_approve_without_strong_owner_verification(
     assert store.require(change.change_id).state is ChangeState.WAITING_OWNER_APPROVAL
 
 
+def test_explicit_owner_architecture_rejection_stops_before_development(
+    tmp_path,
+) -> None:
+    session = ConversationSession(session_id="owner-session")
+    session.start()
+    initial = session.accept_turn(ConversationRole.USER, "New adapter")
+    store = ChangeStore(SQLiteWorkStore(tmp_path / "work.sqlite3"))
+    service = _service(store, session)
+    change = service.start(initial)
+    research = store.list_stages(change.change_id)[0]
+    item = store.work.require(research.work_id)
+    running = store.work.save(
+        item.transition(WorkState.RUNNING), expected_version=item.version
+    )
+    store.work.save(
+        running.transition(WorkState.COMPLETED), expected_version=running.version
+    )
+    gate = service.propose_architecture(change.change_id, {"plan": "a"})
+    session.accept_turn(ConversationRole.USER, f"Reject {gate.gate_id}")
+    decision = service.decide_latest(gate.gate_id)
+
+    assert not decision.approved
+    assert store.require(change.change_id).state is ChangeState.REJECTED
+    assert [stage.stage_key for stage in store.list_stages(change.change_id)] == [
+        "research"
+    ]
+
+
 def test_acceptance_challenge_requires_canonical_verified_development(tmp_path) -> None:
     session = ConversationSession(session_id="owner-session")
     session.start()
