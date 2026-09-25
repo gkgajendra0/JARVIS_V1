@@ -100,6 +100,49 @@ class ChangeService:
         )
         return gate
 
+    def revise_architecture(
+        self, change_id: str, payload: dict[str, object]
+    ) -> GateChallenge:
+        """Supersede an approved architecture and reopen its exact owner gate safely."""
+        store = self.coordinator.store
+        change = store.require(change_id)
+        current = store.latest_artifact(change_id, "architecture")
+        if current is None:
+            raise ChangeConflict("architecture revision requires an existing proposal")
+        if not isinstance(payload, dict) or not payload:
+            raise ChangeConflict("architecture proposal is empty")
+        rendered = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        if len(rendered.encode("utf-8")) > 16_384:
+            raise ChangeConflict("architecture proposal exceeds review limit")
+
+        recovery_states = {
+            ChangeState.ARCHITECTURE_READY,
+            ChangeState.WAITING_OWNER_APPROVAL,
+        }
+        downstream_states = {
+            ChangeState.APPROVED_FOR_BUILD,
+            ChangeState.DEVELOPING,
+            ChangeState.VERIFYING,
+            ChangeState.WAITING_OWNER_ACCEPTANCE,
+            ChangeState.READY_FOR_PROMOTION,
+            ChangeState.WAITING_PROMOTION_APPROVAL,
+        }
+        if change.state in recovery_states:
+            if current.revision < 2 or current.payload != payload:
+                raise ChangeConflict(
+                    "architecture revision differs from the pending reviewed revision"
+                )
+            return self.propose_architecture(change_id, payload)
+        if change.state not in downstream_states:
+            raise ChangeConflict(
+                "architecture revision requires an approved or downstream change"
+            )
+        if current.payload == payload:
+            raise ChangeConflict("architecture revision must change the current proposal")
+
+        store.add_artifact(change_id, kind="architecture", payload=payload)
+        return self.propose_architecture(change_id, payload)
+
     def decide_latest(self, gate_id: str) -> GateDecision:
         turn = next(
             (
