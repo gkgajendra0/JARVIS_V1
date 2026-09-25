@@ -10,6 +10,18 @@ from jarvis.model_routing.eligibility import (
     NoEligibleTargets,
     TargetHealthEligibility,
 )
+from jarvis.model_routing.evaluation import (
+    BenchmarkBaseline,
+    RoutingBenchmarkCase,
+    RoutingCaseEvaluation,
+    RoutingEvaluationConfig,
+    RoutingEvaluationMetrics,
+    RoutingEvaluationReport,
+    TargetReplayObservation,
+    benchmark_fixture_digest,
+    evaluate_routing_replay,
+    load_routing_benchmark_fixture,
+)
 from jarvis.model_routing.health import (
     HealthAction,
     HealthMutation,
@@ -80,6 +92,7 @@ from jarvis.model_routing.strategy import (
 )
 
 __all__ = [
+    "BenchmarkBaseline",
     "BenchmarkStatus",
     "CostProfile",
     "DefaultWorkTargets",
@@ -112,7 +125,12 @@ __all__ = [
     "RoutedSelection",
     "RoutingAttempt",
     "RoutingAttemptKind",
+    "RoutingBenchmarkCase",
+    "RoutingCaseEvaluation",
     "RoutingDecision",
+    "RoutingEvaluationConfig",
+    "RoutingEvaluationMetrics",
+    "RoutingEvaluationReport",
     "RoutingOutcome",
     "RoutingProvenanceError",
     "RoutingRegistryError",
@@ -130,14 +148,18 @@ __all__ = [
     "TargetExclusion",
     "TargetHealthEligibility",
     "TargetHealthRecord",
+    "TargetReplayObservation",
     "UnknownModelAdapterError",
     "UnknownModelTargetError",
     "UnknownRoutingStrategyError",
     "VerificationStatus",
     "apply_provider_failure",
+    "benchmark_fixture_digest",
     "build_default_model_adapter_registry",
     "build_default_work_targets",
     "build_work_routing_request",
     "derive_work_step_signals",
+    "evaluate_routing_replay",
+    "load_routing_benchmark_fixture",
     "reasoning_cycle_key",
 ]
