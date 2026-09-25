@@ -1,16 +1,9 @@
 from __future__ import annotations
 
 import multiprocessing
-import traceback
-
-
 def _import_target(module_name: str, result_queue) -> None:
-    try:
-        __import__(module_name)
-    except Exception:
-        result_queue.put(traceback.format_exc())
-    else:
-        result_queue.put("ok")
+    __import__(module_name)
+    result_queue.put("ok")
 
 
 def _assert_fresh_import(module_name: str) -> None:
@@ -26,9 +19,9 @@ def _assert_fresh_import(module_name: str) -> None:
         process.terminate()
         process.join(timeout=5)
         raise AssertionError(f"cold import timed out: {module_name}")
+    assert process.exitcode == 0
     result = result_queue.get(timeout=5)
-    assert process.exitcode == 0, result
-    assert result == "ok", result
+    assert result == "ok"
 
 
 def test_engineering_knowledge_acceptance_cold_import_has_no_cycle() -> None:
