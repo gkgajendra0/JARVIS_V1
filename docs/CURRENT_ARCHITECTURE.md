@@ -45,6 +45,12 @@ AEC/NS/HPF/AGC          RF-DETR/OC-SORT     risk + OPA
           RepairPolicy / RepairAttempt / budgets
           startup readiness + authenticated liveness
           bounded same-version recovery + verification
+                             |
+                    ENGINEERING KNOWLEDGE
+                             |
+          immutable revisions + provenance/applicability
+          deterministic REPAIR projection + lifecycle
+          exact/FTS5/Qwen grounded advisory retrieval
 
 canonical USER turns
    +-> LiveContext / MemoryService
