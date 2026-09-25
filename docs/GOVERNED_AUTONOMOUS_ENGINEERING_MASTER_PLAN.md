@@ -2,7 +2,7 @@
 
 ## Status
 
-**AUTHORITATIVE OWNER-APPROVED NORTH-STAR PROGRAM ARCHITECTURE — accepted on protected `main`; Phase 2 EngineeringKnowledge architecture approved 2026-09-24**
+**AUTHORITATIVE OWNER-APPROVED NORTH-STAR PROGRAM ARCHITECTURE — accepted on protected `main`; Phase 2 EngineeringKnowledge owner-machine accepted 2026-09-25; Phase 3 EngineeringChange is active**
 
 Established: 2026-09-24
 
@@ -458,7 +458,7 @@ Preserve the current hardening contract. This architecture review does not reope
 
 ### Phase 2 — EngineeringKnowledge foundation
 
-**STATUS: OWNER-APPROVED ARCHITECTURE / ACTIVE IMPLEMENTATION SLICE**
+**STATUS: DONE / OWNER-MACHINE ACCEPTED 2026-09-25**
 
 Generalize the already researched RepairKnowledge work into the shared durable engineering knowledge model, with `REPAIR` as the first implemented vertical.
 
@@ -471,6 +471,8 @@ Exit criteria:
 - schema can represent later integration/capability knowledge without migration to a parallel silo.
 
 ### Phase 3 — EngineeringChange lifecycle and mission orchestration
+
+**STATUS: ACTIVE / NEXT ARCHITECTURE SLICE**
 
 Add the durable program-level aggregate above WorkItems.
 
@@ -673,12 +675,12 @@ Rules:
 
 ---
 
-## 13. Immediate sequence from 2026-09-24
+## 13. Immediate sequence from 2026-09-25
 
-1. Phase 1H repository and owner-machine acceptance is complete.
-2. Canonical Phase-1H documentation is reconciled with the accepted hardening evidence.
-3. Begin Phase 2 as shared `EngineeringKnowledge`, preserving REPAIR as the first vertical and the previously researched RepairKnowledge semantics.
-4. Do **not** reopen or rewrite accepted Phase 1/R2 or Phase 1H without new concrete evidence.
+1. Phase 1/R2 and Phase 1H remain accepted foundations.
+2. Phase 2 EngineeringKnowledge is complete and owner-machine accepted.
+3. Begin Phase 3 by researching and freezing the durable `EngineeringChange` lifecycle / mission-orchestration architecture above existing WorkItems.
+4. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H or Phase 2 without new concrete evidence.
 5. Define `EngineeringChange` before multi-stage autonomous source/capability engineering is implemented.
 6. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
 7. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.
