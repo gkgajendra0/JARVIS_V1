@@ -237,7 +237,7 @@ def test_exact_evidence_reference_has_priority_and_provenance_envelope(
     store.close()
 
 
-def test_dense_retrieval_uses_only_accepted_applicable_revisions(tmp_path) -> None:
+def test_dense_retrieval_requires_lexical_or_exact_anchor(tmp_path) -> None:
     path = tmp_path / "engineering.sqlite3"
     store = SqliteIncidentStore(path)
     first_id, _ = _candidate(store, suffix="voice-exit")
@@ -254,16 +254,23 @@ def test_dense_retrieval_uses_only_accepted_applicable_revisions(tmp_path) -> No
     index.refresh_revision(first_id, encoder=encoder, now_epoch=122.0)
     index.refresh_revision(second_id, encoder=encoder, now_epoch=122.0)
 
-    results = index.retrieve(
+    unanchored = index.retrieve(
         "semantic-only",
         context=_context(),
         encoder=encoder,
         now_epoch=123.0,
     )
+    anchored = index.retrieve(
+        "restart semantic-only",
+        context=_context(),
+        encoder=encoder,
+        now_epoch=123.0,
+    )
 
-    assert results
-    assert results[0].revision.revision_id == second_id
-    assert results[0].dense_rank == 1
+    assert unanchored == ()
+    assert anchored
+    assert anchored[0].revision.revision_id == second_id
+    assert anchored[0].dense_rank == 1
     index.close()
     store.close()
 

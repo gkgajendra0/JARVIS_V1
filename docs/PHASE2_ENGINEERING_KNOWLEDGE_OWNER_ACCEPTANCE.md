@@ -118,3 +118,16 @@ After the owner-machine run:
 - reconcile CURRENT_ARCHITECTURE, CURRENT_PLAN, PROJECT_STATE, and any materially affected PRODUCT/ROADMAP statements;
 - create the canonical Phase-2 acceptance record;
 - obtain the owner's final acceptance of Phase 2.
+
+
+## Dense-only abstention correction
+
+The first real owner-machine Qwen-256 benchmark showed that unrestricted dense
+nearest-neighbor expansion returned results for some explicit no-answer cases.
+Phase 2 therefore uses a conservative grounded-hybrid rule: exact/lexical
+retrieval establishes the admissible candidate set and Qwen dense similarity may
+rerank only those grounded candidates.
+
+This is intentional. EngineeringKnowledge prefers abstention over a semantically
+plausible but ungrounded answer. A future semantic-only retrieval path requires
+separate benchmark evidence and an explicit abstention contract.

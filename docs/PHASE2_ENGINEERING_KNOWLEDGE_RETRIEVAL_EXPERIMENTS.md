@@ -107,3 +107,20 @@ Owner-machine acceptance should run the Phase-2H corpus and capture the real bas
 Where practical, the benchmark may then evaluate the built-in candidates (Qwen dimensions, trigram support, bounded reranker). Optional external vector backends should only be installed if a measured scale problem makes their evaluation justified; Phase 2J does not require installing them merely to prove that the baseline works.
 
 No experiment may weaken the zero-tolerance safety gate.
+
+
+## Phase 2J owner-machine safety finding
+
+The first real Qwen-256 owner-machine run produced perfect Recall@K but a 0.5
+no-answer false-positive rate because dense similarity always has a nearest
+neighbor, even for unknown/future queries.
+
+The accepted safety correction is conservative: dense ranking may only rerank
+revisions already admitted by an exact or lexical retrieval anchor. Dense-only
+expansion is disabled for the Phase-2 baseline. This keeps semantic ranking as
+an advisory ordering signal without allowing embedding similarity by itself to
+invent an answer.
+
+Future dense-only expansion remains a Phase-2I/next-phase experiment and must
+earn adoption with an explicit abstention contract and the zero-tolerance
+no-answer safety gate.
