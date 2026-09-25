@@ -532,6 +532,12 @@ class EngineeringKnowledgeRetrievalIndex:
                 )
 
         lexical_ids = [revision_id for revision_id, _ in lexical]
+        retrieval_anchors = set(lexical_ids) | set(exact_ids)
+        dense = [
+            (revision_id, score)
+            for revision_id, score in dense
+            if revision_id in retrieval_anchors
+        ]
         dense_ids = [revision_id for revision_id, _ in dense]
         fused = reciprocal_rank_fuse(
             lexical_ids,
