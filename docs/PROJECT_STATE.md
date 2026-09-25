@@ -16,7 +16,7 @@ and abandoned branches are historical evidence in Git history. They are not curr
 documentation authority.
 
 Snapshot baseline verified from protected `main` at
-`3c5a2f732db171a9ad61a4531fecd66aed0d27c4` on 2026-09-25.
+`c04ede5c3f63ad803541a2f3d15a5e85c1b41023` on 2026-09-25, immediately after Phase-3 PR #108 merge.
 
 ---
 
@@ -254,11 +254,13 @@ old acceptance transcripts and superseded proposals.
 
 ## Current branch / PR truth
 
-At Phase-2 closure reconciliation start:
+At the Phase-4 architecture-freeze baseline:
 
-- protected `main`: `3c5a2f732db171a9ad61a4531fecd66aed0d27c4`;
-- Phase-2 implementation/acceptance PRs #92–#106: **merged**;
-- Phase-2 owner-machine acceptance: **PASS 2026-09-25**;
+- protected `main`: `c04ede5c3f63ad803541a2f3d15a5e85c1b41023`;
+- Phase-2 implementation/acceptance PRs #92–#106: **merged / accepted**;
+- Phase-3 PR #108: **merged / owner-machine accepted 2026-09-25**;
+- Phase-4 documentation freeze: PR #109;
+- Phase-4 runtime implementation: **not started yet**;
 - Self-Repair issue #65: **closed / completed**.
 
 Several old feature/research branches still exist remotely. Their presence does not
