@@ -145,12 +145,13 @@ class EngineeringKnowledgeIndexEncoder(Protocol):
 def build_engineering_qwen_encoder(
     *,
     device: str | None = "cuda",
+    contract: EmbeddingContract = QWEN3_EMBEDDING_CONTRACT,
 ) -> Qwen3EmbeddingEncoder:
     """Build the existing pinned Qwen adapter with an engineering-specific prompt."""
 
     return Qwen3EmbeddingEncoder(
         device=device,
-        contract=QWEN3_EMBEDDING_CONTRACT,
+        contract=contract,
         query_instruction=JARVIS_ENGINEERING_RETRIEVAL_INSTRUCTION,
     )
 
