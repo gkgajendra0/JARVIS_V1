@@ -182,9 +182,7 @@ class ReasoningAdapter:
         del target, system_prompt, input_payload
         self.calls.append(request_context)
         if self.routing_store is not None:
-            persisted = self.routing_store.get_decision(
-                request_context.decision_id
-            )
+            persisted = self.routing_store.get_decision(request_context.decision_id)
             assert persisted is not None
         if self.error is not None:
             raise self.error
@@ -210,9 +208,7 @@ def _routed_reasoner(
 ]:
     work_store = SQLiteWorkStore(tmp_path / "work.sqlite")
     routing_store = ModelRoutingStore(work_store)
-    selected_adapter = adapter or ReasoningAdapter(
-        routing_store=routing_store
-    )
+    selected_adapter = adapter or ReasoningAdapter(routing_store=routing_store)
     selected_adapter.routing_store = routing_store
     adapters = ModelAdapterRegistry((selected_adapter,))
     targets = ModelTargetRegistry(
@@ -228,9 +224,7 @@ def _routed_reasoner(
     router = ModelRouter(
         target_registry=targets,
         adapter_registry=adapters,
-        strategy_registry=RoutingStrategyRegistry(
-            (EngineeringStageStrategy(),)
-        ),
+        strategy_registry=RoutingStrategyRegistry((EngineeringStageStrategy(),)),
         routing_store=routing_store,
         eligibility_policy=EligibilityPolicy(),
         credential_available=lambda target: True,
@@ -265,9 +259,7 @@ async def test_router_persists_decision_before_provider_invocation(
         expected_route.routing_request_id
     )
     assert persisted is not None
-    attempts = routing_store.list_attempts(
-        persisted.decision.decision_id
-    )
+    attempts = routing_store.list_attempts(persisted.decision.decision_id)
     assert len(attempts) == 1
     assert attempts[0].target_id == "work.fake.default"
 
@@ -285,15 +277,11 @@ async def test_same_reasoning_cycle_reuses_one_route_decision(
     )
 
     await reasoner.decide(request)
-    first = routing_store.find_decision_by_request(
-        route_request.routing_request_id
-    )
+    first = routing_store.find_decision_by_request(route_request.routing_request_id)
     assert first is not None
 
     await reasoner.decide(request)
-    second = routing_store.find_decision_by_request(
-        route_request.routing_request_id
-    )
+    second = routing_store.find_decision_by_request(route_request.routing_request_id)
     assert second is not None
     assert second.decision.decision_id == first.decision.decision_id
 
@@ -307,9 +295,7 @@ async def test_same_reasoning_cycle_reuses_one_route_decision(
         ).fetchone()[0]
     assert count == 1
     assert len(adapter.calls) == 2
-    assert len(
-        routing_store.list_attempts(first.decision.decision_id)
-    ) == 2
+    assert len(routing_store.list_attempts(first.decision.decision_id)) == 2
 
 
 @pytest.mark.asyncio
@@ -332,9 +318,7 @@ async def test_model_invoker_never_selects_a_different_target() -> None:
             called.append(target.target_id)
             return response_model(value=target.target_id)
 
-    invoker = ModelInvoker(
-        ModelAdapterRegistry((TargetEchoAdapter(),))
-    )
+    invoker = ModelInvoker(ModelAdapterRegistry((TargetEchoAdapter(),)))
     selected = _target("selected")
     result = await invoker.invoke_structured(
         target=selected,
@@ -405,9 +389,7 @@ async def test_routed_reasoner_preserves_provider_pressure_behavior(
         request,
         primary_target_id="work.fake.default",
     )
-    persisted = routing_store.find_decision_by_request(
-        route_request.routing_request_id
-    )
+    persisted = routing_store.find_decision_by_request(route_request.routing_request_id)
     assert persisted is not None
     attempts = routing_store.list_attempts(
         persisted.decision.decision_id
