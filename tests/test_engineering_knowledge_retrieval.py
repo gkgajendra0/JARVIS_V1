@@ -10,6 +10,7 @@ from jarvis.engineering_knowledge import (
     ApplicabilityFact,
     EngineeringKnowledgeFacet,
     EngineeringKnowledgeRetrievalIndex,
+    EngineeringKnowledgeRetrievalPolicy,
     KnowledgeLifecycleService,
     RepairKnowledgeProjector,
     build_engineering_qwen_encoder,
@@ -258,12 +259,43 @@ def test_dense_retrieval_uses_only_accepted_applicable_revisions(tmp_path) -> No
         "semantic-only",
         context=_context(),
         encoder=encoder,
+        policy=EngineeringKnowledgeRetrievalPolicy.local(
+            minimum_dense_score=0.5,
+        ),
         now_epoch=123.0,
     )
 
     assert results
     assert results[0].revision.revision_id == second_id
     assert results[0].dense_rank == 1
+    index.close()
+    store.close()
+
+
+def test_dense_only_retrieval_abstains_without_calibrated_threshold(
+    tmp_path,
+) -> None:
+    path = tmp_path / "engineering.sqlite3"
+    store = SqliteIncidentStore(path)
+    revision_id, _ = _candidate(
+        store,
+        reason="runtime_unresponsive",
+        suffix="voice-hang-abstain",
+    )
+    _accept(store, revision_id)
+
+    encoder = FakeEngineeringEncoder()
+    index = EngineeringKnowledgeRetrievalIndex(path)
+    index.refresh_revision(revision_id, encoder=encoder, now_epoch=122.0)
+
+    results = index.retrieve(
+        "semantic-only",
+        context=_context(),
+        encoder=encoder,
+        now_epoch=123.0,
+    )
+
+    assert results == ()
     index.close()
     store.close()
 
