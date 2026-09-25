@@ -141,8 +141,6 @@ def test_phase2j_security_and_open_facet_checks_pass() -> None:
         "open-ended-facet-extensibility",
     }
 
-
-
 def test_phase2j_live_observer_spans_full_bounded_recovery_budget() -> None:
     # Production permits three attempts, each of which may consume the 120s
     # startup-readiness timeout before the supervisor can conclude it failed.
