@@ -255,6 +255,8 @@ class PersistedRoutingDecision:
     registry_digest: str
     eligibility: EligibilitySnapshot
     decision: RoutingDecision
+    change_id: str | None = None
+    stage_key: str | None = None
 
 
 class ModelRoutingStore:
@@ -278,6 +280,8 @@ class ModelRoutingStore:
                     decision_id TEXT PRIMARY KEY,
                     routing_request_id TEXT NOT NULL UNIQUE,
                     work_id TEXT NOT NULL,
+                    change_id TEXT,
+                    stage_key TEXT,
                     strategy_key TEXT NOT NULL,
                     strategy_version INTEGER NOT NULL,
                     strategy_digest TEXT NOT NULL,
@@ -333,6 +337,20 @@ class ModelRoutingStore:
                     );
                 """
             )
+            decision_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(model_routing_decisions)"
+                ).fetchall()
+            }
+            if "change_id" not in decision_columns:
+                connection.execute(
+                    "ALTER TABLE model_routing_decisions ADD COLUMN change_id TEXT"
+                )
+            if "stage_key" not in decision_columns:
+                connection.execute(
+                    "ALTER TABLE model_routing_decisions ADD COLUMN stage_key TEXT"
+                )
 
     def _validate_decision_inputs(
         self,
@@ -371,17 +389,19 @@ class ModelRoutingStore:
         connection.execute(
             """
             INSERT INTO model_routing_decisions (
-                decision_id, routing_request_id, work_id,
+                decision_id, routing_request_id, work_id, change_id, stage_key,
                 strategy_key, strategy_version, strategy_digest,
                 registry_digest, policy_version, policy_digest,
                 selected_target_id, decision_json, eligibility_json,
                 created_at_epoch
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 decision.decision_id,
                 request.routing_request_id,
                 request.work_id,
+                request.change_id,
+                request.stage_key,
                 decision.strategy_key,
                 decision.strategy_version,
                 decision.strategy_digest,
@@ -427,6 +447,8 @@ class ModelRoutingStore:
             registry_digest=digest,
             eligibility=eligibility,
             decision=decision,
+            change_id=request.change_id,
+            stage_key=request.stage_key,
         )
 
     def _insert_attempt(
@@ -519,6 +541,8 @@ class ModelRoutingStore:
             registry_digest=digest,
             eligibility=eligibility,
             decision=decision,
+            change_id=request.change_id,
+            stage_key=request.stage_key,
         )
 
     def get_decision(self, decision_id: str) -> PersistedRoutingDecision | None:
@@ -541,6 +565,8 @@ class ModelRoutingStore:
             decision=_decision_from_payload(
                 self._work_store.decode_extension_json(row["decision_json"])
             ),
+            change_id=row["change_id"],
+            stage_key=row["stage_key"],
         )
 
     def find_decision_by_request(
