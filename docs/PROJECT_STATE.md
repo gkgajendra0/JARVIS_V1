@@ -16,7 +16,7 @@ and abandoned branches are historical evidence in Git history. They are not curr
 documentation authority.
 
 Snapshot baseline verified from protected `main` at
-`3c5a2f732db171a9ad61a4531fecd66aed0d27c4` on 2026-09-25.
+`c04ede5c3f63ad803541a2f3d15a5e85c1b41023` on 2026-09-25, immediately after Phase-3 PR #108 merge.
 
 ---
 
@@ -49,10 +49,12 @@ Snapshot baseline verified from protected `main` at
 | Persistent concurrent work | DONE foundation | durable WorkItems/steps/deliveries, restart recovery, background research/development, priority/resource control |
 | Deterministic Self-Repair | PARTIAL foundation for Step 19 | R1/R2 typed framework plus Phase-1H-hardened R2 production recovery: sustained rolling budgets, shared target/action circuit breaker, typed verification/preconditions/provenance, versioned persistence, Windows Job Object runtime ownership and bounded production guardian |
 | EngineeringKnowledge | DONE foundation | Phase 2 owner-machine accepted 2026-09-25: immutable engineering knowledge, deterministic REPAIR projection, lifecycle/provenance/applicability, grounded local hybrid retrieval, integrity/security gates and open-ended facet extensibility |
-| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H, 2 and 3 are accepted; Phase 4 Research + Diagnostic Model Router is now active |
+| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H, 2 and 3 are accepted; Phase 4 Research + Diagnostic Model Router research/architecture is complete and implementation is next |
 | Step 8 notes/tasks/reminders | PLANNED | still the next numbered product slice when numbered roadmap work resumes |
 
 Phase 3 EngineeringChange is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The canonical record is `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The owner-machine run proved durable same-identity recovery across a full Windows shutdown/reboot and live Exa research; persistent Gemini HTTP 429 pressure was accepted as an external limitation and did not weaken governance.
+
+Phase 4 Research + Diagnostic Model Router has completed technology research and owner-approved architecture. Canonical documents: `PHASE4_MODEL_ROUTER_RESEARCH.md`, `PHASE4_MODEL_ROUTER_ARCHITECTURE.md`, and `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md`. Implementation is not yet accepted production state.
 
 ---
 
@@ -207,7 +209,7 @@ These are intentionally not represented as completed.
 | full local/offline conversation | DEFERRED | current provider resilience is truthful survival, not a second full local conversation stack |
 | proactive/event-driven monitoring | PLANNED | later Step 15 |
 | full Steps 9/10/12 | PLANNED with partial foundations | Hands supplies foundations only |
-| Later autonomous-engineering phases | ACTIVE / PLANNED | Phases 2 EngineeringKnowledge and 3 EngineeringChange are accepted; Phase 4 Research + Diagnostic Model Router is active and later phases remain planned in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` |
+| Later autonomous-engineering phases | ACTIVE / PLANNED | Phases 2 EngineeringKnowledge and 3 EngineeringChange are accepted; Phase 4 research/architecture is complete and implementation is next; later phases remain planned in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` |
 
 ---
 
@@ -252,11 +254,13 @@ old acceptance transcripts and superseded proposals.
 
 ## Current branch / PR truth
 
-At Phase-2 closure reconciliation start:
+At the Phase-4 architecture-freeze baseline:
 
-- protected `main`: `3c5a2f732db171a9ad61a4531fecd66aed0d27c4`;
-- Phase-2 implementation/acceptance PRs #92–#106: **merged**;
-- Phase-2 owner-machine acceptance: **PASS 2026-09-25**;
+- protected `main`: `c04ede5c3f63ad803541a2f3d15a5e85c1b41023`;
+- Phase-2 implementation/acceptance PRs #92–#106: **merged / accepted**;
+- Phase-3 PR #108: **merged / owner-machine accepted 2026-09-25**;
+- Phase-4 documentation freeze: PR #109;
+- Phase-4 runtime implementation: **not started yet**;
 - Self-Repair issue #65: **closed / completed**.
 
 Several old feature/research branches still exist remotely. Their presence does not
@@ -277,6 +281,6 @@ The active cross-cutting slice is:
 
 **Phase 4 — Research + Diagnostic Model Router**
 
-Phase 4 must reuse existing WorkItems/WorkSteps/WorkDeliveries, EngineeringChange, EngineeringKnowledge and Authority boundaries rather than create a parallel task, routing, verification or provenance system.
+Research and architecture are complete and owner-approved. Implementation must follow the frozen Phase-4 documents and reuse existing WorkItems/WorkSteps/WorkDeliveries, EngineeringChange, EngineeringKnowledge and Authority boundaries rather than create a parallel task, routing, verification or provenance system. Jev is explicitly deferred to a later optimization experiment.
 
 Source repair remains a later phase. Step 8 remains the next numbered product slice when numbered roadmap work resumes.

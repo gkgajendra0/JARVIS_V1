@@ -472,7 +472,7 @@ Exit criteria:
 
 ### Phase 3 — EngineeringChange lifecycle and mission orchestration
 
-**STATUS: ACTIVE / NEXT ARCHITECTURE SLICE**
+**STATUS: DONE / OWNER-MACHINE ACCEPTED 2026-09-25**
 
 Add the durable program-level aggregate above WorkItems.
 
@@ -484,9 +484,13 @@ Exit criteria:
 
 ### Phase 4 — Research/Diagnostic Model Router
 
+**STATUS: ACTIVE / RESEARCH + OWNER-APPROVED ARCHITECTURE COMPLETE; IMPLEMENTATION NEXT**
+
 Create one provider/model-neutral routing boundary for research, diagnostics and engineering reasoning.
 
 Routing considers task kind, privacy/locality, evidence size, model capabilities, latency, cost, provider health and previous outcomes. Provider choice never changes Authority.
+
+The frozen Phase-4 design is JARVIS-owned rather than a mandatory external gateway: versioned target/adapter/strategy registries, deterministic eligibility, WorkStep-aware stage routing, target-scoped health/cooldown, bounded error-class-aware fallback, durable route provenance and baseline-driven evaluation. External systems such as Switchyard, vLLM Semantic Router and LiteLLM contribute patterns but do not own the canonical routing boundary. Jev is deliberately deferred to a later optimization experiment.
 
 ### Phase 5 — Secure autonomous engineering substrate
 
@@ -679,9 +683,9 @@ Rules:
 
 1. Phase 1/R2 and Phase 1H remain accepted foundations.
 2. Phase 2 EngineeringKnowledge is complete and owner-machine accepted.
-3. Begin Phase 3 by researching and freezing the durable `EngineeringChange` lifecycle / mission-orchestration architecture above existing WorkItems.
-4. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H or Phase 2 without new concrete evidence.
-5. Define `EngineeringChange` before multi-stage autonomous source/capability engineering is implemented.
+3. Phase 3 EngineeringChange is complete and owner-machine accepted.
+4. Phase 4 research and owner-approved architecture are complete; implement `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md` from protected `main` without reopening technology selection absent new evidence.
+5. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2 or Phase 3 without new concrete evidence.
 6. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
 7. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.
 

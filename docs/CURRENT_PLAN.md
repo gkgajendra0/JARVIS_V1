@@ -41,6 +41,8 @@ The active development slice is now:
 
 **Phase 4 — Research + Diagnostic Model Router**
 
+Research and architecture are complete and owner-approved. Implementation must follow the frozen contracts in `PHASE4_MODEL_ROUTER_ARCHITECTURE.md`; do not restart technology selection or redesign the router without new concrete evidence.
+
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
 Phase 1H is **DONE / OWNER-MACHINE ACCEPTED 2026-09-24**. Its final contract and evidence are recorded in `SELF_REPAIR_PHASE1H_HARDENING.md`.
@@ -120,11 +122,14 @@ They remain separate unless evidence shows that one directly blocks the active P
 - `PHASE2_ENGINEERING_KNOWLEDGE_IMPLEMENTATION_PLAN.md` — completed Phase-2 implementation sequence, gates and acceptance matrix.
 - `PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md` — canonical Phase-2 owner-machine acceptance record.
 - `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md` — canonical Phase-3 owner-machine acceptance record.
+- `PHASE4_MODEL_ROUTER_RESEARCH.md` — Phase-4 technology research and dispositions.
+- `PHASE4_MODEL_ROUTER_ARCHITECTURE.md` — owner-approved stable Phase-4 routing contracts/invariants.
+- `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md` — implementation sequence and acceptance gates.
 
 Historical experiments, old acceptance transcripts and superseded research remain available through Git history rather than becoming competing planning truth.
 
 ## Immediate next action
 
-**Begin Phase 4 — Research + Diagnostic Model Router.**
+**Implement Phase 4 — Research + Diagnostic Model Router from the frozen architecture.**
 
-Follow the permanent engineering rule: research thoroughly, define the architecture, obtain owner approval, then implement on an isolated branch/PR with CI and owner-machine acceptance where required. Phase 4 must reuse the accepted EngineeringChange, EngineeringKnowledge, Authority and persistent WorkItem foundations; it must not introduce a parallel execution or governance system.
+Research/architecture are complete. Start from protected `main` on an isolated Phase-4 implementation branch/PR and execute `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md` in order. Preserve the accepted EngineeringChange, EngineeringKnowledge, Authority, WorkItem/DBOS and research-evidence foundations. Do not introduce a parallel execution/governance system, a mandatory router proxy/service, learned production routing, or Jev during this phase.
