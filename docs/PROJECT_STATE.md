@@ -49,13 +49,10 @@ Snapshot baseline verified from protected `main` at
 | Persistent concurrent work | DONE foundation | durable WorkItems/steps/deliveries, restart recovery, background research/development, priority/resource control |
 | Deterministic Self-Repair | PARTIAL foundation for Step 19 | R1/R2 typed framework plus Phase-1H-hardened R2 production recovery: sustained rolling budgets, shared target/action circuit breaker, typed verification/preconditions/provenance, versioned persistence, Windows Job Object runtime ownership and bounded production guardian |
 | EngineeringKnowledge | DONE foundation | Phase 2 owner-machine accepted 2026-09-25: immutable engineering knowledge, deterministic REPAIR projection, lifecycle/provenance/applicability, grounded local hybrid retrieval, integrity/security gates and open-ended facet extensibility |
-| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H and 2 are accepted; Phase 3 EngineeringChange lifecycle / mission orchestration is now active |
+| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H, 2 and 3 are accepted; Phase 4 Research + Diagnostic Model Router is now active |
 | Step 8 notes/tasks/reminders | PLANNED | still the next numbered product slice when numbered roadmap work resumes |
 
-Phase-3 EngineeringChange implementation is tracked in PR #108.
-The program remains ACTIVE until CI and the owner-machine procedure in
-`PHASE3_ENGINEERING_CHANGE_OWNER_ACCEPTANCE.md` pass; none of these changes are
-accepted production state until the owner-machine evidence passes.
+Phase 3 EngineeringChange is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The canonical record is `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The owner-machine run proved durable same-identity recovery across a full Windows shutdown/reboot and live Exa research; persistent Gemini HTTP 429 pressure was accepted as an external limitation and did not weaken governance.
 
 ---
 
@@ -182,6 +179,15 @@ Final Phase-2 owner-machine acceptance on protected-main baseline
 Canonical acceptance record:
 `PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
 
+### EngineeringChange Phase 3
+
+- **#108** governed EngineeringChange lifecycle / mission orchestration: canonical change/work identity, immutable artifact-bound owner gates, revision-safe development attempts, acceptance/promotion intent boundaries, PostgreSQL DBOS recovery and bounded owner-machine evidence.
+
+Final Phase-3 owner-machine acceptance on 2026-09-25 proved same-turn idempotency, owner-input resume, successful Exa-backed research actions, same-identity PostgreSQL DBOS recovery and full Windows cold-boot survival. Persistent Gemini HTTP 429 provider pressure prevented the live run from naturally traversing the downstream architecture/Windows-Hello/development gates; the owner explicitly accepted this external limitation, with those contracts retained in the exact green automated suite and no governance bypass.
+
+Canonical acceptance record:
+`PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`.
+
 ---
 
 ## Open / deferred work
@@ -201,7 +207,7 @@ These are intentionally not represented as completed.
 | full local/offline conversation | DEFERRED | current provider resilience is truthful survival, not a second full local conversation stack |
 | proactive/event-driven monitoring | PLANNED | later Step 15 |
 | full Steps 9/10/12 | PLANNED with partial foundations | Hands supplies foundations only |
-| Later autonomous-engineering phases | ACTIVE / PLANNED | Phase 2 EngineeringKnowledge is accepted; Phase 3 EngineeringChange is active and later phases remain planned in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` |
+| Later autonomous-engineering phases | ACTIVE / PLANNED | Phases 2 EngineeringKnowledge and 3 EngineeringChange are accepted; Phase 4 Research + Diagnostic Model Router is active and later phases remain planned in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` |
 
 ---
 
@@ -265,10 +271,12 @@ Phase 1H is **DONE / OWNER-MACHINE ACCEPTED 2026-09-24** and is promoted through
 
 Phase 2 EngineeringKnowledge is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The accepted implementation and final real-machine evidence are recorded in `PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
 
-The active/next cross-cutting slice is:
+Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. PR #108 carries the accepted implementation and `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md` carries the final owner-machine evidence.
 
-**Phase 3 — EngineeringChange Lifecycle / Mission Orchestration**
+The active cross-cutting slice is:
 
-Phase 3 must reuse existing WorkItems/WorkSteps/WorkDeliveries and the accepted EngineeringKnowledge substrate rather than create a parallel task, authority, verification or provenance system.
+**Phase 4 — Research + Diagnostic Model Router**
 
-DiagnosticModelRouter and source repair remain later phases. Step 8 remains the next numbered product slice when numbered roadmap work resumes.
+Phase 4 must reuse existing WorkItems/WorkSteps/WorkDeliveries, EngineeringChange, EngineeringKnowledge and Authority boundaries rather than create a parallel task, routing, verification or provenance system.
+
+Source repair remains a later phase. Step 8 remains the next numbered product slice when numbered roadmap work resumes.
