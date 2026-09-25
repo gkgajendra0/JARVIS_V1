@@ -197,9 +197,7 @@ def test_eligibility_snapshot_partitions_considered_targets() -> None:
     )
 
     assert snapshot.eligible_target_ids == ("t1", "t3")
-    assert snapshot.exclusions[0].reason_codes == (
-        "target_cooldown",
-    )
+    assert snapshot.exclusions[0].reason_codes == ("target_cooldown",)
 
     with pytest.raises(ValueError, match="eligible or excluded"):
         EligibilitySnapshot(
