@@ -242,6 +242,31 @@ class RoutingProvenanceError(RuntimeError):
     pass
 
 
+class RoutingResourceBlocked(RuntimeError):
+    """All approved targets for one durable routing decision are unavailable."""
+
+    def __init__(
+        self,
+        *,
+        decision_id: str,
+        reason: str,
+        retry_after_seconds: float = 30.0,
+    ) -> None:
+        normalized_decision = str(decision_id).strip()
+        normalized_reason = str(reason).strip()
+        if not normalized_decision:
+            raise ValueError("routing blocker requires decision_id")
+        if not normalized_reason:
+            raise ValueError("routing blocker requires reason")
+        if retry_after_seconds <= 0:
+            raise ValueError("routing blocker retry delay must be positive")
+        super().__init__(normalized_reason)
+        self.decision_id = normalized_decision
+        self.reason = normalized_reason
+        self.retry_after_seconds = float(retry_after_seconds)
+        self.blocker_key = f"routing-resource:{normalized_decision}"
+
+
 @dataclass(frozen=True, slots=True)
 class RoutedSelection:
     request: RoutingRequest
