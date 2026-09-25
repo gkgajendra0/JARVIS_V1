@@ -185,9 +185,7 @@ class CostProfile:
         start = _epoch(self.effective_from_epoch, field="effective_from_epoch")
         end = _optional_epoch(self.effective_to_epoch, field="effective_to_epoch")
         if end is not None and end < start:
-            raise ValueError(
-                "effective_to_epoch cannot precede effective_from_epoch"
-            )
+            raise ValueError("effective_to_epoch cannot precede effective_from_epoch")
         object.__setattr__(self, "effective_from_epoch", start)
         object.__setattr__(self, "effective_to_epoch", end)
         object.__setattr__(
@@ -352,9 +350,7 @@ class RoutingRequest:
     change_id: str | None = None
     stage_key: str | None = None
     affinity_key: str | None = None
-    routing_features: dict[str, RoutingFeatureValue] = field(
-        default_factory=dict
-    )
+    routing_features: dict[str, RoutingFeatureValue] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -399,9 +395,7 @@ class RoutingRequest:
         if not isinstance(self.privacy_class, PrivacyClass):
             raise TypeError("privacy_class must be a PrivacyClass")
         if not isinstance(self.locality_requirement, LocalityRequirement):
-            raise TypeError(
-                "locality_requirement must be a LocalityRequirement"
-            )
+            raise TypeError("locality_requirement must be a LocalityRequirement")
         object.__setattr__(
             self,
             "estimated_context_tokens",
@@ -411,9 +405,7 @@ class RoutingRequest:
             ),
         )
         if not isinstance(self.evidence_size_class, EvidenceSizeClass):
-            raise TypeError(
-                "evidence_size_class must be an EvidenceSizeClass"
-            )
+            raise TypeError("evidence_size_class must be an EvidenceSizeClass")
         object.__setattr__(
             self,
             "recent_progress_signals",
@@ -526,24 +518,14 @@ class EligibilitySnapshot:
         )
         considered_set = set(considered)
         if not set(eligible).issubset(considered_set):
-            raise ValueError(
-                "eligible targets must be part of considered targets"
-            )
-        exclusion_ids = tuple(
-            exclusion.target_id for exclusion in self.exclusions
-        )
+            raise ValueError("eligible targets must be part of considered targets")
+        exclusion_ids = tuple(exclusion.target_id for exclusion in self.exclusions)
         if not set(exclusion_ids).issubset(considered_set):
-            raise ValueError(
-                "excluded targets must be part of considered targets"
-            )
+            raise ValueError("excluded targets must be part of considered targets")
         if set(eligible).intersection(exclusion_ids):
-            raise ValueError(
-                "target cannot be both eligible and excluded"
-            )
+            raise ValueError("target cannot be both eligible and excluded")
         if set(eligible).union(exclusion_ids) != considered_set:
-            raise ValueError(
-                "every considered target must be eligible or excluded"
-            )
+            raise ValueError("every considered target must be eligible or excluded")
         if len(exclusion_ids) != len(set(exclusion_ids)):
             raise ValueError("target exclusions must be unique")
         object.__setattr__(
@@ -568,9 +550,7 @@ class EligibilitySnapshot:
                 field="target health version",
             )
         if not set(health).issubset(considered_set):
-            raise ValueError(
-                "target health snapshot contains an unconsidered target"
-            )
+            raise ValueError("target health snapshot contains an unconsidered target")
         object.__setattr__(
             self,
             "target_health_versions",
@@ -588,9 +568,7 @@ class EligibilitySnapshot:
                 field="credential availability",
             )
         if not set(credentials).issubset(considered_set):
-            raise ValueError(
-                "credential snapshot contains an unconsidered target"
-            )
+            raise ValueError("credential snapshot contains an unconsidered target")
         object.__setattr__(
             self,
             "credential_availability",
@@ -644,9 +622,7 @@ class RoutingStrategyResult:
             required=True,
         )
         if len(targets) != len(self.ordered_target_ids):
-            raise ValueError(
-                "ordered_target_ids must not contain duplicates"
-            )
+            raise ValueError("ordered_target_ids must not contain duplicates")
         object.__setattr__(
             self,
             "ordered_target_ids",
@@ -733,9 +709,7 @@ class RoutingDecision:
             field="selected_target_id",
         )
         if selected not in ordered:
-            raise ValueError(
-                "selected_target_id must be in ordered_target_ids"
-            )
+            raise ValueError("selected_target_id must be in ordered_target_ids")
         object.__setattr__(
             self,
             "ordered_target_ids",
@@ -794,9 +768,7 @@ class RoutingAttempt:
     failure_class: str | None = None
     usage: dict[str, int | float] = field(default_factory=dict)
     estimated_cost_usd: float | None = None
-    response_contract_result: ResponseContractResult = (
-        ResponseContractResult.UNKNOWN
-    )
+    response_contract_result: ResponseContractResult = ResponseContractResult.UNKNOWN
     correlation_key: str | None = None
 
     def __post_init__(self) -> None:
@@ -837,9 +809,7 @@ class RoutingAttempt:
             field="ended_at_epoch",
         )
         if ended is not None and ended < started:
-            raise ValueError(
-                "ended_at_epoch cannot precede started_at_epoch"
-            )
+            raise ValueError("ended_at_epoch cannot precede started_at_epoch")
         object.__setattr__(
             self,
             "started_at_epoch",
@@ -894,10 +864,7 @@ class RoutingAttempt:
             self.response_contract_result,
             ResponseContractResult,
         ):
-            raise TypeError(
-                "response_contract_result must be a "
-                "ResponseContractResult"
-            )
+            raise TypeError("response_contract_result must be a ResponseContractResult")
         object.__setattr__(
             self,
             "correlation_key",
@@ -917,9 +884,7 @@ class RoutingOutcome:
     work_step_succeeded: bool | None = None
     verifier_reference: str | None = None
     accepted_result: bool | None = None
-    aggregate_usage: dict[str, int | float] = field(
-        default_factory=dict
-    )
+    aggregate_usage: dict[str, int | float] = field(default_factory=dict)
     estimated_total_cost_usd: float | None = None
     outcome_evidence_reference: str | None = None
 
@@ -974,14 +939,8 @@ class RoutingOutcome:
                 field="final_target_id",
             )
         )
-        if (
-            final_target is not None
-            and path
-            and final_target != path[-1]
-        ):
-            raise ValueError(
-                "final_target_id must match the last fallback_path target"
-            )
+        if final_target is not None and path and final_target != path[-1]:
+            raise ValueError("final_target_id must match the last fallback_path target")
         object.__setattr__(
             self,
             "final_target_id",
