@@ -56,7 +56,8 @@ def _observation(
     return evaluation.EngineeringKnowledgeEvaluationObservation(
         query_id=query_id,
         ranked_hits=tuple(
-            evaluation.EngineeringKnowledgeEvaluationHit(document_key=key) for key in ranked
+            evaluation.EngineeringKnowledgeEvaluationHit(document_key=key)
+            for key in ranked
         ),
         resources=evaluation.EvaluationResourceSample(
             wall_latency_ms=latency_ms,
