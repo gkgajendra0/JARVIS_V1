@@ -51,6 +51,12 @@ from jarvis.model_routing.store import (
     PersistedRoutingDecision,
     RoutingStoreError,
 )
+from jarvis.model_routing.strategy import (
+    EngineeringStageStrategy,
+    StageRoutingSignals,
+    StrategyNoCandidateError,
+    derive_work_step_signals,
+)
 
 __all__ = [
     "BenchmarkStatus",
@@ -62,6 +68,7 @@ __all__ = [
     "EligibilityRuntimeState",
     "EligibilitySnapshot",
     "EligibleTargets",
+    "EngineeringStageStrategy",
     "EvidenceSizeClass",
     "HealthAction",
     "HealthMutation",
@@ -87,6 +94,8 @@ __all__ = [
     "RoutingStrategy",
     "RoutingStrategyRegistry",
     "RoutingStrategyResult",
+    "StageRoutingSignals",
+    "StrategyNoCandidateError",
     "TargetExclusion",
     "TargetHealthEligibility",
     "TargetHealthRecord",
@@ -94,4 +103,5 @@ __all__ = [
     "UnknownModelTargetError",
     "UnknownRoutingStrategyError",
     "apply_provider_failure",
+    "derive_work_step_signals",
 ]
