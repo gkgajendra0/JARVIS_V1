@@ -588,9 +588,7 @@ class EligibilitySnapshot:
             self.locality_requirement,
             LocalityRequirement,
         ):
-            raise TypeError(
-                "locality_requirement must be a LocalityRequirement"
-            )
+            raise TypeError("locality_requirement must be a LocalityRequirement")
         object.__setattr__(
             self,
             "policy_version",
@@ -701,9 +699,7 @@ class RoutingDecision:
             required=True,
         )
         if len(ordered) != len(self.ordered_target_ids):
-            raise ValueError(
-                "ordered_target_ids must not contain duplicates"
-            )
+            raise ValueError("ordered_target_ids must not contain duplicates")
         selected = _token(
             self.selected_target_id,
             field="selected_target_id",
