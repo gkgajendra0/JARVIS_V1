@@ -60,13 +60,9 @@ def _run_fixture(path: Path, *, encoder=None):
 def test_phase2j_fixture_lexical_path_passes_zero_tolerance_safety(tmp_path) -> None:
     report = _run_fixture(tmp_path / "fixture.sqlite3")
     corpus = load_engineering_knowledge_qrels(QREL_PATH)
-    no_answer_ids = {
-        case.query_id for case in corpus.cases if case.expect_no_answer
-    }
+    no_answer_ids = {case.query_id for case in corpus.cases if case.expect_no_answer}
     no_answer_hits = {
-        observation.query_id: tuple(
-            hit.document_key for hit in observation.ranked_hits
-        )
+        observation.query_id: tuple(hit.document_key for hit in observation.ranked_hits)
         for observation in report.observations
         if observation.query_id in no_answer_ids and observation.ranked_hits
     }
