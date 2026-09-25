@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.engineering_knowledge import evaluation
+import jarvis.engineering_knowledge.evaluation as evaluation
 
 
 CORPUS_PATH = (
