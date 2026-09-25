@@ -14,6 +14,17 @@ from jarvis.engineering_knowledge.applicability import (
     NumericVersionRangeMatcher,
     build_default_applicability_registry,
 )
+from jarvis.engineering_knowledge.benchmarking import (
+    BASELINE_RETRIEVAL_VARIANT,
+    PHASE2I_RETRIEVAL_VARIANTS,
+    RetrievalBenchmarkAdoptionPolicy,
+    RetrievalBenchmarkComparison,
+    RetrievalBenchmarkDecision,
+    RetrievalExperimentReadiness,
+    RetrievalExperimentVariant,
+    build_qwen3_experiment_contract,
+    compare_retrieval_benchmark,
+)
 from jarvis.engineering_knowledge.canonical import (
     EngineeringKnowledgeCanonicalizationError,
     EngineeringKnowledgeDuplicateKeyError,
@@ -124,9 +135,11 @@ from jarvis.engineering_knowledge.security import (
 )
 
 __all__ = [
+    "BASELINE_RETRIEVAL_VARIANT",
     "CANONICALIZATION_RFC8785",
     "DIGEST_ALGORITHM_SHA256",
     "JARVIS_ENGINEERING_RETRIEVAL_INSTRUCTION",
+    "PHASE2I_RETRIEVAL_VARIANTS",
     "PROJECTION_POLICY_ID",
     "PROJECTOR_ID",
     "REPAIR_FINDING_FACET_TYPE",
@@ -211,15 +224,22 @@ __all__ = [
     "RepairKnowledgeProjectionResult",
     "RepairKnowledgeProjector",
     "RepairKnowledgePromotionPolicy",
+    "RetrievalBenchmarkAdoptionPolicy",
+    "RetrievalBenchmarkComparison",
+    "RetrievalBenchmarkDecision",
+    "RetrievalExperimentReadiness",
+    "RetrievalExperimentVariant",
     "UnsupportedApplicabilityMatcherError",
     "UnsupportedFacetSchemaError",
     "ValidatedFacet",
     "build_default_applicability_registry",
     "build_default_facet_registry",
     "build_engineering_qwen_encoder",
+    "build_qwen3_experiment_contract",
     "canonical_sha256",
     "canonicalize_json",
     "canonicalize_json_object_text",
+    "compare_retrieval_benchmark",
     "lifecycle_evidence_json",
     "load_engineering_knowledge_qrels",
     "parse_json_object",
