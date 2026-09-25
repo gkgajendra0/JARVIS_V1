@@ -62,6 +62,11 @@ from jarvis.model_routing.router import (
     build_work_routing_request,
     reasoning_cycle_key,
 )
+from jarvis.model_routing.status import (
+    RoutingStatus,
+    RoutingStatusReader,
+    VerificationStatus,
+)
 from jarvis.model_routing.store import (
     ModelRoutingStore,
     PersistedRoutingDecision,
@@ -112,6 +117,8 @@ __all__ = [
     "RoutingProvenanceError",
     "RoutingRegistryError",
     "RoutingRequest",
+    "RoutingStatus",
+    "RoutingStatusReader",
     "RoutingStoreError",
     "RoutingStrategy",
     "RoutingStrategyRegistry",
@@ -126,6 +133,7 @@ __all__ = [
     "UnknownModelAdapterError",
     "UnknownModelTargetError",
     "UnknownRoutingStrategyError",
+    "VerificationStatus",
     "apply_provider_failure",
     "build_default_model_adapter_registry",
     "build_default_work_targets",
