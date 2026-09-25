@@ -74,6 +74,7 @@ class WorkAgentTools:
             self.propose_change_architecture,
             self.revise_change_architecture,
             self.prepare_change_acceptance,
+            self.prepare_change_promotion,
             self.decide_change_gate,
             self.get_engineering_change_status,
         ]
@@ -158,6 +159,21 @@ class WorkAgentTools:
             "gate_id": gate.gate_id,
             "artifact_digest": gate.artifact_digest,
             "status": "awaiting_explicit_owner_acceptance",
+        }
+
+    @function_tool()
+    async def prepare_change_promotion(
+        self, context: RunContext, change_id: str
+    ) -> dict[str, object]:
+        """Present promotion intent after owner acceptance without promoting anything."""
+        del context
+        gate = self._change_service().prepare_promotion(change_id)
+        return {
+            "ok": True,
+            "change_id": change_id,
+            "gate_id": gate.gate_id,
+            "artifact_digest": gate.artifact_digest,
+            "status": "awaiting_explicit_owner_promotion_decision",
         }
 
     @function_tool()
