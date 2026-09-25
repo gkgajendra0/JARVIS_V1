@@ -337,9 +337,10 @@ class RoutedWorkReasoner:
         if attempts and attempts[-1].failure_class is not None:
             last_target_id = attempts[-1].target_id
             health = self._router.routing_store.get_health(last_target_id)
-            if health is not None and health.effective_state(
-                now_epoch=now_epoch
-            ).value == "degraded":
+            if (
+                health is not None
+                and health.effective_state(now_epoch=now_epoch).value == "degraded"
+            ):
                 return self._router.target_registry.require(last_target_id)
 
         failed_target_ids = {
@@ -347,9 +348,7 @@ class RoutedWorkReasoner:
             for attempt in attempts
             if attempt.failure_class is not None
         }
-        allowed_ids = decision.ordered_target_ids[
-            : 1 + decision.fallback_budget
-        ]
+        allowed_ids = decision.ordered_target_ids[: 1 + decision.fallback_budget]
         for target_id in allowed_ids:
             if target_id in failed_target_ids:
                 continue
@@ -393,9 +392,7 @@ class RoutedWorkReasoner:
                 retry_after_seconds=30.0,
             ) from exc
         attempts = list(
-            self._router.routing_store.list_attempts(
-                selection.decision.decision_id
-            )
+            self._router.routing_store.list_attempts(selection.decision.decision_id)
         )
         max_new_attempts = len(selection.decision.ordered_target_ids) + 1
         new_attempts = 0
@@ -419,9 +416,7 @@ class RoutedWorkReasoner:
 
             ordinal = len(attempts) + 1
             attempt_id = _attempt_id(selection.decision.decision_id, ordinal)
-            correlation_key = (
-                f"{selection.decision.decision_id}:attempt:{ordinal}"
-            )
+            correlation_key = f"{selection.decision.decision_id}:attempt:{ordinal}"
             context = ModelInvocationContext(
                 work_id=request.work.work_id,
                 routing_request_id=routing_request.routing_request_id,
