@@ -18,6 +18,7 @@ from jarvis.memory.retrieval_models import (
     QWEN3_RERANKER_REVISION,
 )
 
+
 def _required_text(value: object, field: str) -> str:
     if not isinstance(value, str):
         raise TypeError(f"{field} must be a string")
