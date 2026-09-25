@@ -60,10 +60,11 @@ class RetrievalExperimentVariant:
             _required_text(self.vector_backend, "vector_backend"),
         )
         if self.reranker_model_id is None:
-            if self.reranker_model_revision is not None or self.reranker_top_k is not None:
-                raise ValueError(
-                    "reranker revision/top-k require a reranker model"
-                )
+            if (
+                self.reranker_model_revision is not None
+                or self.reranker_top_k is not None
+            ):
+                raise ValueError("reranker revision/top-k require a reranker model")
         else:
             object.__setattr__(
                 self,
@@ -192,9 +193,7 @@ PHASE2I_RETRIEVAL_VARIANTS: tuple[RetrievalExperimentVariant, ...] = (
 
 def build_qwen3_experiment_contract(dimension: int) -> EmbeddingContract:
     if dimension not in {256, 512, 1024}:
-        raise ValueError(
-            "Phase-2I Qwen experiment dimension must be 256, 512, or 1024"
-        )
+        raise ValueError("Phase-2I Qwen experiment dimension must be 256, 512, or 1024")
     return EmbeddingContract(
         model_id=QWEN3_EMBEDDING_MODEL_ID,
         model_revision=QWEN3_EMBEDDING_REVISION,
@@ -328,9 +327,7 @@ def compare_retrieval_benchmark(
 
     missing_resources = _missing_required_resources(ratios, policy)
     if missing_resources:
-        reasons.extend(
-            f"missing_{name}_measurement" for name in missing_resources
-        )
+        reasons.extend(f"missing_{name}_measurement" for name in missing_resources)
         return _comparison(
             baseline_variant,
             candidate_variant,
@@ -344,9 +341,7 @@ def compare_retrieval_benchmark(
 
     resource_regressions = _resource_regressions(ratios, policy)
     if resource_regressions:
-        reasons.extend(
-            f"{name}_ratio_exceeds_policy" for name in resource_regressions
-        )
+        reasons.extend(f"{name}_ratio_exceeds_policy" for name in resource_regressions)
         return _comparison(
             baseline_variant,
             candidate_variant,
@@ -359,8 +354,7 @@ def compare_retrieval_benchmark(
         )
 
     meaningful = (
-        ndcg_gain >= policy.minimum_ndcg_gain
-        or mrr_gain >= policy.minimum_mrr_gain
+        ndcg_gain >= policy.minimum_ndcg_gain or mrr_gain >= policy.minimum_mrr_gain
     )
     if not meaningful:
         reasons.append("relevance_gain_below_measured_policy_threshold")
@@ -418,9 +412,7 @@ def _missing_required_resources(
     ratios: dict[str, float | None],
     policy: RetrievalBenchmarkAdoptionPolicy,
 ) -> tuple[str, ...]:
-    missing: list[str] = [
-        name for name in ("latency", "cpu") if ratios[name] is None
-    ]
+    missing: list[str] = [name for name in ("latency", "cpu") if ratios[name] is None]
     for name, limit in (
         ("rss", policy.maximum_rss_ratio),
         ("vram", policy.maximum_vram_ratio),
@@ -445,9 +437,7 @@ def _resource_regressions(
     return tuple(
         name
         for name, limit in checks
-        if limit is not None
-        and ratios[name] is not None
-        and ratios[name] > limit
+        if limit is not None and ratios[name] is not None and ratios[name] > limit
     )
 
 
