@@ -43,7 +43,6 @@ def _positive_float(value: object, field: str) -> float:
     return normalized
 
 
-
 class RetrievalExperimentReadiness(StrEnum):
     CURRENT_BASELINE = "current_baseline"
     BUILTIN_EXPERIMENT = "builtin_experiment"
@@ -483,5 +482,3 @@ def _optional_ratio(
 
 def _float_or_none(value: int | None) -> float | None:
     return None if value is None else float(value)
-
-
