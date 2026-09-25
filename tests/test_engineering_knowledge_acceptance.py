@@ -74,14 +74,14 @@ def test_phase2j_fixture_lexical_path_passes_zero_tolerance_safety(tmp_path) -> 
     assert report.metrics.no_answer_false_positive_count == 0
 
 
-def test_phase2j_fixture_catches_dense_no_answer_overreach(tmp_path) -> None:
+def test_phase2j_fixture_blocks_dense_only_no_answer_overreach(tmp_path) -> None:
     report = _run_fixture(
         tmp_path / "dense-overreach.sqlite3",
         encoder=_SameVectorEncoder(),
     )
 
-    assert report.metrics.safety_gate_passed is False
-    assert report.metrics.no_answer_false_positive_count > 0
+    assert report.metrics.safety_gate_passed is True
+    assert report.metrics.no_answer_false_positive_count == 0
 
 
 def test_phase2j_fixture_contains_terminal_and_private_controls(tmp_path) -> None:
