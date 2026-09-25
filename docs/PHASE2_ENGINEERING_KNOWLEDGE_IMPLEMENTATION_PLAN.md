@@ -2,7 +2,9 @@
 
 ## Status
 
-**OWNER-APPROVED ARCHITECTURE — IMPLEMENTATION PLAN READY**
+**IMPLEMENTED — OWNER-MACHINE ACCEPTED 2026-09-25**
+
+Canonical final acceptance record: `PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
 
 Date: 2026-09-24
 
@@ -22,7 +24,7 @@ research
 -> protected-main merge
 ```
 
-No merge is implied by this plan.
+This plan is retained as the implementation/acceptance contract that was executed. Phase 2 is complete for its defined scope.
 
 ---
 
@@ -420,7 +422,7 @@ Only after this docs slice is reviewed, CI-clean and explicitly merged should im
 
 ## 10. Definition of done
 
-Phase 2 is DONE only when:
+Phase 2 is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The completion criteria below were satisfied:
 
 - code exists and passes repository gates;
 - migration is proven against accepted data;
