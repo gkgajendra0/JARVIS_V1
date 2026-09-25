@@ -20,7 +20,11 @@ from jarvis.model_routing.registry import (
     ModelTargetRegistry,
     RoutingStrategyRegistry,
 )
-from jarvis.model_routing.router import ModelRouter, build_work_routing_request
+from jarvis.model_routing.router import (
+    ModelRouter,
+    RoutingResourceBlocked,
+    build_work_routing_request,
+)
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.model_routing.strategy import EngineeringStageStrategy
 from jarvis.work.brain import (
@@ -29,7 +33,6 @@ from jarvis.work.brain import (
     BrainPreempted,
     BrainRequest,
     InteractiveBrainGate,
-    ProviderPressure,
 )
 from jarvis.work.models import WorkItem, WorkType
 from jarvis.work.reasoner import RoutedWorkReasoner
@@ -366,7 +369,7 @@ async def test_interactive_voice_still_preempts_routed_background_reasoning(
 
 
 @pytest.mark.asyncio
-async def test_routed_reasoner_preserves_provider_pressure_behavior(
+async def test_single_target_rate_limit_becomes_routing_resource_blocker(
     tmp_path: Path,
 ) -> None:
     class RateLimitError(RuntimeError):
@@ -381,10 +384,10 @@ async def test_routed_reasoner_preserves_provider_pressure_behavior(
     work = _work(work_store)
     request = _brain_request(work)
 
-    with pytest.raises(ProviderPressure) as caught:
+    with pytest.raises(RoutingResourceBlocked) as caught:
         await reasoner.decide(request)
 
-    assert caught.value.provider == "gemini"
+    assert caught.value.decision_id is not None
     route_request = build_work_routing_request(
         request,
         primary_target_id="work.fake.default",
