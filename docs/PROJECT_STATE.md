@@ -16,7 +16,7 @@ and abandoned branches are historical evidence in Git history. They are not curr
 documentation authority.
 
 Snapshot baseline verified from protected `main` at
-`7cd4ab241d4706130a82636657da25eaf639d961` on 2026-09-24.
+`3c5a2f732db171a9ad61a4531fecd66aed0d27c4` on 2026-09-25.
 
 ---
 
@@ -48,7 +48,8 @@ Snapshot baseline verified from protected `main` at
 | Self-Awareness | PARTIAL foundation for later diagnostics | Self Model, deterministic health/dependencies/blast radius, operational evidence and incident engineering memory |
 | Persistent concurrent work | DONE foundation | durable WorkItems/steps/deliveries, restart recovery, background research/development, priority/resource control |
 | Deterministic Self-Repair | PARTIAL foundation for Step 19 | R1/R2 typed framework plus Phase-1H-hardened R2 production recovery: sustained rolling budgets, shared target/action circuit breaker, typed verification/preconditions/provenance, versioned persistence, Windows Job Object runtime ownership and bounded production guardian |
-| Self-Repair / Self-Evolution program | ACTIVE | Phase 1 and Phase 1H are accepted; Phase 2 EngineeringKnowledge is now the active/next implementation slice with REPAIR as the first vertical |
+| EngineeringKnowledge | DONE foundation | Phase 2 owner-machine accepted 2026-09-25: immutable engineering knowledge, deterministic REPAIR projection, lifecycle/provenance/applicability, grounded local hybrid retrieval, integrity/security gates and open-ended facet extensibility |
+| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H and 2 are accepted; Phase 3 EngineeringChange lifecycle / mission orchestration is now active |
 | Step 8 notes/tasks/reminders | PLANNED | still the next numbered product slice when numbered roadmap work resumes |
 
 ---
@@ -142,6 +143,40 @@ Final deterministic Self-Repair acceptance:
 - final breaker proof: 3 verified recent repairs were present, the fourth crash produced 0 new RepairAttempts, 0 guardian/supervisor/runtime processes remained, and the test reported `PASS - FOURTH RESTART WAS BLOCKED`;
 - automatic Windows logon startup was observed; an unavailable configured Pocket 3 microphone failed closed at preflight, while the same startup path succeeded once Windows enumerated the device.
 
+### EngineeringKnowledge Phase 2
+
+- **#91** governed autonomous-engineering north-star documentation alignment.
+- **#92** owner-approved Phase-2 research/architecture/implementation-plan freeze.
+- **#93** Phase 2A EngineeringKnowledge core contracts and schema.
+- **#94** Phase 2B registered versioned facets and RFC-8785 canonicalization boundary.
+- **#95** Phase 2C deterministic verified-repair projector.
+- **#96** Phase 2D lifecycle and deterministic repair promotion.
+- **#97** Phase 2E applicability evaluation.
+- **#98** Phase 2F local-first hybrid retrieval.
+- **#99** Phase 2G security/integrity/admission hardening.
+- **#100** Phase 2H qrel evaluation harness.
+- **#101** Phase 2I retrieval benchmarking/adoption policy.
+- **#102** Phase 2J owner-machine acceptance harness and query-security hardening.
+- **#103** owner-machine dependency-sync documentation correction.
+- **#104** cold-start import-cycle correction and fresh-process regression coverage.
+- **#105** grounded dense retrieval correction after real Qwen no-answer evidence.
+- **#106** full bounded R2 recovery-observation correction.
+
+Final Phase-2 owner-machine acceptance on protected-main baseline
+`3c5a2f732db171a9ad61a4531fecd66aed0d27c4` passed every integrated gate:
+
+- R2 recovered before EngineeringKnowledge existed for the new repair;
+- the verified RepairAttempt projected, promoted and retained exact provenance;
+- exact/lexical retrieval and wrong-component exclusion passed;
+- paraphrased Qwen-256 retrieval passed;
+- poisoning and secret-like admission gates passed;
+- unknown facets failed closed while a reviewed future facet used the same registry;
+- lexical qrel safety passed;
+- hybrid Qwen-256 qrel safety passed.
+
+Canonical acceptance record:
+`PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
+
 ---
 
 ## Open / deferred work
@@ -161,7 +196,7 @@ These are intentionally not represented as completed.
 | full local/offline conversation | DEFERRED | current provider resilience is truthful survival, not a second full local conversation stack |
 | proactive/event-driven monitoring | PLANNED | later Step 15 |
 | full Steps 9/10/12 | PLANNED with partial foundations | Hands supplies foundations only |
-| EngineeringKnowledge and later repair-learning/evolution phases | ACTIVE / PLANNED | Phase 2 EngineeringKnowledge is now unblocked; exact sequence lives in `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` |
+| Later autonomous-engineering phases | ACTIVE / PLANNED | Phase 2 EngineeringKnowledge is accepted; Phase 3 EngineeringChange is active and later phases remain planned in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` |
 
 ---
 
@@ -206,12 +241,12 @@ old acceptance transcripts and superseded proposals.
 
 ## Current branch / PR truth
 
-At reconciliation start:
+At Phase-2 closure reconciliation start:
 
-- protected `main`: `4036b2e58eb93136905a5c8c41654c10fb14a8d7`;
-- open pull requests: **none**;
-- Self-Repair issue #65: **closed / completed**;
-- Self-Repair PRs #73–#87: **all merged**.
+- protected `main`: `3c5a2f732db171a9ad61a4531fecd66aed0d27c4`;
+- Phase-2 implementation/acceptance PRs #92–#106: **merged**;
+- Phase-2 owner-machine acceptance: **PASS 2026-09-25**;
+- Self-Repair issue #65: **closed / completed**.
 
 Several old feature/research branches still exist remotely. Their presence does not
 mean their code is pending. Branch cleanup is repository hygiene and should be done
@@ -223,10 +258,12 @@ separately after state/document reconciliation.
 
 Phase 1H is **DONE / OWNER-MACHINE ACCEPTED 2026-09-24** and is promoted through PR #90.
 
+Phase 2 EngineeringKnowledge is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The accepted implementation and final real-machine evidence are recorded in `PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
+
 The active/next cross-cutting slice is:
 
-**Phase 2 — EngineeringKnowledge Foundation**
+**Phase 3 — EngineeringChange Lifecycle / Mission Orchestration**
 
-The preserved RepairKnowledge research/design remains the REPAIR-specific input, while the underlying provenance, lifecycle, supersession and retrieval substrate must be generic enough for later DIAGNOSTIC, CAPABILITY, INTEGRATION, ARCHITECTURE, EVALUATION and OPERATIONS knowledge.
+Phase 3 must reuse existing WorkItems/WorkSteps/WorkDeliveries and the accepted EngineeringKnowledge substrate rather than create a parallel task, authority, verification or provenance system.
 
 DiagnosticModelRouter and source repair remain later phases. Step 8 remains the next numbered product slice when numbered roadmap work resumes.
