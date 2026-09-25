@@ -34,11 +34,6 @@ from jarvis.model_routing.models import (
     RoutingStrategyResult,
     TargetExclusion,
 )
-from jarvis.model_routing.store import (
-    ModelRoutingStore,
-    PersistedRoutingDecision,
-    RoutingStoreError,
-)
 from jarvis.model_routing.registry import (
     DuplicateRegistrationError,
     ModelAdapter,
@@ -50,6 +45,11 @@ from jarvis.model_routing.registry import (
     UnknownModelAdapterError,
     UnknownModelTargetError,
     UnknownRoutingStrategyError,
+)
+from jarvis.model_routing.store import (
+    ModelRoutingStore,
+    PersistedRoutingDecision,
+    RoutingStoreError,
 )
 
 __all__ = [
