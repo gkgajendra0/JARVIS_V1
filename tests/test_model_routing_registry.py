@@ -189,9 +189,7 @@ def test_routing_strategy_registry_rejects_duplicate_key_version() -> None:
 
 
 def test_registered_strategy_can_order_more_than_two_candidates() -> None:
-    adapters = ModelAdapterRegistry(
-        (DummyAdapter("openai"),)
-    )
+    adapters = ModelAdapterRegistry((DummyAdapter("openai"),))
     targets = ModelTargetRegistry(
         adapters,
         (
