@@ -40,6 +40,7 @@ def inspect_change(store: ChangeStore, change_id: str) -> dict[str, object]:
     development = [stage for stage in stages if stage.stage_key == "development"]
     architecture = store.latest_artifact(change_id, "architecture")
     acceptance = store.latest_artifact(change_id, "acceptance")
+    promotion = store.latest_artifact(change_id, "promotion")
     with store.work._lock, store.work._connect() as db:
         decisions = db.execute(
             """SELECT gate.kind, gate.artifact_id, gate.artifact_digest,
@@ -77,6 +78,7 @@ def inspect_change(store: ChangeStore, change_id: str) -> dict[str, object]:
             and verification.get("passed") is True
         ),
         "current_acceptance_approved": approved("acceptance", acceptance),
+        "current_promotion_intent_approved": approved("promotion", promotion),
         "no_automatic_promotion": change.state
         not in {
             ChangeState.PROMOTED,
@@ -110,6 +112,7 @@ def inspect_change(store: ChangeStore, change_id: str) -> dict[str, object]:
         ],
         "architecture_digest": architecture.digest if architecture else None,
         "acceptance_digest": acceptance.digest if acceptance else None,
+        "promotion_digest": promotion.digest if promotion else None,
         "event_count": len(store.list_events(change_id)),
         "recorded_at": datetime.now(UTC).isoformat(),
         "result": "PENDING" if all(gates.values()) else "FAIL",
