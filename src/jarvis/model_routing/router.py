@@ -242,6 +242,35 @@ class RoutingProvenanceError(RuntimeError):
     pass
 
 
+class RoutingResourceBlocked(RuntimeError):
+    """All approved targets for one durable routing lineage are unavailable."""
+
+    def __init__(
+        self,
+        *,
+        reason: str,
+        decision_id: str | None = None,
+        routing_request_id: str | None = None,
+        retry_after_seconds: float = 30.0,
+    ) -> None:
+        normalized_decision = str(decision_id or "").strip() or None
+        normalized_request = str(routing_request_id or "").strip() or None
+        normalized_reason = str(reason).strip()
+        if normalized_decision is None and normalized_request is None:
+            raise ValueError("routing blocker requires decision or request lineage")
+        if not normalized_reason:
+            raise ValueError("routing blocker requires reason")
+        if retry_after_seconds <= 0:
+            raise ValueError("routing blocker retry delay must be positive")
+        super().__init__(normalized_reason)
+        self.decision_id = normalized_decision
+        self.routing_request_id = normalized_request
+        self.reason = normalized_reason
+        self.retry_after_seconds = float(retry_after_seconds)
+        lineage = normalized_decision or normalized_request
+        self.blocker_key = f"routing-resource:{lineage}"
+
+
 @dataclass(frozen=True, slots=True)
 class RoutedSelection:
     request: RoutingRequest
