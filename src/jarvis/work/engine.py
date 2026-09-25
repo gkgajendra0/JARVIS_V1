@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from jarvis.model_routing.router import RoutingResourceBlocked
 from jarvis.work.brain import (
     BrainAction,
     BrainCoordinator,
@@ -373,6 +374,47 @@ class WorkEngine:
             retry_after_seconds=retry_after,
         )
 
+    def _record_routing_blocker(
+        self,
+        work: WorkItem,
+        exc: RoutingResourceBlocked,
+    ) -> WorkAdvanceResult:
+        step = WorkStep(
+            work_id=work.work_id,
+            kind="routing_resource_blocker",
+            summary="Approved reasoning targets are unavailable",
+            input_data={},
+        )
+        self._store.add_step(step)
+        completed = step.start().complete(
+            {
+                "decision_id": exc.decision_id,
+                "routing_request_id": exc.routing_request_id,
+                "reason": exc.reason,
+                "retry_after_seconds": exc.retry_after_seconds,
+            }
+        )
+        self._store.save_step(completed)
+        latest = self._store.require(work.work_id)
+        waiting = latest.transition(
+            WorkState.WAITING_RESOURCE,
+            status_detail=exc.reason,
+            current_step_id=step.step_id,
+        )
+        saved = self._store.save(waiting, expected_version=latest.version)
+        self._store.enqueue_delivery(
+            work=saved,
+            kind=WorkDeliveryKind.RESOURCE_BLOCKER,
+            message=exc.reason,
+            event_key=exc.blocker_key,
+        )
+        return WorkAdvanceResult(
+            saved.work_id,
+            saved.state,
+            progressed=True,
+            retry_after_seconds=exc.retry_after_seconds,
+        )
+
     def _check_dependencies(self, work: WorkItem) -> WorkAdvanceResult | None:
         if not work.dependencies:
             if work.state is WorkState.WAITING_DEPENDENCY:
@@ -605,6 +647,15 @@ class WorkEngine:
                 exc,
                 previous_attempt=provider_pressure_attempt,
             )
+        except RoutingResourceBlocked as exc:
+            latest = self._store.require(work.work_id)
+            if latest.state.terminal or latest.state is WorkState.PAUSED:
+                return WorkAdvanceResult(
+                    latest.work_id,
+                    latest.state,
+                    progressed=False,
+                )
+            return self._record_routing_blocker(latest, exc)
         except Exception as exc:  # noqa: BLE001 - provider boundary must fail closed
             latest = self._store.require(work.work_id)
             if latest.state.terminal or latest.state is WorkState.PAUSED:
