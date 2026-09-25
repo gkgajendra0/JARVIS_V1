@@ -605,6 +605,13 @@ def build_default_self_model() -> SelfModelRegistry:
             logger_prefixes=("jarvis.work.development",),
         ),
         C(
+            "work.engineering_change",
+            "Governed engineering lifecycle over canonical WorkItems and owner gates.",
+            ("src/jarvis/engineering_change",),
+            parent_component_id="work",
+            logger_prefixes=("jarvis.engineering_change",),
+        ),
+        C(
             "knowledge.research",
             "Provider-neutral source-aware current web research with provenance.",
             ("src/jarvis/knowledge", "src/jarvis/voice/research_tools.py"),

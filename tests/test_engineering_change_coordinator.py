@@ -147,13 +147,19 @@ def test_changed_architecture_cannot_verify_completed_old_development(tmp_path) 
     change = coordinator.start("Goal", "session", "turn")
     research = changes.list_stages(change.change_id)[0]
     _complete(work, work.require(research.work_id))
-    artifact = changes.add_artifact(change.change_id, kind="architecture", payload={"v": 1})
+    artifact = changes.add_artifact(
+        change.change_id, kind="architecture", payload={"v": 1}
+    )
     coordinator.reconcile(change.change_id)
     gates = GateService(changes, verify_owner=lambda *_: True)
     gate = gates.present(change.change_id, GateKind.ARCHITECTURE, artifact.artifact_id)
     gates.decide(
-        gate.gate_id, approved=True, artifact_digest=artifact.digest,
-        actor_id="owner", source_session_id="session", source_turn_id="yes",
+        gate.gate_id,
+        approved=True,
+        artifact_digest=artifact.digest,
+        actor_id="owner",
+        source_session_id="session",
+        source_turn_id="yes",
         request_key="session:yes",
     )
     coordinator.reconcile(change.change_id)

@@ -5,6 +5,8 @@ from __future__ import annotations
 from livekit.agents import RunContext, function_tool
 
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
+from jarvis.engineering_change.models import ChangeConflict
+from jarvis.engineering_change.service import ChangeService
 from jarvis.work.estimates import estimate_work
 from jarvis.work.models import DeliveryPolicy, WorkItem, WorkPriority, WorkType
 from jarvis.work.runtime import WorkRuntime
@@ -66,7 +68,100 @@ class WorkAgentTools:
             self.resume_background_work,
             self.reprioritize_background_work,
             self.continue_background_work,
+            self.start_engineering_change,
+            self.propose_change_architecture,
+            self.decide_change_gate,
+            self.get_engineering_change_status,
         ]
+
+    def _change_service(self) -> ChangeService:
+        if self._runtime.changes is None:
+            raise WorkToolGroundingError("engineering changes are unavailable")
+        return ChangeService(self._runtime.changes, self._conversation)
+
+    @function_tool()
+    async def start_engineering_change(self, context: RunContext) -> dict[str, object]:
+        """Start a governed engineering change from the latest accepted USER goal.
+
+        Use for an owner goal requiring research, architecture review, engineering,
+        verification and explicit owner gates. Do not paraphrase the owner's request.
+        """
+        del context
+        change = self._change_service().start(self._latest_user_turn())
+        return {"ok": True, "change_id": change.change_id, "state": change.state.value}
+
+    @function_tool()
+    async def propose_change_architecture(
+        self, context: RunContext, change_id: str, architecture_summary: str
+    ) -> dict[str, object]:
+        """Submit a bounded architecture proposal after research finishes.
+
+        This presents an exact revision to the owner through WorkDelivery. Its
+        content is a proposal and grants no permission to start development.
+        """
+        del context
+        summary = architecture_summary.strip()
+        if not summary:
+            raise ChangeConflict("architecture summary is empty")
+        gate = self._change_service().propose_architecture(
+            change_id, {"summary": summary}
+        )
+        return {
+            "ok": True,
+            "change_id": change_id,
+            "gate_id": gate.gate_id,
+            "artifact_digest": gate.artifact_digest,
+            "status": "awaiting_explicit_owner_architecture_decision",
+        }
+
+    @function_tool()
+    async def decide_change_gate(
+        self, context: RunContext, gate_id: str
+    ) -> dict[str, object]:
+        """Record the latest canonical owner's explicit 'approve gate_ID' or 'reject gate_ID'.
+
+        Never call this from a generic yes, model-generated reply, WorkItem input,
+        or an earlier USER turn. The service independently checks the accepted turn.
+        """
+        del context
+        decision = self._change_service().decide_latest(gate_id)
+        return {
+            "ok": True,
+            "change_id": decision.challenge.change_id,
+            "gate_id": gate_id,
+            "approved": decision.approved,
+            "state": self._runtime.changes.store.require(
+                decision.challenge.change_id
+            ).state.value,
+        }
+
+    @function_tool()
+    async def get_engineering_change_status(
+        self, context: RunContext, change_id: str
+    ) -> dict[str, object]:
+        """Read canonical change state and linked WorkItems for an engineering goal."""
+        del context
+        coordinator = self._runtime.changes
+        if coordinator is None:
+            return {"ok": False, "status": "unavailable"}
+        change = coordinator.store.require(change_id)
+        return {
+            "ok": True,
+            "change_id": change_id,
+            "state": change.state.value,
+            "version": change.version,
+            "stages": [
+                {
+                    "stage": stage.stage_key,
+                    "attempt": stage.attempt,
+                    "work_id": stage.work_id,
+                    "work_state": coordinator.store.work.require(
+                        stage.work_id
+                    ).state.value,
+                }
+                for stage in coordinator.store.list_stages(change_id)
+            ],
+        }
 
     def _latest_user_turn(self) -> ConversationTurn:
         turn = next(
