@@ -75,14 +75,9 @@ from jarvis.model_routing.strategy import (
 )
 
 __all__ = [
-    "apply_provider_failure",
     "BenchmarkStatus",
-    "build_default_model_adapter_registry",
-    "build_default_work_targets",
-    "build_work_routing_request",
     "CostProfile",
     "DefaultWorkTargets",
-    "derive_work_step_signals",
     "DuplicateRegistrationError",
     "EligibilityPolicy",
     "EligibilityReason",
@@ -108,7 +103,6 @@ __all__ = [
     "NoEligibleTargets",
     "PersistedRoutingDecision",
     "PrivacyClass",
-    "reasoning_cycle_key",
     "ResponseContractResult",
     "RoutedSelection",
     "RoutingAttempt",
@@ -132,4 +126,10 @@ __all__ = [
     "UnknownModelAdapterError",
     "UnknownModelTargetError",
     "UnknownRoutingStrategyError",
+    "apply_provider_failure",
+    "build_default_model_adapter_registry",
+    "build_default_work_targets",
+    "build_work_routing_request",
+    "derive_work_step_signals",
+    "reasoning_cycle_key",
 ]
