@@ -49,7 +49,7 @@ def test_one_owner_goal_has_durable_identity_and_rejects_duplicate(tmp_path) -> 
         )
 
 
-def test_sensitive_change_payloads_follow_workstore_at_rest_protection(tmp_path) -> None:
+def test_sensitive_change_payloads_follow_workstore_at_rest_protection(\n    tmp_path,\n) -> None:
     class FakeKeyProtector:
         protector_id = "phase3-test-protector"
 
@@ -84,7 +84,7 @@ def test_sensitive_change_payloads_follow_workstore_at_rest_protection(tmp_path)
 
     raw = b"".join(
         candidate.read_bytes()
-        for candidate in (path, path.with_name(path.name + "-wal"), path.with_name(path.name + "-shm"))
+        for candidate in (\n            path,\n            path.with_name(path.name + "-wal"),\n            path.with_name(path.name + "-shm"),\n        )
         if candidate.exists()
     )
     assert marker.encode("utf-8") not in raw
