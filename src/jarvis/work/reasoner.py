@@ -12,6 +12,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from jarvis.ai_provider import normalize_ai_provider, resolve_ai_role_model
 from jarvis.hands.provider_adapters import build_structured_output_client
+from jarvis.model_routing.health import (
+    HealthAction,
+    TargetHealthRecord,
+    apply_provider_failure,
+)
 from jarvis.model_routing.invoker import ModelInvocationContext, ModelInvoker
 from jarvis.model_routing.models import (
     ResponseContractResult,
@@ -20,8 +25,12 @@ from jarvis.model_routing.models import (
 )
 from jarvis.model_routing.router import (
     ModelRouter,
+    RoutedSelection,
+    RoutingResourceBlocked,
+    RoutingUnavailableError,
     build_work_routing_request,
 )
+from jarvis.model_routing.store import RoutingStoreError
 from jarvis.provider_resilience import classify_provider_failure
 from jarvis.work.brain import BrainDecision, BrainRequest, ProviderPressure
 
@@ -220,7 +229,7 @@ class ProviderWorkReasoner:
 
 
 class RoutedWorkReasoner:
-    """Route one bounded WorkReasoner cycle before provider invocation."""
+    """Route one bounded WorkReasoner cycle with durable bounded fallback."""
 
     def __init__(
         self,
@@ -245,80 +254,251 @@ class RoutedWorkReasoner:
     def model_name(self) -> str:
         return self._router.target_registry.require(self._primary_target_id).model_id
 
+    def _health_record(self, target_id: str, *, now_epoch: float) -> TargetHealthRecord:
+        existing = self._router.routing_store.get_health(target_id)
+        if existing is not None:
+            return existing
+        initial = TargetHealthRecord(
+            target_id=target_id,
+            updated_at_epoch=now_epoch,
+        )
+        try:
+            return self._router.routing_store.create_health(initial)
+        except RoutingStoreError:
+            concurrent = self._router.routing_store.get_health(target_id)
+            if concurrent is None:
+                raise
+            return concurrent
+
+    def _record_failure_health(
+        self,
+        *,
+        target_id: str,
+        failure,
+        now_epoch: float,
+    ):
+        record = self._health_record(target_id, now_epoch=now_epoch)
+        mutation = apply_provider_failure(
+            record,
+            failure,
+            now_epoch=now_epoch,
+        )
+        try:
+            self._router.routing_store.save_health(
+                mutation.record,
+                expected_version=record.version,
+            )
+            return mutation
+        except RoutingStoreError:
+            refreshed = self._router.routing_store.get_health(target_id)
+            if refreshed is None:
+                raise
+            mutation = apply_provider_failure(
+                refreshed,
+                failure,
+                now_epoch=now_epoch,
+            )
+            self._router.routing_store.save_health(
+                mutation.record,
+                expected_version=refreshed.version,
+            )
+            return mutation
+
+    def _mark_target_recovered(self, target_id: str, *, now_epoch: float) -> None:
+        record = self._router.routing_store.get_health(target_id)
+        if record is None:
+            return
+        if (
+            record.state.value == "healthy"
+            and record.consecutive_failures == 0
+            and record.cooldown_until_epoch is None
+        ):
+            return
+        recovered = record.recovered(now_epoch=now_epoch)
+        try:
+            self._router.routing_store.save_health(
+                recovered,
+                expected_version=record.version,
+            )
+        except RoutingStoreError:
+            return
+
+    def _next_target(
+        self,
+        selection: RoutedSelection,
+        attempts: tuple[RoutingAttempt, ...],
+        *,
+        now_epoch: float,
+    ):
+        decision = selection.decision
+        if attempts and attempts[-1].failure_class is None:
+            return self._router.target_registry.require(decision.selected_target_id)
+
+        if attempts and attempts[-1].failure_class is not None:
+            last_target_id = attempts[-1].target_id
+            health = self._router.routing_store.get_health(last_target_id)
+            if (
+                health is not None
+                and health.effective_state(now_epoch=now_epoch).value == "degraded"
+            ):
+                return self._router.target_registry.require(last_target_id)
+
+        failed_target_ids = {
+            attempt.target_id
+            for attempt in attempts
+            if attempt.failure_class is not None
+        }
+        allowed_ids = decision.ordered_target_ids[: 1 + decision.fallback_budget]
+        for target_id in allowed_ids:
+            if target_id in failed_target_ids:
+                continue
+            health = self._router.routing_store.get_health(target_id)
+            if health is not None and health.effective_state(
+                now_epoch=now_epoch
+            ).value in {"cooldown", "unavailable", "disabled"}:
+                continue
+            return self._router.target_registry.require(target_id)
+        return None
+
+    def _blocked_retry_after(
+        self,
+        selection: RoutedSelection,
+        *,
+        now_epoch: float,
+    ) -> float:
+        waits: list[float] = []
+        for target_id in selection.decision.ordered_target_ids[
+            : 1 + selection.decision.fallback_budget
+        ]:
+            record = self._router.routing_store.get_health(target_id)
+            if record is None or record.cooldown_until_epoch is None:
+                continue
+            remaining = record.cooldown_until_epoch - now_epoch
+            if remaining > 0:
+                waits.append(remaining)
+        return max(1.0, min(waits)) if waits else 30.0
+
     async def decide(self, request: BrainRequest) -> BrainDecision:
         routing_request = build_work_routing_request(
             request,
             primary_target_id=self._primary_target_id,
         )
-        selection = self._router.route(routing_request)
-        prior_attempts = self._router.routing_store.list_attempts(
-            selection.decision.decision_id
-        )
-        ordinal = len(prior_attempts) + 1
-        attempt_id = _attempt_id(selection.decision.decision_id, ordinal)
-        correlation_key = f"{selection.decision.decision_id}:attempt:{ordinal}"
-        context = ModelInvocationContext(
-            work_id=request.work.work_id,
-            routing_request_id=routing_request.routing_request_id,
-            decision_id=selection.decision.decision_id,
-            attempt_id=attempt_id,
-            correlation_key=correlation_key,
-        )
-        started = float(self._clock())
         try:
-            parsed = await self._invoker.invoke_structured(
-                target=selection.target,
-                system_prompt=_SYSTEM_PROMPT,
-                input_payload=_work_input_payload(request),
-                response_model=_WorkDecisionModel,
-                request_context=context,
+            selection = self._router.route(routing_request)
+        except RoutingUnavailableError as exc:
+            raise RoutingResourceBlocked(
+                routing_request_id=routing_request.routing_request_id,
+                reason="no approved routing target is currently eligible",
+                retry_after_seconds=30.0,
+            ) from exc
+        attempts = list(
+            self._router.routing_store.list_attempts(selection.decision.decision_id)
+        )
+        max_new_attempts = len(selection.decision.ordered_target_ids) + 1
+        new_attempts = 0
+
+        while new_attempts < max_new_attempts:
+            now = float(self._clock())
+            target = self._next_target(
+                selection,
+                tuple(attempts),
+                now_epoch=now,
             )
-        except Exception as exc:
-            ended = float(self._clock())
-            failure = classify_provider_failure(
-                exc,
-                provider=selection.target.provider_id,
+            if target is None:
+                raise RoutingResourceBlocked(
+                    decision_id=selection.decision.decision_id,
+                    reason="all approved routing targets are currently unavailable",
+                    retry_after_seconds=self._blocked_retry_after(
+                        selection,
+                        now_epoch=now,
+                    ),
+                )
+
+            ordinal = len(attempts) + 1
+            attempt_id = _attempt_id(selection.decision.decision_id, ordinal)
+            correlation_key = f"{selection.decision.decision_id}:attempt:{ordinal}"
+            context = ModelInvocationContext(
+                work_id=request.work.work_id,
+                routing_request_id=routing_request.routing_request_id,
+                decision_id=selection.decision.decision_id,
+                attempt_id=attempt_id,
+                correlation_key=correlation_key,
             )
-            self._router.routing_store.record_attempt(
-                RoutingAttempt(
+            started = float(self._clock())
+            new_attempts += 1
+            try:
+                parsed = await self._invoker.invoke_structured(
+                    target=target,
+                    system_prompt=_SYSTEM_PROMPT,
+                    input_payload=_work_input_payload(request),
+                    response_model=_WorkDecisionModel,
+                    request_context=context,
+                )
+            except Exception as exc:
+                ended = float(self._clock())
+                failure = classify_provider_failure(
+                    exc,
+                    provider=target.provider_id,
+                )
+                attempt = RoutingAttempt(
                     attempt_id=attempt_id,
                     decision_id=selection.decision.decision_id,
                     work_id=request.work.work_id,
-                    target_id=selection.target.target_id,
+                    target_id=target.target_id,
                     attempt_ordinal=ordinal,
                     started_at_epoch=started,
                     ended_at_epoch=max(started, ended),
                     latency_ms=max(0.0, (ended - started) * 1000.0),
-                    kind=RoutingAttemptKind.PRIMARY,
+                    kind=(
+                        RoutingAttemptKind.PRIMARY
+                        if target.target_id == selection.decision.selected_target_id
+                        else RoutingAttemptKind.FALLBACK
+                    ),
                     failure_class=failure.kind.value,
                     response_contract_result=ResponseContractResult.UNKNOWN,
                     correlation_key=correlation_key,
                 )
-            )
-            pressure = _provider_pressure_from_exception(
-                exc,
-                provider=selection.target.provider_id,
-            )
-            if pressure is not None:
-                raise pressure from exc
-            raise
+                self._router.routing_store.record_attempt(attempt)
+                attempts.append(attempt)
+                mutation = self._record_failure_health(
+                    target_id=target.target_id,
+                    failure=failure,
+                    now_epoch=ended,
+                )
+                if mutation.action is HealthAction.FAIL_CLOSED_NO_FALLBACK:
+                    raise
+                continue
 
-        ended = float(self._clock())
-        if not isinstance(parsed, _WorkDecisionModel):
-            raise TypeError("work reasoner returned unexpected response type")
-        self._router.routing_store.record_attempt(
-            RoutingAttempt(
+            ended = float(self._clock())
+            if not isinstance(parsed, _WorkDecisionModel):
+                raise TypeError("work reasoner returned unexpected response type")
+            attempt = RoutingAttempt(
                 attempt_id=attempt_id,
                 decision_id=selection.decision.decision_id,
                 work_id=request.work.work_id,
-                target_id=selection.target.target_id,
+                target_id=target.target_id,
                 attempt_ordinal=ordinal,
                 started_at_epoch=started,
                 ended_at_epoch=max(started, ended),
                 latency_ms=max(0.0, (ended - started) * 1000.0),
-                kind=RoutingAttemptKind.PRIMARY,
+                kind=(
+                    RoutingAttemptKind.PRIMARY
+                    if target.target_id == selection.decision.selected_target_id
+                    else RoutingAttemptKind.FALLBACK
+                ),
                 response_contract_result=ResponseContractResult.VALID,
                 correlation_key=correlation_key,
             )
+            self._router.routing_store.record_attempt(attempt)
+            self._mark_target_recovered(target.target_id, now_epoch=ended)
+            return _brain_decision(request, parsed)
+
+        now = float(self._clock())
+        raise RoutingResourceBlocked(
+            decision_id=selection.decision.decision_id,
+            reason="bounded routing attempt budget is exhausted",
+            retry_after_seconds=self._blocked_retry_after(
+                selection,
+                now_epoch=now,
+            ),
         )
-        return _brain_decision(request, parsed)
