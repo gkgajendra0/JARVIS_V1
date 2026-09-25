@@ -389,6 +389,7 @@ class WorkEngine:
         completed = step.start().complete(
             {
                 "decision_id": exc.decision_id,
+                "routing_request_id": exc.routing_request_id,
                 "reason": exc.reason,
                 "retry_after_seconds": exc.retry_after_seconds,
             }
