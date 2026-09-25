@@ -612,6 +612,8 @@ class RoutingStrategyResult:
     ordered_target_ids: tuple[str, ...]
     reason_codes: tuple[str, ...]
     selected_role: str
+    hold_affinity: bool = False
+    affinity_target_id: str | None = None
 
     def __post_init__(self) -> None:
         targets = _tokens(
@@ -642,6 +644,21 @@ class RoutingStrategyResult:
                 field="selected_role",
             ),
         )
+        object.__setattr__(
+            self,
+            "hold_affinity",
+            _bool(self.hold_affinity, field="hold_affinity"),
+        )
+        affinity_target = (
+            None
+            if self.affinity_target_id is None
+            else _token(self.affinity_target_id, field="affinity_target_id")
+        )
+        if affinity_target is not None and not self.hold_affinity:
+            raise ValueError("affinity_target_id requires hold_affinity")
+        if affinity_target is not None and affinity_target not in targets:
+            raise ValueError("affinity_target_id must be an ordered target")
+        object.__setattr__(self, "affinity_target_id", affinity_target)
 
 
 @dataclass(frozen=True, slots=True)
