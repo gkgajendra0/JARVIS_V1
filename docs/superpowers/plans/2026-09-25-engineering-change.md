@@ -1,6 +1,6 @@
 # EngineeringChange Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** A durable EngineeringChange coordinates multiple canonical WorkItems with exact-revision owner gates and restart-safe provenance.
 
@@ -9,6 +9,8 @@
 **Tech Stack:** Python 3.11+, SQLite WAL, existing DBOS 2.31.1 production Postgres, RFC-8785, pytest, Ruff.
 
 **Spec:** `docs/superpowers/specs/2026-09-25-engineering-change-design.md`
+
+**Implementation status:** Tasks 1–4 and the Phase-3 fault/recovery harness are implemented on PR #108. Final exact-head full CI is still required before the owner-machine acceptance procedure; Phase 3 remains unaccepted until that real-machine gate passes.
 
 ## Global Constraints
 
@@ -34,9 +36,9 @@
 
 **Interfaces:** `ChangeState`, `EngineeringChange`, `ChangeArtifact`, `ChangeDecision`, `ChangeStage`, `ChangeStore`; `ChangeStore.create/get/transition/add_artifact/record_decision/link_work/list_active`. Store shares `SQLiteWorkStore` connection/codec and uses foreign keys to work_items. The registry recognizes a versioned initial process and refuses unsupported versions.
 
-- [ ] Write tests for create/read, CAS conflict, encrypted sensitive fields, unknown version, immutable revisions, forbidden lifecycle transition, and atomic stage WorkItem link. Run `PYTHONPATH=src python -m pytest tests/test_engineering_change_core.py -q` and see import/behavior failure.
-- [ ] Add SQLite tables/indexes with positive versions, unique `(source_session_id, source_turn_id, process_key)`, unique stage attempt keys, and append-only decision/event constraints. Add protected payload handling. Implement models and store and rerun tests to green.
-- [ ] Run targeted existing `test_work_orchestration.py` and `test_work_privacy.py`; commit `feat: add durable EngineeringChange state`.
+- [x] Write tests for create/read, CAS conflict, encrypted sensitive fields, unknown version, immutable revisions, forbidden lifecycle transition, and atomic stage WorkItem link. Run `PYTHONPATH=src python -m pytest tests/test_engineering_change_core.py -q` and see import/behavior failure.
+- [x] Add SQLite tables/indexes with positive versions, unique `(source_session_id, source_turn_id, process_key)`, unique stage attempt keys, and append-only decision/event constraints. Add protected payload handling. Implement models and store and rerun tests to green.
+- [x] Run targeted existing `test_work_orchestration.py` and `test_work_privacy.py`; commit `feat: add durable EngineeringChange state`.
 
 ### Task 2: Typed gate and artifact binding
 
@@ -44,9 +46,9 @@
 
 **Interfaces:** `GateService.present(change_id, gate_kind, artifact_id)`, `GateService.decide(change_id, gate_id, decision, actor_id, source_session_id, source_turn_id, request_key)`; decisions verify current artifact digest and are stored once. Canonical SHA-256 uses existing RFC-8785 helper. Decision has no Authority permit semantics.
 
-- [ ] Write RED tests for exact artifact binding, trusted-source requirement, duplicate idempotency, conflicting duplicate, rejection, changed revision invalidation and unrelated Authority invariants.
-- [ ] Implement immutable gate challenges/decisions and admission predicates; use existing WorkDelivery for prompts, keyed by `(change, gate, revision)`, and keep any secret value out of evidence. Run targeted tests GREEN.
-- [ ] Commit `feat: bind EngineeringChange gates to reviewed artifacts`.
+- [x] Write RED tests for exact artifact binding, trusted-source requirement, duplicate idempotency, conflicting duplicate, rejection, changed revision invalidation and unrelated Authority invariants.
+- [x] Implement immutable gate challenges/decisions and admission predicates; use existing WorkDelivery for prompts, keyed by `(change, gate, revision)`, and keep any secret value out of evidence. Run targeted tests GREEN.
+- [x] Commit `feat: bind EngineeringChange gates to reviewed artifacts`.
 
 ### Task 3: Reuse canonical WorkItems and DBOS submission
 
@@ -54,9 +56,9 @@
 
 **Interfaces:** `ChangeCoordinator.reconcile(change_id)` and `reconcile_for_work(work_id)`; stage creation atomically persists WorkItem and link, submission invokes existing backend with the same work ID, startup reconciles missing submission. Child WorkItem source turns are deterministic `(change_id, stage_key, attempt)`.
 
-- [ ] Write RED tests for one owner goal with multiple dependent WorkItems, parallel ready research items, stage gating, idempotent duplicate submission, local commit/submission crash, and terminal WorkItem recovery.
-- [ ] Implement coordinator and narrow existing orchestrator adapter, leaving direct WorkItem behavior intact. Call reconciliation at completion and startup. Run new and existing DBOS/work tests GREEN.
-- [ ] Commit `feat: coordinate governed changes through WorkItems`.
+- [x] Write RED tests for one owner goal with multiple dependent WorkItems, parallel ready research items, stage gating, idempotent duplicate submission, local commit/submission crash, and terminal WorkItem recovery.
+- [x] Implement coordinator and narrow existing orchestrator adapter, leaving direct WorkItem behavior intact. Call reconciliation at completion and startup. Run new and existing DBOS/work tests GREEN.
+- [x] Commit `feat: coordinate governed changes through WorkItems`.
 
 ### Task 4: Fail-closed lifecycle and owner-facing flow
 
@@ -64,9 +66,9 @@
 
 **Interfaces:** Trusted application-facing start/list/status/review/decide operations preserve canonical user turn and disambiguate concurrent gates. Work owner-input remains separate from change approval. Typed process contracts enforce mandatory architecture, verification, acceptance and promotion prerequisites.
 
-- [ ] Write RED tests for rejection, retry as fresh attempt, stale approval, unknown process, racing approval/revision updates, owner intent provenance, two simultaneous gates, and no automatic promotion.
-- [ ] Implement minimal process registry, lifecycle transitions, trusted owner bridge and canonical status. Preserve approximate progress and unknown ETA semantics. Run targeted tests GREEN.
-- [ ] Commit `feat: expose governed EngineeringChange lifecycle`.
+- [x] Write RED tests for rejection, retry as fresh attempt, stale approval, unknown process, racing approval/revision updates, owner intent provenance, two simultaneous gates, and no automatic promotion.
+- [x] Implement minimal process registry, lifecycle transitions, trusted owner bridge and canonical status. Preserve approximate progress and unknown ETA semantics. Run targeted tests GREEN.
+- [x] Commit `feat: expose governed EngineeringChange lifecycle`.
 
 ### Task 5: Verification, owner-machine harness, and documentation
 
@@ -74,6 +76,6 @@
 
 **Interfaces:** The harness emits bounded, sanitized JSON evidence for owner-machine Postgres/restart/approval tests. It does not claim acceptance before an actual run on the owner's machine.
 
-- [ ] Write RED fault-injection tests for each transaction/submission/decision/reconcile boundary and a negative test proving no automatic merge/deployment.
+- [x] Write RED fault-injection tests for each transaction/submission/decision/reconcile boundary and a negative test proving no automatic merge/deployment.
 - [ ] Implement the runner and documentation, run targeted tests GREEN; run `ruff format --check .`, `ruff check .`, and `pytest -q` with the CI dependency set. Review the diff for protected surfaces and secrets.
-- [ ] Commit `test: verify Phase 3 recovery and document owner acceptance` and open a PR. Merge green implementation only under standing authorization and accepted gates; stop if owner-machine input is required.
+- [x] Commit `test: verify Phase 3 recovery and document owner acceptance` and open a PR. Merge green implementation only under standing authorization and accepted gates; stop if owner-machine input is required.
