@@ -16,6 +16,10 @@ from jarvis.engineering_knowledge.evaluation import (
     EngineeringKnowledgeEvaluationReport,
 )
 from jarvis.engineering_knowledge.retrieval import build_engineering_qwen_encoder
+from jarvis.memory.embeddings import (
+    QWEN3_EMBEDDING_MODEL_ID,
+    QWEN3_EMBEDDING_REVISION,
+)
 
 
 def _report(
@@ -108,9 +112,8 @@ def test_qwen_experiment_contract_uses_same_pinned_model(dimension: int) -> None
     contract = build_qwen3_experiment_contract(dimension)
 
     assert contract.dimension == dimension
-    assert contract.model_id == BASELINE_RETRIEVAL_VARIANT.variant_id.split("-")[2].replace(
-        "qwen256", contract.model_id
-    )
+    assert contract.model_id == QWEN3_EMBEDDING_MODEL_ID
+    assert contract.model_revision == QWEN3_EMBEDDING_REVISION
 
 
 def test_qwen_experiment_contract_rejects_unreviewed_dimension() -> None:
