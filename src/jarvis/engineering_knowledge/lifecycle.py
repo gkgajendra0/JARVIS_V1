@@ -11,6 +11,7 @@ from jarvis.engineering_knowledge.models import (
     AttestationVerdict,
     EngineeringApplicability,
     EngineeringAttestation,
+    EngineeringEvidence,
     EngineeringKnowledgeFacet,
     EngineeringKnowledgeRevision,
     KnowledgeEvidenceLink,
@@ -21,6 +22,9 @@ from jarvis.engineering_knowledge.models import (
 from jarvis.engineering_knowledge.projector import (
     REPAIR_KIND_NAMESPACE,
     REPAIR_VERIFICATION_PREDICATE,
+)
+from jarvis.engineering_knowledge.security import (
+    EngineeringKnowledgeIntegrityVerifier,
 )
 
 REPAIR_PROMOTION_POLICY_ID = "repair-knowledge-promotion:v1"
@@ -60,6 +64,11 @@ class KnowledgeLifecycleStore(Protocol):
         self,
         revision_id: str,
     ) -> tuple[EngineeringApplicability, ...]: ...
+
+    def list_engineering_knowledge_evidence(
+        self,
+        revision_id: str,
+    ) -> tuple[EngineeringEvidence, ...]: ...
 
     def list_engineering_attestations(
         self,
@@ -133,6 +142,13 @@ class RepairKnowledgePromotionPolicy:
 
         reasons: list[str] = []
         evidence_ids: list[str] = []
+
+        integrity = EngineeringKnowledgeIntegrityVerifier().verify(
+            store,
+            revision_id,
+        )
+        if not integrity.valid:
+            reasons.extend(f"integrity:{reason}" for reason in integrity.reason_codes)
 
         if revision.kind_namespace != REPAIR_KIND_NAMESPACE:
             reasons.append("wrong_kind_namespace")

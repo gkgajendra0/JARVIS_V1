@@ -27,10 +27,16 @@ from jarvis.engineering_knowledge.models import (
     AttestationVerdict,
     EngineeringApplicability,
     EngineeringAttestation,
+    EngineeringEvidence,
     EngineeringKnowledgeFacet,
     EngineeringKnowledgeRevision,
     KnowledgeFreshnessState,
     KnowledgeSensitivity,
+)
+from jarvis.engineering_knowledge.security import (
+    EngineeringEvidenceAdmissionGate,
+    EngineeringKnowledgeIntegrityVerifier,
+    EvidenceAdmissionRequest,
 )
 from jarvis.incidents.migration_runner import EngineeringMigrationRunner
 from jarvis.memory.embeddings import (
@@ -84,6 +90,12 @@ class EngineeringKnowledgeRetrievalPolicy:
     @classmethod
     def local(cls) -> EngineeringKnowledgeRetrievalPolicy:
         return cls(sensitivities=_DEFAULT_LOCAL_SENSITIVITIES)
+
+    @classmethod
+    def external_context(cls) -> EngineeringKnowledgeRetrievalPolicy:
+        """Conservative policy for material leaving the local JARVIS boundary."""
+
+        return cls(sensitivities=frozenset({KnowledgeSensitivity.STANDARD}))
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,6 +192,27 @@ class EngineeringKnowledgeRetrievalIndex:
             columns = [item[0] for item in cursor.description or ()]
         return _revision_from_row(dict(zip(columns, row, strict=True)))
 
+    def list_engineering_knowledge_facets(
+        self,
+        revision_id: str,
+    ) -> tuple[EngineeringKnowledgeFacet, ...]:
+        normalized = _required_text(revision_id, "revision_id")
+        with self._lock:
+            cursor = self._connection.execute(
+                """
+                SELECT *
+                FROM engineering_knowledge_facet
+                WHERE revision_id = ?
+                ORDER BY facet_type, schema_id, schema_version, facet_id
+                """,
+                (normalized,),
+            )
+            rows = cursor.fetchall()
+            columns = [item[0] for item in cursor.description or ()]
+        return tuple(
+            _facet_from_row(dict(zip(columns, row, strict=True))) for row in rows
+        )
+
     def list_engineering_knowledge_applicability(
         self,
         revision_id: str,
@@ -208,6 +241,83 @@ class EngineeringKnowledgeRetrievalIndex:
                 constraint_json=str(row[5]),
                 required=bool(row[6]),
                 created_at_epoch=float(row[7]),
+            )
+            for row in rows
+        )
+
+    def list_engineering_knowledge_evidence(
+        self,
+        revision_id: str,
+    ) -> tuple[EngineeringEvidence, ...]:
+        normalized = _required_text(revision_id, "revision_id")
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT DISTINCT evidence.evidence_id, evidence.evidence_type,
+                       evidence.source_class, evidence.canonical_reference,
+                       evidence.summary, evidence.occurred_at_epoch,
+                       evidence.observed_at_epoch, evidence.sensitivity,
+                       evidence.producer, evidence.integrity_algorithm,
+                       evidence.integrity_digest, evidence.created_at_epoch
+                FROM engineering_knowledge_evidence_link AS link
+                JOIN engineering_evidence AS evidence
+                  ON evidence.evidence_id = link.evidence_id
+                WHERE link.revision_id = ?
+                ORDER BY evidence.canonical_reference, evidence.evidence_id
+                """,
+                (normalized,),
+            ).fetchall()
+        return tuple(
+            EngineeringEvidence(
+                evidence_id=str(row[0]),
+                evidence_type=str(row[1]),
+                source_class=str(row[2]),
+                canonical_reference=str(row[3]),
+                summary=str(row[4]),
+                occurred_at_epoch=(float(row[5]) if row[5] is not None else None),
+                observed_at_epoch=float(row[6]),
+                sensitivity=KnowledgeSensitivity(str(row[7])),
+                producer=str(row[8]),
+                integrity_algorithm=(str(row[9]) if row[9] is not None else None),
+                integrity_digest=(str(row[10]) if row[10] is not None else None),
+                created_at_epoch=float(row[11]),
+            )
+            for row in rows
+        )
+
+    def list_engineering_attestations(
+        self,
+        *,
+        subject_type: str,
+        subject_id: str,
+    ) -> tuple[EngineeringAttestation, ...]:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT attestation_id, subject_type, subject_id, subject_digest,
+                       predicate_type, producer, expected_contract_json,
+                       observed_result_json, verdict, evidence_ids_json,
+                       observed_at_epoch, created_at_epoch
+                FROM engineering_attestation
+                WHERE subject_type = ? AND subject_id = ?
+                ORDER BY predicate_type, observed_at_epoch, attestation_id
+                """,
+                (str(subject_type).strip().casefold(), str(subject_id).strip()),
+            ).fetchall()
+        return tuple(
+            EngineeringAttestation(
+                attestation_id=str(row[0]),
+                subject_type=str(row[1]),
+                subject_id=str(row[2]),
+                subject_digest=str(row[3]),
+                predicate_type=str(row[4]),
+                producer=str(row[5]),
+                expected_contract_json=str(row[6]),
+                observed_result_json=str(row[7]),
+                verdict=AttestationVerdict(str(row[8])),
+                evidence_ids=tuple(json.loads(str(row[9]))),
+                observed_at_epoch=float(row[10]),
+                created_at_epoch=float(row[11]),
             )
             for row in rows
         )
@@ -506,9 +616,15 @@ class EngineeringKnowledgeRetrievalIndex:
             ).fetchall()
 
         applicability_service = EngineeringKnowledgeApplicabilityService(self)
+        integrity_verifier = EngineeringKnowledgeIntegrityVerifier()
         eligible: dict[str, ApplicabilityDecision] = {}
         for row in rows:
             revision_id = str(row[0])
+            integrity = integrity_verifier.verify(self, revision_id)
+            if not integrity.valid:
+                continue
+            if not self._derived_document_matches_canonical(revision_id):
+                continue
             decision = applicability_service.evaluate(revision_id, context)
             if decision.eligible:
                 eligible[revision_id] = decision
@@ -543,7 +659,51 @@ class EngineeringKnowledgeRetrievalIndex:
             raise EngineeringKnowledgeRetrievalError(
                 "knowledge revision produced no safe searchable text"
             )
+        decision = EngineeringEvidenceAdmissionGate().assess(
+            EvidenceAdmissionRequest(
+                source_class="authoritative_engineering_record",
+                content=normalized,
+                sensitivity=revision.sensitivity,
+            )
+        )
+        if not decision.admissible:
+            raise EngineeringKnowledgeRetrievalError(
+                "knowledge search projection failed security screening: "
+                + ",".join(decision.reason_codes)
+            )
         return normalized
+
+    def _derived_document_matches_canonical(self, revision_id: str) -> bool:
+        revision = self.get_engineering_knowledge_revision(revision_id)
+        if revision is None:
+            return False
+        stored = self._search_document_with_hash(revision_id)
+        if stored is None:
+            return False
+        searchable_text, stored_digest = stored
+        try:
+            canonical_text = self._build_searchable_text(revision)
+        except EngineeringKnowledgeRetrievalError:
+            return False
+        canonical_digest = hashlib.sha256(canonical_text.encode("utf-8")).hexdigest()
+        return searchable_text == canonical_text and stored_digest == canonical_digest
+
+    def _search_document_with_hash(
+        self,
+        revision_id: str,
+    ) -> tuple[str, str] | None:
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT searchable_text, content_sha256
+                FROM engineering_knowledge_search_document
+                WHERE revision_id = ?
+                """,
+                (revision_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return str(row[0]), str(row[1])
 
     def _upsert_embedding(
         self,
@@ -753,36 +913,9 @@ class EngineeringKnowledgeRetrievalIndex:
         self,
         revision_id: str,
     ) -> tuple[EngineeringAttestation, ...]:
-        with self._lock:
-            rows = self._connection.execute(
-                """
-                SELECT attestation_id, subject_type, subject_id, subject_digest,
-                       predicate_type, producer, expected_contract_json,
-                       observed_result_json, verdict, evidence_ids_json,
-                       observed_at_epoch, created_at_epoch
-                FROM engineering_attestation
-                WHERE subject_type = 'knowledge_revision'
-                  AND subject_id = ?
-                ORDER BY predicate_type, observed_at_epoch, attestation_id
-                """,
-                (revision_id,),
-            ).fetchall()
-        return tuple(
-            EngineeringAttestation(
-                attestation_id=str(row[0]),
-                subject_type=str(row[1]),
-                subject_id=str(row[2]),
-                subject_digest=str(row[3]),
-                predicate_type=str(row[4]),
-                producer=str(row[5]),
-                expected_contract_json=str(row[6]),
-                observed_result_json=str(row[7]),
-                verdict=AttestationVerdict(str(row[8])),
-                evidence_ids=tuple(json.loads(str(row[9]))),
-                observed_at_epoch=float(row[10]),
-                created_at_epoch=float(row[11]),
-            )
-            for row in rows
+        return self.list_engineering_attestations(
+            subject_type="knowledge_revision",
+            subject_id=revision_id,
         )
 
 

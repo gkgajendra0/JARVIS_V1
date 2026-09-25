@@ -340,13 +340,39 @@ def test_stale_embedding_is_skipped_when_document_hash_differs(tmp_path) -> None
 def test_unknown_facet_payload_is_not_added_to_search_document(tmp_path) -> None:
     path = tmp_path / "engineering.sqlite3"
     store = SqliteIncidentStore(path)
-    revision_id, _ = _candidate(store)
-    _accept(store, revision_id)
+    connection = sqlite3.connect(path)
+    connection.execute(
+        """
+        INSERT INTO engineering_knowledge_identity (
+            knowledge_id, stable_label, created_at_epoch, created_by
+        ) VALUES ('knowledge-future', 'future knowledge', 100.0, 'test')
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO engineering_knowledge_revision (
+            revision_id, knowledge_id, revision_number,
+            kind_namespace, normalized_summary,
+            system_from_epoch, sensitivity, freshness_state,
+            canonicalization, digest_algorithm, canonical_digest,
+            created_at_epoch, created_by
+        ) VALUES (
+            'revision-future', 'knowledge-future', 1,
+            'future.experimental', 'safe canonical summary',
+            100.0, 'standard', 'current',
+            'rfc8785', 'sha256', ?, 100.0, 'test'
+        )
+        """,
+        ("a" * 64,),
+    )
+    connection.commit()
+    connection.close()
+
     marker = "TOP_SECRET_POISON_MARKER"
     payload = {"untrusted_instruction": marker}
     unknown = EngineeringKnowledgeFacet(
         facet_id="facet-future-untrusted",
-        revision_id=revision_id,
+        revision_id="revision-future",
         facet_type="future.untrusted.experimental",
         schema_id="urn:future:untrusted:v1",
         schema_version="1",
@@ -359,25 +385,18 @@ def test_unknown_facet_payload_is_not_added_to_search_document(tmp_path) -> None
     store.insert_engineering_knowledge_facet(unknown)
 
     index = EngineeringKnowledgeRetrievalIndex(path)
-    index.refresh_revision(revision_id, now_epoch=122.0)
-    results = index.retrieve(
-        marker,
-        context=_context(),
-        now_epoch=123.0,
-    )
+    index.refresh_revision("revision-future", now_epoch=122.0)
 
-    assert results == ()
     connection = sqlite3.connect(path)
     try:
         document = connection.execute(
             """
             SELECT searchable_text
             FROM engineering_knowledge_search_document
-            WHERE revision_id = ?
-            """,
-            (revision_id,),
+            WHERE revision_id = 'revision-future'
+            """
         ).fetchone()
-        assert document is not None
+        assert document == ("safe canonical summary",)
         assert marker not in str(document[0])
     finally:
         connection.close()
