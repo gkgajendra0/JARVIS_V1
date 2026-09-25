@@ -241,6 +241,58 @@ class ChangeService:
         self.coordinator.reconcile(challenge.change_id)
         return decision
 
+    def prepare_promotion(self, change_id: str) -> GateChallenge:
+        """Present promotion intent without performing any merge or deployment."""
+        store = self.coordinator.store
+        change = store.require(change_id)
+        if change.state not in {
+            ChangeState.READY_FOR_PROMOTION,
+            ChangeState.WAITING_PROMOTION_APPROVAL,
+        }:
+            raise ChangeConflict("change is not ready for promotion review")
+        acceptance = store.latest_artifact(change_id, "acceptance")
+        if acceptance is None:
+            raise ChangeConflict("promotion requires accepted development evidence")
+
+        promotion = store.latest_artifact(change_id, "promotion")
+        payload = {
+            "acceptance_artifact_id": acceptance.artifact_id,
+            "acceptance_digest": acceptance.digest,
+            "work_id": acceptance.payload.get("work_id"),
+            "result": acceptance.payload.get("result"),
+        }
+        if change.state is ChangeState.READY_FOR_PROMOTION:
+            promotion = store.add_artifact(
+                change_id, kind="promotion", payload=payload
+            )
+        elif promotion is None or promotion.payload != payload:
+            raise ChangeConflict("promotion review does not match current acceptance")
+        gate = GateService(store, verify_owner=lambda *_: False).present(
+            change_id, GateKind.PROMOTION, promotion.artifact_id
+        )
+        work_id = str(acceptance.payload.get("work_id", ""))
+        stage = store.stage_for_work(work_id)
+        if stage is None or stage.change_id != change_id:
+            raise ChangeConflict("promotion evidence has no canonical development")
+        work = store.work.require(work_id)
+        result = acceptance.payload.get("result")
+        branch = result.get("branch") if isinstance(result, dict) else None
+        commit = result.get("commit") if isinstance(result, dict) else None
+        store.work.enqueue_delivery(
+            work=work,
+            kind=WorkDeliveryKind.OWNER_INPUT,
+            message=(
+                f"Review EngineeringChange {change_id} promotion intent for "
+                f"branch {branch}, commit {commit}. Digest: {promotion.digest}. "
+                f"Approval records promotion intent only and does not push, merge, "
+                f"deploy, or mark the change promoted. Say 'approve promotion' for "
+                f"a single pending review, or 'approve {gate.gate_id}' to identify "
+                f"it exactly. Use 'reject promotion' or 'reject {gate.gate_id}' to decline."
+            ),
+            event_key=f"change:{change_id}:{gate.gate_id}:{promotion.digest}",
+        )
+        return gate
+
     def prepare_acceptance(self, change_id: str) -> GateChallenge:
         """Present canonical development evidence; never trust a model pass claim."""
         store = self.coordinator.store
