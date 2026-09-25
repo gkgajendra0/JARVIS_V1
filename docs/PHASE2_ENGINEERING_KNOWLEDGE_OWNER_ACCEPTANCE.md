@@ -19,9 +19,15 @@ CI cannot prove all of the following on the owner's production machine:
 - real RAM/VRAM/index cost;
 - real repair projection and retrieval from production evidence.
 
-## One-command acceptance runner
+## Owner-machine preparation and acceptance runner
 
-After pulling the accepted main revision and while the normal supervised JARVIS runtime is healthy, run:
+Pulling a revision does not install newly declared Python dependencies into an existing virtual environment. After pulling the accepted main revision, refresh the editable install with the retrieval extra before running acceptance:
+
+    python -m pip install -e ".[retrieval]"
+
+This installs the current core dependency set, including the pinned RFC-8785 canonicalizer, plus the local retrieval stack required for the real Qwen benchmark.
+
+Then, while the normal supervised JARVIS runtime is healthy, run:
 
     jarvis-engineering-knowledge-acceptance --live-crash --device cuda
 
@@ -68,6 +74,8 @@ unless an explicit output path is supplied.
 The console reports every gate as PASS, FAIL, or PENDING.
 
 A FAIL means implementation evidence is not acceptable and must be corrected before Phase 2 closure.
+
+A missing-import error before the acceptance runner starts means the local virtual environment has not been synchronized with the current project dependency declarations. Refresh it with `python -m pip install -e ".[retrieval]"` and rerun.
 
 A PENDING result means the required proof could not be completed, for example:
 

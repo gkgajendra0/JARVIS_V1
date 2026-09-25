@@ -33,6 +33,12 @@ python -m venv .venv
 python -m pip install -e ".[dev]"
 ```
 
+When pulling a revision that changes `pyproject.toml`, refresh the editable install in the existing virtual environment before running the new code. For functionality that uses local semantic retrieval, install the retrieval extra as well:
+
+```powershell
+python -m pip install -e ".[dev,retrieval]"
+```
+
 Production JARVIS uses **one active cloud-AI provider/account at a time** through `JARVIS_AI_PROVIDER`. Keep only the required secret locally in the Windows environment. Example:
 
 ```powershell
