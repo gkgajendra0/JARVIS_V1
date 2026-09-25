@@ -61,11 +61,11 @@ Do not reopen the accepted Phase-1/R2 or Phase-1H architecture without new concr
 
 ## 2. Canonical forward sequence
 
-With Phase 1H owner-machine acceptance complete, the cross-cutting program proceeds as follows:
+With Phase 2 owner-machine acceptance complete, the cross-cutting program proceeds as follows:
 
 ```text
-Phase 2   EngineeringKnowledge Foundation
-Phase 3   EngineeringChange Lifecycle / Mission Orchestration
+Phase 2   EngineeringKnowledge Foundation — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
+Phase 3   EngineeringChange Lifecycle / Mission Orchestration — ACTIVE
 Phase 4   Research + Diagnostic Model Router
 Phase 5   Secure Autonomous Engineering Substrate
 Phase 6   Unknown-Incident Investigation + Source Repair
