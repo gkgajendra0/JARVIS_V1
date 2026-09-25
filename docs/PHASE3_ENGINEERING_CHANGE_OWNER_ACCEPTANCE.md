@@ -8,6 +8,7 @@ Status: **PENDING**. Run this procedure on the tested PR head after CI passes an
 - Use an isolated Git worktree at the exact green PR head. Record that commit SHA and preserve the protected-main checkout. The acceptance evidence must identify this same tested commit.
 - Confirm Windows Hello verification is configured for the owner, the normal supervised JARVIS voice runtime is healthy, and DBOS uses the accepted production PostgreSQL configuration. Do not point this run at a throwaway SQLite DBOS backend.
 - Synchronize the current editable install with `python -m pip install -e ".[dev,phase45d-acceptance,hands,vision,active-speaker,speaker]"` using the project's supported Python environment. The live owner-machine runtime currently enables vision/active-speaker and enrolled-speaker paths, so a fresh acceptance venv must include those declared runtime extras rather than relying on packages left in an older environment.
+- On Windows, the normal package index can resolve `torch==2.13.0` to a CPU-only wheel even though the accepted RF-DETR production stack is configured for CUDA. Before starting the acceptance runtime, mirror the CUDA family used by the healthy protected-main JARVIS venv with the official PyTorch wheel index and verify `torch.cuda.is_available()` plus the detected GPU. PyTorch 2.13.0 supports the Windows CUDA 12.6, 13.0 and 13.2 wheel families used by this procedure. Fail closed if the protected-main environment reports no CUDA runtime or an unsupported family.
 - Do not place secrets, access tokens or production credentials in an architecture proposal or evidence transcript.
 
 From the protected-main checkout, create a separate branch worktree at the PR head:
@@ -20,6 +21,18 @@ cd ..\jarvis_phase3_acceptance
 git rev-parse HEAD
 py -3.11 -m venv .venv
 .\.venv\Scripts\python -m pip install -e ".[dev,phase45d-acceptance,hands,vision,active-speaker,speaker]"
+
+$mainPython = "C:\Users\gkgaj\Desktop\jarvis_v1\.venv\Scripts\python.exe"
+$acceptancePython = (Resolve-Path ".\.venv\Scripts\python.exe").Path
+$cudaFamily = (& $mainPython -c "import torch; print(torch.version.cuda or '')").Trim()
+$cudaIndex = switch ($cudaFamily) {
+    "12.6" { "cu126" }
+    "13.0" { "cu130" }
+    "13.2" { "cu132" }
+    default { throw "Protected-main JARVIS does not expose a supported CUDA family: '$cudaFamily'" }
+}
+& $acceptancePython -m pip install --no-deps --force-reinstall torch==2.13.0 torchvision==0.28.0 --index-url "https://download.pytorch.org/whl/$cudaIndex"
+& $acceptancePython -c "import torch; assert torch.cuda.is_available(), 'CUDA unavailable'; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))"
 ```
 
 Stop the normal owner-machine supervisor cleanly before testing this worktree.
