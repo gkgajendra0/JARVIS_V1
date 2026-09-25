@@ -68,8 +68,8 @@ def test_independent_changes_can_have_ready_research_workitems_in_parallel(
     assert backend.submissions == [first_stage.work_id, second_stage.work_id]
     assert work.require(first_stage.work_id).dependencies == ()
     assert work.require(second_stage.work_id).dependencies == ()
-    assert work.require(first_stage.work_id).state is WorkState.PENDING
-    assert work.require(second_stage.work_id).state is WorkState.PENDING
+    assert work.require(first_stage.work_id).state is WorkState.QUEUED
+    assert work.require(second_stage.work_id).state is WorkState.QUEUED
 
 
 def test_research_then_approved_build_uses_dependent_workitem(tmp_path) -> None:
