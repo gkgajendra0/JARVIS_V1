@@ -178,9 +178,13 @@ async def test_typed_operational_evidence_tool_is_read_only_and_bounded(
     tmp_path: Path,
 ) -> None:
     log_path = tmp_path / "jarvis.jsonl"
-    observed_at = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat().replace(
-        "+00:00",
-        "Z",
+    observed_at = (
+        (datetime.now(timezone.utc) - timedelta(minutes=1))
+        .isoformat()
+        .replace(
+            "+00:00",
+            "Z",
+        )
     )
     log_path.write_text(
         f'{{"timestamp":"{observed_at}","level":"warning",'
