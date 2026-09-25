@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-25-engineering-change-design.md`
 
-**Implementation status:** Tasks 1–5 implementation and CI are complete on PR #108. Code Quality run #4419 passed on implementation head `09c90004d26a3c932a1b2f1b748f40c55f27cf9d` (Ruff, full pytest, Windows Hello helper, Windows DPAPI). Phase 3 remains unaccepted until the documented owner-machine gate passes; this documentation-only reconciliation must remain CI-green.
+**Implementation status:** Tasks 1–5 are complete on PR #108. Final implementation head `6af843cff7bf4a0b7f6091a85a991f410f8d0ec5` passed Code Quality run #4426 (Ruff, full pytest, Windows Hello helper, Windows DPAPI). Phase 3 was OWNER-MACHINE ACCEPTED 2026-09-25 with persistent Gemini HTTP 429 pressure recorded as an external limitation; see `docs/PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The final documentation head must remain CI-green before merge.
 
 ## Global Constraints
 
