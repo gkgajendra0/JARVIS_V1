@@ -5,19 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.engineering_knowledge.evaluation import (
-    EngineeringKnowledgeEvaluationCase,
-    EngineeringKnowledgeEvaluationCorpus,
-    EngineeringKnowledgeEvaluationError,
-    EngineeringKnowledgeEvaluationHarness,
-    EngineeringKnowledgeEvaluationHit,
-    EngineeringKnowledgeEvaluationObservation,
-    EvaluationContextFact,
-    EvaluationResourceSample,
-    GradedRelevance,
-    load_engineering_knowledge_qrels,
-    score_engineering_knowledge_evaluation,
-)
+from jarvis.engineering_knowledge import evaluation
 
 
 CORPUS_PATH = (
@@ -30,17 +18,17 @@ CORPUS_PATH = (
 def _case(
     query_id: str,
     *,
-    relevant: tuple[GradedRelevance, ...] = (),
+    relevant: tuple[evaluation.GradedRelevance, ...] = (),
     forbidden: tuple[str, ...] = (),
     stale: tuple[str, ...] = (),
     leakage: tuple[str, ...] = (),
     no_answer: bool = False,
-) -> EngineeringKnowledgeEvaluationCase:
-    return EngineeringKnowledgeEvaluationCase(
+) -> evaluation.EngineeringKnowledgeEvaluationCase:
+    return evaluation.EngineeringKnowledgeEvaluationCase(
         query_id=query_id,
         query_text=f"query {query_id}",
         context=(
-            EvaluationContextFact(
+            evaluation.EvaluationContextFact(
                 target_namespace="jarvis.component",
                 target_identity="runtime.voice",
             ),
@@ -64,13 +52,13 @@ def _observation(
     vram_mb: float | None = None,
     disk_bytes: int | None = None,
     rebuild_ms: float | None = None,
-) -> EngineeringKnowledgeEvaluationObservation:
-    return EngineeringKnowledgeEvaluationObservation(
+) -> evaluation.EngineeringKnowledgeEvaluationObservation:
+    return evaluation.EngineeringKnowledgeEvaluationObservation(
         query_id=query_id,
         ranked_hits=tuple(
-            EngineeringKnowledgeEvaluationHit(document_key=key) for key in ranked
+            evaluation.EngineeringKnowledgeEvaluationHit(document_key=key) for key in ranked
         ),
-        resources=EvaluationResourceSample(
+        resources=evaluation.EvaluationResourceSample(
             wall_latency_ms=latency_ms,
             cpu_time_ms=cpu_ms,
             rss_mb=rss_mb,
@@ -82,7 +70,7 @@ def _observation(
 
 
 def test_phase2h_corpus_loads_and_covers_required_categories() -> None:
-    corpus = load_engineering_knowledge_qrels(CORPUS_PATH)
+    corpus = evaluation.load_engineering_knowledge_qrels(CORPUS_PATH)
 
     assert corpus.corpus_id == "jarvis.engineering_knowledge.qrels"
     assert corpus.version == 1
@@ -110,15 +98,15 @@ def test_phase2h_corpus_loads_and_covers_required_categories() -> None:
 
 
 def test_metrics_are_computed_with_graded_relevance_and_safety_counts() -> None:
-    corpus = EngineeringKnowledgeEvaluationCorpus(
+    corpus = evaluation.EngineeringKnowledgeEvaluationCorpus(
         corpus_id="unit",
         version=1,
         cases=(
             _case(
                 "answerable",
                 relevant=(
-                    GradedRelevance("best", 3),
-                    GradedRelevance("secondary", 1),
+                    evaluation.GradedRelevance("best", 3),
+                    evaluation.GradedRelevance("secondary", 1),
                 ),
                 forbidden=("wrong-component",),
                 stale=("stale-old",),
@@ -150,7 +138,7 @@ def test_metrics_are_computed_with_graded_relevance_and_safety_counts() -> None:
         ),
     )
 
-    report = score_engineering_knowledge_evaluation(
+    report = evaluation.score_engineering_knowledge_evaluation(
         corpus,
         observations,
         k=4,
@@ -180,15 +168,15 @@ def test_metrics_are_computed_with_graded_relevance_and_safety_counts() -> None:
 
 
 def test_perfect_rankings_pass_zero_tolerance_safety_gate() -> None:
-    corpus = EngineeringKnowledgeEvaluationCorpus(
+    corpus = evaluation.EngineeringKnowledgeEvaluationCorpus(
         corpus_id="perfect",
         version=1,
         cases=(
             _case(
                 "q1",
                 relevant=(
-                    GradedRelevance("a", 3),
-                    GradedRelevance("b", 1),
+                    evaluation.GradedRelevance("a", 3),
+                    evaluation.GradedRelevance("b", 1),
                 ),
                 forbidden=("forbidden",),
                 stale=("stale",),
@@ -197,7 +185,7 @@ def test_perfect_rankings_pass_zero_tolerance_safety_gate() -> None:
             _case("q2", no_answer=True),
         ),
     )
-    report = score_engineering_knowledge_evaluation(
+    report = evaluation.score_engineering_knowledge_evaluation(
         corpus,
         (
             _observation("q1", ("a", "b"), latency_ms=1.0, cpu_ms=1.0),
@@ -214,17 +202,17 @@ def test_perfect_rankings_pass_zero_tolerance_safety_gate() -> None:
 
 
 def test_observation_set_must_exactly_match_corpus() -> None:
-    corpus = EngineeringKnowledgeEvaluationCorpus(
+    corpus = evaluation.EngineeringKnowledgeEvaluationCorpus(
         corpus_id="mismatch",
         version=1,
         cases=(_case("expected", no_answer=True),),
     )
 
     with pytest.raises(
-        EngineeringKnowledgeEvaluationError,
+        evaluation.EngineeringKnowledgeEvaluationError,
         match="observation query IDs mismatch",
     ):
-        score_engineering_knowledge_evaluation(
+        evaluation.score_engineering_knowledge_evaluation(
             corpus,
             (_observation("extra", ()),),
         )
@@ -232,12 +220,12 @@ def test_observation_set_must_exactly_match_corpus() -> None:
 
 def test_no_answer_case_cannot_declare_relevant_documents() -> None:
     with pytest.raises(
-        EngineeringKnowledgeEvaluationError,
+        evaluation.EngineeringKnowledgeEvaluationError,
         match="no-answer case cannot contain relevant",
     ):
         _case(
             "invalid",
-            relevant=(GradedRelevance("doc", 1),),
+            relevant=(evaluation.GradedRelevance("doc", 1),),
             no_answer=True,
         )
 
@@ -248,12 +236,12 @@ class _Retriever:
 
     def retrieve(
         self,
-        case: EngineeringKnowledgeEvaluationCase,
+        case: evaluation.EngineeringKnowledgeEvaluationCase,
         *,
         limit: int,
-    ) -> tuple[EngineeringKnowledgeEvaluationHit, ...]:
+    ) -> tuple[evaluation.EngineeringKnowledgeEvaluationHit, ...]:
         return tuple(
-            EngineeringKnowledgeEvaluationHit(document_key=key)
+            evaluation.EngineeringKnowledgeEvaluationHit(document_key=key)
             for key in self.hits_by_query.get(case.query_id, ())[:limit]
         )
 
@@ -266,15 +254,15 @@ class _Probe:
 
 
 def test_harness_runs_retriever_and_resource_probe() -> None:
-    corpus = EngineeringKnowledgeEvaluationCorpus(
+    corpus = evaluation.EngineeringKnowledgeEvaluationCorpus(
         corpus_id="harness",
         version=1,
         cases=(
-            _case("q1", relevant=(GradedRelevance("doc", 3),)),
+            _case("q1", relevant=(evaluation.GradedRelevance("doc", 3),)),
             _case("q2", no_answer=True),
         ),
     )
-    harness = EngineeringKnowledgeEvaluationHarness(
+    harness = evaluation.EngineeringKnowledgeEvaluationHarness(
         _Retriever({"q1": ("doc",), "q2": ()}),
         resource_probe=_Probe(),
     )
