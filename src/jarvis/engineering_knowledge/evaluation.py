@@ -28,7 +28,9 @@ class EvaluationContextFact:
         seen: set[str] = set()
         for key, value in self.attributes:
             normalized_key = _required_text(key, "context attribute key").casefold()
-            normalized_value = _required_text(value, f"context attribute {normalized_key}")
+            normalized_value = _required_text(
+                value, f"context attribute {normalized_key}"
+            )
             if normalized_key in seen:
                 raise EngineeringKnowledgeEvaluationError(
                     f"duplicate context attribute: {normalized_key}"
@@ -186,7 +188,9 @@ class EvaluationResourceSample:
                     _non_negative_finite(value, field),
                 )
         if self.disk_bytes is not None:
-            if isinstance(self.disk_bytes, bool) or not isinstance(self.disk_bytes, int):
+            if isinstance(self.disk_bytes, bool) or not isinstance(
+                self.disk_bytes, int
+            ):
                 raise TypeError("disk_bytes must be an integer")
             if self.disk_bytes < 0:
                 raise EngineeringKnowledgeEvaluationError(
@@ -344,7 +348,9 @@ def load_engineering_knowledge_qrels(
                 target_identity=str(item["target_identity"]),
                 attributes=tuple(
                     (str(key), str(value))
-                    for key, value in _dict(item.get("attributes", {}), "attributes").items()
+                    for key, value in _dict(
+                        item.get("attributes", {}), "attributes"
+                    ).items()
                 ),
             )
             for item in _list(raw_case.get("context", []), "context")
