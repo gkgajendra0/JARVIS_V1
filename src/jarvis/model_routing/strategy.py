@@ -254,19 +254,11 @@ class EngineeringStageStrategy:
                 reasons.append("routine_work")
 
         efficient = sorted(
-            (
-                target
-                for target in eligible_targets
-                if "efficient" in target.roles
-            ),
+            (target for target in eligible_targets if "efficient" in target.roles),
             key=lambda target: target.target_id,
         )
         capable = sorted(
-            (
-                target
-                for target in eligible_targets
-                if "capable" in target.roles
-            ),
+            (target for target in eligible_targets if "capable" in target.roles),
             key=lambda target: target.target_id,
         )
 
@@ -304,7 +296,5 @@ class EngineeringStageStrategy:
             reason_codes=_ordered_unique(reasons),
             selected_role=preferred_role,
             hold_affinity=hold_affinity,
-            affinity_target_id=(
-                affinity_target_id if hold_affinity else None
-            ),
+            affinity_target_id=(affinity_target_id if hold_affinity else None),
         )
