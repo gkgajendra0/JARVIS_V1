@@ -24,7 +24,7 @@ This roadmap owns **numbered product sequence only**. It does not select technol
 | 16 | Extensibility and Plugin/Skill Lifecycle | CAP-033 | PLANNED |
 | 17 | Daily Assistant and Multi-Capability Workflows | CAP-042 | PLANNED |
 | 18 | Learning, Gap Detection, Governed Skill Creation | CAP-043–045 | PLANNED |
-| 19 | Governed Self-Diagnostics and Repair | CAP-046 | PARTIAL — deterministic R1/R2 foundation + Phase 1H hardening accepted; Phase 2 EngineeringKnowledge next |
+| 19 | Governed Self-Diagnostics and Repair | CAP-046 | PARTIAL — deterministic R1/R2 + Phase 1H + Phase 2 EngineeringKnowledge accepted; Phase 3 EngineeringChange active |
 | 20 | Governed Self-Improvement and Advanced Autonomy | CAP-047 | PLANNED |
 
 ## Accepted interludes that do not renumber the roadmap
@@ -70,8 +70,8 @@ The current exact sequence is:
 ```text
 Phase 1   deterministic repair + accepted R2 recovery — DONE
 Phase 1H  foundation hardening — DONE / OWNER-MACHINE ACCEPTED 2026-09-24
-Phase 2   EngineeringKnowledge — ACTIVE / NEXT
-Phase 3   EngineeringChange lifecycle / mission orchestration
+Phase 2   EngineeringKnowledge — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
+Phase 3   EngineeringChange lifecycle / mission orchestration — ACTIVE / NEXT
 Phase 4   Research + Diagnostic Model Router
 Phase 5   Secure autonomous engineering substrate
 Phase 6   Unknown-incident investigation + source repair
@@ -85,7 +85,9 @@ Phase 13  Engineering curriculum + specialist model evaluation
 Phase 14  Governed self-evolution
 ```
 
-Phase 2 generalizes the earlier RepairKnowledge design into shared `EngineeringKnowledge`, with `REPAIR` as the first implemented vertical. This avoids later parallel silos for capability/integration knowledge.
+Phase 2 generalized the earlier RepairKnowledge design into shared `EngineeringKnowledge`, with `REPAIR` as the first implemented vertical. Owner-machine acceptance passed on 2026-09-25, including R2-independence, real repair projection/promotion/retrieval, poisoning/secret gates, future-facet extensibility, and lexical/hybrid qrel safety.
+
+Phase 3 is now the active cross-cutting slice and will add the durable `EngineeringChange` mission lifecycle above existing WorkItems.
 
 Owner-requested capability acquisition intentionally comes before autonomous gap detection. If the owner explicitly says "get this capability", JARVIS should not need repeated failures or repeated requests before it can run the governed acquisition lifecycle.
 
@@ -188,9 +190,9 @@ The same lifecycle applies to JARVIS-generated engineering candidates; autonomy 
 
 Persistent Concurrent Work Orchestration and the deterministic repair/R2 foundation are owner accepted.
 
-**Current active cross-cutting work is Phase 2 — EngineeringKnowledge Foundation.**
+**Current active cross-cutting work is Phase 3 — EngineeringChange Lifecycle / Mission Orchestration.**
 
-Phase 2 implementation is unblocked because Phase 1H automated and owner-machine acceptance passed on 2026-09-24.
+Phase 2 EngineeringKnowledge is DONE / OWNER-MACHINE ACCEPTED 2026-09-25. Its accepted foundation is now available to Phase 3 and later autonomous-engineering phases.
 
 Step 8 remains the next numbered product slice when numbered roadmap work resumes.
 
