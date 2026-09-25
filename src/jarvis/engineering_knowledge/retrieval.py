@@ -210,8 +210,7 @@ class EngineeringKnowledgeRetrievalIndex:
             rows = cursor.fetchall()
             columns = [item[0] for item in cursor.description or ()]
         return tuple(
-            _facet_from_row(dict(zip(columns, row, strict=True)))
-            for row in rows
+            _facet_from_row(dict(zip(columns, row, strict=True))) for row in rows
         )
 
     def list_engineering_knowledge_applicability(
