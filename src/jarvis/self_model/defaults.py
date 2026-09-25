@@ -598,6 +598,22 @@ def build_default_self_model() -> SelfModelRegistry:
             logger_prefixes=("jarvis.work", "jarvis.voice.work_tools"),
         ),
         C(
+            "work.model_routing",
+            "Provider/model-neutral target selection contracts for background "
+            "engineering reasoning.",
+            ("src/jarvis/model_routing",),
+            parent_component_id="work",
+            tests=(
+                "tests/test_model_routing_models.py",
+                "tests/test_model_routing_registry.py",
+            ),
+            logger_prefixes=("jarvis.model_routing",),
+            docs=(
+                "docs/PHASE4_MODEL_ROUTER_ARCHITECTURE.md",
+                "docs/PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md",
+            ),
+        ),
+        C(
             "work.development",
             "Isolated Git worktrees and sandbox-gated staged development execution.",
             ("src/jarvis/work/development.py", "tools/development-sandbox"),
