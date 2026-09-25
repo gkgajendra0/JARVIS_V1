@@ -39,35 +39,42 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 The active development slice is now:
 
-**Phase 2 — EngineeringKnowledge Foundation**
+**Phase 3 — EngineeringChange Lifecycle / Mission Orchestration**
 
 Phase 1H is **DONE / OWNER-MACHINE ACCEPTED 2026-09-24**. Its final contract and evidence are recorded in `SELF_REPAIR_PHASE1H_HARDENING.md`.
 
-The accepted hardening covers sustained restart budgets, shared target/action circuit breaking, typed verification/preconditions, immutable repair provenance, versioned engineering persistence, Windows Job Object runtime ownership, local-only production supervision and the bounded Windows outer guardian.
+Phase 2 EngineeringKnowledge is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25** on protected-main baseline `3c5a2f732db171a9ad61a4531fecd66aed0d27c4`. Its final integrated evidence is recorded in `PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
 
-The final owner-machine breaker proof established three verified recent repairs and then blocked the fourth restart with zero new RepairAttempts and zero remaining guardian/supervisor/runtime processes. Automatic logon startup was also observed; temporary Pocket 3 device-enumeration timing remains a non-blocking resilience follow-up.
+The accepted Phase-2 scope includes immutable EngineeringKnowledge revisions, registered facets, deterministic REPAIR projection, lifecycle/promotion, provenance, applicability, grounded local hybrid retrieval, poisoning/secret controls and an open-ended extension model.
 
-Do not reopen the accepted Phase-1/R2 or Phase-1H architecture without new concrete evidence.
+Do not reopen accepted Phase-1/R2, Phase-1H or Phase-2 architecture without new concrete evidence.
 
-## Phase 2 definition
+## Phase 2 accepted result
 
-Phase 2 implementation is **UNBLOCKED** by completed Phase 1H owner-machine acceptance.
+Phase 2 EngineeringKnowledge is now implemented and accepted.
 
-The previous RepairKnowledge research/design remains useful evidence, but Phase 2 should now be implemented as:
+Accepted behavior includes:
 
-**Phase 2 — EngineeringKnowledge Foundation**
+- canonical engineering SQLite persistence with immutable revisions;
+- registered versioned facets with fail-closed unknown semantics;
+- deterministic REPAIR projection from verified RepairAttempts;
+- lifecycle/promotion, provenance, applicability and integrity contracts;
+- exact + FTS5 + pinned local Qwen retrieval with grounded dense reranking and RRF;
+- poisoning/secret admission controls and sensitivity filtering;
+- JARVIS-specific qrel evaluation and owner-machine benchmark evidence;
+- open-ended future facet/process extensibility without parallel knowledge or authority systems.
 
-`REPAIR` is the first vertical, preserving all RepairKnowledge requirements for provenance, lifecycle, supersession and retrieval, but the underlying storage/schema should be able to represent later `DIAGNOSTIC`, `CAPABILITY`, `INTEGRATION`, `ARCHITECTURE`, `EVALUATION` and `OPERATIONS` engineering knowledge without creating parallel silos.
+EngineeringKnowledge remains advisory and cannot create execution authority.
 
-This is a forward architecture correction before implementation, not a claim that generalized EngineeringKnowledge already exists in production.
+The final owner-machine negative control proved deterministic R2 recovery before EngineeringKnowledge existed for the new repair.
 
 ## Next cross-cutting sequence
 
 Continue with the phased sequence in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`:
 
 ```text
-Phase 2  EngineeringKnowledge
-Phase 3  EngineeringChange lifecycle / mission orchestration
+Phase 2  EngineeringKnowledge — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
+Phase 3  EngineeringChange lifecycle / mission orchestration — ACTIVE
 Phase 4  Research + Diagnostic Model Router
 Phase 5  Secure autonomous engineering substrate
 Phase 6  Unknown-incident investigation + source repair
@@ -93,7 +100,7 @@ The active Self-Repair/Evolution/Autonomous-Engineering program is cross-cutting
 
 Current open/deferred items are tracked only in `PROJECT_STATE.md`. The important open issues are #19, #44, #45, #46, #63 and #69.
 
-They remain separate unless evidence shows that one directly blocks the active Phase 2 work.
+They remain separate unless evidence shows that one directly blocks the active Phase 3 work.
 
 ## Documentation ownership
 
@@ -108,7 +115,8 @@ They remain separate unless evidence shows that one directly blocks the active P
 - `SELF_REPAIR_PHASE1H_HARDENING.md` — current hardening gate.
 - `PHASE2_ENGINEERING_KNOWLEDGE_RESEARCH.md` — consolidated Phase-2 research findings and technology dispositions.
 - `PHASE2_ENGINEERING_KNOWLEDGE_ARCHITECTURE.md` — owner-approved Phase-2 architecture and invariants.
-- `PHASE2_ENGINEERING_KNOWLEDGE_IMPLEMENTATION_PLAN.md` — exact implementation sequence, gates and acceptance matrix.
+- `PHASE2_ENGINEERING_KNOWLEDGE_IMPLEMENTATION_PLAN.md` — completed Phase-2 implementation sequence, gates and acceptance matrix.
+- `PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md` — canonical Phase-2 owner-machine acceptance record.
 
 Historical experiments, old acceptance transcripts and superseded research remain available through Git history rather than becoming competing planning truth.
 
