@@ -19,6 +19,7 @@ from .models import (
     ChangeStage,
     ChangeState,
     EngineeringChange,
+    ProcessContract,
     UnsupportedProcess,
 )
 
@@ -34,13 +35,25 @@ def _digest(payload: dict[str, object]) -> str:
 class ChangeStore:
     """Transactional change/work ownership; DBOS is still the execution backend."""
 
-    SUPPORTED = frozenset({("engineering.change", 1)})
+    DEFAULT_PROCESS = ProcessContract("engineering.change", 1)
 
-    def __init__(self, work: SQLiteWorkStore) -> None:
+    def __init__(
+        self, work: SQLiteWorkStore, *, processes: tuple[ProcessContract, ...] = ()
+    ) -> None:
         self.work = work
+        self._processes = {
+            (
+                self.DEFAULT_PROCESS.key,
+                self.DEFAULT_PROCESS.version,
+            ): self.DEFAULT_PROCESS
+        }
+        for process in processes:
+            identity = (process.key, process.version)
+            if identity in self._processes:
+                raise ChangeConflict("duplicate process contract")
+            self._processes[identity] = process
         with work._lock, work._connect() as connection:
-            connection.executescript(
-                """
+            schema = """
                 CREATE TABLE IF NOT EXISTS engineering_changes (
                     change_id TEXT PRIMARY KEY,
                     request TEXT NOT NULL,
@@ -102,7 +115,40 @@ class ChangeStore:
                     decided_at TEXT NOT NULL
                 );
                 """
-            )
+            connection.executescript(schema)
+            with connection:
+                columns = {
+                    row["name"]
+                    for row in connection.execute(
+                        "PRAGMA table_info(engineering_change_stages)"
+                    )
+                }
+                if "plan_artifact_id" not in columns:
+                    connection.execute(
+                        """ALTER TABLE engineering_change_stages ADD COLUMN
+                        plan_artifact_id TEXT REFERENCES engineering_change_artifacts(artifact_id)"""
+                    )
+                connection.execute(
+                    """CREATE TABLE IF NOT EXISTS engineering_change_schema (
+                    version INTEGER PRIMARY KEY, checksum TEXT NOT NULL)"""
+                )
+                checksum = hashlib.sha256(
+                    (schema + "|stage-plan-v2").encode("utf-8")
+                ).hexdigest()
+                rows = connection.execute(
+                    "SELECT version, checksum FROM engineering_change_schema"
+                ).fetchall()
+                if rows and (
+                    len(rows) != 1
+                    or rows[0]["version"] != 2
+                    or rows[0]["checksum"] != checksum
+                ):
+                    raise ChangeConflict("engineering change schema checksum mismatch")
+                if not rows:
+                    connection.execute(
+                        "INSERT INTO engineering_change_schema VALUES (2, ?)",
+                        (checksum,),
+                    )
 
     def _from_row(self, row: sqlite3.Row) -> EngineeringChange:
         result = EngineeringChange(
@@ -120,9 +166,45 @@ class ChangeStore:
         self._assert_supported(result.process_key, result.process_version)
         return result
 
-    @classmethod
-    def _assert_supported(cls, key: str, version: int) -> None:
-        if (key, version) not in cls.SUPPORTED:
+    def _event(
+        self,
+        db: sqlite3.Connection,
+        change_id: str,
+        event_key: str,
+        kind: str,
+        detail: dict[str, object],
+    ) -> None:
+        db.execute(
+            "INSERT INTO engineering_change_events VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                "event_" + uuid.uuid4().hex[:16],
+                change_id,
+                event_key,
+                kind,
+                self.work._encode_json(detail),
+                _now(),
+            ),
+        )
+
+    def list_events(self, change_id: str) -> tuple[dict[str, object], ...]:
+        with self.work._lock, self.work._connect() as db:
+            rows = db.execute(
+                """SELECT * FROM engineering_change_events WHERE change_id=?
+                ORDER BY rowid""",
+                (change_id,),
+            ).fetchall()
+        return tuple(
+            {
+                "event_key": row["event_key"],
+                "kind": row["kind"],
+                "detail": self.work._decode_json(row["detail"]),
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        )
+
+    def _assert_supported(self, key: str, version: int) -> None:
+        if type(version) is not int or (key, version) not in self._processes:
             raise UnsupportedProcess(f"unsupported change process: {key}/{version}")
 
     def create(
@@ -166,6 +248,16 @@ class ChangeStore:
                     timestamp,
                     timestamp,
                 ),
+            )
+            self._event(
+                connection,
+                change_id,
+                "created:1",
+                "created",
+                {
+                    "process_key": process_key,
+                    "process_version": process_version,
+                },
             )
             return self._from_row(
                 connection.execute(
@@ -343,6 +435,13 @@ class ChangeStore:
                 WHERE change_id=? AND version=?""",
                 (state.value, current.version + 1, _now(), change_id, expected_version),
             )
+            self._event(
+                connection,
+                change_id,
+                f"transition:{current.version + 1}",
+                "transition",
+                {"from": current.state.value, "to": state.value},
+            )
             return self._from_row(
                 connection.execute(
                     "SELECT * FROM engineering_changes WHERE change_id=?", (change_id,)
@@ -400,6 +499,13 @@ class ChangeStore:
                     artifact.created_at,
                 ),
             )
+            self._event(
+                connection,
+                change_id,
+                f"artifact:{artifact.artifact_id}",
+                "artifact",
+                {"kind": kind, "revision": revision, "digest": digest},
+            )
             if kind == "architecture" and change.state in {
                 ChangeState.WAITING_OWNER_APPROVAL,
                 ChangeState.APPROVED_FOR_BUILD,
@@ -413,6 +519,13 @@ class ChangeStore:
                     """UPDATE engineering_changes SET state=?, version=version+1,
                     updated_at=? WHERE change_id=?""",
                     (ChangeState.ARCHITECTURE_READY.value, _now(), change_id),
+                )
+                self._event(
+                    connection,
+                    change_id,
+                    f"revised:{artifact.artifact_id}",
+                    "architecture_revised",
+                    {"previous_state": change.state.value},
                 )
             return artifact
 
@@ -494,6 +607,13 @@ class ChangeStore:
                 connection.execute(
                     "INSERT INTO engineering_change_stages VALUES (?, ?, ?, ?, ?)",
                     (change_id, stage_key, attempt, item.work_id, plan_artifact_id),
+                )
+                self._event(
+                    connection,
+                    change_id,
+                    f"stage:{stage_key}:{attempt}",
+                    "stage",
+                    {"work_id": item.work_id, "plan_artifact_id": plan_artifact_id},
                 )
             except sqlite3.IntegrityError as exc:
                 raise ChangeConflict("stage WorkItem link violates identity") from exc

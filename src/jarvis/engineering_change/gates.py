@@ -92,6 +92,9 @@ class GateService:
             or artifact.kind != kind.value
         ):
             raise ChangeConflict("gate artifact does not match kind or change")
+        current = self.store.latest_artifact(change_id, kind.value)
+        if current is None or current.artifact_id != artifact_id:
+            raise ChangeConflict("gate artifact was superseded")
         if kind is GateKind.ACCEPTANCE:
             stage = self.store.stage_for_work(str(artifact.payload.get("work_id", "")))
             if (
@@ -141,6 +144,17 @@ class GateService:
                         artifact.digest,
                         challenge.created_at,
                     ),
+                )
+                self.store._event(
+                    db,
+                    change_id,
+                    f"gate:{challenge.gate_id}",
+                    "gate",
+                    {
+                        "kind": kind.value,
+                        "artifact_id": artifact_id,
+                        "digest": artifact.digest,
+                    },
                 )
             else:
                 challenge = self._challenge(row)
@@ -284,6 +298,19 @@ class GateService:
                     decided_at,
                     challenge.change_id,
                 ),
+            )
+            self.store._event(
+                db,
+                challenge.change_id,
+                f"decision:{gate_id}",
+                "decision",
+                {
+                    "approved": approved,
+                    "gate_id": gate_id,
+                    "actor_id": actor_id,
+                    "source_session_id": source_session_id,
+                    "source_turn_id": source_turn_id,
+                },
             )
             return GateDecision(
                 challenge,

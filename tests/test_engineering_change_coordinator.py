@@ -189,3 +189,16 @@ def test_changed_architecture_cannot_verify_completed_old_development(tmp_path) 
     assert new_development.work_id != development.work_id
     assert not changes.work_admitted(development.work_id)
     assert changes.work_admitted(new_development.work_id)
+
+
+def test_failed_research_is_recorded_without_starting_development(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+    coordinator = ChangeCoordinator(changes, RecordingBackend())
+    change = coordinator.start("Goal", "session", "turn")
+    research = changes.list_stages(change.change_id)[0]
+    item = work.require(research.work_id)
+    work.save(item.transition(WorkState.FAILED), expected_version=item.version)
+    coordinator.reconcile_for_work(research.work_id)
+    assert changes.require(change.change_id).state is ChangeState.FAILED
+    assert len(changes.list_stages(change.change_id)) == 1

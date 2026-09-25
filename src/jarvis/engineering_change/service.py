@@ -38,7 +38,11 @@ class ChangeService:
     ) -> GateChallenge:
         store = self.coordinator.store
         change = store.require(change_id)
-        if change.state is not ChangeState.RESEARCHING:
+        if change.state not in {
+            ChangeState.RESEARCHING,
+            ChangeState.ARCHITECTURE_READY,
+            ChangeState.WAITING_OWNER_APPROVAL,
+        }:
             raise ChangeConflict("architecture requires completed research")
         stages = store.list_stages(change_id)
         research = next((s for s in stages if s.stage_key == "research"), None)
@@ -52,8 +56,15 @@ class ChangeService:
         rendered = json.dumps(payload, ensure_ascii=False, sort_keys=True)
         if len(rendered.encode("utf-8")) > 16_384:
             raise ChangeConflict("architecture proposal exceeds review limit")
-        artifact = store.add_artifact(change_id, kind="architecture", payload=payload)
-        self.coordinator.reconcile(change_id)
+        artifact = store.latest_artifact(change_id, "architecture")
+        if change.state is ChangeState.RESEARCHING and artifact is None:
+            artifact = store.add_artifact(
+                change_id, kind="architecture", payload=payload
+            )
+        elif artifact is None or artifact.payload != payload:
+            raise ChangeConflict("architecture revision differs from current review")
+        if change.state is ChangeState.RESEARCHING:
+            self.coordinator.reconcile(change_id)
         # This callback never creates approval authority: only decide_latest can
         # use the exact current canonical USER turn to resolve this challenge.
         gate = GateService(store, verify_owner=lambda *_: False).present(

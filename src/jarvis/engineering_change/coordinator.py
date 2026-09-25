@@ -6,7 +6,7 @@ from typing import Protocol
 
 from jarvis.work.models import WorkItem, WorkPriority, WorkState, WorkType
 
-from .models import ChangeConflict, ChangeState, EngineeringChange
+from .models import ChangeConflict, ChangeState, EngineeringChange, UnsupportedProcess
 from .store import ChangeStore
 
 
@@ -20,12 +20,18 @@ class ChangeCoordinator:
         self.backend = backend
 
     def start(
-        self, request: str, source_session_id: str, source_turn_id: str
+        self,
+        request: str,
+        source_session_id: str,
+        source_turn_id: str,
+        *,
+        process_key: str = "engineering.change",
+        process_version: int = 1,
     ) -> EngineeringChange:
         change = self.store.create(
             request=request,
-            process_key="engineering.change",
-            process_version=1,
+            process_key=process_key,
+            process_version=process_version,
             source_session_id=source_session_id,
             source_turn_id=source_turn_id,
         )
@@ -94,7 +100,12 @@ class ChangeCoordinator:
 
     def reconcile_active(self) -> None:
         for change_id in self.store.active_ids():
-            self.reconcile(change_id)
+            try:
+                self.reconcile(change_id)
+            except UnsupportedProcess:
+                # A removed process handler must not stop unrelated WorkItems.
+                # The per-action admission check refuses all affected stages.
+                continue
 
     def reconcile(self, change_id: str) -> EngineeringChange:
         change = self.store.require(change_id)
@@ -105,6 +116,10 @@ class ChangeCoordinator:
         if change.state is ChangeState.RESEARCHING:
             stage = self.submit_stage(change_id, "research", 1)
             research = self.store.work.require(stage.work_id)
+            if research.state in {WorkState.FAILED, WorkState.CANCELLED}:
+                return self.store.transition(
+                    change_id, ChangeState.FAILED, expected_version=change.version
+                )
             if (
                 research.state is WorkState.COMPLETED
                 and self.store.latest_artifact(change_id, "architecture") is not None
@@ -152,6 +167,10 @@ class ChangeCoordinator:
             if stage is None:
                 raise ChangeConflict("developing change has no WorkItem")
             item = self.store.work.require(stage.work_id)
+            if item.state in {WorkState.FAILED, WorkState.CANCELLED}:
+                return self.store.transition(
+                    change_id, ChangeState.FAILED, expected_version=change.version
+                )
             if item.state is WorkState.COMPLETED:
                 with self.store.work._lock, self.store.work._connect() as db:
                     self.store._admit_stage(db, change, "development")

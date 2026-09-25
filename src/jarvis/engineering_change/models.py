@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from jarvis.work.models import WorkType
+
 
 class ChangeConflict(ValueError):
     """A state, identity, or immutable evidence conflict."""
@@ -13,6 +15,30 @@ class ChangeConflict(ValueError):
 
 class UnsupportedProcess(ChangeConflict):
     """A process contract is not registered in this runtime."""
+
+
+@dataclass(frozen=True, slots=True)
+class ProcessContract:
+    """Registered process family with core gate sequence enforced independently."""
+
+    key: str
+    version: int
+    research_type: WorkType = WorkType.RESEARCH
+    development_type: WorkType = WorkType.DEVELOPMENT
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.key, str)
+            or not self.key.strip()
+            or type(self.version) is not int
+            or self.version < 1
+        ):
+            raise ValueError("process key and positive version are required")
+        if (
+            self.research_type is not WorkType.RESEARCH
+            or self.development_type is not WorkType.DEVELOPMENT
+        ):
+            raise ValueError("unavailable process stage executor")
 
 
 class ChangeState(str, Enum):
@@ -38,7 +64,9 @@ class ChangeState(str, Enum):
 
 TRANSITIONS: dict[ChangeState, frozenset[ChangeState]] = {
     ChangeState.PROPOSED: frozenset({ChangeState.RESEARCHING, ChangeState.REJECTED}),
-    ChangeState.RESEARCHING: frozenset({ChangeState.ARCHITECTURE_READY}),
+    ChangeState.RESEARCHING: frozenset(
+        {ChangeState.ARCHITECTURE_READY, ChangeState.FAILED}
+    ),
     ChangeState.ARCHITECTURE_READY: frozenset({ChangeState.WAITING_OWNER_APPROVAL}),
     ChangeState.WAITING_OWNER_APPROVAL: frozenset(
         {
@@ -48,7 +76,7 @@ TRANSITIONS: dict[ChangeState, frozenset[ChangeState]] = {
         }
     ),
     ChangeState.APPROVED_FOR_BUILD: frozenset({ChangeState.DEVELOPING}),
-    ChangeState.DEVELOPING: frozenset({ChangeState.VERIFYING}),
+    ChangeState.DEVELOPING: frozenset({ChangeState.VERIFYING, ChangeState.FAILED}),
     ChangeState.VERIFYING: frozenset(
         {ChangeState.WAITING_OWNER_ACCEPTANCE, ChangeState.READY_FOR_PROMOTION}
     ),

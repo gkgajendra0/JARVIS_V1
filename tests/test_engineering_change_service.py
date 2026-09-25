@@ -139,3 +139,31 @@ def test_verified_commit_requires_separate_owner_acceptance(tmp_path) -> None:
     session.accept_turn(ConversationRole.USER, f"Approve {acceptance.gate_id}")
     service.decide_latest(acceptance.gate_id)
     assert store.require(change.change_id).state is ChangeState.READY_FOR_PROMOTION
+
+
+def test_restart_resends_same_architecture_gate_and_delivery(tmp_path) -> None:
+    session = ConversationSession(session_id="owner-session")
+    session.start()
+    initial = session.accept_turn(ConversationRole.USER, "New adapter")
+    store = ChangeStore(SQLiteWorkStore(tmp_path / "work.sqlite3"))
+    service = ChangeService(ChangeCoordinator(store, Backend()), session)
+    change = service.start(initial)
+    research = store.list_stages(change.change_id)[0]
+    item = store.work.require(research.work_id)
+    running = store.work.save(
+        item.transition(WorkState.RUNNING), expected_version=item.version
+    )
+    store.work.save(
+        running.transition(WorkState.COMPLETED), expected_version=running.version
+    )
+    gate = service.propose_architecture(change.change_id, {"plan": "a"})
+    restarted = ChangeService(
+        ChangeCoordinator(ChangeStore(SQLiteWorkStore(store.work.path)), Backend()),
+        session,
+    )
+    retry = restarted.propose_architecture(change.change_id, {"plan": "a"})
+    assert retry == gate
+    assert store.latest_artifact(change.change_id, "architecture").revision == 1
+    assert len(store.work.list_pending_deliveries()) == 1
+    with pytest.raises(ChangeConflict):
+        restarted.propose_architecture(change.change_id, {"plan": "different"})

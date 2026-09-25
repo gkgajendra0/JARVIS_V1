@@ -41,6 +41,10 @@ The active development slice is now:
 
 **Phase 3 — EngineeringChange Lifecycle / Mission Orchestration**
 
+Phase-3 implementation is in draft PR #108. Its acceptance procedure is
+`PHASE3_ENGINEERING_CHANGE_OWNER_ACCEPTANCE.md`. CI and owner-machine proof are
+still required; do not label Phase 3 DONE before the real owner run passes.
+
 Phase 1H is **DONE / OWNER-MACHINE ACCEPTED 2026-09-24**. Its final contract and evidence are recorded in `SELF_REPAIR_PHASE1H_HARDENING.md`.
 
 Phase 2 EngineeringKnowledge is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25** on protected-main baseline `3c5a2f732db171a9ad61a4531fecd66aed0d27c4`. Its final integrated evidence is recorded in `PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
