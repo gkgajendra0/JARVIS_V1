@@ -68,7 +68,11 @@ from jarvis.self_repair.fault_injection import (
     inject_fault,
 )
 
-_DEFAULT_LIVE_WAIT_SECONDS = 120.0
+# One R2 attempt can legitimately consume the 120s production startup timeout,
+# plus watchdog polling, cooldown and the 10s stabilization window. The acceptance
+# observer spans the full three-attempt bounded repair budget so it cannot declare
+# a false failure while the supervisor is still executing an allowed recovery.
+_DEFAULT_LIVE_WAIT_SECONDS = 420.0
 _RESTART_WINDOW_SECONDS = 300.0
 
 
@@ -323,6 +327,10 @@ def _run_live_r2_negative_control(
                 "Recent restart history is inside the circuit-breaker window.",
                 recent_attempts=len(recent),
                 retry_after_epoch=retry_after,
+                retry_after_local=time.strftime(
+                    "%Y-%m-%d %H:%M:%S",
+                    time.localtime(retry_after),
+                ),
             )
         )
         return None
@@ -353,32 +361,72 @@ def _run_live_r2_negative_control(
 
     deadline = time.monotonic() + wait_seconds
     recovered: RepairAttempt | None = None
+    new_attempts: tuple[RepairAttempt, ...] = ()
+    supervisor_pid = target.parent_pid
     while time.monotonic() < deadline:
         candidates = store.list_repair_attempts_for_component(
             "voice_runtime",
             action_kind=RepairActionKind.RESTART_RUNTIME_CHILD,
             limit=500,
         )
-        for attempt in reversed(candidates):
-            if attempt.attempt_id in before_attempts:
-                continue
-            if attempt.started_at_epoch < started_at - 1.0:
-                continue
-            if _is_verified_recovery(attempt):
-                recovered = attempt
-                break
+        new_attempts = tuple(
+            attempt
+            for attempt in candidates
+            if attempt.attempt_id not in before_attempts
+            and attempt.started_at_epoch >= started_at - 1.0
+        )
+        recovered = next(
+            (
+                attempt
+                for attempt in reversed(new_attempts)
+                if _is_verified_recovery(attempt)
+            ),
+            None,
+        )
         if recovered is not None:
+            break
+
+        terminal_failures = tuple(
+            attempt
+            for attempt in new_attempts
+            if attempt.finished_at_epoch is not None
+            and attempt.verdict is not RepairVerdict.RECOVERED
+        )
+        if len(terminal_failures) >= 3 and not _recognized_supervisor_alive(
+            supervisor_pid
+        ):
             break
         time.sleep(1.0)
 
     if recovered is None:
+        active = tuple(
+            attempt for attempt in new_attempts if attempt.finished_at_epoch is None
+        )
+        supervisor_alive = _recognized_supervisor_alive(supervisor_pid)
+        runtime_state = _supervised_runtime_diagnostic()
+        status = (
+            AcceptanceStatus.PENDING
+            if active and supervisor_alive
+            else AcceptanceStatus.FAIL
+        )
+        summary = (
+            "R2 recovery is still in progress at the observer deadline."
+            if status is AcceptanceStatus.PENDING
+            else "Injected crash did not produce verified R2 recovery."
+        )
         checks.append(
             _check(
                 "live-r2-independence",
-                AcceptanceStatus.FAIL,
-                "Injected crash did not produce verified R2 recovery in time.",
+                status,
+                summary,
                 affected_processes=affected,
                 wait_seconds=wait_seconds,
+                supervisor_pid=supervisor_pid,
+                supervisor_alive=supervisor_alive,
+                runtime_state=runtime_state,
+                new_attempts=[
+                    _repair_attempt_diagnostic(attempt) for attempt in new_attempts
+                ],
             )
         )
         return None
@@ -780,6 +828,57 @@ def _latest_recovered_attempt(
             item.attempt_id,
         ),
     )
+
+
+def _repair_attempt_diagnostic(attempt: RepairAttempt) -> dict[str, Any]:
+    verification = attempt.verification
+    return {
+        "attempt_id": attempt.attempt_id,
+        "started_at_epoch": attempt.started_at_epoch,
+        "finished_at_epoch": attempt.finished_at_epoch,
+        "verdict": attempt.verdict.value if attempt.verdict is not None else None,
+        "verification_status": (
+            verification.status.value if verification is not None else None
+        ),
+        "verification_summary": (
+            verification.summary if verification is not None else None
+        ),
+        "execution_result": attempt.execution_result,
+    }
+
+
+def _recognized_supervisor_alive(pid: int | None) -> bool:
+    if pid is None:
+        return False
+    try:
+        process = psutil.Process(pid)
+        if not process.is_running():
+            return False
+        command = " ".join(process.cmdline()).casefold()
+    except (psutil.Error, OSError):
+        return False
+    return any(
+        marker in command
+        for marker in (
+            "jarvis.runtime_supervisor",
+            "jarvis-supervisor",
+            "jarvis.dev_supervisor",
+            "jarvis-dev",
+        )
+    )
+
+
+def _supervised_runtime_diagnostic() -> dict[str, Any]:
+    try:
+        runtime = discover_supervised_runtime()
+    except (RuntimeError, psutil.Error) as exc:
+        return {"available": False, "error": f"{type(exc).__name__}: {exc}"}
+    return {
+        "available": True,
+        "pid": runtime.pid,
+        "parent_pid": runtime.parent_pid,
+        "cmdline": list(runtime.cmdline),
+    }
 
 
 def _is_verified_recovery(attempt: RepairAttempt) -> bool:

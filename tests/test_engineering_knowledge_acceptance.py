@@ -6,8 +6,10 @@ from pathlib import Path
 import numpy as np
 
 from jarvis.engineering_knowledge.acceptance import (
+    _DEFAULT_LIVE_WAIT_SECONDS,
     AcceptanceStatus,
     _accept_security_and_extensibility,
+    _repair_attempt_diagnostic,
 )
 from jarvis.engineering_knowledge.acceptance_fixture import (
     QREL_PATH,
@@ -19,6 +21,7 @@ from jarvis.engineering_knowledge.evaluation import (
     load_engineering_knowledge_qrels,
 )
 from jarvis.engineering_knowledge.retrieval import EngineeringKnowledgeRetrievalIndex
+from jarvis.incidents import SqliteIncidentStore
 from jarvis.memory.embeddings import QWEN3_EMBEDDING_CONTRACT
 
 
@@ -137,3 +140,30 @@ def test_phase2j_security_and_open_facet_checks_pass() -> None:
         "poisoning-and-secret-gates",
         "open-ended-facet-extensibility",
     }
+
+
+def test_phase2j_live_observer_spans_full_bounded_recovery_budget() -> None:
+    # Production permits three attempts, each of which may consume the 120s
+    # startup-readiness timeout before the supervisor can conclude it failed.
+    assert _DEFAULT_LIVE_WAIT_SECONDS >= 420.0
+
+
+def test_phase2j_repair_attempt_diagnostic_reports_terminal_evidence(tmp_path) -> None:
+    path = tmp_path / "diagnostic.sqlite3"
+    seed_qrel_fixture(path)
+    store = SqliteIncidentStore(path)
+    try:
+        attempts = store.list_repair_attempts_for_component(
+            "runtime.voice",
+            limit=20,
+        )
+        assert attempts
+        diagnostic = _repair_attempt_diagnostic(attempts[-1])
+    finally:
+        store.close()
+
+    assert diagnostic["attempt_id"] == attempts[-1].attempt_id
+    assert diagnostic["finished_at_epoch"] is not None
+    assert diagnostic["verdict"] == "recovered"
+    assert diagnostic["verification_status"] == "pass"
+    assert diagnostic["verification_summary"] == "acceptance_fixture_verified"

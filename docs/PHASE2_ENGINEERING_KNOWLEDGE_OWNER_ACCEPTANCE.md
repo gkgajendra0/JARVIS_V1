@@ -131,3 +131,19 @@ rerank only those grounded candidates.
 This is intentional. EngineeringKnowledge prefers abstention over a semantically
 plausible but ungrounded answer. A future semantic-only retrieval path requires
 separate benchmark evidence and an explicit abstention contract.
+
+
+## Live-recovery observer timing
+
+The first owner-machine live crash run exposed an acceptance-harness timing bug:
+the observer waited 120 seconds, which is equal to the production supervisor's
+single-attempt startup-readiness timeout. A valid R2 recovery may additionally
+need watchdog detection, cooldown and the stabilization window, and the bounded
+policy permits up to three attempts.
+
+The acceptance observer therefore allows 420 seconds for the full bounded
+recovery budget. It returns immediately on verified recovery. If recovery does
+not complete, the evidence now includes every new RepairAttempt, its verdict and
+verification result, whether the recognized supervisor is still alive, and the
+current supervised-runtime discovery state. This prevents a slow but still
+authorized recovery from being misclassified as a Self-Repair failure.
