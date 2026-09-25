@@ -203,8 +203,9 @@ def test_verified_commit_requires_separate_owner_acceptance(tmp_path) -> None:
     service.coordinator.reconcile_for_work(development.work_id)
     acceptance = service.prepare_acceptance(change.change_id)
     assert store.require(change.change_id).state is ChangeState.WAITING_OWNER_ACCEPTANCE
-    session.accept_turn(ConversationRole.USER, f"Approve {acceptance.gate_id}")
-    service.decide_latest(acceptance.gate_id)
+    session.accept_turn(ConversationRole.USER, "Approve acceptance")
+    accepted = service.decide_latest(acceptance.gate_id)
+    assert service.decide_latest(acceptance.gate_id) == accepted
     assert store.require(change.change_id).state is ChangeState.READY_FOR_PROMOTION
     report = inspect_change(store, change.change_id)
     assert report["result"] == "PENDING"
@@ -234,3 +235,29 @@ def test_restart_resends_same_architecture_gate_and_delivery(tmp_path) -> None:
     assert len(store.work.list_pending_deliveries()) == 1
     with pytest.raises(ChangeConflict):
         restarted.propose_architecture(change.change_id, {"plan": "different"})
+
+
+def test_short_spoken_review_requires_one_pending_gate(tmp_path) -> None:
+    session = ConversationSession(session_id="owner-session")
+    session.start()
+    store = ChangeStore(SQLiteWorkStore(tmp_path / "work.sqlite3"))
+    service = _service(store, session)
+    gates = []
+    for goal in ("First goal", "Second goal"):
+        change = service.start(session.accept_turn(ConversationRole.USER, goal))
+        research = store.list_stages(change.change_id)[0]
+        item = store.work.require(research.work_id)
+        running = store.work.save(
+            item.transition(WorkState.RUNNING), expected_version=item.version
+        )
+        store.work.save(
+            running.transition(WorkState.COMPLETED), expected_version=running.version
+        )
+        gates.append(service.propose_architecture(change.change_id, {"plan": goal}))
+    session.accept_turn(ConversationRole.USER, "Approve architecture")
+    with pytest.raises(ChangeConflict, match="ambiguous"):
+        service.decide_latest(gates[0].gate_id)
+    assert all(
+        store.require(gate.change_id).state is ChangeState.WAITING_OWNER_APPROVAL
+        for gate in gates
+    )

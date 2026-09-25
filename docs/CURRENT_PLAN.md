@@ -41,7 +41,7 @@ The active development slice is now:
 
 **Phase 3 — EngineeringChange Lifecycle / Mission Orchestration**
 
-Phase-3 implementation is in draft PR #108. Its acceptance procedure is
+Phase-3 implementation is tracked in PR #108. Its acceptance procedure is
 `PHASE3_ENGINEERING_CHANGE_OWNER_ACCEPTANCE.md`. CI and owner-machine proof are
 still required; do not label Phase 3 DONE before the real owner run passes.
 

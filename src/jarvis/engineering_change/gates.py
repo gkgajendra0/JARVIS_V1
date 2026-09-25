@@ -192,6 +192,26 @@ class GateService:
                 challenge if decision is None else self._decision(challenge, decision)
             )
 
+    def pending_gate_ids(self) -> tuple[str, ...]:
+        """Latest, undecided review challenges across active changes."""
+        work = self.store.work
+        with work._lock, work._connect() as db:
+            rows = db.execute(
+                """SELECT gate.gate_id FROM engineering_change_gates AS gate
+                JOIN engineering_changes AS change ON change.change_id=gate.change_id
+                JOIN engineering_change_artifacts AS artifact ON artifact.artifact_id=gate.artifact_id
+                LEFT JOIN engineering_change_decisions AS decision ON decision.gate_id=gate.gate_id
+                WHERE decision.gate_id IS NULL
+                  AND (change.state='waiting_owner_approval' AND gate.kind='architecture'
+                    OR change.state='waiting_owner_acceptance' AND gate.kind='acceptance'
+                    OR change.state='waiting_promotion_approval' AND gate.kind='promotion')
+                  AND artifact.revision=(SELECT MAX(other.revision)
+                    FROM engineering_change_artifacts AS other
+                    WHERE other.change_id=gate.change_id AND other.kind=gate.kind)
+                ORDER BY gate.created_at"""
+            ).fetchall()
+        return tuple(row["gate_id"] for row in rows)
+
     @staticmethod
     def _decision(challenge: GateChallenge, row: sqlite3.Row) -> GateDecision:
         return GateDecision(

@@ -52,10 +52,10 @@ Snapshot baseline verified from protected `main` at
 | Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H and 2 are accepted; Phase 3 EngineeringChange lifecycle / mission orchestration is now active |
 | Step 8 notes/tasks/reminders | PLANNED | still the next numbered product slice when numbered roadmap work resumes |
 
-Phase-3 EngineeringChange implementation is being reviewed in draft PR #108.
+Phase-3 EngineeringChange implementation is tracked in PR #108.
 The program remains ACTIVE until CI and the owner-machine procedure in
 `PHASE3_ENGINEERING_CHANGE_OWNER_ACCEPTANCE.md` pass; none of these changes are
-accepted production state while the PR is open.
+accepted production state until the owner-machine evidence passes.
 
 ---
 

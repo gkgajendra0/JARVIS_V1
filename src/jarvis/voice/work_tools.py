@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from livekit.agents import RunContext, function_tool
 
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
@@ -143,7 +145,9 @@ class WorkAgentTools:
         or an earlier USER turn. The service independently checks the accepted turn.
         """
         del context
-        decision = self._change_service().decide_latest(gate_id)
+        decision = await asyncio.to_thread(
+            self._change_service().decide_latest, gate_id
+        )
         return {
             "ok": True,
             "change_id": decision.challenge.change_id,

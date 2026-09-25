@@ -20,6 +20,10 @@ from .models import ChangeConflict, ChangeState, EngineeringChange
 _DECISION = re.compile(
     r"\s*(approve|reject)\s+(gate_[0-9a-f]{16})[.!]?\s*", re.IGNORECASE
 )
+_SINGLE_REVIEW = re.compile(
+    r"\s*(approve|reject)\s+(architecture|acceptance|promotion)(?:\s+(?:proposal|gate))?[.!]?\s*",
+    re.IGNORECASE,
+)
 
 
 class ChangeService:
@@ -88,7 +92,9 @@ class ChangeService:
             message=(
                 f"Review EngineeringChange {change_id} architecture revision "
                 f"{artifact.revision}: {rendered}. Digest: {artifact.digest}. "
-                f"To decide, say 'approve {gate.gate_id}' or 'reject {gate.gate_id}'."
+                f"To decide, say 'approve architecture' if this is the only pending "
+                f"review, or 'approve {gate.gate_id}' to identify it exactly. "
+                f"Say 'reject architecture' or 'reject {gate.gate_id}' to decline."
             ),
             event_key=f"change:{change_id}:{gate.gate_id}:{artifact.digest}",
         )
@@ -106,7 +112,8 @@ class ChangeService:
         if turn is None:
             raise ChangeConflict("no accepted owner turn")
         match = _DECISION.fullmatch(turn.text)
-        if match is None or match.group(2) != gate_id:
+        typed = _SINGLE_REVIEW.fullmatch(turn.text)
+        if match is None and typed is None:
             raise ChangeConflict("owner must explicitly identify the current gate")
         store = self.coordinator.store
         verification = lambda actor, source_session, source_turn, gate, digest: (
@@ -131,7 +138,25 @@ class ChangeService:
         if gate is None:
             raise ChangeConflict("unknown gate")
         challenge = gate.challenge if isinstance(gate, GateDecision) else gate
-        approved = match.group(1).casefold() == "approve"
+        if (
+            isinstance(gate, GateDecision)
+            and gate.verification_id is not None
+            and gate.source_session_id == self.session.session_id
+            and gate.source_turn_id == turn.turn_id
+            and gate.approved == ((match or typed).group(1).casefold() == "approve")
+            and (match is None or match.group(2) == gate_id)
+            and (typed is None or typed.group(2).casefold() == challenge.kind.value)
+        ):
+            self.coordinator.reconcile(challenge.change_id)
+            return gate
+        if match is not None and match.group(2) != gate_id:
+            raise ChangeConflict("owner named a different gate")
+        if typed is not None and (
+            typed.group(2).casefold() != challenge.kind.value
+            or gates.pending_gate_ids() != (gate_id,)
+        ):
+            raise ChangeConflict("spoken review is ambiguous; identify the gate ID")
+        approved = (match or typed).group(1).casefold() == "approve"
         proposal = ActionProposal.create(
             session_id=self.session.session_id,
             capability="engineering_change",
@@ -211,7 +236,9 @@ class ChangeService:
                 f"Review EngineeringChange {change_id} acceptance: branch "
                 f"{result['branch']}, commit {result['commit']}, tests passed in "
                 f"{result['verification'].get('sandbox')}. Digest: {artifact.digest}. "
-                f"Say 'approve {gate.gate_id}' or 'reject {gate.gate_id}'."
+                f"Say 'approve acceptance' for a single pending review, or "
+                f"'approve {gate.gate_id}' to identify it exactly. "
+                f"Use 'reject acceptance' or 'reject {gate.gate_id}' to decline."
             ),
             event_key=f"change:{change_id}:{gate.gate_id}:{artifact.digest}",
         )
