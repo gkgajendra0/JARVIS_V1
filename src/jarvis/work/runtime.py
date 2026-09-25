@@ -6,11 +6,14 @@ import asyncio
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
+from jarvis.engineering_change.coordinator import ChangeCoordinator
+from jarvis.engineering_change.store import ChangeStore
 from jarvis.knowledge.research import CurrentResearchService
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
 from jarvis.work.dbos_backend import (
     DBOSWorkExecutionBackend,
+    configure_terminal_reconciliation,
     initialize_dbos_work_runtime,
     shutdown_dbos_work_runtime,
 )
@@ -47,6 +50,7 @@ class WorkRuntime:
         orchestrator: WorkOrchestrator,
         supported_work_types: frozenset[WorkType],
         interactive_brain_gate: InteractiveBrainGate,
+        changes: ChangeCoordinator | None = None,
     ) -> None:
         self.store = store
         self.engine = engine
@@ -54,6 +58,7 @@ class WorkRuntime:
         self.orchestrator = orchestrator
         self.supported_work_types = supported_work_types
         self._interactive_brain_gate = interactive_brain_gate
+        self.changes = changes
         self._closed = False
 
     def supports(self, work_type: WorkType) -> bool:
@@ -139,6 +144,7 @@ def build_work_runtime(
         payload_codec=payload_codec,
     )
     store.protect_existing_payloads()
+    change_store = ChangeStore(store)
     reasoner = ProviderWorkReasoner(provider=provider, model=model)
     interactive_brain_gate = InteractiveBrainGate()
     brain = BrainCoordinator(
@@ -173,6 +179,7 @@ def build_work_runtime(
         actions=actions,
         resources=resources,
         base_resource_keys=("work",),
+        action_admission=change_store.work_admitted,
     )
     engine.reconcile_interrupted_steps()
     backend = initialize_dbos_work_runtime(
@@ -185,6 +192,9 @@ def build_work_runtime(
     )
     orchestrator = WorkOrchestrator(store, backend)
     orchestrator.reconcile_active()
+    changes = ChangeCoordinator(change_store, backend)
+    configure_terminal_reconciliation(changes.reconcile_for_work)
+    changes.reconcile_active()
     return WorkRuntime(
         store=store,
         engine=engine,
@@ -192,4 +202,5 @@ def build_work_runtime(
         orchestrator=orchestrator,
         supported_work_types=actions.supported_work_types,
         interactive_brain_gate=interactive_brain_gate,
+        changes=changes,
     )

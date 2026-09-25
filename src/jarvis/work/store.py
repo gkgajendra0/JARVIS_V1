@@ -379,8 +379,15 @@ class SQLiteWorkStore:
         with self._lock, self._connect() as connection:
             self._validate_dependency_graph(connection, item)
             try:
-                connection.execute(
-                    """
+                self._insert_item(connection, item)
+            except sqlite3.IntegrityError as exc:
+                raise WorkStoreError(f"work already exists: {item.work_id}") from exc
+        return item
+
+    def _insert_item(self, connection: sqlite3.Connection, item: WorkItem) -> None:
+        """Insert within the caller's transaction, including a change-stage link."""
+        connection.execute(
+            """
                     INSERT INTO work_items (
                         work_id, request, work_type, source_session_id, source_turn_id,
                         state, priority, delivery_policy, dependencies_json,
@@ -388,32 +395,25 @@ class SQLiteWorkStore:
                         created_at, updated_at, version
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (
-                        item.work_id,
-                        self._encode_text(item.request),
-                        item.work_type.value,
-                        item.source_session_id,
-                        item.source_turn_id,
-                        item.state.value,
-                        int(item.priority),
-                        item.delivery_policy.value,
-                        json.dumps(item.dependencies),
-                        (
-                            item.paused_from_state.value
-                            if item.paused_from_state is not None
-                            else None
-                        ),
-                        item.current_step_id,
-                        self._encode_json(item.result),
-                        self._encode_optional_text(item.status_detail),
-                        _dt(item.created_at),
-                        _dt(item.updated_at),
-                        item.version,
-                    ),
-                )
-            except sqlite3.IntegrityError as exc:
-                raise WorkStoreError(f"work already exists: {item.work_id}") from exc
-        return item
+            (
+                item.work_id,
+                self._encode_text(item.request),
+                item.work_type.value,
+                item.source_session_id,
+                item.source_turn_id,
+                item.state.value,
+                int(item.priority),
+                item.delivery_policy.value,
+                json.dumps(item.dependencies),
+                item.paused_from_state.value if item.paused_from_state else None,
+                item.current_step_id,
+                self._encode_json(item.result),
+                self._encode_optional_text(item.status_detail),
+                _dt(item.created_at),
+                _dt(item.updated_at),
+                item.version,
+            ),
+        )
 
     def get(self, work_id: str) -> WorkItem | None:
         with self._lock, self._connect() as connection:

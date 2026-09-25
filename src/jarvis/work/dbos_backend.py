@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -29,6 +30,12 @@ _WAITING_STATES = frozenset(
 
 _ENGINE: WorkEngine | None = None
 _JARVIS_EVENT_LOOP: asyncio.AbstractEventLoop | None = None
+_ON_WORK_TERMINAL: Callable[[str], object] | None = None
+
+
+def configure_terminal_reconciliation(callback: Callable[[str], object]) -> None:
+    global _ON_WORK_TERMINAL
+    _ON_WORK_TERMINAL = callback
 
 
 def default_dbos_system_database_url() -> str:
@@ -113,6 +120,8 @@ def _advance_work(work_id: str) -> dict[str, Any]:
         _jarvis_loop(),
     )
     result = future.result()
+    if result.state.terminal and _ON_WORK_TERMINAL is not None:
+        _ON_WORK_TERMINAL(work_id)
     return {
         "work_id": result.work_id,
         "state": result.state.value,
@@ -336,7 +345,7 @@ def shutdown_dbos_work_runtime(
 ) -> None:
     """Stop DBOS after a bounded drain window for already-running workflows."""
 
-    global _ENGINE, _JARVIS_EVENT_LOOP
+    global _ENGINE, _JARVIS_EVENT_LOOP, _ON_WORK_TERMINAL
     if (
         isinstance(workflow_completion_timeout_sec, bool)
         or workflow_completion_timeout_sec < 0
@@ -349,3 +358,4 @@ def shutdown_dbos_work_runtime(
     finally:
         _ENGINE = None
         _JARVIS_EVENT_LOOP = None
+        _ON_WORK_TERMINAL = None

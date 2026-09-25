@@ -1,0 +1,165 @@
+from __future__ import annotations
+
+import pytest
+
+from jarvis.engineering_change import ChangeConflict, ChangeState, ChangeStore
+from jarvis.engineering_change.coordinator import ChangeCoordinator
+from jarvis.engineering_change.gates import GateKind, GateService
+from jarvis.work.models import WorkState
+from jarvis.work.store import SQLiteWorkStore
+
+
+class RecordingBackend:
+    def __init__(self) -> None:
+        self.submissions: list[str] = []
+        self.fail_once = False
+
+    def submit(self, work_id, *, priority):
+        del priority
+        if self.fail_once:
+            self.fail_once = False
+            raise RuntimeError("backend temporarily unavailable")
+        self.submissions.append(work_id)
+        return work_id
+
+
+def _complete(work, item):
+    running = work.save(
+        item.transition(WorkState.RUNNING), expected_version=item.version
+    )
+    return work.save(
+        running.transition(WorkState.COMPLETED), expected_version=running.version
+    )
+
+
+def test_restart_reconciles_submission_without_duplicate_stage(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+    backend = RecordingBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+    backend.fail_once = True
+    with pytest.raises(RuntimeError, match="unavailable"):
+        coordinator.start("Investigate camera", "session", "turn")
+    change = changes.find_by_source("session", "turn", "engineering.change")
+    assert change is not None
+    stages = changes.list_stages(change.change_id)
+    assert len(stages) == 1
+    assert backend.submissions == []
+    coordinator.reconcile(change.change_id)
+    coordinator.reconcile(change.change_id)
+    assert changes.list_stages(change.change_id) == stages
+    assert backend.submissions == [stages[0].work_id, stages[0].work_id]
+
+
+def test_research_then_approved_build_uses_dependent_workitem(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+    backend = RecordingBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+    change = coordinator.start("Build camera adapter", "session", "turn")
+    research = changes.list_stages(change.change_id)[0]
+    _complete(work, work.require(research.work_id))
+    coordinator.reconcile_for_work(research.work_id)
+    assert changes.require(change.change_id).state is ChangeState.RESEARCHING
+    artifact = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"decision": "typed local adapter"},
+    )
+    coordinator.reconcile(change.change_id)
+    assert changes.require(change.change_id).state is ChangeState.ARCHITECTURE_READY
+    gates = GateService(changes, verify_owner=lambda *_: True)
+    gate = gates.present(change.change_id, GateKind.ARCHITECTURE, artifact.artifact_id)
+    gates.decide(
+        gate.gate_id,
+        approved=True,
+        artifact_digest=artifact.digest,
+        actor_id="owner",
+        source_session_id="session",
+        source_turn_id="approval",
+        request_key="session:approval",
+    )
+    coordinator.reconcile(change.change_id)
+    development = changes.list_stages(change.change_id)[1]
+    assert work.require(development.work_id).dependencies == (research.work_id,)
+    assert changes.require(change.change_id).state is ChangeState.DEVELOPING
+    _complete(work, work.require(development.work_id))
+    coordinator.reconcile_for_work(development.work_id)
+    assert changes.require(change.change_id).state is ChangeState.VERIFYING
+    assert all(item != gate.gate_id for item in backend.submissions)
+
+
+def test_dev_stage_cannot_be_created_before_approval_or_after_revision_change(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+    backend = RecordingBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+    change = coordinator.start("Goal", "session", "turn")
+    research = changes.list_stages(change.change_id)[0]
+    with pytest.raises(ChangeConflict):
+        coordinator.submit_stage(change.change_id, "development", 1)
+    _complete(work, work.require(research.work_id))
+    artifact = changes.add_artifact(
+        change.change_id, kind="architecture", payload={"v": 1}
+    )
+    coordinator.reconcile(change.change_id)
+    gates = GateService(changes, verify_owner=lambda *_: True)
+    gate = gates.present(change.change_id, GateKind.ARCHITECTURE, artifact.artifact_id)
+    gates.decide(
+        gate.gate_id,
+        approved=True,
+        artifact_digest=artifact.digest,
+        actor_id="owner",
+        source_session_id="session",
+        source_turn_id="approval",
+        request_key="approval",
+    )
+    changes.add_artifact(change.change_id, kind="architecture", payload={"v": 2})
+    with pytest.raises(ChangeConflict):
+        coordinator.submit_stage(change.change_id, "development", 1)
+
+
+def test_startup_reconciles_terminal_research_and_unsubmitted_stage(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+    backend = RecordingBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+    change = coordinator.start("Goal", "session", "turn")
+    research = changes.list_stages(change.change_id)[0]
+    _complete(work, work.require(research.work_id))
+    changes.add_artifact(
+        change.change_id, kind="architecture", payload={"plan": "review"}
+    )
+    restarted = ChangeCoordinator(ChangeStore(SQLiteWorkStore(work.path)), backend)
+    restarted.reconcile_active()
+    assert (
+        restarted.store.require(change.change_id).state
+        is ChangeState.ARCHITECTURE_READY
+    )
+
+
+def test_changed_architecture_cannot_verify_completed_old_development(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+    coordinator = ChangeCoordinator(changes, RecordingBackend())
+    change = coordinator.start("Goal", "session", "turn")
+    research = changes.list_stages(change.change_id)[0]
+    _complete(work, work.require(research.work_id))
+    artifact = changes.add_artifact(change.change_id, kind="architecture", payload={"v": 1})
+    coordinator.reconcile(change.change_id)
+    gates = GateService(changes, verify_owner=lambda *_: True)
+    gate = gates.present(change.change_id, GateKind.ARCHITECTURE, artifact.artifact_id)
+    gates.decide(
+        gate.gate_id, approved=True, artifact_digest=artifact.digest,
+        actor_id="owner", source_session_id="session", source_turn_id="yes",
+        request_key="session:yes",
+    )
+    coordinator.reconcile(change.change_id)
+    development = changes.list_stages(change.change_id)[1]
+    _complete(work, work.require(development.work_id))
+    changes.add_artifact(change.change_id, kind="architecture", payload={"v": 2})
+    with pytest.raises(ChangeConflict, match="current architecture"):
+        coordinator.reconcile_for_work(development.work_id)
+    assert changes.require(change.change_id).state is ChangeState.DEVELOPING
