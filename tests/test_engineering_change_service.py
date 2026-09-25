@@ -244,8 +244,7 @@ def test_verified_commit_requires_separate_owner_acceptance(tmp_path) -> None:
     session.accept_turn(ConversationRole.USER, "Approve promotion")
     service.decide_latest(promotion.gate_id)
     assert (
-        store.require(change.change_id).state
-        is ChangeState.WAITING_PROMOTION_APPROVAL
+        store.require(change.change_id).state is ChangeState.WAITING_PROMOTION_APPROVAL
     )
     report = inspect_change(store, change.change_id)
     assert report["result"] == "PENDING"
