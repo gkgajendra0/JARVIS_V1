@@ -10,6 +10,25 @@ Status: **PENDING**. Run this procedure on the tested PR head after CI passes an
 - Synchronize the current editable install with `python -m pip install -e ".[dev,phase45d-acceptance,hands]"` using the project's supported Python environment.
 - Do not place secrets, access tokens or production credentials in an architecture proposal or evidence transcript.
 
+From the protected-main checkout, create a separate branch worktree at the PR head:
+
+```powershell
+cd C:\Users\gkgaj\Desktop\jarvis_v1
+git fetch origin refs/pull/108/head
+git worktree add -b phase3_acceptance ..\jarvis_phase3_acceptance FETCH_HEAD
+cd ..\jarvis_phase3_acceptance
+git rev-parse HEAD
+py -3.11 -m venv .venv
+.\.venv\Scripts\python -m pip install -e ".[dev,phase45d-acceptance,hands]"
+```
+
+Stop the normal owner-machine supervisor cleanly before testing this worktree.
+From this worktree, run `.\.venv\Scripts\jarvis-supervisor --branch phase3_acceptance`.
+The production supervisor's local-only mode keeps Git update polling disabled and
+retains the configured PostgreSQL DBOS backend. Do not start two JARVIS voice
+runtimes against the same microphone and WorkStore concurrently. After the
+acceptance run, stop the test supervisor and resume the ordinary main runtime.
+
 ## Live sequence
 
 1. Give JARVIS one bounded engineering goal and start it through `start_engineering_change`. Record the returned `change_id` and research `work_id`. Confirm a second call grounded in the same accepted USER turn returns the same change and research WorkItem.
@@ -21,7 +40,7 @@ Status: **PENDING**. Run this procedure on the tested PR head after CI passes an
 7. Run the evidence inspection from the same owner Windows profile:
 
    ```powershell
-   python -m jarvis.engineering_change.acceptance --change-id CHANGE_ID
+   .\.venv\Scripts\python -m jarvis.engineering_change.acceptance --change-id CHANGE_ID
    ```
 
    The JSON evidence is written under `%LOCALAPPDATA%\JARVIS\operations\acceptance\`. It contains only IDs, states, digests, and summarized gate outcomes. Attach the file and the observed PostgreSQL/restart, voice-delivery, and isolated development results for review.
