@@ -167,16 +167,12 @@ def _brain_decision(
     )
     allowed = {action.name: action for action in request.allowed_actions}
     if decision.action is not None and decision.action not in allowed:
-        raise ValueError(
-            "work reasoner selected an action outside the JARVIS catalog"
-        )
+        raise ValueError("work reasoner selected an action outside the JARVIS catalog")
     return decision
 
 
 def _attempt_id(decision_id: str, ordinal: int) -> str:
-    digest = hashlib.sha256(
-        f"{decision_id}:{ordinal}".encode("utf-8")
-    ).hexdigest()[:24]
+    digest = hashlib.sha256(f"{decision_id}:{ordinal}".encode("utf-8")).hexdigest()[:24]
     return f"attempt_{digest}"
 
 
@@ -243,15 +239,11 @@ class RoutedWorkReasoner:
 
     @property
     def provider_name(self) -> str:
-        return self._router.target_registry.require(
-            self._primary_target_id
-        ).provider_id
+        return self._router.target_registry.require(self._primary_target_id).provider_id
 
     @property
     def model_name(self) -> str:
-        return self._router.target_registry.require(
-            self._primary_target_id
-        ).model_id
+        return self._router.target_registry.require(self._primary_target_id).model_id
 
     async def decide(self, request: BrainRequest) -> BrainDecision:
         routing_request = build_work_routing_request(
@@ -264,9 +256,7 @@ class RoutedWorkReasoner:
         )
         ordinal = len(prior_attempts) + 1
         attempt_id = _attempt_id(selection.decision.decision_id, ordinal)
-        correlation_key = (
-            f"{selection.decision.decision_id}:attempt:{ordinal}"
-        )
+        correlation_key = f"{selection.decision.decision_id}:attempt:{ordinal}"
         context = ModelInvocationContext(
             work_id=request.work.work_id,
             routing_request_id=routing_request.routing_request_id,
