@@ -138,16 +138,45 @@ class ChangeStore:
                 rows = connection.execute(
                     "SELECT version, checksum FROM engineering_change_schema"
                 ).fetchall()
+                ledger = {row["version"]: row["checksum"] for row in rows}
                 if rows and (
-                    len(rows) != 1
-                    or rows[0]["version"] != 2
-                    or rows[0]["checksum"] != checksum
+                    2 not in ledger or set(ledger) - {2, 3} or ledger[2] != checksum
                 ):
                     raise ChangeConflict("engineering change schema checksum mismatch")
                 if not rows:
                     connection.execute(
                         "INSERT INTO engineering_change_schema VALUES (2, ?)",
                         (checksum,),
+                    )
+                proof_columns = {
+                    row["name"]
+                    for row in connection.execute(
+                        "PRAGMA table_info(engineering_change_decisions)"
+                    )
+                }
+                for column in (
+                    "verification_id",
+                    "verifier_id",
+                    "proposal_fingerprint",
+                ):
+                    if column not in proof_columns:
+                        connection.execute(
+                            f"ALTER TABLE engineering_change_decisions ADD COLUMN {column} TEXT"
+                        )
+                proof_checksum = hashlib.sha256(
+                    (checksum + "|strong-owner-proof-v3").encode("utf-8")
+                ).hexdigest()
+                proof_row = connection.execute(
+                    "SELECT checksum FROM engineering_change_schema WHERE version=3"
+                ).fetchone()
+                if proof_row is not None and proof_row["checksum"] != proof_checksum:
+                    raise ChangeConflict(
+                        "engineering change proof schema checksum mismatch"
+                    )
+                if proof_row is None:
+                    connection.execute(
+                        "INSERT INTO engineering_change_schema VALUES (3, ?)",
+                        (proof_checksum,),
                     )
 
     def _from_row(self, row: sqlite3.Row) -> EngineeringChange:

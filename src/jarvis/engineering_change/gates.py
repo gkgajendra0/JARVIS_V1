@@ -58,6 +58,9 @@ class GateDecision:
     source_turn_id: str
     request_key: str
     decided_at: str
+    verification_id: str | None = None
+    verifier_id: str | None = None
+    proposal_fingerprint: str | None = None
 
 
 class GateService:
@@ -199,6 +202,9 @@ class GateService:
             row["source_turn_id"],
             row["request_key"],
             row["decided_at"],
+            row["verification_id"],
+            row["verifier_id"],
+            row["proposal_fingerprint"],
         )
 
     def decide(
@@ -211,6 +217,9 @@ class GateService:
         source_session_id: str,
         source_turn_id: str,
         request_key: str,
+        verification_id: str | None = None,
+        verifier_id: str | None = None,
+        proposal_fingerprint: str | None = None,
     ) -> GateDecision:
         if not all(
             (
@@ -278,7 +287,11 @@ class GateService:
             decided_at = _now()
             try:
                 db.execute(
-                    "INSERT INTO engineering_change_decisions VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    """INSERT INTO engineering_change_decisions (
+                    gate_id, approved, actor_id, source_session_id,
+                    source_turn_id, request_key, decided_at, verification_id,
+                    verifier_id, proposal_fingerprint
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         gate_id,
                         int(approved),
@@ -287,6 +300,9 @@ class GateService:
                         source_turn_id,
                         request_key,
                         decided_at,
+                        verification_id,
+                        verifier_id,
+                        proposal_fingerprint,
                     ),
                 )
             except sqlite3.IntegrityError as exc:
@@ -310,6 +326,8 @@ class GateService:
                     "actor_id": actor_id,
                     "source_session_id": source_session_id,
                     "source_turn_id": source_turn_id,
+                    "verifier_id": verifier_id,
+                    "verification_id": verification_id,
                 },
             )
             return GateDecision(
@@ -320,4 +338,7 @@ class GateService:
                 source_turn_id,
                 request_key,
                 decided_at,
+                verification_id,
+                verifier_id,
+                proposal_fingerprint,
             )

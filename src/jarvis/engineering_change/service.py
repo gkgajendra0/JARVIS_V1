@@ -5,6 +5,11 @@ from __future__ import annotations
 import json
 import re
 
+from jarvis.authority.approval import ApprovalService
+from jarvis.authority.proposal import ActionProposal
+from jarvis.authority.strong_approval import StrongApprovalService
+from jarvis.authority.types import ActionAttributes, ActionOrigin
+from jarvis.authority.verifier import WindowsHelloVerifier
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.work.models import WorkDeliveryKind, WorkState
 
@@ -21,10 +26,17 @@ class ChangeService:
     """Only accepted USER turns from this session can produce gate decisions."""
 
     def __init__(
-        self, coordinator: ChangeCoordinator, session: ConversationSession
+        self,
+        coordinator: ChangeCoordinator,
+        session: ConversationSession,
+        *,
+        strong_approval: StrongApprovalService | None = None,
     ) -> None:
         self.coordinator = coordinator
         self.session = session
+        self._strong_approval = strong_approval or StrongApprovalService(
+            approvals=ApprovalService(), verifier=WindowsHelloVerifier()
+        )
 
     def start(self, turn: ConversationTurn) -> EngineeringChange:
         if turn.role is not ConversationRole.USER or not any(
@@ -119,14 +131,44 @@ class ChangeService:
         if gate is None:
             raise ChangeConflict("unknown gate")
         challenge = gate.challenge if isinstance(gate, GateDecision) else gate
+        approved = match.group(1).casefold() == "approve"
+        proposal = ActionProposal.create(
+            session_id=self.session.session_id,
+            capability="engineering_change",
+            operation=f"decide_{challenge.kind.value}",
+            target={"change_id": challenge.change_id, "gate_id": gate_id},
+            parameters={
+                "artifact_id": challenge.artifact_id,
+                "digest": challenge.artifact_digest,
+                "approved": approved,
+                "source_turn_id": turn.turn_id,
+            },
+            material_summary=(
+                f"{'Approve' if approved else 'Reject'} EngineeringChange "
+                f"{challenge.change_id} {challenge.kind.value} gate {gate_id}, "
+                f"artifact SHA-256 {challenge.artifact_digest}"
+            ),
+            attributes=ActionAttributes(persistent_write=True),
+            origin=ActionOrigin.DIRECT_USER,
+        )
+        outcome = self._strong_approval.verify_and_resolve(
+            proposal=proposal, session_id=self.session.session_id
+        )
+        if not outcome.granted or not outcome.verification.is_bound_to(
+            proposal=proposal, session_id=self.session.session_id
+        ):
+            raise ChangeConflict("strong owner verification required for change gate")
         decision = gates.decide(
             gate_id,
-            approved=match.group(1).casefold() == "approve",
+            approved=approved,
             artifact_digest=challenge.artifact_digest,
             actor_id="owner",
             source_session_id=self.session.session_id,
             source_turn_id=turn.turn_id,
             request_key=f"change-decision:{self.session.session_id}:{turn.turn_id}",
+            verification_id=outcome.verification.verification_id,
+            verifier_id=outcome.verification.verifier_id,
+            proposal_fingerprint=proposal.fingerprint,
         )
         self.coordinator.reconcile(challenge.change_id)
         return decision
