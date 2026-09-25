@@ -106,9 +106,7 @@ def _attempt(
         ended_at_epoch=101.0 + ordinal,
         latency_ms=latency_ms,
         kind=(
-            RoutingAttemptKind.PRIMARY
-            if ordinal == 1
-            else RoutingAttemptKind.FALLBACK
+            RoutingAttemptKind.PRIMARY if ordinal == 1 else RoutingAttemptKind.FALLBACK
         ),
         failure_class=failure_class,
         usage=usage or {},
