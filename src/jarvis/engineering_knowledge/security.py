@@ -17,7 +17,7 @@ from jarvis.engineering_knowledge.models import (
     EngineeringKnowledgeRevision,
     KnowledgeSensitivity,
 )
-from jarvis.engineering_knowledge.projector import (
+from jarvis.engineering_knowledge.repair_contracts import (
     PROJECTOR_ID,
     REPAIR_KIND_NAMESPACE,
     REPAIR_VERIFICATION_PREDICATE,
