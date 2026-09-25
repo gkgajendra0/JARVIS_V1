@@ -313,8 +313,7 @@ def _run_live_r2_negative_control(
     )
     if recent:
         retry_after = (
-            max(item.started_at_epoch for item in recent)
-            + _RESTART_WINDOW_SECONDS
+            max(item.started_at_epoch for item in recent) + _RESTART_WINDOW_SECONDS
         )
         checks.append(
             _check(
@@ -425,9 +424,7 @@ def _accept_real_repair(
             store,
             projected.revision_id,
         )
-        evidence = store.list_engineering_knowledge_evidence(
-            projected.revision_id
-        )
+        evidence = store.list_engineering_knowledge_evidence(projected.revision_id)
         references = {item.canonical_reference for item in evidence}
         expected = {
             f"incident:{attempt.incident_id}",
@@ -615,9 +612,7 @@ def _accept_security_and_extensibility(
         payload_digest=canonical_sha256(unknown_payload),
         created_at_epoch=time.time(),
     )
-    unknown_decision = build_default_facet_registry().assess_for_decision(
-        unknown
-    )
+    unknown_decision = build_default_facet_registry().assess_for_decision(unknown)
 
     future_handler = _FutureAcceptanceFacetHandler()
     extensible = EngineeringKnowledgeFacetRegistry()
@@ -741,9 +736,7 @@ def _run_benchmark_once(
     rebuild_ms = (time.perf_counter() - start) * 1000.0
     if encoder is not None and not all(item.embedding_indexed for item in indexed):
         index.close()
-        raise RuntimeError(
-            "Qwen did not index every accepted fixture revision"
-        )
+        raise RuntimeError("Qwen did not index every accepted fixture revision")
     retriever = FixtureQrelRetriever(
         index,
         fixture,
@@ -768,12 +761,8 @@ def _latest_recovered_attempt(
 ) -> RepairAttempt | None:
     candidates: list[RepairAttempt] = []
     for incident in store.list_recent(limit=200):
-        candidates.extend(
-            store.list_repair_attempts(incident.incident_id, limit=200)
-        )
-    verified = [
-        attempt for attempt in candidates if _is_verified_recovery(attempt)
-    ]
+        candidates.extend(store.list_repair_attempts(incident.incident_id, limit=200))
+    verified = [attempt for attempt in candidates if _is_verified_recovery(attempt)]
     if not verified:
         return None
     return max(
@@ -840,8 +829,7 @@ def _repair_paraphrase(attempt: RepairAttempt) -> str:
 
 def _contains_revision(candidates: Sequence[Any], revision_id: str) -> bool:
     return any(
-        candidate.revision.revision_id == revision_id
-        for candidate in candidates
+        candidate.revision.revision_id == revision_id for candidate in candidates
     )
 
 
@@ -956,10 +944,7 @@ def _print_report(report: Phase2OwnerAcceptanceReport) -> None:
     print("Phase 2 EngineeringKnowledge owner-machine acceptance")
     print("=" * 58)
     for check in report.checks:
-        print(
-            f"[{check.status.value.upper():7}] "
-            f"{check.check_id}: {check.summary}"
-        )
+        print(f"[{check.status.value.upper():7}] {check.check_id}: {check.summary}")
         if check.status is not AcceptanceStatus.PASS and check.details:
             print("          " + json.dumps(check.details, sort_keys=True))
     print()
@@ -1031,10 +1016,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("Acceptance interrupted by owner.")
         return 130
     except Exception as exc:
-        print(
-            "Phase-2 acceptance failed unexpectedly: "
-            f"{type(exc).__name__}: {exc}"
-        )
+        print(f"Phase-2 acceptance failed unexpectedly: {type(exc).__name__}: {exc}")
         return 2
     return 0 if report.complete else 1
 
