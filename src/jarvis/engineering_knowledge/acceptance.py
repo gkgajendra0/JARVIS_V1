@@ -9,16 +9,17 @@ import os
 import sqlite3
 import tempfile
 import time
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, ClassVar
 
 import psutil
 
 from jarvis.engineering_knowledge.acceptance_fixture import (
-    FixtureQrelRetriever,
     QREL_PATH,
+    FixtureQrelRetriever,
     seed_qrel_fixture,
 )
 from jarvis.engineering_knowledge.applicability import (
@@ -129,7 +130,7 @@ class _AcceptanceResourceProbe(EvaluationResourceProbe):
 
 
 class _FutureAcceptanceFacetHandler:
-    _schema: dict[str, JSONValue] = {
+    _schema: ClassVar[dict[str, JSONValue]] = {
         "facet_type": "acceptance.future-observation",
         "schema_id": "urn:jarvis:acceptance:future-observation:v1",
         "schema_version": "1",
@@ -328,7 +329,7 @@ def _run_live_r2_negative_control(
 
     try:
         target = discover_supervised_runtime()
-    except Exception as exc:
+    except (RuntimeError, psutil.Error) as exc:
         checks.append(
             _check(
                 "live-r2-independence",
@@ -442,7 +443,14 @@ def _accept_real_repair(
             and expected.issubset(references)
             and projected.revision_id in persisted
         )
-    except Exception as exc:
+    except (
+        KeyError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        sqlite3.Error,
+    ) as exc:
         checks.append(
             _check(
                 "real-repair-projection",
@@ -867,7 +875,7 @@ def _cuda_memory_mb() -> float | None:
         if not torch.cuda.is_available():
             return None
         return float(torch.cuda.memory_reserved()) / (1024.0 * 1024.0)
-    except Exception:
+    except RuntimeError:
         return None
 
 
@@ -880,7 +888,7 @@ def _release_cuda_cache() -> None:
     try:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-    except Exception:
+    except RuntimeError:
         return
 
 
@@ -1015,7 +1023,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("Acceptance interrupted by owner.")
         return 130
-    except Exception as exc:
+    except (
+        KeyError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        sqlite3.Error,
+    ) as exc:
         print(f"Phase-2 acceptance failed unexpectedly: {type(exc).__name__}: {exc}")
         return 2
     return 0 if report.complete else 1
