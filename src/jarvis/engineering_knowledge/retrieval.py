@@ -192,6 +192,28 @@ class EngineeringKnowledgeRetrievalIndex:
             columns = [item[0] for item in cursor.description or ()]
         return _revision_from_row(dict(zip(columns, row, strict=True)))
 
+    def list_engineering_knowledge_facets(
+        self,
+        revision_id: str,
+    ) -> tuple[EngineeringKnowledgeFacet, ...]:
+        normalized = _required_text(revision_id, "revision_id")
+        with self._lock:
+            cursor = self._connection.execute(
+                """
+                SELECT *
+                FROM engineering_knowledge_facet
+                WHERE revision_id = ?
+                ORDER BY facet_type, schema_id, schema_version, facet_id
+                """,
+                (normalized,),
+            )
+            rows = cursor.fetchall()
+            columns = [item[0] for item in cursor.description or ()]
+        return tuple(
+            _facet_from_row(dict(zip(columns, row, strict=True)))
+            for row in rows
+        )
+
     def list_engineering_knowledge_applicability(
         self,
         revision_id: str,
