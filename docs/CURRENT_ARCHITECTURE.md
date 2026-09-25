@@ -2,7 +2,7 @@
 
 ## Status
 
-**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC REPAIR FRAMEWORK AND R2 RUNTIME CRASH/HANG RECOVERY FOUNDATION ARE OWNER ACCEPTED ON 2026-09-23. PHASE 1H FOUNDATION HARDENING IS OWNER-MACHINE ACCEPTED ON 2026-09-24. PHASE 2 ENGINEERINGKNOWLEDGE IS THE NEXT CROSS-CUTTING SLICE; STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
+**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC REPAIR FRAMEWORK AND R2 RUNTIME CRASH/HANG RECOVERY FOUNDATION ARE OWNER ACCEPTED ON 2026-09-23. PHASE 1H FOUNDATION HARDENING IS OWNER-MACHINE ACCEPTED ON 2026-09-24. PHASE 2 ENGINEERINGKNOWLEDGE IS OWNER-MACHINE ACCEPTED ON 2026-09-25. PHASE 3 ENGINEERINGCHANGE IS THE NEXT CROSS-CUTTING SLICE; STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
 
 The latest owner-machine accepted Self-Repair runtime baseline includes Phase 1H foundation hardening promoted through PR #90 on 2026-09-24; later documentation-only reconciliation commits may advance protected `main` without changing that runtime behavior.
 
@@ -287,14 +287,53 @@ Owner-machine acceptance covers crash/hang recovery, launcher-only death, interp
 
 Automatic Windows logon startup was observed. When Windows had not yet enumerated the configured Pocket 3 microphone, preflight failed closed rather than selecting another input. Once the configured device was available, the same production path passed preflight, initialized audio/vision and reached native owner-tracking lock.
 
-This architecture is deliberately bounded. RepairKnowledge, DiagnosticModelRouter,
-AI-assisted diagnosis, source repair and self-evolution are not current production
-execution surfaces.
+This architecture is deliberately bounded. EngineeringKnowledge is now an accepted
+advisory production foundation, but DiagnosticModelRouter, AI-assisted diagnosis,
+source repair and self-evolution are not current production execution surfaces.
 
 The complete forward program is defined in
 `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
 
 Final acceptance/status history is summarized in `PROJECT_STATE.md`.
+
+---
+
+## EngineeringKnowledge production foundation
+
+Phase 2 EngineeringKnowledge is owner-machine accepted on 2026-09-25.
+
+Current architecture includes:
+
+- canonical EngineeringKnowledge persistence inside the versioned/checksummed engineering SQLite boundary;
+- stable knowledge identity plus immutable revisions;
+- registered versioned facets with exact schema identity and fail-closed unknown semantics;
+- RFC-8785 canonical JSON + SHA-256 integrity contracts;
+- provenance/evidence links and typed verification attestations;
+- deterministic REPAIR projection from completed verifier-backed `RECOVERED` RepairAttempts;
+- lifecycle state and deterministic promotion from CANDIDATE through accepted terminal handling;
+- registered applicability matchers evaluated before relevance;
+- accepted/current/applicable filtering before retrieval ranking;
+- exact lookup and SQLite FTS5/BM25;
+- pinned local Qwen3 embedding support with rebuildable derived indexes;
+- RRF fusion where dense ranking may rerank only exact/lexically grounded candidates;
+- lexical/exact fallback when the embedding path is unavailable;
+- poisoning/instruction and secret-like admission gates;
+- sensitivity filtering and integrity checks before advisory use;
+- JARVIS-specific qrel/evaluation infrastructure;
+- open-ended registered future facets/process semantics without a parallel knowledge database.
+
+EngineeringKnowledge is advisory. It cannot create RepairPolicy, lower deterministic
+risk, grant execution permission, authorize credentials, merge protected main or
+deploy a source change.
+
+Owner-machine acceptance proved a real production crash was recovered by bounded R2
+before any EngineeringKnowledge revision existed for that repair. The recovered
+RepairAttempt was then projected, promoted, provenance-checked and retrieved through
+exact, lexical and Qwen-256 paraphrase paths. Poisoning/secret gates, future-facet
+extensibility and lexical/hybrid qrel safety all passed.
+
+Canonical final record:
+`docs/PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
 
 ## Known residuals / deliberate deferrals
 
@@ -310,7 +349,7 @@ Not currently claimed as solved:
 - full offline conversation or automatic provider failover;
 - full future Steps 9, 10 and 12 beyond accepted Hands foundations;
 - calendar/email communication, proactive/event-driven automation, plugin lifecycle and world-awareness/HUD end state;
-- AI-assisted diagnostics, RepairKnowledge execution promotion, sandboxed source repair, Repair Curriculum and governed self-improvement beyond the accepted deterministic Self-Repair foundation.
+- AI-assisted diagnostics, automatic promotion from EngineeringKnowledge into executable RepairPolicy, sandboxed source repair, Engineering Curriculum and governed self-improvement beyond the accepted deterministic Self-Repair + EngineeringKnowledge foundations.
 
 Repository-wide accepted/deferred/superseded/rejected truth is centralized in `PROJECT_STATE.md`.
 
@@ -318,9 +357,9 @@ Repository-wide accepted/deferred/superseded/rejected truth is centralized in `P
 
 ## Next architecture acceptance
 
-Phase 1H is **DONE / OWNER-MACHINE ACCEPTED 2026-09-24**. Its final evidence is recorded in `docs/SELF_REPAIR_PHASE1H_HARDENING.md`.
+Phase 2 EngineeringKnowledge is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `docs/PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
 
-The next active cross-cutting slice is **Phase 2 — EngineeringKnowledge Foundation**. The preserved RepairKnowledge research remains the REPAIR-specific design input, while the shared foundation must preserve provenance, lifecycle, supersession and retrieval for later engineering knowledge kinds without granting knowledge records execution Authority.
+The next active cross-cutting slice is **Phase 3 — EngineeringChange Lifecycle / Mission Orchestration**. It must build above the accepted WorkItem/WorkStep/WorkDelivery execution truth and EngineeringKnowledge foundation rather than introduce a parallel task, approval, provenance or verification system.
 
 **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027/CAP-028)** remains
 the next numbered product slice and must still reuse the accepted durable
