@@ -104,14 +104,8 @@ def test_cooldown_expiry_becomes_effectively_healthy() -> None:
         version=2,
     )
 
-    assert (
-        record.effective_state(now_epoch=129.9)
-        is TargetHealthEligibility.COOLDOWN
-    )
-    assert (
-        record.effective_state(now_epoch=130.0)
-        is TargetHealthEligibility.HEALTHY
-    )
+    assert record.effective_state(now_epoch=129.9) is TargetHealthEligibility.COOLDOWN
+    assert record.effective_state(now_epoch=130.0) is TargetHealthEligibility.HEALTHY
 
     recovered = record.recovered(now_epoch=131.0)
     assert recovered.state is TargetHealthEligibility.HEALTHY
