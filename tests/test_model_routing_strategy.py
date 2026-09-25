@@ -90,16 +90,24 @@ def test_settled_mechanical_work_prefers_efficient_role() -> None:
 
 
 def test_repeated_quality_failures_escalate_to_capable() -> None:
-    first = WorkStep(
-        work_id="work-1",
-        kind="sandbox_test",
-        summary="Run tests",
-    ).start().fail("controlled failure")
-    second = WorkStep(
-        work_id="work-1",
-        kind="verification_test",
-        summary="Verify again",
-    ).start().fail("controlled failure")
+    first = (
+        WorkStep(
+            work_id="work-1",
+            kind="sandbox_test",
+            summary="Run tests",
+        )
+        .start()
+        .fail("controlled failure")
+    )
+    second = (
+        WorkStep(
+            work_id="work-1",
+            kind="verification_test",
+            summary="Verify again",
+        )
+        .start()
+        .fail("controlled failure")
+    )
     signals = derive_work_step_signals((first, second))
 
     result = EngineeringStageStrategy().rank(
@@ -117,11 +125,15 @@ def test_repeated_quality_failures_escalate_to_capable() -> None:
 
 
 def test_provider_pressure_alone_does_not_make_task_harder() -> None:
-    pressure = WorkStep(
-        work_id="work-1",
-        kind="provider_pressure",
-        summary="Provider rate limited",
-    ).start().complete({"status_code": 429, "attempt": 1})
+    pressure = (
+        WorkStep(
+            work_id="work-1",
+            kind="provider_pressure",
+            summary="Provider rate limited",
+        )
+        .start()
+        .complete({"status_code": 429, "attempt": 1})
+    )
     signals = derive_work_step_signals((pressure,))
 
     result = EngineeringStageStrategy().rank(
@@ -238,7 +250,5 @@ def test_capable_requirement_fails_closed_without_capable_target() -> None:
     ):
         EngineeringStageStrategy().rank(
             request=_request(task_kind="diagnostics"),
-            eligible_targets=(
-                _target("efficient-only", roles=("efficient",)),
-            ),
+            eligible_targets=(_target("efficient-only", roles=("efficient",)),),
         )
