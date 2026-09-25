@@ -19,6 +19,7 @@ from jarvis.memory.retrieval_models import (
 )
 
 
+
 def _required_text(value: object, field: str) -> str:
     if not isinstance(value, str):
         raise TypeError(f"{field} must be a string")
@@ -42,7 +43,6 @@ def _positive_float(value: object, field: str) -> float:
     if normalized <= 0.0:
         raise ValueError(f"{field} must be positive")
     return normalized
-
 
 class RetrievalExperimentReadiness(StrEnum):
     CURRENT_BASELINE = "current_baseline"
