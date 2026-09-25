@@ -129,3 +129,20 @@ class ModelInvoker:
             response_model=response_model,
             request_context=request_context,
         )
+
+
+def build_default_model_adapter_registry() -> ModelAdapterRegistry:
+    """Register only the provider families already approved by JARVIS."""
+
+    return ModelAdapterRegistry(
+        (
+            StructuredOutputModelAdapter(
+                adapter_id="gemini",
+                provider_id="gemini",
+            ),
+            StructuredOutputModelAdapter(
+                adapter_id="openai",
+                provider_id="openai",
+            ),
+        )
+    )
