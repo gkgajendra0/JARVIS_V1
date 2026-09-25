@@ -18,6 +18,31 @@ from jarvis.memory.retrieval_models import (
     QWEN3_RERANKER_REVISION,
 )
 
+def _required_text(value: object, field: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{field} must be a string")
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{field} must not be empty")
+    return normalized
+
+
+def _non_negative_float(value: object, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise TypeError(f"{field} must be numeric")
+    normalized = float(value)
+    if normalized < 0.0:
+        raise ValueError(f"{field} must be non-negative")
+    return normalized
+
+
+def _positive_float(value: object, field: str) -> float:
+    normalized = _non_negative_float(value, field)
+    if normalized <= 0.0:
+        raise ValueError(f"{field} must be positive")
+    return normalized
+
+
 
 class RetrievalExperimentReadiness(StrEnum):
     CURRENT_BASELINE = "current_baseline"
@@ -460,26 +485,3 @@ def _float_or_none(value: int | None) -> float | None:
     return None if value is None else float(value)
 
 
-def _required_text(value: object, field: str) -> str:
-    if not isinstance(value, str):
-        raise TypeError(f"{field} must be a string")
-    normalized = value.strip()
-    if not normalized:
-        raise ValueError(f"{field} must not be empty")
-    return normalized
-
-
-def _non_negative_float(value: object, field: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise TypeError(f"{field} must be numeric")
-    normalized = float(value)
-    if normalized < 0.0:
-        raise ValueError(f"{field} must be non-negative")
-    return normalized
-
-
-def _positive_float(value: object, field: str) -> float:
-    normalized = _non_negative_float(value, field)
-    if normalized <= 0.0:
-        raise ValueError(f"{field} must be positive")
-    return normalized
