@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import multiprocessing
+
+
 def _import_target(module_name: str, result_queue) -> None:
     __import__(module_name)
     result_queue.put("ok")
