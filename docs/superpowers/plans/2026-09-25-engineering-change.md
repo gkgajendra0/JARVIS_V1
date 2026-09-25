@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-25-engineering-change-design.md`
 
-**Implementation status:** Tasks 1–4 and the Phase-3 fault/recovery harness are implemented on PR #108. Final exact-head full CI is still required before the owner-machine acceptance procedure; Phase 3 remains unaccepted until that real-machine gate passes.
+**Implementation status:** Tasks 1–5 implementation and CI are complete on PR #108. Code Quality run #4419 passed on implementation head `09c90004d26a3c932a1b2f1b748f40c55f27cf9d` (Ruff, full pytest, Windows Hello helper, Windows DPAPI). Phase 3 remains unaccepted until the documented owner-machine gate passes; this documentation-only reconciliation must remain CI-green.
 
 ## Global Constraints
 
@@ -77,5 +77,5 @@
 **Interfaces:** The harness emits bounded, sanitized JSON evidence for owner-machine Postgres/restart/approval tests. It does not claim acceptance before an actual run on the owner's machine.
 
 - [x] Write RED fault-injection tests for each transaction/submission/decision/reconcile boundary and a negative test proving no automatic merge/deployment.
-- [ ] Implement the runner and documentation, run targeted tests GREEN; run `ruff format --check .`, `ruff check .`, and `pytest -q` with the CI dependency set. Review the diff for protected surfaces and secrets.
+- [x] Implement the runner and documentation, run targeted tests GREEN; run `ruff format --check .`, `ruff check .`, and `pytest -q` with the CI dependency set. Review the diff for protected surfaces and secrets.
 - [x] Commit `test: verify Phase 3 recovery and document owner acceptance` and open a PR. Merge green implementation only under standing authorization and accepted gates; stop if owner-machine input is required.
