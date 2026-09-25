@@ -124,9 +124,7 @@ def _attempt(
         ended_at_epoch=102.0,
         latency_ms=1000.0,
         kind=(
-            RoutingAttemptKind.PRIMARY
-            if ordinal == 1
-            else RoutingAttemptKind.FALLBACK
+            RoutingAttemptKind.PRIMARY if ordinal == 1 else RoutingAttemptKind.FALLBACK
         ),
         failure_class=failure_class,
         usage={"input_tokens": 100, "output_tokens": 20},
@@ -232,9 +230,10 @@ def test_decision_and_attempt_transaction_rolls_back_on_attempt_failure(
         )
 
     assert routing_store.get_decision(second_decision.decision_id) is None
-    assert routing_store.find_decision_by_request(
-        second_request.routing_request_id
-    ) is None
+    assert (
+        routing_store.find_decision_by_request(second_request.routing_request_id)
+        is None
+    )
 
 
 def test_target_health_cas_rejects_stale_concurrent_update(tmp_path: Path) -> None:
