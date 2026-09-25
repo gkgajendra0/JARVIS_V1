@@ -223,7 +223,9 @@ def build_default_work_targets(
             )
         )
     if not primary_target_id:
-        raise AssertionError("configured work provider did not produce a primary target")
+        raise AssertionError(
+            "configured work provider did not produce a primary target"
+        )
     return DefaultWorkTargets(
         registry=ModelTargetRegistry(adapter_registry, tuple(targets)),
         primary_target_id=primary_target_id,
@@ -330,16 +332,11 @@ class ModelRouter:
             raise RoutingProvenanceError(
                 "persisted routing decision registry digest does not match"
             )
-        if (
-            persisted.eligibility.policy_digest
-            != self.eligibility_policy.policy_digest
-        ):
+        if persisted.eligibility.policy_digest != self.eligibility_policy.policy_digest:
             raise RoutingProvenanceError(
                 "persisted routing decision policy digest does not match"
             )
-        target = self.target_registry.require(
-            persisted.decision.selected_target_id
-        )
+        target = self.target_registry.require(persisted.decision.selected_target_id)
         return RoutedSelection(
             request=request,
             decision=persisted.decision,
@@ -429,9 +426,7 @@ class ModelRouter:
         return RoutedSelection(
             request=request,
             decision=persisted.decision,
-            target=self.target_registry.require(
-                persisted.decision.selected_target_id
-            ),
+            target=self.target_registry.require(persisted.decision.selected_target_id),
             eligibility=persisted.eligibility,
             reused_decision=False,
         )
