@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Iterable
 from typing import Any, Protocol
 
@@ -233,3 +235,54 @@ class ModelTargetRegistry:
         return tuple(
             target for target in self.all() if normalized in target.capabilities
         )
+
+    def digest(self) -> str:
+        """Return a deterministic non-secret digest of the approved target registry."""
+
+        payload = []
+        for target in self.all():
+            cost_profile = target.cost_profile
+            payload.append(
+                {
+                    "target_id": target.target_id,
+                    "adapter_id": target.adapter_id,
+                    "provider_id": target.provider_id,
+                    "model_id": target.model_id,
+                    "endpoint_ref": target.endpoint_ref,
+                    "locality": target.locality.value,
+                    "capabilities": target.capabilities,
+                    "roles": target.roles,
+                    "max_context_tokens": target.max_context_tokens,
+                    "supports_structured_output": target.supports_structured_output,
+                    "supports_tools": target.supports_tools,
+                    "supports_streaming": target.supports_streaming,
+                    "credential_ref": target.credential_ref,
+                    "latency_class": target.latency_class,
+                    "enabled": target.enabled,
+                    "benchmark_status": target.benchmark_status.value,
+                    "registry_version": target.registry_version,
+                    "cost_profile": (
+                        None
+                        if cost_profile is None
+                        else {
+                            "profile_id": cost_profile.profile_id,
+                            "version": cost_profile.version,
+                            "effective_from_epoch": cost_profile.effective_from_epoch,
+                            "effective_to_epoch": cost_profile.effective_to_epoch,
+                            "input_usd_per_million_tokens": (
+                                cost_profile.input_usd_per_million_tokens
+                            ),
+                            "output_usd_per_million_tokens": (
+                                cost_profile.output_usd_per_million_tokens
+                            ),
+                        }
+                    ),
+                }
+            )
+        encoded = json.dumps(
+            payload,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()

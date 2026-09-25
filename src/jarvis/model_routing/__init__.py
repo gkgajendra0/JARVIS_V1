@@ -10,6 +10,12 @@ from jarvis.model_routing.eligibility import (
     NoEligibleTargets,
     TargetHealthEligibility,
 )
+from jarvis.model_routing.health import (
+    HealthAction,
+    HealthMutation,
+    TargetHealthRecord,
+    apply_provider_failure,
+)
 from jarvis.model_routing.models import (
     BenchmarkStatus,
     CostProfile,
@@ -40,6 +46,11 @@ from jarvis.model_routing.registry import (
     UnknownModelTargetError,
     UnknownRoutingStrategyError,
 )
+from jarvis.model_routing.store import (
+    ModelRoutingStore,
+    PersistedRoutingDecision,
+    RoutingStoreError,
+)
 
 __all__ = [
     "BenchmarkStatus",
@@ -52,14 +63,18 @@ __all__ = [
     "EligibilitySnapshot",
     "EligibleTargets",
     "EvidenceSizeClass",
+    "HealthAction",
+    "HealthMutation",
     "IneligibleStrategyTargetError",
     "LocalityRequirement",
     "ModelAdapter",
     "ModelAdapterRegistry",
     "ModelLocality",
+    "ModelRoutingStore",
     "ModelTarget",
     "ModelTargetRegistry",
     "NoEligibleTargets",
+    "PersistedRoutingDecision",
     "PrivacyClass",
     "ResponseContractResult",
     "RoutingAttempt",
@@ -68,12 +83,15 @@ __all__ = [
     "RoutingOutcome",
     "RoutingRegistryError",
     "RoutingRequest",
+    "RoutingStoreError",
     "RoutingStrategy",
     "RoutingStrategyRegistry",
     "RoutingStrategyResult",
     "TargetExclusion",
     "TargetHealthEligibility",
+    "TargetHealthRecord",
     "UnknownModelAdapterError",
     "UnknownModelTargetError",
     "UnknownRoutingStrategyError",
+    "apply_provider_failure",
 ]
