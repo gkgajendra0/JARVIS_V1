@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
+from dataclasses import dataclass
 
 import pytest
 
-import jarvis.engineering_knowledge.evaluation as evaluation
+from jarvis.engineering_knowledge import evaluation
 
 
 CORPUS_PATH = (
