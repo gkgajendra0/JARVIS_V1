@@ -80,22 +80,47 @@ class EngineeringKnowledgeRetrievalQueryError(EngineeringKnowledgeRetrievalError
 @dataclass(frozen=True, slots=True)
 class EngineeringKnowledgeRetrievalPolicy:
     sensitivities: frozenset[KnowledgeSensitivity]
+    minimum_dense_score: float | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.sensitivities, frozenset) or not all(
             isinstance(value, KnowledgeSensitivity) for value in self.sensitivities
         ):
             raise TypeError("sensitivities must be a frozenset[KnowledgeSensitivity]")
+        threshold = self.minimum_dense_score
+        if threshold is not None:
+            if isinstance(threshold, bool) or not isinstance(threshold, int | float):
+                raise TypeError("minimum_dense_score must be numeric or None")
+            normalized = float(threshold)
+            if not math.isfinite(normalized) or not -1.0 <= normalized <= 1.0:
+                raise ValueError(
+                    "minimum_dense_score must be finite and within [-1.0, 1.0]"
+                )
+            object.__setattr__(self, "minimum_dense_score", normalized)
 
     @classmethod
-    def local(cls) -> EngineeringKnowledgeRetrievalPolicy:
-        return cls(sensitivities=_DEFAULT_LOCAL_SENSITIVITIES)
+    def local(
+        cls,
+        *,
+        minimum_dense_score: float | None = None,
+    ) -> EngineeringKnowledgeRetrievalPolicy:
+        return cls(
+            sensitivities=_DEFAULT_LOCAL_SENSITIVITIES,
+            minimum_dense_score=minimum_dense_score,
+        )
 
     @classmethod
-    def external_context(cls) -> EngineeringKnowledgeRetrievalPolicy:
+    def external_context(
+        cls,
+        *,
+        minimum_dense_score: float | None = None,
+    ) -> EngineeringKnowledgeRetrievalPolicy:
         """Conservative policy for material leaving the local JARVIS boundary."""
 
-        return cls(sensitivities=frozenset({KnowledgeSensitivity.STANDARD}))
+        return cls(
+            sensitivities=frozenset({KnowledgeSensitivity.STANDARD}),
+            minimum_dense_score=minimum_dense_score,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -541,9 +566,21 @@ class EngineeringKnowledgeRetrievalIndex:
         }
 
         ordered: list[str] = list(exact_ids)
-        ordered.extend(
-            item.assertion_id for item in fused if item.assertion_id not in exact_rank
-        )
+        for item in fused:
+            revision_id = item.assertion_id
+            if revision_id in exact_rank:
+                continue
+            if revision_id in lexical_rank:
+                ordered.append(revision_id)
+                continue
+            threshold = resolved_policy.minimum_dense_score
+            score = dense_score.get(revision_id)
+            if (
+                threshold is not None
+                and score is not None
+                and score >= threshold
+            ):
+                ordered.append(revision_id)
         selected = ordered[:limit]
         output: list[EngineeringKnowledgeRetrievalCandidate] = []
         for rank, revision_id in enumerate(selected, start=1):
