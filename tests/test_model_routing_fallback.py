@@ -90,7 +90,10 @@ class ScriptedAdapter:
         return response_model(
             action="do_step",
             summary="Execute bounded step",
-            parameters={},
+            parameters_json="{}",
+            goal_complete=False,
+            needs_owner=False,
+            owner_question=None,
         )
 
 
