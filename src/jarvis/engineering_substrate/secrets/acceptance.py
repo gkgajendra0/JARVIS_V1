@@ -191,7 +191,7 @@ def run_acceptance() -> SecretAcceptanceResult:
 def main() -> int:
     try:
         result = run_acceptance()
-    except Exception as exc:
+    except (RuntimeError, ValueError, OSError, subprocess.SubprocessError) as exc:
         print(
             json.dumps(
                 {
