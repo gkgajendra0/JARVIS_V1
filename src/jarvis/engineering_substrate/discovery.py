@@ -52,6 +52,7 @@ class DiscoveryAdapterPolicy:
     allowed_service_types: tuple[str, ...]
     allowed_device_types: tuple[str, ...] = ()
     allowed_domains: tuple[str, ...] = ("local.",)
+    allowed_interfaces: tuple[str, ...] = ()
     max_timeout_seconds: float = 10.0
     max_results: int = 32
     max_freshness_seconds: float = 300.0
@@ -63,6 +64,12 @@ class DiscoveryAdapterPolicy:
         services = _tokens(self.allowed_service_types)
         devices = _tokens(self.allowed_device_types)
         domains = _tokens(self.allowed_domains)
+        interfaces = tuple(
+            dict.fromkeys(
+                ipaddress.ip_address(str(value).strip()).compressed.casefold()
+                for value in self.allowed_interfaces
+            )
+        )
         if not adapter_id or not adapter_version:
             raise ValueError("discovery adapter identity/version must not be empty")
         if not protocols:
@@ -84,6 +91,7 @@ class DiscoveryAdapterPolicy:
         object.__setattr__(self, "allowed_service_types", services)
         object.__setattr__(self, "allowed_device_types", devices)
         object.__setattr__(self, "allowed_domains", domains)
+        object.__setattr__(self, "allowed_interfaces", interfaces)
         object.__setattr__(
             self,
             "max_timeout_seconds",
@@ -320,9 +328,10 @@ class MdnsDnsSdAdapter:
                     "instance_name": record.instance_name,
                 }
             )
+            transport = _service_transport(record.service_type)
             endpoints = tuple(
                 sorted(
-                    f"tcp://{_endpoint_host(address)}:{record.port}"
+                    f"{transport}://{_endpoint_host(address)}:{record.port}"
                     for address in record.addresses
                 )
             )
@@ -425,6 +434,19 @@ class DiscoveryBroker:
         domain = (scope.local_domain or "local.").strip().casefold()
         if domain not in policy.allowed_domains:
             raise DiscoveryPolicyError("discovery domain exceeds adapter policy")
+        if scope.local_interface is not None:
+            try:
+                interface = ipaddress.ip_address(
+                    scope.local_interface
+                ).compressed.casefold()
+            except ValueError as exc:
+                raise DiscoveryPolicyError(
+                    "discovery local interface must be a concrete IP address"
+                ) from exc
+            if interface not in policy.allowed_interfaces:
+                raise DiscoveryPolicyError(
+                    "discovery local interface exceeds adapter policy"
+                )
         if scope.timeout_seconds > policy.max_timeout_seconds:
             raise DiscoveryPolicyError("discovery timeout exceeds adapter policy")
         if scope.max_results > policy.max_results:
@@ -602,6 +624,15 @@ def _validate_mdns_service_type(value: str) -> None:
         raise ValueError("mDNS service type must be explicit and local")
     if "._tcp." not in service_type and "._udp." not in service_type:
         raise ValueError("mDNS service type must declare TCP or UDP transport")
+
+
+def _service_transport(service_type: str) -> str:
+    normalized = str(service_type).strip().casefold()
+    if "._udp." in normalized:
+        return "udp"
+    if "._tcp." in normalized:
+        return "tcp"
+    raise DiscoveryAdapterError("mDNS service type has no registered transport")
 
 
 def _endpoint_host(address: str) -> str:
