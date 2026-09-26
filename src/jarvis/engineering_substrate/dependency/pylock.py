@@ -163,7 +163,9 @@ def inspect_pylock(
         created_by=created_by,
         lock_sha256=hashlib.sha256(payload).hexdigest(),
         resolved_packages=tuple(sorted(dict.fromkeys(resolved))),
-        graph_digest=canonical_digest(sorted(graph, key=lambda item: str(item["name"]))),
+        graph_digest=canonical_digest(
+            sorted(graph, key=lambda item: str(item["name"]))
+        ),
         wheels=tuple(
             sorted(
                 wheels,
