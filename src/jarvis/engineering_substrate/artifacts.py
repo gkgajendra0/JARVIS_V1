@@ -110,7 +110,10 @@ class ArtifactStore:
     """Immutable SHA-256 object store with quarantine and verify-on-read."""
 
     def __init__(self, root: pathlib.Path | str | None = None) -> None:
-        self.root = pathlib.Path(root or default_artifact_root()).resolve()
+        raw_root = pathlib.Path(root or default_artifact_root())
+        if raw_root.exists() and raw_root.is_symlink():
+            raise ArtifactPathError("artifact store root cannot be a symlink")
+        self.root = raw_root.resolve()
         self.objects_root = self.root / "sha256"
         self.metadata_root = self.root / "metadata" / "sha256"
         self.quarantine_root = self.root / "quarantine"
