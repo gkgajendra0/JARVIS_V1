@@ -145,15 +145,11 @@ class SecretLeaseRequest:
         if not scopes or any(not item for item in scopes):
             raise ValueError("lease scopes must not be empty")
         if ttl <= 0 or ttl > _MAX_LEASE_SECONDS:
-            raise ValueError(
-                f"ttl_seconds must be within (0, {_MAX_LEASE_SECONDS:g}]"
-            )
+            raise ValueError(f"ttl_seconds must be within (0, {_MAX_LEASE_SECONDS:g}]")
         if isinstance(budget, bool) or not isinstance(budget, int):
             raise TypeError("use_budget must be an integer")
         if budget <= 0 or budget > _MAX_USE_BUDGET:
-            raise ValueError(
-                f"use_budget must be within [1, {_MAX_USE_BUDGET}]"
-            )
+            raise ValueError(f"use_budget must be within [1, {_MAX_USE_BUDGET}]")
         object.__setattr__(self, "secret_id", secret_id)
         object.__setattr__(self, "consumer_id", consumer)
         object.__setattr__(self, "scopes", scopes)
@@ -249,7 +245,9 @@ class CanonicalAuthoritySecretGate:
         if proposal.session_id != context.session_id:
             raise SecretAuthorizationError("secret proposal session mismatch")
         if proposal.capability != "engineering:secret" or proposal.operation != "lease":
-            raise SecretAuthorizationError("secret proposal operation is not registered")
+            raise SecretAuthorizationError(
+                "secret proposal operation is not registered"
+            )
         if proposal.target() != request.authority_target():
             raise SecretAuthorizationError("secret proposal target mismatch")
         if proposal.parameters() != request.authority_parameters():
@@ -422,16 +420,16 @@ class SecretBroker:
             raise SecretLeaseError("secret rotated after lease issuance")
         if state.lease.consumer_id not in material.descriptor.allowed_consumers:
             raise SecretLeaseError("secret consumer permission changed")
-        if not set(state.lease.scopes).issubset(set(material.descriptor.allowed_scopes)):
+        if not set(state.lease.scopes).issubset(
+            set(material.descriptor.allowed_scopes)
+        ):
             raise SecretLeaseError("secret scopes changed after lease issuance")
 
         try:
             secret_text = material.value.decode("utf-8")
         except UnicodeDecodeError as exc:
-            raise SecretIntegrityError(
-                "child-env secret must be valid UTF-8"
-            ) from exc
-        if " " in secret_text:
+            raise SecretIntegrityError("child-env secret must be valid UTF-8") from exc
+        if "\x00" in secret_text:
             raise SecretIntegrityError("child-env secret cannot contain NUL")
 
         source = os.environ if parent_environment is None else parent_environment
