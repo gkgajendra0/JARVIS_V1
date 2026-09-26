@@ -109,10 +109,48 @@ def test_dependency_profiles_build_fixed_commands_without_runtime_suffix(
         "jarvis.engineering_substrate.dependency.worker",
         "acquire",
     ]
-    assert verify_command[-2:] == [
-        "jarvis.engineering_substrate.dependency.worker",
-        "verify",
-    ]
+    assert verify_command[-1] == "uv"
+
+    verify_sync = registry.build_launch(
+        profile_id="dependency.verify.v1",
+        image="jarvis-dependency:locked",
+        mounts=(
+            SandboxMountBinding("artifacts_ro", artifacts),
+            SandboxMountBinding("candidate_rw", candidate),
+            SandboxMountBinding("worktree_ro", worktree),
+        ),
+        trusted_suffix=(
+            "pip",
+            "sync",
+            "/artifacts/pylock.toml",
+            "--python",
+            "/candidate/.venv/bin/python",
+            "--offline",
+            "--require-hashes",
+            "--only-binary",
+            ":all:",
+            "--no-build",
+            "--no-config",
+            "--no-python-downloads",
+            "--no-progress",
+        ),
+    )
+    assert verify_sync.command[-14:] == (
+        "uv",
+        "pip",
+        "sync",
+        "/artifacts/pylock.toml",
+        "--python",
+        "/candidate/.venv/bin/python",
+        "--offline",
+        "--require-hashes",
+        "--only-binary",
+        ":all:",
+        "--no-build",
+        "--no-config",
+        "--no-python-downloads",
+        "--no-progress",
+    )
 
     with pytest.raises(SandboxPolicyError, match="runtime command suffix"):
         registry.build_launch(
@@ -123,6 +161,29 @@ def test_dependency_profiles_build_fixed_commands_without_runtime_suffix(
                 SandboxMountBinding("worktree_ro", worktree),
             ),
             trusted_suffix=("--unsafe",),
+        )
+
+
+def test_dependency_verify_rejects_unregistered_uv_operation(
+    tmp_path: Path,
+) -> None:
+    artifacts = tmp_path / "artifacts"
+    candidate = tmp_path / "candidate"
+    worktree = tmp_path / "worktree"
+    for path in (artifacts, candidate, worktree):
+        path.mkdir()
+    registry = default_sandbox_registry(docker_executable="docker")
+
+    with pytest.raises(SandboxPolicyError, match="not registered"):
+        registry.build_launch(
+            profile_id="dependency.verify.v1",
+            image="jarvis-dependency:locked",
+            mounts=(
+                SandboxMountBinding("artifacts_ro", artifacts),
+                SandboxMountBinding("candidate_rw", candidate),
+                SandboxMountBinding("worktree_ro", worktree),
+            ),
+            trusted_suffix=("pip", "install", "anything"),
         )
 
 
