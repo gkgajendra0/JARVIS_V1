@@ -199,8 +199,14 @@ jobs:
           tests/test_hands_generic_grounding.py
           tests/test_windows_hello_utf8.py
 
-      - name: Run Windows DPAPI smoke test
-        run: python -m pytest -q tests/test_windows_dpapi.py
+      - name: Run Windows DPAPI smoke tests
+        run: >-
+          python -m pytest -q
+          tests/test_windows_dpapi.py
+          tests/test_engineering_substrate_secrets_windows.py
+
+      - name: Run Phase 5E disposable secret acceptance
+        run: python -m jarvis.engineering_substrate.secrets.acceptance
 
       - name: Run Windows Self-Repair Job Object smoke tests
         run: python -m pytest -q tests/test_self_repair_windows_job.py
