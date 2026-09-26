@@ -39,7 +39,7 @@ from jarvis.work.models import WorkItem, WorkState, WorkType
 from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.reasoner import RoutedWorkReasoner
-from jarvis.work.resources import ResourceLeaseManager
+from jarvis.work.resources import ResourceLeaseManager, engineering_resource_capacities
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
 
@@ -195,17 +195,19 @@ def build_work_runtime(
         ),
     )
     actions = WorkActionRegistry(tuple(executors))
+    resource_capacities = {
+        "work": max(1, global_concurrency),
+        "cpu": max(1, min(2, global_concurrency)),
+        "git": 1,
+        "network": max(1, global_concurrency),
+        "gpu": 1,
+        "browser": 1,
+        "desktop": 1,
+        "provider_api": 1,
+        **engineering_resource_capacities(),
+    }
     resources = ResourceLeaseManager(
-        {
-            "work": max(1, global_concurrency),
-            "cpu": max(1, min(2, global_concurrency)),
-            "git": 1,
-            "network": max(1, global_concurrency),
-            "gpu": 1,
-            "browser": 1,
-            "desktop": 1,
-            "provider_api": 1,
-        },
+        resource_capacities,
         min_available_memory_mb=min_available_memory_mb,
     )
     engine = WorkEngine(
