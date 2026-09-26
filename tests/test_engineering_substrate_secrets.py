@@ -38,10 +38,14 @@ from jarvis.engineering_substrate import (
     SecretLeaseError,
     SecretLeaseRequest,
     SecretLifecycleState,
+    SecretRedactor,
     SecretStore,
     build_secret_lease_proposal,
 )
 from jarvis.engineering_substrate.secrets.cli import main as secret_cli_main
+from jarvis.engineering_change.store import ChangeStore
+from jarvis.work.models import WorkItem, WorkType
+from jarvis.work.store import SQLiteWorkStore
 from jarvis.security import KeyProtectionError
 
 SECRET_VALUE = b"phase5e-disposable-test-value"
@@ -111,6 +115,71 @@ def test_secret_store_persists_only_sealed_value_and_metadata(tmp_path: Path) ->
     assert SECRET_VALUE not in database_bytes
     assert b"secret-demo" in database_bytes
     assert b"repository.read" in database_bytes
+
+
+def test_secret_redactor_scrubs_text_bytes_and_repr() -> None:
+    redactor = SecretRedactor.from_values(
+        (SECRET_VALUE, SECRET_VALUE.decode()),
+    )
+
+    assert SECRET_VALUE.decode() not in repr(redactor)
+    assert redactor.redact_text(
+        "prefix " + SECRET_VALUE.decode() + " suffix"
+    ) == "prefix [REDACTED_SECRET] suffix"
+    assert redactor.redact_bytes(
+        b"prefix " + SECRET_VALUE + b" suffix"
+    ) == b"prefix [REDACTED_SECRET] suffix"
+
+    redactor.clear()
+    assert redactor.redact_text(SECRET_VALUE.decode()) == SECRET_VALUE.decode()
+
+
+def test_work_and_engineering_change_metadata_never_persist_plaintext_secret(
+    tmp_path: Path,
+) -> None:
+    work_path = tmp_path / "work.sqlite3"
+    work_store = SQLiteWorkStore(work_path)
+    item = WorkItem(
+        request="phase5e metadata-only secret lease test",
+        work_type=WorkType.DEVELOPMENT,
+        source_session_id="phase5e-session",
+        source_turn_id="phase5e-turn",
+        result={
+            "secret_id": "secret-demo",
+            "consumer_id": "dependency.private-index.v1",
+            "scopes": ["repository.read"],
+            "policy_digest": "b" * 64,
+        },
+    )
+    work_store.create(item)
+
+    changes = ChangeStore(work_store)
+    change = changes.create(
+        request="phase5e metadata-only change",
+        process_key=ChangeStore.DEFAULT_PROCESS.key,
+        process_version=ChangeStore.DEFAULT_PROCESS.version,
+        source_session_id="phase5e-change-session",
+        source_turn_id="phase5e-change-turn",
+    )
+    changes.add_artifact(
+        change.change_id,
+        kind="secret_lease_metadata",
+        payload={
+            "secret_id": "secret-demo",
+            "consumer_id": "dependency.private-index.v1",
+            "scopes": ["repository.read"],
+            "policy_digest": "b" * 64,
+        },
+    )
+
+    persisted = b"".join(
+        path.read_bytes()
+        for path in tmp_path.iterdir()
+        if path.is_file() and path.name.startswith("work.sqlite3")
+    )
+    assert SECRET_VALUE not in persisted
+    assert b"secret-demo" in persisted
+    assert b"repository.read" in persisted
 
 
 def test_projection_tamper_is_detected_against_sealed_envelope(tmp_path: Path) -> None:
