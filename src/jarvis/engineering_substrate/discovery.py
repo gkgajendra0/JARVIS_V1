@@ -75,12 +75,16 @@ class DiscoveryAdapterPolicy:
         if not protocols:
             raise ValueError("discovery adapter requires an explicit protocol")
         if not services and not devices:
-            raise ValueError("discovery adapter requires an explicit service/device set")
+            raise ValueError(
+                "discovery adapter requires an explicit service/device set"
+            )
         if "mdns" in protocols:
             for service_type in services:
                 _validate_mdns_service_type(service_type)
         if self.max_timeout_seconds <= 0 or self.max_timeout_seconds > 30:
-            raise ValueError("adapter max_timeout_seconds must be within Phase-5 bounds")
+            raise ValueError(
+                "adapter max_timeout_seconds must be within Phase-5 bounds"
+            )
         if self.max_results <= 0 or self.max_results > 64:
             raise ValueError("adapter max_results must be within Phase-5 bounds")
         if self.max_freshness_seconds <= 0:
@@ -125,11 +129,7 @@ class MdnsServiceRecord:
         addresses: list[str] = []
         for raw in self.addresses:
             address = ipaddress.ip_address(str(raw).strip())
-            if not (
-                address.is_private
-                or address.is_link_local
-                or address.is_loopback
-            ):
+            if not (address.is_private or address.is_link_local or address.is_loopback):
                 raise ValueError("mDNS endpoint must remain local/private")
             normalized = address.compressed.casefold()
             if normalized not in addresses:
@@ -315,9 +315,7 @@ class MdnsDnsSdAdapter:
                     "mDNS backend returned an out-of-scope service type"
                 )
             if scope.target_hints:
-                searchable = (
-                    record.instance_name + " " + record.server
-                ).casefold()
+                searchable = (record.instance_name + " " + record.server).casefold()
                 if not any(
                     hint.casefold() in searchable for hint in scope.target_hints
                 ):
@@ -422,15 +420,11 @@ class DiscoveryBroker:
         if not set(scope.allowed_service_types).issubset(
             set(policy.allowed_service_types)
         ):
-            raise DiscoveryPolicyError(
-                "discovery service type exceeds adapter policy"
-            )
+            raise DiscoveryPolicyError("discovery service type exceeds adapter policy")
         if not set(scope.allowed_device_types).issubset(
             set(policy.allowed_device_types)
         ):
-            raise DiscoveryPolicyError(
-                "discovery device type exceeds adapter policy"
-            )
+            raise DiscoveryPolicyError("discovery device type exceeds adapter policy")
         domain = (scope.local_domain or "local.").strip().casefold()
         if domain not in policy.allowed_domains:
             raise DiscoveryPolicyError("discovery domain exceeds adapter policy")
@@ -462,25 +456,19 @@ class DiscoveryBroker:
             )
         observations = adapter.discover(scope)
         if len(observations) > scope.max_results:
-            raise DiscoveryAdapterError(
-                "discovery adapter exceeded max_results"
-            )
+            raise DiscoveryAdapterError("discovery adapter exceeded max_results")
         expected_scope_digest = canonical_digest(scope)
         identities: set[str] = set()
         validated: list[DiscoveryObservation] = []
         for observation in observations:
             if observation.adapter_id != scope.adapter_id:
-                raise DiscoveryAdapterError(
-                    "discovery observation adapter_id mismatch"
-                )
+                raise DiscoveryAdapterError("discovery observation adapter_id mismatch")
             if observation.adapter_version != policy.adapter_version:
                 raise DiscoveryAdapterError(
                     "discovery observation adapter_version mismatch"
                 )
             if observation.scope_id != scope.scope_id:
-                raise DiscoveryAdapterError(
-                    "discovery observation scope_id mismatch"
-                )
+                raise DiscoveryAdapterError("discovery observation scope_id mismatch")
             if observation.scope_digest != expected_scope_digest:
                 raise DiscoveryAdapterError(
                     "discovery observation scope digest mismatch"
@@ -606,9 +594,7 @@ def default_discovery_broker(
 def _tokens(values: Iterable[str]) -> tuple[str, ...]:
     normalized = tuple(
         dict.fromkeys(
-            str(value).strip().casefold()
-            for value in values
-            if str(value).strip()
+            str(value).strip().casefold() for value in values if str(value).strip()
         )
     )
     if any("*" in value for value in normalized):
