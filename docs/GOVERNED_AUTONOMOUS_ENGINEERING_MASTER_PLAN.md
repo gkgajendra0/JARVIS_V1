@@ -2,15 +2,18 @@
 
 ## Status
 
-**AUTHORITATIVE OWNER-APPROVED NORTH-STAR PROGRAM ARCHITECTURE — accepted on protected `main`; Phase 2 EngineeringKnowledge owner-machine accepted 2026-09-25; Phase 3 EngineeringChange is active**
+**AUTHORITATIVE OWNER-APPROVED AUTONOMOUS-ENGINEERING SUBSYSTEM — subordinate to the whole-JARVIS autonomous self-management north star**
 
-Established: 2026-09-24
+Established: 2026-09-24  
+North-star hierarchy reconciled: 2026-09-26
 
-This document defines the long-term engineering architecture for the JARVIS V1 end state. It sits above the specialized Self-Repair/Self-Evolution program and the numbered product roadmap.
+This document defines the long-term **engineering subsystem** by which JARVIS can investigate, repair, extend and improve itself. It sits above the specialized Self-Repair/Self-Evolution program, but below the product-level `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
 
-The central product promise is:
+The whole-JARVIS product north star is broader than autonomous engineering: JARVIS should eventually understand desired versus actual state, determine what work should exist, operate/manage itself and use this engineering subsystem whenever a gap requires research, source change, capability acquisition or governed improvement.
 
-> **The owner expresses intent; JARVIS handles the engineering required to satisfy that intent; authority remains with the owner.**
+The central engineering promise remains:
+
+> **The owner expresses intent or JARVIS produces an evidence-backed engineering need; JARVIS handles the governed engineering required to satisfy it; authority remains with the owner.**
 
 The owner should not need to perform routine research, coding, Git operations, dependency setup, debugging, test execution, PR preparation, deployment mechanics or production diagnosis merely because JARVIS lacks a capability. The owner remains responsible for explicit architecture/promotion approvals, secrets or physical inputs that only the owner can provide, and real-world acceptance when software cannot independently prove physical behavior.
 
@@ -20,7 +23,7 @@ This plan does not authorize autonomous protected-main merge, governance mutatio
 
 ## 1. End-state vision
 
-JARVIS is intended to become one coherent personal intelligence runtime that can:
+Within the larger autonomous self-management product, this subsystem enables JARVIS to become its own governed engineer. It must support a coherent personal intelligence runtime that can:
 
 1. understand its own architecture, capabilities, dependencies, resources, health and accepted constraints;
 2. accept high-level owner goals even when the required capability does not yet exist;
@@ -552,6 +555,14 @@ Exit criteria: the owner can acquire one real new capability without manually re
 
 Production outcomes update/supersede EngineeringKnowledge, regressions and compatibility knowledge. Failed candidates remain useful negative evidence.
 
+### Phase 10A — Autonomous Operations Control Plane integration point
+
+**OWNED BY `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`, not by this engineering subsystem alone.**
+
+After Phase 10, whole-JARVIS autonomy adds the durable Objective/DesiredState model, SystemState aggregation, reconciliation loop, evidence-backed AutonomyFindings/ActionCandidates, autonomous work creation, portfolio prioritization, owner-attention queue, autonomy budgets/anti-thrash controls and shadow evaluation.
+
+This phase deliberately occurs before autonomous gap/weakness creation so JARVIS has a canonical reason for creating work and a governed way to prioritize it. It must reuse this engineering lifecycle rather than creating a second repair/coding brain.
+
 ### Phase 11 — autonomous capability-gap and weakness detection
 
 Only after direct owner-requested acquisition works reliably should JARVIS create ImprovementCandidates from repeated manual intervention, fallback use, latency/cost/resource problems, reliability weakness or clearly measurable missing capability patterns.
@@ -666,8 +677,9 @@ Canonical ownership after this plan is accepted:
 - `CURRENT_PLAN.md` — current active work only;
 - `PROJECT_STATE.md` — accepted/deferred/superseded/rejected ledger;
 - `QUALITY_GATES.md` — universal completion and promotion rules;
-- `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` — authoritative north-star architecture for owner-directed autonomous engineering;
-- `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — specialized repair/evolution program aligned under this master plan;
+- `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md` — authoritative whole-JARVIS operating north star;
+- `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` — authoritative autonomous-engineering subsystem under that north star;
+- `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — specialized repair/evolution program aligned under this engineering master plan;
 - phase-specific design/research documents — implementation detail for the active phase.
 
 Rules:
@@ -687,11 +699,13 @@ Rules:
 2. Phase 2 EngineeringKnowledge is complete and owner-machine accepted.
 3. Phase 3 EngineeringChange is complete and owner-machine accepted.
 4. Phase 4 Research + Diagnostic Model Router is complete and owner-machine accepted on 2026-09-26; preserve its routing/health/fallback boundary.
-5. Begin Phase 5 Secure Autonomous Engineering Substrate with research and architecture before implementation.
-6. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2, Phase 3 or Phase 4 without new concrete evidence.
-7. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
-8. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.
+5. Continue Phase 5 Secure Autonomous Engineering Substrate implementation; the 2026-09-26 north-star clarification does not interrupt or rewrite Phase 5.
+6. Continue Phases 6–10 as the governed engineering effectors required by the larger self-management goal.
+7. Insert Phase 10A Autonomous Operations Control Plane before Phase 11, as defined by `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
+8. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2, Phase 3 or Phase 4 without new concrete evidence.
+9. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
+10. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.
 
 The program is considered aligned only while each active slice can answer:
 
-> **How does this move JARVIS toward accepting owner intent and autonomously performing the necessary governed engineering, without taking ownership authority away from the owner?**
+> **How does this move JARVIS toward autonomously managing JARVIS and its work, and when engineering is required, autonomously performing that governed engineering — without taking ownership authority away from the owner?**
