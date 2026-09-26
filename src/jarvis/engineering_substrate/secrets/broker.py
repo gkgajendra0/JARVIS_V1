@@ -366,11 +366,12 @@ class SecretBroker:
             raise SecretAuthorizationError(
                 "secret authority evidence proposal fingerprint mismatch"
             )
-        if (
-            len(evidence.policy_digest) != 64
-            or any(char not in "0123456789abcdef" for char in evidence.policy_digest)
+        if len(evidence.policy_digest) != 64 or any(
+            char not in "0123456789abcdef" for char in evidence.policy_digest
         ):
-            raise SecretAuthorizationError("secret authority evidence digest is invalid")
+            raise SecretAuthorizationError(
+                "secret authority evidence digest is invalid"
+            )
 
         # Only after Authority has been consumed may the sealed envelope be decrypted.
         descriptor = self._store.verified_descriptor(request.secret_id)
