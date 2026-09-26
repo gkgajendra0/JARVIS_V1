@@ -138,7 +138,7 @@ def test_dependency_profiles_build_fixed_commands_without_runtime_suffix(
             "--no-progress",
         ),
     )
-    assert verify_sync.command[-16:] == (
+    assert verify_sync.command[-15:] == (
         "uv",
         "--cache-dir",
         "/candidate/.uv-cache",
