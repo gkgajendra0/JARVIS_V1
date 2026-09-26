@@ -106,7 +106,9 @@ def run_acceptance() -> SecretAcceptanceResult:
             value=secret_value,
         )
         if store.materialize(descriptor.secret_id).value != secret_value:
-            raise SecretAcceptanceError("DPAPI round trip changed the disposable secret")
+            raise SecretAcceptanceError(
+                "DPAPI round trip changed the disposable secret"
+            )
 
         request = SecretLeaseRequest(
             secret_id=descriptor.secret_id,
