@@ -68,9 +68,7 @@ class SubstrateReplayCase:
         if not isinstance(self.restart_boundary, bool):
             raise TypeError("restart_boundary must be bool")
         before = (
-            None
-            if self.lineage_before is None
-            else str(self.lineage_before).strip()
+            None if self.lineage_before is None else str(self.lineage_before).strip()
         )
         after = None if self.lineage_after is None else str(self.lineage_after).strip()
         if self.restart_boundary and (not before or not after):
@@ -192,8 +190,7 @@ def substrate_fixture_digest(
         "fixture_version": _positive_int(fixture_version, field="fixture_version"),
         "source_revision": _required_text(source_revision, field="source_revision"),
         "cases": [
-            _case_payload(case)
-            for case in sorted(cases, key=lambda item: item.case_id)
+            _case_payload(case) for case in sorted(cases, key=lambda item: item.case_id)
         ],
     }
     encoded = json.dumps(
