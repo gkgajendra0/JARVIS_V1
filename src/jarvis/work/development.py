@@ -19,6 +19,12 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from jarvis.capabilities.local_reads import default_project_root
+from jarvis.engineering_substrate.sandbox import (
+    SandboxMountBinding,
+    SandboxPolicyError,
+    SandboxResourceUnavailable,
+    default_sandbox_registry,
+)
 from jarvis.work.brain import BrainAction
 from jarvis.work.engine import WorkOwnerInputRequired
 from jarvis.work.models import WorkItem, WorkType
@@ -530,7 +536,7 @@ class DevelopmentTestRunner(Protocol):
 
 
 class DockerDevelopmentTestRunner:
-    """Run fixed pytest commands inside a locked-down prebuilt Docker image."""
+    """Run fixed pytest commands through the registered test.offline.v1 profile."""
 
     def __init__(self, image: str) -> None:
         self.image = image.strip()
@@ -539,7 +545,10 @@ class DockerDevelopmentTestRunner:
         docker = shutil.which("docker")
         if docker is None:
             raise DevelopmentWorkspaceError("Docker executable is unavailable")
-        self._docker = docker
+        self._sandbox_registry = default_sandbox_registry(
+            docker_executable=docker,
+            protected_main_root=default_project_root(),
+        )
 
     async def run(
         self,
@@ -548,41 +557,18 @@ class DockerDevelopmentTestRunner:
         targets: tuple[str, ...],
         timeout_seconds: float,
     ) -> dict[str, Any]:
-        mount = f"type=bind,src={workspace},dst=/workspace,readonly"
-        command = [
-            self._docker,
-            "run",
-            "--rm",
-            "--network",
-            "none",
-            "--read-only",
-            "--cap-drop",
-            "ALL",
-            "--security-opt",
-            "no-new-privileges",
-            "--pids-limit",
-            "128",
-            "--memory",
-            "2g",
-            "--cpus",
-            "2",
-            "--mount",
-            mount,
-            "--tmpfs",
-            "/tmp:rw,noexec,nosuid,size=512m",
-            "--workdir",
-            "/workspace",
-            "--env",
-            "PYTHONDONTWRITEBYTECODE=1",
-            self.image,
-            "python",
-            "-m",
-            "pytest",
-            "-q",
-            "-p",
-            "no:cacheprovider",
-            *targets,
-        ]
+        try:
+            launch = self._sandbox_registry.build_launch(
+                profile_id="test.offline.v1",
+                image=self.image,
+                mounts=(SandboxMountBinding("workspace_ro", workspace),),
+                trusted_suffix=targets,
+                requested_timeout_seconds=timeout_seconds,
+            )
+        except (SandboxPolicyError, SandboxResourceUnavailable) as exc:
+            raise DevelopmentWorkspaceError(str(exc)) from exc
+
+        command = list(launch.command)
         try:
             completed = await asyncio.to_thread(
                 subprocess.run,
@@ -592,7 +578,7 @@ class DockerDevelopmentTestRunner:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=timeout_seconds,
+                timeout=launch.timeout_seconds,
                 check=False,
                 shell=False,
             )
@@ -600,7 +586,7 @@ class DockerDevelopmentTestRunner:
             return {
                 "passed": False,
                 "timed_out": True,
-                "timeout_seconds": timeout_seconds,
+                "timeout_seconds": launch.timeout_seconds,
                 "output": "sandboxed pytest timed out",
                 "sandbox": "docker",
             }
@@ -614,6 +600,8 @@ class DockerDevelopmentTestRunner:
             "sandbox": "docker",
             "network": "disabled",
             "workspace": "read_only",
+            "sandbox_profile": launch.profile_id,
+            "sandbox_profile_version": launch.profile_version,
         }
 
 
