@@ -246,12 +246,13 @@ At research freeze, 0.12.18 is current and contains the Windows wheel path-trave
 
 Allowed: public PyPI simple index over HTTPS.
 
-Private indexes require a registered source plus scoped SecretLease.
+Private indexes require a registered source plus scoped SecretLease. Phase-5 v1 resolves a dependency from one explicitly selected source policy; it does not combine public and private indexes with an extra-index search. Current pip documentation warns that extra-index behavior can create dependency-confusion risk because candidate locations are searched together.
 
 Denied by default:
 
 - HTTP downgrade;
 - trusted-host/TLS verification bypass;
+- public/private extra-index mixing for one requirement;
 - arbitrary model-provided index;
 - mutable VCS dependency;
 - local path outside the isolated worktree/artifact cache;
@@ -291,8 +292,8 @@ Dedicated local store:
 Production requirements:
 
 - versioned schema;
-- each value sealed with existing user-scoped Windows DPAPI KeyProtector;
-- metadata indexable separately;
+- each secret stored as a DPAPI-sealed envelope containing the plaintext value plus the security-sensitive descriptor identity/scope/version;
+- nonsecret metadata may be projected into index columns, but projection is checked against the sealed envelope before materialization so local metadata edits cannot broaden scope;
 - plaintext never persisted;
 - machine-wide DPAPI mode forbidden;
 - fail closed if production DPAPI unavailable.
@@ -308,6 +309,8 @@ Operations: enroll, rotate/replace, revoke, list metadata, inspect metadata.
 Plaintext input uses no-echo local console input and never argv. Voice/model may ask the owner to enroll a secret but never receives its value.
 
 ### Lease policy
+
+Leases are short-lived, non-transferable and are not automatically reusable across a JARVIS process restart. Durable audit metadata may record that a lease existed, but a resumed WorkItem must obtain a fresh policy-checked lease.
 
 Lease requires:
 
