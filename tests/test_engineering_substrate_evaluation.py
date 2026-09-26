@@ -19,8 +19,8 @@ _FIXTURE = Path(__file__).parent / "fixtures" / "phase5_substrate_replay_v1.json
 
 
 def _load():
-    fixture_id, fixture_version, source_revision, cases = (
-        load_substrate_replay_fixture(_FIXTURE)
+    fixture_id, fixture_version, source_revision, cases = load_substrate_replay_fixture(
+        _FIXTURE
     )
     return fixture_id, fixture_version, source_revision, cases
 
