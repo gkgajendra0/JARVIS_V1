@@ -148,6 +148,7 @@ def test_dependency_verify_rejects_unregistered_uv_operation(
             trusted_suffix=("pip", "install", "anything"),
         )
 
+
 def test_sandbox_rejects_mount_policy_drift_and_protected_main_write(
     tmp_path: Path,
 ) -> None:
