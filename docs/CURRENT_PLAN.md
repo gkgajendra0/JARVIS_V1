@@ -51,7 +51,7 @@ Phase-5 technology research is complete and the concrete architecture/implementa
 
 The proposed design adds deterministic DependencyBroker, SecretBroker, declarative CapabilityManifest, bounded discovery, JARVIS-owned SandboxProfiles, provenance and hardware-acceptance evidence while preserving EngineeringChange and Authority as the only governance boundary.
 
-**Current state: ARCHITECTURE OWNER-APPROVED / IMPLEMENTATION ACTIVE.** Phase 5A canonical substrate contracts and Phase 5B SandboxRegistry/content-addressed ArtifactStore are implemented. Docker sandbox-required work now fails closed without host fallback, existing development tests route through the registered offline profile, and staged artifacts are SHA-256-addressed with quarantine and verify-on-read. Continue Phase 5C through 5J under the standing authorization, stopping only for genuine owner-machine/manual acceptance or a new architectural decision.
+**Current state: ARCHITECTURE OWNER-APPROVED / IMPLEMENTATION ACTIVE.** Phase 5A canonical substrate contracts, Phase 5B SandboxRegistry/content-addressed ArtifactStore, and Phase 5C Python DependencyBroker are implemented. Dependency resolution is bound to one registered HTTPS source, pinned uv 0.12.19 trust evidence, PEP-751 pylock.toml, wheel-only artifacts and exact SHA-256 identities; protected-main environments are never dependency targets. Continue Phase 5D through 5J under the standing authorization, stopping only for genuine owner-machine/manual acceptance or a new architectural decision.
 
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
@@ -141,4 +141,4 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Begin Phase 5C — Python DependencyBroker + trusted uv adapter — after the Phase-5B PR is green/merged, then continue through Phase 5J under the standing authorization.**
+**Begin Phase 5D — dependency provenance + offline candidate verification — after the Phase-5C PR is green/merged, then continue through Phase 5J under the standing authorization.**
