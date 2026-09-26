@@ -9,7 +9,6 @@ from dataclasses import dataclass
 
 import psutil
 
-
 ENGINEERING_RESOURCE_CAPACITIES: dict[str, int] = {
     "resolver": 1,
     "artifact": 2,
