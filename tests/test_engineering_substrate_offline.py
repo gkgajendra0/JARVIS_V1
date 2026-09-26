@@ -191,12 +191,16 @@ def test_candidate_recreation_runs_only_registered_offline_docker_operations(
         assert command[command.index("--cap-drop") + 1] == "ALL"
         assert "no-new-privileges" in command
         assert UV_VERIFY_IMAGE in command
+        assert command[command.index("uv") + 1 : command.index("uv") + 3] == [
+            "--cache-dir",
+            "/candidate/.uv-cache",
+        ]
     sync = runner.commands[1]
     assert "--offline" in sync
     assert "--require-hashes" in sync
     assert "--only-binary" in sync
     assert ":all:" in sync
-    assert "--no-build" in sync
+    assert "--no-build" not in sync
 
 
 def test_candidate_inventory_must_exactly_match_canonical_resolution(
