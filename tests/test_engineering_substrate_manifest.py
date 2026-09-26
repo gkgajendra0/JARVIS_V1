@@ -119,6 +119,24 @@ def _manifest(**overrides: object) -> CapabilityManifest:
     return CapabilityManifest(**values)  # type: ignore[arg-type]
 
 
+def test_trusted_execution_registrations_cannot_be_empty() -> None:
+    with pytest.raises(ValueError, match="at least one adapter"):
+        TrustedExecutorRegistration(
+            executor_id="empty.executor.v1",
+            adapter_ids=(),
+            operations=("run",),
+            authority_attribute_floor=(),
+            allowed_secret_scopes=(),
+            sandbox_profile_ids=(),
+        )
+
+    with pytest.raises(ValueError, match="at least one operation"):
+        TrustedAdapterRegistration(
+            adapter_id="empty.adapter.v1",
+            operations=(),
+        )
+
+
 def test_representative_manifest_validates_and_is_digest_bound() -> None:
     manifest = _manifest()
     registered = _registry().register(manifest)
