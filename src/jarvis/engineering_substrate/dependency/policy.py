@@ -60,7 +60,9 @@ class DependencySourcePolicy:
             raise ValueError("source_id must not be empty")
         index_url = _https_url(self.index_url, field="index_url")
         hosts = tuple(
-            dict.fromkeys(str(item).strip().casefold() for item in self.allowed_artifact_hosts)
+            dict.fromkeys(
+                str(item).strip().casefold() for item in self.allowed_artifact_hosts
+            )
         )
         if not hosts or any(not item or "/" in item or ":" in item for item in hosts):
             raise ValueError("allowed_artifact_hosts must contain bare hostnames")
