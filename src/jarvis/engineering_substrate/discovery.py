@@ -626,5 +626,3 @@ def default_discovery_broker(
         adapters=(adapter,),
         clock=clock,
     )
-
-
