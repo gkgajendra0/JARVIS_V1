@@ -297,11 +297,12 @@ def test_secret_lease_consumes_canonical_critical_authority_and_is_child_only(
     assert held_environment == {}
     assert dict(os.environ) == before
 
-    with pytest.raises(
-        SecretLeaseError, match="unknown|exhausted"
-    ), broker.child_environment(
-        lease.lease_id,
-        consumer_id=lease.consumer_id,
+    with (
+        pytest.raises(SecretLeaseError, match="unknown|exhausted"),
+        broker.child_environment(
+            lease.lease_id,
+            consumer_id=lease.consumer_id,
+        ),
     ):
         pass
 
@@ -349,9 +350,12 @@ def test_lease_scope_consumer_rotation_revocation_and_restart_fail_closed(
     )
 
     store.rotate("secret-demo", value=b"rotated", now_epoch=1_100)
-    with pytest.raises(SecretLeaseError, match="rotated"), broker.child_environment(
-        lease.lease_id,
-        consumer_id=lease.consumer_id,
+    with (
+        pytest.raises(SecretLeaseError, match="rotated"),
+        broker.child_environment(
+            lease.lease_id,
+            consumer_id=lease.consumer_id,
+        ),
     ):
         pass
 
@@ -362,11 +366,12 @@ def test_lease_scope_consumer_rotation_revocation_and_restart_fail_closed(
         clock=lambda: 1_000.0,
         process_nonce="process-b",
     )
-    with pytest.raises(
-        SecretLeaseError, match="fresh lease"
-    ), restarted.child_environment(
-        lease.lease_id,
-        consumer_id=lease.consumer_id,
+    with (
+        pytest.raises(SecretLeaseError, match="fresh lease"),
+        restarted.child_environment(
+            lease.lease_id,
+            consumer_id=lease.consumer_id,
+        ),
     ):
         pass
 
