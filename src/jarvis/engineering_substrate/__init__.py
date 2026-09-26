@@ -56,6 +56,14 @@ from jarvis.engineering_substrate.discovery import (
     ZeroconfMdnsBackend,
     default_discovery_broker,
 )
+from jarvis.engineering_substrate.hardware_acceptance import (
+    HardwareAcceptanceAssessment,
+    HardwareAcceptanceConflict,
+    HardwareAcceptanceError,
+    HardwareAcceptanceExpired,
+    HardwareAcceptanceService,
+    HardwareAcceptanceUnavailable,
+)
 from jarvis.engineering_substrate.manifest import (
     CapabilityManifestError,
     CapabilityManifestRegistry,
@@ -171,8 +179,14 @@ __all__ = [
     "DuplicateCapabilityManifestError",
     "DuplicateSandboxProfileError",
     "DuplicateSchemaRegistrationError",
+    "HardwareAcceptanceAssessment",
+    "HardwareAcceptanceConflict",
+    "HardwareAcceptanceError",
     "HardwareAcceptanceEvidence",
+    "HardwareAcceptanceExpired",
     "HardwareAcceptanceRequest",
+    "HardwareAcceptanceService",
+    "HardwareAcceptanceUnavailable",
     "HardwareAcceptanceVerdict",
     "IntegrityProvenanceResponse",
     "ManifestActivationError",
