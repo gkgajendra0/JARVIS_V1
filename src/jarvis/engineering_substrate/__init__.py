@@ -132,6 +132,7 @@ from jarvis.engineering_substrate.secrets import (
 )
 
 __all__ = [
+    "DEFAULT_MDNS_POLICY",
     "PRIVATE_INDEX_TOKEN_CONSUMER",
     "SCHEMA_VERSION_V1",
     "ArtifactAdmissionRecord",
@@ -156,7 +157,6 @@ __all__ = [
     "DependencyResolution",
     "DependencyResolutionRegistration",
     "DigestRegistration",
-    "DEFAULT_MDNS_POLICY",
     "DiscoveryAdapter",
     "DiscoveryAdapterError",
     "DiscoveryAdapterPolicy",
@@ -230,6 +230,7 @@ __all__ = [
     "UnknownSchemaVersionError",
     "VerificationStatus",
     "VerifiedAttestationSet",
+    "ZeroconfMdnsBackend",
     "build_secret_lease_proposal",
     "canonical_bytes",
     "canonical_digest",
@@ -237,10 +238,9 @@ __all__ = [
     "capability_manifest_json_schema",
     "capability_manifest_schema_bytes",
     "capability_manifest_schema_digest",
-    "ZeroconfMdnsBackend",
     "default_artifact_root",
-    "default_discovery_broker",
     "default_contract_schema_registry",
+    "default_discovery_broker",
     "default_sandbox_registry",
     "default_secret_consumer_registry",
     "default_secret_store_path",
