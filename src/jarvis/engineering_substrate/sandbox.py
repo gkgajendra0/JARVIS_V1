@@ -268,7 +268,6 @@ class SandboxRegistry:
                         "--require-hashes",
                         "--only-binary",
                         ":all:",
-                        "--no-build",
                         "--no-config",
                         "--no-python-downloads",
                         "--no-progress",
@@ -420,7 +419,7 @@ DEFAULT_SANDBOX_DEFINITIONS = (
             SandboxMountPolicy("worktree_ro", "/workspace", True),
         ),
         image_workdir="/candidate",
-        fixed_entrypoint=("uv",),
+        fixed_entrypoint=("uv", "--cache-dir", "/candidate/.uv-cache"),
     ),
 )
 
