@@ -1,7 +1,7 @@
 """Phase-5E DPAPI SecretStore and authority-bound SecretBroker."""
 
 from jarvis.engineering_substrate.secrets.broker import (
-    PYPI_TOKEN_CONSUMER,
+    PRIVATE_INDEX_TOKEN_CONSUMER,
     CanonicalAuthoritySecretGate,
     SecretAuthorizationError,
     SecretAuthorityEvidence,
@@ -27,7 +27,7 @@ from jarvis.engineering_substrate.secrets.store import (
 )
 
 __all__ = [
-    "PYPI_TOKEN_CONSUMER",
+    "PRIVATE_INDEX_TOKEN_CONSUMER",
     "CanonicalAuthoritySecretGate",
     "SecretAlreadyExistsError",
     "SecretAuthorizationError",
