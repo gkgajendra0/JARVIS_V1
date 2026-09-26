@@ -156,9 +156,7 @@ def test_dependency_digest_drift_is_rejected() -> None:
 
 def test_sandbox_digest_drift_is_rejected() -> None:
     with pytest.raises(ManifestDigestMismatchError, match="sandbox profile digest"):
-        _registry().validate_for_activation(
-            _manifest(sandbox_profile_digests=(SHA_C,))
-        )
+        _registry().validate_for_activation(_manifest(sandbox_profile_digests=(SHA_C,)))
 
 
 def test_dependency_requires_its_registered_provenance() -> None:
@@ -228,6 +226,4 @@ def test_schema_accepts_canonical_representative_manifest() -> None:
     payload = canonical_payload(_manifest())
     assert isinstance(payload, dict)
 
-    jsonschema.Draft202012Validator(
-        capability_manifest_json_schema()
-    ).validate(payload)
+    jsonschema.Draft202012Validator(capability_manifest_json_schema()).validate(payload)
