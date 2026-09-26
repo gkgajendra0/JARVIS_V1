@@ -1,8 +1,8 @@
 # Phase 4 Model Router Owner-Machine Acceptance
 
-Status: **READY AFTER PR #118 EXACT-HEAD CI IS GREEN**.
+Status: **PASS — OWNER-MACHINE ACCEPTED 2026-09-26**.
 
-This is the final live gate for Phase 4. It verifies real routed background reasoning, durable route provenance, bounded target-aware fallback and health behavior, restart continuity, and no Authority or security regression.
+This document defines the final live gate that was executed for Phase 4. The completed evidence and disposition are recorded in `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`. The run verified real routed background reasoning, durable route provenance, bounded target-aware fallback and health behavior, restart continuity, and no Authority or security regression.
 
 ## Prerequisites
 
