@@ -40,7 +40,7 @@ Recommended sequence:
 - 5A — canonical contracts, versions, digests and registries — **IMPLEMENTED**;
 - 5B — SandboxRegistry and content-addressed ArtifactStore — **IMPLEMENTED**;
 - 5C — Python DependencyBroker + trusted uv adapter — **IMPLEMENTED**;
-- 5D — dependency provenance and offline candidate verification;
+- 5D — dependency provenance and offline candidate verification — **IMPLEMENTED**;
 - 5E — SecretBroker + DPAPI SecretStore + trusted enrollment CLI;
 - 5F — CapabilityManifestRegistry + JSON Schema export;
 - 5G — bounded DiscoveryBroker + mDNS/DNS-SD adapter;
