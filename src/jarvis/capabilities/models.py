@@ -19,6 +19,7 @@ class CapabilityKind(str, Enum):
     NATIVE_API = "native_api"
     VISUAL_FALLBACK = "visual_fallback"
     LOCAL_READ = "local_read"
+    DISCOVERED_SERVICE = "discovered_service"
 
 
 class DiscoveryState(str, Enum):
