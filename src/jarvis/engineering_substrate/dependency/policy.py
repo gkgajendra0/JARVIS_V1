@@ -132,7 +132,7 @@ class UvReleasePolicy:
     release_immutable: bool = True
     release_commit_verified: bool = True
     github_artifact_attestations: bool = True
-    windows_authenticode_expected: bool = True
+    platform_signature_kind: str | None = None
 
     def __post_init__(self) -> None:
         version = str(self.version).strip()
@@ -156,11 +156,16 @@ class UvReleasePolicy:
         )
         object.__setattr__(self, "release_asset_name", asset)
         object.__setattr__(self, "repository", repository)
+        signature_kind = (
+            None
+            if self.platform_signature_kind is None
+            else str(self.platform_signature_kind).strip().casefold() or None
+        )
+        object.__setattr__(self, "platform_signature_kind", signature_kind)
         if not (
             self.release_immutable
             and self.release_commit_verified
             and self.github_artifact_attestations
-            and self.windows_authenticode_expected
         ):
             raise ValueError("reviewed uv release trust signals must all be present")
 
@@ -176,7 +181,7 @@ class UvReleasePolicy:
                 "release_immutable": self.release_immutable,
                 "release_commit_verified": self.release_commit_verified,
                 "github_artifact_attestations": self.github_artifact_attestations,
-                "windows_authenticode_expected": self.windows_authenticode_expected,
+                "platform_signature_kind": self.platform_signature_kind,
             }
         )
 
@@ -187,5 +192,15 @@ UV_WINDOWS_X64_0_12_19 = UvReleasePolicy(
     release_asset_name="uv-x86_64-pc-windows-msvc.zip",
     release_asset_sha256=(
         "6dbb02d79e419522f1c500f0adb1cddcff0cda7d59b0d66ea7f5e3b4a1b2f5f0"
+    ),
+    platform_signature_kind="authenticode",
+)
+
+UV_LINUX_X64_0_12_19 = UvReleasePolicy(
+    version="0.12.19",
+    release_commit_sha="bea138450f0e620a4ce5765b0e38cff7b9f0799f",
+    release_asset_name="uv-x86_64-unknown-linux-gnu.tar.gz",
+    release_asset_sha256=(
+        "23bf5552d220e0842b65c862097b2ebaeba0064b74eda5e565e77fd25969d8c8"
     ),
 )
