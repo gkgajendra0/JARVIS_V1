@@ -174,7 +174,9 @@ def _brain_decision(
     try:
         parameters = json.loads(parsed.parameters_json)
     except json.JSONDecodeError as exc:
-        raise ValueError("work reasoner parameters_json must contain valid JSON") from exc
+        raise ValueError(
+            "work reasoner parameters_json must contain valid JSON"
+        ) from exc
     if not isinstance(parameters, dict):
         raise ValueError("work reasoner parameters_json must decode to an object")
 
