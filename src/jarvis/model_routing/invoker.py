@@ -50,7 +50,11 @@ StructuredClientFactory = Callable[[str, str], StructuredOutputClient]
 
 
 def _default_client_factory(provider: str, model: str) -> StructuredOutputClient:
-    return build_structured_output_client(provider=provider, model=model)
+    return build_structured_output_client(
+        provider=provider,
+        model=model,
+        provider_retries=False,
+    )
 
 
 class StructuredOutputModelAdapter:
