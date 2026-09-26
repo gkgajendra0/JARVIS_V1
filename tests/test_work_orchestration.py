@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 import jarvis.work.store as work_store_module
-
 from jarvis.voice.work_tools import _public_work
 from jarvis.work.brain import (
     BrainAction,
