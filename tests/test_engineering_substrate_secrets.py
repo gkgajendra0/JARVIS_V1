@@ -123,12 +123,14 @@ def test_secret_redactor_scrubs_text_bytes_and_repr() -> None:
     )
 
     assert SECRET_VALUE.decode() not in repr(redactor)
-    assert redactor.redact_text(
-        "prefix " + SECRET_VALUE.decode() + " suffix"
-    ) == "prefix [REDACTED_SECRET] suffix"
-    assert redactor.redact_bytes(
-        b"prefix " + SECRET_VALUE + b" suffix"
-    ) == b"prefix [REDACTED_SECRET] suffix"
+    assert (
+        redactor.redact_text("prefix " + SECRET_VALUE.decode() + " suffix")
+        == "prefix [REDACTED_SECRET] suffix"
+    )
+    assert (
+        redactor.redact_bytes(b"prefix " + SECRET_VALUE + b" suffix")
+        == b"prefix [REDACTED_SECRET] suffix"
+    )
 
     redactor.clear()
     assert redactor.redact_text(SECRET_VALUE.decode()) == SECRET_VALUE.decode()
