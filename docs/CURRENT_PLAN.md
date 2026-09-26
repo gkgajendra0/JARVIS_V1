@@ -51,7 +51,7 @@ Phase-5 technology research is complete and the concrete architecture/implementa
 
 The proposed design adds deterministic DependencyBroker, SecretBroker, declarative CapabilityManifest, bounded discovery, JARVIS-owned SandboxProfiles, provenance and hardware-acceptance evidence while preserving EngineeringChange and Authority as the only governance boundary.
 
-**Current state: ARCHITECTURE OWNER-APPROVED / IMPLEMENTATION ACTIVE.** Phase 5A canonical substrate contracts, Phase 5B SandboxRegistry/content-addressed ArtifactStore, Phase 5C Python DependencyBroker, and Phase 5D provenance/offline candidate verification are implemented. Dependency artifacts are SHA-256/content-addressed, available PyPI PEP-740 evidence is cryptographically verified with digest-bound provenance, and candidate recreation uses a digest-pinned uv image with network disabled and exact inventory comparison. Continue Phase 5E through 5J under the standing authorization, stopping only for genuine owner-machine/manual acceptance or a new architectural decision.
+**Current state: ARCHITECTURE OWNER-APPROVED / IMPLEMENTATION ACTIVE.** Phase 5A–5F are implemented. Phase 5E passed owner-machine Windows DPAPI acceptance on 2026-09-26. CapabilityManifest v1 is now digest-bound to dependency/provenance/sandbox/discovery references, validates trusted executor/adapter registrations and deterministic Authority floors, requires verification/rollback/hardware contracts where applicable, and exports deterministic JSON Schema Draft 2020-12. Continue Phase 5G through 5J under the standing authorization, stopping only for genuine owner-machine/manual acceptance or a new architectural decision.
 
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
@@ -141,4 +141,4 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Begin Phase 5E — SecretBroker + DPAPI SecretStore + trusted enrollment CLI — after the Phase-5D PR is green/merged, then continue through Phase 5J under the standing authorization.**
+**Begin Phase 5G — bounded DiscoveryBroker + mDNS/DNS-SD adapter — after the Phase-5F PR is green/merged, then continue through Phase 5J under the standing authorization.**
