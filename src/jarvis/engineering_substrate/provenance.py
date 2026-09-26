@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
 import urllib.error
@@ -236,6 +237,7 @@ class PyPIAttestationVerifier:
                     predicate_type, _ = attestation.verify(
                         bundle.publisher,
                         distribution,
+                        offline=True,
                     )
                 except AttestationError as exc:
                     raise ProvenanceVerificationError(
@@ -262,6 +264,7 @@ class ArtifactProvenanceResult:
     provenance: ArtifactProvenance
     policy_digest: str
     integrity_reference: str | None
+    provenance_payload_digest: str | None
 
 
 class ProvenanceService:
@@ -332,6 +335,7 @@ class ProvenanceService:
                 provenance=provenance,
                 policy_digest=self._policy.policy_digest,
                 integrity_reference=response.request_url,
+                provenance_payload_digest=None,
             )
 
         try:
@@ -340,6 +344,10 @@ class ProvenanceService:
                 provenance_payload=response.payload,
             )
         except ProvenanceVerificationError:
+            rejected_payload_digest = hashlib.sha256(response.payload).hexdigest()
+            rejected_reference = (
+                f"{response.request_url}#sha256={rejected_payload_digest}"
+            )
             rejected = ArtifactProvenance(
                 provenance_id=provenance_id,
                 artifact_id=artifact.artifact_id,
@@ -350,7 +358,7 @@ class ProvenanceService:
                 artifact_sha256=artifact.sha256,
                 attestation_status=AttestationStatus.REJECTED,
                 verification_status=VerificationStatus.REJECTED,
-                attestation_refs=(response.request_url,),
+                attestation_refs=(rejected_reference,),
                 publisher_identity=None,
                 slsa_refs=(),
                 sbom_refs=(),
@@ -361,6 +369,9 @@ class ProvenanceService:
                 rejected_provenance=rejected,
             )
 
+        verified_reference = (
+            f"{response.request_url}#sha256={verified.provenance_digest}"
+        )
         publisher_identity = ";".join(verified.publisher_identities)
         slsa_refs = tuple(
             predicate
@@ -377,7 +388,7 @@ class ProvenanceService:
             artifact_sha256=artifact.sha256,
             attestation_status=AttestationStatus.VERIFIED,
             verification_status=VerificationStatus.VERIFIED,
-            attestation_refs=(response.request_url,),
+            attestation_refs=(verified_reference,),
             publisher_identity=publisher_identity,
             slsa_refs=slsa_refs,
             sbom_refs=(),
@@ -385,5 +396,6 @@ class ProvenanceService:
         return ArtifactProvenanceResult(
             provenance=provenance,
             policy_digest=self._policy.policy_digest,
-            integrity_reference=response.request_url,
+            integrity_reference=verified_reference,
+            provenance_payload_digest=verified.provenance_digest,
         )
