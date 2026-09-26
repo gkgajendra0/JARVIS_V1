@@ -112,16 +112,14 @@ class TrustedExecutorRegistration:
             "executor_id",
             _token(self.executor_id, field="executor_id"),
         )
-        object.__setattr__(
-            self,
-            "adapter_ids",
-            _tokens(self.adapter_ids, field="adapter_id"),
-        )
-        object.__setattr__(
-            self,
-            "operations",
-            _tokens(self.operations, field="operation"),
-        )
+        adapter_ids = _tokens(self.adapter_ids, field="adapter_id")
+        operations = _tokens(self.operations, field="operation")
+        if not adapter_ids:
+            raise ValueError("trusted executor requires at least one adapter")
+        if not operations:
+            raise ValueError("trusted executor requires at least one operation")
+        object.__setattr__(self, "adapter_ids", adapter_ids)
+        object.__setattr__(self, "operations", operations)
         object.__setattr__(
             self,
             "authority_attribute_floor",
@@ -161,11 +159,10 @@ class TrustedAdapterRegistration:
             "adapter_id",
             _token(self.adapter_id, field="adapter_id"),
         )
-        object.__setattr__(
-            self,
-            "operations",
-            _tokens(self.operations, field="operation"),
-        )
+        operations = _tokens(self.operations, field="operation")
+        if not operations:
+            raise ValueError("trusted adapter requires at least one operation")
+        object.__setattr__(self, "operations", operations)
         object.__setattr__(
             self,
             "discovery_scope_ids",
