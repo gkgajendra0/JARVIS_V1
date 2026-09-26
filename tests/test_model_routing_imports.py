@@ -50,3 +50,18 @@ def test_public_facade_remains_lazy_and_compatible() -> None:
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "ModelRouter EngineeringStageStrategy"
+
+
+def test_work_leaf_and_public_facade_are_clean_interpreter_safe() -> None:
+    leaf = _run_clean_import(
+        "from jarvis.work.models import WorkStep; print(WorkStep.__name__)"
+    )
+    assert leaf.returncode == 0, leaf.stderr
+    assert leaf.stdout.strip() == "WorkStep"
+
+    facade = _run_clean_import(
+        "from jarvis.work import WorkEngine, WorkItem; "
+        "print(WorkEngine.__name__, WorkItem.__name__)"
+    )
+    assert facade.returncode == 0, facade.stderr
+    assert facade.stdout.strip() == "WorkEngine WorkItem"
