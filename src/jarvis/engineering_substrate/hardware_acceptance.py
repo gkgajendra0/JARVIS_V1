@@ -150,6 +150,7 @@ class HardwareAcceptanceService:
             request_id TEXT NOT NULL UNIQUE
                 REFERENCES engineering_hardware_acceptance_requests(request_id),
             request_digest TEXT NOT NULL,
+            evidence_digest TEXT NOT NULL,
             resolution_key TEXT NOT NULL UNIQUE,
             payload BLOB NOT NULL,
             observed_at_epoch REAL NOT NULL
@@ -311,7 +312,8 @@ class HardwareAcceptanceService:
         work = self.store.work
         with work._lock, work._connect() as db:
             row = db.execute(
-                """SELECT payload FROM engineering_hardware_acceptance_evidence
+                """SELECT evidence_digest, payload
+                FROM engineering_hardware_acceptance_evidence
                 WHERE request_id=?""",
                 (request.request_id,),
             ).fetchone()
@@ -319,6 +321,10 @@ class HardwareAcceptanceService:
             return None
         payload = work._decode_json(row["payload"])
         evidence = _evidence_from_payload(payload)
+        if canonical_digest(evidence) != row["evidence_digest"]:
+            raise HardwareAcceptanceConflict(
+                "hardware acceptance evidence integrity mismatch"
+            )
         if (
             evidence.request_id != request.request_id
             or evidence.request_digest != canonical_digest(request)
@@ -410,6 +416,10 @@ class HardwareAcceptanceService:
             if row is None:
                 return None
             current = _evidence_from_payload(work._decode_json(row["payload"]))
+            if canonical_digest(current) != row["evidence_digest"]:
+                raise HardwareAcceptanceConflict(
+                    "hardware acceptance evidence integrity mismatch"
+                )
             if (
                 row["resolution_key"] == resolution
                 and current.evidence_id == evidence_id
@@ -428,7 +438,7 @@ class HardwareAcceptanceService:
         work = self.store.work
         with work._lock, work._connect() as db:
             existing = db.execute(
-                """SELECT resolution_key, payload
+                """SELECT evidence_digest, resolution_key, payload
                 FROM engineering_hardware_acceptance_evidence
                 WHERE request_id=?""",
                 (request.request_id,),
@@ -454,13 +464,14 @@ class HardwareAcceptanceService:
                 with db:
                     db.execute(
                         """INSERT INTO engineering_hardware_acceptance_evidence
-                        (evidence_id, request_id, request_digest, resolution_key,
-                         payload, observed_at_epoch)
-                        VALUES (?, ?, ?, ?, ?, ?)""",
+                        (evidence_id, request_id, request_digest, evidence_digest,
+                         resolution_key, payload, observed_at_epoch)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
                         (
                             evidence.evidence_id,
                             evidence.request_id,
                             evidence.request_digest,
+                            canonical_digest(evidence),
                             resolution,
                             work._encode_json(payload),
                             evidence.observed_at_epoch,
@@ -480,7 +491,7 @@ class HardwareAcceptanceService:
                     )
             except sqlite3.IntegrityError as exc:
                 row = db.execute(
-                    """SELECT resolution_key, payload
+                    """SELECT evidence_digest, resolution_key, payload
                     FROM engineering_hardware_acceptance_evidence
                     WHERE request_id=? OR resolution_key=?""",
                     (request.request_id, resolution),
