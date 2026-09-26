@@ -57,6 +57,22 @@ def _non_negative_int(value: object, *, field: str) -> int:
     return value
 
 
+def _string_tuple(value: object, *, field: str) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise TypeError(f"{field} must be a JSON array")
+    if any(not isinstance(item, str) for item in value):
+        raise TypeError(f"{field} must contain only strings")
+    return tuple(value)
+
+
+def _json_object(value: object, *, field: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise TypeError(f"{field} must be a JSON object")
+    if any(not isinstance(key, str) for key in value):
+        raise TypeError(f"{field} keys must be strings")
+    return dict(value)
+
+
 class BenchmarkBaseline(StrEnum):
     FIXED_CURRENT = "fixed_current"
     ALWAYS_CAPABLE = "always_capable"
@@ -580,17 +596,24 @@ def load_routing_benchmark_fixture(
             task_kind=raw_request["task_kind"],
             strategy_key="engineering_stage",
             strategy_version=1,
-            required_capabilities=tuple(raw_request["required_capabilities"]),
+            required_capabilities=_string_tuple(
+                raw_request["required_capabilities"],
+                field="required_capabilities",
+            ),
             privacy_class=PrivacyClass(raw_request["privacy_class"]),
             locality_requirement=LocalityRequirement(
                 raw_request["locality_requirement"]
             ),
-            estimated_context_tokens=int(raw_request["estimated_context_tokens"]),
+            estimated_context_tokens=raw_request["estimated_context_tokens"],
             evidence_size_class=EvidenceSizeClass(raw_request["evidence_size_class"]),
-            recent_progress_signals=tuple(
-                raw_request.get("recent_progress_signals", ())
+            recent_progress_signals=_string_tuple(
+                raw_request.get("recent_progress_signals", []),
+                field="recent_progress_signals",
             ),
-            recent_failure_signals=tuple(raw_request.get("recent_failure_signals", ())),
+            recent_failure_signals=_string_tuple(
+                raw_request.get("recent_failure_signals", []),
+                field="recent_failure_signals",
+            ),
             latency_preference=raw_request.get(
                 "latency_preference",
                 "balanced",
@@ -599,23 +622,30 @@ def load_routing_benchmark_fixture(
             change_id=raw_request.get("change_id"),
             stage_key=raw_request.get("stage_key"),
             affinity_key=raw_request.get("affinity_key"),
-            routing_features=dict(raw_request.get("routing_features", {})),
+            routing_features=_json_object(
+                raw_request.get("routing_features", {}),
+                field="routing_features",
+            ),
         )
-        observations = tuple(
-            TargetReplayObservation(
-                target_id=item["target_id"],
-                invocation_succeeded=bool(item["invocation_succeeded"]),
-                structured_output_valid=bool(item["structured_output_valid"]),
-                verified_success=bool(item["verified_success"]),
-                verifier_reference=item["verifier_reference"],
-                latency_ms=float(item["latency_ms"]),
-                input_tokens=int(item["input_tokens"]),
-                output_tokens=int(item["output_tokens"]),
-                estimated_cost_usd=float(item["estimated_cost_usd"]),
-                failure_class=item.get("failure_class"),
+        observations_list: list[TargetReplayObservation] = []
+        for item in raw_observations:
+            if not isinstance(item, dict):
+                raise ValueError("benchmark observation must be an object")
+            observations_list.append(
+                TargetReplayObservation(
+                    target_id=item["target_id"],
+                    invocation_succeeded=item["invocation_succeeded"],
+                    structured_output_valid=item["structured_output_valid"],
+                    verified_success=item["verified_success"],
+                    verifier_reference=item["verifier_reference"],
+                    latency_ms=item["latency_ms"],
+                    input_tokens=item["input_tokens"],
+                    output_tokens=item["output_tokens"],
+                    estimated_cost_usd=item["estimated_cost_usd"],
+                    failure_class=item.get("failure_class"),
+                )
             )
-            for item in raw_observations
-        )
+        observations = tuple(observations_list)
         cases.append(
             RoutingBenchmarkCase(
                 case_id=raw_case["case_id"],
