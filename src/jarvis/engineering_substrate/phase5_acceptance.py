@@ -10,8 +10,11 @@ import argparse
 import hashlib
 import json
 import pathlib
+import subprocess
 import sys
 import tempfile
+import zipfile
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from jarvis.engineering_substrate.artifacts import ArtifactStore
@@ -55,6 +58,15 @@ class Phase5AcceptanceError(RuntimeError):
     """The integrated Phase-5 acceptance could not prove an invariant."""
 
 
+@dataclass(frozen=True, slots=True)
+class UvReleaseAcceptance:
+    adapter: UvAdapter
+    release_asset_sha256: str
+    executable_sha256: str
+    signer_subject: str
+    signer_thumbprint: str
+
+
 def _hash_file(path: pathlib.Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -72,23 +84,94 @@ def _require_regular_file(path: pathlib.Path, *, field: str) -> pathlib.Path:
     return path.resolve()
 
 
+def _verify_authenticode(executable: pathlib.Path) -> tuple[str, str]:
+    script = (
+        "$s=Get-AuthenticodeSignature -LiteralPath $args[0];"
+        "[pscustomobject]@{"
+        "Status=[string]$s.Status;"
+        "Subject=[string]$s.SignerCertificate.Subject;"
+        "Thumbprint=[string]$s.SignerCertificate.Thumbprint"
+        "}|ConvertTo-Json -Compress"
+    )
+    try:
+        completed = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                script,
+                str(executable),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+            shell=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Phase5AcceptanceError(
+            "uv Authenticode verification could not run"
+        ) from exc
+    if completed.returncode != 0:
+        raise Phase5AcceptanceError("uv Authenticode verification failed")
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise Phase5AcceptanceError(
+            "uv Authenticode verification returned invalid evidence"
+        ) from exc
+    if not isinstance(payload, dict) or payload.get("Status") != "Valid":
+        raise Phase5AcceptanceError("uv Authenticode signature is not valid")
+    subject = str(payload.get("Subject") or "").strip()
+    thumbprint = str(payload.get("Thumbprint") or "").strip().casefold()
+    if not subject or not thumbprint:
+        raise Phase5AcceptanceError(
+            "uv Authenticode signer identity is unavailable"
+        )
+    return subject, thumbprint
+
+
 def _validate_uv_release_asset(
     asset_path: pathlib.Path,
     executable_path: pathlib.Path,
-) -> UvAdapter:
+) -> UvReleaseAcceptance:
     policy = UV_WINDOWS_X64_0_12_19
     asset = _require_regular_file(asset_path, field="uv release asset")
     executable = _require_regular_file(executable_path, field="uv executable")
-    asset_digest = _hash_file(asset)
     if asset.name != policy.release_asset_name:
         raise Phase5AcceptanceError("uv release asset file name is not reviewed")
+    asset_digest = _hash_file(asset)
     if asset_digest != policy.release_asset_sha256:
         raise Phase5AcceptanceError("uv release asset SHA-256 mismatch")
 
+    executable_digest = _hash_file(executable)
+    try:
+        with zipfile.ZipFile(asset) as archive:
+            members = tuple(
+                name
+                for name in archive.namelist()
+                if pathlib.PurePosixPath(name).name.casefold() == "uv.exe"
+            )
+            if len(members) != 1:
+                raise Phase5AcceptanceError(
+                    "reviewed uv asset must contain exactly one uv.exe"
+                )
+            archived_digest = hashlib.sha256(archive.read(members[0])).hexdigest()
+    except zipfile.BadZipFile as exc:
+        raise Phase5AcceptanceError("reviewed uv release asset is not a valid ZIP") from exc
+    if archived_digest != executable_digest:
+        raise Phase5AcceptanceError(
+            "uv executable bytes are not from the reviewed release asset"
+        )
+
+    signer_subject, signer_thumbprint = _verify_authenticode(executable)
     registration = UvBinaryRegistration(
         executable_path=executable,
         version=policy.version,
-        executable_sha256=_hash_file(executable),
+        executable_sha256=executable_digest,
         release_commit_sha=policy.release_commit_sha,
         release_asset_sha256=asset_digest,
         release_policy_digest=policy.policy_digest,
@@ -98,7 +181,13 @@ def _validate_uv_release_asset(
         binary_registration=registration,
     )
     adapter.verify_trust()
-    return adapter
+    return UvReleaseAcceptance(
+        adapter=adapter,
+        release_asset_sha256=asset_digest,
+        executable_sha256=executable_digest,
+        signer_subject=signer_subject,
+        signer_thumbprint=signer_thumbprint,
+    )
 
 
 def _manifest_acceptance(
@@ -245,7 +334,8 @@ def run_acceptance(
         raise Phase5AcceptanceError("acceptance repo_root must be a regular directory")
     repo = repo.resolve()
 
-    uv = _validate_uv_release_asset(uv_release_asset, uv_executable)
+    uv_trust = _validate_uv_release_asset(uv_release_asset, uv_executable)
+    uv = uv_trust.adapter
 
     with tempfile.TemporaryDirectory(prefix="jarvis-phase5-acceptance-") as temp:
         root = pathlib.Path(temp)
@@ -350,9 +440,12 @@ def run_acceptance(
             "recorded_at": datetime.now(UTC).isoformat(),
             "uv": {
                 "version": uv.release_policy.version,
-                "release_asset_sha256": uv.release_policy.release_asset_sha256,
-                "executable_sha256": uv.binary_registration.executable_sha256,
+                "release_asset_sha256": uv_trust.release_asset_sha256,
+                "executable_sha256": uv_trust.executable_sha256,
                 "policy_digest": uv.release_policy.policy_digest,
+                "signature_kind": uv.release_policy.platform_signature_kind,
+                "signer_subject": uv_trust.signer_subject,
+                "signer_thumbprint": uv_trust.signer_thumbprint,
             },
             "dependency": {
                 "package": "tomli-w==1.2.0",
