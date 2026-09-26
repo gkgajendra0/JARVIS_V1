@@ -190,7 +190,7 @@ The same lifecycle applies to JARVIS-generated engineering candidates; autonomy 
 
 Persistent Concurrent Work Orchestration and the deterministic repair/R2 foundation are owner accepted.
 
-**Current active cross-cutting work is Phase 3 — EngineeringChange Lifecycle / Mission Orchestration.**
+**Current active cross-cutting work is Phase 5 — Secure Autonomous Engineering Substrate research/architecture.**
 
 Phase 2 EngineeringKnowledge is DONE / OWNER-MACHINE ACCEPTED 2026-09-25. Its accepted foundation is now available to Phase 3 and later autonomous-engineering phases.
 
