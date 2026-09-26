@@ -81,7 +81,7 @@ def _manifest() -> RegisteredCapabilityManifest:
     return RegisteredCapabilityManifest(
         manifest=manifest,
         manifest_digest=canonical_digest(manifest),
-        authority_risk_floor=RiskClass.LOW,
+        authority_risk_floor=RiskClass.ROUTINE,
     )
 
 
