@@ -398,9 +398,12 @@ class HardwareAcceptanceService:
                 "hardware resolution requires trusted observation evidence"
             )
         resolution = _required_text(resolution_key, field="resolution_key")
-        evidence_id = "hwev_" + canonical_digest(
-            {"request_id": request.request_id, "resolution_key": resolution}
-        )[:20]
+        evidence_id = (
+            "hwev_"
+            + canonical_digest(
+                {"request_id": request.request_id, "resolution_key": resolution}
+            )[:20]
+        )
 
         def matches_existing(
             row: sqlite3.Row | None,
