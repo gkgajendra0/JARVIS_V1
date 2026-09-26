@@ -604,6 +604,7 @@ def build_default_self_model() -> SelfModelRegistry:
             ("src/jarvis/model_routing",),
             parent_component_id="work",
             tests=(
+                "tests/test_model_routing_acceptance.py",
                 "tests/test_model_routing_eligibility.py",
                 "tests/test_model_routing_evaluation.py",
                 "tests/test_model_routing_fallback.py",
@@ -619,6 +620,7 @@ def build_default_self_model() -> SelfModelRegistry:
             docs=(
                 "docs/PHASE4_MODEL_ROUTER_ARCHITECTURE.md",
                 "docs/PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md",
+                "docs/PHASE4_MODEL_ROUTER_OWNER_ACCEPTANCE.md",
             ),
         ),
         C(
