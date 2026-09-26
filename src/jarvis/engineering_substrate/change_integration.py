@@ -166,9 +166,7 @@ class EngineeringSubstrateChangeService:
         architecture = self._approved_architecture(change_id)
         requirements = tuple(
             dict.fromkeys(
-                str(item).strip()
-                for item in requirement_ids
-                if str(item).strip()
+                str(item).strip() for item in requirement_ids if str(item).strip()
             )
         )
         if not str(plan_id).strip() or not requirements:
@@ -462,8 +460,7 @@ class EngineeringSubstrateChangeService:
         if manifest is None:
             raise ChangeConflict("Phase-5 verification requires current manifest")
         if (
-            manifest.payload.get("architecture_artifact_id")
-            != architecture.artifact_id
+            manifest.payload.get("architecture_artifact_id") != architecture.artifact_id
             or manifest.payload.get("architecture_digest") != architecture.digest
         ):
             raise ChangeConflict("current manifest belongs to stale architecture")
@@ -576,8 +573,7 @@ class EngineeringSubstrateChangeService:
             raise ChangeConflict("Phase-5 verification requires current manifest")
 
         automated = {
-            str(key).strip(): bool(value)
-            for key, value in automated_evidence.items()
+            str(key).strip(): bool(value) for key, value in automated_evidence.items()
         }
         if any(not key for key in automated):
             raise ValueError("automated evidence IDs must not be empty")
