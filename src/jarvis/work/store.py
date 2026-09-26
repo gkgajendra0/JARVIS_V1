@@ -113,12 +113,22 @@ class SQLiteWorkStore:
 
         return self._decode_json(value)
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(self.path, timeout=30.0)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys=ON")
-        connection.execute("PRAGMA journal_mode=WAL")
-        return connection
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys=ON")
+            connection.execute("PRAGMA journal_mode=WAL")
+            try:
+                yield connection
+            except BaseException:
+                connection.rollback()
+                raise
+            else:
+                connection.commit()
+        finally:
+            connection.close()
 
     def _encode_text(self, value: str) -> str:
         return self._payload_codec.encode(value)
@@ -394,13 +404,9 @@ class SQLiteWorkStore:
                     migrated += 1
 
         if migrated:
-            with self._lock:
-                connection = self._connect()
-                try:
-                    connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                    connection.execute("VACUUM")
-                finally:
-                    connection.close()
+            with self._lock, self._connect() as connection:
+                connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                connection.execute("VACUUM")
         return migrated
 
     def create(self, item: WorkItem) -> WorkItem:
