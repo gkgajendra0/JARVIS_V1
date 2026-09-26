@@ -93,9 +93,7 @@ def _descriptor_from_payload(payload: object) -> SecretDescriptor:
             secret_id=str(payload["secret_id"]),
             kind=str(payload["kind"]),
             service=str(payload["service"]),
-            allowed_consumers=tuple(
-                str(item) for item in payload["allowed_consumers"]
-            ),
+            allowed_consumers=tuple(str(item) for item in payload["allowed_consumers"]),
             allowed_scopes=tuple(str(item) for item in payload["allowed_scopes"]),
             lifecycle_state=SecretLifecycleState(str(payload["lifecycle_state"])),
             version=int(payload["version"]),
@@ -119,7 +117,9 @@ class SecretStore:
     ) -> None:
         self.path = pathlib.Path(path or default_secret_store_path()).resolve()
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._protector = protector if protector is not None else WindowsDpapiKeyProtector()
+        self._protector = (
+            protector if protector is not None else WindowsDpapiKeyProtector()
+        )
         if not isinstance(getattr(self._protector, "protector_id", None), str):
             raise TypeError("secret protector must expose protector_id")
         self._clock = clock
@@ -139,7 +139,9 @@ class SecretStore:
 
     def _initialize(self) -> None:
         with self._lock, self._connect() as connection:
-            current_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+            current_version = int(
+                connection.execute("PRAGMA user_version").fetchone()[0]
+            )
             if current_version not in {0, _SECRET_SCHEMA_VERSION}:
                 raise SecretStoreError(
                     f"unsupported secret-store schema version: {current_version}"
@@ -279,12 +281,16 @@ class SecretStore:
                 validate=True,
             )
         except (KeyError, ValueError) as exc:
-            raise SecretIntegrityError("sealed secret value encoding is invalid") from exc
+            raise SecretIntegrityError(
+                "sealed secret value encoding is invalid"
+            ) from exc
         if not value:
             raise SecretIntegrityError("sealed secret value is empty")
         return SecretMaterial(descriptor=descriptor, value=value)
 
-    def _require_row(self, connection: sqlite3.Connection, secret_id: str) -> sqlite3.Row:
+    def _require_row(
+        self, connection: sqlite3.Connection, secret_id: str
+    ) -> sqlite3.Row:
         key = _required_text(secret_id, field="secret_id")
         row = connection.execute(
             "SELECT * FROM secrets WHERE secret_id = ?",
