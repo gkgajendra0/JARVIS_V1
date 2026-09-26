@@ -112,7 +112,7 @@ def test_dependency_profiles_build_fixed_commands_without_runtime_suffix(
     assert verify_command[-3:] == [
         "uv",
         "--cache-dir",
-        "/candidate/.uv-cache",
+        "/tmp/uv-cache",
     ]
 
     verify_sync = registry.build_launch(
@@ -141,7 +141,7 @@ def test_dependency_profiles_build_fixed_commands_without_runtime_suffix(
     assert verify_sync.command[-15:] == (
         "uv",
         "--cache-dir",
-        "/candidate/.uv-cache",
+        "/tmp/uv-cache",
         "pip",
         "sync",
         "/artifacts/pylock.toml",
@@ -270,7 +270,13 @@ def test_pytest_target_cannot_become_docker_or_pytest_option(tmp_path: Path) -> 
     workspace.mkdir()
     registry = default_sandbox_registry(docker_executable="docker")
 
-    for target in ("../outside.py", "--collect-only", "/absolute/test.py"):
+    for target in (
+        "../outside.py",
+        "--collect-only",
+        "/absolute/test.py",
+        r"\absolute\test.py",
+        r"C:\absolute\test.py",
+    ):
         with pytest.raises(SandboxPolicyError, match="relative non-option"):
             registry.build_launch(
                 profile_id="test.offline.v1",
