@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from jarvis.engineering_substrate import (
+    ArtifactIntegrityError,
     ArtifactStore,
     AttestationStatus,
     DependencyArtifact,
@@ -244,7 +245,7 @@ def test_content_hash_remains_mandatory_even_when_attestation_client_is_present(
     object_path = store.objects_root / artifact.sha256
     object_path.write_bytes(b"tampered-after-admission")
 
-    with pytest.raises(Exception, match="verify-on-read"):
+    with pytest.raises(ArtifactIntegrityError, match="verify-on-read"):
         ProvenanceService(
             artifact_store=store,
             integrity_client=FakeIntegrityClient(b'{"provenance":"fixture"}'),
