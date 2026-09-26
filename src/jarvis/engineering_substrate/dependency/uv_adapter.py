@@ -207,7 +207,6 @@ class UvAdapter:
             "--generate-hashes",
             "--only-binary",
             ":all:",
-            "--no-build",
             "--no-config",
             "--no-python-downloads",
             "--no-progress",
