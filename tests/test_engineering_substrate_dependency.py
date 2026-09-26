@@ -158,7 +158,7 @@ def test_uv_adapter_builds_fixed_wheel_only_single_index_command(
     assert command[1:3] == ("pip", "compile")
     assert "--only-binary" in command
     assert command[command.index("--only-binary") + 1] == ":all:"
-    assert "--no-build" in command
+    assert "--no-build" not in command
     assert "--no-config" in command
     assert "--no-python-downloads" in command
     assert "--default-index" in command
