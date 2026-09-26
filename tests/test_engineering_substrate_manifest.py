@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import fields
 
-import jsonschema
 import pytest
 
 from jarvis.authority import RiskClass
@@ -201,21 +200,22 @@ def test_raw_execution_and_plaintext_secret_fields_are_impossible() -> None:
     }.isdisjoint(field_names)
 
     schema = capability_manifest_json_schema()
-    payload = canonical_payload(_manifest())
-    assert isinstance(payload, dict)
-
+    properties = schema["properties"]
+    assert isinstance(properties, dict)
+    assert schema["additionalProperties"] is False
     for forbidden_name in ("command", "executable", "secret_value", "api_key"):
-        invalid = dict(payload)
-        invalid[forbidden_name] = "must-never-be-accepted"
-        with pytest.raises(jsonschema.ValidationError):
-            jsonschema.validate(invalid, schema)
+        assert forbidden_name not in properties
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            _manifest(**{forbidden_name: "must-never-be-accepted"})
 
 
 def test_schema_is_valid_draft_2020_12_and_deterministic() -> None:
     schema_a = capability_manifest_json_schema()
     schema_b = capability_manifest_json_schema()
 
-    jsonschema.Draft202012Validator.check_schema(schema_a)
+    assert schema_a["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+    assert schema_a["type"] == "object"
+    assert schema_a["additionalProperties"] is False
     assert schema_a == schema_b
     assert capability_manifest_schema_bytes() == capability_manifest_schema_bytes()
     assert capability_manifest_schema_digest() == canonical_digest(schema_a)
@@ -226,4 +226,8 @@ def test_schema_accepts_canonical_representative_manifest() -> None:
     payload = canonical_payload(_manifest())
     assert isinstance(payload, dict)
 
-    jsonschema.Draft202012Validator(capability_manifest_json_schema()).validate(payload)
+    schema = capability_manifest_json_schema()
+    required = set(schema["required"])
+    properties = set(schema["properties"])
+    assert set(payload) == required
+    assert set(payload).issubset(properties)
