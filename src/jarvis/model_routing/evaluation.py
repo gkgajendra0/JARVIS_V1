@@ -567,7 +567,7 @@ def load_routing_benchmark_fixture(
     fixture_path = Path(path)
     payload: Any = json.loads(fixture_path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
-        raise ValueError("routing benchmark fixture must be a JSON object")
+        raise TypeError("routing benchmark fixture must be a JSON object")
     if payload.get("schema_version") != 1:
         raise ValueError("unsupported routing benchmark fixture schema")
     fixture_id = _token(payload.get("fixture_id"), field="fixture_id")
@@ -582,14 +582,14 @@ def load_routing_benchmark_fixture(
     cases: list[RoutingBenchmarkCase] = []
     for raw_case in raw_cases:
         if not isinstance(raw_case, dict):
-            raise ValueError("benchmark case must be an object")
+            raise TypeError("benchmark case must be an object")
         raw_request = raw_case.get("request")
         raw_observations = raw_case.get("observations")
         if not isinstance(raw_request, dict) or not isinstance(
             raw_observations,
             list,
         ):
-            raise ValueError("benchmark case request/observations are invalid")
+            raise TypeError("benchmark case request/observations are invalid")
         request = RoutingRequest(
             routing_request_id=raw_request["routing_request_id"],
             work_id=raw_request["work_id"],
@@ -630,7 +630,7 @@ def load_routing_benchmark_fixture(
         observations_list: list[TargetReplayObservation] = []
         for item in raw_observations:
             if not isinstance(item, dict):
-                raise ValueError("benchmark observation must be an object")
+                raise TypeError("benchmark observation must be an object")
             observations_list.append(
                 TargetReplayObservation(
                     target_id=item["target_id"],
