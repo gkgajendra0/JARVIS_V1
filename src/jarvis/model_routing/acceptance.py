@@ -124,8 +124,7 @@ def inspect_routing_acceptance(
         "routing_decision_present": True,
         "routing_links_canonical_work": persisted.work_id == normalized_work_id,
         "engineering_stage_v1": (
-            status.strategy_key == "engineering_stage"
-            and status.strategy_version == 1
+            status.strategy_key == "engineering_stage" and status.strategy_version == 1
         ),
         "strategy_registry_policy_provenance": provenance_ok,
         "routing_attempt_present": bool(attempts),
@@ -206,10 +205,7 @@ def main(argv: list[str] | None = None) -> int:
         decision_id=args.decision_id,
     )
     default_dir = default_work_state_dir().parent / "operations" / "acceptance"
-    path = (
-        args.output
-        or default_dir / f"phase4-model-routing-{args.work_id}.json"
-    )
+    path = args.output or default_dir / f"phase4-model-routing-{args.work_id}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n",
