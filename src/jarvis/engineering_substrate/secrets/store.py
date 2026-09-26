@@ -9,6 +9,8 @@ import pathlib
 import sqlite3
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from typing import Final
@@ -138,8 +140,17 @@ class SecretStore:
         connection.execute("PRAGMA foreign_keys = ON")
         return connection
 
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        connection = self._connect()
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
     def _initialize(self) -> None:
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connection() as connection:
             current_version = int(
                 connection.execute("PRAGMA user_version").fetchone()[0]
             )
@@ -325,7 +336,7 @@ class SecretStore:
             updated_at_epoch=now,
         )
         sealed = self._seal(descriptor, value)
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connection() as connection:
             try:
                 connection.execute(
                     """
@@ -353,7 +364,7 @@ class SecretStore:
         value: bytes,
     ) -> SecretDescriptor:
         sealed = self._seal(descriptor, value)
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connection() as connection:
             cursor = connection.execute(
                 """
                 UPDATE secrets
@@ -441,7 +452,7 @@ class SecretStore:
     def descriptor(self, secret_id: str) -> SecretDescriptor:
         """Return indexed metadata only; callers must not treat it as integrity verified."""
 
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connection() as connection:
             return self._descriptor_from_row(self._require_row(connection, secret_id))
 
     def verified_descriptor(self, secret_id: str) -> SecretDescriptor:
@@ -452,7 +463,7 @@ class SecretStore:
     def list_descriptors(self) -> tuple[SecretDescriptor, ...]:
         """List only descriptors whose indexed projection matches the sealed envelope."""
 
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connection() as connection:
             rows = connection.execute(
                 "SELECT * FROM secrets ORDER BY service, secret_id"
             ).fetchall()
@@ -467,7 +478,7 @@ class SecretStore:
         *,
         require_active: bool = True,
     ) -> SecretMaterial:
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connection() as connection:
             row = self._require_row(connection, secret_id)
             descriptor = self._descriptor_from_row(row)
             material = self._unseal(row, descriptor)
