@@ -2,13 +2,21 @@
 
 ## Vision
 
-JARVIS V1 is a personal, voice-first intelligent assistant intended to feel like one coherent intelligence across conversation, memory, knowledge, local computer work, devices, communication, proactive assistance, and tightly governed self-repair/self-evolution.
+JARVIS V1 is a personal, voice-first intelligent assistant intended to mature into one coherent **governed autonomous self-managing personal intelligence runtime** across conversation, memory, knowledge, local computer work, devices, communication, proactive assistance, operations, self-repair and self-evolution.
 
-The end-state owner experience is stronger than a collection of prebuilt features:
+The end-state owner relationship is:
 
-> **The owner expresses intent; JARVIS handles the engineering required to satisfy that intent; authority remains with the owner.**
+> **The owner defines intent, priorities, boundaries, budgets and protected decisions. JARVIS continuously understands itself and its environment, determines what work is necessary, operates and maintains itself, repairs failures, optimizes performance and cost, acquires missing capabilities, executes long-running goals, verifies its own results, learns from outcomes, and progressively improves itself. Authority remains with the owner.**
 
-When the owner asks for something JARVIS cannot currently do, mature JARVIS should truthfully identify the capability gap and, when the owner directs it to acquire the capability, be able to research, architect, implement, test, diagnose failed attempts, prepare evidence and promotion artifacts, and involve the owner only at genuine authority/secret/physical-world acceptance gates. The owner should not need to manually research the solution, write code, manage Git, pull branches, run routine tests or debug the candidate merely because JARVIS lacks a capability.
+The owner should not need to act as JARVIS's full-time operator, project manager, debugger or release engineer. Mature JARVIS should increasingly determine what work needs to exist from owner goals, accepted system obligations and evidence from its own current state, rather than waiting for the owner to manually create every task.
+
+When JARVIS cannot currently satisfy a goal, it should identify the capability or engineering gap truthfully and use the governed engineering lifecycle to research, architect, implement, test, diagnose failed attempts, prepare evidence and promotion artifacts, and involve the owner only at genuine authority, secret/physical-input, acceptance or protected-promotion gates.
+
+The permanent constitutional rule is:
+
+> **JARVIS may manage JARVIS, but JARVIS must never become its own source of authority.**
+
+The complete top-level operating architecture is defined in `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`. The autonomous-engineering system is one major subsystem beneath that product north star.
 
 The goal is not to reproduce the old JARVIS implementation. Preserve worthwhile product intent, research the best suitable current technology for each active slice, and keep JARVIS-owned truth/authority around commodity technology.
 
@@ -26,6 +34,9 @@ The goal is not to reproduce the old JARVIS implementation. Preserve worthwhile 
 10. **Capability limits are explicit.** JARVIS fails truthfully rather than hallucinating access or completion.
 11. **Owner intent can create engineering work.** A missing capability may become a governed durable EngineeringChange rather than a dead-end response.
 12. **Autonomy never implies self-authorization.** Research/coding/testing autonomy does not remove owner approval, security, verification or protected-main promotion gates.
+13. **JARVIS owns operations, not constitutional authority.** Mature JARVIS may create and prioritize work from accepted goals/system obligations and may operate itself inside delegated bounds; it may not create new authority for itself.
+14. **Desired state drives autonomy.** Autonomous work must be traceable to accepted owner intent, registered system obligations, measurable desired state or evidence-backed operational findings.
+15. **Deterministic before agentic.** Predictable maintenance/recovery should use deterministic controllers or workflows when they are safer and sufficient; model reasoning is reserved for ambiguity, diagnosis, research, planning and novel work.
 
 Action state should distinguish proposed, awaiting approval, approved, attempted, succeeded, failed, partially completed, unverified and rolled back where applicable.
 
@@ -223,18 +234,21 @@ CAP-041 is partial because PR #55 now provides accepted persistent concurrent Wo
 | CAP-049 | Provider and Model Replaceability | Keep speech/model/search/memory/browser providers replaceable. | all | BOUNDED |
 | CAP-050 | Development Health and Research-First Evolution | Tests, benchmarks, architecture checks, project health, research-first development. | all | ACTIVE |
 | CAP-051 | Governed Autonomous Engineering | Turn an approved owner goal/incident/gap into durable research, architecture, isolated development, verification and promotion-ready evidence without transferring owner authority. | cross-cutting | PLANNED — foundational pieces exist |
+| CAP-052 | Autonomous Self-Management Control Plane | Maintain owner-approved desired state, reconcile whole-JARVIS actual state, create/prioritize necessary work, operate/heal/configure/optimize/protect/extend JARVIS within delegated authority, and escalate only genuine owner-attention boundaries. | cross-cutting | PLANNED — north star approved 2026-09-26 |
 
 CAP-046 is partial because the deterministic repair framework, bounded R2 production Self-Repair foundation and generalized EngineeringKnowledge foundation are owner accepted. Registered repair policies, durable RepairAttempts, external crash/hang supervision, budgets/cooldowns, startup readiness, authenticated liveness verification, Windows process-tree recovery, verified-repair knowledge projection, lifecycle/provenance/applicability and grounded local retrieval are production proven. AI-assisted diagnostics, sandboxed source repair, closed-loop engineering learning and later self-evolution layers remain incomplete.
 
 CAP-047 remains planned. No current capability may silently rewrite protected main, weaken Authority/governance, expand permissions or self-declare an improvement successful.
 
-CAP-051 is the explicit north-star engineering capability. Existing durable WorkItems, bounded research/development workers, Authority, self-awareness, isolated worktrees and deterministic R2 repair are foundations, not completion. The staged implementation sequence is defined in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`.
+CAP-051 is the explicit autonomous-engineering capability. Existing durable WorkItems, bounded research/development workers, Authority, self-awareness, isolated worktrees and deterministic R2 repair are foundations, not completion. The staged engineering sequence is defined in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`.
+
+CAP-052 is the top-level autonomy capability and does **not** mean an unrestricted super-agent. Its future control plane must reuse Self Model, Health, WorkItems, EngineeringChange, EngineeringKnowledge, Authority and verification as canonical truth. It introduces durable objectives/desired state, whole-system reconciliation, autonomous finding/work creation, portfolio prioritization, meaningful owner-attention escalation and later separately approved delegated-authority envelopes. The authoritative design is `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
 
 CAP-048 is bounded because truthful local failure survival exists but full offline conversation does not. CAP-049 is bounded because major provider boundaries are replaceable while complete replaceability across future capabilities remains ongoing.
 
-## Final Goal — Personal Intelligence Runtime
+## Final Goal — Autonomous Self-Managing Personal Intelligence Runtime
 
-The product is not complete merely because every catalogue row has code.
+The product is not complete merely because every catalogue row has code or because JARVIS can autonomously execute an engineering project. The end state requires whole-JARVIS self-management under owner authority.
 
 The end state is one coherent personal intelligence runtime where:
 
@@ -250,11 +264,20 @@ The end state is one coherent personal intelligence runtime where:
 - research, architecture, implementation, testing, debugging, PR preparation and evidence gathering can increasingly be handled by JARVIS;
 - owner involvement is concentrated at real authority, secret/physical-input, acceptance and promotion gates;
 - self-diagnosis/improvement occurs only through explicit governed evidence-backed processes;
-- protected Authority/security/governance cannot be silently relaxed by the system improving itself.
+- protected Authority/security/governance cannot be silently relaxed by the system improving itself;
+- JARVIS maintains an owner-approved desired-state/objective model distinct from observed actual state;
+- JARVIS can detect meaningful gaps between desired and actual state and decide when new work should exist;
+- JARVIS can manage and prioritize its own operational, repair, capability, maintenance and improvement portfolio;
+- predictable self-management uses deterministic controllers/workflows before invoking agentic reasoning;
+- owner attention becomes a scarce explicit resource reserved for true authority, judgment, secret/physical-input, acceptance or protected-promotion boundaries.
 
 The owner should be able to understand what JARVIS knows, what it inferred, what it did, what failed, what it changed or proposes to change, how it verified the result, and what authority it currently has.
 
-The target experience is therefore not "the owner programs every new capability into JARVIS." It is "the owner states the goal, JARVIS performs the governed engineering, and the owner retains final authority."
+The target experience is therefore not "the owner programs every new capability into JARVIS" and not merely "JARVIS manages projects for the owner." It is:
+
+> **The owner defines intent and the constitution; JARVIS manages JARVIS and its work inside that constitution, continuously moving actual state toward the owner-approved desired state and involving the owner only when owner authority is genuinely required.**
+
+The engineering subsystem remains essential because it gives the autonomy control plane a governed way to repair, extend and improve the system rather than merely detect problems.
 
 ## Documentation Authority
 
