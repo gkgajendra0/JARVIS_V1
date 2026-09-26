@@ -214,7 +214,9 @@ class ManifestReferenceCatalog:
         result: dict[str, str] = {}
         for registration in registrations:
             if registration.reference_id in result:
-                raise ValueError(\n                    f"duplicate {kind} reference: {registration.reference_id}"\n                )
+                raise ValueError(
+                    f"duplicate {kind} reference: {registration.reference_id}"
+                )
             result[registration.reference_id] = registration.digest
         return result
 
