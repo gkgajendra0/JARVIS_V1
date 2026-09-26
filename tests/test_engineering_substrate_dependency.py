@@ -226,6 +226,57 @@ def test_missing_uv_is_a_resource_blocker(tmp_path: Path) -> None:
         adapter.verify_trust()
 
 
+def test_pylock_derives_optional_wheel_name_from_url(tmp_path: Path) -> None:
+    lock = tmp_path / "pylock-optional-wheel-name.toml"
+    lock.write_text(
+        f"""lock-version = "1.0"
+created-by = "uv 0.12.19"
+
+[[packages]]
+name = "demo_package"
+version = "1.2.3"
+index = "https://pypi.org/simple"
+dependencies = []
+
+[[packages.wheels]]
+url = "https://files.pythonhosted.org/packages/demo/demo_package-1.2.3-py3-none-any.whl"
+size = {len(WHEEL_BYTES)}
+hashes = {{sha256 = "{WHEEL_SHA}"}}
+""",
+        encoding="utf-8",
+    )
+
+    parsed = inspect_pylock(lock, source=PYPI_PUBLIC_V1)
+
+    assert len(parsed.wheels) == 1
+    assert parsed.wheels[0].filename == "demo_package-1.2.3-py3-none-any.whl"
+    assert parsed.wheels[0].sha256 == WHEEL_SHA
+
+
+def test_pylock_omitted_name_still_rejects_non_wheel_url(tmp_path: Path) -> None:
+    lock = tmp_path / "pylock-non-wheel-url.toml"
+    lock.write_text(
+        f"""lock-version = "1.0"
+created-by = "uv 0.12.19"
+
+[[packages]]
+name = "demo_package"
+version = "1.2.3"
+index = "https://pypi.org/simple"
+dependencies = []
+
+[[packages.wheels]]
+url = "https://files.pythonhosted.org/packages/demo/not-a-wheel.tar.gz"
+size = {len(WHEEL_BYTES)}
+hashes = {{sha256 = "{WHEEL_SHA}"}}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DependencyPolicyError, match="wheel file"):
+        inspect_pylock(lock, source=PYPI_PUBLIC_V1)
+
+
 def test_pylock_rejects_non_wheel_or_wrong_source(tmp_path: Path) -> None:
     no_wheel = tmp_path / "pylock-no-wheel.toml"
     no_wheel.write_text(_pylock_text(with_wheel=False), encoding="utf-8")
