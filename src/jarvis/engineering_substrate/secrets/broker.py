@@ -471,12 +471,12 @@ class SecretBroker:
             self._leases.clear()
 
 
-PYPI_TOKEN_CONSUMER = SecretConsumerPolicy(
-    consumer_id="dependency.pypi-token.v1",
+PRIVATE_INDEX_TOKEN_CONSUMER = SecretConsumerPolicy(
+    consumer_id="dependency.private-index.v1",
     allowed_scopes=("repository.read",),
-    secret_environment_variable="UV_INDEX_PYPI_TOKEN",
+    secret_environment_variable="JARVIS_DEPENDENCY_INDEX_TOKEN",
 )
 
 
 def default_secret_consumer_registry() -> SecretConsumerRegistry:
-    return SecretConsumerRegistry((PYPI_TOKEN_CONSUMER,))
+    return SecretConsumerRegistry((PRIVATE_INDEX_TOKEN_CONSUMER,))
