@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -232,3 +233,23 @@ def test_unknown_baseline_target_fails_closed() -> None:
             targets=_targets(),
             config=broken,
         )
+
+
+def test_fixture_loader_rejects_string_boolean_coercion(tmp_path: Path) -> None:
+    payload = json.loads(_FIXTURE.read_text(encoding="utf-8"))
+    payload["cases"][0]["observations"][0]["verified_success"] = "false"
+    path = tmp_path / "bad-bool.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(TypeError, match="verified_success"):
+        load_routing_benchmark_fixture(path)
+
+
+def test_fixture_loader_rejects_string_numeric_coercion(tmp_path: Path) -> None:
+    payload = json.loads(_FIXTURE.read_text(encoding="utf-8"))
+    payload["cases"][0]["request"]["estimated_context_tokens"] = "1800"
+    path = tmp_path / "bad-number.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(TypeError, match="estimated_context_tokens"):
+        load_routing_benchmark_fixture(path)
