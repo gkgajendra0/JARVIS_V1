@@ -1,21 +1,22 @@
 """Phase-5E DPAPI SecretStore and authority-bound SecretBroker."""
 
 from jarvis.engineering_substrate.secrets.broker import (
-    PRIVATE_INDEX_TOKEN_CONSUMER,
+    build_secret_lease_proposal,
     CanonicalAuthoritySecretGate,
-    SecretAuthorizationError,
+    default_secret_consumer_registry,
+    PRIVATE_INDEX_TOKEN_CONSUMER,
     SecretAuthorityEvidence,
     SecretAuthorityGate,
+    SecretAuthorizationError,
     SecretBroker,
     SecretBrokerError,
     SecretConsumerPolicy,
     SecretConsumerRegistry,
     SecretLeaseError,
     SecretLeaseRequest,
-    build_secret_lease_proposal,
-    default_secret_consumer_registry,
 )
 from jarvis.engineering_substrate.secrets.store import (
+    default_secret_store_path,
     SecretAlreadyExistsError,
     SecretIntegrityError,
     SecretMaterial,
@@ -23,16 +24,18 @@ from jarvis.engineering_substrate.secrets.store import (
     SecretStateError,
     SecretStore,
     SecretStoreError,
-    default_secret_store_path,
 )
 
 __all__ = [
-    "PRIVATE_INDEX_TOKEN_CONSUMER",
+    "build_secret_lease_proposal",
     "CanonicalAuthoritySecretGate",
+    "default_secret_consumer_registry",
+    "default_secret_store_path",
+    "PRIVATE_INDEX_TOKEN_CONSUMER",
     "SecretAlreadyExistsError",
-    "SecretAuthorizationError",
     "SecretAuthorityEvidence",
     "SecretAuthorityGate",
+    "SecretAuthorizationError",
     "SecretBroker",
     "SecretBrokerError",
     "SecretConsumerPolicy",
@@ -45,7 +48,4 @@ __all__ = [
     "SecretStateError",
     "SecretStore",
     "SecretStoreError",
-    "build_secret_lease_proposal",
-    "default_secret_consumer_registry",
-    "default_secret_store_path",
 ]
