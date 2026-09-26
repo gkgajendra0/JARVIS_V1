@@ -23,6 +23,7 @@ from jarvis.engineering_substrate.contracts import (
     ArtifactProvenance,
     AttestationStatus,
     DependencyArtifact,
+    DependencyResolution,
     VerificationStatus,
 )
 
@@ -278,10 +279,17 @@ class ProvenanceService:
         self,
         artifact: DependencyArtifact,
         *,
+        resolution: DependencyResolution,
         provenance_id: str,
     ) -> ArtifactProvenanceResult:
         if not isinstance(artifact, DependencyArtifact):
             raise TypeError("artifact must be a DependencyArtifact")
+        if not isinstance(resolution, DependencyResolution):
+            raise TypeError("resolution must be a DependencyResolution")
+        if artifact.artifact_id not in resolution.artifact_ids:
+            raise ProvenanceVerificationError(
+                "artifact is not bound to the supplied dependency resolution"
+            )
         if artifact.source_id != "pypi.public.v1":
             raise ProvenanceVerificationError(
                 "PyPI provenance verification requires pypi.public.v1"
@@ -303,8 +311,8 @@ class ProvenanceService:
                 artifact_id=artifact.artifact_id,
                 source_id=artifact.source_id,
                 resolver_id="uv",
-                resolver_version="phase5c",
-                resolver_digest=artifact.sha256,
+                resolver_version=resolution.resolver_version,
+                resolver_digest=resolution.resolver_digest,
                 artifact_sha256=artifact.sha256,
                 attestation_status=AttestationStatus.NOT_AVAILABLE,
                 verification_status=VerificationStatus.VERIFIED,
@@ -330,8 +338,8 @@ class ProvenanceService:
                 artifact_id=artifact.artifact_id,
                 source_id=artifact.source_id,
                 resolver_id="uv",
-                resolver_version="phase5c",
-                resolver_digest=artifact.sha256,
+                resolver_version=resolution.resolver_version,
+                resolver_digest=resolution.resolver_digest,
                 artifact_sha256=artifact.sha256,
                 attestation_status=AttestationStatus.REJECTED,
                 verification_status=VerificationStatus.REJECTED,
@@ -356,8 +364,8 @@ class ProvenanceService:
             artifact_id=artifact.artifact_id,
             source_id=artifact.source_id,
             resolver_id="uv",
-            resolver_version="phase5c",
-            resolver_digest=artifact.sha256,
+            resolver_version=resolution.resolver_version,
+            resolver_digest=resolution.resolver_digest,
             artifact_sha256=artifact.sha256,
             attestation_status=AttestationStatus.VERIFIED,
             verification_status=VerificationStatus.VERIFIED,
