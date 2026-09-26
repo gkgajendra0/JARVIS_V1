@@ -233,22 +233,66 @@ class SandboxRegistry:
         docker = self._docker()
         image_token = self._image(image)
 
-        if trusted_suffix and profile.profile_id != "test.offline.v1":
-            raise SandboxPolicyError(
-                "runtime command suffix is only supported by the reviewed pytest adapter"
-            )
-        for item in trusted_suffix:
-            text = str(item).strip()
-            pure = pathlib.PurePath(text.split("::", 1)[0])
-            if (
-                not text
-                or pure.is_absolute()
-                or pathlib.PureWindowsPath(str(pure)).is_absolute()
-                or ".." in pure.parts
-                or text.startswith("-")
-            ):
+        if trusted_suffix:
+            if profile.profile_id == "test.offline.v1":
+                for item in trusted_suffix:
+                    text = str(item).strip()
+                    pure = pathlib.PurePath(text.split("::", 1)[0])
+                    if (
+                        not text
+                        or pure.is_absolute()
+                        or pathlib.PureWindowsPath(str(pure)).is_absolute()
+                        or ".." in pure.parts
+                        or text.startswith("-")
+                    ):
+                        raise SandboxPolicyError(
+                            "pytest target must remain a relative non-option path"
+                        )
+            elif profile.profile_id == "dependency.verify.v1":
+                allowed = {
+                    (
+                        "venv",
+                        "/candidate/.venv",
+                        "--python",
+                        "3.11",
+                        "--no-python-downloads",
+                        "--no-progress",
+                    ),
+                    (
+                        "pip",
+                        "sync",
+                        "/artifacts/pylock.toml",
+                        "--python",
+                        "/candidate/.venv/bin/python",
+                        "--offline",
+                        "--require-hashes",
+                        "--only-binary",
+                        ":all:",
+                        "--no-build",
+                        "--no-config",
+                        "--no-python-downloads",
+                        "--no-progress",
+                    ),
+                    (
+                        "pip",
+                        "check",
+                        "--python",
+                        "/candidate/.venv/bin/python",
+                    ),
+                    (
+                        "pip",
+                        "freeze",
+                        "--python",
+                        "/candidate/.venv/bin/python",
+                    ),
+                }
+                if trusted_suffix not in allowed:
+                    raise SandboxPolicyError(
+                        "dependency verification command is not registered"
+                    )
+            else:
                 raise SandboxPolicyError(
-                    "pytest target must remain a relative non-option path"
+                    "runtime command suffix is not supported by this sandbox profile"
                 )
 
         timeout = profile.timeout_seconds
@@ -365,7 +409,7 @@ DEFAULT_SANDBOX_DEFINITIONS = (
     SandboxDefinition(
         profile=_profile(
             profile_id="dependency.verify.v1",
-            entrypoint_id="dependency_verify_worker.v1",
+            entrypoint_id="uv_dependency_verify.v1",
             network_mode=SandboxNetworkMode.NONE,
             mount_policy_ids=("artifacts_ro", "candidate_rw", "worktree_ro"),
             timeout_seconds=300,
@@ -376,12 +420,7 @@ DEFAULT_SANDBOX_DEFINITIONS = (
             SandboxMountPolicy("worktree_ro", "/workspace", True),
         ),
         image_workdir="/candidate",
-        fixed_entrypoint=(
-            "python",
-            "-m",
-            "jarvis.engineering_substrate.dependency.worker",
-            "verify",
-        ),
+        fixed_entrypoint=("uv",),
     ),
 )
 
