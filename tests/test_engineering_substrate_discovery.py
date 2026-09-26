@@ -105,6 +105,28 @@ def test_scope_cannot_broaden_to_unregistered_service_type() -> None:
         )
 
 
+def test_scope_local_interface_cannot_exceed_registered_policy() -> None:
+    broker = default_discovery_broker(backend=FakeMdnsBackend(()))
+
+    with pytest.raises(DiscoveryPolicyError, match="local interface exceeds"):
+        broker.discover(_scope(local_interface="192.168.1.25"))
+
+
+def test_registered_local_interface_is_allowed() -> None:
+    backend = FakeMdnsBackend(())
+    policy = replace(
+        DEFAULT_MDNS_POLICY,
+        allowed_interfaces=("192.168.1.25",),
+    )
+    broker = DiscoveryBroker(
+        policies=(policy,),
+        adapters=(MdnsDnsSdAdapter(backend=backend),),
+    )
+
+    assert broker.discover(_scope(local_interface="192.168.1.25")) == ()
+    assert backend.calls[0]["local_interface"] == "192.168.1.25"
+
+
 def test_scope_timeout_and_result_limit_cannot_exceed_policy() -> None:
     backend = FakeMdnsBackend(())
     broker = default_discovery_broker(backend=backend)
@@ -148,6 +170,34 @@ def test_result_limit_is_enforced_before_projection() -> None:
 
     assert len(observations) == 2
     assert backend.calls[0]["max_results"] == 2
+
+
+def test_udp_service_preserves_transport_in_endpoint() -> None:
+    service_type = "_example._udp.local."
+    backend = FakeMdnsBackend(
+        (
+            _record(
+                service_type=service_type,
+                instance_name="Example._example._udp.local.",
+            ),
+        )
+    )
+    policy = DiscoveryAdapterPolicy(
+        adapter_id="mdns_dns_sd.v1",
+        adapter_version="python-zeroconf-0.151.3",
+        protocols=("mdns",),
+        allowed_service_types=(service_type,),
+    )
+    broker = DiscoveryBroker(
+        policies=(policy,),
+        adapters=(MdnsDnsSdAdapter(backend=backend, clock=lambda: 100.0),),
+        clock=lambda: 100.0,
+    )
+    scope = _scope(allowed_service_types=(service_type,))
+
+    observations = broker.discover(scope)
+
+    assert observations[0].endpoints == ("udp://192.168.1.50:8009",)
 
 
 def test_target_hint_only_narrows_results() -> None:
