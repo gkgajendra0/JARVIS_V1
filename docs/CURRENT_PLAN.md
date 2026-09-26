@@ -51,7 +51,7 @@ Phase-5 technology research is complete and the concrete architecture/implementa
 
 The proposed design adds deterministic DependencyBroker, SecretBroker, declarative CapabilityManifest, bounded discovery, JARVIS-owned SandboxProfiles, provenance and hardware-acceptance evidence while preserving EngineeringChange and Authority as the only governance boundary.
 
-**Current state: ARCHITECTURE OWNER-APPROVED / IMPLEMENTATION AUTHORIZED.** Execute Phase 5A through 5J under the standing authorization, stopping only for genuine owner-machine/manual acceptance or a new architectural decision.
+**Current state: ARCHITECTURE OWNER-APPROVED / IMPLEMENTATION ACTIVE.** Phase 5A canonical substrate contracts are implemented with fail-closed versioning, canonical RFC-8785/SHA-256 digests, bounded discovery contracts and Self-Model coverage. Continue Phase 5B through 5J under the standing authorization, stopping only for genuine owner-machine/manual acceptance or a new architectural decision.
 
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
@@ -141,4 +141,4 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Begin Phase 5A — canonical substrate contracts — from the owner-approved frozen architecture, then continue through Phase 5J under the standing authorization.**
+**Begin Phase 5B — SandboxRegistry + content-addressed ArtifactStore — from the merged Phase-5A contracts, then continue through Phase 5J under the standing authorization.**

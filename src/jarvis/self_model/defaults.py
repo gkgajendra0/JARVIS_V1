@@ -63,6 +63,19 @@ def build_default_self_model() -> SelfModelRegistry:
             ),
         ),
         C(
+            "engineering.substrate",
+            "Governed dependency, secret, sandbox, discovery, manifest, provenance "
+            "and hardware-acceptance substrate for autonomous engineering.",
+            ("src/jarvis/engineering_substrate",),
+            parent_component_id="jarvis",
+            tests=("tests/test_engineering_substrate_contracts.py",),
+            logger_prefixes=("jarvis.engineering_substrate",),
+            docs=(
+                "docs/PHASE5_SECURE_ENGINEERING_SUBSTRATE_ARCHITECTURE.md",
+                "docs/PHASE5_SECURE_ENGINEERING_SUBSTRATE_IMPLEMENTATION_PLAN.md",
+            ),
+        ),
+        C(
             "runtime.core",
             "Process bootstrap, configuration, preflight and core conversation lifecycle.",
             (
