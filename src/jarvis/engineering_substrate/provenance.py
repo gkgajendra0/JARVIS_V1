@@ -228,9 +228,7 @@ class PyPIAttestationVerifier:
         if len(expected_digest) != 64 or any(
             char not in "0123456789abcdef" for char in expected_digest
         ):
-            raise ProvenanceVerificationError(
-                "artifact expected SHA-256 is invalid"
-            )
+            raise ProvenanceVerificationError("artifact expected SHA-256 is invalid")
         try:
             digest = hashlib.sha256()
             with artifact_path.open("rb") as handle:
