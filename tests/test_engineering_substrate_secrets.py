@@ -30,6 +30,7 @@ from jarvis.authority import (
 from jarvis.authority.types import AuthorityEffect as Effect
 from jarvis.engineering_substrate import (
     CanonicalAuthoritySecretGate,
+    SecretAuthorizationError,
     SecretBroker,
     SecretConsumerPolicy,
     SecretConsumerRegistry,
