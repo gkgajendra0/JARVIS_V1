@@ -186,6 +186,25 @@ class ManifestReferenceCatalog:
     resource_requirement_ids: tuple[str, ...] = ()
     platform_constraint_ids: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        for field_name in (
+            "verification_contract_ids",
+            "hardware_acceptance_contract_ids",
+            "disable_rollback_contract_ids",
+            "health_probe_ids",
+            "resource_requirement_ids",
+            "platform_constraint_ids",
+        ):
+            object.__setattr__(
+                self,
+                field_name,
+                _tokens(getattr(self, field_name), field=field_name),
+            )
+        self.dependency_map()
+        self.provenance_map()
+        self.sandbox_map()
+        self.discovery_map()
+
     def _digest_map(
         self,
         registrations: tuple[DigestRegistration, ...],
@@ -543,7 +562,6 @@ def capability_manifest_json_schema() -> dict[str, object]:
             "type": "string",
             "pattern": "^[0-9a-f]{64}$",
         },
-        "uniqueItems": True,
         "maxItems": 64,
     }
     properties: dict[str, object] = {
