@@ -119,6 +119,13 @@ class GateService:
                 raise ChangeConflict(
                     "acceptance requires verified canonical development"
                 )
+            # Phase-5 changes add a stricter digest-bound substrate verification
+            # requirement. Non-Phase-5 EngineeringChanges remain unchanged.
+            from jarvis.engineering_substrate.change_integration import (
+                ensure_substrate_acceptance_current,
+            )
+
+            ensure_substrate_acceptance_current(self.store, change_id)
         work = self.store.work
         with work._lock, work._connect() as db:
             change = self._require_change(db, change_id)
