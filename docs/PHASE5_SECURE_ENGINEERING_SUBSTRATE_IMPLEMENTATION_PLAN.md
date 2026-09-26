@@ -1,6 +1,6 @@
 # Phase 5 Secure Autonomous Engineering Substrate — Implementation Plan
 
-Status: **OWNER-APPROVED / AUTHORIZED FOR IMPLEMENTATION**
+Status: **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**
 
 Owner approval recorded: 2026-09-26
 
@@ -43,10 +43,10 @@ Recommended sequence:
 - 5D — dependency provenance and offline candidate verification — **IMPLEMENTED**;
 - 5E — SecretBroker + DPAPI SecretStore + trusted enrollment CLI — **IMPLEMENTED / OWNER-MACHINE ACCEPTED 2026-09-26**;
 - 5F — CapabilityManifestRegistry + JSON Schema export — **IMPLEMENTED**;
-- 5G — bounded DiscoveryBroker + mDNS/DNS-SD adapter;
-- 5H — HardwareAcceptance contracts/service;
-- 5I — EngineeringChange integration, observability and concurrency;
-- 5J — evaluation + owner-machine acceptance + final documentation.
+- 5G — bounded DiscoveryBroker + mDNS/DNS-SD adapter — **IMPLEMENTED**;
+- 5H — HardwareAcceptance contracts/service — **IMPLEMENTED**;
+- 5I — EngineeringChange integration, observability and concurrency — **IMPLEMENTED**;
+- 5J — evaluation + owner-machine acceptance + final documentation — **IMPLEMENTED / OWNER-MACHINE ACCEPTED 2026-09-27**.
 
 Do not parallelize slices whose contracts depend on an unmerged previous slice. Tests/research inside a slice can run concurrently where safe.
 
