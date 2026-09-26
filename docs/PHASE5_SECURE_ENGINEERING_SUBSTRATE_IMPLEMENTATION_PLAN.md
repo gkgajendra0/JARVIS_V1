@@ -38,7 +38,7 @@ Phase 5 should be implemented in small additive PRs. Each slice must be independ
 Recommended sequence:
 
 - 5A — canonical contracts, versions, digests and registries — **IMPLEMENTED**;
-- 5B — SandboxRegistry and content-addressed ArtifactStore;
+- 5B — SandboxRegistry and content-addressed ArtifactStore — **IMPLEMENTED**;
 - 5C — Python DependencyBroker + trusted uv adapter;
 - 5D — dependency provenance and offline candidate verification;
 - 5E — SecretBroker + DPAPI SecretStore + trusted enrollment CLI;
