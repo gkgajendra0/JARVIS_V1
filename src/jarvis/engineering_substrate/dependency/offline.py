@@ -110,7 +110,7 @@ class OfflineVerificationBundleBuilder:
             raise TypeError("resolved must be a ResolvedPythonDependency")
         root = pathlib.Path(output_root)
         if root.exists() and root.is_symlink():
-            raise OfflineVerificationError("verification bundle root cannot be a symlink")
+            raise OfflineVerificationError(\n                "verification bundle root cannot be a symlink"\n            )
         root.mkdir(parents=True, exist_ok=True)
         root = root.resolve()
         wheelhouse = root / "wheels"
@@ -119,7 +119,7 @@ class OfflineVerificationBundleBuilder:
         canonical_bytes = resolved.lock_path.read_bytes()
         canonical_digest_value = _sha256_bytes(canonical_bytes)
         if canonical_digest_value != resolved.resolution.lock_digest:
-            raise OfflineVerificationError("canonical pylock digest changed before verification")
+            raise OfflineVerificationError(\n                "canonical pylock digest changed before verification"\n            )
         try:
             document = tomllib.loads(canonical_bytes.decode("utf-8"))
         except (UnicodeError, tomllib.TOMLDecodeError) as exc:
@@ -144,10 +144,7 @@ class OfflineVerificationBundleBuilder:
         for raw_package in packages:
             if not isinstance(raw_package, dict):
                 raise OfflineVerificationError("canonical pylock package is invalid")
-            if any(
-                key in raw_package
-                for key in ("vcs", "directory", "archive")
-            ):
+            if any(key in raw_package for key in ("vcs", "directory", "archive")):
                 raise OfflineVerificationError(
                     "offline verification refuses non-wheel package sources"
                 )
@@ -254,7 +251,7 @@ class OfflineCandidateVerifier:
         self._image = str(image).strip()
         self._runner = runner
         if self._image != UV_VERIFY_IMAGE:
-            raise ValueError("Phase-5D verification image must match the reviewed digest")
+            raise ValueError(\n                "Phase-5D verification image must match the reviewed digest"\n            )
 
     def _run(
         self,
@@ -288,8 +285,7 @@ class OfflineCandidateVerifier:
         if completed.returncode != 0:
             output = (completed.stdout + "\n" + completed.stderr).strip()
             raise OfflineVerificationError(
-                "dependency verification sandbox rejected candidate: "
-                + output[-2000:]
+                "dependency verification sandbox rejected candidate: " + output[-2000:]
             )
         return completed
 
