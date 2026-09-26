@@ -51,13 +51,23 @@ PR #55 contains the owner-accepted implementation: provider-neutral durable Work
 
 Step 8 tasks/reminders/scheduling, later Step 15 proactive/event-driven work and the autonomous-engineering program must reuse this foundation rather than create separate task/background systems.
 
+### Autonomous self-management north star
+
+On 2026-09-26 the owner explicitly clarified and approved the top-level product goal: JARVIS is not merely an autonomous project/engineering worker. The end state is a **governed autonomous self-managing personal intelligence runtime** that can understand desired versus actual state, decide what work should exist, operate/maintain/heal/configure/optimize/protect/extend itself, manage long-running goals, verify outcomes and learn while owner authority remains constitutionally separate.
+
+The authoritative product-level architecture is `docs/AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
+
+This clarification does **not** invalidate or interrupt the existing autonomous-engineering program. That program becomes the governed engineering subsystem JARVIS uses whenever self-management requires research, source change, repair, capability acquisition or improvement.
+
+A future **Phase 10A — Autonomous Operations Control Plane** is inserted after closed-loop engineering learning and before autonomous gap/weakness detection. It will add the Objective/DesiredState model, whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, owner-attention handling and autonomy evaluation. It is not active during Phase 5.
+
 ### Governed autonomous engineering / Self-Repair / Self-Evolution cross-cutting program
 
 The 2026-09-20 Self-Repair Foundation interlude completed on 2026-09-23 with owner-machine acceptance of the deterministic repair framework and bounded R2 runtime crash/hang recovery. Issue #65 is closed.
 
 Accepted early Step-19 foundation includes deterministic repair contracts, durable RepairAttempts, external crash/hang supervision, restart budgets/cooldowns, startup readiness, authenticated liveness stabilization, provider-degradation separation and Windows runtime-process-tree handling.
 
-A 2026-09-24 architecture review confirmed that Phase 1/R2 remains the correct foundation for the longer JARVIS goal. The program is now explicitly governed by `docs/GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`: JARVIS should eventually accept owner intent and autonomously perform the required governed research, engineering, testing, diagnosis and candidate preparation while the owner retains architecture, secret/physical-input, acceptance and protected-main promotion authority.
+A 2026-09-24 architecture review confirmed that Phase 1/R2 remains the correct foundation for the longer JARVIS goal. The engineering program is governed by `docs/GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`, which is now explicitly subordinate to the whole-JARVIS self-management north star. JARVIS should eventually perform the required governed research, engineering, testing, diagnosis and candidate preparation when owner intent or evidence-backed self-management findings require engineering work, while owner authority remains explicit at protected boundaries.
 
 The shared program has three trigger loops:
 
@@ -71,14 +81,15 @@ The current exact sequence is:
 Phase 1   deterministic repair + accepted R2 recovery — DONE
 Phase 1H  foundation hardening — DONE / OWNER-MACHINE ACCEPTED 2026-09-24
 Phase 2   EngineeringKnowledge — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
-Phase 3   EngineeringChange lifecycle / mission orchestration — ACTIVE / NEXT
-Phase 4   Research + Diagnostic Model Router
-Phase 5   Secure autonomous engineering substrate
+Phase 3   EngineeringChange lifecycle / mission orchestration — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
+Phase 4   Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 2026-09-26
+Phase 5   Secure autonomous engineering substrate — ACTIVE / IMPLEMENTATION; 5A–5F merged, 5G underway
 Phase 6   Unknown-incident investigation + source repair
 Phase 7   Governed promotion / production verification / rollback
 Phase 8   Capability package + registry lifecycle
 Phase 9   Owner-requested capability acquisition
 Phase 10  Closed-loop engineering learning
+Phase 10A Autonomous Operations Control Plane
 Phase 11  Autonomous capability-gap / weakness detection
 Phase 12  Shadow improvement + baseline benchmarking
 Phase 13  Engineering curriculum + specialist model evaluation
@@ -87,7 +98,7 @@ Phase 14  Governed self-evolution
 
 Phase 2 generalized the earlier RepairKnowledge design into shared `EngineeringKnowledge`, with `REPAIR` as the first implemented vertical. Owner-machine acceptance passed on 2026-09-25, including R2-independence, real repair projection/promotion/retrieval, poisoning/secret gates, future-facet extensibility, and lexical/hybrid qrel safety.
 
-Phase 3 is now the active cross-cutting slice and will add the durable `EngineeringChange` mission lifecycle above existing WorkItems.
+Phase 3 and Phase 4 are owner-machine accepted. Phase 5 is the active cross-cutting slice; Phases 5A–5F are merged and Phase 5G bounded discovery is underway in parallel with this documentation-only north-star reconciliation.
 
 Owner-requested capability acquisition intentionally comes before autonomous gap detection. If the owner explicitly says "get this capability", JARVIS should not need repeated failures or repeated requests before it can run the governed acquisition lifecycle.
 
@@ -184,15 +195,15 @@ The same lifecycle applies to JARVIS-generated engineering candidates; autonomy 
 6. Visible and Aware Assistant — Steps 13–15.
 7. Extensible Daily Assistant — Steps 16–17.
 8. Governed Learning and Improvement — Steps 18–20 plus the cross-cutting autonomous-engineering program.
-9. Personal Intelligence Runtime — integrated end state where owner intent can drive governed autonomous engineering.
+9. Autonomous Self-Managing Personal Intelligence Runtime — integrated end state where owner intent and accepted system obligations drive whole-JARVIS self-management, with governed autonomous engineering as the repair/extension/improvement subsystem.
 
 ## Current next step
 
 Persistent Concurrent Work Orchestration and the deterministic repair/R2 foundation are owner accepted.
 
-**Current active cross-cutting work is Phase 5 — Secure Autonomous Engineering Substrate research/architecture.**
+**Current active cross-cutting work is Phase 5 — Secure Autonomous Engineering Substrate implementation.** Phases 5A–5F are merged; Phase 5G bounded discovery is currently underway.
 
-Phase 2 EngineeringKnowledge is DONE / OWNER-MACHINE ACCEPTED 2026-09-25. Its accepted foundation is now available to Phase 3 and later autonomous-engineering phases.
+The 2026-09-26 autonomous self-management north-star clarification is documentation/architecture alignment only and does not interrupt active Phase 5 implementation.
 
 Step 8 remains the next numbered product slice when numbered roadmap work resumes.
 
