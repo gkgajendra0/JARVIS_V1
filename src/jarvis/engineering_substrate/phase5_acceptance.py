@@ -96,8 +96,10 @@ def _tested_commit(repo: pathlib.Path) -> str:
             "acceptance could not identify the tested Git revision"
         ) from exc
     commit = completed.stdout.strip().casefold()
-    if completed.returncode != 0 or len(commit) != 40 or any(
-        char not in "0123456789abcdef" for char in commit
+    if (
+        completed.returncode != 0
+        or len(commit) != 40
+        or any(char not in "0123456789abcdef" for char in commit)
     ):
         raise Phase5AcceptanceError("acceptance Git revision is not a full commit SHA")
     return commit
