@@ -8,8 +8,18 @@ from jarvis.engineering_substrate.dependency import UV_WINDOWS_X64_0_12_19
 from jarvis.engineering_substrate.phase5_acceptance import (
     Phase5AcceptanceError,
     _restart_lineage_acceptance,
+    _tested_commit,
     _validate_uv_release_asset,
 )
+
+
+def test_acceptance_records_full_git_revision() -> None:
+    repo = Path(__file__).resolve().parents[1]
+
+    commit = _tested_commit(repo)
+
+    assert len(commit) == 40
+    assert all(char in "0123456789abcdef" for char in commit)
 
 
 def test_uv_acceptance_rejects_tampered_release_asset_before_execution(
