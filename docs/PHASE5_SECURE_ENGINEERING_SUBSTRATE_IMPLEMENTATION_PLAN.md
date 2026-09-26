@@ -41,8 +41,8 @@ Recommended sequence:
 - 5B — SandboxRegistry and content-addressed ArtifactStore — **IMPLEMENTED**;
 - 5C — Python DependencyBroker + trusted uv adapter — **IMPLEMENTED**;
 - 5D — dependency provenance and offline candidate verification — **IMPLEMENTED**;
-- 5E — SecretBroker + DPAPI SecretStore + trusted enrollment CLI;
-- 5F — CapabilityManifestRegistry + JSON Schema export;
+- 5E — SecretBroker + DPAPI SecretStore + trusted enrollment CLI — **IMPLEMENTED / OWNER-MACHINE ACCEPTED 2026-09-26**;
+- 5F — CapabilityManifestRegistry + JSON Schema export — **IMPLEMENTED**;
 - 5G — bounded DiscoveryBroker + mDNS/DNS-SD adapter;
 - 5H — HardwareAcceptance contracts/service;
 - 5I — EngineeringChange integration, observability and concurrency;
