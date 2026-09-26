@@ -21,13 +21,19 @@ The authoritative completed/deferred/superseded/rejected ledger is `PROJECT_STAT
 
 ## North-star program architecture
 
-The owner-approved long-term engineering direction is defined by:
+The owner-approved **whole-JARVIS product north star** is defined by:
+
+`AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`
+
+JARVIS is intended to become a governed autonomous self-managing personal intelligence runtime: the owner defines intent, priorities, boundaries, budgets and protected decisions; JARVIS increasingly understands desired versus actual state, determines what work should exist, operates/manages itself, repairs failures, optimizes, protects, acquires capabilities and learns while remaining inside owner authority.
+
+The permanent rule is: **JARVIS may manage JARVIS, but JARVIS must never become its own source of authority.**
+
+The governed engineering subsystem is defined by:
 
 `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`
 
-The target is not merely self-repair. JARVIS should ultimately accept owner intent and autonomously perform the governed engineering needed to investigate failures, repair itself and acquire missing capabilities, while owner authority remains explicit at architecture, secrets/physical-input, acceptance and promotion gates.
-
-The architecture uses one shared governed platform with three trigger loops:
+It remains the mechanism JARVIS uses when self-management requires research, diagnosis, source repair, capability acquisition or improvement. Its architecture uses one shared governed platform with three trigger loops:
 
 1. deterministic production repair;
 2. unknown-problem investigation and repair engineering;
@@ -96,6 +102,7 @@ Phase 7  Governed promotion / production verification / rollback
 Phase 8  Capability package + registry lifecycle
 Phase 9  Owner-requested capability acquisition
 Phase 10 Closed-loop engineering learning
+Phase 10A Autonomous Operations Control Plane — approved future integration point; not active during Phase 5
 Phase 11 Autonomous capability-gap / weakness detection
 Phase 12 Shadow improvement + baseline benchmarking
 Phase 13 Engineering curriculum + specialist model evaluation
@@ -103,6 +110,8 @@ Phase 14 Governed self-evolution
 ```
 
 Owner-requested capability acquisition intentionally precedes autonomous gap detection: an explicit owner request to acquire a capability must not wait for repeated failures or repeated requests.
+
+The owner-approved 2026-09-26 sequencing clarification inserts Phase 10A before Phase 11. Phase 10A will add the Objective/DesiredState model, whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, owner-attention handling and autonomy evaluation. It does not interrupt or broaden authority during active Phase 5.
 
 ## Next numbered product slice
 
@@ -124,8 +133,9 @@ They remain separate unless evidence shows that one directly blocks the active P
 - `CURRENT_PLAN.md` — active work only and authoritative current phase.
 - `PROJECT_STATE.md` — accepted/deferred/superseded/rejected repository ledger.
 - `QUALITY_GATES.md` — universal validation, acceptance and promotion rules.
-- `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` — north-star architecture for autonomous governed engineering.
-- `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — specialized repair/evolution program aligned under the north-star plan.
+- `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md` — authoritative whole-JARVIS product/operating north star.
+- `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` — autonomous-engineering subsystem under that north star.
+- `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — specialized repair/evolution program under the engineering subsystem.
 - `SELF_REPAIR_PHASE1H_HARDENING.md` — current hardening gate.
 - `PHASE2_ENGINEERING_KNOWLEDGE_RESEARCH.md` — consolidated Phase-2 research findings and technology dispositions.
 - `PHASE2_ENGINEERING_KNOWLEDGE_ARCHITECTURE.md` — owner-approved Phase-2 architecture and invariants.
@@ -141,4 +151,4 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Begin Phase 5G — bounded DiscoveryBroker + mDNS/DNS-SD adapter — after the Phase-5F PR is green/merged, then continue through Phase 5J under the standing authorization.**
+**Continue Phase 5G — bounded mDNS/DNS-SD discovery broker — under the standing Phase-5 authorization, then continue through Phase 5J.** Phases 5A–5F are already merged. This north-star documentation work is intentionally parallel and must not interrupt the active Phase-5 implementation branch/PR.
