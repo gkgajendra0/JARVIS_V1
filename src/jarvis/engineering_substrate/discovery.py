@@ -69,6 +69,9 @@ class DiscoveryAdapterPolicy:
             raise ValueError("discovery adapter requires an explicit protocol")
         if not services and not devices:
             raise ValueError("discovery adapter requires an explicit service/device set")
+        if "mdns" in protocols:
+            for service_type in services:
+                _validate_mdns_service_type(service_type)
         if self.max_timeout_seconds <= 0 or self.max_timeout_seconds > 30:
             raise ValueError("adapter max_timeout_seconds must be within Phase-5 bounds")
         if self.max_results <= 0 or self.max_results > 64:
@@ -586,9 +589,19 @@ def _tokens(values: Iterable[str]) -> tuple[str, ...]:
             if str(value).strip()
         )
     )
-    if "*" in normalized:
+    if any("*" in value for value in normalized):
         raise ValueError("wildcard discovery policy is forbidden")
     return normalized
+
+
+def _validate_mdns_service_type(value: str) -> None:
+    service_type = str(value).strip().casefold()
+    if service_type == "_services._dns-sd._udp.local.":
+        raise ValueError("DNS-SD service-type enumeration is forbidden")
+    if not service_type.startswith("_") or not service_type.endswith(".local."):
+        raise ValueError("mDNS service type must be explicit and local")
+    if "._tcp." not in service_type and "._udp." not in service_type:
+        raise ValueError("mDNS service type must declare TCP or UDP transport")
 
 
 def _endpoint_host(address: str) -> str:
