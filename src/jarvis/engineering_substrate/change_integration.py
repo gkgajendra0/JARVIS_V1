@@ -165,7 +165,11 @@ class EngineeringSubstrateChangeService:
         self._require_bind_state(change_id)
         architecture = self._approved_architecture(change_id)
         requirements = tuple(
-            dict.fromkeys(str(item).strip() for item in requirement_ids if str(item).strip())
+            dict.fromkeys(
+                str(item).strip()
+                for item in requirement_ids
+                if str(item).strip()
+            )
         )
         if not str(plan_id).strip() or not requirements:
             raise ChangeConflict("dependency plan requires identity and requirements")
@@ -261,7 +265,8 @@ class EngineeringSubstrateChangeService:
             artifact = self._current_resolution_artifact(change_id, resolution_id)
             if artifact.payload.get("resolution_digest") != expected_digest:
                 raise ChangeConflict(
-                    f"dependency resolution changed before manifest bind: {resolution_id}"
+                    "dependency resolution changed before manifest bind: "
+                    f"{resolution_id}"
                 )
             if (
                 artifact.payload.get("architecture_artifact_id")
@@ -391,7 +396,9 @@ class EngineeringSubstrateChangeService:
         request = hardware.get_request(request_id)
         evidence = hardware.get_evidence(request_id)
         if request.change_id != change_id:
-            raise ChangeConflict("hardware request belongs to another EngineeringChange")
+            raise ChangeConflict(
+                "hardware request belongs to another EngineeringChange"
+            )
         if request.manifest_digest != manifest.payload.get("manifest_digest"):
             raise ChangeConflict("hardware request belongs to stale manifest")
         if evidence is None:
@@ -568,7 +575,10 @@ class EngineeringSubstrateChangeService:
         if manifest is None:
             raise ChangeConflict("Phase-5 verification requires current manifest")
 
-        automated = {str(key).strip(): bool(value) for key, value in automated_evidence.items()}
+        automated = {
+            str(key).strip(): bool(value)
+            for key, value in automated_evidence.items()
+        }
         if any(not key for key in automated):
             raise ValueError("automated evidence IDs must not be empty")
 
@@ -577,7 +587,9 @@ class EngineeringSubstrateChangeService:
         )
         covered_secret_scopes: set[str] = set()
         for artifact in self._current_secret_lease_artifacts(change_id, manifest):
-            covered_secret_scopes.update(str(item) for item in artifact.payload.get("scopes", ()))
+            covered_secret_scopes.update(
+                str(item) for item in artifact.payload.get("scopes", ())
+            )
         missing_secret_scopes = tuple(
             sorted(required_secret_scopes - covered_secret_scopes)
         )
@@ -603,7 +615,10 @@ class EngineeringSubstrateChangeService:
             bound = next(
                 (
                     artifact
-                    for artifact in self._current_hardware_artifacts(change_id, manifest)
+                    for artifact in self._current_hardware_artifacts(
+                        change_id,
+                        manifest,
+                    )
                     if artifact.payload.get("hardware_contract_id") == contract_id
                     and artifact.payload.get("request_id") == request_id
                 ),
