@@ -39,7 +39,7 @@ Recommended sequence:
 
 - 5A — canonical contracts, versions, digests and registries — **IMPLEMENTED**;
 - 5B — SandboxRegistry and content-addressed ArtifactStore — **IMPLEMENTED**;
-- 5C — Python DependencyBroker + trusted uv adapter;
+- 5C — Python DependencyBroker + trusted uv adapter — **IMPLEMENTED**;
 - 5D — dependency provenance and offline candidate verification;
 - 5E — SecretBroker + DPAPI SecretStore + trusted enrollment CLI;
 - 5F — CapabilityManifestRegistry + JSON Schema export;
@@ -154,7 +154,9 @@ Initial implementation must:
 - verify source/release identity;
 - treat missing/wrong uv as resource unavailable.
 
-At architecture research freeze, uv 0.12.18 is the current candidate because it includes the current Windows wheel path-traversal fix. Re-confirm exact release/artifact before implementation pin.
+Implementation revalidation on 2026-09-26 confirmed uv 0.12.19 as the current immutable upstream release. The reviewed release commit is `bea138450f0e620a4ce5765b0e38cff7b9f0799f` and GitHub reports the commit signature as verified. The release publishes GitHub Artifact Attestations. The reviewed x64 Windows archive SHA-256 is `6dbb02d79e419522f1c500f0adb1cddcff0cda7d59b0d66ea7f5e3b4a1b2f5f0`; the reviewed x64 Linux GNU archive used by the Docker-side trust policy is `23bf5552d220e0842b65c862097b2ebaeba0064b74eda5e565e77fd25969d8c8`. Windows releases also carry the reviewed Authenticode expectation.
+
+Runtime registration still binds the exact extracted executable version and SHA-256 to the reviewed release-policy digest. There is no automatic "latest" upgrade.
 
 ### Deliverables
 
