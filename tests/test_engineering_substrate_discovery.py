@@ -100,9 +100,7 @@ def test_scope_cannot_broaden_to_unregistered_service_type() -> None:
     broker = default_discovery_broker(backend=FakeMdnsBackend(()))
 
     with pytest.raises(DiscoveryPolicyError, match="service type exceeds"):
-        broker.discover(
-            _scope(allowed_service_types=("_ssh._tcp.local.",))
-        )
+        broker.discover(_scope(allowed_service_types=("_ssh._tcp.local.",)))
 
 
 def test_scope_local_interface_cannot_exceed_registered_policy() -> None:
@@ -229,9 +227,7 @@ def test_freshness_expires_deterministically() -> None:
 
 
 def test_adapter_cannot_return_out_of_scope_service() -> None:
-    backend = FakeMdnsBackend(
-        (_record(service_type="_airplay._tcp.local."),)
-    )
+    backend = FakeMdnsBackend((_record(service_type="_airplay._tcp.local."),))
     broker = default_discovery_broker(backend=backend)
 
     with pytest.raises(DiscoveryAdapterError, match="out-of-scope"):
