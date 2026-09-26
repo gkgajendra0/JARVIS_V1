@@ -167,24 +167,23 @@ class HardwareAcceptanceService:
             (schema + f"|hardware-acceptance-v{self.SCHEMA_VERSION}").encode("utf-8")
         ).hexdigest()
         work = self.store.work
-        with work._lock, work._connect() as db:
-            with db:
-                db.executescript(schema)
-                row = db.execute(
-                    """SELECT checksum FROM engineering_hardware_acceptance_schema
-                    WHERE version=?""",
-                    (self.SCHEMA_VERSION,),
-                ).fetchone()
-                if row is not None and row["checksum"] != checksum:
-                    raise HardwareAcceptanceConflict(
-                        "hardware acceptance schema checksum mismatch"
-                    )
-                if row is None:
-                    db.execute(
-                        """INSERT INTO engineering_hardware_acceptance_schema
-                        (version, checksum) VALUES (?, ?)""",
-                        (self.SCHEMA_VERSION, checksum),
-                    )
+        with work._lock, work._connect() as db, db:
+            db.executescript(schema)
+            row = db.execute(
+                """SELECT checksum FROM engineering_hardware_acceptance_schema
+                WHERE version=?""",
+                (self.SCHEMA_VERSION,),
+            ).fetchone()
+            if row is not None and row["checksum"] != checksum:
+                raise HardwareAcceptanceConflict(
+                    "hardware acceptance schema checksum mismatch"
+                )
+            if row is None:
+                db.execute(
+                    """INSERT INTO engineering_hardware_acceptance_schema
+                    (version, checksum) VALUES (?, ?)""",
+                    (self.SCHEMA_VERSION, checksum),
+                )
 
     def create_request(
         self,
