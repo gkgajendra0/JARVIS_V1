@@ -37,6 +37,16 @@ class SandboxResourceUnavailable(SandboxRegistryError):
     """Docker is unavailable; callers must block rather than execute on the host."""
 
 
+def _has_symlink_component(path: pathlib.Path) -> bool:
+    absolute = path.absolute()
+    cursor = pathlib.Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        cursor /= part
+        if cursor.exists() and cursor.is_symlink():
+            return True
+    return False
+
+
 @dataclass(frozen=True, slots=True)
 class SandboxMountPolicy:
     policy_id: str
@@ -173,8 +183,10 @@ class SandboxRegistry:
         for policy_id in sorted(expected):
             policy = expected[policy_id]
             source = supplied[policy_id].source
-            if source.is_symlink():
-                raise SandboxPolicyError("sandbox mount source cannot be a symlink")
+            if _has_symlink_component(source):
+                raise SandboxPolicyError(
+                    "sandbox mount source cannot traverse a symlink"
+                )
             resolved = source.resolve()
             if resolved == home:
                 raise SandboxPolicyError("entire owner home profile cannot be mounted")
