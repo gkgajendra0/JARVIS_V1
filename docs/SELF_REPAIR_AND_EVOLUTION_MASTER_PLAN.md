@@ -72,7 +72,7 @@ With Phases 2, 3 and 4 owner-machine accepted, the cross-cutting program proceed
 Phase 2   EngineeringKnowledge Foundation — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 3   EngineeringChange Lifecycle / Mission Orchestration — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 4   Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 2026-09-26
-Phase 5   Secure Autonomous Engineering Substrate — ACTIVE / IMPLEMENTATION; 5A–5F merged, 5G underway
+Phase 5   Secure Autonomous Engineering Substrate — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 6   Unknown-Incident Investigation + Source Repair
 Phase 7   Governed Promotion / Production Verification / Rollback
 Phase 8   Capability Package + Registry Lifecycle
