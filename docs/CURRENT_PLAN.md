@@ -43,7 +43,7 @@ The active development slice is now:
 
 Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. Its final evidence is recorded in `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`.
 
-Phase-5 technology research is now complete and a concrete architecture/implementation plan is proposed. Canonical review documents are:
+Phase-5 technology research is complete and the concrete architecture/implementation plan was explicitly owner-approved on 2026-09-26. Canonical review documents are:
 
 - `PHASE5_SECURE_ENGINEERING_SUBSTRATE_RESEARCH.md`;
 - `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ARCHITECTURE.md`;
@@ -51,7 +51,7 @@ Phase-5 technology research is now complete and a concrete architecture/implemen
 
 The proposed design adds deterministic DependencyBroker, SecretBroker, declarative CapabilityManifest, bounded discovery, JARVIS-owned SandboxProfiles, provenance and hardware-acceptance evidence while preserving EngineeringChange and Authority as the only governance boundary.
 
-**Current gate: OWNER ARCHITECTURE APPROVAL REQUIRED.** Do not implement Phase 5 until the architecture is explicitly approved.
+**Current state: ARCHITECTURE OWNER-APPROVED / IMPLEMENTATION AUTHORIZED.** Execute Phase 5A through 5J under the standing authorization, stopping only for genuine owner-machine/manual acceptance or a new architectural decision.
 
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
@@ -90,7 +90,7 @@ Continue with the phased sequence in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLA
 Phase 2  EngineeringKnowledge — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 3  EngineeringChange lifecycle / mission orchestration — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 4  Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 2026-09-26
-Phase 5  Secure autonomous engineering substrate — ACTIVE / ARCHITECTURE PROPOSED; OWNER APPROVAL REQUIRED
+Phase 5  Secure autonomous engineering substrate — ACTIVE / ARCHITECTURE OWNER-APPROVED; IMPLEMENTATION AUTHORIZED
 Phase 6  Unknown-incident investigation + source repair
 Phase 7  Governed promotion / production verification / rollback
 Phase 8  Capability package + registry lifecycle
@@ -141,6 +141,4 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Review and approve/revise Phase 5 — Secure Autonomous Engineering Substrate architecture.**
-
-Research is complete. The proposed architecture and ordered implementation slices are documented in the Phase-5 research, architecture and implementation-plan files. No implementation begins until explicit owner approval.
+**Begin Phase 5A — canonical substrate contracts — from the owner-approved frozen architecture, then continue through Phase 5J under the standing authorization.**
