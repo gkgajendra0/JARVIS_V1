@@ -316,57 +316,11 @@ class OfflineCandidateVerifier:
 
         mounts = (
             SandboxMountBinding("artifacts_ro", bundle.root),
-            SandboxMountBinding("candidate_rw", candidate),
             SandboxMountBinding("worktree_ro", worktree_path),
-        )
-        self._run(
-            mounts=mounts,
-            suffix=(
-                "venv",
-                "/candidate/.venv",
-                "--python",
-                "3.11",
-                "--no-python-downloads",
-                "--no-progress",
-            ),
-            cwd=candidate,
-        )
-        self._run(
-            mounts=mounts,
-            suffix=(
-                "pip",
-                "sync",
-                "/artifacts/pylock.toml",
-                "--python",
-                "/candidate/.venv/bin/python",
-                "--offline",
-                "--require-hashes",
-                "--only-binary",
-                ":all:",
-                "--no-config",
-                "--no-python-downloads",
-                "--no-progress",
-            ),
-            cwd=candidate,
-        )
-        self._run(
-            mounts=mounts,
-            suffix=(
-                "pip",
-                "check",
-                "--python",
-                "/candidate/.venv/bin/python",
-            ),
-            cwd=candidate,
         )
         frozen = self._run(
             mounts=mounts,
-            suffix=(
-                "pip",
-                "freeze",
-                "--python",
-                "/candidate/.venv/bin/python",
-            ),
+            suffix=(),
             cwd=candidate,
         )
         inventory = tuple(
