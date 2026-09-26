@@ -37,14 +37,9 @@ from jarvis.engineering_substrate.dependency.uv_adapter import (
 )
 
 __all__ = [
-    "UV_VERIFY_IMAGE",
-    "OfflineCandidateResult",
-    "OfflineCandidateVerifier",
-    "OfflineVerificationBundle",
-    "OfflineVerificationBundleBuilder",
-    "OfflineVerificationError",
     "PYPI_PUBLIC_V1",
     "UV_LINUX_X64_0_12_19",
+    "UV_VERIFY_IMAGE",
     "UV_WINDOWS_X64_0_12_19",
     "DependencyBroker",
     "DependencyPolicyError",
@@ -53,6 +48,11 @@ __all__ = [
     "DependencySourceRegistry",
     "LockedWheel",
     "LockedWheelFetcher",
+    "OfflineCandidateResult",
+    "OfflineCandidateVerifier",
+    "OfflineVerificationBundle",
+    "OfflineVerificationBundleBuilder",
+    "OfflineVerificationError",
     "ParsedPylock",
     "PythonResolutionEnvironment",
     "ResolvedPythonDependency",
