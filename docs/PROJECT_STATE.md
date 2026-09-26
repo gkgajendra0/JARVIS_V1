@@ -294,6 +294,31 @@ separately after state/document reconciliation.
 
 ---
 
+## Owner-approved autonomous self-management north star
+
+On 2026-09-26 the owner clarified and approved the top-level product goal recorded in
+`AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
+
+The target is broader than autonomous engineering/project management: mature JARVIS
+should understand owner-approved desired state versus observed actual state, decide
+what work should exist, operate/maintain/heal/configure/optimize/protect/extend
+itself, manage long-running goals, verify outcomes and learn while owner authority
+remains separate and protected.
+
+Permanent rule:
+
+> **JARVIS may manage JARVIS, but JARVIS must never become its own source of authority.**
+
+This is an **accepted future product/architecture direction, not current production
+capability**. It does not reopen accepted phases or interrupt active Phase 5.
+The existing governed autonomous-engineering program becomes the engineering
+subsystem beneath this whole-JARVIS north star.
+
+The approved future sequence inserts **Phase 10A — Autonomous Operations Control
+Plane** after Phase 10 and before Phase 11. Phase 10A will own objectives/desired
+state, system-state reconciliation, evidence-backed autonomous work creation,
+portfolio prioritization, owner-attention handling and autonomy evaluation.
+
 ## Current active work
 
 Phase 1H is **DONE / OWNER-MACHINE ACCEPTED 2026-09-24** and is promoted through PR #90.
@@ -308,6 +333,8 @@ The active cross-cutting slice is:
 
 **Phase 5 — Secure Autonomous Engineering Substrate**
 
-Research and architecture are next. Phase 5 must reuse EngineeringChange, EngineeringKnowledge, Model Router, WorkItems, Authority and existing isolation/verification boundaries while defining governed dependency, secret, capability-manifest, discovery, provenance, sandbox-profile and hardware-in-the-loop primitives.
+Phases 5A–5F are merged on protected `main`; Phase 5G bounded mDNS/DNS-SD discovery is underway in PR #126. Continue through Phase 5J under the standing authorization, stopping only for genuine owner-machine/manual acceptance or a new architectural decision.
+
+The north-star documentation reconciliation runs in parallel and does not broaden current runtime authority or interrupt Phase 5.
 
 Source repair remains Phase 6. Step 8 remains the next numbered product slice when numbered roadmap work resumes.
