@@ -67,7 +67,11 @@ class SubstrateReplayCase:
             raise TypeError("security_invariant_preserved must be bool")
         if not isinstance(self.restart_boundary, bool):
             raise TypeError("restart_boundary must be bool")
-        before = None if self.lineage_before is None else str(self.lineage_before).strip()
+        before = (
+            None
+            if self.lineage_before is None
+            else str(self.lineage_before).strip()
+        )
         after = None if self.lineage_after is None else str(self.lineage_after).strip()
         if self.restart_boundary and (not before or not after):
             raise SubstrateReplayError(
