@@ -237,12 +237,18 @@ class SandboxRegistry:
             if profile.profile_id == "test.offline.v1":
                 for item in trusted_suffix:
                     text = str(item).strip()
-                    pure = pathlib.PurePath(text.split("::", 1)[0])
+                    path_token = text.split("::", 1)[0]
+                    posix_path = pathlib.PurePosixPath(path_token)
+                    windows_path = pathlib.PureWindowsPath(path_token)
                     if (
                         not text
-                        or pure.is_absolute()
-                        or pathlib.PureWindowsPath(str(pure)).is_absolute()
-                        or ".." in pure.parts
+                        or not path_token
+                        or posix_path.is_absolute()
+                        or windows_path.is_absolute()
+                        or bool(windows_path.root)
+                        or bool(windows_path.drive)
+                        or ".." in posix_path.parts
+                        or ".." in windows_path.parts
                         or text.startswith("-")
                     ):
                         raise SandboxPolicyError(
@@ -419,7 +425,7 @@ DEFAULT_SANDBOX_DEFINITIONS = (
             SandboxMountPolicy("worktree_ro", "/workspace", True),
         ),
         image_workdir="/candidate",
-        fixed_entrypoint=("uv", "--cache-dir", "/candidate/.uv-cache"),
+        fixed_entrypoint=("uv", "--cache-dir", "/tmp/uv-cache"),
     ),
 )
 
