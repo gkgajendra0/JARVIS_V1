@@ -39,9 +39,13 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 The active development slice is now:
 
-**Phase 4 — Research + Diagnostic Model Router**
+**Phase 5 — Secure Autonomous Engineering Substrate**
 
-Research and architecture are complete and owner-approved. Implementation must follow the frozen contracts in `PHASE4_MODEL_ROUTER_ARCHITECTURE.md`; do not restart technology selection or redesign the router without new concrete evidence.
+Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. Its final evidence is recorded in `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`. The accepted implementation provides deterministic provider/model-neutral routing for durable background reasoning, target-scoped health/cooldown, JARVIS-owned bounded fallback, durable route provenance/status, offline evaluation, and restart-safe lineage without changing Authority.
+
+The final live run naturally proved `Gemini -> rate_limited -> OpenAI fallback -> quota_exhausted`. Both provider failures were treated as external target-local pressure; JARVIS preserved the canonical WorkItem and entered truthful `WAITING_RESOURCE` when approved capacity was exhausted.
+
+Phase 5 must now research and architect the secure brokers/substrate required before autonomous capability acquisition or broader source engineering can safely expand: governed dependencies, secret references, capability manifests, bounded device/service discovery, least-privilege sandbox profiles, provenance, and hardware-in-the-loop acceptance. Do not implement Phase 5 until its research and architecture have been reviewed and owner-approved.
 
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
@@ -79,8 +83,8 @@ Continue with the phased sequence in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLA
 ```text
 Phase 2  EngineeringKnowledge — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 3  EngineeringChange lifecycle / mission orchestration — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
-Phase 4  Research + Diagnostic Model Router — ACTIVE
-Phase 5  Secure autonomous engineering substrate
+Phase 4  Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 2026-09-26
+Phase 5  Secure autonomous engineering substrate — ACTIVE / RESEARCH + ARCHITECTURE NEXT
 Phase 6  Unknown-incident investigation + source repair
 Phase 7  Governed promotion / production verification / rollback
 Phase 8  Capability package + registry lifecycle
@@ -124,12 +128,13 @@ They remain separate unless evidence shows that one directly blocks the active P
 - `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md` — canonical Phase-3 owner-machine acceptance record.
 - `PHASE4_MODEL_ROUTER_RESEARCH.md` — Phase-4 technology research and dispositions.
 - `PHASE4_MODEL_ROUTER_ARCHITECTURE.md` — owner-approved stable Phase-4 routing contracts/invariants.
-- `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md` — implementation sequence and acceptance gates.
+- `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md` — completed implementation sequence and acceptance gates.
+- `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md` — canonical Phase-4 owner-machine acceptance record.
 
 Historical experiments, old acceptance transcripts and superseded research remain available through Git history rather than becoming competing planning truth.
 
 ## Immediate next action
 
-**Implement Phase 4 — Research + Diagnostic Model Router from the frozen architecture.**
+**Begin Phase 5 — Secure Autonomous Engineering Substrate with research first.**
 
-Research/architecture are complete. Start from protected `main` on an isolated Phase-4 implementation branch/PR and execute `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md` in order. Preserve the accepted EngineeringChange, EngineeringKnowledge, Authority, WorkItem/DBOS and research-evidence foundations. Do not introduce a parallel execution/governance system, a mandatory router proxy/service, learned production routing, or Jev during this phase.
+Start from the accepted Phase-4 baseline after PR #118 merges. Research the finest practical design for the governed DependencyBroker, SecretBroker, CapabilityManifest, bounded discovery interface, least-privilege sandbox profiles, artifact/source/dependency provenance, and hardware-in-the-loop acceptance contracts. Reuse the accepted EngineeringChange, EngineeringKnowledge, Model Router, Authority, WorkItem/DBOS and verification foundations. Freeze a Phase-5 architecture and obtain owner approval before implementation.
