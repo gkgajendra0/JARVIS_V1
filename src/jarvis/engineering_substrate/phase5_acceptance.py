@@ -79,6 +79,30 @@ def _hash_file(path: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
+def _tested_commit(repo: pathlib.Path) -> str:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            check=False,
+            shell=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Phase5AcceptanceError(
+            "acceptance could not identify the tested Git revision"
+        ) from exc
+    commit = completed.stdout.strip().casefold()
+    if completed.returncode != 0 or len(commit) != 40 or any(
+        char not in "0123456789abcdef" for char in commit
+    ):
+        raise Phase5AcceptanceError("acceptance Git revision is not a full commit SHA")
+    return commit
+
+
 def _require_regular_file(path: pathlib.Path, *, field: str) -> pathlib.Path:
     if path.is_symlink() or not path.is_file():
         raise Phase5AcceptanceError(f"{field} must be a regular file")
@@ -336,6 +360,7 @@ def run_acceptance(
     if repo.is_symlink() or not repo.is_dir():
         raise Phase5AcceptanceError("acceptance repo_root must be a regular directory")
     repo = repo.resolve()
+    tested_commit = _tested_commit(repo)
 
     uv_trust = _validate_uv_release_asset(uv_release_asset, uv_executable)
     uv = uv_trust.adapter
@@ -442,6 +467,7 @@ def run_acceptance(
 
         evidence = {
             "status": "PASS",
+            "tested_commit": tested_commit,
             "recorded_at": datetime.now(UTC).isoformat(),
             "uv": {
                 "version": uv.release_policy.version,
