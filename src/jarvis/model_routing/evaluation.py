@@ -249,9 +249,7 @@ class RoutingEvaluationMetrics:
 
     @property
     def structured_output_valid_rate(self) -> float:
-        return (
-            self.structured_output_valid_cases / self.cases if self.cases else 0.0
-        )
+        return self.structured_output_valid_cases / self.cases if self.cases else 0.0
 
     @property
     def fallback_recovery_rate(self) -> float | None:
@@ -454,9 +452,7 @@ def _metrics(results: tuple[RoutingCaseEvaluation, ...]) -> RoutingEvaluationMet
         fallback_recoveries=sum(item.fallback_recovered for item in results),
         comparable_route_cases=comparable,
         wrong_routes=sum(item.wrong_route is True for item in results),
-        unnecessary_escalations=sum(
-            item.unnecessary_escalation for item in results
-        ),
+        unnecessary_escalations=sum(item.unnecessary_escalation for item in results),
         model_calls=sum(item.model_calls for item in results),
         route_churn=sum(item.route_churn for item in results),
         total_latency_ms=sum(item.total_latency_ms for item in results),
@@ -589,18 +585,12 @@ def load_routing_benchmark_fixture(
             locality_requirement=LocalityRequirement(
                 raw_request["locality_requirement"]
             ),
-            estimated_context_tokens=int(
-                raw_request["estimated_context_tokens"]
-            ),
-            evidence_size_class=EvidenceSizeClass(
-                raw_request["evidence_size_class"]
-            ),
+            estimated_context_tokens=int(raw_request["estimated_context_tokens"]),
+            evidence_size_class=EvidenceSizeClass(raw_request["evidence_size_class"]),
             recent_progress_signals=tuple(
                 raw_request.get("recent_progress_signals", ())
             ),
-            recent_failure_signals=tuple(
-                raw_request.get("recent_failure_signals", ())
-            ),
+            recent_failure_signals=tuple(raw_request.get("recent_failure_signals", ())),
             latency_preference=raw_request.get(
                 "latency_preference",
                 "balanced",
