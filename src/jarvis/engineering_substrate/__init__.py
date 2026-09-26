@@ -41,6 +41,17 @@ from jarvis.engineering_substrate.contracts import (
     SourceBuildPolicy,
     VerificationStatus,
 )
+from jarvis.engineering_substrate.provenance import (
+    ArtifactProvenanceResult,
+    IntegrityProvenanceResponse,
+    ProvenancePolicy,
+    ProvenanceResourceUnavailable,
+    ProvenanceService,
+    ProvenanceVerificationError,
+    PyPIAttestationVerifier,
+    PyPIIntegrityClient,
+    VerifiedAttestationSet,
+)
 from jarvis.engineering_substrate.registry import (
     ContractSchemaRegistration,
     ContractSchemaRegistry,
@@ -64,6 +75,15 @@ from jarvis.engineering_substrate.sandbox import (
 )
 
 __all__ = [
+    "ArtifactProvenanceResult",
+    "IntegrityProvenanceResponse",
+    "ProvenancePolicy",
+    "ProvenanceResourceUnavailable",
+    "ProvenanceService",
+    "ProvenanceVerificationError",
+    "PyPIAttestationVerifier",
+    "PyPIIntegrityClient",
+    "VerifiedAttestationSet",
     "SCHEMA_VERSION_V1",
     "ArtifactAdmissionRecord",
     "ArtifactAdmissionResult",
