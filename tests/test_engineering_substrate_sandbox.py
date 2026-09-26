@@ -109,11 +109,11 @@ def test_dependency_profiles_build_fixed_commands_without_runtime_suffix(
         "jarvis.engineering_substrate.dependency.worker",
         "acquire",
     ]
-    assert verify_command[-3:] == (
+    assert verify_command[-3:] == [
         "uv",
         "--cache-dir",
         "/candidate/.uv-cache",
-    )
+    ]
 
     verify_sync = registry.build_launch(
         profile_id="dependency.verify.v1",
