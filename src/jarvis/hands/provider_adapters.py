@@ -166,6 +166,7 @@ def build_structured_output_client(
     *,
     provider: str,
     model: str,
+    provider_retries: bool = True,
 ) -> StructuredOutputClient:
     """Build one Hands planner client inside the approved SDK-import boundary."""
 
@@ -178,19 +179,32 @@ def build_structured_output_client(
         purpose="Hands semantic planning",
     )
 
+    if not isinstance(provider_retries, bool):
+        raise TypeError("provider_retries must be a boolean")
+
     if normalized_provider == "openai":
         from openai import AsyncOpenAI
 
+        client_kwargs: dict[str, Any] = {"api_key": api_key}
+        if not provider_retries:
+            client_kwargs["max_retries"] = 0
         return OpenAIStructuredOutputClient(
-            client=AsyncOpenAI(api_key=api_key),
+            client=AsyncOpenAI(**client_kwargs),
             model=model_name,
         )
 
     if normalized_provider == "gemini":
         from google import genai
 
+        client_kwargs = {"api_key": api_key}
+        if not provider_retries:
+            client_kwargs["http_options"] = {
+                "retry_options": {
+                    "attempts": 0,
+                }
+            }
         return GeminiStructuredOutputClient(
-            client=genai.Client(api_key=api_key),
+            client=genai.Client(**client_kwargs),
             model=model_name,
         )
 
