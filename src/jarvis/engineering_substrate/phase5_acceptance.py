@@ -428,9 +428,12 @@ def run_acceptance(
         )
         if any(
             result.provenance.verification_status.value != "verified"
+            or result.provenance.attestation_status.value != "verified"
             for result in provenance_results
         ):
-            raise Phase5AcceptanceError("dependency provenance was not verified")
+            raise Phase5AcceptanceError(
+                "dependency provenance/attestation was not verified"
+            )
 
         sandbox_registry = default_sandbox_registry(
             protected_main_root=repo,
