@@ -346,10 +346,19 @@ class MdnsDnsSdAdapter:
         observed = float(self._clock())
         scope_digest = canonical_digest(scope)
         observations: list[DiscoveryObservation] = []
+        local_domain = (scope.local_domain or "local.").strip().casefold()
         for record in records[: scope.max_results]:
             if record.service_type not in scope.allowed_service_types:
                 raise DiscoveryAdapterError(
                     "mDNS backend returned an out-of-scope service type"
+                )
+            if not record.server.endswith(local_domain):
+                raise DiscoveryAdapterError(
+                    "mDNS backend returned a server outside the requested domain"
+                )
+            if not record.instance_name.casefold().endswith(record.service_type):
+                raise DiscoveryAdapterError(
+                    "mDNS instance name does not match its service type"
                 )
             if scope.target_hints:
                 searchable = (record.instance_name + " " + record.server).casefold()
