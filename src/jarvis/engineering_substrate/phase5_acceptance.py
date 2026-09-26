@@ -161,7 +161,9 @@ def _validate_uv_release_asset(
                 )
             archived_digest = hashlib.sha256(archive.read(members[0])).hexdigest()
     except zipfile.BadZipFile as exc:
-        raise Phase5AcceptanceError("reviewed uv release asset is not a valid ZIP") from exc
+        raise Phase5AcceptanceError(
+            "reviewed uv release asset is not a valid ZIP"
+        ) from exc
     if archived_digest != executable_digest:
         raise Phase5AcceptanceError(
             "uv executable bytes are not from the reviewed release asset"
@@ -377,7 +379,9 @@ def run_acceptance(
         )
         parsed = broker.inspect_lock(resolved)
         if not parsed.wheels:
-            raise Phase5AcceptanceError("resolved dependency produced no wheel evidence")
+            raise Phase5AcceptanceError(
+                "resolved dependency produced no wheel evidence"
+            )
         artifacts = broker.acquire_locked_wheels(
             resolved,
             staging_dir=staging,
