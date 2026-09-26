@@ -214,7 +214,7 @@ class ManifestReferenceCatalog:
         result: dict[str, str] = {}
         for registration in registrations:
             if registration.reference_id in result:
-                raise ValueError(f"duplicate {kind} reference: {registration.reference_id}")
+                raise ValueError(\n                    f"duplicate {kind} reference: {registration.reference_id}"\n                )
             result[registration.reference_id] = registration.digest
         return result
 
@@ -247,9 +247,7 @@ class RegisteredCapabilityManifest:
 
 
 _AUTHORITY_BOOLEAN_FIELDS = frozenset(
-    item.name
-    for item in fields(ActionAttributes)
-    if item.name != "scope"
+    item.name for item in fields(ActionAttributes) if item.name != "scope"
 )
 
 
@@ -271,7 +269,9 @@ def _required_risk(
     required: set[str] = set()
     for registration in registrations:
         required.update(registration.authority_attribute_floor)
-    return classifier.classify(_authority_attributes(tuple(sorted(required)))).risk_class
+    return classifier.classify(
+        _authority_attributes(tuple(sorted(required)))
+    ).risk_class
 
 
 class CapabilityManifestRegistry:
