@@ -41,11 +41,17 @@ The active development slice is now:
 
 **Phase 5 — Secure Autonomous Engineering Substrate**
 
-Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. Its final evidence is recorded in `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`. The accepted implementation provides deterministic provider/model-neutral routing for durable background reasoning, target-scoped health/cooldown, JARVIS-owned bounded fallback, durable route provenance/status, offline evaluation, and restart-safe lineage without changing Authority.
+Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. Its final evidence is recorded in `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`.
 
-The final live run naturally proved `Gemini -> rate_limited -> OpenAI fallback -> quota_exhausted`. Both provider failures were treated as external target-local pressure; JARVIS preserved the canonical WorkItem and entered truthful `WAITING_RESOURCE` when approved capacity was exhausted.
+Phase-5 technology research is now complete and a concrete architecture/implementation plan is proposed. Canonical review documents are:
 
-Phase 5 must now research and architect the secure brokers/substrate required before autonomous capability acquisition or broader source engineering can safely expand: governed dependencies, secret references, capability manifests, bounded device/service discovery, least-privilege sandbox profiles, provenance, and hardware-in-the-loop acceptance. Do not implement Phase 5 until its research and architecture have been reviewed and owner-approved.
+- `PHASE5_SECURE_ENGINEERING_SUBSTRATE_RESEARCH.md`;
+- `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ARCHITECTURE.md`;
+- `PHASE5_SECURE_ENGINEERING_SUBSTRATE_IMPLEMENTATION_PLAN.md`.
+
+The proposed design adds deterministic DependencyBroker, SecretBroker, declarative CapabilityManifest, bounded discovery, JARVIS-owned SandboxProfiles, provenance and hardware-acceptance evidence while preserving EngineeringChange and Authority as the only governance boundary.
+
+**Current gate: OWNER ARCHITECTURE APPROVAL REQUIRED.** Do not implement Phase 5 until the architecture is explicitly approved.
 
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
@@ -84,7 +90,7 @@ Continue with the phased sequence in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLA
 Phase 2  EngineeringKnowledge — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 3  EngineeringChange lifecycle / mission orchestration — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 4  Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 2026-09-26
-Phase 5  Secure autonomous engineering substrate — ACTIVE / RESEARCH + ARCHITECTURE NEXT
+Phase 5  Secure autonomous engineering substrate — ACTIVE / ARCHITECTURE PROPOSED; OWNER APPROVAL REQUIRED
 Phase 6  Unknown-incident investigation + source repair
 Phase 7  Governed promotion / production verification / rollback
 Phase 8  Capability package + registry lifecycle
@@ -135,6 +141,6 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Begin Phase 5 — Secure Autonomous Engineering Substrate with research first.**
+**Review and approve/revise Phase 5 — Secure Autonomous Engineering Substrate architecture.**
 
-Start from the accepted Phase-4 baseline after PR #118 merges. Research the finest practical design for the governed DependencyBroker, SecretBroker, CapabilityManifest, bounded discovery interface, least-privilege sandbox profiles, artifact/source/dependency provenance, and hardware-in-the-loop acceptance contracts. Reuse the accepted EngineeringChange, EngineeringKnowledge, Model Router, Authority, WorkItem/DBOS and verification foundations. Freeze a Phase-5 architecture and obtain owner approval before implementation.
+Research is complete. The proposed architecture and ordered implementation slices are documented in the Phase-5 research, architecture and implementation-plan files. No implementation begins until explicit owner approval.
