@@ -450,7 +450,8 @@ def test_phase5_resource_keys_are_registered_and_independent() -> None:
             async with manager.lease(("discovery",)) as lease:
                 return lease
 
-        return tuple(await asyncio.gather(resolver(), discovery()))  # type: ignore[return-value]
+        results = await asyncio.gather(resolver(), discovery())
+        return results[0], results[1]
 
     resolver_lease, discovery_lease = asyncio.run(run())
     assert resolver_lease == ("resolver",)
