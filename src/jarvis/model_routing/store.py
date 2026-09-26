@@ -15,6 +15,7 @@ from jarvis.model_routing.models import (
     RoutingAttempt,
     RoutingAttemptKind,
     RoutingDecision,
+    RoutingOutcome,
     RoutingRequest,
     TargetExclusion,
 )
@@ -185,12 +186,77 @@ def _attempt_from_payload(payload: dict[str, object]) -> RoutingAttempt:
     )
 
 
+def _outcome_payload(outcome: RoutingOutcome) -> dict[str, object]:
+    return {
+        "outcome_id": outcome.outcome_id,
+        "decision_id": outcome.decision_id,
+        "work_id": outcome.work_id,
+        "fallback_path": list(outcome.fallback_path),
+        "total_attempts": outcome.total_attempts,
+        "total_latency_ms": outcome.total_latency_ms,
+        "final_target_id": outcome.final_target_id,
+        "work_step_succeeded": outcome.work_step_succeeded,
+        "verifier_reference": outcome.verifier_reference,
+        "accepted_result": outcome.accepted_result,
+        "aggregate_usage": dict(outcome.aggregate_usage),
+        "estimated_total_cost_usd": outcome.estimated_total_cost_usd,
+        "outcome_evidence_reference": outcome.outcome_evidence_reference,
+    }
+
+
+def _outcome_from_payload(payload: dict[str, object]) -> RoutingOutcome:
+    return RoutingOutcome(
+        outcome_id=str(payload["outcome_id"]),
+        decision_id=str(payload["decision_id"]),
+        work_id=str(payload["work_id"]),
+        fallback_path=tuple(str(value) for value in payload["fallback_path"]),
+        total_attempts=int(payload["total_attempts"]),
+        total_latency_ms=float(payload["total_latency_ms"]),
+        final_target_id=(
+            None
+            if payload["final_target_id"] is None
+            else str(payload["final_target_id"])
+        ),
+        work_step_succeeded=(
+            None
+            if payload["work_step_succeeded"] is None
+            else bool(payload["work_step_succeeded"])
+        ),
+        verifier_reference=(
+            None
+            if payload["verifier_reference"] is None
+            else str(payload["verifier_reference"])
+        ),
+        accepted_result=(
+            None
+            if payload["accepted_result"] is None
+            else bool(payload["accepted_result"])
+        ),
+        aggregate_usage={
+            str(key): float(value)
+            for key, value in dict(payload["aggregate_usage"]).items()
+        },
+        estimated_total_cost_usd=(
+            None
+            if payload["estimated_total_cost_usd"] is None
+            else float(payload["estimated_total_cost_usd"])
+        ),
+        outcome_evidence_reference=(
+            None
+            if payload["outcome_evidence_reference"] is None
+            else str(payload["outcome_evidence_reference"])
+        ),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class PersistedRoutingDecision:
     work_id: str
     registry_digest: str
     eligibility: EligibilitySnapshot
     decision: RoutingDecision
+    change_id: str | None = None
+    stage_key: str | None = None
 
 
 class ModelRoutingStore:
@@ -214,6 +280,8 @@ class ModelRoutingStore:
                     decision_id TEXT PRIMARY KEY,
                     routing_request_id TEXT NOT NULL UNIQUE,
                     work_id TEXT NOT NULL,
+                    change_id TEXT,
+                    stage_key TEXT,
                     strategy_key TEXT NOT NULL,
                     strategy_version INTEGER NOT NULL,
                     strategy_digest TEXT NOT NULL,
@@ -251,6 +319,16 @@ class ModelRoutingStore:
                     version INTEGER NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS model_routing_outcomes (
+                    outcome_id TEXT PRIMARY KEY,
+                    decision_id TEXT NOT NULL UNIQUE,
+                    work_id TEXT NOT NULL,
+                    outcome_json TEXT NOT NULL,
+                    FOREIGN KEY(decision_id)
+                        REFERENCES model_routing_decisions(decision_id),
+                    FOREIGN KEY(work_id) REFERENCES work_items(work_id)
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_model_routing_decisions_work
                     ON model_routing_decisions(work_id, created_at_epoch);
                 CREATE INDEX IF NOT EXISTS idx_model_routing_attempts_decision
@@ -259,6 +337,20 @@ class ModelRoutingStore:
                     );
                 """
             )
+            decision_columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(model_routing_decisions)"
+                ).fetchall()
+            }
+            if "change_id" not in decision_columns:
+                connection.execute(
+                    "ALTER TABLE model_routing_decisions ADD COLUMN change_id TEXT"
+                )
+            if "stage_key" not in decision_columns:
+                connection.execute(
+                    "ALTER TABLE model_routing_decisions ADD COLUMN stage_key TEXT"
+                )
 
     def _validate_decision_inputs(
         self,
@@ -297,17 +389,19 @@ class ModelRoutingStore:
         connection.execute(
             """
             INSERT INTO model_routing_decisions (
-                decision_id, routing_request_id, work_id,
+                decision_id, routing_request_id, work_id, change_id, stage_key,
                 strategy_key, strategy_version, strategy_digest,
                 registry_digest, policy_version, policy_digest,
                 selected_target_id, decision_json, eligibility_json,
                 created_at_epoch
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 decision.decision_id,
                 request.routing_request_id,
                 request.work_id,
+                request.change_id,
+                request.stage_key,
                 decision.strategy_key,
                 decision.strategy_version,
                 decision.strategy_digest,
@@ -353,6 +447,8 @@ class ModelRoutingStore:
             registry_digest=digest,
             eligibility=eligibility,
             decision=decision,
+            change_id=request.change_id,
+            stage_key=request.stage_key,
         )
 
     def _insert_attempt(
@@ -445,6 +541,8 @@ class ModelRoutingStore:
             registry_digest=digest,
             eligibility=eligibility,
             decision=decision,
+            change_id=request.change_id,
+            stage_key=request.stage_key,
         )
 
     def get_decision(self, decision_id: str) -> PersistedRoutingDecision | None:
@@ -467,6 +565,8 @@ class ModelRoutingStore:
             decision=_decision_from_payload(
                 self._work_store.decode_extension_json(row["decision_json"])
             ),
+            change_id=row["change_id"],
+            stage_key=row["stage_key"],
         )
 
     def find_decision_by_request(
@@ -500,6 +600,84 @@ class ModelRoutingStore:
                 self._work_store.decode_extension_json(row["attempt_json"])
             )
             for row in rows
+        )
+
+    def list_decisions_for_work(
+        self,
+        work_id: str,
+        *,
+        limit: int = 20,
+    ) -> tuple[PersistedRoutingDecision, ...]:
+        normalized = work_id.strip()
+        if not normalized:
+            raise ValueError("work_id must not be empty")
+        if limit <= 0:
+            raise ValueError("decision list limit must be positive")
+        with self._work_store.extension_transaction() as connection:
+            rows = connection.execute(
+                """
+                SELECT decision_id FROM model_routing_decisions
+                WHERE work_id = ?
+                ORDER BY created_at_epoch DESC, decision_id DESC
+                LIMIT ?
+                """,
+                (normalized, limit),
+            ).fetchall()
+        decisions = []
+        for row in rows:
+            persisted = self.get_decision(row["decision_id"])
+            if persisted is None:
+                raise RoutingStoreError("routing decision disappeared during read")
+            decisions.append(persisted)
+        return tuple(decisions)
+
+    def record_outcome(self, outcome: RoutingOutcome) -> RoutingOutcome:
+        if not isinstance(outcome, RoutingOutcome):
+            raise TypeError("outcome must be a RoutingOutcome")
+        persisted = self.get_decision(outcome.decision_id)
+        if persisted is None:
+            raise RoutingStoreError(f"unknown routing decision: {outcome.decision_id}")
+        if persisted.work_id != outcome.work_id:
+            raise RoutingStoreError("routing outcome work_id does not match decision")
+        try:
+            with self._work_store.extension_transaction() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO model_routing_outcomes (
+                        outcome_id, decision_id, work_id, outcome_json
+                    ) VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        outcome.outcome_id,
+                        outcome.decision_id,
+                        outcome.work_id,
+                        self._work_store.encode_extension_json(
+                            _outcome_payload(outcome)
+                        ),
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise RoutingStoreError(
+                f"routing outcome cannot be created: {outcome.outcome_id}"
+            ) from exc
+        return outcome
+
+    def get_outcome(self, decision_id: str) -> RoutingOutcome | None:
+        normalized = decision_id.strip()
+        if not normalized:
+            raise ValueError("decision_id must not be empty")
+        with self._work_store.extension_transaction() as connection:
+            row = connection.execute(
+                """
+                SELECT outcome_json FROM model_routing_outcomes
+                WHERE decision_id = ?
+                """,
+                (normalized,),
+            ).fetchone()
+        if row is None:
+            return None
+        return _outcome_from_payload(
+            self._work_store.decode_extension_json(row["outcome_json"])
         )
 
     def create_health(self, record: TargetHealthRecord) -> TargetHealthRecord:
