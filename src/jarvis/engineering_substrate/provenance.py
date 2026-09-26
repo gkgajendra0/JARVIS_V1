@@ -31,6 +31,15 @@ from jarvis.engineering_substrate.contracts import (
 class ProvenanceVerificationError(RuntimeError):
     """Provenance exists but cannot be accepted as verified evidence."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        rejected_provenance: ArtifactProvenance | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.rejected_provenance = rejected_provenance
+
 
 class ProvenanceResourceUnavailable(RuntimeError):
     """The authoritative provenance service is unavailable for this attempt."""
@@ -350,7 +359,8 @@ class ProvenanceService:
             )
             raise ProvenanceVerificationError(
                 "artifact provenance was rejected; "
-                f"rejected evidence digest={canonical_digest(rejected)}"
+                f"rejected evidence digest={canonical_digest(rejected)}",
+                rejected_provenance=rejected,
             )
 
         publisher_identity = ";".join(verified.publisher_identities)
