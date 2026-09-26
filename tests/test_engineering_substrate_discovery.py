@@ -234,6 +234,36 @@ def test_adapter_cannot_return_out_of_scope_service() -> None:
         broker.discover(_scope())
 
 
+def test_backend_server_cannot_escape_requested_local_domain() -> None:
+    record = MdnsServiceRecord(
+        service_type="_googlecast._tcp.local.",
+        instance_name="Living Room._googlecast._tcp.local.",
+        server="living-room.example.invalid.",
+        port=8009,
+        addresses=("192.168.1.50",),
+        ttl_seconds=120,
+    )
+    broker = default_discovery_broker(backend=FakeMdnsBackend((record,)))
+
+    with pytest.raises(DiscoveryAdapterError, match="outside the requested domain"):
+        broker.discover(_scope())
+
+
+def test_backend_instance_must_match_service_type() -> None:
+    record = MdnsServiceRecord(
+        service_type="_googlecast._tcp.local.",
+        instance_name="Living Room._airplay._tcp.local.",
+        server="living-room.local.",
+        port=8009,
+        addresses=("192.168.1.50",),
+        ttl_seconds=120,
+    )
+    broker = default_discovery_broker(backend=FakeMdnsBackend((record,)))
+
+    with pytest.raises(DiscoveryAdapterError, match="does not match"):
+        broker.discover(_scope())
+
+
 def test_public_network_endpoint_is_rejected() -> None:
     with pytest.raises(ValueError, match="local/private"):
         _record(address="8.8.8.8")
