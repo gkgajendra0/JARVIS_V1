@@ -111,7 +111,11 @@ def inspect_routing_acceptance(
         for attempt in attempts
     )
     fallback_path = tuple(attempt.target_id for attempt in attempts)
-    bounded_attempts = len(attempts) <= len(status.ordered_target_ids) + 1
+    max_bounded_attempts = min(
+        len(status.ordered_target_ids) + 1,
+        2 * (1 + status.fallback_budget),
+    )
+    bounded_attempts = len(attempts) <= max_bounded_attempts
     provenance_ok = all(
         (
             _is_sha256(status.strategy_digest),
