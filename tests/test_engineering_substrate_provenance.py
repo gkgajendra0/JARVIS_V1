@@ -67,8 +67,7 @@ class FakeIntegrityClient:
         self.calls.append((project, version, filename))
         return IntegrityProvenanceResponse(
             request_url=(
-                "https://pypi.org/integrity/"
-                f"{project}/{version}/{filename}/provenance"
+                f"https://pypi.org/integrity/{project}/{version}/{filename}/provenance"
             ),
             payload=self.payload,
         )
@@ -218,7 +217,9 @@ def test_real_pypi_attestation_parser_rejects_forged_cryptographic_material(
                     {
                         "version": 1,
                         "verification_material": {
-                            "certificate": base64.b64encode(b"not-a-certificate").decode(),
+                            "certificate": base64.b64encode(
+                                b"not-a-certificate"
+                            ).decode(),
                             "transparency_entries": [{}],
                         },
                         "envelope": {
