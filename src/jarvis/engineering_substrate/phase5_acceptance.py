@@ -384,10 +384,10 @@ def run_acceptance(
             protected_main_root=repo,
         )
         requirement = DependencyRequirement(
-            requirement_id="phase5-acceptance-tomli-w",
+            requirement_id="phase5-acceptance-packaging",
             ecosystem=DependencyEcosystem.PYTHON,
-            package_name="tomli-w",
-            version_constraint="==1.2.0",
+            package_name="packaging",
+            version_constraint="==26.0",
             purpose="Harmless Phase-5 owner acceptance dependency",
             registered_source_ids=("pypi.public.v1",),
             platform_constraints=(
@@ -481,7 +481,7 @@ def run_acceptance(
                 "signer_thumbprint": uv_trust.signer_thumbprint,
             },
             "dependency": {
-                "package": "tomli-w==1.2.0",
+                "package": "packaging==26.0",
                 "resolution_id": resolved.resolution.resolution_id,
                 "resolution_digest": canonical_digest(resolved.resolution),
                 "lock_digest": resolved.resolution.lock_digest,
