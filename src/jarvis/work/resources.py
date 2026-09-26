@@ -10,6 +10,22 @@ from dataclasses import dataclass
 import psutil
 
 
+ENGINEERING_RESOURCE_CAPACITIES: dict[str, int] = {
+    "resolver": 1,
+    "artifact": 2,
+    "secret": 1,
+    "discovery": 1,
+    "docker": 1,
+    "device_acceptance": 1,
+}
+
+
+def engineering_resource_capacities() -> dict[str, int]:
+    """Return a copy of the registered Phase-5 engineering resource capacities."""
+
+    return dict(ENGINEERING_RESOURCE_CAPACITIES)
+
+
 class ResourcePressure(RuntimeError):
     """Physical resource pressure prevents a new bounded work step from starting."""
 
