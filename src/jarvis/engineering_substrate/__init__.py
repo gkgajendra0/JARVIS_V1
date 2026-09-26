@@ -1,10 +1,33 @@
 """Phase-5 Secure Autonomous Engineering Substrate contracts."""
 
+from jarvis.engineering_substrate.artifacts import (
+    ArtifactAdmissionRecord,
+    ArtifactAdmissionResult,
+    ArtifactIntegrityError,
+    ArtifactPathError,
+    ArtifactRetentionReferences,
+    ArtifactStore,
+    ArtifactStoreError,
+    default_artifact_root,
+)
 from jarvis.engineering_substrate.canonical import (
     SubstrateCanonicalizationError,
     canonical_bytes,
     canonical_digest,
     canonical_payload,
+)
+from jarvis.engineering_substrate.sandbox import (
+    DuplicateSandboxProfileError,
+    SandboxDefinition,
+    SandboxLaunch,
+    SandboxMountBinding,
+    SandboxMountPolicy,
+    SandboxPolicyError,
+    SandboxRegistry,
+    SandboxRegistryError,
+    SandboxResourceUnavailable,
+    UnknownSandboxProfileError,
+    default_sandbox_registry,
 )
 from jarvis.engineering_substrate.contracts import (
     SCHEMA_VERSION_V1,
@@ -41,6 +64,25 @@ from jarvis.engineering_substrate.registry import (
 )
 
 __all__ = [
+    "ArtifactAdmissionRecord",
+    "ArtifactAdmissionResult",
+    "ArtifactIntegrityError",
+    "ArtifactPathError",
+    "ArtifactRetentionReferences",
+    "ArtifactStore",
+    "ArtifactStoreError",
+    "DuplicateSandboxProfileError",
+    "SandboxDefinition",
+    "SandboxLaunch",
+    "SandboxMountBinding",
+    "SandboxMountPolicy",
+    "SandboxPolicyError",
+    "SandboxRegistry",
+    "SandboxRegistryError",
+    "SandboxResourceUnavailable",
+    "UnknownSandboxProfileError",
+    "default_artifact_root",
+    "default_sandbox_registry",
     "SCHEMA_VERSION_V1",
     "ArtifactProvenance",
     "AttestationStatus",
