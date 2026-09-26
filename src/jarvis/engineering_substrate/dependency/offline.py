@@ -110,7 +110,9 @@ class OfflineVerificationBundleBuilder:
             raise TypeError("resolved must be a ResolvedPythonDependency")
         root = pathlib.Path(output_root)
         if root.exists() and root.is_symlink():
-            raise OfflineVerificationError(\n                "verification bundle root cannot be a symlink"\n            )
+            raise OfflineVerificationError(
+                "verification bundle root cannot be a symlink"
+            )
         root.mkdir(parents=True, exist_ok=True)
         root = root.resolve()
         wheelhouse = root / "wheels"
@@ -119,7 +121,9 @@ class OfflineVerificationBundleBuilder:
         canonical_bytes = resolved.lock_path.read_bytes()
         canonical_digest_value = _sha256_bytes(canonical_bytes)
         if canonical_digest_value != resolved.resolution.lock_digest:
-            raise OfflineVerificationError(\n                "canonical pylock digest changed before verification"\n            )
+            raise OfflineVerificationError(
+                "canonical pylock digest changed before verification"
+            )
         try:
             document = tomllib.loads(canonical_bytes.decode("utf-8"))
         except (UnicodeError, tomllib.TOMLDecodeError) as exc:
@@ -251,7 +255,9 @@ class OfflineCandidateVerifier:
         self._image = str(image).strip()
         self._runner = runner
         if self._image != UV_VERIFY_IMAGE:
-            raise ValueError(\n                "Phase-5D verification image must match the reviewed digest"\n            )
+            raise ValueError(
+                "Phase-5D verification image must match the reviewed digest"
+            )
 
     def _run(
         self,
