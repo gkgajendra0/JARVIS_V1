@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Iterable
 
 from jarvis.authority import ActionAttributes, ActionScope, RiskClass, RiskClassifier
@@ -228,9 +228,9 @@ class RegisteredCapabilityManifest:
 
 
 _AUTHORITY_BOOLEAN_FIELDS = frozenset(
-    field
-    for field, default in ActionAttributes().__dict__.items()
-    if isinstance(default, bool)
+    item.name
+    for item in fields(ActionAttributes)
+    if item.name != "scope"
 )
 
 
