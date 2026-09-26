@@ -6,6 +6,7 @@ import pytest
 from jarvis.model_routing.acceptance import inspect_routing_acceptance
 from jarvis.model_routing.models import (
     EligibilitySnapshot,
+    EvidenceSizeClass,
     LocalityRequirement,
     PrivacyClass,
     ResponseContractResult,
@@ -48,7 +49,7 @@ def _route(
         privacy_class=PrivacyClass.STANDARD,
         locality_requirement=LocalityRequirement.ANY,
         estimated_context_tokens=1200,
-        evidence_size_class="small",
+        evidence_size_class=EvidenceSizeClass.SMALL,
         recent_progress_signals=("plan_settled",),
         recent_failure_signals=(),
         latency_preference="balanced",
