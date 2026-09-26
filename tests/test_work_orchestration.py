@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 from pathlib import Path
 
 import pytest
+
+import jarvis.work.store as work_store_module
 
 from jarvis.voice.work_tools import _public_work
 from jarvis.work.brain import (
@@ -33,6 +36,54 @@ from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.reasoner import _provider_pressure_from_exception
 from jarvis.work.resources import ResourceLeaseManager
 from jarvis.work.store import SQLiteWorkStore, WorkStoreError
+
+
+def test_sqlite_work_store_closes_every_connection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_connect = sqlite3.connect
+    opened = []
+
+    class TrackingConnection:
+        def __init__(self, inner):
+            self._inner = inner
+            self.closed = False
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+        @property
+        def row_factory(self):
+            return self._inner.row_factory
+
+        @row_factory.setter
+        def row_factory(self, value):
+            self._inner.row_factory = value
+
+        def close(self):
+            self.closed = True
+            self._inner.close()
+
+    def tracking_connect(*args, **kwargs):
+        connection = TrackingConnection(real_connect(*args, **kwargs))
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(work_store_module.sqlite3, "connect", tracking_connect)
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = WorkItem(
+        request="connection close regression",
+        work_type=WorkType.GENERIC,
+        source_session_id="test",
+        source_turn_id="sqlite-close",
+    )
+    store.create(item)
+    assert store.require(item.work_id).work_id == item.work_id
+
+    assert opened
+    assert all(connection.closed for connection in opened)
 
 
 class ScriptedReasoner:
