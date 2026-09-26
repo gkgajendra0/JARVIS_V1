@@ -205,7 +205,7 @@ class SecretStore:
             consumers = json.loads(str(row["allowed_consumers_json"]))
             scopes = json.loads(str(row["allowed_scopes_json"]))
             if not isinstance(consumers, list) or not isinstance(scopes, list):
-                raise ValueError("scope projections must be lists")
+                raise TypeError("scope projections must be lists")
             return SecretDescriptor(
                 secret_id=str(row["secret_id"]),
                 kind=str(row["kind"]),
