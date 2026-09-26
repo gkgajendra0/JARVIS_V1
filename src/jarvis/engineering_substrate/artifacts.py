@@ -68,7 +68,9 @@ class ArtifactRetentionReferences:
     referenced_sha256: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        normalized = tuple(dict.fromkeys(_sha256(item) for item in self.referenced_sha256))
+        normalized = tuple(
+            dict.fromkeys(_sha256(item) for item in self.referenced_sha256)
+        )
         object.__setattr__(self, "referenced_sha256", normalized)
 
 
@@ -140,7 +142,9 @@ class ArtifactStore:
             try:
                 path.resolve().relative_to(self.root)
             except ValueError as exc:
-                raise ArtifactPathError("artifact store path escaped trusted root") from exc
+                raise ArtifactPathError(
+                    "artifact store path escaped trusted root"
+                ) from exc
 
     def _object_path(self, digest: str) -> pathlib.Path:
         normalized = _sha256(digest)
