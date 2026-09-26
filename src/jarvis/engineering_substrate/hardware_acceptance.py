@@ -483,7 +483,12 @@ class HardwareAcceptanceService:
                     WHERE request_id=? OR resolution_key=?""",
                     (request.request_id, resolution),
                 ).fetchone()
-                replay = matches_existing(row)
+                try:
+                    replay = matches_existing(row)
+                except HardwareAcceptanceConflict as mismatch:
+                    raise HardwareAcceptanceConflict(
+                        "hardware resolution lost compare-and-set race"
+                    ) from mismatch
                 if replay is not None:
                     return replay
                 raise HardwareAcceptanceConflict(
