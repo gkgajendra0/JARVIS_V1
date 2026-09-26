@@ -379,9 +379,7 @@ def test_blocker_delivery_deduplicates_by_stable_reason(
     assert first.delivery_id == second.delivery_id
     pending = store.work.list_pending_deliveries(limit=50)
     matching = tuple(
-        delivery
-        for delivery in pending
-        if delivery.event_key == first.event_key
+        delivery for delivery in pending if delivery.event_key == first.event_key
     )
     assert len(matching) == 1
     assert store.work.require(item.work_id).state is WorkState.WAITING_RESOURCE
