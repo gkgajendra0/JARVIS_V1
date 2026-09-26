@@ -337,17 +337,20 @@ class SecretBroker:
     ) -> SecretLease:
         if not isinstance(request, SecretLeaseRequest):
             raise TypeError("request must be a SecretLeaseRequest")
-        descriptor = self._store.verified_descriptor(request.secret_id)
-        if descriptor.lifecycle_state is not SecretLifecycleState.ACTIVE:
-            raise SecretLeaseError("secret is revoked")
         consumer = self._consumers.require(request.consumer_id)
-        if request.consumer_id not in descriptor.allowed_consumers:
-            raise SecretLeaseError("secret is not allowed for this consumer")
         requested = set(request.scopes)
-        if not requested.issubset(set(descriptor.allowed_scopes)):
-            raise SecretLeaseError("lease scope exceeds secret descriptor")
         if not requested.issubset(set(consumer.allowed_scopes)):
             raise SecretLeaseError("lease scope exceeds registered consumer")
+
+        # Projection metadata can reject obviously invalid requests without decrypting.
+        # It is not trusted as integrity evidence until after Authority is consumed.
+        projected = self._store.descriptor(request.secret_id)
+        if projected.lifecycle_state is not SecretLifecycleState.ACTIVE:
+            raise SecretLeaseError("secret is revoked")
+        if request.consumer_id not in projected.allowed_consumers:
+            raise SecretLeaseError("secret is not allowed for this consumer")
+        if not requested.issubset(set(projected.allowed_scopes)):
+            raise SecretLeaseError("lease scope exceeds secret descriptor")
 
         evidence = self._authority_gate.authorize(
             request=request,
@@ -355,6 +358,29 @@ class SecretBroker:
             context=context,
             permit_id=permit_id,
         )
+        if evidence.risk_class != RiskClass.CRITICAL.name:
+            raise SecretAuthorizationError(
+                "secret authority evidence did not retain CRITICAL risk"
+            )
+        if evidence.proposal_fingerprint != proposal.fingerprint:
+            raise SecretAuthorizationError(
+                "secret authority evidence proposal fingerprint mismatch"
+            )
+        if (
+            len(evidence.policy_digest) != 64
+            or any(char not in "0123456789abcdef" for char in evidence.policy_digest)
+        ):
+            raise SecretAuthorizationError("secret authority evidence digest is invalid")
+
+        # Only after Authority has been consumed may the sealed envelope be decrypted.
+        descriptor = self._store.verified_descriptor(request.secret_id)
+        if descriptor.lifecycle_state is not SecretLifecycleState.ACTIVE:
+            raise SecretLeaseError("secret is revoked")
+        if request.consumer_id not in descriptor.allowed_consumers:
+            raise SecretLeaseError("secret is not allowed for this consumer")
+        if not requested.issubset(set(descriptor.allowed_scopes)):
+            raise SecretLeaseError("lease scope exceeds secret descriptor")
+
         now = float(self._clock())
         lease = SecretLease(
             lease_id=str(uuid.uuid4()),
