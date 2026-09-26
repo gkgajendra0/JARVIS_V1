@@ -28,6 +28,34 @@ from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.engineering_substrate.contracts import DiscoveryObservation, DiscoveryScope
 
 
+def _tokens(values: Iterable[str]) -> tuple[str, ...]:
+    normalized = tuple(
+        dict.fromkeys(
+            str(value).strip().casefold() for value in values if str(value).strip()
+        )
+    )
+    if any("*" in value for value in normalized):
+        raise ValueError("wildcard discovery policy is forbidden")
+    return normalized
+
+
+def _validate_mdns_service_type(value: str) -> None:
+    service_type = str(value).strip().casefold()
+    if service_type == "_services._dns-sd._udp.local.":
+        raise ValueError("DNS-SD service-type enumeration is forbidden")
+    if not service_type.startswith("_") or not service_type.endswith(".local."):
+        raise ValueError("mDNS service type must be explicit and local")
+    if "._tcp." not in service_type and "._udp." not in service_type:
+        raise ValueError("mDNS service type must declare TCP or UDP transport")
+
+
+def _endpoint_host(address: str) -> str:
+    parsed = ipaddress.ip_address(address)
+    if parsed.version == 6:
+        return f"[{parsed.compressed.casefold()}]"
+    return parsed.compressed
+
+
 class DiscoveryBrokerError(RuntimeError):
     """Base error for bounded discovery."""
 
@@ -269,6 +297,15 @@ class ZeroconfMdnsBackend:
             if browser is not None:
                 browser.cancel()
             zeroconf.close()
+
+
+def _service_transport(service_type: str) -> str:
+    normalized = str(service_type).strip().casefold()
+    if "._udp." in normalized:
+        return "udp"
+    if "._tcp." in normalized:
+        return "tcp"
+    raise DiscoveryAdapterError("mDNS service type has no registered transport")
 
 
 class MdnsDnsSdAdapter:
@@ -591,38 +628,3 @@ def default_discovery_broker(
     )
 
 
-def _tokens(values: Iterable[str]) -> tuple[str, ...]:
-    normalized = tuple(
-        dict.fromkeys(
-            str(value).strip().casefold() for value in values if str(value).strip()
-        )
-    )
-    if any("*" in value for value in normalized):
-        raise ValueError("wildcard discovery policy is forbidden")
-    return normalized
-
-
-def _validate_mdns_service_type(value: str) -> None:
-    service_type = str(value).strip().casefold()
-    if service_type == "_services._dns-sd._udp.local.":
-        raise ValueError("DNS-SD service-type enumeration is forbidden")
-    if not service_type.startswith("_") or not service_type.endswith(".local."):
-        raise ValueError("mDNS service type must be explicit and local")
-    if "._tcp." not in service_type and "._udp." not in service_type:
-        raise ValueError("mDNS service type must declare TCP or UDP transport")
-
-
-def _service_transport(service_type: str) -> str:
-    normalized = str(service_type).strip().casefold()
-    if "._udp." in normalized:
-        return "udp"
-    if "._tcp." in normalized:
-        return "tcp"
-    raise DiscoveryAdapterError("mDNS service type has no registered transport")
-
-
-def _endpoint_host(address: str) -> str:
-    parsed = ipaddress.ip_address(address)
-    if parsed.version == 6:
-        return f"[{parsed.compressed.casefold()}]"
-    return parsed.compressed
