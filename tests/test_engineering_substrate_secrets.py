@@ -311,7 +311,6 @@ def test_secret_lease_consumes_canonical_critical_authority_and_is_child_only(
         pass
 
 
-
 def test_authority_rejection_happens_before_secret_unseal(tmp_path: Path) -> None:
     class CountingProtector(FakeProtector):
         def __init__(self) -> None:
