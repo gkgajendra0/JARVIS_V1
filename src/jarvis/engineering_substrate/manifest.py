@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, fields
-from typing import Iterable
 
 from jarvis.authority import ActionAttributes, ActionScope, RiskClass, RiskClassifier
 from jarvis.engineering_substrate.canonical import canonical_bytes, canonical_digest
