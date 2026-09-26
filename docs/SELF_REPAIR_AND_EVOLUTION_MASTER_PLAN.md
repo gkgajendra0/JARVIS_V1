@@ -2,14 +2,19 @@
 
 ## Status
 
-**SPECIALIZED PROGRAM ENTRYPOINT — governed by the JARVIS autonomous-engineering north star**
+**SPECIALIZED PROGRAM ENTRYPOINT — governed by the autonomous-engineering subsystem under the whole-JARVIS autonomous self-management north star**
 
 Established: 2026-09-23  
-Reconciled: 2026-09-24
+Reconciled: 2026-09-24  
+North-star hierarchy reconciled: 2026-09-26
 
 This document is the canonical entrypoint for JARVIS Self-Repair and Self-Evolution.
 
-The long-term cross-cutting architecture and future phase sequence are owned by:
+The whole-JARVIS product north star is owned by:
+
+- `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`
+
+The long-term autonomous-engineering architecture and engineering phase sequence are owned by:
 
 - `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`
 
@@ -67,12 +72,13 @@ With Phases 2, 3 and 4 owner-machine accepted, the cross-cutting program proceed
 Phase 2   EngineeringKnowledge Foundation — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 3   EngineeringChange Lifecycle / Mission Orchestration — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 4   Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 2026-09-26
-Phase 5   Secure Autonomous Engineering Substrate — ACTIVE / RESEARCH + ARCHITECTURE NEXT
+Phase 5   Secure Autonomous Engineering Substrate — ACTIVE / IMPLEMENTATION; 5A–5F merged, 5G underway
 Phase 6   Unknown-Incident Investigation + Source Repair
 Phase 7   Governed Promotion / Production Verification / Rollback
 Phase 8   Capability Package + Registry Lifecycle
 Phase 9   Owner-Requested Capability Acquisition
 Phase 10  Closed-Loop Engineering Learning
+Phase 10A Autonomous Operations Control Plane — whole-JARVIS integration point
 Phase 11  Autonomous Capability-Gap / Weakness Detection
 Phase 12  Shadow Improvement + Baseline Benchmarking
 Phase 13  Engineering Curriculum + Specialist Model Evaluation
