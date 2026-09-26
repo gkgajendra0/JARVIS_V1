@@ -281,12 +281,13 @@ The engineering subsystem remains essential because it gives the autonomy contro
 
 ## Documentation Authority
 
-- `PRODUCT.md` — durable product definition and capability catalogue.
-- `ROADMAP.md` — numbered product sequence/high-level status.
+- `PRODUCT.md` — durable product identity, behavioral contract and capability catalogue.
+- `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md` — authoritative whole-JARVIS operating north star.
+- `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` — autonomous-engineering subsystem under the product north star.
+- `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — specialized staged repair/evolution program under the engineering subsystem.
+- `ROADMAP.md` — numbered product sequence/high-level status and approved cross-cutting sequencing.
 - `CURRENT_PLAN.md` — active slice and work disposition; authoritative current phase.
-- `CURRENT_ARCHITECTURE.md` — accepted running architecture only.
-- `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` — authoritative north-star architecture for owner-directed autonomous engineering.
-- `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — specialized staged program for repair/evolution under the north-star architecture.
+- `CURRENT_ARCHITECTURE.md` — accepted running architecture only; future north-star behavior must never be represented here as current production truth.
 - `QUALITY_GATES.md` — universal completion/validation/promotion rules.
 - `PROJECT_STATE.md` — canonical accepted/deferred/superseded/rejected repository ledger.
 
