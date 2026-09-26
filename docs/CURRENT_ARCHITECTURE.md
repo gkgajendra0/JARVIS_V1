@@ -2,7 +2,7 @@
 
 ## Status
 
-**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC REPAIR FRAMEWORK AND R2 RUNTIME CRASH/HANG RECOVERY FOUNDATION ARE OWNER ACCEPTED ON 2026-09-23. PHASE 1H FOUNDATION HARDENING IS OWNER-MACHINE ACCEPTED ON 2026-09-24. PHASE 2 ENGINEERINGKNOWLEDGE IS OWNER-MACHINE ACCEPTED ON 2026-09-25. PHASE 3 ENGINEERINGCHANGE IS THE NEXT CROSS-CUTTING SLICE; STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
+**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC REPAIR FRAMEWORK AND R2 RUNTIME CRASH/HANG RECOVERY FOUNDATION ARE OWNER ACCEPTED ON 2026-09-23. PHASE 1H FOUNDATION HARDENING IS OWNER-MACHINE ACCEPTED ON 2026-09-24. PHASE 2 ENGINEERINGKNOWLEDGE AND PHASE 3 ENGINEERINGCHANGE ARE OWNER-MACHINE ACCEPTED ON 2026-09-25. PHASE 4 RESEARCH + DIAGNOSTIC MODEL ROUTER IS OWNER-MACHINE ACCEPTED ON 2026-09-26. PHASE 5 SECURE AUTONOMOUS ENGINEERING SUBSTRATE IS THE NEXT CROSS-CUTTING SLICE; STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
 
 The latest owner-machine accepted Self-Repair runtime baseline includes Phase 1H foundation hardening promoted through PR #90 on 2026-09-24; later documentation-only reconciliation commits may advance protected `main` without changing that runtime behavior.
 
@@ -15,7 +15,7 @@ This file describes architecture that actually exists on protected `main`. Histo
 ```text
                          JARVIS V1
                              |
-                one active cloud-AI provider
+      one active realtime cloud provider + routed background reasoning pool
                              |
         +--------------------+--------------------+
         |                    |                    |
@@ -51,6 +51,17 @@ AEC/NS/HPF/AGC          RF-DETR/OC-SORT     risk + OPA
           immutable revisions + provenance/applicability
           deterministic REPAIR projection + lifecycle
           exact/FTS5/Qwen grounded advisory retrieval
+                             |
+                    ENGINEERING CHANGE
+                             |
+          durable mission lifecycle + immutable gates
+          architecture/build/acceptance/promotion truth
+                             |
+                     MODEL ROUTING
+                             |
+          deterministic eligibility + engineering_stage.v1
+          target health/cooldown + bounded fallback
+          durable decisions/attempts/outcomes/status
 
 canonical USER turns
    +-> LiveContext / MemoryService
@@ -293,9 +304,10 @@ Owner-machine acceptance covers crash/hang recovery, launcher-only death, interp
 
 Automatic Windows logon startup was observed. When Windows had not yet enumerated the configured Pocket 3 microphone, preflight failed closed rather than selecting another input. Once the configured device was available, the same production path passed preflight, initialized audio/vision and reached native owner-tracking lock.
 
-This architecture is deliberately bounded. EngineeringKnowledge is now an accepted
-advisory production foundation, but DiagnosticModelRouter, AI-assisted diagnosis,
-source repair and self-evolution are not current production execution surfaces.
+This architecture is deliberately bounded. EngineeringKnowledge and the Phase-4
+Research + Diagnostic Model Router are accepted production foundations, but
+AI-assisted unknown-incident source repair, autonomous dependency/secret acquisition,
+governed promotion, capability acquisition and self-evolution are later phases.
 
 The complete forward program is defined in
 `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
@@ -341,6 +353,41 @@ extensibility and lexical/hybrid qrel safety all passed.
 Canonical final record:
 `docs/PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
 
+
+## EngineeringChange production foundation
+
+Phase 3 EngineeringChange Lifecycle / Mission Orchestration is owner-machine accepted on 2026-09-25.
+
+Current architecture includes one durable program-level `EngineeringChange` aggregate above WorkItems, immutable artifact-bound owner gates, architecture revision invalidation, owner-input waits, verified development evidence, acceptance and promotion-intent boundaries, and restart-safe PostgreSQL DBOS mission recovery. WorkItems remain the execution unit; EngineeringChange owns the multi-stage governed lifecycle.
+
+Canonical final record:
+`docs/PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`.
+
+## Research + Diagnostic Model Router production foundation
+
+Phase 4 is owner-machine accepted on 2026-09-26.
+
+Current architecture now includes:
+
+- provider/model-neutral routing targets, adapters and strategies;
+- deterministic hard eligibility for capability, structured output, context, locality/privacy, credentials, target health and route role;
+- `engineering_stage.v1` deterministic WorkStep-aware routing;
+- durable route decisions before invocation plus append-only attempts/outcomes and strategy/registry/policy digests;
+- target-local health, cooldown and provider-failure classification;
+- JARVIS-owned bounded same-target retry/fallback rather than hidden provider-SDK retry ownership for routed background reasoning;
+- approved Gemini and OpenAI structured-output targets for durable WorkReasoner use;
+- truthful `WAITING_RESOURCE` behavior when approved targets are exhausted;
+- bounded owner-visible routing status and offline replay/evaluation;
+- restart-safe canonical WorkItem and routing-request lineage;
+- coalesced repeated owner-facing routing-blocker speech without discarding engineering evidence.
+
+Owner-machine acceptance naturally proved `Gemini -> rate_limited -> OpenAI fallback -> quota_exhausted` under the same canonical WorkItem, then proved the accepted fallback lineage survived runtime restart with zero duplicate routing-request IDs. Authority/security regressions remained green.
+
+Realtime voice routing is not part of this foundation. Interactive voice/Hands retain their existing provider behavior and priority. Local-model targets, learned routing, Jev and autonomous routing-policy mutation remain deferred.
+
+Canonical final record:
+`docs/PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`.
+
 ## Known residuals / deliberate deferrals
 
 Not currently claimed as solved:
@@ -363,9 +410,9 @@ Repository-wide accepted/deferred/superseded/rejected truth is centralized in `P
 
 ## Next architecture acceptance
 
-Phase 2 EngineeringKnowledge is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `docs/PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
+Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. Its final evidence is recorded in `docs/PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`.
 
-The next active cross-cutting slice is **Phase 3 — EngineeringChange Lifecycle / Mission Orchestration**. It must build above the accepted WorkItem/WorkStep/WorkDelivery execution truth and EngineeringKnowledge foundation rather than introduce a parallel task, approval, provenance or verification system.
+The next active cross-cutting slice is **Phase 5 — Secure Autonomous Engineering Substrate**. Its research and architecture must define governed dependency acquisition, opaque secret handling, capability manifests, bounded device/service discovery, least-privilege sandbox profiles, provenance and hardware-in-the-loop acceptance without broadening model authority.
 
 **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027/CAP-028)** remains
 the next numbered product slice and must still reuse the accepted durable
