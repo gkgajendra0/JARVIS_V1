@@ -726,7 +726,7 @@ class EngineeringSubstrateChangeService:
             )
 
         stable = hashlib.sha256(
-            f"{component_token}|{reason_token}".encode("utf-8")
+            f"{component_token}|{reason_token}".encode()
         ).hexdigest()[:24]
         return self.store.work.enqueue_delivery(
             work=waiting,
