@@ -12,7 +12,6 @@ import json
 import pathlib
 import sys
 import tempfile
-from dataclasses import asdict
 from datetime import UTC, datetime
 
 from jarvis.engineering_substrate.artifacts import ArtifactStore
