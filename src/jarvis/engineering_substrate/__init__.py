@@ -16,6 +16,17 @@ from jarvis.engineering_substrate.canonical import (
     canonical_digest,
     canonical_payload,
 )
+from jarvis.engineering_substrate.change_integration import (
+    DEPENDENCY_PLAN_KIND,
+    DEPENDENCY_RESOLUTION_KIND,
+    HARDWARE_EVIDENCE_KIND,
+    MANIFEST_KIND,
+    SECRET_LEASE_KIND,
+    VERIFICATION_KIND,
+    EngineeringSubstrateChangeService,
+    SubstrateBindingSnapshot,
+    ensure_substrate_acceptance_current,
+)
 from jarvis.engineering_substrate.contracts import (
     SCHEMA_VERSION_V1,
     ArtifactProvenance,
@@ -141,8 +152,14 @@ from jarvis.engineering_substrate.secrets import (
 
 __all__ = [
     "DEFAULT_MDNS_POLICY",
+    "DEPENDENCY_PLAN_KIND",
+    "DEPENDENCY_RESOLUTION_KIND",
+    "HARDWARE_EVIDENCE_KIND",
+    "MANIFEST_KIND",
     "PRIVATE_INDEX_TOKEN_CONSUMER",
     "SCHEMA_VERSION_V1",
+    "SECRET_LEASE_KIND",
+    "VERIFICATION_KIND",
     "ArtifactAdmissionRecord",
     "ArtifactAdmissionResult",
     "ArtifactIntegrityError",
@@ -179,6 +196,7 @@ __all__ = [
     "DuplicateCapabilityManifestError",
     "DuplicateSandboxProfileError",
     "DuplicateSchemaRegistrationError",
+    "EngineeringSubstrateChangeService",
     "HardwareAcceptanceAssessment",
     "HardwareAcceptanceConflict",
     "HardwareAcceptanceError",
@@ -235,6 +253,7 @@ __all__ = [
     "SecretStore",
     "SecretStoreError",
     "SourceBuildPolicy",
+    "SubstrateBindingSnapshot",
     "SubstrateCanonicalizationError",
     "SubstrateRegistryError",
     "TrustedAdapterRegistration",
@@ -258,4 +277,5 @@ __all__ = [
     "default_sandbox_registry",
     "default_secret_consumer_registry",
     "default_secret_store_path",
+    "ensure_substrate_acceptance_current",
 ]
