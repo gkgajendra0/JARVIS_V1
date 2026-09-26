@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 from pathlib import Path
 
@@ -173,7 +172,7 @@ def test_invalid_attestation_produces_explicit_rejected_evidence(
 
 
 def test_provenance_rejects_artifact_not_bound_to_resolution(tmp_path: Path) -> None:
-    store, artifact, resolution = _artifact_evidence(tmp_path)
+    store, artifact, _resolution = _artifact_evidence(tmp_path)
     unrelated = DependencyResolution(
         resolution_id="resolution-other",
         requirement_id="requirement-1",
