@@ -485,11 +485,13 @@ class CapabilityManifestRegistry:
                 "unknown hardware acceptance contract(s): "
                 + ", ".join(sorted(unknown_hardware))
             )
-        if operations & set(executor.physical_effect_operations):
-            if not manifest.hardware_acceptance_contract_ids:
-                raise ManifestActivationError(
-                    "physical-effect operation requires hardware acceptance contract"
-                )
+        if (
+            operations & set(executor.physical_effect_operations)
+            and not manifest.hardware_acceptance_contract_ids
+        ):
+            raise ManifestActivationError(
+                "physical-effect operation requires hardware acceptance contract"
+            )
 
         for values, registered, kind in (
             (
