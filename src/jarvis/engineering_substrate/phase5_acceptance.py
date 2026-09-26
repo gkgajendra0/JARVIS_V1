@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -86,13 +87,15 @@ def _require_regular_file(path: pathlib.Path, *, field: str) -> pathlib.Path:
 
 def _verify_authenticode(executable: pathlib.Path) -> tuple[str, str]:
     script = (
-        "$s=Get-AuthenticodeSignature -LiteralPath $args[0];"
+        "$s=Get-AuthenticodeSignature -LiteralPath $env:JARVIS_PHASE5_UV_EXE;"
         "[pscustomobject]@{"
         "Status=[string]$s.Status;"
         "Subject=[string]$s.SignerCertificate.Subject;"
         "Thumbprint=[string]$s.SignerCertificate.Thumbprint"
         "}|ConvertTo-Json -Compress"
     )
+    child_environment = dict(os.environ)
+    child_environment["JARVIS_PHASE5_UV_EXE"] = str(executable)
     try:
         completed = subprocess.run(
             [
@@ -101,7 +104,6 @@ def _verify_authenticode(executable: pathlib.Path) -> tuple[str, str]:
                 "-NonInteractive",
                 "-Command",
                 script,
-                str(executable),
             ],
             capture_output=True,
             text=True,
@@ -110,6 +112,7 @@ def _verify_authenticode(executable: pathlib.Path) -> tuple[str, str]:
             timeout=30,
             check=False,
             shell=False,
+            env=child_environment,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise Phase5AcceptanceError(
