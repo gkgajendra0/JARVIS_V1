@@ -74,7 +74,7 @@ from jarvis.engineering_substrate.sandbox import (
     default_sandbox_registry,
 )
 from jarvis.engineering_substrate.secrets import (
-    PYPI_TOKEN_CONSUMER,
+    PRIVATE_INDEX_TOKEN_CONSUMER,
     CanonicalAuthoritySecretGate,
     SecretAlreadyExistsError,
     SecretAuthorizationError,
@@ -138,7 +138,7 @@ __all__ = [
     "ProvenanceResourceUnavailable",
     "ProvenanceService",
     "ProvenanceVerificationError",
-    "PYPI_TOKEN_CONSUMER",
+    "PRIVATE_INDEX_TOKEN_CONSUMER",
     "PyPIAttestationVerifier",
     "PyPIIntegrityClient",
     "SandboxDefinition",
