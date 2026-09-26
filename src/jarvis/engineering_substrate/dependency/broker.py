@@ -261,9 +261,7 @@ class DependencyBroker:
             resolver_version=self._uv.release_policy.version,
             resolver_digest=self._uv.binary_registration.executable_sha256,
             resolved_packages=parsed.resolved_packages,
-            artifact_ids=tuple(
-                dict.fromkeys(wheel.sha256 for wheel in parsed.wheels)
-            ),
+            artifact_ids=tuple(dict.fromkeys(wheel.sha256 for wheel in parsed.wheels)),
             dependency_graph_digest=parsed.graph_digest,
             lock_format="pylock.toml",
             lock_version=parsed.lock_version,
