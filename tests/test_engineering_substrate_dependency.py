@@ -47,7 +47,9 @@ def _requirement(**overrides: object) -> DependencyRequirement:
     return DependencyRequirement(**values)  # type: ignore[arg-type]
 
 
-def _pylock_text(*, with_wheel: bool = True, index: str = "https://pypi.org/simple") -> str:
+def _pylock_text(
+    *, with_wheel: bool = True, index: str = "https://pypi.org/simple"
+) -> str:
     wheel = ""
     if with_wheel:
         wheel = f"""
@@ -122,9 +124,7 @@ def test_public_source_policy_requires_https_and_known_artifact_host() -> None:
     assert PYPI_PUBLIC_V1.permits_artifact_url(
         "https://files.pythonhosted.org/packages/a/demo.whl"
     )
-    assert not PYPI_PUBLIC_V1.permits_artifact_url(
-        "https://example.invalid/demo.whl"
-    )
+    assert not PYPI_PUBLIC_V1.permits_artifact_url("https://example.invalid/demo.whl")
 
     with pytest.raises(DependencyPolicyError, match="HTTPS"):
         DependencySourcePolicy(
@@ -134,7 +134,9 @@ def test_public_source_policy_requires_https_and_known_artifact_host() -> None:
         )
 
 
-def test_uv_adapter_builds_fixed_wheel_only_single_index_command(tmp_path: Path) -> None:
+def test_uv_adapter_builds_fixed_wheel_only_single_index_command(
+    tmp_path: Path,
+) -> None:
     runner = RecordingUvRunner(_pylock_text())
     adapter = _adapter(tmp_path, runner)
     workspace = tmp_path / "workspace"
@@ -178,6 +180,29 @@ def test_uv_binary_identity_fails_closed_on_digest_or_version_drift(
 
     adapter.binary_registration.executable_path.write_bytes(b"tampered")
     with pytest.raises(DependencyResourceUnavailable, match="SHA-256"):
+        adapter.verify_trust()
+
+
+def test_wrong_registered_uv_version_fails_closed(tmp_path: Path) -> None:
+    runner = RecordingUvRunner(_pylock_text())
+    policy = UV_WINDOWS_X64_0_12_19
+    executable = tmp_path / "uv.exe"
+    executable.write_bytes(b"reviewed-uv-executable")
+    registration = UvBinaryRegistration(
+        executable_path=executable,
+        version="0.12.18",
+        executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(),
+        release_commit_sha=policy.release_commit_sha,
+        release_asset_sha256=policy.release_asset_sha256,
+        release_policy_digest=policy.policy_digest,
+    )
+    adapter = UvAdapter(
+        release_policy=policy,
+        binary_registration=registration,
+        runner=runner,
+    )
+
+    with pytest.raises(DependencyResourceUnavailable, match="version"):
         adapter.verify_trust()
 
 
@@ -282,9 +307,7 @@ def test_broker_denies_source_mixing_and_direct_or_vcs_inputs(tmp_path: Path) ->
 
     with pytest.raises(DependencyPolicyError, match="exactly one"):
         broker.resolve_python(
-            _requirement(
-                registered_source_ids=("pypi.public.v1", "private.v1")
-            ),
+            _requirement(registered_source_ids=("pypi.public.v1", "private.v1")),
             workspace=workspace,
             environment=environment,
         )
