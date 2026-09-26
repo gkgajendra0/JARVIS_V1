@@ -684,7 +684,9 @@ class DiscoveryScope:
             field="allowed_device_type",
         )
         if not services and not devices:
-            raise ValueError("discovery scope requires an allowed service or device type")
+            raise ValueError(
+                "discovery scope requires an allowed service or device type"
+            )
         _reject_wildcards(services, field="allowed_service_types")
         _reject_wildcards(devices, field="allowed_device_types")
         object.__setattr__(self, "allowed_service_types", services)
