@@ -609,6 +609,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 "tests/test_model_routing_evaluation.py",
                 "tests/test_model_routing_fallback.py",
                 "tests/test_model_routing_health.py",
+                "tests/test_model_routing_imports.py",
                 "tests/test_model_routing_models.py",
                 "tests/test_model_routing_registry.py",
                 "tests/test_model_routing_status.py",
