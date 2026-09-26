@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from jarvis.engineering_substrate import (
+    ArtifactIntegrityError,
     ArtifactStore,
     DependencyArtifact,
     DependencyEcosystem,
@@ -134,7 +135,7 @@ def test_offline_bundle_rejects_missing_or_tampered_artifact(tmp_path: Path) -> 
         )
 
     (store.objects_root / artifact.sha256).write_bytes(b"tampered")
-    with pytest.raises(Exception, match="verify-on-read"):
+    with pytest.raises(ArtifactIntegrityError, match="verify-on-read"):
         builder.build(
             resolved,
             (artifact,),
