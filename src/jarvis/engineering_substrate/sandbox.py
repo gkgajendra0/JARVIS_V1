@@ -5,8 +5,8 @@ from __future__ import annotations
 import pathlib
 import re
 import shutil
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from jarvis.engineering_substrate.contracts import (
     SandboxFilesystemMode,
