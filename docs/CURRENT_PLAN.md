@@ -45,19 +45,19 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 The active development slice is now:
 
-**Phase 5 — Secure Autonomous Engineering Substrate**
+**Phase 6 — Unknown-Incident Investigation + Source Repair**
 
-Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. Its final evidence is recorded in `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`.
+Phase 5 Secure Autonomous Engineering Substrate is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Its final evidence is recorded in `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`. PR #133 merged to protected main at `78f25fb192b926ee30a028cfc02c829e1197cc9e`.
 
-Phase-5 technology research is complete and the concrete architecture/implementation plan was explicitly owner-approved on 2026-09-26. Canonical review documents are:
+Phase-6 research is complete and the architecture/implementation plan is proposed on the dedicated design branch. Canonical review documents are:
 
-- `PHASE5_SECURE_ENGINEERING_SUBSTRATE_RESEARCH.md`;
-- `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ARCHITECTURE.md`;
-- `PHASE5_SECURE_ENGINEERING_SUBSTRATE_IMPLEMENTATION_PLAN.md`.
+- `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_RESEARCH.md`;
+- `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ARCHITECTURE.md`;
+- `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_IMPLEMENTATION_PLAN.md`.
 
-The proposed design adds deterministic DependencyBroker, SecretBroker, declarative CapabilityManifest, bounded discovery, JARVIS-owned SandboxProfiles, provenance and hardware-acceptance evidence while preserving EngineeringChange and Authority as the only governance boundary.
+The proposed design composes the accepted Incident, EngineeringKnowledge, EngineeringChange, WorkItem/DBOS, Model Router, Phase-5 sandbox/dependency/provenance and isolated DEVELOPMENT primitives. It adds bounded read-only diagnostics, typed diagnosis evidence, incident-to-change admission, exact architecture-gated development handoff and protected-surface candidate verification. It deliberately does not embed OpenHands, SWE-agent or another control plane.
 
-**Current state: ARCHITECTURE OWNER-APPROVED / IMPLEMENTATION ACTIVE.** Phase 5A–5F are implemented. Phase 5E passed owner-machine Windows DPAPI acceptance on 2026-09-26. CapabilityManifest v1 is now digest-bound to dependency/provenance/sandbox/discovery references, validates trusted executor/adapter registrations and deterministic Authority floors, requires verification/rollback/hardware contracts where applicable, and exports deterministic JSON Schema Draft 2020-12. Continue Phase 5G through 5J under the standing authorization, stopping only for genuine owner-machine/manual acceptance or a new architectural decision.
+**Current state: RESEARCH COMPLETE / ARCHITECTURE PROPOSED — WAITING OWNER APPROVAL.** Runtime/source implementation must not begin until the Phase-6 architecture is explicitly owner-approved.
 
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
@@ -96,8 +96,8 @@ Continue with the phased sequence in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLA
 Phase 2  EngineeringKnowledge — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 3  EngineeringChange lifecycle / mission orchestration — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 4  Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 2026-09-26
-Phase 5  Secure autonomous engineering substrate — ACTIVE / ARCHITECTURE OWNER-APPROVED; IMPLEMENTATION AUTHORIZED
-Phase 6  Unknown-incident investigation + source repair
+Phase 5  Secure autonomous engineering substrate — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
+Phase 6  Unknown-incident investigation + source repair — ACTIVE / ARCHITECTURE PROPOSED; WAITING OWNER APPROVAL
 Phase 7  Governed promotion / production verification / rollback
 Phase 8  Capability package + registry lifecycle
 Phase 9  Owner-requested capability acquisition
@@ -111,7 +111,7 @@ Phase 14 Governed self-evolution
 
 Owner-requested capability acquisition intentionally precedes autonomous gap detection: an explicit owner request to acquire a capability must not wait for repeated failures or repeated requests.
 
-The owner-approved 2026-09-26 sequencing clarification inserts Phase 10A before Phase 11. Phase 10A will add the Objective/DesiredState model, whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, owner-attention handling and autonomy evaluation. It does not interrupt or broaden authority during active Phase 5.
+The owner-approved 2026-09-26 sequencing clarification inserts Phase 10A before Phase 11. Phase 10A will add the Objective/DesiredState model, whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, owner-attention handling and autonomy evaluation. It does not interrupt or broaden authority during active Phase 6.
 
 ## Next numbered product slice
 
@@ -123,7 +123,7 @@ The active Self-Repair/Evolution/Autonomous-Engineering program is cross-cutting
 
 Current open/deferred items are tracked only in `PROJECT_STATE.md`. The important open issues are #19, #44, #45, #46, #63 and #69.
 
-They remain separate unless evidence shows that one directly blocks the active Phase 4 work.
+They remain separate unless evidence shows that one directly blocks the active Phase 6 work.
 
 ## Documentation ownership
 
@@ -146,9 +146,13 @@ They remain separate unless evidence shows that one directly blocks the active P
 - `PHASE4_MODEL_ROUTER_ARCHITECTURE.md` — owner-approved stable Phase-4 routing contracts/invariants.
 - `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md` — completed implementation sequence and acceptance gates.
 - `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md` — canonical Phase-4 owner-machine acceptance record.
+- `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md` — canonical Phase-5 owner-machine acceptance record.
+- `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_RESEARCH.md` — Phase-6 technology/repository research and framework dispositions.
+- `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ARCHITECTURE.md` — proposed Phase-6 stable contracts/invariants, pending owner approval.
+- `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_IMPLEMENTATION_PLAN.md` — proposed Phase-6 implementation slices and acceptance matrix.
 
 Historical experiments, old acceptance transcripts and superseded research remain available through Git history rather than becoming competing planning truth.
 
 ## Immediate next action
 
-**Continue Phase 5G — bounded mDNS/DNS-SD discovery broker — under the standing Phase-5 authorization, then continue through Phase 5J.** Phases 5A–5F are already merged. This north-star documentation work is intentionally parallel and must not interrupt the active Phase-5 implementation branch/PR.
+**Owner review/approval of the proposed Phase-6 Unknown-Incident Investigation + Source Repair architecture.** After explicit approval, create the isolated Phase-6 implementation branch/PR and begin Phase 6A contracts + process registration. Do not implement runtime/source behavior before that architecture gate.
