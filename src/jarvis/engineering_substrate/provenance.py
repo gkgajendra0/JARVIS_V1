@@ -279,9 +279,7 @@ class ProvenanceService:
             raise TypeError("artifact_store must be an ArtifactStore")
         self._artifact_store = artifact_store
         self._integrity_client = integrity_client or PyPIIntegrityClient()
-        self._attestation_verifier = (
-            attestation_verifier or PyPIAttestationVerifier()
-        )
+        self._attestation_verifier = attestation_verifier or PyPIAttestationVerifier()
         self._policy = policy or ProvenancePolicy()
 
     def verify_pypi_artifact(
