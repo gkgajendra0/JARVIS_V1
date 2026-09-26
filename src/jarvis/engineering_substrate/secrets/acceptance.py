@@ -120,7 +120,7 @@ def run_acceptance() -> SecretAcceptanceResult:
         proposal = build_secret_lease_proposal(
             request,
             session_id="phase5e-owner-acceptance",
-            origin=ActionOrigin.SYSTEM_INTERNAL,
+            origin=ActionOrigin.SYSTEM,
         )
         context = InteractionContext(
             session_id="phase5e-owner-acceptance",
