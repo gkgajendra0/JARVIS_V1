@@ -104,7 +104,13 @@ The current 0.12.18 release also fixes a Windows wheel-install path traversal ad
 
 Disposition: **ADOPT uv as the first trusted Python DependencyBroker adapter, pinned and provenance-verified.** JARVIS persists PEP 751 and its own typed evidence, not `uv.lock` as the sole canonical record.
 
-### 3.4 Source builds
+### 3.4 Index/source confusion
+
+Current pip documentation explicitly warns that combining a private repository with public candidates through extra-index search is unsafe because all locations are considered and a higher-version public package can win, creating dependency-confusion risk.
+
+Disposition: **Phase-5 v1 uses one explicitly selected registered source policy for a dependency resolution. Public/private extra-index mixing is denied.** Private indexes require an explicit source registration and SecretLease.
+
+### 3.5 Source builds
 
 Both pip and uv documentation make clear that source/build backends can execute code.
 
@@ -494,6 +500,8 @@ This gives later phases enough power to acquire dependencies, secrets and physic
   https://pip.pypa.io/en/stable/cli/pip_lock/
 - pip Secure Installs:
   https://pip.pypa.io/en/latest/topics/secure-installs/
+- pip index/extra-index dependency-confusion warning:
+  https://pip.pypa.io/en/latest/cli/pip_install/
 - uv locking/syncing:
   https://docs.astral.sh/uv/concepts/projects/sync/
 - uv CLI/export:
