@@ -173,7 +173,9 @@ class UvAdapter:
         try:
             resolved.relative_to(root)
         except ValueError as exc:
-            raise DependencyPolicyError(f"{field} must remain inside workspace") from exc
+            raise DependencyPolicyError(
+                f"{field} must remain inside workspace"
+            ) from exc
         if candidate.exists() and candidate.is_symlink():
             raise DependencyPolicyError(f"{field} cannot be a symlink")
         return resolved
