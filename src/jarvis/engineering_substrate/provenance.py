@@ -208,17 +208,6 @@ class PyPIAttestationVerifier:
         expected_sha256: str,
         provenance_payload: bytes,
     ) -> VerifiedAttestationSet:
-        try:
-            provenance = Provenance.model_validate_json(provenance_payload)
-        except ValidationError as exc:
-            raise ProvenanceVerificationError(
-                "PyPI provenance payload violates the PEP-740 model"
-            ) from exc
-
-        if not provenance.attestation_bundles:
-            raise ProvenanceVerificationError(
-                "PyPI provenance contains no attestation bundles"
-            )
         filename = str(distribution_filename).strip()
         expected_digest = str(expected_sha256).strip().casefold()
         if not filename:
@@ -255,6 +244,18 @@ class PyPIAttestationVerifier:
             raise ProvenanceVerificationError(
                 "artifact cannot form a valid Python distribution identity"
             ) from exc
+
+        try:
+            provenance = Provenance.model_validate_json(provenance_payload)
+        except ValidationError as exc:
+            raise ProvenanceVerificationError(
+                "PyPI provenance payload violates the PEP-740 model"
+            ) from exc
+
+        if not provenance.attestation_bundles:
+            raise ProvenanceVerificationError(
+                "PyPI provenance contains no attestation bundles"
+            )
 
         publisher_identities: list[str] = []
         predicate_types: list[str] = []
