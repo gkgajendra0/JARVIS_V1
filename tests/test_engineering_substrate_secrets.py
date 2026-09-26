@@ -28,6 +28,7 @@ from jarvis.authority import (
     TrustTier,
 )
 from jarvis.authority.types import AuthorityEffect as Effect
+from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate import (
     CanonicalAuthoritySecretGate,
     SecretAuthorizationError,
@@ -43,10 +44,9 @@ from jarvis.engineering_substrate import (
     build_secret_lease_proposal,
 )
 from jarvis.engineering_substrate.secrets.cli import main as secret_cli_main
-from jarvis.engineering_change.store import ChangeStore
+from jarvis.security import KeyProtectionError
 from jarvis.work.models import WorkItem, WorkType
 from jarvis.work.store import SQLiteWorkStore
-from jarvis.security import KeyProtectionError
 
 SECRET_VALUE = b"phase5e-disposable-test-value"
 
