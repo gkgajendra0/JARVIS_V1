@@ -106,6 +106,18 @@ def _sha256(value: object, *, field: str) -> str:
     return normalized
 
 
+def _digests(
+    values: tuple[str, ...],
+    *,
+    field: str,
+    limit: int = MAX_ITEMS,
+) -> tuple[str, ...]:
+    normalized = tuple(_sha256(item, field=field) for item in values)
+    if len(normalized) > limit:
+        raise ValueError(f"{field} exceeds maximum of {limit}")
+    return normalized
+
+
 def _schema_version(value: object) -> int:
     version = _positive_int(value, field="schema_version")
     if version != SCHEMA_VERSION_V1:
@@ -577,6 +589,10 @@ class CapabilityManifest:
     hardware_acceptance_contract_ids: tuple[str, ...]
     provenance_ids: tuple[str, ...]
     disable_rollback_contract_id: str
+    dependency_resolution_digests: tuple[str, ...] = ()
+    sandbox_profile_digests: tuple[str, ...] = ()
+    discovery_scope_digests: tuple[str, ...] = ()
+    provenance_digests: tuple[str, ...] = ()
     schema_version: int = SCHEMA_VERSION_V1
 
     def __post_init__(self) -> None:
@@ -646,6 +662,31 @@ class CapabilityManifest:
                 field="disable_rollback_contract_id",
             ),
         )
+        for field_name in (
+            "dependency_resolution_digests",
+            "sandbox_profile_digests",
+            "discovery_scope_digests",
+            "provenance_digests",
+        ):
+            object.__setattr__(
+                self,
+                field_name,
+                _digests(getattr(self, field_name), field=field_name),
+            )
+        bindings = (
+            (
+                "dependency_resolution_ids",
+                "dependency_resolution_digests",
+            ),
+            ("sandbox_profile_ids", "sandbox_profile_digests"),
+            ("discovery_scope_ids", "discovery_scope_digests"),
+            ("provenance_ids", "provenance_digests"),
+        )
+        for ids_field, digests_field in bindings:
+            if len(getattr(self, ids_field)) != len(getattr(self, digests_field)):
+                raise ValueError(
+                    f"{ids_field} and {digests_field} must have equal length"
+                )
         object.__setattr__(self, "schema_version", _schema_version(self.schema_version))
 
 
