@@ -9,7 +9,8 @@ import pathlib
 import sqlite3
 import threading
 import time
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from typing import Final
 
 from jarvis.engineering_substrate.canonical import canonical_payload
