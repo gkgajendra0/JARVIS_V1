@@ -180,6 +180,8 @@ class AttestationVerifier(Protocol):
         self,
         *,
         artifact_path: pathlib.Path,
+        distribution_filename: str,
+        expected_sha256: str,
         provenance_payload: bytes,
     ) -> VerifiedAttestationSet: ...
 
@@ -202,8 +204,47 @@ class PyPIAttestationVerifier:
         self,
         *,
         artifact_path: pathlib.Path,
+        distribution_filename: str,
+        expected_sha256: str,
         provenance_payload: bytes,
     ) -> VerifiedAttestationSet:
+        filename = str(distribution_filename).strip()
+        expected_digest = str(expected_sha256).strip().casefold()
+        if not filename:
+            raise ProvenanceVerificationError(
+                "artifact distribution filename is missing"
+            )
+        if len(expected_digest) != 64 or any(
+            char not in "0123456789abcdef" for char in expected_digest
+        ):
+            raise ProvenanceVerificationError("artifact expected SHA-256 is invalid")
+        try:
+            digest = hashlib.sha256()
+            with artifact_path.open("rb") as handle:
+                while True:
+                    chunk = handle.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    digest.update(chunk)
+            observed_digest = digest.hexdigest()
+        except OSError as exc:
+            raise ProvenanceVerificationError(
+                "artifact content could not be read for provenance verification"
+            ) from exc
+        if observed_digest != expected_digest:
+            raise ProvenanceVerificationError(
+                "artifact content digest changed before provenance verification"
+            )
+        try:
+            distribution = Distribution(
+                name=filename,
+                digest=observed_digest,
+            )
+        except (ValidationError, ValueError) as exc:
+            raise ProvenanceVerificationError(
+                "artifact cannot form a valid Python distribution identity"
+            ) from exc
+
         try:
             provenance = Provenance.model_validate_json(provenance_payload)
         except ValidationError as exc:
@@ -215,12 +256,6 @@ class PyPIAttestationVerifier:
             raise ProvenanceVerificationError(
                 "PyPI provenance contains no attestation bundles"
             )
-        try:
-            distribution = Distribution.from_file(artifact_path)
-        except (OSError, ValueError) as exc:
-            raise ProvenanceVerificationError(
-                "artifact cannot form a valid Python distribution identity"
-            ) from exc
 
         publisher_identities: list[str] = []
         predicate_types: list[str] = []
@@ -341,6 +376,8 @@ class ProvenanceService:
         try:
             verified = self._attestation_verifier.verify(
                 artifact_path=object_path,
+                distribution_filename=artifact.filename,
+                expected_sha256=artifact.sha256,
                 provenance_payload=response.payload,
             )
         except ProvenanceVerificationError:

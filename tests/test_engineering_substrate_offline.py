@@ -151,9 +151,7 @@ class RecordingDockerRunner:
     def __call__(self, command, **kwargs):
         argv = [str(item) for item in command]
         self.commands.append(argv)
-        if argv[-4:-2] == ["pip", "freeze"] or (
-            "freeze" in argv and argv[argv.index("freeze") - 1] == "pip"
-        ):
+        if any("pip freeze" in item for item in argv):
             return subprocess.CompletedProcess(argv, 0, self.freeze_output, "")
         return subprocess.CompletedProcess(argv, 0, "", "")
 
@@ -184,19 +182,24 @@ def test_candidate_recreation_runs_only_registered_offline_docker_operations(
 
     assert result.inventory == ("demo-package==1.2.3",)
     assert result.image == UV_VERIFY_IMAGE
-    assert len(runner.commands) == 4
-    for command in runner.commands:
-        assert command[command.index("--network") + 1] == "none"
-        assert "--read-only" in command
-        assert command[command.index("--cap-drop") + 1] == "ALL"
-        assert "no-new-privileges" in command
-        assert UV_VERIFY_IMAGE in command
-    sync = runner.commands[1]
-    assert "--offline" in sync
-    assert "--require-hashes" in sync
-    assert "--only-binary" in sync
-    assert ":all:" in sync
-    assert "--no-build" in sync
+    assert len(runner.commands) == 1
+    command = runner.commands[0]
+    assert command[command.index("--network") + 1] == "none"
+    assert "--read-only" in command
+    assert command[command.index("--cap-drop") + 1] == "ALL"
+    assert "no-new-privileges" in command
+    assert UV_VERIFY_IMAGE in command
+    assert "/candidate:rw,nosuid,size=512m" in command
+    assert not any("candidate_rw" in item for item in command)
+    script = command[-1]
+    assert "uv --cache-dir /tmp/uv-cache venv /candidate/.venv" in script
+    assert "pip sync /artifacts/pylock.toml" in script
+    assert "--offline" in script
+    assert "--require-hashes" in script
+    assert "--only-binary :all:" in script
+    assert "pip check" in script
+    assert "pip freeze" in script
+    assert "--no-build" not in script
 
 
 def test_candidate_inventory_must_exactly_match_canonical_resolution(

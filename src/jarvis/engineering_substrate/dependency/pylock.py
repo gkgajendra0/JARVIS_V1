@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import pathlib
 import tomllib
+import urllib.parse
 from dataclasses import dataclass
 from typing import Any
 
@@ -125,14 +126,20 @@ def inspect_pylock(
         for raw_wheel in raw_wheels:
             if not isinstance(raw_wheel, dict):
                 raise DependencyPolicyError("pylock wheel entry must be a table")
-            filename = str(raw_wheel.get("name") or "").strip()
             url = str(raw_wheel.get("url") or "").strip()
-            if not filename or not filename.casefold().endswith(".whl"):
-                raise DependencyPolicyError("locked artifact must be a wheel file")
             if not url or not source.permits_artifact_url(url):
                 raise DependencyPolicyError(
                     "locked wheel URL is outside the registered source policy"
                 )
+            explicit_name = str(raw_wheel.get("name") or "").strip()
+            if explicit_name:
+                filename = explicit_name
+            else:
+                filename = urllib.parse.unquote(
+                    pathlib.PurePosixPath(urllib.parse.urlsplit(url).path).name
+                ).strip()
+            if not filename or not filename.casefold().endswith(".whl"):
+                raise DependencyPolicyError("locked artifact must be a wheel file")
             hashes = raw_wheel.get("hashes")
             if not isinstance(hashes, dict) or "sha256" not in hashes:
                 raise DependencyPolicyError("locked wheel requires SHA-256")

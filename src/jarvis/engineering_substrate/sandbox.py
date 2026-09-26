@@ -16,6 +16,18 @@ from jarvis.engineering_substrate.contracts import (
 
 _DOCKER_IMAGE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$")
 
+_DEPENDENCY_VERIFY_SCRIPT = (
+    "uv --cache-dir /tmp/uv-cache venv /candidate/.venv "
+    "--python 3.11 --no-python-downloads --no-progress 1>&2\n"
+    "uv --cache-dir /tmp/uv-cache pip sync /artifacts/pylock.toml "
+    "--python /candidate/.venv/bin/python --offline --require-hashes "
+    "--only-binary :all: --no-config --no-python-downloads --no-progress 1>&2\n"
+    "uv --cache-dir /tmp/uv-cache pip check "
+    "--python /candidate/.venv/bin/python 1>&2\n"
+    "exec uv --cache-dir /tmp/uv-cache pip freeze "
+    "--python /candidate/.venv/bin/python"
+)
+
 
 class SandboxRegistryError(RuntimeError):
     """Base error for trusted sandbox profile lookup or command construction."""
@@ -237,59 +249,27 @@ class SandboxRegistry:
             if profile.profile_id == "test.offline.v1":
                 for item in trusted_suffix:
                     text = str(item).strip()
-                    pure = pathlib.PurePath(text.split("::", 1)[0])
+                    path_token = text.split("::", 1)[0]
+                    posix_path = pathlib.PurePosixPath(path_token)
+                    windows_path = pathlib.PureWindowsPath(path_token)
                     if (
                         not text
-                        or pure.is_absolute()
-                        or pathlib.PureWindowsPath(str(pure)).is_absolute()
-                        or ".." in pure.parts
+                        or not path_token
+                        or posix_path.is_absolute()
+                        or windows_path.is_absolute()
+                        or bool(windows_path.root)
+                        or bool(windows_path.drive)
+                        or ".." in posix_path.parts
+                        or ".." in windows_path.parts
                         or text.startswith("-")
                     ):
                         raise SandboxPolicyError(
                             "pytest target must remain a relative non-option path"
                         )
             elif profile.profile_id == "dependency.verify.v1":
-                allowed = {
-                    (
-                        "venv",
-                        "/candidate/.venv",
-                        "--python",
-                        "3.11",
-                        "--no-python-downloads",
-                        "--no-progress",
-                    ),
-                    (
-                        "pip",
-                        "sync",
-                        "/artifacts/pylock.toml",
-                        "--python",
-                        "/candidate/.venv/bin/python",
-                        "--offline",
-                        "--require-hashes",
-                        "--only-binary",
-                        ":all:",
-                        "--no-build",
-                        "--no-config",
-                        "--no-python-downloads",
-                        "--no-progress",
-                    ),
-                    (
-                        "pip",
-                        "check",
-                        "--python",
-                        "/candidate/.venv/bin/python",
-                    ),
-                    (
-                        "pip",
-                        "freeze",
-                        "--python",
-                        "/candidate/.venv/bin/python",
-                    ),
-                }
-                if trusted_suffix not in allowed:
-                    raise SandboxPolicyError(
-                        "dependency verification command is not registered"
-                    )
+                raise SandboxPolicyError(
+                    "dependency verification command does not accept runtime suffix"
+                )
             else:
                 raise SandboxPolicyError(
                     "runtime command suffix is not supported by this sandbox profile"
@@ -328,6 +308,17 @@ class SandboxRegistry:
             [
                 "--tmpfs",
                 "/tmp:rw,noexec,nosuid,size=512m",
+            ]
+        )
+        if profile.profile_id == "dependency.verify.v1":
+            command.extend(
+                [
+                    "--tmpfs",
+                    "/candidate:rw,nosuid,size=512m",
+                ]
+            )
+        command.extend(
+            [
                 "--workdir",
                 definition.image_workdir,
                 image_token,
@@ -411,16 +402,15 @@ DEFAULT_SANDBOX_DEFINITIONS = (
             profile_id="dependency.verify.v1",
             entrypoint_id="uv_dependency_verify.v1",
             network_mode=SandboxNetworkMode.NONE,
-            mount_policy_ids=("artifacts_ro", "candidate_rw", "worktree_ro"),
+            mount_policy_ids=("artifacts_ro", "worktree_ro"),
             timeout_seconds=300,
         ),
         mount_policies=(
             SandboxMountPolicy("artifacts_ro", "/artifacts", True),
-            SandboxMountPolicy("candidate_rw", "/candidate", False),
             SandboxMountPolicy("worktree_ro", "/workspace", True),
         ),
-        image_workdir="/candidate",
-        fixed_entrypoint=("uv",),
+        image_workdir="/workspace",
+        fixed_entrypoint=("sh", "-eu", "-c", _DEPENDENCY_VERIFY_SCRIPT),
     ),
 )
 

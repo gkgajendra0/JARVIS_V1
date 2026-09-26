@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 from pathlib import Path
 
@@ -73,8 +74,17 @@ class FakeIntegrityClient:
 
 
 class AcceptingVerifier:
-    def verify(self, *, artifact_path: Path, provenance_payload: bytes):
+    def verify(
+        self,
+        *,
+        artifact_path: Path,
+        distribution_filename: str,
+        expected_sha256: str,
+        provenance_payload: bytes,
+    ):
         assert artifact_path.is_file()
+        assert distribution_filename == "demo_package-1.2.3-py3-none-any.whl"
+        assert expected_sha256 == artifact_path.name
         assert provenance_payload == b'{"provenance":"fixture"}'
         return VerifiedAttestationSet(
             publisher_identities=(
@@ -89,8 +99,15 @@ class AcceptingVerifier:
 
 
 class RejectingVerifier:
-    def verify(self, *, artifact_path: Path, provenance_payload: bytes):
-        del artifact_path, provenance_payload
+    def verify(
+        self,
+        *,
+        artifact_path: Path,
+        distribution_filename: str,
+        expected_sha256: str,
+        provenance_payload: bytes,
+    ):
+        del artifact_path, distribution_filename, expected_sha256, provenance_payload
         raise ProvenanceVerificationError("forged fixture rejected")
 
 
@@ -145,6 +162,67 @@ def test_verified_attestation_records_publisher_and_slsa_reference(
     assert "example/demo" in (first.provenance.publisher_identity or "")
     assert first.provenance.slsa_refs == ("https://slsa.dev/provenance/v1",)
     assert canonical_digest(first.provenance) == canonical_digest(second.provenance)
+
+
+def test_real_verifier_uses_lock_filename_for_content_addressed_object(
+    tmp_path: Path,
+) -> None:
+    wheel_name = "demo_package-1.2.3-py3-none-any.whl"
+    payload = b"content-addressed-wheel"
+    digest = hashlib.sha256(payload).hexdigest()
+    object_path = tmp_path / digest
+    object_path.write_bytes(payload)
+
+    forged = {
+        "version": 1,
+        "attestation_bundles": [
+            {
+                "publisher": {
+                    "kind": "GitHub",
+                    "repository": "example/demo",
+                    "workflow": "release.yml",
+                },
+                "attestations": [
+                    {
+                        "version": 1,
+                        "verification_material": {
+                            "certificate": base64.b64encode(
+                                b"not-a-certificate"
+                            ).decode(),
+                            "transparency_entries": [{}],
+                        },
+                        "envelope": {
+                            "statement": base64.b64encode(b"{}").decode(),
+                            "signature": base64.b64encode(b"forged").decode(),
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+    with pytest.raises(ProvenanceVerificationError, match="cryptographic"):
+        PyPIAttestationVerifier().verify(
+            artifact_path=object_path,
+            distribution_filename=wheel_name,
+            expected_sha256=digest,
+            provenance_payload=json.dumps(forged).encode(),
+        )
+
+
+def test_real_verifier_rejects_content_digest_drift_before_attestation(
+    tmp_path: Path,
+) -> None:
+    object_path = tmp_path / ("a" * 64)
+    object_path.write_bytes(b"tampered")
+
+    with pytest.raises(ProvenanceVerificationError, match="digest changed"):
+        PyPIAttestationVerifier().verify(
+            artifact_path=object_path,
+            distribution_filename="demo_package-1.2.3-py3-none-any.whl",
+            expected_sha256="a" * 64,
+            provenance_payload=b'{"version":1,"attestation_bundles":[]}',
+        )
 
 
 def test_invalid_attestation_produces_explicit_rejected_evidence(
@@ -234,6 +312,8 @@ def test_real_pypi_attestation_parser_rejects_forged_cryptographic_material(
     with pytest.raises(ProvenanceVerificationError, match="cryptographic"):
         PyPIAttestationVerifier().verify(
             artifact_path=wheel,
+            distribution_filename=wheel.name,
+            expected_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
             provenance_payload=json.dumps(forged).encode(),
         )
 

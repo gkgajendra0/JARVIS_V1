@@ -199,6 +199,11 @@ jobs:
           tests/test_hands_generic_grounding.py
           tests/test_windows_hello_utf8.py
 
+      - name: Run Windows sandbox path regressions
+        run: >-
+          python -m pytest -q
+          tests/test_engineering_substrate_sandbox.py::test_pytest_target_cannot_become_docker_or_pytest_option
+
       - name: Run Windows DPAPI smoke tests
         run: >-
           python -m pytest -q
