@@ -49,12 +49,12 @@ Snapshot baseline verified from protected `main` at
 | Persistent concurrent work | DONE foundation | durable WorkItems/steps/deliveries, restart recovery, background research/development, priority/resource control |
 | Deterministic Self-Repair | PARTIAL foundation for Step 19 | R1/R2 typed framework plus Phase-1H-hardened R2 production recovery: sustained rolling budgets, shared target/action circuit breaker, typed verification/preconditions/provenance, versioned persistence, Windows Job Object runtime ownership and bounded production guardian |
 | EngineeringKnowledge | DONE foundation | Phase 2 owner-machine accepted 2026-09-25: immutable engineering knowledge, deterministic REPAIR projection, lifecycle/provenance/applicability, grounded local hybrid retrieval, integrity/security gates and open-ended facet extensibility |
-| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H, 2 and 3 are accepted; Phase 4 Research + Diagnostic Model Router research/architecture is complete and implementation is next |
+| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H, 2, 3 and 4 are accepted; Phase 5 Secure Autonomous Engineering Substrate research/architecture is next |
 | Step 8 notes/tasks/reminders | PLANNED | still the next numbered product slice when numbered roadmap work resumes |
 
 Phase 3 EngineeringChange is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The canonical record is `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The owner-machine run proved durable same-identity recovery across a full Windows shutdown/reboot and live Exa research; persistent Gemini HTTP 429 pressure was accepted as an external limitation and did not weaken governance.
 
-Phase 4 Research + Diagnostic Model Router has completed technology research and owner-approved architecture. Canonical documents: `PHASE4_MODEL_ROUTER_RESEARCH.md`, `PHASE4_MODEL_ROUTER_ARCHITECTURE.md`, and `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md`. Implementation is not yet accepted production state.
+Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. Canonical final evidence is `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`. The live run proved deterministic two-target eligibility, Gemini `rate_limited` -> OpenAI fallback, target-local quota cooldown, restart-safe lineage, zero duplicate routing-request IDs and unchanged Authority/security boundaries.
 
 ---
 
@@ -190,6 +190,29 @@ Final Phase-3 owner-machine acceptance on 2026-09-25 proved same-turn idempotenc
 Canonical acceptance record:
 `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`.
 
+### Research + Diagnostic Model Router Phase 4
+
+- **#109** Phase-4 research/architecture/implementation-plan freeze.
+- **#110–#117** Phase 4A–4H implementation: canonical routing contracts/registries, deterministic eligibility, durable routing/health persistence, `engineering_stage.v1`, provider-neutral invocation, bounded fallback/blocker semantics, status/provenance, and offline evaluation.
+- **#118** Phase 4I owner-machine acceptance boundary plus live-found integration corrections for strict OpenAI structured output, import-cycle hardening, routed-provider retry ownership and repeated blocker-notification coalescing.
+
+Final owner-machine acceptance on exact implementation head
+`b6d88199eedaca568efa82bf62a26ec2ef396903` proved:
+
+- both approved targets eligible in the live acceptance decision;
+- Gemini primary -> `rate_limited`;
+- OpenAI fallback -> `quota_exhausted`;
+- bounded fallback path `Gemini -> OpenAI`;
+- all routing store/provenance/lineage gates PASS;
+- same canonical WorkItem across fallback and restart;
+- zero duplicate routing-request IDs after restart;
+- accepted fallback attempt ordinals/path unchanged after restart;
+- Authority/security regression suite PASS;
+- provider exhaustion surfaced truthfully as `WAITING_RESOURCE` without policy relaxation or fabricated success.
+
+Canonical acceptance record:
+`PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`.
+
 ---
 
 ## Open / deferred work
@@ -209,7 +232,7 @@ These are intentionally not represented as completed.
 | full local/offline conversation | DEFERRED | current provider resilience is truthful survival, not a second full local conversation stack |
 | proactive/event-driven monitoring | PLANNED | later Step 15 |
 | full Steps 9/10/12 | PLANNED with partial foundations | Hands supplies foundations only |
-| Later autonomous-engineering phases | ACTIVE / PLANNED | Phases 2 EngineeringKnowledge and 3 EngineeringChange are accepted; Phase 4 research/architecture is complete and implementation is next; later phases remain planned in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` |
+| Later autonomous-engineering phases | ACTIVE / PLANNED | Phases 2 EngineeringKnowledge, 3 EngineeringChange and 4 Model Router are accepted; Phase 5 Secure Autonomous Engineering Substrate is next; later phases remain planned in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` |
 
 ---
 
@@ -254,13 +277,15 @@ old acceptance transcripts and superseded proposals.
 
 ## Current branch / PR truth
 
-At the Phase-4 architecture-freeze baseline:
+At the Phase-4 owner-acceptance documentation head:
 
-- protected `main`: `c04ede5c3f63ad803541a2f3d15a5e85c1b41023`;
+- protected `main` still contains the accepted pre-Phase-4 baseline until PR #118 promotion;
 - Phase-2 implementation/acceptance PRs #92–#106: **merged / accepted**;
 - Phase-3 PR #108: **merged / owner-machine accepted 2026-09-25**;
 - Phase-4 documentation freeze: PR #109;
-- Phase-4 runtime implementation: **not started yet**;
+- Phase-4 slices #110–#117: **merged**;
+- Phase-4 final PR #118: **owner-machine accepted 2026-09-26; final documentation/CI before protected-main merge**;
+- acceptance-tested Phase-4 implementation head: `b6d88199eedaca568efa82bf62a26ec2ef396903`;
 - Self-Repair issue #65: **closed / completed**.
 
 Several old feature/research branches still exist remotely. Their presence does not
@@ -277,10 +302,12 @@ Phase 2 EngineeringKnowledge is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Th
 
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. PR #108 carries the accepted implementation and `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md` carries the final owner-machine evidence.
 
+Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. PR #118 carries the final implementation/acceptance boundary and `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md` carries the canonical evidence.
+
 The active cross-cutting slice is:
 
-**Phase 4 — Research + Diagnostic Model Router**
+**Phase 5 — Secure Autonomous Engineering Substrate**
 
-Research and architecture are complete and owner-approved. Implementation must follow the frozen Phase-4 documents and reuse existing WorkItems/WorkSteps/WorkDeliveries, EngineeringChange, EngineeringKnowledge and Authority boundaries rather than create a parallel task, routing, verification or provenance system. Jev is explicitly deferred to a later optimization experiment.
+Research and architecture are next. Phase 5 must reuse EngineeringChange, EngineeringKnowledge, Model Router, WorkItems, Authority and existing isolation/verification boundaries while defining governed dependency, secret, capability-manifest, discovery, provenance, sandbox-profile and hardware-in-the-loop primitives.
 
-Source repair remains a later phase. Step 8 remains the next numbered product slice when numbered roadmap work resumes.
+Source repair remains Phase 6. Step 8 remains the next numbered product slice when numbered roadmap work resumes.

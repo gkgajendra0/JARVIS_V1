@@ -484,9 +484,11 @@ Exit criteria:
 
 ### Phase 4 — Research/Diagnostic Model Router
 
-**STATUS: ACTIVE / RESEARCH + OWNER-APPROVED ARCHITECTURE COMPLETE; IMPLEMENTATION NEXT**
+**STATUS: DONE / OWNER-MACHINE ACCEPTED 2026-09-26**
 
 Create one provider/model-neutral routing boundary for research, diagnostics and engineering reasoning.
+
+Accepted result: deterministic eligibility, `engineering_stage.v1`, durable routing provenance, target-local health/cooldown, JARVIS-owned bounded fallback, Gemini/OpenAI routed WorkReasoner targets, offline evaluation and restart-safe lineage. Live acceptance naturally proved Gemini `rate_limited` -> OpenAI fallback -> `quota_exhausted` without weakening policy or Authority.
 
 Routing considers task kind, privacy/locality, evidence size, model capabilities, latency, cost, provider health and previous outcomes. Provider choice never changes Authority.
 
@@ -684,10 +686,11 @@ Rules:
 1. Phase 1/R2 and Phase 1H remain accepted foundations.
 2. Phase 2 EngineeringKnowledge is complete and owner-machine accepted.
 3. Phase 3 EngineeringChange is complete and owner-machine accepted.
-4. Phase 4 research and owner-approved architecture are complete; implement `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md` from protected `main` without reopening technology selection absent new evidence.
-5. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2 or Phase 3 without new concrete evidence.
-6. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
-7. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.
+4. Phase 4 Research + Diagnostic Model Router is complete and owner-machine accepted on 2026-09-26; preserve its routing/health/fallback boundary.
+5. Begin Phase 5 Secure Autonomous Engineering Substrate with research and architecture before implementation.
+6. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2, Phase 3 or Phase 4 without new concrete evidence.
+7. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
+8. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.
 
 The program is considered aligned only while each active slice can answer:
 

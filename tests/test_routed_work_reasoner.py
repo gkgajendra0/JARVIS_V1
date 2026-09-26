@@ -35,12 +35,35 @@ from jarvis.work.brain import (
     InteractiveBrainGate,
 )
 from jarvis.work.models import WorkItem, WorkType
-from jarvis.work.reasoner import RoutedWorkReasoner
+from jarvis.work.reasoner import RoutedWorkReasoner, _WorkDecisionModel
 from jarvis.work.store import SQLiteWorkStore
 
 
 class DummyResponse(BaseModel):
     value: str
+
+
+def _schema_nodes(value):
+    if isinstance(value, dict):
+        yield value
+        for nested in value.values():
+            yield from _schema_nodes(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            yield from _schema_nodes(nested)
+
+
+def test_work_decision_schema_is_strict_output_compatible() -> None:
+    schema = _WorkDecisionModel.model_json_schema()
+
+    for node in _schema_nodes(schema):
+        assert "default" not in node
+        if node.get("type") != "object":
+            continue
+        assert node.get("additionalProperties") is False
+        properties = node.get("properties")
+        if isinstance(properties, dict):
+            assert set(node.get("required", ())) == set(properties)
 
 
 class FakeStructuredClient:
@@ -194,7 +217,10 @@ class ReasoningAdapter:
         return response_model(
             action="do_step",
             summary="Execute bounded step",
-            parameters={},
+            parameters_json="{}",
+            goal_complete=False,
+            needs_owner=False,
+            owner_question=None,
         )
 
 
@@ -257,6 +283,7 @@ async def test_router_persists_decision_before_provider_invocation(
     decision = await reasoner.decide(request)
 
     assert decision.action == "do_step"
+    assert decision.parameters == {}
     assert len(adapter.calls) == 1
     persisted = routing_store.find_decision_by_request(
         expected_route.routing_request_id

@@ -1,6 +1,6 @@
 # Phase 4 Implementation Plan — Research + Diagnostic Model Router
 
-Status: **READY TO IMPLEMENT AFTER DOCUMENTATION MERGE**
+Status: **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**
 
 Research: `PHASE4_MODEL_ROUTER_RESEARCH.md`  
 Architecture: `PHASE4_MODEL_ROUTER_ARCHITECTURE.md`
@@ -386,6 +386,10 @@ Each can be added later through the Phase-4 target/adapter/strategy/evaluation i
 
 ## Implementation completion definition
 
-Phase 4 is complete when JARVIS can truthfully and durably choose among approved background reasoning targets using deterministic eligibility + stage routing, survive provider pressure through bounded target-aware fallback, preserve canonical WorkItem/EngineeringChange identity, expose route provenance, and demonstrate via benchmark and owner-machine acceptance that the router does not weaken governance.
+**Satisfied on 2026-09-26.**
+
+JARVIS now truthfully and durably chooses among approved background reasoning targets using deterministic eligibility + stage routing, survives provider pressure through bounded target-aware fallback, preserves canonical WorkItem identity, exposes route provenance, and has passed benchmark, restart-continuity and Authority/security owner-machine acceptance.
+
+Canonical acceptance record: `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`.
 
 No later phase should need to replace this core boundary to add local, specialist, learned or Jev-backed routing.

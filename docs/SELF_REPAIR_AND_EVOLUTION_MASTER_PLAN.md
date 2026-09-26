@@ -61,13 +61,13 @@ Do not reopen the accepted Phase-1/R2 or Phase-1H architecture without new concr
 
 ## 2. Canonical forward sequence
 
-With Phases 2 and 3 owner-machine accepted and Phase 4 research/architecture complete, the cross-cutting program proceeds as follows:
+With Phases 2, 3 and 4 owner-machine accepted, the cross-cutting program proceeds as follows:
 
 ```text
 Phase 2   EngineeringKnowledge Foundation — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 3   EngineeringChange Lifecycle / Mission Orchestration — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
-Phase 4   Research + Diagnostic Model Router — ACTIVE / ARCHITECTURE APPROVED; IMPLEMENTATION NEXT
-Phase 5   Secure Autonomous Engineering Substrate
+Phase 4   Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 2026-09-26
+Phase 5   Secure Autonomous Engineering Substrate — ACTIVE / RESEARCH + ARCHITECTURE NEXT
 Phase 6   Unknown-Incident Investigation + Source Repair
 Phase 7   Governed Promotion / Production Verification / Rollback
 Phase 8   Capability Package + Registry Lifecycle
@@ -81,7 +81,7 @@ Phase 14  Governed Self-Evolution
 
 The full requirements, objects, entry/exit gates and permanent governance invariants for these phases are defined in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`.
 
-Phase-4 implementation details are frozen in `PHASE4_MODEL_ROUTER_RESEARCH.md`, `PHASE4_MODEL_ROUTER_ARCHITECTURE.md`, and `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md`. Jev is deferred to a separate later optimization experiment.
+Phase-4 implementation details are preserved in `PHASE4_MODEL_ROUTER_RESEARCH.md`, `PHASE4_MODEL_ROUTER_ARCHITECTURE.md`, and `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md`; final owner-machine evidence is in `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`. Jev remains deferred to a separate later optimization experiment.
 
 ---
 

@@ -90,7 +90,10 @@ class ScriptedAdapter:
         return response_model(
             action="do_step",
             summary="Execute bounded step",
-            parameters={},
+            parameters_json="{}",
+            goal_complete=False,
+            needs_owner=False,
+            owner_question=None,
         )
 
 
@@ -112,6 +115,20 @@ class BlockerReasoner:
         del request
         raise RoutingResourceBlocked(
             decision_id="decision-blocked",
+            reason="approved reasoning targets are unavailable",
+            retry_after_seconds=17.0,
+        )
+
+
+class RotatingBlockerReasoner:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def decide(self, request: BrainRequest):
+        del request
+        self.calls += 1
+        raise RoutingResourceBlocked(
+            decision_id=f"decision-blocked-{self.calls}",
             reason="approved reasoning targets are unavailable",
             retry_after_seconds=17.0,
         )
@@ -431,6 +448,37 @@ async def test_all_targets_in_cooldown_fail_before_invocation(
 
     assert caught.value.routing_request_id is not None
     assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_repeated_same_routing_blocker_is_spoken_once_per_work(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    work = _work(store, turn="turn-engine-repeated-blocker")
+    reasoner = RotatingBlockerReasoner()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((NeverUsedExecutor(),)),
+    )
+
+    first = await engine.advance(work.work_id)
+    second = await engine.advance(work.work_id)
+
+    assert first.state is WorkState.WAITING_RESOURCE
+    assert second.state is WorkState.WAITING_RESOURCE
+    assert reasoner.calls == 2
+    blocker_steps = [
+        step
+        for step in store.list_steps(work.work_id)
+        if step.kind == "routing_resource_blocker"
+    ]
+    assert len(blocker_steps) == 2
+    deliveries = store.list_pending_deliveries()
+    assert len(deliveries) == 1
+    assert deliveries[0].kind is WorkDeliveryKind.RESOURCE_BLOCKER
+    assert deliveries[0].message == "approved reasoning targets are unavailable"
 
 
 @pytest.mark.asyncio

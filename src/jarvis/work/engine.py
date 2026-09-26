@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -402,11 +403,12 @@ class WorkEngine:
             current_step_id=step.step_id,
         )
         saved = self._store.save(waiting, expected_version=latest.version)
+        blocker_digest = hashlib.sha256(exc.reason.encode()).hexdigest()[:24]
         self._store.enqueue_delivery(
             work=saved,
             kind=WorkDeliveryKind.RESOURCE_BLOCKER,
             message=exc.reason,
-            event_key=exc.blocker_key,
+            event_key=f"routing-resource:{blocker_digest}",
         )
         return WorkAdvanceResult(
             saved.work_id,

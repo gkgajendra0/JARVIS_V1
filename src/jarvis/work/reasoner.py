@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import time
 from collections.abc import Callable
@@ -44,8 +45,10 @@ Reason incrementally from the original owner request and recorded step evidence.
 one useful next step at a time. If the goal is fully satisfied by the recorded evidence,
 mark goal_complete. If a material decision, approval, missing safe execution substrate,
 or unavailable capability must come from the owner, set needs_owner and ask one concise
-question instead of guessing. Otherwise choose exactly one allowed action and provide
-only parameters supported by its schema.
+question instead of guessing. Otherwise choose exactly one allowed action. Encode the
+action parameter object as compact JSON text in parameters_json; use "{}" when there
+are no parameters. The decoded object must contain only parameters supported by the
+selected action schema.
 
 For development work, JARVIS owns a strict staged sequence. Prepare the isolated
 worktree before source work. Inspect relevant files/search evidence before editing.
@@ -118,14 +121,16 @@ def _provider_pressure_from_exception(
 
 
 class _WorkDecisionModel(BaseModel):
+    """Provider-facing strict schema; dynamic action args travel as JSON text."""
+
     model_config = ConfigDict(extra="forbid")
 
-    action: str | None = None
+    action: str | None
     summary: str = Field(min_length=1, max_length=500)
-    parameters: dict[str, Any] = Field(default_factory=dict)
-    goal_complete: bool = False
-    needs_owner: bool = False
-    owner_question: str | None = Field(default=None, max_length=500)
+    parameters_json: str
+    goal_complete: bool
+    needs_owner: bool
+    owner_question: str | None
 
 
 def _work_input_payload(request: BrainRequest) -> dict[str, Any]:
@@ -166,10 +171,19 @@ def _brain_decision(
     request: BrainRequest,
     parsed: _WorkDecisionModel,
 ) -> BrainDecision:
+    try:
+        parameters = json.loads(parsed.parameters_json)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            "work reasoner parameters_json must contain valid JSON"
+        ) from exc
+    if not isinstance(parameters, dict):
+        raise TypeError("work reasoner parameters_json must decode to an object")
+
     decision = BrainDecision(
         action=parsed.action,
         summary=parsed.summary,
-        parameters=dict(parsed.parameters),
+        parameters=parameters,
         goal_complete=parsed.goal_complete,
         needs_owner=parsed.needs_owner,
         owner_question=parsed.owner_question,
