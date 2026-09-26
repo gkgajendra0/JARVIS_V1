@@ -159,3 +159,33 @@ def test_acceptance_inspector_rejects_decision_for_another_work(
             second.work_id,
             decision_id=decision.decision_id,
         )
+
+
+def test_acceptance_inspector_rejects_attempts_beyond_fallback_bound(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    work = _work(store)
+    routing = ModelRoutingStore(store)
+    decision = _route(routing, work)
+
+    for ordinal in range(1, 5):
+        routing.record_attempt(
+            RoutingAttempt(
+                attempt_id=f"attempt-{ordinal}",
+                decision_id=decision.decision_id,
+                work_id=work.work_id,
+                target_id="target-a",
+                attempt_ordinal=ordinal,
+                started_at_epoch=100.0 + ordinal,
+                ended_at_epoch=101.0 + ordinal,
+                latency_ms=1000.0,
+                kind=RoutingAttemptKind.PRIMARY,
+                response_contract_result=ResponseContractResult.VALID,
+            )
+        )
+
+    result = inspect_routing_acceptance(store, work.work_id)
+
+    assert result["result"] == "FAIL"
+    assert result["store_gates"]["bounded_attempt_lineage"] == "FAIL"
