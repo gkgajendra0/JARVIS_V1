@@ -176,7 +176,9 @@ class SandboxRegistry:
                 )
             supplied[binding.policy_id] = binding
         if set(supplied) != set(expected):
-            raise SandboxPolicyError("sandbox mount bindings must exactly match profile")
+            raise SandboxPolicyError(
+                "sandbox mount bindings must exactly match profile"
+            )
 
         args: list[str] = []
         home = pathlib.Path.home().resolve()
@@ -191,7 +193,10 @@ class SandboxRegistry:
             if resolved == home:
                 raise SandboxPolicyError("entire owner home profile cannot be mounted")
             lower_parts = {part.casefold() for part in resolved.parts}
-            if "docker.sock" in lower_parts or resolved.name.casefold() == "docker.sock":
+            if (
+                "docker.sock" in lower_parts
+                or resolved.name.casefold() == "docker.sock"
+            ):
                 raise SandboxPolicyError("Docker socket mount is forbidden")
             if (
                 self._protected_main_root is not None
@@ -254,9 +259,7 @@ class SandboxRegistry:
             timeout = min(timeout, requested)
 
         network = (
-            "none"
-            if profile.network_mode is SandboxNetworkMode.NONE
-            else "bridge"
+            "none" if profile.network_mode is SandboxNetworkMode.NONE else "bridge"
         )
         command: list[str] = [
             docker,
@@ -334,9 +337,7 @@ DEFAULT_SANDBOX_DEFINITIONS = (
             mount_policy_ids=("workspace_ro",),
             timeout_seconds=300,
         ),
-        mount_policies=(
-            SandboxMountPolicy("workspace_ro", "/workspace", True),
-        ),
+        mount_policies=(SandboxMountPolicy("workspace_ro", "/workspace", True),),
         image_workdir="/workspace",
         fixed_entrypoint=("python", "-m", "pytest", "-q", "-p", "no:cacheprovider"),
     ),
