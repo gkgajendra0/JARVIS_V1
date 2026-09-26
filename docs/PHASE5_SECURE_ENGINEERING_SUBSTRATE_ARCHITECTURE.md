@@ -1,6 +1,8 @@
 # Phase 5 Secure Autonomous Engineering Substrate — Architecture
 
-Status: **PROPOSED / OWNER APPROVAL REQUIRED BEFORE IMPLEMENTATION**
+Status: **OWNER-APPROVED / FROZEN FOR IMPLEMENTATION**
+
+Owner approval recorded: 2026-09-26
 
 Date: 2026-09-26
 
