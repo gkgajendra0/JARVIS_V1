@@ -193,7 +193,7 @@ def test_candidate_recreation_runs_only_registered_offline_docker_operations(
         assert UV_VERIFY_IMAGE in command
         assert command[command.index("uv") + 1 : command.index("uv") + 3] == [
             "--cache-dir",
-            "/candidate/.uv-cache",
+            "/tmp/uv-cache",
         ]
     sync = runner.commands[1]
     assert "--offline" in sync
