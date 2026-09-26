@@ -18,10 +18,7 @@ from jarvis.engineering_substrate.artifacts import ArtifactStore
 from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.engineering_substrate.contracts import DependencyArtifact
 from jarvis.engineering_substrate.dependency.broker import ResolvedPythonDependency
-from jarvis.engineering_substrate.dependency.policy import (
-    DependencyPolicyError,
-    normalize_python_package_name,
-)
+from jarvis.engineering_substrate.dependency.policy import normalize_python_package_name
 from jarvis.engineering_substrate.sandbox import (
     SandboxMountBinding,
     SandboxRegistry,
