@@ -131,9 +131,7 @@ def _verify_authenticode(executable: pathlib.Path) -> tuple[str, str]:
     subject = str(payload.get("Subject") or "").strip()
     thumbprint = str(payload.get("Thumbprint") or "").strip().casefold()
     if not subject or not thumbprint:
-        raise Phase5AcceptanceError(
-            "uv Authenticode signer identity is unavailable"
-        )
+        raise Phase5AcceptanceError("uv Authenticode signer identity is unavailable")
     return subject, thumbprint
 
 
