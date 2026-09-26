@@ -49,6 +49,7 @@ jarvis-engineering-knowledge-acceptance = "jarvis.engineering_knowledge.acceptan
 jarvis-secret = "jarvis.engineering_substrate.secrets.cli:main"
 jarvis-secret-acceptance = "jarvis.engineering_substrate.secrets.acceptance:main"
 jarvis-hardware-acceptance = "jarvis.engineering_substrate.hardware_acceptance:main"
+jarvis-phase5-acceptance = "jarvis.engineering_substrate.phase5_acceptance:main"
 jarvis-vision-preview = "jarvis.vision.preview:main"
 jarvis-vision-follow = "jarvis.vision.follow_live:main"
 jarvis-face-model-smoke = "jarvis.identity.model_smoke:main"
