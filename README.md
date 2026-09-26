@@ -1,6 +1,6 @@
 # JARVIS V1
 
-JARVIS V1 is a personal, voice-first intelligent assistant built research-first around explicit JARVIS-owned truth, authority, memory, and execution boundaries.
+JARVIS V1 is a personal, voice-first intelligent assistant built research-first around explicit JARVIS-owned truth, authority, memory, and execution boundaries, with an owner-approved north star of becoming a governed autonomous self-managing personal intelligence runtime.
 
 The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARVIS V1 does not import it or depend on it at runtime.
 
@@ -16,7 +16,8 @@ The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARV
 - Self-Awareness: **ACCEPTED FOUNDATION**.
 - Persistent Concurrent Work Orchestration: **ACCEPTED FOUNDATION**.
 - Deterministic repair framework + R2 runtime crash/hang recovery: **ACCEPTED FOUNDATION**.
-- Self-Repair / Self-Evolution program: **ACTIVE — Phase 2 EngineeringKnowledge owner-machine accepted 2026-09-25; Phase 3 EngineeringChange is next**.
+- Governed Autonomous Engineering / Self-Repair / Self-Evolution: **ACTIVE — Phases 2–4 owner-machine accepted; Phase 5 Secure Autonomous Engineering Substrate implementation active, with 5A–5F merged and 5G underway**.
+- Autonomous Self-Management Control Plane: **PLANNED — owner-approved north star; Phase 10A future integration point, not current runtime capability**.
 - Step 8 notes/tasks/reminders/scheduling remains the **next numbered product slice** when numbered roadmap work resumes.
 
 Current accepted/deferred/superseded/rejected truth is centralized in
@@ -115,6 +116,8 @@ Protected CI additionally covers Playwright Chromium provisioning/smoke, Windows
 Current documentation is intentionally small:
 
 - [Product definition and capability catalogue](docs/PRODUCT.md)
+- [Autonomous self-management master plan](docs/AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md)
+- [Governed autonomous-engineering master plan](docs/GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Current accepted architecture](docs/CURRENT_ARCHITECTURE.md)
 - [Current active plan](docs/CURRENT_PLAN.md)
