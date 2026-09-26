@@ -61,6 +61,30 @@ This clarification does **not** invalidate or interrupt the existing autonomous-
 
 A future **Phase 10A — Autonomous Operations Control Plane** is inserted after closed-loop engineering learning and before autonomous gap/weakness detection. It will add the Objective/DesiredState model, whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, owner-attention handling and autonomy evaluation. It is not active during Phase 5.
 
+### Advanced intelligence north star — Universal Knowledge + Discovery
+
+Owner-approved on 2026-09-27: after the governed self-learning/self-evolution
+foundation is mature, JARVIS should evolve toward a shared **Universal Knowledge
+Intelligence** layer and a governed **Discovery Intelligence** program.
+
+The Universal Knowledge goal is not to statically store "everything" inside one model.
+It is to make JARVIS capable of locating, verifying, structuring, connecting, retaining,
+refreshing and reasoning over as much accessible human knowledge as possible across
+domains, while preserving provenance, uncertainty, contradictions and experience-derived
+knowledge. This Knowledge Fabric is intended to become a core JARVIS service usable by all
+capabilities and by cloud or local models.
+
+Discovery Intelligence then uses that substrate to map knowledge frontiers, identify
+anomalies/gaps/contradictions, generate competing hypotheses, falsify them, check prior
+art, run reproducible computational experiments, benchmark itself through historical
+rediscovery tests, and eventually support governed physical experimentation.
+
+The detailed authoritative plan is
+`docs/UNIVERSAL_KNOWLEDGE_AND_DISCOVERY_MASTER_PLAN.md`.
+
+This is a long-horizon strategic program. It does not interrupt, renumber or claim
+completion of the active autonomous-engineering phases.
+
 ### Governed autonomous engineering / Self-Repair / Self-Evolution cross-cutting program
 
 The 2026-09-20 Self-Repair Foundation interlude completed on 2026-09-23 with owner-machine acceptance of the deterministic repair framework and bounded R2 runtime crash/hang recovery. Issue #65 is closed.
@@ -196,6 +220,7 @@ The same lifecycle applies to JARVIS-generated engineering candidates; autonomy 
 7. Extensible Daily Assistant — Steps 16–17.
 8. Governed Learning and Improvement — Steps 18–20 plus the cross-cutting autonomous-engineering program.
 9. Autonomous Self-Managing Personal Intelligence Runtime — integrated end state where owner intent and accepted system obligations drive whole-JARVIS self-management, with governed autonomous engineering as the repair/extension/improvement subsystem.
+10. Universal Knowledge + Discovery Intelligence — shared source-aware cross-domain knowledge fabric followed by governed frontier mapping, hypothesis/falsification, computational discovery, historical rediscovery benchmarking, autonomous quests and eventual physical experimentation.
 
 ## Current next step
 
