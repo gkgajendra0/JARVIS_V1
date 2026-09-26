@@ -343,7 +343,6 @@ class OfflineCandidateVerifier:
                 "--require-hashes",
                 "--only-binary",
                 ":all:",
-                "--no-build",
                 "--no-config",
                 "--no-python-downloads",
                 "--no-progress",
