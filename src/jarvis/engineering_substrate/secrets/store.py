@@ -9,7 +9,7 @@ import pathlib
 import sqlite3
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from typing import Final
 
 from jarvis.engineering_substrate.canonical import canonical_payload
@@ -46,7 +46,7 @@ class SecretStateError(SecretStoreError):
 @dataclass(frozen=True, slots=True)
 class SecretMaterial:
     descriptor: SecretDescriptor
-    value: bytes
+    value: bytes = dataclass_field(repr=False)
 
 
 def default_secret_store_path() -> pathlib.Path:
@@ -438,18 +438,27 @@ class SecretStore:
         )
 
     def descriptor(self, secret_id: str) -> SecretDescriptor:
+        """Return indexed metadata only; callers must not treat it as integrity verified."""
+
         with self._lock, self._connect() as connection:
             return self._descriptor_from_row(self._require_row(connection, secret_id))
 
     def verified_descriptor(self, secret_id: str) -> SecretDescriptor:
+        """Cross-check indexed metadata against the sealed DPAPI envelope."""
+
         return self.materialize(secret_id, require_active=False).descriptor
 
     def list_descriptors(self) -> tuple[SecretDescriptor, ...]:
+        """List only descriptors whose indexed projection matches the sealed envelope."""
+
         with self._lock, self._connect() as connection:
             rows = connection.execute(
                 "SELECT * FROM secrets ORDER BY service, secret_id"
             ).fetchall()
-        return tuple(self._descriptor_from_row(row) for row in rows)
+            return tuple(
+                self._unseal(row, self._descriptor_from_row(row)).descriptor
+                for row in rows
+            )
 
     def materialize(
         self,
