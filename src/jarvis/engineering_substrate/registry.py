@@ -120,15 +120,11 @@ PHASE5_V1_SCHEMA_REGISTRATIONS = (
     ContractSchemaRegistration(
         "capability_manifest", SCHEMA_VERSION_V1, "CapabilityManifest"
     ),
-    ContractSchemaRegistration(
-        "discovery_scope", SCHEMA_VERSION_V1, "DiscoveryScope"
-    ),
+    ContractSchemaRegistration("discovery_scope", SCHEMA_VERSION_V1, "DiscoveryScope"),
     ContractSchemaRegistration(
         "discovery_observation", SCHEMA_VERSION_V1, "DiscoveryObservation"
     ),
-    ContractSchemaRegistration(
-        "sandbox_profile", SCHEMA_VERSION_V1, "SandboxProfile"
-    ),
+    ContractSchemaRegistration("sandbox_profile", SCHEMA_VERSION_V1, "SandboxProfile"),
     ContractSchemaRegistration(
         "hardware_acceptance_request",
         SCHEMA_VERSION_V1,
