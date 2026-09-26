@@ -599,7 +599,7 @@ class CapabilityManifest:
         object.__setattr__(
             self,
             "manifest_id",
-            _required_text(self.manifest_id, field="manifest_id"),
+            _token(self.manifest_id, field="manifest_id"),
         )
         object.__setattr__(
             self,
