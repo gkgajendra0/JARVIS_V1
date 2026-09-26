@@ -104,6 +104,7 @@ def test_secret_store_persists_only_sealed_value_and_metadata(tmp_path: Path) ->
     material = store.materialize(descriptor.secret_id)
     assert material.value == SECRET_VALUE
     assert material.descriptor == descriptor
+    assert SECRET_VALUE.decode() not in repr(material)
 
     database_bytes = store.path.read_bytes()
     assert SECRET_VALUE not in database_bytes
@@ -123,6 +124,8 @@ def test_projection_tamper_is_detected_against_sealed_envelope(tmp_path: Path) -
 
     with pytest.raises(SecretIntegrityError, match="does not match sealed"):
         store.verified_descriptor("secret-demo")
+    with pytest.raises(SecretIntegrityError, match="does not match sealed"):
+        store.list_descriptors()
 
 
 def test_rotate_replaces_ciphertext_and_revoke_is_versioned(tmp_path: Path) -> None:
@@ -307,6 +310,56 @@ def test_secret_lease_consumes_canonical_critical_authority_and_is_child_only(
         pass
 
 
+
+def test_authority_rejection_happens_before_secret_unseal(tmp_path: Path) -> None:
+    class CountingProtector(FakeProtector):
+        def __init__(self) -> None:
+            self.unseal_calls = 0
+
+        def unseal(self, sealed: bytes, *, purpose: str) -> bytes:
+            self.unseal_calls += 1
+            return super().unseal(sealed, purpose=purpose)
+
+    class RejectingGate:
+        def authorize(self, **kwargs):
+            raise SecretAuthorizationError("denied for test")
+
+    protector = CountingProtector()
+    store = SecretStore(
+        tmp_path / "secrets.sqlite",
+        protector=protector,
+        clock=lambda: 1_000.0,
+    )
+    _enroll(store)
+    consumers = SecretConsumerRegistry(
+        (
+            SecretConsumerPolicy(
+                consumer_id="dependency.private-index.v1",
+                allowed_scopes=("repository.read",),
+                secret_environment_variable="JARVIS_TEST_SECRET",
+            ),
+        )
+    )
+    request, proposal, context = _authorized_request()
+    broker = SecretBroker(
+        store=store,
+        consumers=consumers,
+        authority_gate=RejectingGate(),
+        clock=lambda: 1_000.0,
+        process_nonce="process-a",
+    )
+
+    with pytest.raises(SecretAuthorizationError, match="denied"):
+        broker.issue_lease(
+            request,
+            proposal=proposal,
+            context=context,
+            permit_id="denied",
+        )
+
+    assert protector.unseal_calls == 0
+
+
 def test_lease_scope_consumer_rotation_revocation_and_restart_fail_closed(
     tmp_path: Path,
 ) -> None:
@@ -328,7 +381,7 @@ def test_lease_scope_consumer_rotation_revocation_and_restart_fail_closed(
 
             return SecretAuthorityEvidence(
                 decision_id="decision",
-                proposal_fingerprint="a" * 64,
+                proposal_fingerprint=kwargs["proposal"].fingerprint,
                 policy_version="test",
                 risk_class="CRITICAL",
                 policy_digest="b" * 64,
