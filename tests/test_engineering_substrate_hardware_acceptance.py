@@ -289,6 +289,33 @@ def test_resolution_requires_observation_evidence(tmp_path: Path) -> None:
         )
 
 
+def test_persisted_hardware_evidence_tamper_is_detected(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    service = HardwareAcceptanceService(store, clock=MutableClock())
+    request = _request(service, store)
+    evidence = _resolve(service, request)
+
+    work = store.work
+    with work._lock, work._connect() as db, db:
+        row = db.execute(
+            """SELECT payload FROM engineering_hardware_acceptance_evidence
+            WHERE evidence_id=?""",
+            (evidence.evidence_id,),
+        ).fetchone()
+        payload = work._decode_json(row["payload"])
+        payload["verdict"] = HardwareAcceptanceVerdict.FAIL.value
+        db.execute(
+            """UPDATE engineering_hardware_acceptance_evidence
+            SET payload=? WHERE evidence_id=?""",
+            (work._encode_json(payload), evidence.evidence_id),
+        )
+
+    with pytest.raises(HardwareAcceptanceConflict, match="integrity mismatch"):
+        service.get_evidence(request.request_id)
+
+
 def test_exact_duplicate_resolution_is_idempotent_even_after_expiry(
     tmp_path: Path,
 ) -> None:
