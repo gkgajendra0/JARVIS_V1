@@ -17,7 +17,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from jarvis.authority import RiskClass
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.canonical import canonical_digest, canonical_payload
 from jarvis.engineering_substrate.contracts import (
@@ -202,6 +201,10 @@ class HardwareAcceptanceService:
         change = self.store.require(_required_text(change_id, field="change_id"))
         if not isinstance(manifest, RegisteredCapabilityManifest):
             raise TypeError("manifest must be a RegisteredCapabilityManifest")
+        if canonical_digest(manifest.manifest) != manifest.manifest_digest:
+            raise HardwareAcceptanceConflict(
+                "registered manifest digest does not match manifest content"
+            )
         operation_token = _token(operation, field="operation")
         if operation_token not in manifest.manifest.operations:
             raise HardwareAcceptanceConflict(
@@ -379,9 +382,6 @@ class HardwareAcceptanceService:
             raise HardwareAcceptanceConflict("hardware device identity mismatch")
         if _token(operation, field="operation") != request.operation:
             raise HardwareAcceptanceConflict("hardware operation mismatch")
-        if float(self._clock()) >= request.expires_at_epoch:
-            raise HardwareAcceptanceExpired("hardware acceptance request expired")
-
         owner_ref = (
             None
             if owner_observation_ref is None
@@ -398,21 +398,30 @@ class HardwareAcceptanceService:
                 "hardware resolution requires trusted observation evidence"
             )
         resolution = _required_text(resolution_key, field="resolution_key")
-        observed = float(self._clock())
         evidence_id = "hwev_" + canonical_digest(
             {"request_id": request.request_id, "resolution_key": resolution}
         )[:20]
-        evidence = HardwareAcceptanceEvidence(
-            evidence_id=evidence_id,
-            request_id=request.request_id,
-            request_digest=expected_digest,
-            verdict=verdict,
-            observed_at_epoch=observed,
-            owner_observation_ref=owner_ref,
-            telemetry_refs=telemetry,
-            verifier_refs=verifiers,
-        )
-        payload = _payload_dict(evidence)
+
+        def matches_existing(
+            row: sqlite3.Row | None,
+        ) -> HardwareAcceptanceEvidence | None:
+            if row is None:
+                return None
+            current = _evidence_from_payload(work._decode_json(row["payload"]))
+            if (
+                row["resolution_key"] == resolution
+                and current.evidence_id == evidence_id
+                and current.request_id == request.request_id
+                and current.request_digest == expected_digest
+                and current.verdict is verdict
+                and current.owner_observation_ref == owner_ref
+                and current.telemetry_refs == telemetry
+                and current.verifier_refs == verifiers
+            ):
+                return current
+            raise HardwareAcceptanceConflict(
+                "hardware acceptance request already resolved differently"
+            )
 
         work = self.store.work
         with work._lock, work._connect() as db:
@@ -422,13 +431,23 @@ class HardwareAcceptanceService:
                 WHERE request_id=?""",
                 (request.request_id,),
             ).fetchone()
-            if existing is not None:
-                current = _evidence_from_payload(work._decode_json(existing["payload"]))
-                if existing["resolution_key"] == resolution and current == evidence:
-                    return current
-                raise HardwareAcceptanceConflict(
-                    "hardware acceptance request already resolved differently"
-                )
+            replay = matches_existing(existing)
+            if replay is not None:
+                return replay
+            if float(self._clock()) >= request.expires_at_epoch:
+                raise HardwareAcceptanceExpired("hardware acceptance request expired")
+
+            evidence = HardwareAcceptanceEvidence(
+                evidence_id=evidence_id,
+                request_id=request.request_id,
+                request_digest=expected_digest,
+                verdict=verdict,
+                observed_at_epoch=float(self._clock()),
+                owner_observation_ref=owner_ref,
+                telemetry_refs=telemetry,
+                verifier_refs=verifiers,
+            )
+            payload = _payload_dict(evidence)
             try:
                 with db:
                     db.execute(
@@ -458,6 +477,15 @@ class HardwareAcceptanceService:
                         },
                     )
             except sqlite3.IntegrityError as exc:
+                row = db.execute(
+                    """SELECT resolution_key, payload
+                    FROM engineering_hardware_acceptance_evidence
+                    WHERE request_id=? OR resolution_key=?""",
+                    (request.request_id, resolution),
+                ).fetchone()
+                replay = matches_existing(row)
+                if replay is not None:
+                    return replay
                 raise HardwareAcceptanceConflict(
                     "hardware resolution lost compare-and-set race"
                 ) from exc
