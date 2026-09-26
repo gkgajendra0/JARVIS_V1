@@ -303,6 +303,14 @@ class MdnsDnsSdAdapter:
                 raise DiscoveryAdapterError(
                     "mDNS backend returned an out-of-scope service type"
                 )
+            if scope.target_hints:
+                searchable = (
+                    record.instance_name + " " + record.server
+                ).casefold()
+                if not any(
+                    hint.casefold() in searchable for hint in scope.target_hints
+                ):
+                    continue
             identity_digest = canonical_digest(
                 {
                     "service_type": record.service_type,
