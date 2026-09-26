@@ -84,9 +84,7 @@ def test_stage_router_reports_quality_cost_latency_and_category_metrics() -> Non
     assert report.registry_digest == "c" * 64
     assert report.strategy_digest == EngineeringStageStrategy.strategy_digest
     assert len(report.fixture_digest) == 64
-    assert set(report.overall) == {
-        baseline.value for baseline in BenchmarkBaseline
-    }
+    assert set(report.overall) == {baseline.value for baseline in BenchmarkBaseline}
     assert set(report.by_category) == {
         "development",
         "diagnostics",
