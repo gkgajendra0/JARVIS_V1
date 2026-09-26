@@ -16,7 +16,7 @@ def test_windows_user_dpapi_secret_store_round_trip_and_plaintext_absence(
     tmp_path: Path,
 ) -> None:
     store = SecretStore(tmp_path / "secrets.sqlite")
-    value = f"phase5e-ci-{uuid.uuid4()}".encode("utf-8")
+    value = f"phase5e-ci-{uuid.uuid4()}".encode()
 
     descriptor = store.enroll(
         secret_id="windows-dpapi-smoke",
