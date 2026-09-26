@@ -15,6 +15,7 @@ from jarvis.engineering_substrate.secrets.broker import (
     build_secret_lease_proposal,
     default_secret_consumer_registry,
 )
+from jarvis.engineering_substrate.secrets.redaction import SecretRedactor
 from jarvis.engineering_substrate.secrets.store import (
     SecretAlreadyExistsError,
     SecretIntegrityError,
@@ -42,6 +43,7 @@ __all__ = [
     "SecretLeaseRequest",
     "SecretMaterial",
     "SecretNotFoundError",
+    "SecretRedactor",
     "SecretStateError",
     "SecretStore",
     "SecretStoreError",
