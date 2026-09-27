@@ -871,6 +871,7 @@ class CapabilityRegistryStore:
         *,
         disposition: PackageDisposition,
         reason_code: str,
+        expected_generation: int | None = None,
         authority_ref: str | None = None,
         evidence_ref: str | None = None,
     ) -> AdmittedCapabilityPackage:
@@ -890,6 +891,10 @@ class CapabilityRegistryStore:
         }:
             raise TypeError("unsupported package disposition transition")
 
+        if expected_generation is not None and (
+            type(expected_generation) is not int or expected_generation <= 0
+        ):
+            raise ValueError("expected_generation must be a positive integer")
         occurred_at = _timestamp_text(self._clock())
         normalized_reason = _token(reason_code, field="reason_code")
         with self._write_transaction() as connection:
@@ -920,14 +925,6 @@ class CapabilityRegistryStore:
                     "RETIRED package may only transition to QUARANTINED"
                 )
 
-            connection.execute(
-                """
-                UPDATE capability_packages
-                SET disposition=?
-                WHERE package_id=? AND package_version=?
-                """,
-                (disposition.value, normalized_id, version),
-            )
             registry_row = connection.execute(
                 "SELECT * FROM capability_registry WHERE capability_id=?",
                 (admitted.package.capability_id,),
@@ -938,6 +935,21 @@ class CapabilityRegistryStore:
                 )
             registry = self._registry_from_row(registry_row)
             self._verify_registry_selection(connection, registry)
+            if (
+                expected_generation is not None
+                and registry.generation != expected_generation
+            ):
+                raise StaleRegistryGenerationError(
+                    "package disposition expected stale registry generation"
+                )
+            connection.execute(
+                """
+                UPDATE capability_packages
+                SET disposition=?
+                WHERE package_id=? AND package_version=?
+                """,
+                (disposition.value, normalized_id, version),
+            )
             event_kind = (
                 CapabilityLifecycleEventKind.PACKAGE_RETIRED
                 if disposition is PackageDisposition.RETIRED
