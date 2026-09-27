@@ -314,7 +314,9 @@ class DiagnosticGetIncidentExecutor:
     def __init__(self, resolver: DiagnosticContextResolver) -> None:
         self._resolver = resolver
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ()
 
@@ -354,7 +356,9 @@ class DiagnosticRetrieveKnowledgeExecutor:
         self._resolver = resolver
         self._reader = reader
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ()
 
@@ -439,7 +443,9 @@ class DiagnosticRecordHypothesisExecutor:
     def __init__(self, resolver: DiagnosticContextResolver) -> None:
         self._resolver = resolver
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ()
 
@@ -461,13 +467,7 @@ class DiagnosticRecordHypothesisExecutor:
             if str(item).strip()
         )
         unknown = tuple(
-            sorted(
-                {
-                    item
-                    for item in (*supporting, *refuting)
-                    if item not in known
-                }
-            )
+            sorted({item for item in (*supporting, *refuting) if item not in known})
         )
         if unknown:
             raise DiagnosticProtocolError(
@@ -482,8 +482,7 @@ class DiagnosticRecordHypothesisExecutor:
         hypothesis = DiagnosticHypothesis.create(
             statement=str(parameters.get("statement") or ""),
             affected_components=tuple(
-                str(item)
-                for item in (parameters.get("affected_components") or [])
+                str(item) for item in (parameters.get("affected_components") or [])
             ),
             affected_paths=tuple(
                 str(item) for item in (parameters.get("affected_paths") or [])
@@ -556,7 +555,9 @@ class DiagnosticFinalizeExecutor:
     def __init__(self, resolver: DiagnosticContextResolver) -> None:
         self._resolver = resolver
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ()
 
@@ -608,9 +609,7 @@ class DiagnosticFinalizeExecutor:
         selected_id = None if selected is None else str(selected).strip() or None
         known_hypothesis_ids = {item.hypothesis_id for item in hypotheses}
         if selected_id is not None and selected_id not in known_hypothesis_ids:
-            raise DiagnosticProtocolError(
-                "selected hypothesis is stale or unknown"
-            )
+            raise DiagnosticProtocolError("selected hypothesis is stale or unknown")
 
         try:
             disposition = DiagnosisDisposition(str(parameters.get("disposition")))
@@ -625,10 +624,7 @@ class DiagnosticFinalizeExecutor:
             ):
                 if evidence_id not in evidence_ids:
                     evidence_ids.append(evidence_id)
-        if (
-            reproduction_evidence_id
-            and reproduction_evidence_id not in evidence_ids
-        ):
+        if reproduction_evidence_id and reproduction_evidence_id not in evidence_ids:
             evidence_ids.append(reproduction_evidence_id)
 
         known_evidence = self._resolver.known_evidence_ids(work.work_id)
@@ -660,13 +656,11 @@ class DiagnosticFinalizeExecutor:
                 str(item) for item in (parameters.get("affected_paths") or [])
             ),
             affected_components=tuple(
-                str(item)
-                for item in (parameters.get("affected_components") or [])
+                str(item) for item in (parameters.get("affected_components") or [])
             ),
             proposed_repair_scope=parameters.get("proposed_repair_scope"),
             verification_targets=tuple(
-                str(item)
-                for item in (parameters.get("verification_targets") or [])
+                str(item) for item in (parameters.get("verification_targets") or [])
             ),
             reason_codes=tuple(dict.fromkeys(reason_codes)),
             disposition=disposition,
