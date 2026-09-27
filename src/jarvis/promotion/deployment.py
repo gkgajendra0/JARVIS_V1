@@ -9,7 +9,6 @@ from typing import Protocol
 from jarvis.dev_control import RuntimeReleaseIdentity
 from jarvis.engineering_change.models import ChangeConflict, ChangeState
 from jarvis.engineering_change.store import ChangeStore
-
 from jarvis.engineering_substrate.canonical import canonical_digest
 
 from .models import PromotionAttempt, PromotionAttemptState, PromotionEvidenceV1
