@@ -80,16 +80,12 @@ class DiagnosticContextResolver:
             raise DiagnosticProtocolError(
                 "diagnostic trigger/evidence artifacts are incomplete"
             )
-        source_revision = str(
-            trigger_artifact.payload.get("source_revision") or ""
-        ).strip().lower()
-        incident_id = str(
-            incident_artifact.payload.get("incident_id") or ""
-        ).strip()
+        source_revision = (
+            str(trigger_artifact.payload.get("source_revision") or "").strip().lower()
+        )
+        incident_id = str(incident_artifact.payload.get("incident_id") or "").strip()
         if not source_revision or not incident_id:
-            raise DiagnosticProtocolError(
-                "diagnostic artifact identity is incomplete"
-            )
+            raise DiagnosticProtocolError("diagnostic artifact identity is incomplete")
 
         raw_evidence = incident_artifact.payload.get("evidence")
         evidence_ids: list[str] = []
@@ -157,12 +153,8 @@ def _hypothesis_from_payload(payload: object) -> DiagnosticHypothesis:
             statement=str(payload["statement"]),
             affected_components=tuple(payload.get("affected_components") or ()),
             affected_paths=tuple(payload.get("affected_paths") or ()),
-            supporting_evidence_ids=tuple(
-                payload.get("supporting_evidence_ids") or ()
-            ),
-            refuting_evidence_ids=tuple(
-                payload.get("refuting_evidence_ids") or ()
-            ),
+            supporting_evidence_ids=tuple(payload.get("supporting_evidence_ids") or ()),
+            refuting_evidence_ids=tuple(payload.get("refuting_evidence_ids") or ()),
             status=HypothesisState(str(payload["status"])),
             discriminator=payload.get("discriminator"),
         )
@@ -175,7 +167,9 @@ def _hypothesis_from_payload(payload: object) -> DiagnosticHypothesis:
     return recreated
 
 
-def recorded_hypotheses(steps: tuple[WorkStep, ...]) -> tuple[DiagnosticHypothesis, ...]:
+def recorded_hypotheses(
+    steps: tuple[WorkStep, ...],
+) -> tuple[DiagnosticHypothesis, ...]:
     output: list[DiagnosticHypothesis] = []
     for step in steps:
         if step.kind != "diag_record_hypothesis" or step.state.value != "completed":
@@ -245,9 +239,7 @@ def suspicious_location_scores(
             lines = {
                 int(item)
                 for item in raw_lines
-                if isinstance(item, int)
-                and not isinstance(item, bool)
-                and item > 0
+                if isinstance(item, int) and not isinstance(item, bool) and item > 0
             }
             if lines:
                 sample[path] = lines
@@ -271,9 +263,7 @@ def suspicious_location_scores(
     for path, line in sorted(all_locations):
         fail_covered = sum(line in sample.get(path, set()) for sample in failing)
         pass_covered = sum(line in sample.get(path, set()) for sample in passing)
-        denominator = math.sqrt(
-            total_failed * (fail_covered + pass_covered)
-        )
+        denominator = math.sqrt(total_failed * (fail_covered + pass_covered))
         score = 0.0 if denominator == 0 else fail_covered / denominator
         scored.append(
             (
