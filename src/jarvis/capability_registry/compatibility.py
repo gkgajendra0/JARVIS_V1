@@ -196,7 +196,7 @@ class CapabilityCompatibilityEvaluator:
                     for record_path in records:
                         payload = json.loads(record_path.read_text(encoding="utf-8"))
                         if not isinstance(payload, dict):
-                            raise ValueError(
+                            raise TypeError(
                                 "artifact admission metadata is not an object"
                             )
                         provenance_id = (
@@ -206,6 +206,7 @@ class CapabilityCompatibilityEvaluator:
                             observed.add(provenance_id)
                 except (
                     OSError,
+                    TypeError,
                     ValueError,
                     json.JSONDecodeError,
                     ArtifactStoreError,
@@ -252,11 +253,13 @@ class CapabilityCompatibilityEvaluator:
         provider_descriptor_digest: str | None = None
         provider = None
         if manifest is not None:
-            if manifest.manifest.platform_constraints:
-                if not set(manifest.manifest.platform_constraints).intersection(
+            if (
+                manifest.manifest.platform_constraints
+                and not set(manifest.manifest.platform_constraints).intersection(
                     self.platform_tags
-                ):
-                    reasons.add(CompatibilityReason.PLATFORM_UNSUPPORTED)
+                )
+            ):
+                reasons.add(CompatibilityReason.PLATFORM_UNSUPPORTED)
             provider = self.provider_registry.get(
                 descriptor.capability_id,
                 manifest.manifest.executor_id,
