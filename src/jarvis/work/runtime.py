@@ -90,7 +90,10 @@ from jarvis.model_routing.router import (
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.model_routing.strategy import EngineeringStageStrategy
 from jarvis.promotion.release import DeploymentMetadataStore
-from jarvis.promotion.runtime_composition import PromotionRuntime, PromotionRuntimeConfig
+from jarvis.promotion.runtime_composition import (
+    PromotionRuntime,
+    PromotionRuntimeConfig,
+)
 from jarvis.promotion.store import PromotionStore
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
@@ -464,9 +467,7 @@ def build_work_runtime(
     promotion_runtime = None
     if promotion_runtime_config is not None:
         if capability_deployment_metadata is None:
-            raise ValueError(
-                "live promotion requires canonical deployment metadata"
-            )
+            raise ValueError("live promotion requires canonical deployment metadata")
         promotion_runtime = PromotionRuntime(
             change_store,
             workspace_manager,
