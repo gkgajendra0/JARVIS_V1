@@ -335,7 +335,9 @@ def test_registry_survives_store_restart(tmp_path) -> None:
 
     restarted = CapabilityRegistryStore(path, clock=_clock)
 
-    assert restarted.get_package(package.package_id, package.package_version) is not None
+    assert (
+        restarted.get_package(package.package_id, package.package_version) is not None
+    )
     assert restarted.require_registry(package.capability_id).generation == 2
     assert len(restarted.list_events(package.capability_id)) == 2
 
