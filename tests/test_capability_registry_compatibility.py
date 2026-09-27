@@ -46,11 +46,20 @@ from jarvis.engineering_substrate.manifest import (
     TrustedExecutorRegistration,
 )
 from jarvis.promotion.release import ReleaseError, ReleaseRecord
+from jarvis.self_model.health import HealthObservation
 
 CURRENT_SHA = "a" * 40
 OLD_SHA = "b" * 40
 PROMOTION_DIGEST = "c" * 64
 CONFIG_DIGEST = "d" * 64
+
+
+class FakeHealthProbe:
+    def __init__(self, probe_id: str) -> None:
+        self.probe_id = probe_id
+
+    def observe(self, *, component_id: str) -> HealthObservation:
+        raise AssertionError("Phase-8 compatibility must not execute health probes")
 
 
 class FakeExecutor:
@@ -178,7 +187,9 @@ def _provider_registry(
                 executor=FakeExecutor(descriptor),
                 release_sha=release_sha,
                 supported_runtime_api_versions=runtime_versions,
-                health_probe_ids=health_probe_ids,
+                health_probes=tuple(
+                    FakeHealthProbe(probe_id) for probe_id in health_probe_ids
+                ),
             ),
         )
     )
