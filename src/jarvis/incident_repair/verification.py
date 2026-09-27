@@ -116,7 +116,9 @@ def _test_target_covers(required: str, executed: str) -> bool:
     return _scope_covers(required_path, executed_path)
 
 
-def _completed_steps(steps: tuple[WorkStep, ...], kind: str) -> list[tuple[int, WorkStep]]:
+def _completed_steps(
+    steps: tuple[WorkStep, ...], kind: str
+) -> list[tuple[int, WorkStep]]:
     return [
         (index, step)
         for index, step in enumerate(steps)
@@ -242,9 +244,9 @@ class SourceRepairCandidateVerifier:
                 "canonical WorkItem result differs from committed Git state",
             )
 
-        source_revision = str(
-            architecture.payload.get("source_revision") or ""
-        ).strip().lower()
+        source_revision = (
+            str(architecture.payload.get("source_revision") or "").strip().lower()
+        )
         if not source_revision:
             raise SourceRepairCandidateError(
                 "source_revision_missing",
@@ -354,13 +356,14 @@ class SourceRepairCandidateVerifier:
         covered: set[str] = set()
         for _, step in passing:
             raw_targets = step.input_data.get("targets")
-            targets = ["tests"] if raw_targets is None or raw_targets == () else raw_targets
+            targets = (
+                ["tests"] if raw_targets is None or raw_targets == () else raw_targets
+            )
             if not isinstance(targets, list | tuple):
                 continue
             for required in verification_targets:
                 if any(
-                    _test_target_covers(required, str(executed))
-                    for executed in targets
+                    _test_target_covers(required, str(executed)) for executed in targets
                 ):
                     covered.add(required)
         missing = tuple(
@@ -460,9 +463,7 @@ class SourceRepairCandidateVerifier:
         return allowed
 
     def verify_and_persist(self, change_id: str) -> CandidateVerification:
-        change, stage, work, architecture = self._require_phase6_development(
-            change_id
-        )
+        change, stage, work, architecture = self._require_phase6_development(change_id)
         del change, stage
         git = self._git_evidence(work, architecture)
         protected = self._protected.assess(git.changed_paths)
