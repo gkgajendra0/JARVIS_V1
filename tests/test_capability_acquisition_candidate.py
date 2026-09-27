@@ -37,7 +37,9 @@ from jarvis.capability_acquisition.models import (
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.resolver import CapabilityAcquisitionResolver
-from jarvis.capability_acquisition.runtime_context import StaticAcquisitionContextProvider
+from jarvis.capability_acquisition.runtime_context import (
+    StaticAcquisitionContextProvider,
+)
 from jarvis.capability_acquisition.source import (
     AcquisitionContextV1,
     CapabilitySourceRegistry,
@@ -602,7 +604,4 @@ async def test_valid_phase9_candidate_binds_git_substrate_package_and_acceptance
         acceptance.artifact_id,
     )
     assert gate.artifact_digest == acceptance.digest
-    assert (
-        change_store.require(change_id).state
-        is ChangeState.WAITING_OWNER_ACCEPTANCE
-    )
+    assert change_store.require(change_id).state is ChangeState.WAITING_OWNER_ACCEPTANCE
