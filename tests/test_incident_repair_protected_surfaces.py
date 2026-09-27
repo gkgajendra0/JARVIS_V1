@@ -54,6 +54,14 @@ def test_ordinary_source_and_test_paths_are_clear() -> None:
             "src/jarvis/capability_registry/contracts.py",
             "capability_lifecycle_governance",
         ),
+        (
+            "src/jarvis/capability_acquisition/models.py",
+            "capability_acquisition_governance",
+        ),
+        (
+            "src/jarvis/incident_repair/protected_surfaces.py",
+            "protected_surface_policy",
+        ),
         ("src/jarvis/dev_supervisor.py", "production_deployment_boundary"),
         ("src/jarvis/runtime_supervisor.py", "production_deployment_boundary"),
         (
@@ -73,6 +81,10 @@ def test_ordinary_source_and_test_paths_are_clear() -> None:
         ("tests/test_phase7_promotion_domain.py", "protected_boundary_verifier"),
         (
             "tests/test_capability_registry_contracts.py",
+            "protected_boundary_verifier",
+        ),
+        (
+            "tests/test_capability_acquisition_contracts.py",
             "protected_boundary_verifier",
         ),
     ],
@@ -102,3 +114,7 @@ def test_unclassified_repository_surface_fails_closed() -> None:
 def test_protected_surface_policy_rejects_non_relative_paths(path: str) -> None:
     with pytest.raises(ProtectedSurfacePolicyError):
         RepairProtectedSurfacePolicy().assess((path,))
+
+
+def test_phase9_protected_surface_policy_is_version_5() -> None:
+    assert RepairProtectedSurfacePolicy.policy_version == 5
