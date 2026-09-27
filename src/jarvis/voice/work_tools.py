@@ -6,8 +6,8 @@ import asyncio
 
 from livekit.agents import RunContext, function_tool
 
-from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
+from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.engineering_change.models import ChangeConflict
 from jarvis.engineering_change.service import ChangeService
 from jarvis.work.estimates import estimate_work
