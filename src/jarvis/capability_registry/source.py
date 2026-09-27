@@ -67,7 +67,9 @@ class ReleaseCapabilityPackageSource:
                 "active release failed Phase-7 identity verification"
             ) from exc
         if active is None:
-            raise CapabilityPackageSourceError("no verified active release is available")
+            raise CapabilityPackageSourceError(
+                "no verified active release is available"
+            )
         return cls(active)
 
     def packages(self) -> tuple[SourcedCapabilityPackage, ...]:
