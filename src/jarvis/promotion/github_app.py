@@ -112,7 +112,9 @@ class BrokeredGitHubAppClient:
 
     def _helper_path(self) -> pathlib.Path:
         root = pathlib.Path(self._release_identity.release_root).resolve()
-        helper = (root / "src" / "jarvis" / "promotion" / "github_app_helper.py").resolve()
+        helper = (
+            root / "src" / "jarvis" / "promotion" / "github_app_helper.py"
+        ).resolve()
         try:
             helper.relative_to(root)
         except ValueError as exc:
