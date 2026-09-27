@@ -33,9 +33,9 @@ from jarvis.capabilities.models import (
 from jarvis.capability_registry.admission import CapabilityPackageAdmissionService
 from jarvis.capability_registry.authority import (
     CapabilityLifecycleAction,
-    CapabilityLifecycleAuthorizationError,
     CapabilityLifecycleAuthorityBridge,
     CapabilityLifecycleAuthoritySource,
+    CapabilityLifecycleAuthorizationError,
 )
 from jarvis.capability_registry.compatibility import CapabilityCompatibilityEvaluator
 from jarvis.capability_registry.contracts import (
