@@ -523,11 +523,11 @@ Phase 6 intentionally ends at an owner-reviewable candidate and does not grant p
 
 ### Phase 7 — governed promotion, production verification and rollback
 
-**STATUS: IMPLEMENTATION IN PROGRESS / OWNER ACCEPTANCE PENDING**
+**STATUS: DONE / OWNER-MACHINE ACCEPTED 2026-09-27**
 
 Connect accepted candidates to exact PR/CI evidence, explicit digest-bound owner promotion, one-shot Authority execution, protected-main merge verification, immutable Windows release slots, production observation and deterministic rollback.
 
-Research/architecture was owner-approved on 2026-09-27 and implementation is proceeding in isolation. Autonomous protected-main promotion remains disabled until complete Phase-7 acceptance; implementation code existing on a branch does not itself grant promotion authority.
+Research/architecture was owner-approved on 2026-09-27. The accepted implementation head `19beb542295fa4e3ab23407564847a82d8621258` passed exact-head CI, Windows Phase-7 regression/acceptance coverage and the real owner-machine 14-case replay, then PR #150 was explicitly owner-approved and squash-merged to protected `main` as `d2c7dc360386dab22bff6406d405b298601bff81`. Canonical evidence is recorded in `PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`. Acceptance does not delegate owner promotion authority.
 
 ### Phase 8 — capability package and registry lifecycle
 
@@ -711,10 +711,10 @@ Rules:
 4. Phase 4 Research + Diagnostic Model Router is complete and owner-machine accepted on 2026-09-26; preserve its routing/health/fallback boundary.
 5. Phase 5 Secure Autonomous Engineering Substrate is complete and owner-machine accepted on 2026-09-27.
 6. Phase 6 Unknown-Incident Investigation + Source Repair is complete and owner-machine accepted on 2026-09-27; preserve its exact diagnosis/architecture/candidate provenance and protected-surface boundaries.
-7. Begin Phase 7 Governed Promotion / Production Verification / Rollback with research and architecture only; implementation requires explicit owner architecture approval.
-8. Continue later Phases 8–10 as the governed engineering effectors required by the larger self-management goal.
+7. Phase 7 Governed Promotion / Production Verification / Rollback is complete and owner-machine accepted on 2026-09-27; preserve exact evidence binding, owner/Authority separation, release identity and rollback-safety boundaries.
+8. Begin Phase 8 Capability Package + Registry Lifecycle with repository inspection, technology research and architecture only; implementation requires explicit owner architecture approval.
 9. Insert Phase 10A Autonomous Operations Control Plane before Phase 11, as defined by `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
-10. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2, Phase 3, Phase 4, Phase 5 or Phase 6 without new concrete evidence.
+10. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6 or Phase 7 without new concrete evidence.
 11. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
 12. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.
 
