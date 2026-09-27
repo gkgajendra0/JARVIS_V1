@@ -831,9 +831,7 @@ def test_retirement_store_rejects_stale_authorized_generation(tmp_path) -> None:
     env = _environment(tmp_path, versions=("1.0.0", "2.0.0"))
     _select(env, "2.0.0", 1)
     _enable(env, 2)
-    approved_generation = env["store"].require_registry(
-        "example.capability"
-    ).generation
+    approved_generation = env["store"].require_registry("example.capability").generation
 
     env["lifecycle"].disable(
         "example.capability",
