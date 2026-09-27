@@ -138,9 +138,7 @@ class PromotionSessionService:
             attempt=attempt,
             session_id=self._session.session_id,
             source_turn_id=turn.turn_id,
-            request_key=(
-                f"phase7-promotion:{self._session.session_id}:{turn.turn_id}"
-            ),
+            request_key=(f"phase7-promotion:{self._session.session_id}:{turn.turn_id}"),
             repository_full_name=self._repository,
         )
         merge = self._merger.execute(
