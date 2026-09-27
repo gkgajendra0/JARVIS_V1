@@ -91,9 +91,7 @@ class PromotionCandidateVerifier:
                 "acceptance_candidate_mismatch",
                 "acceptance does not bind the current candidate artifact",
             )
-        if (
-            acceptance.payload.get("candidate_artifact_digest") != artifact.digest
-        ):
+        if acceptance.payload.get("candidate_artifact_digest") != artifact.digest:
             raise PromotionCandidateError(
                 "acceptance_candidate_mismatch",
                 "acceptance does not bind the current candidate artifact digest",
