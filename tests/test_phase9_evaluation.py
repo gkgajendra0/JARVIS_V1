@@ -43,7 +43,7 @@ def _real_payload(commit: str) -> dict[str, object]:
         package_version="1.0.0",
         package_digest="5" * 64,
         promotion_attempt_id="promotion_phase9",
-        active_release_sha="6" * 40,
+        active_release_sha=commit,
         lifecycle_evidence_ref="lifecycle:event:1",
         operation="power",
         target="living-room-tv",
@@ -111,6 +111,19 @@ def test_real_capability_evidence_rejects_wrong_tested_commit() -> None:
 
     with pytest.raises(RealCapabilityEvidenceError, match="tested commit"):
         validate_real_capability_evidence(payload, tested_commit="b" * 40)
+
+
+def test_real_capability_evidence_rejects_different_active_release() -> None:
+    commit = "a" * 40
+    payload = _real_payload(commit)
+    payload["active_release_sha"] = "b" * 40
+    body = {key: value for key, value in payload.items() if key != "evidence_digest"}
+    from jarvis.engineering_substrate.canonical import canonical_digest
+
+    payload["evidence_digest"] = canonical_digest(body)
+
+    with pytest.raises(RealCapabilityEvidenceError, match="active release differs"):
+        validate_real_capability_evidence(payload, tested_commit=commit)
 
 
 def test_real_capability_evidence_cannot_self_approve_effect() -> None:
