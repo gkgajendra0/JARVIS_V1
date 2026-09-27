@@ -98,6 +98,18 @@ class GateService:
         current = self.store.latest_artifact(change_id, kind.value)
         if current is None or current.artifact_id != artifact_id:
             raise ChangeConflict("gate artifact was superseded")
+        if kind is GateKind.ARCHITECTURE:
+            change = self.store.require(change_id)
+            if change.process_key == "unknown_incident_repair":
+                from jarvis.incident_repair.architecture import (
+                    ensure_incident_repair_architecture_current,
+                )
+
+                ensure_incident_repair_architecture_current(
+                    self.store,
+                    change_id,
+                    artifact_id=artifact_id,
+                )
         if kind is GateKind.ACCEPTANCE:
             stage = self.store.stage_for_work(str(artifact.payload.get("work_id", "")))
             if (
