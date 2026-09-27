@@ -55,9 +55,7 @@ _EXPECTED_CASES = [
 def test_phase8_replay_suite_covers_complete_approved_matrix(tmp_path) -> None:
     report = run_replay_suite(tmp_path / "phase8-replay")
 
-    failures = {
-        item.case_id: item.evidence for item in report.cases if not item.passed
-    }
+    failures = {item.case_id: item.evidence for item in report.cases if not item.passed}
     assert failures == {}
     assert report.status == "PASS"
     assert [item.case_id for item in report.cases] == _EXPECTED_CASES
