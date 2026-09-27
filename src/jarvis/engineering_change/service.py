@@ -254,15 +254,18 @@ class ChangeService:
         }:
             raise ChangeConflict("change is not ready for promotion review")
         promotion = store.latest_artifact(change_id, "promotion")
-        if (
-            promotion is None
-            or promotion.payload.get("schema_version") != 1
-            or not promotion.payload.get("evidence_id")
-            or promotion.payload.get("digest") != promotion.digest
-        ):
+        if promotion is None:
             raise ChangeConflict(
                 "exact Phase-7 promotion evidence must be prepared before owner review"
             )
+        from jarvis.promotion.models import PromotionEvidenceV1
+
+        try:
+            evidence = PromotionEvidenceV1.from_payload(promotion.payload)
+        except ValueError as exc:
+            raise ChangeConflict(
+                "exact Phase-7 promotion evidence is invalid"
+            ) from exc
         candidate = store.latest_artifact(change_id, "source_repair_candidate")
         work_id = (
             str(candidate.payload.get("development_work_id") or "")
@@ -282,10 +285,10 @@ class ChangeService:
             kind=WorkDeliveryKind.OWNER_INPUT,
             message=(
                 f"Review EngineeringChange {change_id} exact Phase-7 promotion "
-                f"evidence for PR #{promotion.payload.get('pr_number')}, candidate "
-                f"{promotion.payload.get('candidate_head_sha')}, tested merge "
-                f"{promotion.payload.get('tested_merge_sha')}. Evidence SHA-256: "
-                f"{promotion.payload.get('digest')}. Approval must execute through "
+                f"evidence for PR #{evidence.pr_number}, candidate "
+                f"{evidence.candidate_head_sha}, tested merge "
+                f"{evidence.tested_merge_sha}. Evidence SHA-256: "
+                f"{evidence.digest}. Approval must execute through "
                 f"the governed PromotionAuthorityBridge; this gate alone is not an "
                 f"execution permit. Say 'approve promotion' for a single pending "
                 f"promotion, or 'approve {gate.gate_id}'."
