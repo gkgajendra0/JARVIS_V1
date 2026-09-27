@@ -219,7 +219,6 @@ def test_release_identity_rejects_incomplete_or_wrong_digest(monkeypatch) -> Non
         raise AssertionError("incomplete release identity was accepted")
 
 
-
 def test_external_provider_failure_does_not_rollback_and_healthy_window_closes(
     tmp_path: Path,
 ) -> None:
@@ -367,7 +366,6 @@ def test_external_failure_cannot_request_automatic_rollback(tmp_path: Path) -> N
         assert "candidate-local" in str(exc)
     else:
         raise AssertionError("external provider failure triggered code rollback")
-
 
 
 def test_deployment_resume_from_staged_boundary_is_idempotent(tmp_path: Path) -> None:
