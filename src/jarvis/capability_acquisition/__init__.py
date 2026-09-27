@@ -53,6 +53,14 @@ from .standard_sources import (
     owner_configured_evidence,
     sdk_library_evidence,
 )
+from .verification import (
+    CapabilityAcquisitionDevelopmentCompletionHandler,
+    CapabilityCandidateError,
+    CapabilityCandidateEvidenceV1,
+    CapabilityCandidateVerification,
+    CapabilityCandidateVerifier,
+    ensure_capability_candidate_acceptance_current,
+)
 from .workflow import (
     AcquisitionProtocolError,
     AcquisitionWorkContextResolver,
@@ -80,6 +88,11 @@ __all__ = [
     "CapabilityAcquisitionArchitectureError",
     "CapabilityAcquisitionCoordinator",
     "CapabilityAcquisitionDevelopmentRevisionResolver",
+    "CapabilityAcquisitionDevelopmentCompletionHandler",
+    "CapabilityCandidateError",
+    "CapabilityCandidateEvidenceV1",
+    "CapabilityCandidateVerification",
+    "CapabilityCandidateVerifier",
     "CapabilityAcquisitionPlanV1",
     "CapabilityAcquisitionResolver",
     "CapabilityAcquisitionSourceCompletionHandler",
@@ -100,6 +113,7 @@ __all__ = [
     "asyncapi_contract_evidence",
     "build_acquisition_protocol_executors",
     "ensure_capability_acquisition_architecture_current",
+    "ensure_capability_candidate_acceptance_current",
     "mcp_server_evidence",
     "openapi_contract_evidence",
     "owner_configured_evidence",
