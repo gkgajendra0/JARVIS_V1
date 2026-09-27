@@ -8,12 +8,11 @@ owner-machine acceptance harness.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import pathlib
 import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from jarvis.engineering_change import ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
@@ -713,7 +712,7 @@ def _case_provider_pressure() -> dict[str, object]:
 
 def _case_restart_diagnostics(root: pathlib.Path) -> dict[str, object]:
     repository_root, revision = _new_repo(root)
-    work, changes, _, _, _, _, admitted = _admit(root, repository_root, revision)
+    work, _, _, _, _, _, admitted = _admit(root, repository_root, revision)
     work.add_step(
         _completed_step(
             admitted.diagnostics_work_id,
