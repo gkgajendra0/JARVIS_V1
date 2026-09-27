@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from threading import Event, RLock, Thread
-from typing import Callable
-
 from jarvis.capability_registry.compatibility import (
     CapabilityCompatibilityEvaluator,
     CompatibilityVerdict,
@@ -34,6 +34,9 @@ from jarvis.self_model.health import (
     HealthSnapshot,
     HealthState,
 )
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class ReconciliationTrigger(str, Enum):
@@ -391,6 +394,7 @@ class PeriodicCapabilityReconciler:
             try:
                 self.run_once()
             except Exception:  # noqa: BLE001 - reconciler already failed routing closed
+                _LOGGER.exception("periodic capability reconciliation failed")
                 continue
 
     def stop(self, *, timeout_seconds: float = 5.0) -> None:
