@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from typing import Protocol
 
 from jarvis.ai_provider import configured_ai_provider
@@ -98,6 +99,7 @@ class CapabilityRuntime:
         hands_planner=None,
         result_observer: CapabilityResultObserver | None = None,
         catalog_projection: CapabilityCatalogProjection | None = None,
+        close_callbacks: tuple[Callable[[], None], ...] = (),
     ) -> None:
         self._executors = {executor.capability_key: executor for executor in executors}
         if len(self._executors) != len(executors):
@@ -114,6 +116,9 @@ class CapabilityRuntime:
         self._hands_planner = hands_planner
         self._result_observer = result_observer
         self._catalog_projection = catalog_projection
+        self._close_callbacks = tuple(close_callbacks)
+        if any(not callable(callback) for callback in self._close_callbacks):
+            raise TypeError("close_callbacks must contain callable values")
         self._catalog: CapabilityCatalog | None = None
 
     def _routing_allowed(self, capability_key: str) -> bool:
@@ -333,6 +338,11 @@ class CapabilityRuntime:
 
     def close(self) -> None:
         try:
+            for callback in self._close_callbacks:
+                try:
+                    callback()
+                except Exception:  # noqa: BLE001,S110 - shutdown must continue
+                    pass
             for executor in self._executors.values():
                 close = getattr(executor, "close", None)
                 if not callable(close):
@@ -361,6 +371,7 @@ def build_default_capability_runtime(
     result_observer: CapabilityResultObserver | None = None,
     extra_executors: tuple[CapabilityExecutor, ...] = (),
     catalog_projection: CapabilityCatalogProjection | None = None,
+    close_callbacks: tuple[Callable[[], None], ...] = (),
 ) -> CapabilityRuntime:
     project = LocalProjectReadExecutor()
     system = SystemReadExecutor()
@@ -438,4 +449,5 @@ def build_default_capability_runtime(
         hands_planner=hands_planner,
         result_observer=result_observer,
         catalog_projection=catalog_projection,
+        close_callbacks=close_callbacks,
     )
