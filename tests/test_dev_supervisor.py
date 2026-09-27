@@ -472,7 +472,13 @@ class FakeControl:
     def child_stopped(self) -> None:
         self.child_stopped_calls += 1
 
-    def wait_for_child_ready(self, *, timeout_seconds: float) -> None:
+    def wait_for_child_ready(
+        self,
+        *,
+        timeout_seconds: float,
+        expected_release=None,
+    ) -> None:
+        del expected_release
         assert timeout_seconds > 0
         self.readiness_calls += 1
         outcome = self.readiness_outcomes.pop(0)

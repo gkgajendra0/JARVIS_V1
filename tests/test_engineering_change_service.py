@@ -235,20 +235,16 @@ def test_verified_commit_requires_separate_owner_acceptance(tmp_path) -> None:
     accepted = service.decide_latest(acceptance.gate_id)
     assert service.decide_latest(acceptance.gate_id) == accepted
     assert store.require(change.change_id).state is ChangeState.READY_FOR_PROMOTION
-    promotion = service.prepare_promotion(change.change_id)
-    retry = service.prepare_promotion(change.change_id)
-    assert retry == promotion
-    session.accept_turn(ConversationRole.USER, "yes")
-    with pytest.raises(ChangeConflict):
-        service.decide_latest(promotion.gate_id)
-    session.accept_turn(ConversationRole.USER, "Approve promotion")
-    service.decide_latest(promotion.gate_id)
-    assert (
-        store.require(change.change_id).state is ChangeState.WAITING_PROMOTION_APPROVAL
-    )
+    with pytest.raises(
+        ChangeConflict,
+        match="exact Phase-7 promotion evidence must be prepared",
+    ):
+        service.prepare_promotion(change.change_id)
+    assert store.require(change.change_id).state is ChangeState.READY_FOR_PROMOTION
     report = inspect_change(store, change.change_id)
-    assert report["result"] == "PENDING"
-    assert set(report["store_gates"].values()) == {"PASS"}
+    assert report["result"] == "FAIL"
+    assert report["store_gates"]["current_promotion_intent_approved"] == "FAIL"
+    assert report["store_gates"]["no_automatic_promotion"] == "PASS"
 
 
 def test_revise_approved_architecture_reopens_gate_and_creates_fresh_build_attempt(

@@ -1,4 +1,4 @@
-"""Versioned protected-surface classification for Phase-6 source repair."""
+"""Versioned protected-surface classification for governed source repair."""
 
 from __future__ import annotations
 
@@ -43,16 +43,23 @@ class ProtectedSurfaceAssessment:
 
 
 class RepairProtectedSurfacePolicy:
-    """Deterministic v1 classifier; ambiguous repository surfaces fail closed."""
+    """Deterministic v2 classifier; ambiguous repository surfaces fail closed."""
 
     policy_id = "repair.protected_surfaces"
-    policy_version = 1
+    policy_version = 2
 
     _EXACT_PROTECTED: ClassVar[dict[str, str]] = {
         "pyproject.toml": "repository_build_and_dependency_policy",
         "policies/step3_authority.rego": "authority_policy",
         "src/jarvis/capabilities/authority_bridge.py": "authority_boundary",
         "src/jarvis/engineering_substrate/sandbox.py": "sandbox_policy",
+        "src/jarvis/dev_supervisor.py": "production_deployment_boundary",
+        "src/jarvis/runtime_supervisor.py": "production_deployment_boundary",
+        "src/jarvis/self_repair/windows_guardian.py": "production_deployment_boundary",
+        "src/jarvis/work/dbos_backend.py": "durable_workflow_boundary",
+        "src/jarvis/work/store.py": "durable_state_schema_boundary",
+        "src/jarvis/incidents/migration_runner.py": "durable_state_schema_boundary",
+        "src/jarvis/memory/migration_runner.py": "durable_state_schema_boundary",
         "tools/development-sandbox/dockerfile": "sandbox_policy",
     }
     _PREFIX_PROTECTED = (
@@ -60,6 +67,9 @@ class RepairProtectedSurfacePolicy:
         ("policies/", "authority_policy"),
         ("src/jarvis/authority/", "authority_boundary"),
         ("src/jarvis/engineering_change/", "engineering_governance"),
+        ("src/jarvis/promotion/", "promotion_and_deployment_governance"),
+        ("src/jarvis/incidents/migrations/", "durable_state_schema_boundary"),
+        ("src/jarvis/memory/migrations/", "durable_state_schema_boundary"),
         ("src/jarvis/engineering_substrate/secrets/", "secret_policy"),
     )
     _PROTECTED_TEST_PREFIXES = (
@@ -73,6 +83,8 @@ class RepairProtectedSurfacePolicy:
         "tests/test_engineering_substrate_secrets",
         "tests/test_phase5_acceptance",
         "tests/test_self_repair_phase5_acceptance",
+        "tests/test_phase7_",
+        "tests/test_promotion",
     )
     _KNOWN_CLEAR_PREFIXES = (
         "src/jarvis/",

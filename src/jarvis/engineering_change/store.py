@@ -347,6 +347,34 @@ class ChangeStore:
             ).fetchone()
         return None if row is None else self.get_artifact(row["artifact_id"])
 
+    def list_artifacts(
+        self,
+        change_id: str,
+        *,
+        kind: str | None = None,
+    ) -> tuple[ChangeArtifact, ...]:
+        """Return integrity-checked artifacts in revision order for durable replay."""
+        self.require(change_id)
+        with self.work._lock, self.work._connect() as db:
+            if kind is None:
+                rows = db.execute(
+                    """SELECT artifact_id FROM engineering_change_artifacts
+                    WHERE change_id=? ORDER BY kind, revision""",
+                    (change_id,),
+                ).fetchall()
+            else:
+                if not kind.strip():
+                    raise ChangeConflict("artifact kind must not be empty")
+                rows = db.execute(
+                    """SELECT artifact_id FROM engineering_change_artifacts
+                    WHERE change_id=? AND kind=? ORDER BY revision""",
+                    (change_id, kind),
+                ).fetchall()
+        artifacts = tuple(self.get_artifact(row["artifact_id"]) for row in rows)
+        if any(item is None for item in artifacts):
+            raise ChangeConflict("artifact disappeared during durable replay")
+        return tuple(item for item in artifacts if item is not None)
+
     def list_stages(self, change_id: str) -> tuple[ChangeStage, ...]:
         with self.work._lock, self.work._connect() as db:
             rows = db.execute(
@@ -455,6 +483,87 @@ class ChangeStore:
             is None
         ):
             raise ChangeConflict("current architecture has no owner approval")
+
+    def mark_promoted(
+        self,
+        change_id: str,
+        *,
+        artifact_id: str,
+        artifact_digest: str,
+        expected_version: int,
+    ) -> EngineeringChange:
+        """Enter PROMOTED only from the exact current approved promotion artifact."""
+        with self.work._lock, self.work._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM engineering_changes WHERE change_id=?",
+                (change_id,),
+            ).fetchone()
+            if row is None:
+                raise ChangeConflict("unknown change")
+            current = self._from_row(row)
+            if (
+                current.version != expected_version
+                or current.state is not ChangeState.WAITING_PROMOTION_APPROVAL
+            ):
+                raise ChangeConflict("change is not awaiting exact promotion")
+
+            latest = connection.execute(
+                """SELECT artifact_id, digest FROM engineering_change_artifacts
+                WHERE change_id=? AND kind='promotion'
+                ORDER BY revision DESC LIMIT 1""",
+                (change_id,),
+            ).fetchone()
+            if latest is None or (
+                latest["artifact_id"],
+                latest["digest"],
+            ) != (artifact_id, artifact_digest):
+                raise ChangeConflict(
+                    "promotion artifact is missing, stale, or mismatched"
+                )
+
+            approved = connection.execute(
+                """SELECT 1 FROM engineering_change_gates AS gate
+                JOIN engineering_change_decisions AS decision USING (gate_id)
+                WHERE gate.change_id=? AND gate.kind='promotion'
+                  AND gate.artifact_id=? AND gate.artifact_digest=?
+                  AND decision.approved=1""",
+                (change_id, artifact_id, artifact_digest),
+            ).fetchone()
+            if approved is None:
+                raise ChangeConflict("current promotion artifact has no owner approval")
+
+            timestamp = _now()
+            cursor = connection.execute(
+                """UPDATE engineering_changes
+                SET state=?, version=version+1, updated_at=?
+                WHERE change_id=? AND version=?""",
+                (
+                    ChangeState.PROMOTED.value,
+                    timestamp,
+                    change_id,
+                    expected_version,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ChangeConflict("stale promotion transition")
+            self._event(
+                connection,
+                change_id,
+                f"transition:{expected_version + 1}",
+                "transition",
+                {
+                    "from": current.state.value,
+                    "to": ChangeState.PROMOTED.value,
+                    "promotion_artifact_id": artifact_id,
+                    "promotion_artifact_digest": artifact_digest,
+                },
+            )
+            updated = connection.execute(
+                "SELECT * FROM engineering_changes WHERE change_id=?",
+                (change_id,),
+            ).fetchone()
+            assert updated is not None
+            return self._from_row(updated)
 
     def transition(
         self, change_id: str, state: ChangeState, *, expected_version: int

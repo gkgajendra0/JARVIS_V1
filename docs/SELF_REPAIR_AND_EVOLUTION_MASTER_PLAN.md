@@ -74,7 +74,7 @@ Phase 3   EngineeringChange Lifecycle / Mission Orchestration — DONE / OWNER-M
 Phase 4   Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 2026-09-26
 Phase 5   Secure Autonomous Engineering Substrate — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 6   Unknown-Incident Investigation + Source Repair — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
-Phase 7   Governed Promotion / Production Verification / Rollback — NEXT / RESEARCH + ARCHITECTURE REQUIRED
+Phase 7   Governed Promotion / Production Verification / Rollback — IMPLEMENTATION IN PROGRESS / OWNER ACCEPTANCE PENDING
 Phase 8   Capability Package + Registry Lifecycle
 Phase 9   Owner-Requested Capability Acquisition
 Phase 10  Closed-Loop Engineering Learning
@@ -91,7 +91,7 @@ Phase-4 implementation details are preserved in `PHASE4_MODEL_ROUTER_RESEARCH.md
 
 Phase 6 Unknown-Incident Investigation + Source Repair is owner-machine accepted on 2026-09-27. Its canonical evidence is recorded in `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`. The accepted path covers bounded exact-revision diagnostics, typed diagnosis, owner-gated repair architecture, isolated source-revision-pinned development, protected-surface fail-closed verification, exact candidate provenance, deterministic replay and Windows acceptance. It stops before protected-main promotion/deployment.
 
-Phase 7 Governed Promotion / Production Verification / Rollback is the next cross-cutting phase, but only its research and architecture work is authorized by sequence. Phase-7 implementation requires its own owner-approved architecture.
+Phase 7 Governed Promotion / Production Verification / Rollback has owner-approved research/architecture and implementation is in progress on an isolated draft PR. Protected-main promotion remains disabled until Phase-7 CI, Windows acceptance, exact owner-machine acceptance, and documentation reconciliation are complete.
 
 ---
 

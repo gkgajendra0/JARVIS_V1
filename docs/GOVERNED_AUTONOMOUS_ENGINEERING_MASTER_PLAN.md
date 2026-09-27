@@ -523,11 +523,11 @@ Phase 6 intentionally ends at an owner-reviewable candidate and does not grant p
 
 ### Phase 7 — governed promotion, production verification and rollback
 
-**STATUS: NEXT / RESEARCH + ARCHITECTURE REQUIRED**
+**STATUS: IMPLEMENTATION IN PROGRESS / OWNER ACCEPTANCE PENDING**
 
-Connect accepted candidates to PR/CI/protected-main governance and existing deployment/readiness/rollback boundaries.
+Connect accepted candidates to exact PR/CI evidence, explicit digest-bound owner promotion, one-shot Authority execution, protected-main merge verification, immutable Windows release slots, production observation and deterministic rollback.
 
-No automatic protected-main merge is implied. Phase-7 implementation must not begin until its research/architecture is completed and explicitly owner-approved.
+Research/architecture was owner-approved on 2026-09-27 and implementation is proceeding in isolation. Autonomous protected-main promotion remains disabled until complete Phase-7 acceptance; implementation code existing on a branch does not itself grant promotion authority.
 
 ### Phase 8 — capability package and registry lifecycle
 

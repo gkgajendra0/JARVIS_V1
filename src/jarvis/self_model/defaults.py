@@ -652,6 +652,22 @@ def build_default_self_model() -> SelfModelRegistry:
             logger_prefixes=("jarvis.engineering_change",),
         ),
         C(
+            "work.promotion",
+            "Governed protected-main promotion, exact production activation, "
+            "observation and rollback.",
+            ("src/jarvis/promotion",),
+            parent_component_id="work",
+            tests=(
+                "tests/test_phase7_promotion_domain.py",
+                "tests/test_phase7_github_evidence.py",
+            ),
+            logger_prefixes=("jarvis.promotion",),
+            docs=(
+                "docs/PHASE7_GOVERNED_PROMOTION_ARCHITECTURE.md",
+                "docs/PHASE7_GOVERNED_PROMOTION_IMPLEMENTATION_PLAN.md",
+            ),
+        ),
+        C(
             "work.incident_repair",
             "Phase-6 unknown-incident diagnosis and governed source-repair contracts.",
             ("src/jarvis/incident_repair",),

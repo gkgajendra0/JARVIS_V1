@@ -23,8 +23,22 @@ from jarvis.dev_control import (
     DEV_CONTROL_HOST_ENV,
     DEV_CONTROL_PORT_ENV,
     DEV_CONTROL_TOKEN_ENV,
+    RuntimeReleaseIdentity,
 )
+from jarvis.engineering_change.store import ChangeStore
+from jarvis.incident_repair.process import UNKNOWN_INCIDENT_REPAIR_PROCESS
 from jarvis.incidents import IncidentService, SqliteIncidentStore
+from jarvis.promotion.deployment import DeploymentCoordinator, DeploymentError
+from jarvis.promotion.models import PromotionAttemptState, PromotionEvidenceV1
+from jarvis.promotion.release import (
+    DeploymentMetadataStore,
+    GitReleaseStager,
+    RecoveryPhase,
+    default_deployment_root,
+    default_releases_root,
+    load_active_release_for_startup,
+)
+from jarvis.promotion.store import PromotionStore
 from jarvis.self_awareness import default_incident_store_path
 from jarvis.self_repair import RepairVerificationStatus
 from jarvis.self_repair.supervisor import (
@@ -36,6 +50,8 @@ from jarvis.self_repair.windows_job import (
     WindowsJobObjectError,
     WindowsRuntimeJob,
 )
+from jarvis.work.privacy import build_default_work_payload_codec
+from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
 _BRANCH_ENV = "JARVIS_DEV_BRANCH"
 
@@ -244,6 +260,7 @@ class VoiceControlServer:
         self._host, self._port = self._listener.getsockname()
         self._token = secrets.token_urlsafe(32)
         self._connection: socket.socket | None = None
+        self._child_release_identity: RuntimeReleaseIdentity | None = None
         self._receive_buffer = bytearray()
         self._request_sequence = 0
 
@@ -261,6 +278,7 @@ class VoiceControlServer:
     def _reset_child(self) -> None:
         connection = self._connection
         self._connection = None
+        self._child_release_identity = None
         self._receive_buffer.clear()
         if connection is not None:
             try:
@@ -308,12 +326,34 @@ class VoiceControlServer:
             hello = self._receive()
             if hello.get("type") != "hello" or hello.get("token") != self._token:
                 raise RuntimeError("JARVIS voice control authentication failed")
+            raw_identity = hello.get("release_identity")
+            if raw_identity is not None:
+                if not isinstance(raw_identity, dict):
+                    raise RuntimeError("JARVIS release identity is malformed")
+                try:
+                    self._child_release_identity = RuntimeReleaseIdentity(
+                        release_sha=str(raw_identity.get("release_sha", "")),
+                        release_root=str(raw_identity.get("release_root", "")),
+                        promotion_attempt_id=str(
+                            raw_identity.get("promotion_attempt_id", "")
+                        ),
+                        config_digest=str(raw_identity.get("config_digest", "")),
+                    )
+                except ValueError as exc:
+                    raise RuntimeError(
+                        f"JARVIS release identity is invalid: {exc}"
+                    ) from exc
         except Exception:
             self._reset_child()
             raise
 
-    def wait_for_child_ready(self, *, timeout_seconds: float) -> None:
-        """Require authenticated control plus explicit core-runtime readiness."""
+    def wait_for_child_ready(
+        self,
+        *,
+        timeout_seconds: float,
+        expected_release: RuntimeReleaseIdentity | None = None,
+    ) -> None:
+        """Require authenticated readiness and, when supplied, exact release identity."""
         deadline = time.monotonic() + timeout_seconds
         try:
             self._ensure_child(timeout_seconds=timeout_seconds)
@@ -338,6 +378,28 @@ class VoiceControlServer:
 
                 ready = response.get("ready")
                 if ready is True:
+                    if expected_release is not None:
+                        raw_identity = response.get("release_identity")
+                        if not isinstance(raw_identity, dict):
+                            raise RuntimeError(
+                                "runtime readiness omitted expected release identity"
+                            )
+                        observed = RuntimeReleaseIdentity(
+                            release_sha=str(raw_identity.get("release_sha", "")),
+                            release_root=str(raw_identity.get("release_root", "")),
+                            promotion_attempt_id=str(
+                                raw_identity.get("promotion_attempt_id", "")
+                            ),
+                            config_digest=str(raw_identity.get("config_digest", "")),
+                        )
+                        if observed != expected_release:
+                            raise RuntimeError(
+                                "runtime readiness release identity mismatch"
+                            )
+                        if self._child_release_identity != expected_release:
+                            raise RuntimeError(
+                                "runtime hello release identity mismatch"
+                            )
                     return
                 if ready is not False:
                     raise TypeError("invalid JARVIS readiness state")
@@ -465,9 +527,23 @@ def _find_repo_root() -> Path:
 def _start_jarvis(
     root: Path,
     control: VoiceControlServer,
+    *,
+    release_identity: RuntimeReleaseIdentity | None = None,
 ) -> subprocess.Popen[bytes]:
     child_env = os.environ.copy()
     child_env.update(control.child_environment())
+    if release_identity is not None:
+        if Path(release_identity.release_root).resolve() != root.resolve():
+            raise RuntimeError("release identity root does not match runtime root")
+        child_env.update(release_identity.environment())
+        source_root = str((root / "src").resolve())
+        existing_pythonpath = child_env.get("PYTHONPATH", "").strip()
+        child_env["PYTHONPATH"] = (
+            source_root
+            if not existing_pythonpath
+            else os.pathsep.join((source_root, existing_pythonpath))
+        )
+        child_env["PYTHONDONTWRITEBYTECODE"] = "1"
     kwargs: dict[str, object] = {"cwd": root, "env": child_env}
     if os.name == "nt":
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
@@ -484,6 +560,198 @@ def _start_jarvis(
         raise
     print(f"JARVIS started (pid={process.pid}).")
     return process
+
+
+def _runtime_revision(
+    repo: GitRepo,
+    root: Path,
+    release_identity: RuntimeReleaseIdentity | None,
+) -> str:
+    if release_identity is None:
+        return repo.local_sha()
+    if Path(release_identity.release_root).resolve() != root.resolve():
+        raise RuntimeError("release identity root does not match runtime root")
+    try:
+        observed = (
+            subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=15.0,
+            )
+            .stdout.strip()
+            .casefold()
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("release Git identity is unavailable") from exc
+    if observed != release_identity.release_sha:
+        raise RuntimeError("release runtime root no longer matches release SHA")
+    return observed
+
+
+class SupervisorReleaseRuntimeDriver:
+    """Parent-process runtime switcher used by governed Phase-7 deployment."""
+
+    def __init__(
+        self,
+        process: subprocess.Popen[bytes] | None,
+        control: VoiceControlServer,
+        config: DevSupervisorConfig,
+    ) -> None:
+        self._process: subprocess.Popen[bytes] | None = process
+        self._control = control
+        self._config = config
+
+    @property
+    def process(self) -> subprocess.Popen[bytes] | None:
+        return self._process
+
+    def stop_active(self, *, timeout_seconds: float) -> None:
+        process = self._process
+        if process is None:
+            return
+        _stop_jarvis(
+            process,
+            timeout_seconds=timeout_seconds,
+            control=self._control,
+        )
+        self._process = None
+
+    def start_release(self, identity: RuntimeReleaseIdentity) -> None:
+        if self._process is not None and self._process.poll() is None:
+            raise RuntimeError("a supervised JARVIS runtime is already active")
+        root = Path(identity.release_root).resolve()
+        self._process = _start_jarvis(
+            root,
+            self._control,
+            release_identity=identity,
+        )
+
+    def wait_ready(
+        self,
+        identity: RuntimeReleaseIdentity,
+        *,
+        timeout_seconds: float,
+    ) -> None:
+        process = self._process
+        if process is None or process.poll() is not None:
+            raise RuntimeError("release runtime is not active")
+        self._control.wait_for_child_ready(
+            timeout_seconds=timeout_seconds,
+            expected_release=identity,
+        )
+
+    def stop_candidate(self, *, timeout_seconds: float) -> None:
+        self.stop_active(timeout_seconds=timeout_seconds)
+
+    def ensure_release(
+        self,
+        identity: RuntimeReleaseIdentity,
+        *,
+        timeout_seconds: float,
+    ) -> None:
+        process = self._process
+        if process is None or process.poll() is not None:
+            self.start_release(identity)
+        self.wait_ready(identity, timeout_seconds=timeout_seconds)
+
+
+def _phase7_promotion_stores() -> tuple[ChangeStore, PromotionStore]:
+    store_path = default_work_store_path()
+    work = SQLiteWorkStore(
+        store_path,
+        payload_codec=build_default_work_payload_codec(store_path),
+    )
+    changes = ChangeStore(
+        work,
+        processes=(UNKNOWN_INCIDENT_REPAIR_PROCESS,),
+    )
+    return changes, PromotionStore(changes)
+
+
+def _resume_pending_phase7_deployment(
+    repository_root: Path,
+    process: subprocess.Popen[bytes] | None,
+    control: VoiceControlServer,
+    config: DevSupervisorConfig,
+) -> tuple[subprocess.Popen[bytes] | None, RuntimeReleaseIdentity | None, str | None]:
+    """Start or resume one durable parent-owned Phase-7 deployment handoff."""
+
+    metadata = DeploymentMetadataStore(default_deployment_root())
+    changes, promotions = _phase7_promotion_stores()
+    recovery = metadata.recovery()
+    driver = SupervisorReleaseRuntimeDriver(process, control, config)
+    coordinator = DeploymentCoordinator(
+        changes,
+        promotions,
+        stager=GitReleaseStager(repository_root, default_releases_root()),
+        metadata=metadata,
+        runtime=driver,
+        shutdown_timeout_seconds=config.shutdown_timeout_seconds,
+        startup_timeout_seconds=config.startup_timeout_seconds,
+    )
+
+    if recovery is not None:
+        if recovery.phase in {
+            RecoveryPhase.STARTUP_FAILED,
+            RecoveryPhase.ROLLBACK_STARTED,
+            RecoveryPhase.ROLLBACK_VERIFIED,
+        }:
+            return process, None, None
+        attempt = promotions.get(recovery.attempt_id)
+        if attempt is None or attempt.state is not PromotionAttemptState.DEPLOYING:
+            return process, None, None
+        try:
+            result = coordinator.resume(attempt)
+        except DeploymentError as exc:
+            active = metadata.active()
+            active_identity = None if active is None else active.runtime_identity()
+            return driver.process, active_identity, str(exc)
+        return driver.process, result.release.runtime_identity(), None
+
+    merged = promotions.list_by_states(
+        (PromotionAttemptState.MERGED,),
+        limit=2,
+    )
+    if not merged:
+        return process, None, None
+    if len(merged) != 1:
+        return (
+            process,
+            None,
+            "multiple merged promotion attempts require owner investigation",
+        )
+    attempt = merged[0]
+    if (
+        attempt.promotion_artifact_id is None
+        or attempt.promotion_artifact_digest is None
+    ):
+        return process, None, "merged promotion attempt has no exact evidence artifact"
+    artifact = changes.get_artifact(attempt.promotion_artifact_id)
+    if (
+        artifact is None
+        or artifact.kind != "promotion"
+        or artifact.digest != attempt.promotion_artifact_digest
+    ):
+        return process, None, "merged promotion evidence artifact is missing or stale"
+    try:
+        evidence = PromotionEvidenceV1.from_payload(artifact.payload)
+    except (TypeError, ValueError) as exc:
+        return process, None, f"merged promotion evidence is invalid: {exc}"
+    if evidence.attempt_id != attempt.attempt_id:
+        return process, None, "merged promotion evidence attempt identity mismatch"
+
+    try:
+        result = coordinator.deploy(
+            evidence=evidence,
+            attempt=attempt,
+        )
+    except DeploymentError as exc:
+        active = metadata.active()
+        active_identity = None if active is None else active.runtime_identity()
+        return driver.process, active_identity, str(exc)
+    return driver.process, result.release.runtime_identity(), None
 
 
 def _attach_windows_runtime_job(process: subprocess.Popen[bytes]) -> None:
@@ -702,6 +970,7 @@ def _recover_unexpected_exit(
     config: DevSupervisorConfig,
     repair: SupervisorRepairController,
     *,
+    release_identity: RuntimeReleaseIdentity | None = None,
     sleep_fn: Any = time.sleep,
     now_fn: Any = time.time,
     stabilization_verifier: Any = _verify_child_stabilization,
@@ -719,7 +988,7 @@ def _recover_unexpected_exit(
         timeout_seconds=config.shutdown_timeout_seconds,
         control=control,
     )
-    commit_sha = repo.local_sha()
+    commit_sha = _runtime_revision(repo, root, release_identity)
 
     while True:
         plan = repair.plan_unexpected_exit(
@@ -745,7 +1014,7 @@ def _recover_unexpected_exit(
         if wait_seconds > 0:
             sleep_fn(wait_seconds)
 
-        if repo.local_sha() != commit_sha:
+        if _runtime_revision(repo, root, release_identity) != commit_sha:
             print(
                 "Local revision changed while crash recovery was waiting; "
                 "automatic restart aborted rather than repairing a different revision."
@@ -754,11 +1023,18 @@ def _recover_unexpected_exit(
 
         attempt = repair.start_attempt(
             plan,
-            current_revision=repo.local_sha(),
+            current_revision=_runtime_revision(repo, root, release_identity),
             now_epoch=float(now_fn()),
         )
         try:
-            restarted = _start_jarvis(root, control)
+            if release_identity is None:
+                restarted = _start_jarvis(root, control)
+            else:
+                restarted = _start_jarvis(
+                    root,
+                    control,
+                    release_identity=release_identity,
+                )
         except (OSError, WindowsJobObjectError):
             repair.complete_attempt(
                 plan,
@@ -772,7 +1048,10 @@ def _recover_unexpected_exit(
             continue
 
         try:
-            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+            control.wait_for_child_ready(
+                timeout_seconds=config.startup_timeout_seconds,
+                expected_release=release_identity,
+            )
         except RuntimeError:
             _stop_jarvis(
                 restarted,
@@ -873,6 +1152,7 @@ def _recover_liveness_failure(
     config: DevSupervisorConfig,
     repair: SupervisorRepairController,
     *,
+    release_identity: RuntimeReleaseIdentity | None = None,
     sleep_fn: Any = time.sleep,
     now_fn: Any = time.time,
     stabilization_verifier: Any = _verify_child_stabilization,
@@ -904,7 +1184,7 @@ def _recover_liveness_failure(
         if wait_seconds > 0:
             sleep_fn(wait_seconds)
 
-        if repo.local_sha() != commit_sha:
+        if _runtime_revision(repo, root, release_identity) != commit_sha:
             print(
                 "Local revision changed while liveness recovery was waiting; "
                 "automatic restart aborted rather than repairing a different revision."
@@ -913,7 +1193,7 @@ def _recover_liveness_failure(
 
         attempt = repair.start_attempt(
             plan,
-            current_revision=repo.local_sha(),
+            current_revision=_runtime_revision(repo, root, release_identity),
             now_epoch=float(now_fn()),
         )
         _stop_jarvis(
@@ -922,7 +1202,14 @@ def _recover_liveness_failure(
             control=control,
         )
         try:
-            restarted = _start_jarvis(root, control)
+            if release_identity is None:
+                restarted = _start_jarvis(root, control)
+            else:
+                restarted = _start_jarvis(
+                    root,
+                    control,
+                    release_identity=release_identity,
+                )
         except (OSError, WindowsJobObjectError):
             repair.complete_attempt(
                 plan,
@@ -936,7 +1223,10 @@ def _recover_liveness_failure(
             continue
 
         try:
-            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+            control.wait_for_child_ready(
+                timeout_seconds=config.startup_timeout_seconds,
+                expected_release=release_identity,
+            )
         except RuntimeError:
             _stop_jarvis(
                 restarted,
@@ -1024,7 +1314,9 @@ def _apply_approved_update(
         print("Restarting the existing local JARVIS version.")
         process = _start_jarvis(root, control)
         try:
-            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+            control.wait_for_child_ready(
+                timeout_seconds=config.startup_timeout_seconds,
+            )
         except RuntimeError as ready_exc:
             _stop_jarvis(
                 process,
@@ -1061,7 +1353,9 @@ def _apply_approved_update(
         print(f"Rolled back JARVIS to {previous_sha[:10]}.")
         process = _start_jarvis(root, control)
         try:
-            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+            control.wait_for_child_ready(
+                timeout_seconds=config.startup_timeout_seconds,
+            )
         except RuntimeError as rollback_ready_exc:
             _stop_jarvis(
                 process,
@@ -1104,6 +1398,14 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
             "commit or stash them first"
         )
 
+    runtime_root = root
+    release_identity: RuntimeReleaseIdentity | None = None
+    if not config.git_updates_enabled:
+        active_release = load_active_release_for_startup()
+        if active_release is not None:
+            runtime_root = Path(active_release.release_root).resolve()
+            release_identity = active_release.runtime_identity()
+
     if config.git_updates_enabled:
         print("JARVIS development supervisor")
         print(
@@ -1114,10 +1416,35 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
     else:
         print("JARVIS production runtime supervisor")
         print("Git/network update polling is disabled; Self-Repair remains local-only.")
+        if release_identity is not None:
+            print(
+                "Starting durable active release "
+                f"{release_identity.release_sha[:10]} from {runtime_root}."
+            )
 
     control = VoiceControlServer()
     repair, repair_store = _build_supervisor_repair_controller(config)
-    process = _start_jarvis(root, control)
+    process: subprocess.Popen[bytes] | None = None
+    if not config.git_updates_enabled:
+        process, recovered_identity, deployment_error = (
+            _resume_pending_phase7_deployment(
+                root,
+                None,
+                control,
+                config,
+            )
+        )
+        if recovered_identity is not None:
+            release_identity = recovered_identity
+            runtime_root = Path(recovered_identity.release_root).resolve()
+        if deployment_error is not None:
+            print(f"Phase-7 deployment recovery: {deployment_error}")
+    if process is None:
+        process = _start_jarvis(
+            runtime_root,
+            control,
+            release_identity=release_identity,
+        )
     update_poller = (
         RemoteUpdatePoller(root, config) if config.git_updates_enabled else None
     )
@@ -1127,7 +1454,10 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
 
     try:
         try:
-            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+            control.wait_for_child_ready(
+                timeout_seconds=config.startup_timeout_seconds,
+                expected_release=release_identity,
+            )
         except RuntimeError as exc:
             print(f"Initial JARVIS startup readiness failed: {exc}")
             return _escalation_exit_code(config)
@@ -1150,11 +1480,12 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                     )
                 restarted = _recover_unexpected_exit(
                     repo,
-                    root,
+                    runtime_root,
                     process,
                     control,
                     config,
                     repair,
+                    release_identity=release_identity,
                 )
                 if restarted is None:
                     return _escalation_exit_code(
@@ -1167,6 +1498,36 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
             time.sleep(config.poll_seconds)
             if process.poll() is not None:
                 continue
+
+            if not config.git_updates_enabled:
+                resumed_process, resumed_identity, deployment_error = (
+                    _resume_pending_phase7_deployment(
+                        root,
+                        process,
+                        control,
+                        config,
+                    )
+                )
+                if resumed_identity is not None or deployment_error is not None:
+                    if resumed_process is None:
+                        print(
+                            "Phase-7 deployment handoff left no runnable JARVIS; "
+                            "failing closed."
+                        )
+                        return _escalation_exit_code(config)
+                    process = resumed_process
+                    if resumed_identity is not None:
+                        release_identity = resumed_identity
+                        runtime_root = Path(resumed_identity.release_root).resolve()
+                    if deployment_error is not None:
+                        print(f"Phase-7 deployment handoff: {deployment_error}")
+                    else:
+                        print(
+                            "Phase-7 deployment activated exact release "
+                            f"{release_identity.release_sha[:10]}."
+                        )
+                    liveness_failure_streak = 0
+                    continue
 
             liveness_failure_streak, restart_required = _liveness_restart_required(
                 control,
@@ -1184,11 +1545,12 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                     return _escalation_exit_code(config)
                 restarted = _recover_liveness_failure(
                     repo,
-                    root,
+                    runtime_root,
                     process,
                     control,
                     config,
                     repair,
+                    release_identity=release_identity,
                 )
                 if restarted is None:
                     return _escalation_exit_code(config)
