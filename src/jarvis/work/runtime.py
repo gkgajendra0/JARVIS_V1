@@ -7,6 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from jarvis.capabilities.models import CapabilityCatalog
+from jarvis.dev_control import RuntimeReleaseIdentity
 from jarvis.capability_acquisition.activation import (
     CapabilityAcquisitionLifecycleCoordinator,
 )
@@ -85,6 +86,7 @@ from jarvis.model_routing.router import (
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.model_routing.strategy import EngineeringStageStrategy
 from jarvis.promotion.models import PromotionAttemptState
+from jarvis.promotion.runtime import PromotionRuntimeConfig, PromotionRuntimeService
 from jarvis.promotion.release import DeploymentMetadataStore
 from jarvis.promotion.store import PromotionStore
 from jarvis.work.actions import ResearchWorkExecutor
@@ -151,6 +153,7 @@ class WorkRuntime:
         capability_acquisition: CapabilityAcquisitionCoordinator | None = None,
         capability_lifecycle: CapabilityAcquisitionLifecycleCoordinator | None = None,
         capability_release_bridge: CapabilityAcquisitionReleaseBridge | None = None,
+        promotion_runtime: PromotionRuntimeService | None = None,
     ) -> None:
         self.store = store
         self.engine = engine
@@ -164,6 +167,7 @@ class WorkRuntime:
         self.capability_acquisition = capability_acquisition
         self.capability_lifecycle = capability_lifecycle
         self.capability_release_bridge = capability_release_bridge
+        self.promotion_runtime = promotion_runtime
         self._closed = False
 
     def supports(self, work_type: WorkType) -> bool:
@@ -245,6 +249,8 @@ def build_work_runtime(
     capability_deployment_metadata: DeploymentMetadataStore | None = None,
     capability_package_admission: CapabilityPackageAdmissionService | None = None,
     capability_reconciler: CapabilityLifecycleReconciler | None = None,
+    promotion_release_identity: RuntimeReleaseIdentity | None = None,
+    promotion_runtime_config: PromotionRuntimeConfig | None = None,
 ) -> WorkRuntime:
     """Build one durable work runtime around the configured JARVIS brain provider."""
 
@@ -436,6 +442,24 @@ def build_work_runtime(
             "must be supplied together"
         )
 
+    promotion_runtime = None
+    if promotion_runtime_config is not None:
+        if promotion_release_identity is None:
+            raise ValueError(
+                "promotion runtime configuration requires active release identity"
+            )
+        if capability_deployment_metadata is None:
+            raise ValueError(
+                "promotion runtime configuration requires deployment metadata"
+            )
+        promotion_runtime = PromotionRuntimeService(
+            change_store,
+            workspace_manager=workspace_manager,
+            deployment_metadata=capability_deployment_metadata,
+            release_identity=promotion_release_identity,
+            config=promotion_runtime_config,
+        )
+
     capability_lifecycle = None
     capability_release_bridge = None
     if capability_lifecycle_service is not None:
@@ -486,4 +510,5 @@ def build_work_runtime(
         capability_acquisition=capability_acquisition,
         capability_lifecycle=capability_lifecycle,
         capability_release_bridge=capability_release_bridge,
+        promotion_runtime=promotion_runtime,
     )
