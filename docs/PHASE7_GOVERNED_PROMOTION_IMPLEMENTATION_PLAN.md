@@ -2,9 +2,9 @@
 
 ## Status
 
-**IMPLEMENTATION IN PROGRESS — OWNER ACCEPTANCE PENDING — 2026-09-27**
+**COMPLETE — OWNER-MACHINE ACCEPTED 2026-09-27**
 
-Implementation follows the owner-approved Phase-7 research and architecture. Slices 7A-7E are implemented on the isolated draft PR; 7F deterministic replay/Windows acceptance/documentation reconciliation is in validation. This status is not a production-activation claim.
+Implementation followed the owner-approved Phase-7 research and architecture. Slices 7A-7F are complete. Exact-head CI, Windows regression coverage, the deterministic 14-case replay and the real owner-machine acceptance all passed for implementation head `19beb542295fa4e3ab23407564847a82d8621258`. PR #150 was explicitly owner-approved and squash-merged to protected `main` as `d2c7dc360386dab22bff6406d405b298601bff81`. Canonical final evidence is recorded in `PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`.
 
 ## Slices
 
@@ -64,6 +64,6 @@ Implementation follows the owner-approved Phase-7 research and architecture. Sli
 
 ## Merge/activation rule
 
-Phase-7 implementation PRs may be built and tested in isolation, but autonomous protected-main promotion must remain disabled until complete Phase-7 acceptance.
+Phase-7 implementation is accepted for its defined scope. Protected-main promotion still requires the exact owner/Authority boundary defined by the architecture; acceptance does not grant JARVIS ownership authority or permission to weaken repository governance.
 
 No implementation slice may weaken existing Authority, protected-main, sandbox, secret, dependency, provenance, verification, or owner-gate controls.
