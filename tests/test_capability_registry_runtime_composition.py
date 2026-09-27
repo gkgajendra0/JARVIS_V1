@@ -132,7 +132,9 @@ def _definition(*, release_sha: str = RELEASE_SHA) -> AcquiredCapabilityDefiniti
     )
 
 
-def _write_package(release: ReleaseRecord, definition: AcquiredCapabilityDefinition) -> None:
+def _write_package(
+    release: ReleaseRecord, definition: AcquiredCapabilityDefinition
+) -> None:
     manifest = definition.manifests[0]
     payload = {
         "schema_version": 1,
@@ -208,7 +210,10 @@ def test_package_managed_provider_is_disabled_until_lifecycle_enable(tmp_path) -
     runtime.refresh_catalog()
 
     assert enabled.desired_state is DesiredActivationState.ENABLED
-    assert runtime.capability_for_operation(OPERATION) == definition.provider.descriptor.key
+    assert (
+        runtime.capability_for_operation(OPERATION)
+        == definition.provider.descriptor.key
+    )
     runtime.close()
 
 
