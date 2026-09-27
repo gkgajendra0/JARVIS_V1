@@ -82,6 +82,13 @@ from jarvis.capability_registry.retention import (
     CapabilityArtifactRetentionError,
     CapabilityArtifactRetentionPlanner,
 )
+from jarvis.capability_registry.runtime_composition import (
+    AcquiredCapabilityCompositionError,
+    AcquiredCapabilityDefinition,
+    LazyCapabilityLifecycleAuthority,
+    PackageManagedRuntimeStack,
+    build_package_managed_runtime_stack,
+)
 from jarvis.capability_registry.schema import (
     capability_package_v1_json_schema,
     capability_package_v1_schema_digest,
@@ -112,6 +119,8 @@ __all__ = [
     "CAPABILITY_RUNTIME_API_ID",
     "CAPABILITY_RUNTIME_API_VERSION_V1",
     "PACKAGE_DIRECTORY_NAME",
+    "AcquiredCapabilityCompositionError",
+    "AcquiredCapabilityDefinition",
     "AdmittedCapabilityPackage",
     "AuthorizedCapabilityLifecycle",
     "CapabilityArtifactRetentionError",
@@ -164,8 +173,10 @@ __all__ = [
     "DesiredActivationState",
     "DuplicateCapabilityProviderError",
     "EffectiveCapabilityState",
+    "LazyCapabilityLifecycleAuthority",
     "PackageArtifactDescriptorV1",
     "PackageDisposition",
+    "PackageManagedRuntimeStack",
     "PackageVersionReuseConflict",
     "PeriodicCapabilityReconciler",
     "ReconciliationTrigger",
@@ -176,6 +187,7 @@ __all__ = [
     "UnknownCapabilityPackageError",
     "UnknownCapabilityProviderError",
     "UnknownManagedCapabilityError",
+    "build_package_managed_runtime_stack",
     "capability_package_v1_json_schema",
     "capability_package_v1_schema_digest",
     "current_platform_tags",

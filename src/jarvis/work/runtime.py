@@ -7,6 +7,9 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from jarvis.capabilities.models import CapabilityCatalog
+from jarvis.capability_acquisition.activation import (
+    CapabilityAcquisitionLifecycleCoordinator,
+)
 from jarvis.capability_acquisition.admission import CapabilityAcquisitionCoordinator
 from jarvis.capability_acquisition.architecture import (
     CapabilityAcquisitionDevelopmentRevisionResolver,
@@ -33,6 +36,7 @@ from jarvis.capability_acquisition.workflow import (
     acquisition_completion_guard,
     build_acquisition_protocol_executors,
 )
+from jarvis.capability_registry.lifecycle import CapabilityLifecycleService
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.incident_repair.architecture import (
@@ -77,6 +81,7 @@ from jarvis.model_routing.router import (
 )
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.model_routing.strategy import EngineeringStageStrategy
+from jarvis.promotion.release import DeploymentMetadataStore
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
 from jarvis.work.dbos_backend import (
@@ -139,6 +144,7 @@ class WorkRuntime:
         routing_store: ModelRoutingStore | None = None,
         model_router: ModelRouter | None = None,
         capability_acquisition: CapabilityAcquisitionCoordinator | None = None,
+        capability_lifecycle: CapabilityAcquisitionLifecycleCoordinator | None = None,
     ) -> None:
         self.store = store
         self.engine = engine
@@ -150,6 +156,7 @@ class WorkRuntime:
         self.routing_store = routing_store
         self.model_router = model_router
         self.capability_acquisition = capability_acquisition
+        self.capability_lifecycle = capability_lifecycle
         self._closed = False
 
     def supports(self, work_type: WorkType) -> bool:
@@ -226,6 +233,8 @@ def build_work_runtime(
     dbos_database_url: str | None = None,
     event_loop: asyncio.AbstractEventLoop | None = None,
     acquisition_context_provider: AcquisitionContextProvider | None = None,
+    capability_lifecycle_service: CapabilityLifecycleService | None = None,
+    capability_deployment_metadata: DeploymentMetadataStore | None = None,
 ) -> WorkRuntime:
     """Build one durable work runtime around the configured JARVIS brain provider."""
 
@@ -401,6 +410,21 @@ def build_work_runtime(
         changes=changes,
         context_provider=acquisition_context,
     )
+    if (capability_lifecycle_service is None) != (
+        capability_deployment_metadata is None
+    ):
+        raise ValueError(
+            "capability lifecycle service and deployment metadata must be supplied together"
+        )
+    capability_lifecycle = (
+        None
+        if capability_lifecycle_service is None
+        else CapabilityAcquisitionLifecycleCoordinator(
+            change_store,
+            capability_deployment_metadata,
+            capability_lifecycle_service,
+        )
+    )
     configure_terminal_reconciliation(changes.reconcile_for_work)
     changes.reconcile_active()
     return WorkRuntime(
@@ -414,4 +438,5 @@ def build_work_runtime(
         routing_store=routing_store,
         model_router=model_router,
         capability_acquisition=capability_acquisition,
+        capability_lifecycle=capability_lifecycle,
     )

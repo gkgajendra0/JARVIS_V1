@@ -1,5 +1,10 @@
 """Phase-9 owner-requested capability acquisition contracts."""
 
+from .activation import (
+    CapabilityAcquisitionLifecycleCoordinator,
+    CapabilityAcquisitionLifecycleError,
+    CapabilityAcquisitionLifecycleResult,
+)
 from .admission import (
     CapabilityAcquisitionAdmission,
     CapabilityAcquisitionAdmissionDisposition,
@@ -22,6 +27,13 @@ from .models import (
     OwnerCapabilityGoalV1,
 )
 from .process import OWNER_CAPABILITY_ACQUISITION_PROCESS
+from .promotion import (
+    CapabilityAcquisitionReleaseBridge,
+    CapabilityAcquisitionReleaseBridgeError,
+    CapabilityAcquisitionReleaseBridgeResult,
+    CapabilityLifecycleProposalV1,
+    ensure_capability_release_bridge_current,
+)
 from .resolver import (
     AcquisitionResolutionError,
     AcquisitionResolutionResult,
@@ -89,13 +101,20 @@ __all__ = [
     "CapabilityAcquisitionCoordinator",
     "CapabilityAcquisitionDevelopmentCompletionHandler",
     "CapabilityAcquisitionDevelopmentRevisionResolver",
+    "CapabilityAcquisitionLifecycleCoordinator",
+    "CapabilityAcquisitionLifecycleError",
+    "CapabilityAcquisitionLifecycleResult",
     "CapabilityAcquisitionPlanV1",
+    "CapabilityAcquisitionReleaseBridge",
+    "CapabilityAcquisitionReleaseBridgeError",
+    "CapabilityAcquisitionReleaseBridgeResult",
     "CapabilityAcquisitionResolver",
     "CapabilityAcquisitionSourceCompletionHandler",
     "CapabilityCandidateError",
     "CapabilityCandidateEvidenceV1",
     "CapabilityCandidateVerification",
     "CapabilityCandidateVerifier",
+    "CapabilityLifecycleProposalV1",
     "CapabilityRuntimeAcquisitionContextProvider",
     "CapabilitySourceAdapter",
     "CapabilitySourceRegistry",
@@ -114,6 +133,7 @@ __all__ = [
     "build_acquisition_protocol_executors",
     "ensure_capability_acquisition_architecture_current",
     "ensure_capability_candidate_acceptance_current",
+    "ensure_capability_release_bridge_current",
     "mcp_server_evidence",
     "openapi_contract_evidence",
     "owner_configured_evidence",

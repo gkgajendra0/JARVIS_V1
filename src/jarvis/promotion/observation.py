@@ -198,6 +198,18 @@ class ObservationController:
         if assessment.disposition is not ObservationDisposition.READY_TO_CLOSE:
             raise ChangeConflict("production observation is not ready to close")
         current = self._promotions.require(attempt.attempt_id)
+        change = self._changes.require(current.change_id)
+        if change.process_key == "owner_capability_acquisition":
+            from jarvis.capability_acquisition.promotion import (
+                ensure_capability_release_bridge_current,
+            )
+
+            ensure_capability_release_bridge_current(
+                self._changes,
+                self._metadata,
+                current.change_id,
+                attempt_id=current.attempt_id,
+            )
         active = self._metadata.active()
         recovery = self._metadata.recovery()
         if active is None or active.promotion_attempt_id != current.attempt_id:
