@@ -268,7 +268,7 @@ class AstGrepStructuralAnalyzer:
                     *root.find_all(kind="class_definition"),
                     *root.find_all(kind="function_definition"),
                 ]
-            except Exception:  # noqa: BLE001 - analyzer must not break diagnostics
+            except Exception:  # noqa: BLE001, S112 - analyzer is advisory/bounded
                 continue
             for node in nodes:
                 first_line = node.text().splitlines()[0] if node.text() else ""
@@ -335,7 +335,7 @@ class AstGrepStructuralAnalyzer:
             try:
                 root = self._root(text)
                 nodes = root.find_all(pattern=query)
-            except Exception:  # noqa: BLE001 - invalid/nonmatching pattern is bounded
+            except Exception:  # noqa: BLE001, S112 - invalid pattern is advisory
                 continue
             for node in nodes:
                 snippet = node.text()
