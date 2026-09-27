@@ -107,20 +107,19 @@ class PromotionStore:
             );
         """
         checksum = hashlib.sha256(schema.encode("utf-8")).hexdigest()
-        with work._lock, work._connect() as db:
-            with db:
-                db.executescript(schema)
-                row = db.execute(
-                    "SELECT checksum FROM promotion_schema WHERE version=?",
-                    (self._SCHEMA_VERSION,),
-                ).fetchone()
-                if row is None:
-                    db.execute(
-                        "INSERT INTO promotion_schema(version, checksum) VALUES (?, ?)",
-                        (self._SCHEMA_VERSION, checksum),
-                    )
-                elif row["checksum"] != checksum:
-                    raise ChangeConflict("promotion schema checksum mismatch")
+        with work._lock, work._connect() as db, db:
+            db.executescript(schema)
+            row = db.execute(
+                "SELECT checksum FROM promotion_schema WHERE version=?",
+                (self._SCHEMA_VERSION,),
+            ).fetchone()
+            if row is None:
+                db.execute(
+                    "INSERT INTO promotion_schema(version, checksum) VALUES (?, ?)",
+                    (self._SCHEMA_VERSION, checksum),
+                )
+            elif row["checksum"] != checksum:
+                raise ChangeConflict("promotion schema checksum mismatch")
 
     @staticmethod
     def _attempt_id(
