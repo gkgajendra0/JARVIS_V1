@@ -293,6 +293,79 @@ class CapabilityAcquisitionReleaseBridge:
                 "new package became executable without lifecycle Authority",
             )
 
+        existing_admission = self._changes.latest_artifact(
+            change_id,
+            "capability_package_admission",
+        )
+        existing_lifecycle = self._changes.latest_artifact(
+            change_id,
+            "capability_lifecycle_proposal",
+        )
+        if existing_admission is not None and existing_lifecycle is not None:
+            try:
+                current_admission = ensure_capability_release_bridge_current(
+                    self._changes,
+                    self._deployment,
+                    change_id,
+                    attempt_id=attempt.attempt_id,
+                )
+            except CapabilityAcquisitionReleaseBridgeError:
+                current_admission = None
+            if current_admission is not None:
+                lifecycle_payload = existing_lifecycle.payload
+                if (
+                    current_admission.artifact_id != existing_admission.artifact_id
+                    or existing_admission.payload.get("package_id") != package_id
+                    or existing_admission.payload.get("package_version")
+                    != package_version
+                    or existing_admission.payload.get("package_digest")
+                    != package_digest
+                    or existing_admission.payload.get("capability_id")
+                    != capability_id
+                    or existing_admission.payload.get("compatibility_digest")
+                    != result.compatibility.digest
+                    or lifecycle_payload.get("package_id") != package_id
+                    or lifecycle_payload.get("package_version") != package_version
+                    or lifecycle_payload.get("package_digest") != package_digest
+                    or lifecycle_payload.get("capability_id") != capability_id
+                    or lifecycle_payload.get("compatibility_digest")
+                    != result.compatibility.digest
+                    or lifecycle_payload.get("authority_required") is not True
+                ):
+                    raise CapabilityAcquisitionReleaseBridgeError(
+                        "release_bridge_evidence_stale",
+                        "existing Phase-9 release bridge evidence no longer matches "
+                        "the exact active package",
+                    )
+                try:
+                    existing_proposal = CapabilityLifecycleProposalV1(
+                        capability_id=capability_id,
+                        package_id=package_id,
+                        package_version=package_version,
+                        package_digest=package_digest,
+                        compatibility_digest=result.compatibility.digest,
+                        expected_generation=int(
+                            lifecycle_payload.get("expected_generation")
+                        ),
+                        proposed_actions=tuple(
+                            str(item)
+                            for item in (
+                                lifecycle_payload.get("proposed_actions") or ()
+                            )
+                        ),
+                    )
+                except (TypeError, ValueError) as exc:
+                    raise CapabilityAcquisitionReleaseBridgeError(
+                        "lifecycle_proposal_stale",
+                        "existing Phase-9 lifecycle proposal is malformed",
+                    ) from exc
+                return CapabilityAcquisitionReleaseBridgeResult(
+                    admission=result,
+                    admission_artifact=existing_admission,
+                    lifecycle_proposal=existing_proposal,
+                    lifecycle_artifact=existing_lifecycle,
+                )
+
         proposed_actions: list[str] = []
         if not (
             after.selected_package_id == package_id
