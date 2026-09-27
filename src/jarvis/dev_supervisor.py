@@ -26,11 +26,13 @@ from jarvis.dev_control import (
     DEV_CONTROL_TOKEN_ENV,
     RuntimeReleaseIdentity,
 )
+from jarvis.engineering_change.models import ChangeConflict
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.incident_repair.process import UNKNOWN_INCIDENT_REPAIR_PROCESS
 from jarvis.incidents import IncidentService, SqliteIncidentStore
 from jarvis.promotion.deployment import DeploymentCoordinator, DeploymentError
 from jarvis.promotion.models import PromotionAttemptState, PromotionEvidenceV1
+from jarvis.promotion.observation import ObservationController, ObservationDisposition
 from jarvis.promotion.release import (
     DeploymentMetadataStore,
     GitReleaseStager,
@@ -756,6 +758,57 @@ def _resume_pending_phase7_deployment(
         active_identity = None if active is None else active.runtime_identity()
         return driver.process, active_identity, str(exc)
     return driver.process, result.release.runtime_identity(), None
+
+
+def _record_phase7_healthy_observation() -> None:
+    """Persist one authenticated production liveness sample when observing."""
+
+    changes, promotions = _phase7_promotion_stores()
+    observing = promotions.list_by_states(
+        (PromotionAttemptState.OBSERVING,),
+        limit=2,
+    )
+    if not observing:
+        return
+    if len(observing) != 1:
+        print(
+            "Multiple observing promotion attempts require owner investigation; "
+            "healthy observation is not attributed automatically."
+        )
+        return
+
+    attempt = observing[0]
+    metadata = DeploymentMetadataStore(default_deployment_root())
+    active = metadata.active()
+    if active is None or active.promotion_attempt_id != attempt.attempt_id:
+        return
+
+    controller = ObservationController(
+        changes,
+        promotions,
+        metadata,
+        required_healthy_samples=3,
+    )
+    controller.record_healthy(
+        attempt,
+        reason_code="authenticated_runtime_liveness",
+        evidence=(
+            "supervisor:authenticated_liveness",
+            f"release:{active.release_sha}",
+        ),
+    )
+    assessment = controller.assess(attempt)
+    if assessment.disposition is not ObservationDisposition.READY_TO_CLOSE:
+        return
+    try:
+        controller.close_success(attempt)
+    except ChangeConflict:
+        # Phase-9 package bridge may still be reconciling in the child release.
+        # Keep OBSERVING and retry after the next authenticated liveness sample.
+        return
+    print(
+        "Phase-7 production observation completed: exact active release is now LKG."
+    )
 
 
 def _attach_windows_runtime_job(process: subprocess.Popen[bytes]) -> None:
@@ -1538,6 +1591,13 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                 config,
                 liveness_failure_streak,
             )
+            if (
+                not config.git_updates_enabled
+                and not restart_required
+                and liveness_failure_streak == 0
+            ):
+                _record_phase7_healthy_observation()
+
             if restart_required:
                 if process.poll() is not None:
                     continue
