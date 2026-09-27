@@ -328,7 +328,9 @@ def _package(
     )
 
 
-def _write_package(release: ReleaseRecord, package: CapabilityPackageV1) -> pathlib.Path:
+def _write_package(
+    release: ReleaseRecord, package: CapabilityPackageV1
+) -> pathlib.Path:
     root = pathlib.Path(release.release_root) / "capability_packages"
     root.mkdir(parents=True, exist_ok=True)
     token = package.package_version.replace(".", "_").replace("-", "_")
@@ -708,7 +710,10 @@ def _10_platform(root: pathlib.Path) -> dict[str, object]:
 def _11_registration_disabled(root: pathlib.Path) -> dict[str, object]:
     env = _environment(root, versions=("1.0.0",))
     state = env.store.require_registry("example.capability")
-    if state.desired_state is not DesiredActivationState.DISABLED or state.has_selection:
+    if (
+        state.desired_state is not DesiredActivationState.DISABLED
+        or state.has_selection
+    ):
         raise AssertionError("package admission changed activation intent")
     return {"desired_state": state.desired_state.value, "selected": state.has_selection}
 
@@ -883,7 +888,11 @@ def _23_health_blocks(root: pathlib.Path) -> dict[str, object]:
     _enable_direct(env)
     snapshot = env.reconciler.reconcile(ReconciliationTrigger.HEALTH)
     state = snapshot.state("example.capability")
-    if state is None or state.effective_enabled or state.health_state is not HealthState.FAILED:
+    if (
+        state is None
+        or state.effective_enabled
+        or state.health_state is not HealthState.FAILED
+    ):
         raise AssertionError("failed health did not block effective execution")
     return {"health": state.health_state.value, "effective": state.effective_enabled}
 
@@ -901,7 +910,10 @@ def _24_desired_vs_effective(root: pathlib.Path) -> dict[str, object]:
         or state.effective_enabled
     ):
         raise AssertionError("desired/effective state distinction failed")
-    return {"desired": durable.desired_state.value, "effective": state.effective_enabled}
+    return {
+        "desired": durable.desired_state.value,
+        "effective": state.effective_enabled,
+    }
 
 
 def _25_restart(root: pathlib.Path) -> dict[str, object]:
@@ -1222,7 +1234,9 @@ def _41_release_change(root: pathlib.Path) -> dict[str, object]:
     )
     report = env.evaluator.evaluate_package(env.packages["1.0.0"])
     if report.verdict is not CompatibilityVerdict.RESTART_REQUIRED:
-        raise AssertionError("active release change did not invalidate runtime projection")
+        raise AssertionError(
+            "active release change did not invalidate runtime projection"
+        )
     return {"verdict": report.verdict.value, "reason_codes": report.reason_codes}
 
 
@@ -1245,7 +1259,9 @@ def _43_core_fence(root: pathlib.Path) -> dict[str, object]:
     )
     with env.fence.hold("example.capability"):
         if env.projection.allows(core.key) is not True:
-            raise AssertionError("managed transition fence affected CORE_PINNED routing")
+            raise AssertionError(
+                "managed transition fence affected CORE_PINNED routing"
+            )
     return {"core_unaffected": True}
 
 
@@ -1416,8 +1432,7 @@ def run_replay_suite(root: pathlib.Path) -> Phase8ReplayReport:
     replay_root = pathlib.Path(root)
     replay_root.mkdir(parents=True, exist_ok=True)
     cases = tuple(
-        _case(case_id, replay_root, operation)
-        for case_id, operation in _CASES
+        _case(case_id, replay_root, operation) for case_id, operation in _CASES
     )
     status = "PASS" if all(item.passed for item in cases) else "FAIL"
     payload = {
