@@ -40,6 +40,7 @@ from jarvis.capability_registry.models import (
     PackageDisposition,
 )
 from jarvis.capability_registry.provider import (
+    CapabilityHealthProbe,
     CapabilityProviderRegistration,
     CapabilityProviderRegistry,
     CapabilityProviderRegistryError,
@@ -81,6 +82,7 @@ __all__ = [
     "CapabilityCompatibilityReportV1",
     "CapabilityLifecycleEvent",
     "CapabilityLifecycleEventKind",
+    "CapabilityHealthProbe",
     "CapabilityPackageAdmissionResult",
     "CapabilityPackageAdmissionService",
     "CapabilityPackageContractError",
