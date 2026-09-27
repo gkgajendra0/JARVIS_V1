@@ -95,10 +95,6 @@ class PromotionSessionService:
         challenge = gate.challenge if isinstance(gate, GateDecision) else gate
         if challenge.kind is not GateKind.PROMOTION:
             raise PromotionSessionError("gate is not a promotion gate")
-        if typed is not None and gates.pending_gate_ids() != (gate_id,):
-            raise PromotionSessionError(
-                "spoken promotion review is ambiguous; identify the gate ID"
-            )
 
         artifact = self._changes.get_artifact(challenge.artifact_id)
         if artifact is None or artifact.kind != "promotion":
@@ -130,6 +126,11 @@ class PromotionSessionService:
                     reconciled_after_external_merge=True,
                 ),
                 evidence=evidence,
+            )
+
+        if typed is not None and gates.pending_gate_ids() != (gate_id,):
+            raise PromotionSessionError(
+                "spoken promotion review is ambiguous; identify the gate ID"
             )
 
         authorized = self._authority.authorize(
