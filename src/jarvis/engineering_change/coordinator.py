@@ -20,10 +20,41 @@ class WorkBackend(Protocol):
     def submit(self, work_id: str, *, priority: WorkPriority) -> str: ...
 
 
+class ArchitectureSourceCompletionHandler(Protocol):
+    process_key: str
+    process_version: int
+
+    def complete(
+        self,
+        *,
+        change: EngineeringChange,
+        stage,
+        work: WorkItem,
+    ) -> ChangeState | None: ...
+
+
 class ChangeCoordinator:
-    def __init__(self, store: ChangeStore, backend: WorkBackend) -> None:
+    def __init__(
+        self,
+        store: ChangeStore,
+        backend: WorkBackend,
+        *,
+        source_completion_handlers: tuple[
+            ArchitectureSourceCompletionHandler, ...
+        ] = (),
+    ) -> None:
         self.store = store
         self.backend = backend
+        handlers: dict[tuple[str, int], ArchitectureSourceCompletionHandler] = {}
+        for handler in source_completion_handlers:
+            key = (handler.process_key, handler.process_version)
+            if key in handlers:
+                raise ValueError(
+                    "duplicate architecture-source completion handler: "
+                    f"{key[0]}/{key[1]}"
+                )
+            handlers[key] = handler
+        self._source_completion_handlers = handlers
 
     def start(
         self,
@@ -65,8 +96,9 @@ class ChangeCoordinator:
             if architecture is None:
                 raise ChangeConflict("approved architecture is missing")
             request = (
-                f"{change.request}\nApproved architecture revision "
-                f"{architecture.revision}: {architecture.payload}"
+                f"{change.request}\nApproved architecture artifact "
+                f"{architecture.artifact_id} revision {architecture.revision} "
+                f"digest {architecture.digest}: {architecture.payload}"
             )
             source_stage = process.architecture_source_stage
             source_work = [
@@ -146,15 +178,36 @@ class ChangeCoordinator:
                 return self.store.transition(
                     change_id, ChangeState.FAILED, expected_version=change.version
                 )
-            if (
-                source_work.state is WorkState.COMPLETED
-                and self.store.latest_artifact(change_id, "architecture") is not None
-            ):
-                return self.store.transition(
-                    change_id,
-                    ChangeState.ARCHITECTURE_READY,
-                    expected_version=change.version,
+            if source_work.state is WorkState.COMPLETED:
+                handler = self._source_completion_handlers.get(
+                    (change.process_key, change.process_version)
                 )
+                if handler is not None:
+                    terminal_state = handler.complete(
+                        change=change,
+                        stage=stage,
+                        work=source_work,
+                    )
+                    change = self.store.require(change_id)
+                    if terminal_state is not None:
+                        if change.state is not ChangeState.RESEARCHING:
+                            return change
+                        return self.store.transition(
+                            change_id,
+                            terminal_state,
+                            expected_version=change.version,
+                        )
+                architecture = self.store.latest_artifact(
+                    change_id,
+                    "architecture",
+                )
+                if architecture is not None:
+                    change = self.store.require(change_id)
+                    return self.store.transition(
+                        change_id,
+                        ChangeState.ARCHITECTURE_READY,
+                        expected_version=change.version,
+                    )
 
         elif change.state is ChangeState.APPROVED_FOR_BUILD:
             architecture = self.store.latest_artifact(change_id, "architecture")

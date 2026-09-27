@@ -60,6 +60,10 @@ class DevelopmentWorkspaceError(RuntimeError):
     pass
 
 
+class DevelopmentBaseRevisionResolver(Protocol):
+    def revision_for(self, work_id: str) -> str | None: ...
+
+
 def _contains_secret(text: str) -> bool:
     return any(pattern.search(text) for pattern in _SECRET_PATTERNS)
 
@@ -98,6 +102,7 @@ class DevelopmentWorkspaceManager:
         *,
         repository_root: str | pathlib.Path | None = None,
         workspace_root: str | pathlib.Path | None = None,
+        base_revision_resolver: DevelopmentBaseRevisionResolver | None = None,
     ) -> None:
         self.repository_root = pathlib.Path(
             repository_root or default_project_root()
@@ -110,6 +115,7 @@ class DevelopmentWorkspaceManager:
                 "JARVIS source root is not a Git repository"
             )
         self.workspace_root.mkdir(parents=True, exist_ok=True)
+        self._base_revision_resolver = base_revision_resolver
         self._disabled_hooks_root = (
             self.workspace_root / ".disabled-git-hooks"
         ).resolve()
@@ -149,6 +155,53 @@ class DevelopmentWorkspaceManager:
         ) as exc:
             raise DevelopmentWorkspaceError(str(exc)) from exc
 
+    def _approved_base_revision(self, work_id: str) -> str | None:
+        resolver = self._base_revision_resolver
+        if resolver is None:
+            return None
+        raw = resolver.revision_for(work_id)
+        if raw is None:
+            return None
+        revision = str(raw).strip().casefold()
+        if len(revision) not in {40, 64} or any(
+            char not in "0123456789abcdef" for char in revision
+        ):
+            raise DevelopmentWorkspaceError(
+                "approved development base must be an exact Git object ID"
+            )
+        available = self._run(
+            self.repository_root,
+            "cat-file",
+            "-e",
+            f"{revision}^{{commit}}",
+            check=False,
+        )
+        if available.returncode != 0:
+            raise DevelopmentWorkspaceError(
+                "approved development base revision is unavailable"
+            )
+        return revision
+
+    def _verify_approved_base(
+        self,
+        workspace: DevelopmentWorkspace,
+        approved_base: str | None,
+    ) -> None:
+        if approved_base is None:
+            return
+        ancestor = self._run(
+            workspace.path,
+            "merge-base",
+            "--is-ancestor",
+            approved_base,
+            "HEAD",
+            check=False,
+        )
+        if ancestor.returncode != 0:
+            raise DevelopmentWorkspaceError(
+                "development branch drifted from approved source revision"
+            )
+
     def workspace_for(self, work_id: str) -> DevelopmentWorkspace:
         token = _safe_work_id(work_id)
         branch = f"jarvis/work/{token}"
@@ -163,7 +216,9 @@ class DevelopmentWorkspaceManager:
 
     def ensure(self, work_id: str) -> DevelopmentWorkspace:
         workspace = self.workspace_for(work_id)
+        approved_base = self._approved_base_revision(work_id)
         if (workspace.path / ".git").exists() or (workspace.path / ".git").is_file():
+            self._verify_approved_base(workspace, approved_base)
             return workspace
         if workspace.path.exists():
             raise DevelopmentWorkspaceError(
@@ -182,10 +237,18 @@ class DevelopmentWorkspaceManager:
         if branch_check.returncode == 0:
             args.extend([str(workspace.path), workspace.branch])
         else:
-            args.extend(["-b", workspace.branch, str(workspace.path), "HEAD"])
+            args.extend(
+                [
+                    "-b",
+                    workspace.branch,
+                    str(workspace.path),
+                    approved_base or "HEAD",
+                ]
+            )
         self._run(self.repository_root, *args, timeout=120.0)
         if not workspace.path.is_dir():
             raise DevelopmentWorkspaceError("Git worktree creation was not verified")
+        self._verify_approved_base(workspace, approved_base)
         return workspace
 
     def resolve(
@@ -263,6 +326,7 @@ class PrepareDevelopmentWorkspaceExecutor:
             "prepared": True,
             "branch": workspace.branch,
             "workspace_token": workspace.path.name,
+            "base_revision": self._manager._approved_base_revision(work.work_id),
             "production_tree_modified": False,
         }
 
