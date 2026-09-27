@@ -227,6 +227,7 @@ jobs:
           python -m pytest -q
           tests/test_phase7_promotion_domain.py
           tests/test_phase7_github_evidence.py
+          tests/test_phase7_github_app.py
           tests/test_phase7_authority_merge.py
           tests/test_phase7_deployment.py
           tests/test_phase7_release_staging.py
