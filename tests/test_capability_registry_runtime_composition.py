@@ -22,13 +22,13 @@ from jarvis.capability_registry.models import (
     CapabilityLifecycleEventKind,
     DesiredActivationState,
 )
+from jarvis.capability_registry.provider import CapabilityProviderRegistration
 from jarvis.capability_registry.runtime_composition import (
     AcquiredCapabilityCompositionError,
     AcquiredCapabilityDefinition,
     build_package_managed_runtime_stack,
 )
 from jarvis.capability_registry.store import CapabilityRegistryStore
-from jarvis.capability_registry.provider import CapabilityProviderRegistration
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate import CapabilityManifest, canonical_digest
 from jarvis.engineering_substrate.artifacts import ArtifactStore
