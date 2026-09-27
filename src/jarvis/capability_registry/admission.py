@@ -56,7 +56,9 @@ class CapabilityPackageAdmissionService:
         self.package_source = package_source
         self.evaluator = evaluator
         if evaluator.package_source is not package_source:
-            raise ValueError("evaluator and admission service must use the same package source")
+            raise ValueError(
+                "evaluator and admission service must use the same package source"
+            )
 
     @staticmethod
     def _disposition(
@@ -73,7 +75,9 @@ class CapabilityPackageAdmissionService:
         if not isinstance(sourced, SourcedCapabilityPackage):
             raise TypeError("sourced must be SourcedCapabilityPackage")
         if sourced.release_sha != self.package_source.release_sha:
-            raise ValueError("sourced package release does not match active package source")
+            raise ValueError(
+                "sourced package release does not match active package source"
+            )
         report = self.evaluator.evaluate_package(sourced.package)
         disposition = self._disposition(report)
         admitted = self.store.admit_package(
