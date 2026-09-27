@@ -2,7 +2,7 @@
 
 ## Status
 
-**RESEARCH COMPLETE — ARCHITECTURE READY FOR OWNER APPROVAL — 2026-09-27**
+**FOUNDATION RESEARCH COMPLETE — IMPLEMENTATION RESEARCH V2 COMPLETE — SEE `PHASE8_CAPABILITY_PACKAGE_REGISTRY_IMPLEMENTATION_RESEARCH.md` — 2026-09-27**
 
 Phase 8 turns the accepted Phase-5 manifest/security primitives into durable capability lifecycle truth. It does not acquire arbitrary new capabilities; Phase 9 owns owner-requested capability acquisition.
 
@@ -102,11 +102,13 @@ Do not add another mandatory signing ceremony for source code already admitted t
 
 ### 3.9 WebAssembly Component Model / WASI
 
-The Component Model/WASI provides strong typed host/guest interfaces and a promising future boundary for third-party/untrusted portable capabilities. Current WASI 0.3 tooling is evolving and introduces a new runtime/toolchain not used by JARVIS today.
+The Component Model/WASI provides strong typed host/guest interfaces and a promising future boundary for third-party/untrusted portable capabilities.
 
-Disposition: **DEFER.**
+As of this research, WASI 0.3 is the current stable WASI line; WASI 0.3.0 was released 2026-06-11 and 0.3.1 on 2026-08-11. Runtime/toolchain adoption is still uneven across languages, and JARVIS does not currently use a WASM component runtime.
 
-Keep `package_kind` extensible so a future WASI capability kind can be added without changing lifecycle semantics.
+Disposition: **DEFER AS AN EXECUTION BACKEND, PRESERVE PROVIDER COMPATIBILITY.**
+
+Do not encode Python in-process execution into the persistent package contract. A future reviewed WASM provider should be able to implement the same trusted executor boundary without changing package lifecycle semantics.
 
 ## 4. Dynamic loading / hot reload research conclusion
 
@@ -226,4 +228,10 @@ Permanent Phase-8 rules:
 
 ## 11. Research readiness
 
-The research is sufficient to architect Phase 8 without another technology dependency. Further external research would primarily optimize future remote distribution or third-party isolation, which are outside the Phase-8 v1 boundary.
+The foundation research was sufficient to choose the package/registry direction, but implementation-focused research found an important missing lifecycle-control detail: direct “commit then refresh” mutation can leave stale routing if reconciliation fails.
+
+The authoritative implementation-focused conclusions now live in:
+
+`PHASE8_CAPABILITY_PACKAGE_REGISTRY_IMPLEMENTATION_RESEARCH.md`
+
+That second pass compares Kubernetes reconciliation, Nix generations, SQLite/DBOS roles, PyPA/Pluggy, go-plugin, Dapr, WASI/Extism, Windows AppContainer/Sandbox, OCI/ORAS, TUF, Sigstore/SLSA/CycloneDX and OPA, and requires the architecture to add deterministic reconciliation plus generation-fenced transitions before implementation approval.
