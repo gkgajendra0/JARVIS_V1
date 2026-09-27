@@ -164,6 +164,15 @@ class CapabilityHealthBridge:
                     summary="Trusted health probe returned mismatched component identity.",
                 )
                 continue
+            if not observation.is_fresh(now_epoch=self.clock()):
+                self._record(
+                    component_id=component_id,
+                    source=f"capability_probe:{probe_id}",
+                    state=HealthState.FAILED,
+                    reason_code="required_probe_stale",
+                    summary="Required trusted health probe returned stale evidence.",
+                )
+                continue
             self.health_registry.record(observation)
         return self.health_registry.snapshot(component_id, now_epoch=self.clock())
 
