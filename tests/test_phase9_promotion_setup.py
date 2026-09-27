@@ -141,7 +141,6 @@ def test_promotion_setup_rejects_non_pem_key(
         )
 
 
-
 def test_promotion_setup_rejects_non_windows(tmp_path) -> None:
     if promotion_setup.sys.platform == "win32":
         pytest.skip("non-Windows rejection is covered on Linux CI")
