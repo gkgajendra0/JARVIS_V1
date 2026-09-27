@@ -110,10 +110,13 @@ def test_diagnostic_workspace_is_detached_exact_revision_and_restart_stable(
     assert manager.read_file("work:diagnostic:1", "src/jarvis/demo.py")[
         "text"
     ].startswith("def first_version")
-    assert "second_version" not in manager.read_file(
-        "work:diagnostic:1",
-        "src/jarvis/demo.py",
-    )["text"]
+    assert (
+        "second_version"
+        not in manager.read_file(
+            "work:diagnostic:1",
+            "src/jarvis/demo.py",
+        )["text"]
+    )
     assert _git(repo, "status", "--porcelain") == ""
 
 
@@ -193,9 +196,7 @@ def test_diagnostics_registry_exposes_no_write_or_commit_action(tmp_path) -> Non
         )
     )
 
-    names = {
-        action.name for action in registry.actions_for(WorkType.DIAGNOSTICS)
-    }
+    names = {action.name for action in registry.actions_for(WorkType.DIAGNOSTICS)}
 
     assert "diag_prepare_workspace" in names
     assert "diag_read_file" in names
@@ -203,4 +204,6 @@ def test_diagnostics_registry_exposes_no_write_or_commit_action(tmp_path) -> Non
     assert "diag_bisect" in names
     assert "diag_structural_search" in names
     assert "diag_repo_map" in names
-    assert not any("write" in name or "commit" in name or "edit" in name for name in names)
+    assert not any(
+        "write" in name or "commit" in name or "edit" in name for name in names
+    )
