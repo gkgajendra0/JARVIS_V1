@@ -29,7 +29,7 @@ from jarvis.engineering_change.store import ChangeStore
 from jarvis.incident_repair.process import UNKNOWN_INCIDENT_REPAIR_PROCESS
 from jarvis.incidents import IncidentService, SqliteIncidentStore
 from jarvis.promotion.deployment import DeploymentCoordinator, DeploymentError
-from jarvis.promotion.models import PromotionAttemptState
+from jarvis.promotion.models import PromotionAttemptState, PromotionEvidenceV1
 from jarvis.promotion.release import (
     DeploymentMetadataStore,
     GitReleaseStager,
@@ -676,23 +676,11 @@ def _resume_pending_phase7_deployment(
     control: VoiceControlServer,
     config: DevSupervisorConfig,
 ) -> tuple[subprocess.Popen[bytes] | None, RuntimeReleaseIdentity | None, str | None]:
-    """Resume only a durable DEPLOYING attempt; all process effects stay parent-owned."""
+    """Start or resume one durable parent-owned Phase-7 deployment handoff."""
+
     metadata = DeploymentMetadataStore(default_deployment_root())
-    recovery = metadata.recovery()
-    if recovery is None:
-        return process, None, None
-    if recovery.phase in {
-        RecoveryPhase.STARTUP_FAILED,
-        RecoveryPhase.ROLLBACK_STARTED,
-        RecoveryPhase.ROLLBACK_VERIFIED,
-    }:
-        return process, None, None
-
     changes, promotions = _phase7_promotion_stores()
-    attempt = promotions.get(recovery.attempt_id)
-    if attempt is None or attempt.state is not PromotionAttemptState.DEPLOYING:
-        return process, None, None
-
+    recovery = metadata.recovery()
     driver = SupervisorReleaseRuntimeDriver(process, control, config)
     coordinator = DeploymentCoordinator(
         changes,
@@ -703,8 +691,62 @@ def _resume_pending_phase7_deployment(
         shutdown_timeout_seconds=config.shutdown_timeout_seconds,
         startup_timeout_seconds=config.startup_timeout_seconds,
     )
+
+    if recovery is not None:
+        if recovery.phase in {
+            RecoveryPhase.STARTUP_FAILED,
+            RecoveryPhase.ROLLBACK_STARTED,
+            RecoveryPhase.ROLLBACK_VERIFIED,
+        }:
+            return process, None, None
+        attempt = promotions.get(recovery.attempt_id)
+        if attempt is None or attempt.state is not PromotionAttemptState.DEPLOYING:
+            return process, None, None
+        try:
+            result = coordinator.resume(attempt)
+        except DeploymentError as exc:
+            active = metadata.active()
+            active_identity = None if active is None else active.runtime_identity()
+            return driver.process, active_identity, str(exc)
+        return driver.process, result.release.runtime_identity(), None
+
+    merged = promotions.list_by_states(
+        (PromotionAttemptState.MERGED,),
+        limit=2,
+    )
+    if not merged:
+        return process, None, None
+    if len(merged) != 1:
+        return (
+            process,
+            None,
+            "multiple merged promotion attempts require owner investigation",
+        )
+    attempt = merged[0]
+    if (
+        attempt.promotion_artifact_id is None
+        or attempt.promotion_artifact_digest is None
+    ):
+        return process, None, "merged promotion attempt has no exact evidence artifact"
+    artifact = changes.get_artifact(attempt.promotion_artifact_id)
+    if (
+        artifact is None
+        or artifact.kind != "promotion"
+        or artifact.digest != attempt.promotion_artifact_digest
+    ):
+        return process, None, "merged promotion evidence artifact is missing or stale"
     try:
-        result = coordinator.resume(attempt)
+        evidence = PromotionEvidenceV1.from_payload(artifact.payload)
+    except ValueError as exc:
+        return process, None, f"merged promotion evidence is invalid: {exc}"
+    if evidence.attempt_id != attempt.attempt_id:
+        return process, None, "merged promotion evidence attempt identity mismatch"
+
+    try:
+        result = coordinator.deploy(
+            evidence=evidence,
+            attempt=attempt,
+        )
     except DeploymentError as exc:
         active = metadata.active()
         active_identity = None if active is None else active.runtime_identity()
