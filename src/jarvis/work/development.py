@@ -158,11 +158,15 @@ class DevelopmentWorkspaceManager:
     def current_revision(self) -> str:
         """Return the exact commit currently checked out at the trusted source root."""
 
-        revision = self._run(
-            self.repository_root,
-            "rev-parse",
-            "HEAD",
-        ).stdout.strip().casefold()
+        revision = (
+            self._run(
+                self.repository_root,
+                "rev-parse",
+                "HEAD",
+            )
+            .stdout.strip()
+            .casefold()
+        )
         if len(revision) != 40 or any(
             char not in "0123456789abcdef" for char in revision
         ):
