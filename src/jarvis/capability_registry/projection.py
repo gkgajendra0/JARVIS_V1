@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from enum import Enum
 from threading import RLock
-from typing import Iterator
-
 from jarvis.capabilities.models import CapabilityCatalog, CapabilityDescriptor
 from jarvis.capability_registry.compatibility import CompatibilityVerdict
 from jarvis.capability_registry.models import (
