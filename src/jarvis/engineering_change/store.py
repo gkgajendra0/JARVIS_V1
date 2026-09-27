@@ -517,7 +517,7 @@ class ChangeStore:
                 latest["artifact_id"],
                 latest["digest"],
             ) != (artifact_id, artifact_digest):
-                raise ChangeConflict("promotion artifact is missing, stale, or mismatched")
+                raise ChangeConflict(\n                    "promotion artifact is missing, stale, or mismatched"\n                )
 
             approved = connection.execute(
                 """SELECT 1 FROM engineering_change_gates AS gate
