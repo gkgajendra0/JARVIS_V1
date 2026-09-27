@@ -171,3 +171,34 @@ def test_work_orchestration_requires_production_postgres() -> None:
     )
     assert config.work_orchestration_enabled is True
     assert config.work_dbos_database_url == "postgresql://localhost/jarvis_work"
+
+
+
+def test_github_promotion_requires_non_secret_identifiers() -> None:
+    with pytest.raises(ValueError, match="CLIENT_ID"):
+        JarvisConfig(github_promotion_enabled=True)
+
+    config = JarvisConfig(
+        github_promotion_enabled=True,
+        github_app_client_id="Iv1.phase9",
+        github_app_installation_id=12345,
+        github_repository_full_name="gkgajendra0/JARVIS_V1",
+        github_app_secret_id="github-promotion-private-key",
+    )
+    assert config.github_promotion_enabled is True
+    assert config.github_app_installation_id == 12345
+    assert config.github_repository_full_name == "gkgajendra0/JARVIS_V1"
+    assert config.github_app_secret_id == "github-promotion-private-key"
+
+
+def test_invalid_github_promotion_identifiers_fail_closed() -> None:
+    with pytest.raises(ValueError, match="installation_id"):
+        JarvisConfig(
+            github_promotion_enabled=True,
+            github_app_client_id="Iv1.phase9",
+            github_app_installation_id=0,
+            github_repository_full_name="gkgajendra0/JARVIS_V1",
+            github_app_secret_id="github-promotion-private-key",
+        )
+    with pytest.raises(ValueError, match="github_expected_ci_app_id"):
+        JarvisConfig(github_expected_ci_app_id=0)
