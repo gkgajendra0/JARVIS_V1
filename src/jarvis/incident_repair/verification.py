@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import pathlib
 from dataclasses import dataclass
+
 from jarvis.engineering_change.models import (
     ChangeArtifact,
     ChangeConflict,
