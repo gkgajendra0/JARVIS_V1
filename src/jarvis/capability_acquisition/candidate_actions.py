@@ -161,6 +161,14 @@ def _validate_manifest_alignment(
             raise CapabilityCandidateActionError(
                 f"candidate manifest {label} differs from approved architecture"
             )
+    requested_operations = set(
+        architecture.payload.get("requested_operations") or ()
+    )
+    if not requested_operations.issubset(set(manifest.operations)):
+        raise CapabilityCandidateActionError(
+            "candidate manifest does not cover all owner-requested operations"
+        )
+
     exact_sets = (
         (
             set(manifest.secret_scope_requirements),
