@@ -273,7 +273,9 @@ def _plan() -> CapabilityAcquisitionPlanV1:
     )
 
 
-def _phase9_store(root: pathlib.Path) -> tuple[ChangeStore, ChangeCoordinator, _Backend]:
+def _phase9_store(
+    root: pathlib.Path,
+) -> tuple[ChangeStore, ChangeCoordinator, _Backend]:
     store = ChangeStore(
         SQLiteWorkStore(root / "work.sqlite3"),
         processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,),
@@ -408,7 +410,10 @@ def _04_stronger_evidence_wins() -> dict[str, object]:
         )
     )
     selected = resolver.resolve(_goal(), _empty_context()).selected_candidate
-    if selected is None or selected.trust_class is not AcquisitionTrustClass.OWNER_CONFIGURED:
+    if (
+        selected is None
+        or selected.trust_class is not AcquisitionTrustClass.OWNER_CONFIGURED
+    ):
         raise Phase9ReplayError("stronger same-strategy evidence did not win")
     return {
         "selected_source": selected.source_kind.value,
@@ -557,7 +562,9 @@ def _11_owner_input_wait(root: pathlib.Path) -> dict[str, object]:
 
 def _12_exact_plan_gate(root: pathlib.Path) -> dict[str, object]:
     _, _, artifact, gates = _generic_gate_store(root)
-    challenge = gates.present(artifact.change_id, GateKind.ARCHITECTURE, artifact.artifact_id)
+    challenge = gates.present(
+        artifact.change_id, GateKind.ARCHITECTURE, artifact.artifact_id
+    )
     decision = gates.decide(
         challenge.gate_id,
         approved=True,
@@ -578,7 +585,9 @@ def _12_exact_plan_gate(root: pathlib.Path) -> dict[str, object]:
 
 def _13_revised_architecture_invalidates(root: pathlib.Path) -> dict[str, object]:
     store, change, artifact, gates = _generic_gate_store(root)
-    challenge = gates.present(change.change_id, GateKind.ARCHITECTURE, artifact.artifact_id)
+    challenge = gates.present(
+        change.change_id, GateKind.ARCHITECTURE, artifact.artifact_id
+    )
     store.add_artifact(
         change.change_id,
         kind="architecture",
