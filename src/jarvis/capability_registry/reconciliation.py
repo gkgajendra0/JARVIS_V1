@@ -352,7 +352,7 @@ class CapabilityLifecycleReconciler:
         )
 
 
-@dataclass(slots=True)
+@dataclass
 class PeriodicCapabilityReconciler:
     reconciler: CapabilityLifecycleReconciler
     interval_seconds: float = 60.0
