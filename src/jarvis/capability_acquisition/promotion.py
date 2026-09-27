@@ -373,9 +373,7 @@ class CapabilityAcquisitionReleaseBridge:
                 f"Say 'activate acquired capability {change_id}' to continue, or leave "
                 f"it disabled."
             ),
-            event_key=(
-                f"phase9-lifecycle:{change_id}:{lifecycle_artifact.digest}"
-            ),
+            event_key=(f"phase9-lifecycle:{change_id}:{lifecycle_artifact.digest}"),
         )
         return CapabilityAcquisitionReleaseBridgeResult(
             admission=result,
