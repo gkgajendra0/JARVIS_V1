@@ -89,11 +89,15 @@ class DeploymentCoordinator:
     ) -> ReleaseRecord:
         """Adopt one already-accepted production revision as initial Phase-7 LKG."""
         if verified is not True:
-            raise DeploymentError("initial LKG requires independent runtime verification")
+            raise DeploymentError(
+                "initial LKG requires independent runtime verification"
+            )
         existing = self._metadata.lkg()
         if existing is not None:
             if existing.release_sha != release_sha:
-                raise DeploymentError("Last Known Good is already initialized differently")
+                raise DeploymentError(
+                    "Last Known Good is already initialized differently"
+                )
             return existing
         release_root = self._stager.stage(release_sha)
         accepted_at = time.time() if now_epoch is None else float(now_epoch)
