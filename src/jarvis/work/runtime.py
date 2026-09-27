@@ -8,6 +8,16 @@ from pathlib import Path
 
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.store import ChangeStore
+from jarvis.incident_repair.code_index import (
+    DiagnosticCodeIndex,
+    build_diagnostic_code_intelligence_executors,
+)
+from jarvis.incident_repair.process import UNKNOWN_INCIDENT_REPAIR_PROCESS
+from jarvis.incident_repair.workspace import (
+    ChangeStoreDiagnosticRevisionResolver,
+    DiagnosticWorkspaceManager,
+    build_diagnostic_workspace_executors,
+)
 from jarvis.knowledge.research import CurrentResearchService
 from jarvis.model_routing.eligibility import EligibilityPolicy
 from jarvis.model_routing.invoker import (
@@ -160,7 +170,10 @@ def build_work_runtime(
         payload_codec=payload_codec,
     )
     store.protect_existing_payloads()
-    change_store = ChangeStore(store)
+    change_store = ChangeStore(
+        store,
+        processes=(UNKNOWN_INCIDENT_REPAIR_PROCESS,),
+    )
     adapter_registry = build_default_model_adapter_registry()
     work_targets = build_default_work_targets(
         configured_provider=provider,
@@ -187,8 +200,14 @@ def build_work_runtime(
         interactive_gate=interactive_brain_gate,
     )
     workspace_manager = DevelopmentWorkspaceManager()
+    diagnostic_workspace_manager = DiagnosticWorkspaceManager(
+        ChangeStoreDiagnosticRevisionResolver(change_store)
+    )
+    diagnostic_code_index = DiagnosticCodeIndex(diagnostic_workspace_manager)
     executors = (
         ResearchWorkExecutor(research_service),
+        *build_diagnostic_workspace_executors(diagnostic_workspace_manager),
+        *build_diagnostic_code_intelligence_executors(diagnostic_code_index),
         *build_development_executors(
             workspace_manager,
             test_runner=build_development_test_runner(development_test_image),
