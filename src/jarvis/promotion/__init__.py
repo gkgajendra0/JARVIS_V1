@@ -57,7 +57,11 @@ from .release import (
     ReleaseRecord,
 )
 from .rollback import RollbackCoordinator, RollbackError, RollbackResult
-from .service import PromotionExecutionResult, PromotionSessionError, PromotionSessionService
+from .service import (
+    PromotionExecutionResult,
+    PromotionSessionError,
+    PromotionSessionService,
+)
 from .store import PromotionStore
 
 __all__ = [
