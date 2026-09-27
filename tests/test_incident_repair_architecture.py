@@ -24,7 +24,6 @@ from jarvis.incident_repair.process import UNKNOWN_INCIDENT_REPAIR_PROCESS
 from jarvis.work.models import WorkPriority, WorkState, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
-
 REVISION = "a" * 40
 
 
