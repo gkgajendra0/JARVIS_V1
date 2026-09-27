@@ -113,11 +113,11 @@ def test_diagnostic_profiles_are_network_disabled_and_source_read_only(
         if token == "--mount"
     ]
     assert any(
-        "target=/workspace" in mount and "readonly" in mount
+        "dst=/workspace" in mount and "readonly" in mount
         for mount in reproduction_mounts
     )
     assert any(
-        "target=/evidence" in mount and "readonly" not in mount
+        "dst=/evidence" in mount and "readonly" not in mount
         for mount in reproduction_mounts
     )
 
@@ -127,7 +127,7 @@ def test_diagnostic_profiles_are_network_disabled_and_source_read_only(
         if token == "--mount"
     ]
     assert len(static_mounts) == 1
-    assert "target=/workspace" in static_mounts[0]
+    assert "dst=/workspace" in static_mounts[0]
     assert "readonly" in static_mounts[0]
     assert reproduction_command[-1] == "tests/test_fault.py::test_repro"
     assert static_command[-1] == "src/jarvis/example.py"
