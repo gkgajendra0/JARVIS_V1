@@ -526,56 +526,93 @@ def _architecture_ready(root: pathlib.Path, *, turn_id: str):
 def _09_idempotent_admission(root: pathlib.Path) -> dict[str, object]:
     root.mkdir(parents=True, exist_ok=True)
     store, backend, first = _admission_environment(root, turn_id="idempotent")
+    if first.change is None or first.acquisition_work_id is None:
+        raise AssertionError("engineering acquisition was not created")
+
+    item = store.work.require(first.acquisition_work_id)
+    running = store.work.save(
+        item.transition(WorkState.RUNNING),
+        expected_version=item.version,
+    )
+
+    reopened_store = ChangeStore(
+        SQLiteWorkStore(root / "work.sqlite3"),
+        processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,),
+    )
+    reopened_backend = _Backend([])
     acquisition = CapabilityAcquisitionCoordinator(
-        changes=ChangeCoordinator(store, backend),
+        changes=ChangeCoordinator(reopened_store, reopened_backend),
         context_provider=StaticAcquisitionContextProvider(_empty_context()),
     )
     second = acquisition.admit(
         _goal("power", turn_id="idempotent"),
         source_revision=_REVISION,
     )
-    if first.change is None or second.change is None:
-        raise AssertionError("engineering acquisition was not created")
-    if first.change.change_id != second.change.change_id:
-        raise AssertionError("same owner turn created duplicate change")
+    if second.change is None or second.acquisition_work_id is None:
+        raise AssertionError("reopened acquisition was not available")
+    observed = reopened_store.work.require(second.acquisition_work_id)
+    if (
+        first.change.change_id != second.change.change_id
+        or first.acquisition_work_id != second.acquisition_work_id
+        or observed.work_id != running.work_id
+        or observed.state is not WorkState.RUNNING
+    ):
+        raise AssertionError("restart changed acquisition research identity/state")
     return {
         "change_id": first.change.change_id,
         "work_id": first.acquisition_work_id,
+        "state": observed.state.value,
+        "reopened_submit_count": len(reopened_backend.submitted),
     }
 
 
-def _10_waiting_resource_identity() -> dict[str, object]:
-    work = WorkItem(
-        request="phase9 provider pressure",
-        work_type=WorkType.RESEARCH,
-        source_session_id="phase9-replay",
-        source_turn_id="resource",
+def _10_waiting_resource_identity(root: pathlib.Path) -> dict[str, object]:
+    root.mkdir(parents=True, exist_ok=True)
+    store, _, admission = _admission_environment(root, turn_id="resource")
+    if admission.acquisition_work_id is None:
+        raise AssertionError("resource replay lacks acquisition WorkItem")
+    delivery = EngineeringSubstrateChangeService(store).block_work_resource(
+        admission.acquisition_work_id,
+        component="model-provider",
+        reason_code="rate_limited",
+        message="Provider pressure requires bounded retry.",
     )
-    waiting = work.transition(
-        WorkState.WAITING_RESOURCE,
-        status_detail="provider_rate_limited",
+    reopened = SQLiteWorkStore(root / "work.sqlite3").require(
+        admission.acquisition_work_id
     )
-    resumed = waiting.transition(WorkState.RUNNING)
-    if not (work.work_id == waiting.work_id == resumed.work_id):
-        raise AssertionError("resource wait changed WorkItem identity")
-    return {"work_id": work.work_id, "wait_state": waiting.state.value}
+    if reopened.state is not WorkState.WAITING_RESOURCE:
+        raise AssertionError("provider pressure did not persist WAITING_RESOURCE")
+    return {
+        "work_id": reopened.work_id,
+        "wait_state": reopened.state.value,
+        "delivery_id": delivery.delivery_id,
+    }
 
 
-def _11_waiting_owner_identity() -> dict[str, object]:
-    work = WorkItem(
-        request="phase9 device pairing",
-        work_type=WorkType.RESEARCH,
-        source_session_id="phase9-replay",
-        source_turn_id="owner",
-    ).transition(WorkState.RUNNING)
-    waiting = work.transition(
-        WorkState.WAITING_FOR_OWNER,
-        status_detail="device_pairing_required",
+def _11_waiting_owner_identity(root: pathlib.Path) -> dict[str, object]:
+    root.mkdir(parents=True, exist_ok=True)
+    store, _, admission = _admission_environment(root, turn_id="owner")
+    if admission.acquisition_work_id is None:
+        raise AssertionError("owner-input replay lacks acquisition WorkItem")
+    item = store.work.require(admission.acquisition_work_id)
+    running = store.work.save(
+        item.transition(WorkState.RUNNING),
+        expected_version=item.version,
     )
-    resumed = waiting.transition(WorkState.RUNNING)
-    if not (work.work_id == waiting.work_id == resumed.work_id):
-        raise AssertionError("owner wait changed WorkItem identity")
-    return {"work_id": work.work_id, "wait_state": waiting.state.value}
+    waiting = store.work.save(
+        running.transition(
+            WorkState.WAITING_FOR_OWNER,
+            status_detail="device_pairing_or_credential_required",
+        ),
+        expected_version=running.version,
+    )
+    reopened = SQLiteWorkStore(root / "work.sqlite3").require(waiting.work_id)
+    if reopened.state is not WorkState.WAITING_FOR_OWNER:
+        raise AssertionError("missing owner input did not persist WAITING_FOR_OWNER")
+    return {
+        "work_id": reopened.work_id,
+        "wait_state": reopened.state.value,
+    }
 
 
 def _gate_fixture(root: pathlib.Path, *, turn: str):
@@ -602,9 +639,16 @@ def _gate_fixture(root: pathlib.Path, *, turn: str):
 
 
 def _12_exact_architecture_digest(root: pathlib.Path) -> dict[str, object]:
-    root.mkdir(parents=True, exist_ok=True)
-    store, change, artifact, gates = _gate_fixture(root, turn="exact-gate")
-    gate = gates.present(change.change_id, GateKind.ARCHITECTURE, artifact.artifact_id)
+    _, store, _, _, change, plan, architecture = _architecture_ready(
+        root,
+        turn_id="exact-gate",
+    )
+    gates = GateService(store, verify_owner=lambda *_: True)
+    gate = gates.present(
+        change.change_id,
+        GateKind.ARCHITECTURE,
+        architecture.artifact_id,
+    )
     try:
         gates.decide(
             gate.gate_id,
@@ -622,29 +666,50 @@ def _12_exact_architecture_digest(root: pathlib.Path) -> dict[str, object]:
     decision = gates.decide(
         gate.gate_id,
         approved=True,
-        artifact_digest=artifact.digest,
+        artifact_digest=architecture.digest,
         actor_id="owner",
         source_session_id="phase9-replay",
         source_turn_id="approve",
         request_key="phase9-replay:exact",
     )
-    return {"approved": decision.approved, "artifact_digest": artifact.digest}
+    current = store.require(change.change_id)
+    if (
+        not decision.approved
+        or current.state is not ChangeState.APPROVED_FOR_BUILD
+        or architecture.payload.get("plan_digest") != plan.digest
+    ):
+        raise AssertionError("Phase-9 architecture approval lost exact plan binding")
+    return {
+        "approved": True,
+        "artifact_digest": architecture.digest,
+        "plan_digest": plan.digest,
+    }
 
 
 def _13_superseded_architecture(root: pathlib.Path) -> dict[str, object]:
-    root.mkdir(parents=True, exist_ok=True)
-    store, change, artifact, gates = _gate_fixture(root, turn="superseded")
-    gate = gates.present(change.change_id, GateKind.ARCHITECTURE, artifact.artifact_id)
+    _, store, _, _, change, _, architecture = _architecture_ready(
+        root,
+        turn_id="superseded",
+    )
+    gates = GateService(store, verify_owner=lambda *_: True)
+    gate = gates.present(
+        change.change_id,
+        GateKind.ARCHITECTURE,
+        architecture.artifact_id,
+    )
     store.add_artifact(
         change.change_id,
         kind="architecture",
-        payload={"schema": "phase9-replay-architecture", "plan_digest": "6" * 64},
+        payload={
+            **architecture.payload,
+            "rollback_strategy": "superseded replay revision",
+        },
     )
     try:
         gates.decide(
             gate.gate_id,
             approved=True,
-            artifact_digest=artifact.digest,
+            artifact_digest=architecture.digest,
             actor_id="owner",
             source_session_id="phase9-replay",
             source_turn_id="approve-old",
@@ -652,18 +717,54 @@ def _13_superseded_architecture(root: pathlib.Path) -> dict[str, object]:
         )
     except ChangeConflict:
         return {"superseded_approval_rejected": True}
-    raise AssertionError("superseded architecture approval was accepted")
+    raise AssertionError("superseded Phase-9 architecture approval was accepted")
 
 
 def _14_no_development_before_gate(root: pathlib.Path) -> dict[str, object]:
-    root.mkdir(parents=True, exist_ok=True)
-    store, _, admission = _admission_environment(root, turn_id="no-dev")
-    if admission.change is None:
-        raise AssertionError("expected acquisition EngineeringChange")
-    stages = store.list_stages(admission.change.change_id)
-    if any(item.stage_key == "development" for item in stages):
-        raise AssertionError("DEVELOPMENT existed before architecture approval")
-    return {"stages": [item.stage_key for item in stages]}
+    _, _, _, coordinator, change, _, _ = _architecture_ready(
+        root,
+        turn_id="no-dev",
+    )
+    try:
+        coordinator.submit_stage(change.change_id, "development", 1)
+    except ChangeConflict:
+        return {"development_before_approval": "rejected"}
+    raise AssertionError("DEVELOPMENT started before Phase-9 architecture approval")
+
+
+def _15_phase8_supply_chain(root: pathlib.Path) -> dict[str, object]:
+    _, store, _, _, change, _, architecture = _architecture_ready(
+        root,
+        turn_id="substrate-failure",
+    )
+    gates = GateService(store, verify_owner=lambda *_: True)
+    gate = gates.present(
+        change.change_id,
+        GateKind.ARCHITECTURE,
+        architecture.artifact_id,
+    )
+    gates.decide(
+        gate.gate_id,
+        approved=True,
+        artifact_digest=architecture.digest,
+        actor_id="owner",
+        source_session_id="phase9-replay",
+        source_turn_id="approve-substrate",
+        request_key="phase9-replay:substrate",
+    )
+    store.add_artifact(
+        change.change_id,
+        kind="substrate_manifest",
+        payload={
+            "schema": "phase9-replay-stale-substrate",
+            "manifest_digest": "f" * 64,
+        },
+    )
+    try:
+        ensure_substrate_acceptance_current(store, change.change_id)
+    except ChangeConflict:
+        return {"dependency_or_provenance_verification": "blocked"}
+    raise AssertionError("stale Phase-5 substrate evidence did not block acceptance")
 
 
 def _15_phase8_supply_chain(phase8) -> dict[str, object]:
