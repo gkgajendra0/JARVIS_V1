@@ -322,5 +322,10 @@ def test_completed_acquisition_derives_digest_bound_architecture(tmp_path) -> No
     assert architecture.payload["selected_candidate_digest"] == candidate.digest
     assert architecture.payload["source_revision"] == REVISION
     assert architecture.payload["allowed_paths"] == ["src/jarvis/tv_control.py"]
-    assert architecture.payload["verification_targets"] == ["tv-control-contract-v1"]
+    assert architecture.payload["verification_contract_ids"] == [
+        "tv-control-contract-v1"
+    ]
+    assert architecture.payload["verification_targets"] == [
+        "tests/test_tv_control.py"
+    ]
     assert architecture.payload["build_permitted"] is True
