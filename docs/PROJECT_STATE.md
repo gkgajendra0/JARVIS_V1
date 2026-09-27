@@ -49,7 +49,7 @@ Snapshot baseline verified from protected `main` at
 | Persistent concurrent work | DONE foundation | durable WorkItems/steps/deliveries, restart recovery, background research/development, priority/resource control |
 | Deterministic Self-Repair | PARTIAL foundation for Step 19 | R1/R2 typed framework plus Phase-1H-hardened R2 production recovery: sustained rolling budgets, shared target/action circuit breaker, typed verification/preconditions/provenance, versioned persistence, Windows Job Object runtime ownership and bounded production guardian |
 | EngineeringKnowledge | DONE foundation | Phase 2 owner-machine accepted 2026-09-25: immutable engineering knowledge, deterministic REPAIR projection, lifecycle/provenance/applicability, grounded local hybrid retrieval, integrity/security gates and open-ended facet extensibility |
-| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H, 2, 3, 4, 5, 6 and 7 are accepted; Phase 8 capability package + registry lifecycle research + architecture is next |
+| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H and 2–8 are accepted; Phase 9 Owner-Requested Capability Acquisition research/architecture is next |
 | Step 8 notes/tasks/reminders | PLANNED | still the next numbered product slice when numbered roadmap work resumes |
 
 Phase 3 EngineeringChange is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The canonical record is `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The owner-machine run proved durable same-identity recovery across a full Windows shutdown/reboot and live Exa research; persistent Gemini HTTP 429 pressure was accepted as an external limitation and did not weaken governance.
@@ -62,7 +62,7 @@ Phase 6 Unknown-Incident Investigation + Source Repair is **DONE / OWNER-MACHINE
 
 Phase 7 Governed Promotion / Production Verification / Rollback is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical final evidence is `PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`. The accepted implementation head `19beb542295fa4e3ab23407564847a82d8621258` passed 14/14 deterministic replay cases and real Windows owner-machine acceptance with evidence digest `9fb2bb940a855c1d0ab32e444e00d7e922bd66d5edd7915c31efe6dd5fa77a9b`. PR #150 was explicitly owner-approved and merged to protected `main` as `d2c7dc360386dab22bff6406d405b298601bff81`.
 
-Phase 8 Capability Package + Registry Lifecycle is next for repository inspection, technology research and architecture. No Phase-8 implementation authority is implied by Phase-7 completion.
+Phase 8 Capability Package + Registry Lifecycle is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical final evidence is `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`. Protected-main implementation SHA `1eda461be022ee30753b3d981e33290442f38a80` passed all 45 deterministic replay cases and the real Windows owner-machine acceptance with evidence digest `16de093d87b12bd9918e87fd160f9efa25c3787fe30fca2fbc0c630089893900` and replay digest `7e20c17d2a94567b051a92366987100b76e439afa48252f456aa738fd00c7a0c`.
 
 ---
 
@@ -144,6 +144,8 @@ truth/status but not runtime behavior.
 - **#133** Phase-5 final secure-engineering-substrate acceptance harness and Windows integration corrections; owner-machine accepted 2026-09-27.
 - **#148** Phase-6 deterministic replay + owner-machine acceptance closure, including Windows replay CI and deterministic persistent-SQLite cleanup; owner-machine accepted 2026-09-27.
 - **#150** Phase-7 governed promotion / production verification / rollback implementation, exact-head CI, Windows release/rollback regressions and owner-machine acceptance; owner-approved and merged 2026-09-27.
+- **#154** Phase-8 Capability Package + Registry Lifecycle implementation-focused research and revised architecture; owner-approved 2026-09-27.
+- **#156–#161** Phase-8 slices 8A–8F: package contracts, durable registry, release admission/compatibility, runtime projection/health, Authority lifecycle/rollback, deterministic evaluation and Windows acceptance; final owner-machine acceptance passed 2026-09-27.
 
 Final deterministic Self-Repair acceptance:
 - crash recovery passed;
@@ -243,7 +245,7 @@ These are intentionally not represented as completed.
 | full local/offline conversation | DEFERRED | current provider resilience is truthful survival, not a second full local conversation stack |
 | proactive/event-driven monitoring | PLANNED | later Step 15 |
 | full Steps 9/10/12 | PLANNED with partial foundations | Hands supplies foundations only |
-| Later autonomous-engineering phases | ACTIVE / PLANNED | Phases 2–7 are accepted; Phase 8 Capability Package + Registry Lifecycle research/architecture is next; later phases remain planned in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` |
+| Later autonomous-engineering phases | ACTIVE / PLANNED | Phases 2–8 are accepted; Phase 9 Owner-Requested Capability Acquisition research/architecture is next; later phases remain planned in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` |
 
 ---
 
@@ -290,7 +292,7 @@ old acceptance transcripts and superseded proposals.
 
 At the Phase-4 owner-acceptance documentation head:
 
-- Phase-4 accepted baseline was promoted through PR #118; subsequent accepted Phases 5–7 are now also on protected `main`;
+- Phase-4 accepted baseline was promoted through PR #118; subsequent accepted Phases 5–8 are now also on protected `main`;
 - Phase-2 implementation/acceptance PRs #92–#106: **merged / accepted**;
 - Phase-3 PR #108: **merged / owner-machine accepted 2026-09-25**;
 - Phase-4 documentation freeze: PR #109;
@@ -321,7 +323,7 @@ Permanent rule:
 > **JARVIS may manage JARVIS, but JARVIS must never become its own source of authority.**
 
 This is an **accepted future product/architecture direction, not current production
-capability**. It does not reopen accepted phases or interrupt the active Phase-8 research/architecture boundary.
+capability**. It does not reopen accepted phases or interrupt the active Phase-9 research/architecture boundary.
 The existing governed autonomous-engineering program becomes the engineering
 subsystem beneath this whole-JARVIS north star.
 
@@ -340,12 +342,14 @@ Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MA
 
 Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. PR #118 carries the final implementation/acceptance boundary and `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md` carries the canonical evidence.
 
+Phase 8 Capability Package + Registry Lifecycle is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical evidence is `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
+
 The active cross-cutting slice is:
 
-**Phase 8 — Capability Package + Registry Lifecycle**
+**Phase 9 — Owner-Requested Capability Acquisition — RESEARCH + ARCHITECTURE NEXT**
 
-Phases 5, 6 and 7 are complete and owner-machine accepted. The next cross-cutting action is Phase-8 repository inspection, technology research and architecture. Phase-8 implementation requires explicit owner architecture approval.
+The next action is Phase-9 repository inspection, technology research and architecture. Phase-9 implementation requires its own explicit owner architecture approval.
 
-The north-star documentation reconciliation does not broaden runtime authority or pre-authorize Phase-8 implementation.
+The north-star documentation reconciliation does not broaden runtime authority or pre-authorize Phase-9 implementation.
 
 Capability package/registry lifecycle is Phase 8. Step 8 remains the next numbered product slice when numbered roadmap work resumes.

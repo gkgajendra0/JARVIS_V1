@@ -2,7 +2,7 @@
 
 ## Status
 
-**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC REPAIR FRAMEWORK AND R2 RUNTIME CRASH/HANG RECOVERY FOUNDATION ARE OWNER ACCEPTED ON 2026-09-23. PHASE 1H FOUNDATION HARDENING IS OWNER-MACHINE ACCEPTED ON 2026-09-24. PHASE 2 ENGINEERINGKNOWLEDGE AND PHASE 3 ENGINEERINGCHANGE ARE OWNER-MACHINE ACCEPTED ON 2026-09-25. PHASE 4 RESEARCH + DIAGNOSTIC MODEL ROUTER IS OWNER-MACHINE ACCEPTED ON 2026-09-26. PHASES 5, 6 AND 7 ARE OWNER-MACHINE ACCEPTED ON 2026-09-27. PHASE 8 CAPABILITY PACKAGE + REGISTRY LIFECYCLE IS THE NEXT CROSS-CUTTING RESEARCH/ARCHITECTURE SLICE; STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
+**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC REPAIR FRAMEWORK AND R2 RUNTIME CRASH/HANG RECOVERY FOUNDATION ARE OWNER ACCEPTED ON 2026-09-23. PHASE 1H FOUNDATION HARDENING IS OWNER-MACHINE ACCEPTED ON 2026-09-24. PHASE 2 ENGINEERINGKNOWLEDGE AND PHASE 3 ENGINEERINGCHANGE ARE OWNER-MACHINE ACCEPTED ON 2026-09-25. PHASE 4 RESEARCH + DIAGNOSTIC MODEL ROUTER IS OWNER-MACHINE ACCEPTED ON 2026-09-26. PHASES 5, 6, 7 AND 8 ARE OWNER-MACHINE ACCEPTED ON 2026-09-27. PHASE 9 OWNER-REQUESTED CAPABILITY ACQUISITION IS THE NEXT CROSS-CUTTING RESEARCH/ARCHITECTURE SLICE; STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
 
 The latest owner-machine accepted Self-Repair runtime baseline includes Phase 1H foundation hardening promoted through PR #90 on 2026-09-24; later documentation-only reconciliation commits may advance protected `main` without changing that runtime behavior.
 
@@ -417,6 +417,17 @@ External provider/hardware/network failures do not independently trigger code ro
 Canonical final record:
 `docs/PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`.
 
+## Capability Package + Registry Lifecycle production foundation
+
+Phase 8 is owner-machine accepted on 2026-09-27.
+
+Current architecture includes immutable strict-SemVer capability package descriptors, Draft-2020-12 schema contracts, a checksummed SQLite lifecycle registry, immutable package admission, exact Phase-7 active-release binding, Phase-5 manifest/ArtifactStore/provenance reuse, source-owned trusted provider registrations, deterministic compatibility evidence, package-managed runtime projection, generation-aware fail-closed routing, per-capability transition fencing, Self Model health projection, Authority-bound lifecycle transitions, compatible version rollback, safety quarantine and bounded artifact retention.
+
+Existing built-ins remain `CORE_PINNED`; package-managed capabilities use durable desired state + selected version + generation reconciled into effective runtime truth. Package metadata cannot choose arbitrary executable code, imports, commands or plaintext secrets. DBOS is not canonical registry truth. No automatic plugin import, production package installation or Python hot reload is introduced.
+
+Canonical final record:
+`docs/PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
+
 ## Known residuals / deliberate deferrals
 
 Not currently claimed as solved:
@@ -439,9 +450,9 @@ Repository-wide accepted/deferred/superseded/rejected truth is centralized in `P
 
 ## Next architecture acceptance
 
-Phases 4–7 are **DONE / OWNER-MACHINE ACCEPTED**. Phase 7's final evidence is recorded in `docs/PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`.
+Phases 4–8 are **DONE / OWNER-MACHINE ACCEPTED**. Phase 8's final evidence is recorded in `docs/PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
 
-The next active cross-cutting slice is **Phase 8 — Capability Package + Registry Lifecycle**. Its work begins with repository inspection, technology research and architecture. Phase-8 implementation requires explicit owner architecture approval and must reuse the accepted WorkItem, EngineeringChange, EngineeringKnowledge, Authority, sandbox, provenance, promotion and rollback foundations rather than create a parallel capability system.
+The next active cross-cutting slice is **Phase 9 — Owner-Requested Capability Acquisition**. Its work begins with repository inspection, technology research and architecture. Phase-9 implementation requires explicit owner architecture approval and must reuse the accepted EngineeringChange, secure engineering substrate, governed promotion and Phase-8 package/registry lifecycle rather than create a parallel capability-acquisition path.
 
 **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027/CAP-028)** remains
 the next numbered product slice and must still reuse the accepted durable
