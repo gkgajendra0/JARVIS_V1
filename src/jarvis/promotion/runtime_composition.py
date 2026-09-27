@@ -161,6 +161,7 @@ class PromotionRuntime:
     def _authority_bundle(self) -> Iterator[_AuthorityBundle]:
         audit = SqliteAuditEventStore(_audit_path())
         opa = ManagedOpaServer()
+        bundle: _AuthorityBundle | None = None
         try:
             opa.start()
             approvals = ApprovalService()
@@ -178,14 +179,13 @@ class PromotionRuntime:
                 opa=opa,
                 audit=audit,
             )
-            try:
-                yield bundle
-            finally:
+            yield bundle
+        finally:
+            if bundle is None:
+                opa.close()
+                audit.close()
+            else:
                 bundle.close()
-        except Exception:
-            opa.close()
-            audit.close()
-            raise
 
     @staticmethod
     def _context(session_id: str) -> InteractionContext:
