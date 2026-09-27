@@ -115,9 +115,7 @@ def _build_change(
     manager = DevelopmentWorkspaceManager(
         repository_root=repository_root,
         workspace_root=tmp_path / "worktrees",
-        base_revision_resolver=IncidentRepairDevelopmentRevisionResolver(
-            change_store
-        ),
+        base_revision_resolver=IncidentRepairDevelopmentRevisionResolver(change_store),
     )
     coordinator = ChangeCoordinator(
         change_store,
