@@ -17,7 +17,13 @@ from jarvis.promotion.observation import (
     ObservationController,
     ObservationDisposition,
 )
-from jarvis.promotion.release import DeploymentMetadataStore
+from jarvis.promotion.release import (
+    DeploymentMetadataStore,
+    RecoveryPhase,
+    RecoveryRecord,
+    ReleaseRecord,
+    deployment_id,
+)
 from jarvis.promotion.rollback import RollbackCoordinator, RollbackError
 from jarvis.promotion.store import PromotionStore
 from jarvis.work.store import SQLiteWorkStore
@@ -383,8 +389,6 @@ def test_deployment_resume_from_staged_boundary_is_idempotent(tmp_path: Path) ->
     # runtime was stopped by reproducing the durable prefix of deploy().
     lkg = metadata.lkg()
     release_root = FakeStager(tmp_path / "releases").stage(MERGE)
-    from jarvis.promotion.release import RecoveryPhase, RecoveryRecord, ReleaseRecord, deployment_id
-
     candidate = ReleaseRecord(
         release_sha=MERGE,
         release_root=str(release_root),
@@ -420,7 +424,9 @@ def test_deployment_resume_from_staged_boundary_is_idempotent(tmp_path: Path) ->
     assert resumed.release == candidate
     assert metadata.active() == candidate
     assert metadata.recovery().phase is RecoveryPhase.NEW_RUNTIME_VERIFIED
-    assert promotions.require(attempt.attempt_id).state is PromotionAttemptState.OBSERVING
+    assert (
+        promotions.require(attempt.attempt_id).state is PromotionAttemptState.OBSERVING
+    )
     assert [event[0] for event in runtime.events[-3:]] == [
         "stop",
         "start",
