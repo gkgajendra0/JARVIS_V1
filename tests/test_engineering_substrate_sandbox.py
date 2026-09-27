@@ -102,9 +102,7 @@ def test_diagnostic_profiles_are_network_disabled_and_source_read_only(
 
     reproduction_command = list(reproduction.command)
     static_command = list(static.command)
-    assert reproduction_command[
-        reproduction_command.index("--network") + 1
-    ] == "none"
+    assert reproduction_command[reproduction_command.index("--network") + 1] == "none"
     assert static_command[static_command.index("--network") + 1] == "none"
     assert "--read-only" in reproduction_command
     assert "--read-only" in static_command
