@@ -652,6 +652,18 @@ def build_default_self_model() -> SelfModelRegistry:
             logger_prefixes=("jarvis.engineering_change",),
         ),
         C(
+            "work.incident_repair",
+            "Phase-6 unknown-incident diagnosis and governed source-repair contracts.",
+            ("src/jarvis/incident_repair",),
+            parent_component_id="work",
+            tests=(
+                "tests/test_incident_repair_models.py",
+                "tests/test_incident_repair_process.py",
+                "tests/test_engineering_change_process_stages.py",
+            ),
+            logger_prefixes=("jarvis.incident_repair",),
+        ),
+        C(
             "knowledge.research",
             "Provider-neutral source-aware current web research with provenance.",
             ("src/jarvis/knowledge", "src/jarvis/voice/research_tools.py"),
