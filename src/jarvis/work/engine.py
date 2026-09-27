@@ -243,8 +243,10 @@ class WorkEngine:
         if not reproduction_exists and not impossible_reason:
             return (
                 False,
-                "diagnostics require reproduction evidence or a typed "
-                "reproduction-impossible reason",
+                (
+                    "diagnostics require reproduction evidence or a typed "
+                    "reproduction-impossible reason"
+                ),
             )
 
         relevant_kinds = {
@@ -313,7 +315,7 @@ class WorkEngine:
         _, step = finalized
         diagnosis = step.observation.get("diagnosis")
         if not isinstance(diagnosis, dict):
-            raise ValueError("diagnostic finalize observation is malformed")
+            raise TypeError("diagnostic finalize observation is malformed")
         return {
             "diagnosis": diagnosis,
             "diagnosis_artifact_id": step.observation.get("diagnosis_artifact_id"),
