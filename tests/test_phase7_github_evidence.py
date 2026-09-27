@@ -72,8 +72,7 @@ def test_github_policy_binds_exact_candidate_and_windows_ci() -> None:
     assert result.tested_merge_sha == MERGE
     assert result.windows_verified is True
     assert (
-        tuple(item.context for item in result.required_checks)[-1]
-        == "promotion-policy"
+        tuple(item.context for item in result.required_checks)[-1] == "promotion-policy"
     )
 
 
