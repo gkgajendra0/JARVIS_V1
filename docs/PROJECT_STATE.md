@@ -243,7 +243,7 @@ These are intentionally not represented as completed.
 | full local/offline conversation | DEFERRED | current provider resilience is truthful survival, not a second full local conversation stack |
 | proactive/event-driven monitoring | PLANNED | later Step 15 |
 | full Steps 9/10/12 | PLANNED with partial foundations | Hands supplies foundations only |
-| Later autonomous-engineering phases | ACTIVE / PLANNED | Phases 2 EngineeringKnowledge, 3 EngineeringChange and 4 Model Router are accepted; Phase 5 Secure Autonomous Engineering Substrate is next; later phases remain planned in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` |
+| Later autonomous-engineering phases | ACTIVE / PLANNED | Phases 2–7 are accepted; Phase 8 Capability Package + Registry Lifecycle research/architecture is next; later phases remain planned in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` |
 
 ---
 
@@ -290,12 +290,12 @@ old acceptance transcripts and superseded proposals.
 
 At the Phase-4 owner-acceptance documentation head:
 
-- protected `main` still contains the accepted pre-Phase-4 baseline until PR #118 promotion;
+- Phase-4 accepted baseline was promoted through PR #118; subsequent accepted Phases 5–7 are now also on protected `main`;
 - Phase-2 implementation/acceptance PRs #92–#106: **merged / accepted**;
 - Phase-3 PR #108: **merged / owner-machine accepted 2026-09-25**;
 - Phase-4 documentation freeze: PR #109;
 - Phase-4 slices #110–#117: **merged**;
-- Phase-4 final PR #118: **owner-machine accepted 2026-09-26; final documentation/CI before protected-main merge**;
+- Phase-4 final PR #118: **owner-machine accepted and merged 2026-09-26**;
 - acceptance-tested Phase-4 implementation head: `b6d88199eedaca568efa82bf62a26ec2ef396903`;
 - Self-Repair issue #65: **closed / completed**.
 
@@ -321,7 +321,7 @@ Permanent rule:
 > **JARVIS may manage JARVIS, but JARVIS must never become its own source of authority.**
 
 This is an **accepted future product/architecture direction, not current production
-capability**. It does not reopen accepted phases or interrupt active Phase 5.
+capability**. It does not reopen accepted phases or interrupt the active Phase-8 research/architecture boundary.
 The existing governed autonomous-engineering program becomes the engineering
 subsystem beneath this whole-JARVIS north star.
 
