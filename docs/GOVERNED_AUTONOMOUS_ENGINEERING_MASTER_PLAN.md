@@ -539,6 +539,12 @@ Repository inspection, foundation research, implementation-focused research and 
 
 ### Phase 9 — owner-requested capability acquisition
 
+**STATUS: SOFTWARE COMPLETE ON PROTECTED MAIN / REAL EXTERNAL OWNER-MACHINE ACCEPTANCE PENDING 2026-09-27**
+
+Reviewed final hardening head `81d498a22bb2293d69c6b6a848b08740fae30f75` passed Ruff, full pytest, Windows Hello, Windows DPAPI, inherited Phase-6/7/8 regression/acceptance coverage, Phase-9 replay regressions and the promotion-policy gate. PR #178 squash-merged the completed live path to protected `main` as `e73db07abad7ab0e73ee2f0030ff6e58e9f3ee76`.
+
+Software completion is not the Phase-9 exit criterion. One genuine owner-requested external capability must still complete the full owner-machine lifecycle with observed external effect and disable/rollback evidence before Phase 9 becomes DONE / OWNER-MACHINE ACCEPTED.
+
 This is the first complete "capability to build capabilities" milestone.
 
 Example owner request:
@@ -717,10 +723,11 @@ Rules:
 6. Phase 6 Unknown-Incident Investigation + Source Repair is complete and owner-machine accepted on 2026-09-27; preserve its exact diagnosis/architecture/candidate provenance and protected-surface boundaries.
 7. Phase 7 Governed Promotion / Production Verification / Rollback is complete and owner-machine accepted on 2026-09-27; preserve exact evidence binding, owner/Authority separation, release identity and rollback-safety boundaries.
 8. Phase 8 Capability Package + Registry Lifecycle is complete and owner-machine accepted on 2026-09-27; preserve its exact package/release identity, registry generation, reconciliation, Authority and rollback boundaries.
-9. Insert Phase 10A Autonomous Operations Control Plane before Phase 11, as defined by `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
-10. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6 or Phase 7 without new concrete evidence.
-11. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
-12. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.
+9. Phase 9 Owner-Requested Capability Acquisition software is complete on protected main at `e73db07abad7ab0e73ee2f0030ff6e58e9f3ee76`; complete one genuine external owner-machine capability lifecycle before declaring the phase accepted.
+10. Insert Phase 10A Autonomous Operations Control Plane before Phase 11, as defined by `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
+11. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6 or Phase 7 without new concrete evidence.
+12. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
+13. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.
 
 The program is considered aligned only while each active slice can answer:
 
