@@ -111,9 +111,17 @@ class PromotionMerger:
         )
         change = self._changes.require(attempt.change_id)
         if change.state is ChangeState.WAITING_PROMOTION_APPROVAL:
-            self._changes.transition(
+            if (
+                attempt.promotion_artifact_id is None
+                or attempt.promotion_artifact_digest is None
+            ):
+                raise PromotionMergeError(
+                    "promotion attempt has no exact approved promotion artifact"
+                )
+            self._changes.mark_promoted(
                 change.change_id,
-                ChangeState.PROMOTED,
+                artifact_id=attempt.promotion_artifact_id,
+                artifact_digest=attempt.promotion_artifact_digest,
                 expected_version=change.version,
             )
         elif change.state is not ChangeState.PROMOTED:
