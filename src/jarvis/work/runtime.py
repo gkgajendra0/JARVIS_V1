@@ -12,6 +12,13 @@ from jarvis.capability_acquisition.architecture import (
     CapabilityAcquisitionDevelopmentRevisionResolver,
     CapabilityAcquisitionSourceCompletionHandler,
 )
+from jarvis.capability_acquisition.candidate_actions import (
+    build_capability_candidate_executors,
+    capability_candidate_completion_guard,
+)
+from jarvis.capability_acquisition.candidate_verification import (
+    CapabilityAcquisitionDevelopmentCompletionHandler,
+)
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.runtime_context import (
     AcquisitionContextProvider,
@@ -324,6 +331,10 @@ def build_work_runtime(
             workspace_manager,
             test_runner=build_development_test_runner(development_test_image),
         ),
+        *build_capability_candidate_executors(
+            change_store,
+            workspace_manager,
+        ),
     )
     actions = WorkActionRegistry(tuple(executors))
     resource_capacities = {
@@ -350,10 +361,17 @@ def build_work_runtime(
         if (
             change.process_key == OWNER_CAPABILITY_ACQUISITION_PROCESS.key
             and change.process_version == OWNER_CAPABILITY_ACQUISITION_PROCESS.version
-            and stage.stage_key
-            == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
         ):
-            return acquisition_completion_guard(steps)
+            if (
+                stage.stage_key
+                == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
+            ):
+                return acquisition_completion_guard(steps)
+            if (
+                stage.stage_key
+                == OWNER_CAPABILITY_ACQUISITION_PROCESS.development_stage.stage_key
+            ):
+                return capability_candidate_completion_guard(work, steps)
         return None
 
     engine = WorkEngine(
@@ -385,6 +403,10 @@ def build_work_runtime(
         ),
         development_completion_handlers=(
             IncidentRepairDevelopmentCompletionHandler(
+                change_store,
+                workspace_manager,
+            ),
+            CapabilityAcquisitionDevelopmentCompletionHandler(
                 change_store,
                 workspace_manager,
             ),
