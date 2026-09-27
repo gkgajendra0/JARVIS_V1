@@ -191,7 +191,7 @@ def test_github_promotion_requires_non_secret_identifiers() -> None:
 
 
 def test_invalid_github_promotion_identifiers_fail_closed() -> None:
-    with pytest.raises(ValueError, match="installation_id"):
+    with pytest.raises(ValueError, match="INSTALLATION_ID"):
         JarvisConfig(
             github_promotion_enabled=True,
             github_app_client_id="Iv1.phase9",
