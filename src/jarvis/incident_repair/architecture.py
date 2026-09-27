@@ -99,11 +99,7 @@ def _normalized_unique(values: object) -> tuple[str, ...]:
     if not isinstance(values, list | tuple):
         return ()
     return tuple(
-        dict.fromkeys(
-            str(item).strip()
-            for item in values
-            if str(item).strip()
-        )
+        dict.fromkeys(str(item).strip() for item in values if str(item).strip())
     )
 
 
@@ -163,9 +159,10 @@ def _validate_completed_diagnosis(
             "incident repair trigger artifact is missing"
         )
     source_revision = str(diagnosis.get("source_revision") or "").strip().lower()
-    if source_revision != str(
-        trigger.payload.get("source_revision") or ""
-    ).strip().lower():
+    if (
+        source_revision
+        != str(trigger.payload.get("source_revision") or "").strip().lower()
+    ):
         raise IncidentRepairArchitectureError(
             "diagnosis source revision differs from admitted incident revision"
         )
@@ -207,9 +204,7 @@ def derive_incident_repair_architecture(
             "diagnosis disposition cannot produce a repair architecture"
         )
 
-    selected_hypothesis_id = str(
-        diagnosis.get("selected_hypothesis_id") or ""
-    ).strip()
+    selected_hypothesis_id = str(diagnosis.get("selected_hypothesis_id") or "").strip()
     hypotheses = diagnosis.get("hypotheses")
     selected = None
     if isinstance(hypotheses, list):
@@ -241,12 +236,8 @@ def derive_incident_repair_architecture(
         source_revision=str(diagnosis.get("source_revision") or "").strip().lower(),
         repair_scope=str(diagnosis.get("proposed_repair_scope") or "").strip(),
         allowed_paths=_normalized_unique(diagnosis.get("affected_paths")),
-        allowed_components=_normalized_unique(
-            diagnosis.get("affected_components")
-        ),
-        verification_targets=_normalized_unique(
-            diagnosis.get("verification_targets")
-        ),
+        allowed_components=_normalized_unique(diagnosis.get("affected_components")),
+        verification_targets=_normalized_unique(diagnosis.get("verification_targets")),
         knowledge_revision_ids=_normalized_unique(
             diagnosis.get("knowledge_revision_ids")
         ),
@@ -282,9 +273,7 @@ def ensure_incident_repair_architecture_current(
 
     architecture = store.latest_artifact(change_id, "architecture")
     if architecture is None:
-        raise IncidentRepairArchitectureError(
-            "incident-repair architecture is missing"
-        )
+        raise IncidentRepairArchitectureError("incident-repair architecture is missing")
     if artifact_id is not None and architecture.artifact_id != artifact_id:
         raise IncidentRepairArchitectureError(
             "incident-repair architecture was superseded"
@@ -295,8 +284,7 @@ def ensure_incident_repair_architecture_current(
         payload.get("schema") != "incident_repair_architecture.v1"
         or payload.get("schema_version") != 1
         or payload.get("process_key") != UNKNOWN_INCIDENT_REPAIR_PROCESS.key
-        or payload.get("process_version")
-        != UNKNOWN_INCIDENT_REPAIR_PROCESS.version
+        or payload.get("process_version") != UNKNOWN_INCIDENT_REPAIR_PROCESS.version
         or payload.get("build_permitted") is not True
         or payload.get("protected_surface_review_required") is not True
     ):
@@ -306,9 +294,7 @@ def ensure_incident_repair_architecture_current(
 
     diagnosis_artifact = store.latest_artifact(change_id, "diagnosis")
     if diagnosis_artifact is None:
-        raise IncidentRepairArchitectureError(
-            "current diagnosis artifact is missing"
-        )
+        raise IncidentRepairArchitectureError("current diagnosis artifact is missing")
     if (
         payload.get("diagnosis_artifact_id") != diagnosis_artifact.artifact_id
         or payload.get("diagnosis_artifact_digest") != diagnosis_artifact.digest
@@ -325,10 +311,8 @@ def ensure_incident_repair_architecture_current(
         or payload.get("source_revision") != diagnosis.get("source_revision")
         or payload.get("repair_scope") != diagnosis.get("proposed_repair_scope")
         or payload.get("allowed_paths") != diagnosis.get("affected_paths")
-        or payload.get("allowed_components")
-        != diagnosis.get("affected_components")
-        or payload.get("verification_targets")
-        != diagnosis.get("verification_targets")
+        or payload.get("allowed_components") != diagnosis.get("affected_components")
+        or payload.get("verification_targets") != diagnosis.get("verification_targets")
         or payload.get("knowledge_revision_ids")
         != diagnosis.get("knowledge_revision_ids")
     ):
@@ -346,9 +330,7 @@ def ensure_incident_repair_architecture_current(
         None,
     )
     if stage is None:
-        raise IncidentRepairArchitectureError(
-            "diagnostic stage is missing"
-        )
+        raise IncidentRepairArchitectureError("diagnostic stage is missing")
     work = store.work.require(stage.work_id)
     _validate_completed_diagnosis(
         store,
@@ -384,7 +366,9 @@ class IncidentRepairDevelopmentRevisionResolver:
             change.change_id,
             artifact_id=stage.plan_artifact_id,
         )
-        revision = str(architecture.payload.get("source_revision") or "").strip().lower()
+        revision = (
+            str(architecture.payload.get("source_revision") or "").strip().lower()
+        )
         if not revision:
             raise IncidentRepairArchitectureError(
                 "approved architecture has no source revision"
