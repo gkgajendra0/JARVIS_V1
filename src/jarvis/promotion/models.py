@@ -321,6 +321,77 @@ class PromotionEvidenceV1:
             digest=digest,
         )
 
+    @classmethod
+    def from_payload(cls, payload: dict[str, object]) -> PromotionEvidenceV1:
+        """Reconstruct and re-verify one persisted immutable promotion artifact."""
+
+        if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+            raise ValueError("promotion evidence schema version is unsupported")
+        raw_checks = payload.get("required_checks")
+        raw_compatibility = payload.get("compatibility")
+        if not isinstance(raw_checks, list) or not isinstance(
+            raw_compatibility, dict
+        ):
+            raise ValueError("promotion evidence payload is malformed")
+        try:
+            checks = tuple(
+                CheckEvidence(
+                    context=str(item["context"]),
+                    conclusion=str(item["conclusion"]),
+                    app_id=(
+                        item.get("app_id")
+                        if isinstance(item.get("app_id"), int)
+                        else None
+                    ),
+                )
+                for item in raw_checks
+                if isinstance(item, dict)
+            )
+            compatibility = CompatibilityEvidence(
+                schema=CompatibilityVerdict(str(raw_compatibility["schema"])),
+                dbos=CompatibilityVerdict(str(raw_compatibility["dbos"])),
+                dependencies=CompatibilityVerdict(
+                    str(raw_compatibility["dependencies"])
+                ),
+            )
+            evidence = cls.create(
+                change_id=str(payload["change_id"]),
+                attempt_id=str(payload["attempt_id"]),
+                candidate_artifact_id=str(payload["candidate_artifact_id"]),
+                candidate_artifact_digest=str(
+                    payload["candidate_artifact_digest"]
+                ),
+                candidate_id=str(payload["candidate_id"]),
+                candidate_digest=str(payload["candidate_digest"]),
+                candidate_base_sha=str(payload["candidate_base_sha"]),
+                candidate_head_sha=str(payload["candidate_head_sha"]),
+                candidate_diff_digest=str(payload["candidate_diff_digest"]),
+                changed_paths=list(payload["changed_paths"]),
+                protected_policy_id=str(payload["protected_policy_id"]),
+                protected_policy_version=int(payload["protected_policy_version"]),
+                protected_verdict=str(payload["protected_verdict"]),
+                pr_number=int(payload["pr_number"]),
+                pr_base_sha=str(payload["pr_base_sha"]),
+                pr_head_sha=str(payload["pr_head_sha"]),
+                tested_merge_sha=str(payload["tested_merge_sha"]),
+                ci_run_id=str(payload["ci_run_id"]),
+                required_checks=checks,
+                windows_verified=payload["windows_verified"] is True,
+                compatibility=compatibility,
+                config_digest=str(payload["config_digest"]),
+                merge_method=str(payload["merge_method"]),
+                deployment_environment=str(payload["deployment_environment"]),
+                lkg_release_sha=str(payload["lkg_release_sha"]),
+                now_epoch=float(payload["created_at_epoch"]),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("promotion evidence payload is malformed") from exc
+        if payload.get("evidence_id") not in {None, evidence.evidence_id}:
+            raise ValueError("promotion evidence id mismatch")
+        if payload.get("digest") not in {None, evidence.digest}:
+            raise ValueError("promotion evidence digest mismatch")
+        return evidence
+
     def canonical_payload(self) -> dict[str, object]:
         return {
             "schema_version": 1,
