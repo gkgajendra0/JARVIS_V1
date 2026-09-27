@@ -52,7 +52,8 @@ CREATE TABLE capability_registry (
 );
 
 CREATE TABLE capability_lifecycle_events (
-    event_id TEXT PRIMARY KEY,
+    event_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL UNIQUE,
     capability_id TEXT NOT NULL,
     package_id TEXT,
     package_version TEXT,
