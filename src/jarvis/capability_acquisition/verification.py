@@ -275,7 +275,6 @@ def ensure_capability_substrate_requirements_current(
         )
 
 
-
 class CapabilityCandidateVerifier:
     """Re-derive Phase-9 candidate truth from Git, package schema and WorkSteps."""
 
