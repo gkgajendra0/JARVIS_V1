@@ -116,18 +116,15 @@ class RepairProtectedSurfacePolicy:
             "acceptance" in name or "evaluation" in name
         ):
             return "self_acceptance_or_evaluator"
-        if folded.startswith("src/jarvis/engineering_substrate/dependency/") and name == (
-            "policy.py"
-        ):
+        if folded.startswith(
+            "src/jarvis/engineering_substrate/dependency/"
+        ) and name == ("policy.py"):
             return "dependency_policy"
         if folded.startswith("tests/") and (
             "acceptance" in name or "evaluation" in name
         ):
             return "self_acceptance_or_evaluator"
-        if any(
-            folded.startswith(prefix)
-            for prefix in cls._PROTECTED_TEST_PREFIXES
-        ):
+        if any(folded.startswith(prefix) for prefix in cls._PROTECTED_TEST_PREFIXES):
             return "protected_boundary_verifier"
         return None
 
@@ -154,9 +151,7 @@ class RepairProtectedSurfacePolicy:
         for path in normalized:
             category = self._protected_category(path)
             if category is not None:
-                protected.append(
-                    ProtectedPathFinding(path=path, category=category)
-                )
+                protected.append(ProtectedPathFinding(path=path, category=category))
             elif self._known_clear(path):
                 clear.append(path)
             else:
