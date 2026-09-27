@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -149,7 +150,7 @@ def _write_package(release: ReleaseRecord, definition: AcquiredCapabilityDefinit
         "sbom_refs": [],
     }
     root = release.runtime_identity().release_root
-    package_root = __import__("pathlib").Path(root) / "capability_packages"
+    package_root = Path(root) / "capability_packages"
     package_root.mkdir()
     (package_root / "tv.control.package.json").write_text(
         json.dumps(payload, sort_keys=True),
