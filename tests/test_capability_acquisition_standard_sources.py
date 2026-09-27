@@ -249,7 +249,10 @@ def test_unverified_standard_source_is_blocked_and_custom_build_is_fallback() ->
         for item in result.candidates
         if item.source_kind is AcquisitionSourceKind.MCP
     )
-    assert "trust_not_allowed" in result.evaluation(mcp_candidate.candidate_id).reason_codes
+    assert (
+        "trust_not_allowed"
+        in result.evaluation(mcp_candidate.candidate_id).reason_codes
+    )
 
 
 def test_verified_standard_source_beats_custom_build() -> None:
