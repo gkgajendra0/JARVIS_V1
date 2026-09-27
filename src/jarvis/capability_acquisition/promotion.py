@@ -27,6 +27,7 @@ from jarvis.engineering_change.store import ChangeStore
 from jarvis.promotion.models import PromotionAttempt, PromotionAttemptState
 from jarvis.promotion.release import DeploymentMetadataStore
 from jarvis.promotion.store import PromotionStore
+from jarvis.work.models import WorkDeliveryKind
 
 
 class CapabilityAcquisitionReleaseBridgeError(ChangeConflict):
@@ -350,6 +351,31 @@ class CapabilityAcquisitionReleaseBridge:
                 "admission_artifact_id": admission_artifact.artifact_id,
                 "admission_artifact_digest": admission_artifact.digest,
             },
+        )
+
+        development_work_id = str(
+            candidate.payload.get("development_work_id") or ""
+        ).strip()
+        if not development_work_id:
+            raise CapabilityAcquisitionReleaseBridgeError(
+                "development_work_missing",
+                "Phase-9 candidate has no canonical development WorkItem",
+            )
+        development_work = self._changes.work.require(development_work_id)
+        self._changes.work.enqueue_delivery(
+            work=development_work,
+            kind=WorkDeliveryKind.OWNER_INPUT,
+            message=(
+                f"Capability acquisition {change_id} is deployed and package "
+                f"{package_id}@{package_version} passed Phase-8 admission. It remains "
+                f"disabled by design. Lifecycle proposal SHA-256: "
+                f"{lifecycle_artifact.digest}. Explicit owner activation is required. "
+                f"Say 'activate acquired capability {change_id}' to continue, or leave "
+                f"it disabled."
+            ),
+            event_key=(
+                f"phase9-lifecycle:{change_id}:{lifecycle_artifact.digest}"
+            ),
         )
         return CapabilityAcquisitionReleaseBridgeResult(
             admission=result,
