@@ -117,7 +117,6 @@ from jarvis.work.reasoner import RoutedWorkReasoner
 from jarvis.work.resources import ResourceLeaseManager, engineering_resource_capacities
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
-
 LOGGER = logging.getLogger(__name__)
 
 
