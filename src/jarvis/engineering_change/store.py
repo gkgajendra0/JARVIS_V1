@@ -347,6 +347,34 @@ class ChangeStore:
             ).fetchone()
         return None if row is None else self.get_artifact(row["artifact_id"])
 
+    def list_artifacts(
+        self,
+        change_id: str,
+        *,
+        kind: str | None = None,
+    ) -> tuple[ChangeArtifact, ...]:
+        """Return integrity-checked artifacts in revision order for durable replay."""
+        self.require(change_id)
+        with self.work._lock, self.work._connect() as db:
+            if kind is None:
+                rows = db.execute(
+                    """SELECT artifact_id FROM engineering_change_artifacts
+                    WHERE change_id=? ORDER BY kind, revision""",
+                    (change_id,),
+                ).fetchall()
+            else:
+                if not kind.strip():
+                    raise ChangeConflict("artifact kind must not be empty")
+                rows = db.execute(
+                    """SELECT artifact_id FROM engineering_change_artifacts
+                    WHERE change_id=? AND kind=? ORDER BY revision""",
+                    (change_id, kind),
+                ).fetchall()
+        artifacts = tuple(self.get_artifact(row["artifact_id"]) for row in rows)
+        if any(item is None for item in artifacts):
+            raise ChangeConflict("artifact disappeared during durable replay")
+        return tuple(item for item in artifacts if item is not None)
+
     def list_stages(self, change_id: str) -> tuple[ChangeStage, ...]:
         with self.work._lock, self.work._connect() as db:
             rows = db.execute(
