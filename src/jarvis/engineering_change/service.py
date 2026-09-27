@@ -60,13 +60,23 @@ class ChangeService:
             ChangeState.WAITING_OWNER_APPROVAL,
         }:
             raise ChangeConflict("architecture requires completed research")
+        process = store.process_contract(
+            change.process_key,
+            change.process_version,
+        )
+        source_stage = process.architecture_source_stage
         stages = store.list_stages(change_id)
-        research = next((s for s in stages if s.stage_key == "research"), None)
+        research = next(
+            (s for s in stages if s.stage_key == source_stage.stage_key),
+            None,
+        )
         if (
             research is None
             or store.work.require(research.work_id).state is not WorkState.COMPLETED
         ):
-            raise ChangeConflict("research WorkItem has not completed")
+            raise ChangeConflict(
+                f"{source_stage.stage_key} WorkItem has not completed"
+            )
         if not isinstance(payload, dict) or not payload:
             raise ChangeConflict("architecture proposal is empty")
         rendered = json.dumps(payload, ensure_ascii=False, sort_keys=True)
