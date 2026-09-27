@@ -365,9 +365,7 @@ class _Session:
             return {"branch": branch, "head_sha": head_sha, "published": False}
 
         basic = base64.b64encode(
-            f"x-access-token:{self._authorization.removeprefix('Bearer ')}".encode(
-                "utf-8"
-            )
+            f"x-access-token:{self._authorization.removeprefix('Bearer ')}".encode()
         ).decode("ascii")
         git = shutil.which("git")
         if git is None:
