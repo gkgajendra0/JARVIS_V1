@@ -258,6 +258,10 @@ class DeploymentCoordinator:
             return self._finish_verified(attempt=current, recovery=recovery)
 
         if recovery.phase is RecoveryPhase.NEW_RUNTIME_VERIFIED:
+            runtime.ensure_release(
+                recovery.candidate.runtime_identity(),
+                timeout_seconds=self._startup_timeout,
+            )
             return self._finish_verified(attempt=current, recovery=recovery)
 
         if recovery.phase is RecoveryPhase.STARTUP_FAILED:
