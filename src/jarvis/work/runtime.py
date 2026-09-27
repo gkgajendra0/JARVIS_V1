@@ -450,11 +450,12 @@ def build_work_runtime(
         changes=changes,
         context_provider=acquisition_context,
     )
-    if (capability_lifecycle_service is None) != (
-        capability_deployment_metadata is None
+    if (
+        capability_lifecycle_service is not None
+        and capability_deployment_metadata is None
     ):
         raise ValueError(
-            "capability lifecycle service and deployment metadata must be supplied together"
+            "capability lifecycle service requires canonical deployment metadata"
         )
     capability_lifecycle = (
         None
