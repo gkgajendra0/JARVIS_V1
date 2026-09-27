@@ -495,6 +495,7 @@ class CapabilityAcquisitionPlanV1:
     network_scopes: tuple[str, ...]
     device_scopes: tuple[str, ...]
     verification_contract_ids: tuple[str, ...]
+    development_test_targets: tuple[str, ...]
     owner_acceptance_contract_ids: tuple[str, ...]
     proposed_capability_id: str
     proposed_package_id: str
@@ -523,6 +524,7 @@ class CapabilityAcquisitionPlanV1:
         network_scopes: tuple[str, ...] | list[str] = (),
         device_scopes: tuple[str, ...] | list[str] = (),
         verification_contract_ids: tuple[str, ...] | list[str] = (),
+        development_test_targets: tuple[str, ...] | list[str] = (),
         owner_acceptance_contract_ids: tuple[str, ...] | list[str] = (),
         evidence_refs: tuple[str, ...] | list[str] = (),
     ) -> CapabilityAcquisitionPlanV1:
@@ -592,6 +594,14 @@ class CapabilityAcquisitionPlanV1:
                     require_nonempty=True,
                 )
             ),
+            "development_test_targets": list(
+                _tokens(
+                    tuple(development_test_targets),
+                    field="development_test_target",
+                    normalized=False,
+                    require_nonempty=True,
+                )
+            ),
             "owner_acceptance_contract_ids": list(
                 _tokens(
                     tuple(owner_acceptance_contract_ids),
@@ -636,6 +646,7 @@ class CapabilityAcquisitionPlanV1:
             network_scopes=tuple(payload["network_scopes"]),
             device_scopes=tuple(payload["device_scopes"]),
             verification_contract_ids=tuple(payload["verification_contract_ids"]),
+            development_test_targets=tuple(payload["development_test_targets"]),
             owner_acceptance_contract_ids=tuple(
                 payload["owner_acceptance_contract_ids"]
             ),
@@ -665,6 +676,7 @@ class CapabilityAcquisitionPlanV1:
             "network_scopes": list(self.network_scopes),
             "device_scopes": list(self.device_scopes),
             "verification_contract_ids": list(self.verification_contract_ids),
+            "development_test_targets": list(self.development_test_targets),
             "owner_acceptance_contract_ids": list(self.owner_acceptance_contract_ids),
             "proposed_capability_id": self.proposed_capability_id,
             "proposed_package_id": self.proposed_package_id,
