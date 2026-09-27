@@ -87,7 +87,10 @@ def test_workspace_can_pin_exact_approved_base_revision(
     )
     workspace = manager.ensure("work_dev_test")
 
-    assert _git(workspace.path, "merge-base", "--is-ancestor", approved, "HEAD").returncode == 0
+    assert (
+        _git(workspace.path, "merge-base", "--is-ancestor", approved, "HEAD").returncode
+        == 0
+    )
     assert _git(workspace.path, "rev-parse", "HEAD").stdout.strip().lower() == approved
     assert (workspace.path / "module.py").read_text(encoding="utf-8") == "VALUE = 1\n"
     assert (git_project / "module.py").read_text(encoding="utf-8") == "VALUE = 99\n"
