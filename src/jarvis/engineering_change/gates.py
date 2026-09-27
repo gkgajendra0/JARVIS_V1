@@ -110,6 +110,16 @@ class GateService:
                     change_id,
                     artifact_id=artifact_id,
                 )
+            elif change.process_key == "owner_capability_acquisition":
+                from jarvis.capability_acquisition.architecture import (
+                    ensure_capability_acquisition_architecture_current,
+                )
+
+                ensure_capability_acquisition_architecture_current(
+                    self.store,
+                    change_id,
+                    artifact_id=artifact_id,
+                )
         if kind is GateKind.ACCEPTANCE:
             stage = self.store.stage_for_work(str(artifact.payload.get("work_id", "")))
             if (
