@@ -301,19 +301,14 @@ class CapabilityLifecycleReconciler:
                         if health_state is not HealthState.HEALTHY:
                             reasons.add(f"health_{health_state.value}")
 
-            fenced = self.projection.transition_fence.is_fenced(
-                registry.capability_id
-            )
+            fenced = self.projection.transition_fence.is_fenced(registry.capability_id)
             if fenced:
                 reasons.add("transition_fenced")
 
             compatible = (
-                report is not None
-                and report.verdict is CompatibilityVerdict.READY
+                report is not None and report.verdict is CompatibilityVerdict.READY
             )
-            health_ok = (
-                not required_probes or health_state is HealthState.HEALTHY
-            )
+            health_ok = not required_probes or health_state is HealthState.HEALTHY
             effective = bool(
                 registry.desired_state is DesiredActivationState.ENABLED
                 and package is not None
@@ -339,12 +334,8 @@ class CapabilityLifecycleReconciler:
                     selected_package_version=registry.selected_package_version,
                     selected_package_digest=registry.selected_package_digest,
                     package_disposition=disposition,
-                    compatibility_verdict=(
-                        None if report is None else report.verdict
-                    ),
-                    compatibility_digest=(
-                        None if report is None else report.digest
-                    ),
+                    compatibility_verdict=(None if report is None else report.verdict),
+                    compatibility_digest=(None if report is None else report.digest),
                     health_state=health_state,
                     transition_fenced=fenced,
                     effective_enabled=effective,
