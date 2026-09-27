@@ -68,7 +68,7 @@ class DeploymentCoordinator:
         *,
         stager: GitReleaseStager,
         metadata: DeploymentMetadataStore,
-        runtime: RuntimeDeploymentDriver,
+        runtime: RuntimeDeploymentDriver | None = None,
         shutdown_timeout_seconds: float = 15.0,
         startup_timeout_seconds: float = 60.0,
     ) -> None:
@@ -83,6 +83,13 @@ class DeploymentCoordinator:
         self._runtime = runtime
         self._shutdown_timeout = float(shutdown_timeout_seconds)
         self._startup_timeout = float(startup_timeout_seconds)
+
+    def _require_runtime(self) -> RuntimeDeploymentDriver:
+        if self._runtime is None:
+            raise DeploymentError(
+                "deployment process control is owned by the supervisor"
+            )
+        return self._runtime
 
     def bootstrap_lkg(
         self,
@@ -174,6 +181,7 @@ class DeploymentCoordinator:
 
     def resume(self, attempt: PromotionAttempt) -> DeploymentResult:
         """Resume one exact deployment from durable recovery metadata."""
+        runtime = self._require_runtime()
         current = self._promotions.require(attempt.attempt_id)
         recovery = self._metadata.recovery()
         if recovery is None or recovery.attempt_id != current.attempt_id:
@@ -196,7 +204,7 @@ class DeploymentCoordinator:
             raise DeploymentError("promotion attempt is not deployment-recoverable")
 
         if recovery.phase is RecoveryPhase.STAGED:
-            self._runtime.stop_active(timeout_seconds=self._shutdown_timeout)
+            runtime.stop_active(timeout_seconds=self._shutdown_timeout)
             recovery = RecoveryRecord(
                 recovery.deployment_id,
                 recovery.attempt_id,
@@ -207,7 +215,7 @@ class DeploymentCoordinator:
             self._metadata.set_recovery(recovery)
 
         if recovery.phase is RecoveryPhase.OLD_RUNTIME_STOPPED:
-            self._runtime.start_release(recovery.candidate.runtime_identity())
+            runtime.start_release(recovery.candidate.runtime_identity())
             recovery = RecoveryRecord(
                 recovery.deployment_id,
                 recovery.attempt_id,
@@ -218,10 +226,35 @@ class DeploymentCoordinator:
             self._metadata.set_recovery(recovery)
 
         if recovery.phase is RecoveryPhase.NEW_RUNTIME_STARTED:
-            self._runtime.ensure_release(
-                recovery.candidate.runtime_identity(),
-                timeout_seconds=self._startup_timeout,
-            )
+            try:
+                runtime.ensure_release(
+                    recovery.candidate.runtime_identity(),
+                    timeout_seconds=self._startup_timeout,
+                )
+            except Exception as exc:
+                failed = RecoveryRecord(
+                    recovery.deployment_id,
+                    recovery.attempt_id,
+                    RecoveryPhase.STARTUP_FAILED,
+                    recovery.candidate,
+                    recovery.lkg,
+                )
+                self._metadata.set_recovery(failed)
+                try:
+                    runtime.stop_candidate(timeout_seconds=self._shutdown_timeout)
+                    runtime.start_release(recovery.lkg.runtime_identity())
+                    runtime.wait_ready(
+                        recovery.lkg.runtime_identity(),
+                        timeout_seconds=self._startup_timeout,
+                    )
+                    self._metadata.set_active(recovery.lkg)
+                except Exception as lkg_exc:
+                    raise DeploymentError(
+                        "candidate startup failed and Last Known Good could not recover"
+                    ) from lkg_exc
+                raise DeploymentError(
+                    "candidate startup failed; Last Known Good restored pending attribution"
+                ) from exc
             return self._finish_verified(attempt=current, recovery=recovery)
 
         if recovery.phase is RecoveryPhase.NEW_RUNTIME_VERIFIED:
@@ -235,20 +268,18 @@ class DeploymentCoordinator:
             f"deployment phase {recovery.phase.value} belongs to rollback recovery"
         )
 
-    def deploy(
+    def prepare(
         self,
         *,
         evidence: PromotionEvidenceV1,
         attempt: PromotionAttempt,
         schema_versions: tuple[tuple[str, int], ...] = (),
         now_epoch: float | None = None,
-    ) -> DeploymentResult:
-        if attempt.change_id != evidence.change_id:
+    ) -> PromotionAttempt:
+        """Persist the exact deployment handoff without controlling the runtime."""
+        current = self._promotions.require(attempt.attempt_id)
+        if current.change_id != evidence.change_id:
             raise DeploymentError("deployment evidence belongs to another change")
-        if attempt.state is not PromotionAttemptState.MERGED:
-            raise DeploymentError("promotion attempt must be merged before deployment")
-        if attempt.merge_sha is None:
-            raise DeploymentError("merged promotion attempt has no merge SHA")
         if not evidence.compatibility.ordinary_path_safe:
             raise DeploymentError(
                 "ordinary deployment requires SAFE compatibility evidence"
@@ -263,77 +294,82 @@ class DeploymentCoordinator:
             raise DeploymentError(
                 "approved promotion evidence no longer matches Last Known Good"
             )
-
         normalized_schema_versions = tuple(sorted(schema_versions))
         if normalized_schema_versions != lkg.schema_versions:
             raise DeploymentError(
                 "ordinary deployment cannot change durable schema versions"
             )
-        release_root = self._stager.stage(attempt.merge_sha)
+
+        if current.state is PromotionAttemptState.DEPLOYING:
+            recovery = self._metadata.recovery()
+            if (
+                recovery is None
+                or recovery.attempt_id != current.attempt_id
+                or recovery.candidate.release_sha != current.merge_sha
+                or recovery.candidate.promotion_evidence_digest != evidence.digest
+                or recovery.lkg.release_sha != lkg.release_sha
+            ):
+                raise DeploymentError(
+                    "existing deployment handoff does not match current evidence"
+                )
+            return current
+
+        if current.state is not PromotionAttemptState.MERGED:
+            raise DeploymentError("promotion attempt must be merged before deployment")
+        if current.merge_sha is None:
+            raise DeploymentError("merged promotion attempt has no merge SHA")
+
+        existing_recovery = self._metadata.recovery()
+        if (
+            existing_recovery is not None
+            and existing_recovery.attempt_id != current.attempt_id
+        ):
+            raise DeploymentError("another deployment recovery is still active")
+
+        release_root = self._stager.stage(current.merge_sha)
         accepted_at = time.time() if now_epoch is None else float(now_epoch)
         candidate = ReleaseRecord(
-            release_sha=attempt.merge_sha,
+            release_sha=current.merge_sha,
             release_root=str(release_root),
-            promotion_attempt_id=attempt.attempt_id,
+            promotion_attempt_id=current.attempt_id,
             promotion_evidence_digest=evidence.digest,
             config_digest=evidence.config_digest,
-            schema_versions=tuple(sorted(schema_versions)),
+            schema_versions=normalized_schema_versions,
             accepted_at_epoch=accepted_at,
         )
         identifier = deployment_id(
-            attempt_id=attempt.attempt_id,
-            merge_sha=attempt.merge_sha,
+            attempt_id=current.attempt_id,
+            merge_sha=current.merge_sha,
             evidence_digest=evidence.digest,
         )
         recovery = RecoveryRecord(
             deployment_id=identifier,
-            attempt_id=attempt.attempt_id,
+            attempt_id=current.attempt_id,
             phase=RecoveryPhase.STAGED,
             candidate=candidate,
             lkg=lkg,
         )
         self._metadata.set_recovery(recovery)
-        attempt = self._promotions.transition(
-            attempt.attempt_id,
+        return self._promotions.transition(
+            current.attempt_id,
             PromotionAttemptState.DEPLOYING,
-            expected_version=attempt.version,
+            expected_version=current.version,
             deployment_id=identifier,
             lkg_sha=lkg.release_sha,
         )
 
-        self._runtime.stop_active(timeout_seconds=self._shutdown_timeout)
-        recovery = RecoveryRecord(
-            identifier,
-            attempt.attempt_id,
-            RecoveryPhase.OLD_RUNTIME_STOPPED,
-            candidate,
-            lkg,
+    def deploy(
+        self,
+        *,
+        evidence: PromotionEvidenceV1,
+        attempt: PromotionAttempt,
+        schema_versions: tuple[tuple[str, int], ...] = (),
+        now_epoch: float | None = None,
+    ) -> DeploymentResult:
+        prepared = self.prepare(
+            evidence=evidence,
+            attempt=attempt,
+            schema_versions=schema_versions,
+            now_epoch=now_epoch,
         )
-        self._metadata.set_recovery(recovery)
-
-        try:
-            self._runtime.start_release(candidate.runtime_identity())
-            recovery = RecoveryRecord(
-                identifier,
-                attempt.attempt_id,
-                RecoveryPhase.NEW_RUNTIME_STARTED,
-                candidate,
-                lkg,
-            )
-            self._metadata.set_recovery(recovery)
-            self._runtime.wait_ready(
-                candidate.runtime_identity(),
-                timeout_seconds=self._startup_timeout,
-            )
-        except Exception:
-            recovery = RecoveryRecord(
-                identifier,
-                attempt.attempt_id,
-                RecoveryPhase.STARTUP_FAILED,
-                candidate,
-                lkg,
-            )
-            self._metadata.set_recovery(recovery)
-            raise
-
-        return self._finish_verified(attempt=attempt, recovery=recovery)
+        return self.resume(prepared)
