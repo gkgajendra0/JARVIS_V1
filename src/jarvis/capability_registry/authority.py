@@ -203,8 +203,7 @@ class CapabilityLifecycleAuthorityBridge:
         unknown = set(binding.manifest_authority_attributes) - boolean_fields
         if unknown:
             raise CapabilityLifecycleAuthorizationError(
-                "unknown manifest Authority attribute(s): "
-                + ", ".join(sorted(unknown))
+                "unknown manifest Authority attribute(s): " + ", ".join(sorted(unknown))
             )
         values = {name: False for name in boolean_fields}
         for name in binding.manifest_authority_attributes:
@@ -415,9 +414,7 @@ class CapabilityLifecycleAuthorityBridge:
             raise CapabilityLifecycleAuthorizationError(
                 "Authority decision risk fell below manifest floor"
             )
-        authority_ref = (
-            f"authority:{decision.decision_id}:{proposal.fingerprint}"
-        )
+        authority_ref = f"authority:{decision.decision_id}:{proposal.fingerprint}"
         return AuthorizedCapabilityLifecycle(
             proposal=proposal,
             context=context,
