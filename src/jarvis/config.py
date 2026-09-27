@@ -96,6 +96,14 @@ class JarvisConfig:
     work_dbos_database_url: str | None = field(default=None, repr=False)
     work_global_concurrency: int = 4
     development_test_docker_image: str | None = None
+    github_promotion_enabled: bool = False
+    github_app_client_id: str | None = None
+    github_app_installation_id: int | None = None
+    github_repository_full_name: str | None = None
+    github_app_secret_id: str | None = None
+    github_base_branch: str = "main"
+    github_workflow_file: str = "code-quality.yml"
+    github_expected_ci_app_id: int | None = 15368
     visual_computer_use_enabled: bool = False
     show_transcript: bool = True
     startup_greeting_enabled: bool = True
@@ -160,6 +168,9 @@ class JarvisConfig:
             "work_orchestration_model",
             "work_dbos_database_url",
             "development_test_docker_image",
+            "github_app_client_id",
+            "github_repository_full_name",
+            "github_app_secret_id",
         ):
             value = getattr(self, name)
             if value is not None:
@@ -180,6 +191,39 @@ class JarvisConfig:
                     "JARVIS_WORK_DBOS_DATABASE_URL must use Postgres "
                     "for production orchestration"
                 )
+
+        for name in ("github_base_branch", "github_workflow_file"):
+            value = str(getattr(self, name)).strip()
+            if not value:
+                raise ValueError(f"{name} must not be empty")
+            object.__setattr__(self, name, value)
+
+        if self.github_promotion_enabled:
+            if self.github_app_client_id is None:
+                raise ValueError(
+                    "JARVIS_GITHUB_APP_CLIENT_ID is required when GitHub promotion is enabled"
+                )
+            if (
+                self.github_app_installation_id is None
+                or isinstance(self.github_app_installation_id, bool)
+                or self.github_app_installation_id <= 0
+            ):
+                raise ValueError(
+                    "JARVIS_GITHUB_APP_INSTALLATION_ID must be positive when GitHub promotion is enabled"
+                )
+            if self.github_repository_full_name is None:
+                raise ValueError(
+                    "JARVIS_GITHUB_REPOSITORY is required when GitHub promotion is enabled"
+                )
+            if self.github_app_secret_id is None:
+                raise ValueError(
+                    "JARVIS_GITHUB_APP_SECRET_ID is required when GitHub promotion is enabled"
+                )
+        if self.github_expected_ci_app_id is not None and (
+            isinstance(self.github_expected_ci_app_id, bool)
+            or self.github_expected_ci_app_id <= 0
+        ):
+            raise ValueError("github_expected_ci_app_id must be positive")
 
         if isinstance(self.work_global_concurrency, bool) or not isinstance(
             self.work_global_concurrency, int
@@ -302,6 +346,39 @@ class JarvisConfig:
             ),
             development_test_docker_image=_configured_optional_text(
                 "JARVIS_DEV_TEST_DOCKER_IMAGE", machine
+            ),
+            github_promotion_enabled=_configured_bool(
+                "JARVIS_GITHUB_PROMOTION_ENABLED", False, machine
+            ),
+            github_app_client_id=_configured_optional_text(
+                "JARVIS_GITHUB_APP_CLIENT_ID", machine
+            ),
+            github_app_installation_id=(
+                None
+                if configured_text("JARVIS_GITHUB_APP_INSTALLATION_ID", machine) is None
+                else _configured_int("JARVIS_GITHUB_APP_INSTALLATION_ID", 0, machine)
+            ),
+            github_repository_full_name=_configured_optional_text(
+                "JARVIS_GITHUB_REPOSITORY", machine
+            ),
+            github_app_secret_id=_configured_optional_text(
+                "JARVIS_GITHUB_APP_SECRET_ID", machine
+            ),
+            github_base_branch=_configured_required_text(
+                "JARVIS_GITHUB_BASE_BRANCH", "main", machine
+            ),
+            github_workflow_file=_configured_required_text(
+                "JARVIS_GITHUB_WORKFLOW_FILE", "code-quality.yml", machine
+            ),
+            github_expected_ci_app_id=(
+                None
+                if configured_text("JARVIS_GITHUB_EXPECTED_CI_APP_ID", machine)
+                == "none"
+                else _configured_int(
+                    "JARVIS_GITHUB_EXPECTED_CI_APP_ID",
+                    15368,
+                    machine,
+                )
             ),
             visual_computer_use_enabled=_configured_bool(
                 "JARVIS_VISUAL_COMPUTER_USE_ENABLED", False, machine

@@ -6,6 +6,7 @@ import asyncio
 
 from livekit.agents import RunContext, function_tool
 
+from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.engineering_change.models import ChangeConflict
 from jarvis.engineering_change.service import ChangeService
@@ -70,14 +71,167 @@ class WorkAgentTools:
             self.resume_background_work,
             self.reprioritize_background_work,
             self.continue_background_work,
+            self.start_capability_acquisition,
+            self.activate_acquired_capability,
+            self.disable_acquired_capability,
             self.start_engineering_change,
             self.propose_change_architecture,
             self.revise_change_architecture,
             self.prepare_change_acceptance,
             self.prepare_change_promotion,
+            self.execute_change_promotion,
             self.decide_change_gate,
             self.get_engineering_change_status,
         ]
+
+    @function_tool()
+    async def start_capability_acquisition(
+        self,
+        context: RunContext,
+        requested_capability: str,
+        required_operations: list[str],
+        target_hints: list[str] | None = None,
+    ) -> dict[str, object]:
+        """Start governed Phase-9 acquisition from the latest accepted USER request.
+
+        Use only when the owner asks JARVIS to obtain a capability it does not
+        already have, such as controlling a device or integrating an external
+        service. The owner's exact request comes from the canonical latest USER
+        turn. requested_capability, required_operations and target_hints are only
+        structured interpretation fields; they do not grant extra Authority.
+        JARVIS binds the acquisition to its trusted current Git revision.
+        """
+        del context
+        coordinator = self._runtime.capability_acquisition
+        if coordinator is None:
+            return {"ok": False, "status": "capability_acquisition_unavailable"}
+
+        turn = self._latest_user_turn()
+        goal = OwnerCapabilityGoalV1.create(
+            request=turn.text,
+            requested_capability=requested_capability,
+            required_operations=required_operations,
+            target_hints=target_hints or (),
+            source_session_id=self._conversation.session_id,
+            source_turn_id=turn.turn_id,
+        )
+        admission = coordinator.admit(
+            goal,
+            source_revision=self._runtime.current_source_revision(),
+        )
+        selected = admission.initial_resolution.selected_candidate
+        result: dict[str, object] = {
+            "ok": True,
+            "status": admission.disposition.value,
+            "goal_id": goal.goal_id,
+            "goal_digest": goal.digest,
+            "canonical_user_turn_id": turn.turn_id,
+            "requested_capability": goal.requested_capability,
+            "required_operations": list(goal.required_operations),
+            "selected_candidate_id": (
+                None if selected is None else selected.candidate_id
+            ),
+            "selected_strategy": (
+                None if selected is None else selected.strategy.value
+            ),
+        }
+        if admission.change is not None:
+            result.update(
+                {
+                    "change_id": admission.change.change_id,
+                    "change_state": admission.change.state.value,
+                    "acquisition_work_id": admission.acquisition_work_id,
+                    "truth_note": (
+                        "accepted means durable Phase-9 acquisition work started; "
+                        "it does not mean the capability is built or enabled"
+                    ),
+                }
+            )
+        elif admission.disposition.value == "existing_lifecycle":
+            result["truth_note"] = (
+                "an existing compatible package can be reused, but lifecycle "
+                "Authority is still required before it becomes enabled"
+            )
+        else:
+            result["truth_note"] = (
+                "the requested capability is already effectively available; "
+                "no engineering work was started"
+            )
+        return result
+
+    @function_tool()
+    async def activate_acquired_capability(
+        self,
+        context: RunContext,
+        change_id: str,
+    ) -> dict[str, object]:
+        """Activate the exact admitted Phase-9 package from an explicit owner turn.
+
+        Use only when the latest accepted USER turn explicitly asks to activate,
+        enable or start using the acquired capability. Phase-8 lifecycle Authority
+        independently authorizes and consumes the state-changing permit.
+        """
+        del context
+        lifecycle = self._runtime.capability_lifecycle
+        if lifecycle is None:
+            return {"ok": False, "status": "capability_lifecycle_unavailable"}
+        turn = self._latest_user_turn()
+        result = await asyncio.to_thread(
+            lifecycle.activate,
+            change_id,
+            authority_session_id=self._conversation.session_id,
+            source_turn_id=turn.turn_id,
+        )
+        self._runtime.refresh_capability_catalog()
+        return {
+            "ok": True,
+            "status": "enabled",
+            "change_id": change_id,
+            "capability_id": result.capability_id,
+            "package_id": result.package_id,
+            "package_version": result.package_version,
+            "package_digest": result.package_digest,
+            "lifecycle_artifact_id": result.artifact.artifact_id,
+            "lifecycle_artifact_digest": result.artifact.digest,
+            "canonical_user_turn_id": turn.turn_id,
+        }
+
+    @function_tool()
+    async def disable_acquired_capability(
+        self,
+        context: RunContext,
+        change_id: str,
+    ) -> dict[str, object]:
+        """Disable the exact admitted Phase-9 package from an explicit owner turn.
+
+        Use for owner-requested disable/rollback safety. The operation reuses the
+        Phase-8 lifecycle Authority path and cannot bypass package provenance,
+        compatibility or durable registry generation checks.
+        """
+        del context
+        lifecycle = self._runtime.capability_lifecycle
+        if lifecycle is None:
+            return {"ok": False, "status": "capability_lifecycle_unavailable"}
+        turn = self._latest_user_turn()
+        result = await asyncio.to_thread(
+            lifecycle.disable,
+            change_id,
+            authority_session_id=self._conversation.session_id,
+            source_turn_id=turn.turn_id,
+        )
+        self._runtime.refresh_capability_catalog()
+        return {
+            "ok": True,
+            "status": "disabled",
+            "change_id": change_id,
+            "capability_id": result.capability_id,
+            "package_id": result.package_id,
+            "package_version": result.package_version,
+            "package_digest": result.package_digest,
+            "lifecycle_artifact_id": result.artifact.artifact_id,
+            "lifecycle_artifact_digest": result.artifact.digest,
+            "canonical_user_turn_id": turn.turn_id,
+        }
 
     def _change_service(self) -> ChangeService:
         if self._runtime.changes is None:
@@ -165,15 +319,76 @@ class WorkAgentTools:
     async def prepare_change_promotion(
         self, context: RunContext, change_id: str
     ) -> dict[str, object]:
-        """Present promotion intent after owner acceptance without promoting anything."""
+        """Publish the exact verified candidate and prepare Phase-7 PR/CI evidence.
+
+        Use after owner acceptance when the change is READY_FOR_PROMOTION. The
+        latest canonical USER turn authorizes only the short-lived GitHub credential
+        lease needed to publish/read the exact candidate. This tool never merges.
+        If CI is still running, report that truthfully and retry this same operation
+        later; PR/ref reconciliation is idempotent.
+        """
         del context
-        gate = self._change_service().prepare_promotion(change_id)
+        runtime = self._runtime.promotion_runtime
+        if runtime is None:
+            return {
+                "ok": False,
+                "status": "promotion_runtime_unavailable",
+                "change_id": change_id,
+            }
+        review = await asyncio.to_thread(
+            runtime.prepare_review,
+            change_id,
+            session=self._conversation,
+        )
         return {
             "ok": True,
             "change_id": change_id,
-            "gate_id": gate.gate_id,
-            "artifact_digest": gate.artifact_digest,
+            "attempt_id": review.attempt.attempt_id,
+            "gate_id": review.gate.gate_id,
+            "artifact_digest": review.artifact.digest,
+            "evidence_digest": review.evidence.digest,
+            "pr_number": review.evidence.pr_number,
+            "candidate_head_sha": review.evidence.candidate_head_sha,
             "status": "awaiting_explicit_owner_promotion_decision",
+        }
+
+    @function_tool()
+    async def execute_change_promotion(
+        self,
+        context: RunContext,
+        gate_id: str,
+    ) -> dict[str, object]:
+        """Authorize and merge the exact current Phase-7 promotion gate.
+
+        Use only after the latest canonical USER turn explicitly says
+        "approve <gate_id>" or otherwise satisfies the existing exact Phase-7
+        promotion decision grammar. GitHub credentials receive a fresh one-use
+        SecretBroker lease and the merge still consumes one-shot Authority.
+        """
+        del context
+        runtime = self._runtime.promotion_runtime
+        if runtime is None:
+            return {"ok": False, "status": "promotion_runtime_unavailable"}
+        result = await asyncio.to_thread(
+            runtime.authorize_and_merge,
+            gate_id,
+            session=self._conversation,
+        )
+        return {
+            "ok": True,
+            "status": "merged",
+            "change_id": result.evidence.change_id,
+            "gate_id": gate_id,
+            "promotion_attempt_id": result.evidence.attempt_id,
+            "evidence_digest": result.evidence.digest,
+            "merge_sha": result.merge.merge_sha,
+            "reconciled_after_external_merge": (
+                result.merge.reconciled_after_external_merge
+            ),
+            "truth_note": (
+                "merge is complete; the production supervisor owns exact-release "
+                "deployment, observation and rollback"
+            ),
         }
 
     @function_tool()

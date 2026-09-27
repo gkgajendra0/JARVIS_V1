@@ -61,6 +61,7 @@ from jarvis.promotion.release import (
     default_deployment_root,
     load_active_release_for_startup,
 )
+from jarvis.promotion.runtime_composition import PromotionRuntimeConfig
 from jarvis.provider_resilience import ProviderResilienceState
 from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.vision.health_observers import (
@@ -349,6 +350,7 @@ def build_production_voice_runtime(
 
     work_runtime = None
     if config.work_orchestration_enabled:
+        deployment_metadata = DeploymentMetadataStore(default_deployment_root())
         work_runtime = build_work_runtime(
             provider=config.ai_provider,
             research_service=research_service,
@@ -368,11 +370,27 @@ def build_production_voice_runtime(
             capability_lifecycle_service=(
                 None if package_stack is None else package_stack.lifecycle
             ),
-            capability_deployment_metadata=(
-                None
-                if package_stack is None
-                else DeploymentMetadataStore(default_deployment_root())
+            capability_deployment_metadata=deployment_metadata,
+            capability_package_admission=(
+                None if package_stack is None else package_stack.admission
             ),
+            capability_package_reconciler=(
+                None if package_stack is None else package_stack.reconciler
+            ),
+            promotion_runtime_config=(
+                None
+                if not config.github_promotion_enabled
+                else PromotionRuntimeConfig(
+                    client_id=config.github_app_client_id or "",
+                    installation_id=config.github_app_installation_id or 0,
+                    repository_full_name=config.github_repository_full_name or "",
+                    secret_id=config.github_app_secret_id or "",
+                    base_branch=config.github_base_branch,
+                    workflow_file=config.github_workflow_file,
+                    expected_ci_app_id=config.github_expected_ci_app_id,
+                )
+            ),
+            capability_catalog_refresher=capability_runtime.refresh_catalog,
         )
         LOGGER.info(
             "Persistent work runtime configured: provider=%s physical_concurrency=%s "

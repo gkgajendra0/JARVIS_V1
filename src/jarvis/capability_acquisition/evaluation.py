@@ -846,6 +846,10 @@ def validate_real_capability_evidence(
         char not in "0123456789abcdef" for char in active_sha
     ):
         raise RealCapabilityEvidenceError("active_release_sha must be exact Git SHA")
+    if active_sha != commit:
+        raise RealCapabilityEvidenceError(
+            "real capability evidence active release differs from tested commit"
+        )
     if body.get("owner_confirmed") is not True:
         raise RealCapabilityEvidenceError(
             "real external capability requires explicit owner confirmation"

@@ -27,6 +27,7 @@ from jarvis.engineering_change.store import ChangeStore
 from jarvis.promotion.models import PromotionAttempt, PromotionAttemptState
 from jarvis.promotion.release import DeploymentMetadataStore
 from jarvis.promotion.store import PromotionStore
+from jarvis.work.models import WorkDeliveryKind
 
 
 class CapabilityAcquisitionReleaseBridgeError(ChangeConflict):
@@ -292,6 +293,78 @@ class CapabilityAcquisitionReleaseBridge:
                 "new package became executable without lifecycle Authority",
             )
 
+        existing_admission = self._changes.latest_artifact(
+            change_id,
+            "capability_package_admission",
+        )
+        existing_lifecycle = self._changes.latest_artifact(
+            change_id,
+            "capability_lifecycle_proposal",
+        )
+        if existing_admission is not None and existing_lifecycle is not None:
+            try:
+                current_admission = ensure_capability_release_bridge_current(
+                    self._changes,
+                    self._deployment,
+                    change_id,
+                    attempt_id=attempt.attempt_id,
+                )
+            except CapabilityAcquisitionReleaseBridgeError:
+                current_admission = None
+            if current_admission is not None:
+                lifecycle_payload = existing_lifecycle.payload
+                if (
+                    current_admission.artifact_id != existing_admission.artifact_id
+                    or existing_admission.payload.get("package_id") != package_id
+                    or existing_admission.payload.get("package_version")
+                    != package_version
+                    or existing_admission.payload.get("package_digest")
+                    != package_digest
+                    or existing_admission.payload.get("capability_id") != capability_id
+                    or existing_admission.payload.get("compatibility_digest")
+                    != result.compatibility.digest
+                    or lifecycle_payload.get("package_id") != package_id
+                    or lifecycle_payload.get("package_version") != package_version
+                    or lifecycle_payload.get("package_digest") != package_digest
+                    or lifecycle_payload.get("capability_id") != capability_id
+                    or lifecycle_payload.get("compatibility_digest")
+                    != result.compatibility.digest
+                    or lifecycle_payload.get("authority_required") is not True
+                ):
+                    raise CapabilityAcquisitionReleaseBridgeError(
+                        "release_bridge_evidence_stale",
+                        "existing Phase-9 release bridge evidence no longer matches "
+                        "the exact active package",
+                    )
+                try:
+                    existing_proposal = CapabilityLifecycleProposalV1(
+                        capability_id=capability_id,
+                        package_id=package_id,
+                        package_version=package_version,
+                        package_digest=package_digest,
+                        compatibility_digest=result.compatibility.digest,
+                        expected_generation=int(
+                            lifecycle_payload.get("expected_generation")
+                        ),
+                        proposed_actions=tuple(
+                            str(item)
+                            for item in (
+                                lifecycle_payload.get("proposed_actions") or ()
+                            )
+                        ),
+                    )
+                except (TypeError, ValueError) as exc:
+                    raise CapabilityAcquisitionReleaseBridgeError(
+                        "lifecycle_proposal_stale",
+                        "existing Phase-9 lifecycle proposal is malformed",
+                    ) from exc
+                return CapabilityAcquisitionReleaseBridgeResult(
+                    admission=result,
+                    admission_artifact=existing_admission,
+                    lifecycle_proposal=existing_proposal,
+                    lifecycle_artifact=existing_lifecycle,
+                )
+
         proposed_actions: list[str] = []
         if not (
             after.selected_package_id == package_id
@@ -350,6 +423,29 @@ class CapabilityAcquisitionReleaseBridge:
                 "admission_artifact_id": admission_artifact.artifact_id,
                 "admission_artifact_digest": admission_artifact.digest,
             },
+        )
+
+        development_work_id = str(
+            candidate.payload.get("development_work_id") or ""
+        ).strip()
+        if not development_work_id:
+            raise CapabilityAcquisitionReleaseBridgeError(
+                "development_work_missing",
+                "Phase-9 candidate has no canonical development WorkItem",
+            )
+        development_work = self._changes.work.require(development_work_id)
+        self._changes.work.enqueue_delivery(
+            work=development_work,
+            kind=WorkDeliveryKind.OWNER_INPUT,
+            message=(
+                f"Capability acquisition {change_id} is deployed and package "
+                f"{package_id}@{package_version} passed Phase-8 admission. It remains "
+                f"disabled by design. Lifecycle proposal SHA-256: "
+                f"{lifecycle_artifact.digest}. Explicit owner activation is required. "
+                f"Say 'activate acquired capability {change_id}' to continue, or leave "
+                f"it disabled."
+            ),
+            event_key=(f"phase9-lifecycle:{change_id}:{lifecycle_artifact.digest}"),
         )
         return CapabilityAcquisitionReleaseBridgeResult(
             admission=result,
