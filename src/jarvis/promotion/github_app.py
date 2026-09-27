@@ -8,13 +8,14 @@ import re
 import subprocess
 import sys
 import threading
-from dataclasses import dataclass
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
 from types import TracebackType
-from typing import Protocol
+from typing import Protocol, Self
 
 from jarvis.dev_control import RuntimeReleaseIdentity
+
 from .github import (
     GitHubPromotionError,
     GitHubPullRequestSnapshot,
@@ -129,7 +130,7 @@ class BrokeredGitHubAppClient:
             )
         return helper
 
-    def __enter__(self) -> BrokeredGitHubAppClient:
+    def __enter__(self) -> Self:
         with self._lock:
             if self._process is not None:
                 raise GitHubPromotionError(
