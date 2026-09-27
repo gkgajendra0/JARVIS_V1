@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from itertools import pairwise
 
 import pytest
 from pydantic import ValidationError
@@ -83,7 +84,7 @@ def test_semver_precedence_matches_semver_2_spec_example() -> None:
     )
 
     parsed = tuple(StrictSemVer.parse(item) for item in ordered)
-    for left, right in zip(parsed, parsed[1:], strict=True):
+    for left, right in pairwise(parsed):
         assert left.compare_precedence(right) == -1
         assert right.compare_precedence(left) == 1
 
