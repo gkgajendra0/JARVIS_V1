@@ -135,9 +135,7 @@ class DiagnosticReproductionEvidence:
                 None if coverage_returncode is None else int(coverage_returncode)
             ),
             "targets": list(targets),
-            "coverage_files": [
-                item.to_payload() for item in coverage_files
-            ],
+            "coverage_files": [item.to_payload() for item in coverage_files],
             "output": output,
             "output_sha256": hashlib.sha256(output.encode("utf-8")).hexdigest(),
             "sandbox_profile": sandbox_profile,
@@ -173,9 +171,7 @@ class DiagnosticReproductionEvidence:
             "pytest_returncode": self.pytest_returncode,
             "coverage_returncode": self.coverage_returncode,
             "targets": list(self.targets),
-            "coverage_files": [
-                item.to_payload() for item in self.coverage_files
-            ],
+            "coverage_files": [item.to_payload() for item in self.coverage_files],
             "output": self.output,
             "output_sha256": self.output_sha256,
             "sandbox_profile": self.sandbox_profile,
@@ -280,7 +276,9 @@ def _coverage_evidence(path: pathlib.Path) -> tuple[CoverageFileEvidence, ...]:
         percent = 0.0
         if isinstance(summary, dict):
             raw_percent = summary.get("percent_covered")
-            if isinstance(raw_percent, int | float) and not isinstance(raw_percent, bool):
+            if isinstance(raw_percent, int | float) and not isinstance(
+                raw_percent, bool
+            ):
                 percent = float(raw_percent)
         output.append(
             CoverageFileEvidence(
@@ -409,17 +407,14 @@ class DockerDiagnosticReproductionRunner:
                 )
 
             combined = (completed.stdout + "\n" + completed.stderr).strip()
-            coverage_files = _coverage_evidence(
-                evidence_root / "coverage.json"
-            )
+            coverage_files = _coverage_evidence(evidence_root / "coverage.json")
             coverage_returncode = None
             reason_codes: list[str] = []
             last_json = next(
                 (
                     line
                     for line in reversed(completed.stdout.splitlines())
-                    if line.strip().startswith("{")
-                    and "coverage_returncode" in line
+                    if line.strip().startswith("{") and "coverage_returncode" in line
                 ),
                 None,
             )
@@ -559,9 +554,7 @@ class DiagnosticRunReproductionExecutor:
             raise WorkOwnerInputRequired(
                 "Safe diagnostic reproduction is not configured. "
                 "Configure an approved diagnostic Docker image containing the "
-                "verified dependencies "
-                + ", ".join(requirement_ids)
-                + "."
+                "verified dependencies " + ", ".join(requirement_ids) + "."
             )
         result = await runner.run(
             workspace.path,
