@@ -334,15 +334,11 @@ class WorkEngine:
             ),
         }
 
+    @staticmethod
     def _completion_guard(
-        self,
         work: WorkItem,
         steps: tuple[WorkStep, ...],
     ) -> tuple[bool, str | None]:
-        if self._custom_completion_guard is not None:
-            custom = self._custom_completion_guard(work, steps)
-            if custom is not None:
-                return custom
         if work.work_type is WorkType.RESEARCH:
             successful = any(
                 step.kind == "research_web"
@@ -386,6 +382,17 @@ class WorkEngine:
                 )
             return True, None
         return True, None
+
+    def _effective_completion_guard(
+        self,
+        work: WorkItem,
+        steps: tuple[WorkStep, ...],
+    ) -> tuple[bool, str | None]:
+        if self._custom_completion_guard is not None:
+            custom = self._custom_completion_guard(work, steps)
+            if custom is not None:
+                return custom
+        return WorkEngine._completion_guard(work, steps)
 
     def _record_completion_guard(
         self,
@@ -833,7 +840,7 @@ class WorkEngine:
             work = latest
 
         if decision.goal_complete:
-            allowed, guard_reason = self._completion_guard(work, steps)
+            allowed, guard_reason = self._effective_completion_guard(work, steps)
             if not allowed:
                 assert guard_reason is not None
                 return self._record_completion_guard(work, guard_reason)
