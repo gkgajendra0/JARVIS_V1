@@ -916,11 +916,14 @@ def _recover_unexpected_exit(
             now_epoch=float(now_fn()),
         )
         try:
-            restarted = _start_jarvis(
-                root,
-                control,
-                release_identity=release_identity,
-            )
+            if release_identity is None:
+                restarted = _start_jarvis(root, control)
+            else:
+                restarted = _start_jarvis(
+                    root,
+                    control,
+                    release_identity=release_identity,
+                )
         except (OSError, WindowsJobObjectError):
             repair.complete_attempt(
                 plan,
@@ -1038,6 +1041,7 @@ def _recover_liveness_failure(
     config: DevSupervisorConfig,
     repair: SupervisorRepairController,
     *,
+    release_identity: RuntimeReleaseIdentity | None = None,
     sleep_fn: Any = time.sleep,
     now_fn: Any = time.time,
     stabilization_verifier: Any = _verify_child_stabilization,
