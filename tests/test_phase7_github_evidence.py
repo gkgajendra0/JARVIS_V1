@@ -71,7 +71,10 @@ def test_github_policy_binds_exact_candidate_and_windows_ci() -> None:
     assert result.pr_head_sha == HEAD
     assert result.tested_merge_sha == MERGE
     assert result.windows_verified is True
-    assert tuple(item.context for item in result.required_checks)[-1] == "promotion-policy"
+    assert (
+        tuple(item.context for item in result.required_checks)[-1]
+        == "promotion-policy"
+    )
 
 
 def test_github_policy_rejects_moved_head_or_wrong_check_app() -> None:
