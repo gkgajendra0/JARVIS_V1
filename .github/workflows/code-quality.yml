@@ -221,3 +221,25 @@ jobs:
 
       - name: Run Windows Self-Repair Job Object smoke tests
         run: python -m pytest -q tests/test_self_repair_windows_job.py
+
+
+  promotion-policy:
+    if: always()
+    needs:
+      - ruff
+      - pytest
+      - windows-hello-helper
+      - windows-dpapi
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all promotion validations to succeed
+        env:
+          RUFF_RESULT: ${{ needs.ruff.result }}
+          PYTEST_RESULT: ${{ needs.pytest.result }}
+          WINDOWS_HELLO_RESULT: ${{ needs.windows-hello-helper.result }}
+          WINDOWS_DPAPI_RESULT: ${{ needs.windows-dpapi.result }}
+        run: |
+          test "$RUFF_RESULT" = "success"
+          test "$PYTEST_RESULT" = "success"
+          test "$WINDOWS_HELLO_RESULT" = "success"
+          test "$WINDOWS_DPAPI_RESULT" = "success"
