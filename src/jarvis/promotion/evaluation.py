@@ -410,18 +410,17 @@ def _case_exact_candidate(root: pathlib.Path) -> dict[str, object]:
 
 
 def _case_stale_candidate(root: pathlib.Path) -> dict[str, object]:
-    changes, promotions, _, _ = _candidate_fixture(root)
-    change = changes.list(states=(ChangeState.READY_FOR_PROMOTION,))[0]
+    changes, promotions, _, attempt = _candidate_fixture(root)
     try:
         PromotionCandidateVerifier(changes, promotions).verify_and_create_attempt(
-            change.change_id,
+            attempt.change_id,
             current_main_sha="9" * 40,
         )
     except StalePromotionCandidate as exc:
-        attempts = promotions.list_for_change(change.change_id)
-        if not attempts or attempts[-1].state is not PromotionAttemptState.STALE:
+        current = promotions.require(attempt.attempt_id)
+        if current.state is not PromotionAttemptState.STALE:
             raise Phase7EvaluationError("stale candidate was not durably marked") from exc
-        return {"reason_code": exc.reason_code, "state": attempts[-1].state.value}
+        return {"reason_code": exc.reason_code, "state": current.state.value}
     raise Phase7EvaluationError("stale candidate was accepted")
 
 
