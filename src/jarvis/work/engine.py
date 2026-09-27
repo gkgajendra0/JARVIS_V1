@@ -183,6 +183,153 @@ class WorkEngine:
         return last_write, last_passing_test, last_diff, last_clean_commit
 
     @staticmethod
+    def _diagnostic_finalize_step(
+        steps: tuple[WorkStep, ...],
+    ) -> tuple[int, WorkStep] | None:
+        for index in range(len(steps) - 1, -1, -1):
+            step = steps[index]
+            if (
+                step.kind == "diag_finalize"
+                and step.state.value == "completed"
+                and step.observation.get("finalized") is True
+            ):
+                return index, step
+        return None
+
+    @staticmethod
+    def _diagnostic_completion_guard(
+        steps: tuple[WorkStep, ...],
+    ) -> tuple[bool, str | None]:
+        incident_inspected = any(
+            step.kind == "diag_get_incident"
+            and step.state.value == "completed"
+            and isinstance(step.observation.get("incident"), dict)
+            for step in steps
+        )
+        if not incident_inspected:
+            return False, "diagnostics must inspect canonical incident evidence"
+
+        workspace_prepared = any(
+            step.kind == "diag_prepare_workspace"
+            and step.state.value == "completed"
+            and step.observation.get("prepared") is True
+            and bool(step.observation.get("revision"))
+            for step in steps
+        )
+        if not workspace_prepared:
+            return False, "diagnostics must prepare the exact-revision workspace"
+
+        hypothesis_recorded = any(
+            step.kind == "diag_record_hypothesis"
+            and step.state.value == "completed"
+            and isinstance(step.observation.get("hypothesis"), dict)
+            for step in steps
+        )
+        if not hypothesis_recorded:
+            return False, "diagnostics must record at least one typed hypothesis"
+
+        finalized = WorkEngine._diagnostic_finalize_step(steps)
+        if finalized is None:
+            return False, "diagnostics require a structured diag_finalize result"
+        finalize_index, finalize_step = finalized
+
+        reproduction_exists = any(
+            step.kind == "diag_run_reproduction"
+            and step.state.value == "completed"
+            for step in steps
+        )
+        impossible_reason = str(
+            finalize_step.observation.get("reproduction_impossible_reason") or ""
+        ).strip()
+        if not reproduction_exists and not impossible_reason:
+            return (
+                False,
+                "diagnostics require reproduction evidence or a typed "
+                "reproduction-impossible reason",
+            )
+
+        relevant_kinds = {
+            "diag_get_incident",
+            "diag_retrieve_knowledge",
+            "diag_prepare_workspace",
+            "diag_list_files",
+            "diag_search_source",
+            "diag_read_file",
+            "diag_code_index",
+            "diag_structural_search",
+            "diag_repo_map",
+            "diag_history",
+            "diag_bisect",
+            "diag_run_reproduction",
+            "diag_static_check",
+            "diag_record_hypothesis",
+            "research_web",
+        }
+        latest_relevant = max(
+            (
+                index
+                for index, step in enumerate(steps)
+                if step.state.value == "completed" and step.kind in relevant_kinds
+            ),
+            default=-1,
+        )
+        if finalize_index <= latest_relevant:
+            return (
+                False,
+                "diagnostics must re-finalize after the latest relevant evidence",
+            )
+
+        diagnosis = finalize_step.observation.get("diagnosis")
+        if not isinstance(diagnosis, dict):
+            return False, "diag_finalize did not persist a structured diagnosis"
+        disposition = diagnosis.get("disposition")
+        if disposition == "supported_repair":
+            if not diagnosis.get("selected_hypothesis_id"):
+                return (
+                    False,
+                    "supported repair diagnosis requires a selected hypothesis",
+                )
+            if not diagnosis.get("proposed_repair_scope"):
+                return (
+                    False,
+                    "supported repair diagnosis requires proposed repair scope",
+                )
+            targets = diagnosis.get("verification_targets")
+            if not isinstance(targets, list) or not targets:
+                return (
+                    False,
+                    "supported repair diagnosis requires verification targets",
+                )
+        elif disposition != "inconclusive":
+            return False, "diagnosis disposition is unsupported"
+        return True, None
+
+    @staticmethod
+    def _diagnostic_result_payload(
+        steps: tuple[WorkStep, ...],
+    ) -> dict[str, Any]:
+        finalized = WorkEngine._diagnostic_finalize_step(steps)
+        if finalized is None:
+            raise ValueError("diagnostic result requires diag_finalize")
+        _, step = finalized
+        diagnosis = step.observation.get("diagnosis")
+        if not isinstance(diagnosis, dict):
+            raise ValueError("diagnostic finalize observation is malformed")
+        return {
+            "diagnosis": diagnosis,
+            "diagnosis_artifact_id": step.observation.get(
+                "diagnosis_artifact_id"
+            ),
+            "diagnosis_artifact_digest": step.observation.get(
+                "diagnosis_artifact_digest"
+            ),
+            "suspicious_locations": step.observation.get(
+                "suspicious_locations",
+                [],
+            ),
+        }
+
+    @staticmethod
     def _completion_guard(
         work: WorkItem,
         steps: tuple[WorkStep, ...],
@@ -202,6 +349,8 @@ class WorkEngine:
                     "fresh research evidence has not been successfully retrieved",
                 )
             )
+        if work.work_type is WorkType.DIAGNOSTICS:
+            return WorkEngine._diagnostic_completion_guard(steps)
         if work.work_type is WorkType.DEVELOPMENT:
             (
                 last_write,
@@ -680,7 +829,9 @@ class WorkEngine:
                 assert guard_reason is not None
                 return self._record_completion_guard(work, guard_reason)
             result_payload: dict[str, Any] = {"summary": decision.summary}
-            if work.work_type is WorkType.DEVELOPMENT:
+            if work.work_type is WorkType.DIAGNOSTICS:
+                result_payload = self._diagnostic_result_payload(steps)
+            elif work.work_type is WorkType.DEVELOPMENT:
                 commit_step = next(
                     (
                         step
