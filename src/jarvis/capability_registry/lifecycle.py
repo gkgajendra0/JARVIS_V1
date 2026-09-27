@@ -682,11 +682,11 @@ class CapabilityLifecycleService:
         )
         snapshot = self._reconcile_after_fence(
             expected_state=durable,
-            action=CapabilityLifecycleAction.QUARANTINE_PACKAGE,
+            action=CapabilityLifecycleAction.RETIRE_PACKAGE,
             require_effective=require_effective,
         )
         return CapabilityLifecycleMutationResult(
-            action=CapabilityLifecycleAction.QUARANTINE_PACKAGE,
+            action=CapabilityLifecycleAction.RETIRE_PACKAGE,
             previous_state=current,
             current_state=durable,
             compatibility=report,
@@ -748,11 +748,11 @@ class CapabilityLifecycleService:
         )
         snapshot = self._reconcile_after_fence(
             expected_state=durable,
-            action=CapabilityLifecycleAction.RETIRE_PACKAGE,
+            action=CapabilityLifecycleAction.QUARANTINE_PACKAGE,
             require_effective=require_effective,
         )
         return CapabilityLifecycleMutationResult(
-            action=CapabilityLifecycleAction.RETIRE_PACKAGE,
+            action=CapabilityLifecycleAction.QUARANTINE_PACKAGE,
             previous_state=current,
             current_state=durable,
             compatibility=report,
