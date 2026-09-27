@@ -45,7 +45,7 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 The active cross-cutting engineering boundary is now:
 
-**Phase 8 — Capability Package + Registry Lifecycle — DONE / OWNER-MACHINE ACCEPTED 2026-09-27**
+**Phase 9 — Owner-Requested Capability Acquisition — SOFTWARE IMPLEMENTATION COMPLETE / OWNER-MACHINE REAL-CAPABILITY ACCEPTANCE PENDING**
 
 Phase 5 Secure Autonomous Engineering Substrate is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Its final evidence is recorded in `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`. PR #133 merged to protected main at `78f25fb192b926ee30a028cfc02c829e1197cc9e`.
 
@@ -85,7 +85,7 @@ PR #150 was explicitly owner-approved and merged to protected `main` as `d2c7dc3
 
 The accepted Phase-7 path adds exact candidate/PR/CI binding, digest-bound owner promotion, one-shot Authority execution, exact-head protected merge, immutable Windows release staging, runtime release identity verification, bounded observation and compatibility-safe rollback. It does not grant JARVIS ownership authority.
 
-**Current state: Phase 8 is DONE / OWNER-MACHINE ACCEPTED 2026-09-27.** Slices 8A–8F are implemented on protected `main` at `1eda461be022ee30753b3d981e33290442f38a80`. The real Windows owner-machine run passed all 45 deterministic replay cases, registry file-handle replace/reopen validation, protected-repository unchanged verification and exact-SHA evidence binding. Canonical evidence is `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`. Phase 9 is next for repository inspection, technology research and architecture; Phase-8 completion does not pre-authorize Phase-9 implementation.
+**Current state: Phase 9 software implementation is complete; final owner-machine real-capability acceptance is pending.** Slices 9A–9G are implemented on protected `main` at `4bea63255ea366d74cc5268c3f56baea3a1a53e3`. Exact-head CI passed Ruff, full pytest, Windows Hello, the complete Windows regression lane, inherited Phase-7/8 acceptance harnesses, the new 24-case Phase-9 deterministic replay and promotion policy. Phase 9 is **not DONE yet**: one genuine owner-requested external capability must still provide real effect evidence, production observation and rollback/disable verification bound to the exact tested implementation SHA.
 
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
@@ -128,7 +128,7 @@ Phase 5  Secure autonomous engineering substrate — DONE / OWNER-MACHINE ACCEPT
 Phase 6  Unknown-incident investigation + source repair — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 7  Governed promotion / production verification / rollback — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 8  Capability package + registry lifecycle — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
-Phase 9  Owner-requested capability acquisition — NEXT / RESEARCH + ARCHITECTURE REQUIRED
+Phase 9  Owner-requested capability acquisition — SOFTWARE COMPLETE / OWNER-MACHINE REAL-CAPABILITY ACCEPTANCE PENDING
 Phase 10 Closed-loop engineering learning
 Phase 10A Autonomous Operations Control Plane — approved future integration point; not active yet
 Phase 11 Autonomous capability-gap / weakness detection
@@ -193,4 +193,4 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Begin Phase 9 repository inspection, technology research and architecture for Owner-Requested Capability Acquisition. Do not begin Phase-9 implementation until the resulting architecture receives explicit owner approval.**
+**Run one genuine owner-requested external capability through the implemented Phase-9 lifecycle, bind its real-world evidence to protected-main SHA `4bea63255ea366d74cc5268c3f56baea3a1a53e3`, run the Windows Phase-9 owner-machine acceptance harness, and record canonical acceptance evidence. Do not mark Phase 9 DONE until this succeeds.**
