@@ -16,6 +16,7 @@ from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_P
 from jarvis.capability_acquisition.promotion import (
     CapabilityAcquisitionReleaseBridge,
     CapabilityAcquisitionReleaseBridgeError,
+    ensure_capability_release_bridge_current,
 )
 from jarvis.capability_registry.admission import CapabilityPackageAdmissionService
 from jarvis.capability_registry.compatibility import (
@@ -374,6 +375,13 @@ def test_promoted_package_is_admitted_without_auto_activation(
         "enable",
     )
     assert result.lifecycle_proposal.authority_required is True
+    current = ensure_capability_release_bridge_current(
+        changes,
+        deployment,
+        change.change_id,
+        attempt_id=attempt.attempt_id,
+    )
+    assert current.artifact_id == result.admission_artifact.artifact_id
 
 
 def test_bridge_rejects_active_release_that_does_not_match_promotion(
@@ -536,3 +544,66 @@ def test_bridge_blocks_package_when_phase8_provider_is_missing(
             admission=admission,
             reconciler=reconciler,
         ).reconcile(change.change_id, attempt_id=attempt.attempt_id)
+
+
+
+def test_release_bridge_current_rejects_candidate_supersession(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    manifest = _manifest()
+    package = _package(manifest)
+    changes, promotions, change, candidate, _, attempt = _change_and_attempt(
+        tmp_path,
+        package_digest=package.digest,
+    )
+    release_root = tmp_path / "release-superseded"
+    release_root.mkdir()
+    release = ReleaseRecord(
+        release_sha=MERGE,
+        release_root=str(release_root),
+        promotion_attempt_id=attempt.attempt_id,
+        promotion_evidence_digest=PROMOTION_DIGEST,
+        config_digest=CONFIG_DIGEST,
+        schema_versions=(("capability_registry", 1),),
+        accepted_at_epoch=1.0,
+    )
+    _write_package(release, package)
+    _set_change_state(changes, change.change_id, ChangeState.OBSERVING)
+    _set_attempt_observing(changes, attempt.attempt_id)
+    deployment = DeploymentMetadataStore(tmp_path / "deployment-superseded")
+    deployment.set_active(release)
+    _, admission, reconciler = _phase8_stack(
+        tmp_path / "phase8-superseded",
+        release,
+        manifest,
+    )
+    monkeypatch.setattr(
+        "jarvis.capability_acquisition.promotion."
+        "ensure_capability_candidate_acceptance_current",
+        lambda *_args, **_kwargs: None,
+    )
+    CapabilityAcquisitionReleaseBridge(
+        changes,
+        promotions,
+        deployment,
+        admission=admission,
+        reconciler=reconciler,
+    ).reconcile(change.change_id, attempt_id=attempt.attempt_id)
+
+    changes.add_artifact(
+        change.change_id,
+        kind="capability_candidate",
+        payload={**candidate.payload, "candidate_id": "capcand_superseded"},
+    )
+
+    with pytest.raises(
+        CapabilityAcquisitionReleaseBridgeError,
+        match="stale or unsafe",
+    ):
+        ensure_capability_release_bridge_current(
+            changes,
+            deployment,
+            change.change_id,
+            attempt_id=attempt.attempt_id,
+        )
