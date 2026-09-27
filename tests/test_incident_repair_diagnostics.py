@@ -6,6 +6,7 @@ import pytest
 
 from jarvis.engineering_change import ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
+from jarvis.incident_repair import UNKNOWN_INCIDENT_REPAIR_PROCESS
 from jarvis.incident_repair.diagnostics import (
     DiagnosticContextResolver,
     DiagnosticFinalizeExecutor,
@@ -15,7 +16,6 @@ from jarvis.incident_repair.diagnostics import (
     DiagnosticRetrieveKnowledgeExecutor,
     suspicious_location_scores,
 )
-from jarvis.incident_repair.process import UNKNOWN_INCIDENT_REPAIR_PROCESS
 from jarvis.model_routing.strategy import derive_work_step_signals
 from jarvis.work.engine import WorkEngine
 from jarvis.work.models import WorkItem, WorkStep, WorkType
