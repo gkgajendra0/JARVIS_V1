@@ -29,7 +29,9 @@ from jarvis.capability_acquisition.models import (
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.resolver import CapabilityAcquisitionResolver
-from jarvis.capability_acquisition.runtime_context import StaticAcquisitionContextProvider
+from jarvis.capability_acquisition.runtime_context import (
+    StaticAcquisitionContextProvider,
+)
 from jarvis.capability_acquisition.source import (
     AcquisitionContextV1,
     CapabilitySourceRegistry,
@@ -173,32 +175,48 @@ def test_admission_creates_one_durable_acquisition_workitem_when_build_is_needed
 
 
 def test_phase9_completion_guard_requires_finalize_after_latest_evidence() -> None:
-    goal_step = WorkStep(
-        work_id="w",
-        kind="acq_inspect_goal",
-        summary="inspect",
-    ).start().complete({"goal": {"goal_id": "g"}})
-    resolve_step = WorkStep(
-        work_id="w",
-        kind="acq_resolve",
-        summary="resolve",
-    ).start().complete({"resolved": True})
-    finalize_step = WorkStep(
-        work_id="w",
-        kind="acq_finalize",
-        summary="finalize",
-    ).start().complete({"finalized": True})
+    goal_step = (
+        WorkStep(
+            work_id="w",
+            kind="acq_inspect_goal",
+            summary="inspect",
+        )
+        .start()
+        .complete({"goal": {"goal_id": "g"}})
+    )
+    resolve_step = (
+        WorkStep(
+            work_id="w",
+            kind="acq_resolve",
+            summary="resolve",
+        )
+        .start()
+        .complete({"resolved": True})
+    )
+    finalize_step = (
+        WorkStep(
+            work_id="w",
+            kind="acq_finalize",
+            summary="finalize",
+        )
+        .start()
+        .complete({"finalized": True})
+    )
 
     assert acquisition_completion_guard((goal_step, resolve_step, finalize_step)) == (
         True,
         None,
     )
 
-    later_research = WorkStep(
-        work_id="w",
-        kind="research_web",
-        summary="new evidence",
-    ).start().complete({"ok": True})
+    later_research = (
+        WorkStep(
+            work_id="w",
+            kind="research_web",
+            summary="new evidence",
+        )
+        .start()
+        .complete({"ok": True})
+    )
     allowed, reason = acquisition_completion_guard(
         (goal_step, resolve_step, finalize_step, later_research)
     )
@@ -303,7 +321,5 @@ def test_completed_acquisition_derives_digest_bound_architecture(tmp_path) -> No
     assert architecture.payload["selected_candidate_digest"] == candidate.digest
     assert architecture.payload["source_revision"] == REVISION
     assert architecture.payload["allowed_paths"] == ["src/jarvis/tv_control.py"]
-    assert architecture.payload["verification_targets"] == [
-        "tv-control-contract-v1"
-    ]
+    assert architecture.payload["verification_targets"] == ["tv-control-contract-v1"]
     assert architecture.payload["build_permitted"] is True
