@@ -183,6 +183,10 @@ class ChangeService:
         if gate is None:
             raise ChangeConflict("unknown gate")
         challenge = gate.challenge if isinstance(gate, GateDecision) else gate
+        if challenge.kind is GateKind.PROMOTION:
+            raise ChangeConflict(
+                "promotion decisions must execute through governed Phase-7 promotion service"
+            )
         if (
             isinstance(gate, GateDecision)
             and gate.verification_id is not None
