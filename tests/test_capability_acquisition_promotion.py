@@ -46,6 +46,7 @@ from jarvis.promotion.models import PromotionAttemptState
 from jarvis.promotion.release import DeploymentMetadataStore, ReleaseRecord
 from jarvis.promotion.store import PromotionStore
 from jarvis.self_model.health import HealthRegistry
+from jarvis.work.models import WorkItem, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
 BASE = "1" * 40
@@ -197,6 +198,15 @@ def _change_and_attempt(tmp_path, *, package_digest: str = DIGEST):
         process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
         source_session_id="owner-session",
         source_turn_id="owner-turn",
+    )
+    changes.work.create(
+        WorkItem(
+            work_id="work_phase9f",
+            request="Build TV control capability",
+            work_type=WorkType.DEVELOPMENT,
+            source_session_id="owner-session",
+            source_turn_id="owner-turn",
+        )
     )
     candidate = changes.add_artifact(
         change.change_id,
@@ -379,6 +389,34 @@ def test_promoted_package_is_admitted_without_auto_activation(
         "enable",
     )
     assert result.lifecycle_proposal.authority_required is True
+    pending = changes.work.list_pending_deliveries(limit=10)
+    lifecycle_deliveries = tuple(
+        item
+        for item in pending
+        if item.event_key.startswith("phase9-lifecycle:")
+    )
+    assert len(lifecycle_deliveries) == 1
+    assert change.change_id in lifecycle_deliveries[0].message
+    assert result.lifecycle_artifact.digest in lifecycle_deliveries[0].message
+
+    repeated = CapabilityAcquisitionReleaseBridge(
+        changes,
+        promotions,
+        deployment,
+        admission=admission,
+        reconciler=reconciler,
+    ).reconcile(
+        change.change_id,
+        attempt_id=attempt.attempt_id,
+    )
+    repeated_deliveries = tuple(
+        item
+        for item in changes.work.list_pending_deliveries(limit=10)
+        if item.event_key.startswith("phase9-lifecycle:")
+    )
+    assert repeated.lifecycle_artifact.digest == result.lifecycle_artifact.digest
+    assert len(repeated_deliveries) == 1
+
     current = ensure_capability_release_bridge_current(
         changes,
         deployment,
