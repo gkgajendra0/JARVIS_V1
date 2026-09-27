@@ -55,7 +55,7 @@ def _release(tmp_path) -> ReleaseRecord:
     return ReleaseRecord(
         release_sha=RELEASE_SHA,
         release_root=str(root),
-        promotion_attempt_id="promotion-retention-test",
+        promotion_attempt_id="promotion_retention_test",
         promotion_evidence_digest="c" * 64,
         config_digest="d" * 64,
         schema_versions=(("capability_registry", 1),),
