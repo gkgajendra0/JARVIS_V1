@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
+from jarvis.capability_registry.contracts import CapabilityPackageV1
 from jarvis.capability_registry.models import (
     AdmittedCapabilityPackage,
     PackageDisposition,
@@ -146,10 +147,9 @@ class CapabilityCompatibilityEvaluator:
 
     def _manifest(
         self,
-        package: AdmittedCapabilityPackage,
+        descriptor: CapabilityPackageV1,
         reasons: set[CompatibilityReason],
     ) -> RegisteredCapabilityManifest | None:
-        descriptor = package.package
         try:
             registered = self.manifest_registry.require(
                 descriptor.manifest_id,
@@ -171,11 +171,11 @@ class CapabilityCompatibilityEvaluator:
 
     def _verify_artifacts(
         self,
-        package: AdmittedCapabilityPackage,
+        package: CapabilityPackageV1,
         reasons: set[CompatibilityReason],
     ) -> tuple[str, ...]:
         verified: list[str] = []
-        for descriptor in package.package.artifacts:
+        for descriptor in package.artifacts:
             try:
                 path = self.artifact_store.verify(descriptor.sha256)
             except ArtifactIntegrityError:
@@ -208,15 +208,20 @@ class CapabilityCompatibilityEvaluator:
             verified.append(descriptor.sha256)
         return tuple(sorted(verified))
 
-    def evaluate(
+    def evaluate_package(
         self,
-        package: AdmittedCapabilityPackage,
+        descriptor: CapabilityPackageV1,
+        *,
+        disposition: PackageDisposition = PackageDisposition.AVAILABLE,
     ) -> CapabilityCompatibilityReportV1:
+        if not isinstance(descriptor, CapabilityPackageV1):
+            raise TypeError("descriptor must be CapabilityPackageV1")
+        if not isinstance(disposition, PackageDisposition):
+            raise TypeError("disposition must be PackageDisposition")
         reasons: set[CompatibilityReason] = set()
-        descriptor = package.package
         current_release_sha = self._release_sha(self.package_source.release_sha)
 
-        if package.disposition is not PackageDisposition.AVAILABLE:
+        if disposition is not PackageDisposition.AVAILABLE:
             reasons.add(CompatibilityReason.PACKAGE_NOT_AVAILABLE)
 
         sourced = None
@@ -229,10 +234,10 @@ class CapabilityCompatibilityEvaluator:
                 break
         if sourced is None:
             reasons.add(CompatibilityReason.DESCRIPTOR_NOT_IN_ACTIVE_RELEASE)
-        elif sourced.package_digest != package.package_digest:
+        elif sourced.package_digest != descriptor.digest:
             reasons.add(CompatibilityReason.DESCRIPTOR_DIGEST_MISMATCH)
 
-        manifest = self._manifest(package, reasons)
+        manifest = self._manifest(descriptor, reasons)
         provider_descriptor_digest: str | None = None
         provider = None
         if manifest is not None:
@@ -269,7 +274,7 @@ class CapabilityCompatibilityEvaluator:
                 ):
                     reasons.add(CompatibilityReason.HEALTH_PROBE_UNREGISTERED)
 
-        artifact_digests = self._verify_artifacts(package, reasons)
+        artifact_digests = self._verify_artifacts(descriptor, reasons)
 
         restart_required = self.runtime_release_sha != current_release_sha
         if restart_required:
@@ -291,7 +296,7 @@ class CapabilityCompatibilityEvaluator:
         return CapabilityCompatibilityReportV1(
             package_id=descriptor.package_id,
             package_version=descriptor.package_version,
-            package_digest=package.package_digest,
+            package_digest=descriptor.digest,
             current_release_sha=current_release_sha,
             runtime_release_sha=self.runtime_release_sha,
             platform_tags=self.platform_tags,
@@ -300,4 +305,15 @@ class CapabilityCompatibilityEvaluator:
             manifest_digest=None if manifest is None else manifest.manifest_digest,
             provider_descriptor_digest=provider_descriptor_digest,
             artifact_digests=artifact_digests,
+        )
+
+    def evaluate(
+        self,
+        package: AdmittedCapabilityPackage,
+    ) -> CapabilityCompatibilityReportV1:
+        if not isinstance(package, AdmittedCapabilityPackage):
+            raise TypeError("package must be AdmittedCapabilityPackage")
+        return self.evaluate_package(
+            package.package,
+            disposition=package.disposition,
         )
