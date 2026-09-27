@@ -2,7 +2,7 @@
 
 ## Status
 
-**OWNER-APPROVED — IMPLEMENTATION IN PROGRESS — 8A–8C DONE / 8D ACTIVE — 2026-09-27**
+**OWNER-APPROVED — IMPLEMENTATION IN PROGRESS — 8A–8D DONE / 8E ACTIVE — 2026-09-27**
 
 ## 8A — package contracts and schema — DONE
 
@@ -47,7 +47,7 @@ Deliver:
 - quarantine;
 - compatibility evidence digest.
 
-## 8D — runtime projection + health — IN IMPLEMENTATION
+## 8D — runtime projection + health — DONE
 
 Deliver:
 
@@ -66,7 +66,7 @@ Deliver:
 - no SQLite read on every normal capability invocation solely for generation checking;
 - no dynamic Python reload.
 
-## 8E — lifecycle Authority + version rollback
+## 8E — lifecycle Authority + version rollback — IN IMPLEMENTATION
 
 Deliver:
 
