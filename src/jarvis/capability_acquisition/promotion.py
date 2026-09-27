@@ -320,8 +320,7 @@ class CapabilityAcquisitionReleaseBridge:
                     != package_version
                     or existing_admission.payload.get("package_digest")
                     != package_digest
-                    or existing_admission.payload.get("capability_id")
-                    != capability_id
+                    or existing_admission.payload.get("capability_id") != capability_id
                     or existing_admission.payload.get("compatibility_digest")
                     != result.compatibility.digest
                     or lifecycle_payload.get("package_id") != package_id
