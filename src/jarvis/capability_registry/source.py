@@ -29,7 +29,7 @@ class CapabilityPackageSourceError(RuntimeError):
 class CapabilityPackageSource(Protocol):
     release_sha: str
 
-    def packages(self) -> tuple["SourcedCapabilityPackage", ...]: ...
+    def packages(self) -> tuple[SourcedCapabilityPackage, ...]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,7 +59,7 @@ class ReleaseCapabilityPackageSource:
         self.package_root = package_root
 
     @classmethod
-    def from_active_release(cls) -> "ReleaseCapabilityPackageSource":
+    def from_active_release(cls) -> ReleaseCapabilityPackageSource:
         try:
             active = load_active_release_for_startup()
         except ReleaseError as exc:
