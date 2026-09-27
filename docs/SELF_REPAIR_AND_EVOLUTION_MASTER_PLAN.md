@@ -75,8 +75,8 @@ Phase 4   Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 2
 Phase 5   Secure Autonomous Engineering Substrate — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 6   Unknown-Incident Investigation + Source Repair — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 7   Governed Promotion / Production Verification / Rollback — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
-Phase 8   Capability Package + Registry Lifecycle — OWNER-APPROVED / IMPLEMENTATION ACTIVE (8A)
-Phase 9   Owner-Requested Capability Acquisition
+Phase 8   Capability Package + Registry Lifecycle — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
+Phase 9   Owner-Requested Capability Acquisition — NEXT / RESEARCH + ARCHITECTURE REQUIRED
 Phase 10  Closed-Loop Engineering Learning
 Phase 10A Autonomous Operations Control Plane — whole-JARVIS integration point
 Phase 11  Autonomous Capability-Gap / Weakness Detection
@@ -92,6 +92,8 @@ Phase-4 implementation details are preserved in `PHASE4_MODEL_ROUTER_RESEARCH.md
 Phase 6 Unknown-Incident Investigation + Source Repair is owner-machine accepted on 2026-09-27. Its canonical evidence is recorded in `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`. The accepted path covers bounded exact-revision diagnostics, typed diagnosis, owner-gated repair architecture, isolated source-revision-pinned development, protected-surface fail-closed verification, exact candidate provenance, deterministic replay and Windows acceptance. It stops before protected-main promotion/deployment.
 
 Phase 7 Governed Promotion / Production Verification / Rollback is owner-machine accepted on 2026-09-27. Canonical evidence is recorded in `PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`. The accepted path covers exact candidate/PR/CI identity, digest-bound owner promotion, one-shot Authority execution, exact protected-main merge, immutable Windows release staging, runtime identity verification, bounded observation and compatibility-safe rollback while preserving owner authority.
+
+Phase 8 Capability Package + Registry Lifecycle is owner-machine accepted on 2026-09-27. Canonical evidence is recorded in `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`. The accepted path covers immutable package contracts, exact release/manifest/provider compatibility, durable lifecycle registry truth, generation-aware reconciliation, transition fencing, HealthRegistry projection, Authority-bound lifecycle switching, compatible version rollback, retention, deterministic replay and Windows owner-machine acceptance.
 
 ---
 
