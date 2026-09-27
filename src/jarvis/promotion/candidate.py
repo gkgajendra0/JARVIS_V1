@@ -38,6 +38,8 @@ class VerifiedPromotionCandidate:
     candidate_artifact_digest: str
     candidate_id: str
     candidate_digest: str
+    development_work_id: str
+    branch: str
     base_sha: str
     head_sha: str
     diff_digest: str
@@ -125,6 +127,25 @@ class PromotionCandidateVerifier:
             payload.get("digest"),
             field="candidate digest",
         )
+        development_work_id = str(payload.get("development_work_id") or "").strip()
+        if not development_work_id:
+            raise PromotionCandidateError(
+                "development_work_id_missing",
+                "candidate development work id is missing",
+            )
+        branch = str(payload.get("branch") or "").strip()
+        if (
+            not branch
+            or len(branch) > 128
+            or branch.startswith(("-", "/"))
+            or branch.endswith(("/", ".lock"))
+            or ".." in branch
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", branch)
+        ):
+            raise PromotionCandidateError(
+                "candidate_branch_invalid",
+                "candidate branch is invalid",
+            )
         base_sha = PromotionCandidateVerifier._sha(
             payload.get("source_revision"),
             field="candidate source revision",
@@ -159,6 +180,8 @@ class PromotionCandidateVerifier:
             candidate_artifact_digest=artifact.digest,
             candidate_id=candidate_id,
             candidate_digest=candidate_digest,
+            development_work_id=development_work_id,
+            branch=branch,
             base_sha=base_sha,
             head_sha=head_sha,
             diff_digest=diff_digest,
