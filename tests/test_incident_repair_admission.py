@@ -23,7 +23,6 @@ from jarvis.self_repair.registry import RepairRegistry
 from jarvis.work.models import WorkType
 from jarvis.work.store import SQLiteWorkStore
 
-
 REVISION = "a" * 40
 
 
