@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -13,6 +14,10 @@ from jarvis.capabilities.models import (
     CapabilityResult,
 )
 from jarvis.capabilities.runtime import build_default_capability_runtime
+from jarvis.capability_acquisition.activation import (
+    CapabilityAcquisitionLifecycleCoordinator,
+)
+from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_registry.models import (
     CapabilityLifecycleEventKind,
     DesiredActivationState,
@@ -24,6 +29,7 @@ from jarvis.capability_registry.runtime_composition import (
 )
 from jarvis.capability_registry.store import CapabilityRegistryStore
 from jarvis.capability_registry.provider import CapabilityProviderRegistration
+from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate import CapabilityManifest, canonical_digest
 from jarvis.engineering_substrate.artifacts import ArtifactStore
 from jarvis.engineering_substrate.manifest import (
@@ -31,8 +37,9 @@ from jarvis.engineering_substrate.manifest import (
     TrustedAdapterRegistration,
     TrustedExecutorRegistration,
 )
-from jarvis.promotion.release import ReleaseRecord
+from jarvis.promotion.release import DeploymentMetadataStore, ReleaseRecord
 from jarvis.self_model.health import HealthRegistry
+from jarvis.work.store import SQLiteWorkStore
 
 RELEASE_SHA = "1" * 40
 PACKAGE_ID = "tv.control.package"
@@ -233,3 +240,103 @@ def test_runtime_composition_rejects_provider_from_another_release(tmp_path) -> 
             health_registry=HealthRegistry(),
             start_periodic=False,
         )
+
+
+
+class FakeLifecycleAuthority:
+    def authorize(self, binding, *, authority_session_id: str):
+        assert binding.source.source_session_id == authority_session_id
+        return SimpleNamespace(authority_ref="authority:test:phase9f")
+
+    def consume(self, authorized) -> None:
+        assert authorized.authority_ref == "authority:test:phase9f"
+
+
+def test_phase9_lifecycle_coordinator_uses_phase8_service(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    release = _release(tmp_path)
+    definition = _definition()
+    _write_package(release, definition)
+    registry = CapabilityRegistryStore(tmp_path / "registry-lifecycle.sqlite3")
+    stack = build_package_managed_runtime_stack(
+        release,
+        definitions=(definition,),
+        registry_store=registry,
+        artifact_store=ArtifactStore(tmp_path / "artifacts-lifecycle"),
+        health_registry=HealthRegistry(),
+        start_periodic=False,
+    )
+    stack.lifecycle.authority = FakeLifecycleAuthority()
+
+    changes = ChangeStore(
+        SQLiteWorkStore(tmp_path / "work.sqlite3"),
+        processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,),
+    )
+    change = changes.create(
+        request="Acquire TV control",
+        process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
+        process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
+        source_session_id="owner-session",
+        source_turn_id="owner-turn",
+    )
+    package = registry.get_package(PACKAGE_ID, PACKAGE_VERSION)
+    assert package is not None
+    candidate = changes.add_artifact(
+        change.change_id,
+        kind="capability_candidate",
+        payload={
+            "candidate_id": "capcand_runtime_composition",
+            "digest": "4" * 64,
+            "capability_id": CAPABILITY_ID,
+            "package_id": PACKAGE_ID,
+            "package_version": PACKAGE_VERSION,
+            "package_digest": package.package_digest,
+        },
+    )
+    changes.add_artifact(
+        change.change_id,
+        kind="capability_package_admission",
+        payload={
+            "attempt_id": "promotion_phase9f_runtime",
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+        },
+    )
+    monkeypatch.setattr(
+        "jarvis.capability_acquisition.activation."
+        "ensure_capability_release_bridge_current",
+        lambda *_args, **_kwargs: None,
+    )
+    coordinator = CapabilityAcquisitionLifecycleCoordinator(
+        changes,
+        DeploymentMetadataStore(tmp_path / "deployment-lifecycle"),
+        stack.lifecycle,
+    )
+
+    activated = coordinator.activate(
+        change.change_id,
+        authority_session_id="owner-session",
+        source_turn_id="activate-turn",
+    )
+
+    state = registry.require_registry(CAPABILITY_ID)
+    assert state.desired_state is DesiredActivationState.ENABLED
+    assert state.selected_package_id == PACKAGE_ID
+    assert state.selected_package_version == PACKAGE_VERSION
+    effective = activated.enabled.snapshot.state(CAPABILITY_ID)
+    assert effective is not None and effective.effective_enabled
+    assert activated.artifact.payload["effective_enabled"] is True
+
+    disabled = coordinator.disable(
+        change.change_id,
+        authority_session_id="owner-session",
+        source_turn_id="disable-turn",
+    )
+    state = registry.require_registry(CAPABILITY_ID)
+    assert state.desired_state is DesiredActivationState.DISABLED
+    effective = disabled.disabled.snapshot.state(CAPABILITY_ID)
+    assert effective is not None and not effective.effective_enabled
+    assert disabled.artifact.payload["effective_enabled"] is False
+    stack.close()
