@@ -236,6 +236,20 @@ jobs:
       - name: Run non-destructive Windows Phase 7 acceptance harness
         run: python -m jarvis.promotion.acceptance --repo-root .
 
+      - name: Run Windows Phase 8 capability-registry regressions
+        run: >-
+          python -m pytest -q
+          tests/test_capability_registry_contracts.py
+          tests/test_capability_registry_store.py
+          tests/test_capability_registry_compatibility.py
+          tests/test_capability_registry_projection.py
+          tests/test_capability_registry_lifecycle.py
+          tests/test_capability_registry_retention.py
+          tests/test_phase8_evaluation.py
+
+      - name: Run non-destructive Windows Phase 8 acceptance harness
+        run: python -m jarvis.capability_registry.acceptance --repo-root .
+
 
   promotion-policy:
     if: always()
