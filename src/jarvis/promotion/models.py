@@ -204,7 +204,7 @@ class PromotionEvidenceV1:
         deployment_environment: str,
         lkg_release_sha: str,
         now_epoch: float | None = None,
-    ) -> "PromotionEvidenceV1":
+    ) -> PromotionEvidenceV1:
         if protected_verdict != "clear":
             raise ValueError("promotion requires CLEAR protected-surface verdict")
         if type(protected_policy_version) is not int or protected_policy_version < 1:
