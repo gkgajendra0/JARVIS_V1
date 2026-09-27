@@ -12,10 +12,6 @@ from jarvis.capabilities.models import CapabilityCatalog
 from jarvis.capability_acquisition.activation import (
     CapabilityAcquisitionLifecycleCoordinator,
 )
-from jarvis.capability_acquisition.promotion import (
-    CapabilityAcquisitionReleaseBridge,
-    CapabilityAcquisitionReleaseBridgeError,
-)
 from jarvis.capability_acquisition.admission import CapabilityAcquisitionCoordinator
 from jarvis.capability_acquisition.architecture import (
     CapabilityAcquisitionDevelopmentRevisionResolver,
@@ -23,6 +19,10 @@ from jarvis.capability_acquisition.architecture import (
 )
 from jarvis.capability_acquisition.owner_sources import registered_source_adapters
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
+from jarvis.capability_acquisition.promotion import (
+    CapabilityAcquisitionReleaseBridge,
+    CapabilityAcquisitionReleaseBridgeError,
+)
 from jarvis.capability_acquisition.runtime_context import (
     AcquisitionContextProvider,
     StaticAcquisitionContextProvider,
