@@ -46,7 +46,7 @@ class RepairProtectedSurfacePolicy:
     """Deterministic v2 classifier; ambiguous repository surfaces fail closed."""
 
     policy_id = "repair.protected_surfaces"
-    policy_version = 2
+    policy_version = 3
 
     _EXACT_PROTECTED: ClassVar[dict[str, str]] = {
         "pyproject.toml": "repository_build_and_dependency_policy",
@@ -67,6 +67,7 @@ class RepairProtectedSurfacePolicy:
         ("policies/", "authority_policy"),
         ("src/jarvis/authority/", "authority_boundary"),
         ("src/jarvis/engineering_change/", "engineering_governance"),
+        ("src/jarvis/capability_registry/", "capability_lifecycle_governance"),
         ("src/jarvis/promotion/", "promotion_and_deployment_governance"),
         ("src/jarvis/incidents/migrations/", "durable_state_schema_boundary"),
         ("src/jarvis/memory/migrations/", "durable_state_schema_boundary"),
@@ -79,6 +80,7 @@ class RepairProtectedSurfacePolicy:
         "tests/test_memory_service_authority",
         "tests/test_opa_policy",
         "tests/test_engineering_change",
+        "tests/test_capability_registry_",
         "tests/test_engineering_substrate_sandbox",
         "tests/test_engineering_substrate_secrets",
         "tests/test_phase5_acceptance",

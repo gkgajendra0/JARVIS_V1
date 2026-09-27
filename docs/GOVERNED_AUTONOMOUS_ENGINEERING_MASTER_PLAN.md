@@ -531,11 +531,11 @@ Research/architecture was owner-approved on 2026-09-27. The accepted implementat
 
 ### Phase 8 — capability package and registry lifecycle
 
-**STATUS: IMPLEMENTATION RESEARCH V2 + REVISED ARCHITECTURE COMPLETE / OWNER APPROVAL REQUIRED 2026-09-27**
+**STATUS: OWNER-APPROVED / IMPLEMENTATION ACTIVE — 8A — 2026-09-27**
 
 Create normalized capability packages/manifests, compatibility and health truth, enable/disable semantics and versioned registry lifecycle.
 
-Repository inspection, foundation technology research and implementation-focused research are complete. The revised architecture reuses the accepted Phase-5 CapabilityManifest/ArtifactStore/provenance/Authority boundaries, adds a separate strict-SemVer package contract and durable lifecycle registry, and explicitly rejects automatic plugin imports or production package installation. The implementation-focused pass also adds deterministic lifecycle reconciliation, per-capability transition fencing, generation-aware fail-closed runtime projection and atomic registry-CAS/lifecycle-event transactions so a committed disable/version switch cannot leave stale routing active. Canonical design documents are `PHASE8_CAPABILITY_PACKAGE_REGISTRY_RESEARCH.md`, `PHASE8_CAPABILITY_PACKAGE_REGISTRY_IMPLEMENTATION_RESEARCH.md`, `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ARCHITECTURE.md`, and `PHASE8_CAPABILITY_PACKAGE_REGISTRY_IMPLEMENTATION_PLAN.md`. Runtime implementation must not begin until explicit owner approval of the revised architecture.
+Repository inspection, foundation technology research and implementation-focused research are complete. The revised architecture reuses the accepted Phase-5 CapabilityManifest/ArtifactStore/provenance/Authority boundaries, adds a separate strict-SemVer package contract and durable lifecycle registry, and explicitly rejects automatic plugin imports or production package installation. The implementation-focused pass also adds deterministic lifecycle reconciliation, per-capability transition fencing, generation-aware fail-closed runtime projection and atomic registry-CAS/lifecycle-event transactions so a committed disable/version switch cannot leave stale routing active. Canonical design documents are `PHASE8_CAPABILITY_PACKAGE_REGISTRY_RESEARCH.md`, `PHASE8_CAPABILITY_PACKAGE_REGISTRY_IMPLEMENTATION_RESEARCH.md`, `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ARCHITECTURE.md`, and `PHASE8_CAPABILITY_PACKAGE_REGISTRY_IMPLEMENTATION_PLAN.md`. Owner approval to begin implementation was recorded on 2026-09-27; implementation now proceeds through approved slices 8A–8F.
 
 ### Phase 9 — owner-requested capability acquisition
 
@@ -716,7 +716,7 @@ Rules:
 5. Phase 5 Secure Autonomous Engineering Substrate is complete and owner-machine accepted on 2026-09-27.
 6. Phase 6 Unknown-Incident Investigation + Source Repair is complete and owner-machine accepted on 2026-09-27; preserve its exact diagnosis/architecture/candidate provenance and protected-surface boundaries.
 7. Phase 7 Governed Promotion / Production Verification / Rollback is complete and owner-machine accepted on 2026-09-27; preserve exact evidence binding, owner/Authority separation, release identity and rollback-safety boundaries.
-8. Phase 8 Capability Package + Registry Lifecycle implementation research and revised architecture are complete; implementation remains blocked pending explicit owner approval of the revised architecture.
+8. Phase 8 Capability Package + Registry Lifecycle implementation research and revised architecture are complete and owner-approved; implementation is active beginning with 8A.
 9. Insert Phase 10A Autonomous Operations Control Plane before Phase 11, as defined by `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
 10. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6 or Phase 7 without new concrete evidence.
 11. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.

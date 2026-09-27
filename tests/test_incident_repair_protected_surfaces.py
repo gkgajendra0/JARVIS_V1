@@ -46,6 +46,10 @@ def test_ordinary_source_and_test_paths_are_clear() -> None:
         ),
         (".github/workflows/code-quality.yml", "repository_governance_ci"),
         ("src/jarvis/promotion/store.py", "promotion_and_deployment_governance"),
+        (
+            "src/jarvis/capability_registry/contracts.py",
+            "capability_lifecycle_governance",
+        ),
         ("src/jarvis/dev_supervisor.py", "production_deployment_boundary"),
         ("src/jarvis/runtime_supervisor.py", "production_deployment_boundary"),
         (
@@ -63,6 +67,10 @@ def test_ordinary_source_and_test_paths_are_clear() -> None:
             "durable_state_schema_boundary",
         ),
         ("tests/test_phase7_promotion_domain.py", "protected_boundary_verifier"),
+        (
+            "tests/test_capability_registry_contracts.py",
+            "protected_boundary_verifier",
+        ),
     ],
 )
 def test_protected_paths_require_separate_change(path: str, category: str) -> None:
