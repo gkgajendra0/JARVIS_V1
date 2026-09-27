@@ -864,6 +864,120 @@ class CapabilityRegistryStore:
                 updated_at=occurred_at,
             )
 
+    def set_package_disposition(
+        self,
+        package_id: str,
+        package_version: str,
+        *,
+        disposition: PackageDisposition,
+        reason_code: str,
+        expected_generation: int | None = None,
+        authority_ref: str | None = None,
+        evidence_ref: str | None = None,
+    ) -> AdmittedCapabilityPackage:
+        """Tighten package eligibility and append exact durable lifecycle evidence."""
+
+        normalized_id = _token(package_id, field="package_id")
+        version = str(package_version).strip()
+        if not version:
+            raise ValueError("package_version must not be empty")
+        if disposition is PackageDisposition.AVAILABLE:
+            raise CapabilityRegistrySelectionError(
+                "package disposition cannot be restored to AVAILABLE in v1"
+            )
+        if disposition not in {
+            PackageDisposition.RETIRED,
+            PackageDisposition.QUARANTINED,
+        }:
+            raise TypeError("unsupported package disposition transition")
+
+        if expected_generation is not None and (
+            type(expected_generation) is not int or expected_generation <= 0
+        ):
+            raise ValueError("expected_generation must be a positive integer")
+        occurred_at = _timestamp_text(self._clock())
+        normalized_reason = _token(reason_code, field="reason_code")
+        with self._write_transaction() as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM capability_packages
+                WHERE package_id=? AND package_version=?
+                """,
+                (normalized_id, version),
+            ).fetchone()
+            if row is None:
+                raise UnknownCapabilityPackageError(
+                    "capability package is not admitted"
+                )
+            admitted = self._package_from_row(row)
+            current = admitted.disposition
+            if current is disposition:
+                return admitted
+            if current is PackageDisposition.QUARANTINED:
+                raise CapabilityRegistrySelectionError(
+                    "QUARANTINED package disposition is terminal in v1"
+                )
+            if current is PackageDisposition.RETIRED and (
+                disposition is not PackageDisposition.QUARANTINED
+            ):
+                raise CapabilityRegistrySelectionError(
+                    "RETIRED package may only transition to QUARANTINED"
+                )
+
+            registry_row = connection.execute(
+                "SELECT * FROM capability_registry WHERE capability_id=?",
+                (admitted.package.capability_id,),
+            ).fetchone()
+            if registry_row is None:
+                raise CapabilityRegistryIntegrityError(
+                    "package disposition change has no managed capability state"
+                )
+            registry = self._registry_from_row(registry_row)
+            self._verify_registry_selection(connection, registry)
+            if (
+                expected_generation is not None
+                and registry.generation != expected_generation
+            ):
+                raise StaleRegistryGenerationError(
+                    "package disposition expected stale registry generation"
+                )
+            connection.execute(
+                """
+                UPDATE capability_packages
+                SET disposition=?
+                WHERE package_id=? AND package_version=?
+                """,
+                (disposition.value, normalized_id, version),
+            )
+            event_kind = (
+                CapabilityLifecycleEventKind.PACKAGE_RETIRED
+                if disposition is PackageDisposition.RETIRED
+                else CapabilityLifecycleEventKind.PACKAGE_QUARANTINED
+            )
+            self._append_event(
+                connection,
+                capability_id=admitted.package.capability_id,
+                package_id=admitted.package.package_id,
+                package_version=admitted.package.package_version,
+                package_digest=admitted.package_digest,
+                event_kind=event_kind,
+                previous_generation=registry.generation,
+                new_generation=registry.generation,
+                reason_code=normalized_reason,
+                authority_ref=authority_ref,
+                evidence_ref=evidence_ref,
+                occurred_at=occurred_at,
+            )
+            return AdmittedCapabilityPackage(
+                package=admitted.package,
+                package_digest=admitted.package_digest,
+                admitted_release_sha=admitted.admitted_release_sha,
+                disposition=disposition,
+                admitted_at=admitted.admitted_at,
+                evidence_digest=admitted.evidence_digest,
+            )
+
     def list_events(
         self,
         capability_id: str,

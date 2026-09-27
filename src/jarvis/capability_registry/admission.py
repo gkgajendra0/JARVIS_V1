@@ -86,6 +86,17 @@ class CapabilityPackageAdmissionService:
             evidence_digest=report.digest,
             disposition=disposition,
         )
+        if (
+            disposition is PackageDisposition.QUARANTINED
+            and admitted.disposition is not PackageDisposition.QUARANTINED
+        ):
+            admitted = self.store.set_package_disposition(
+                sourced.package.package_id,
+                sourced.package.package_version,
+                disposition=PackageDisposition.QUARANTINED,
+                reason_code="automatic_admission_quarantine",
+                evidence_ref=report.digest,
+            )
         return CapabilityPackageAdmissionResult(
             admitted=admitted,
             compatibility=self.evaluator.evaluate(admitted),

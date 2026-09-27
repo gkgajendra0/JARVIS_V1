@@ -4,6 +4,14 @@ from jarvis.capability_registry.admission import (
     CapabilityPackageAdmissionResult,
     CapabilityPackageAdmissionService,
 )
+from jarvis.capability_registry.authority import (
+    AuthorizedCapabilityLifecycle,
+    CapabilityLifecycleAction,
+    CapabilityLifecycleAuthorityBridge,
+    CapabilityLifecycleAuthoritySource,
+    CapabilityLifecycleAuthorizationError,
+    CapabilityLifecycleProposalBinding,
+)
 from jarvis.capability_registry.compatibility import (
     CapabilityCompatibilityEvaluator,
     CapabilityCompatibilityReportV1,
@@ -22,6 +30,13 @@ from jarvis.capability_registry.contracts import (
     PackageArtifactDescriptorV1,
     StrictSemVer,
     parse_capability_package_v1,
+)
+from jarvis.capability_registry.lifecycle import (
+    CapabilityLifecycleMutationError,
+    CapabilityLifecycleMutationResult,
+    CapabilityLifecyclePreconditionError,
+    CapabilityLifecycleReconciliationError,
+    CapabilityLifecycleService,
 )
 from jarvis.capability_registry.migration_runner import (
     CapabilityRegistryMigration,
@@ -63,6 +78,10 @@ from jarvis.capability_registry.reconciliation import (
     PeriodicCapabilityReconciler,
     ReconciliationTrigger,
 )
+from jarvis.capability_registry.retention import (
+    CapabilityArtifactRetentionError,
+    CapabilityArtifactRetentionPlanner,
+)
 from jarvis.capability_registry.schema import (
     capability_package_v1_json_schema,
     capability_package_v1_schema_digest,
@@ -94,15 +113,28 @@ __all__ = [
     "CAPABILITY_RUNTIME_API_VERSION_V1",
     "PACKAGE_DIRECTORY_NAME",
     "AdmittedCapabilityPackage",
+    "AuthorizedCapabilityLifecycle",
+    "CapabilityArtifactRetentionError",
+    "CapabilityArtifactRetentionPlanner",
     "CapabilityCompatibilityEvaluator",
     "CapabilityCompatibilityReportV1",
     "CapabilityEffectiveSnapshot",
     "CapabilityHealthBridge",
     "CapabilityHealthProbe",
     "CapabilityInventoryEntry",
+    "CapabilityLifecycleAction",
+    "CapabilityLifecycleAuthorityBridge",
+    "CapabilityLifecycleAuthoritySource",
+    "CapabilityLifecycleAuthorizationError",
     "CapabilityLifecycleEvent",
     "CapabilityLifecycleEventKind",
+    "CapabilityLifecycleMutationError",
+    "CapabilityLifecycleMutationResult",
+    "CapabilityLifecyclePreconditionError",
+    "CapabilityLifecycleProposalBinding",
     "CapabilityLifecycleReconciler",
+    "CapabilityLifecycleReconciliationError",
+    "CapabilityLifecycleService",
     "CapabilityManagementMode",
     "CapabilityPackageAdmissionResult",
     "CapabilityPackageAdmissionService",
