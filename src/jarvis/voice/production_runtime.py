@@ -295,6 +295,7 @@ def build_production_voice_runtime(
         else None
     )
     package_stack = None
+    active_release = None
     try:
         active_release = load_active_release_for_startup()
         if active_release is not None:
@@ -365,6 +366,9 @@ def build_production_voice_runtime(
                     ),
                 )
             ),
+            capability_acquisition_source_revision=(
+                None if active_release is None else active_release.release_sha
+            ),
             capability_lifecycle_service=(
                 None if package_stack is None else package_stack.lifecycle
             ),
@@ -372,6 +376,12 @@ def build_production_voice_runtime(
                 None
                 if package_stack is None
                 else DeploymentMetadataStore(default_deployment_root())
+            ),
+            capability_package_admission=(
+                None if package_stack is None else package_stack.admission
+            ),
+            capability_reconciler=(
+                None if package_stack is None else package_stack.reconciler
             ),
         )
         LOGGER.info(
