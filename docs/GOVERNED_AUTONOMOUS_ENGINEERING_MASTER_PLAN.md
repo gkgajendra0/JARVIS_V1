@@ -539,6 +539,10 @@ Repository inspection, foundation research, implementation-focused research and 
 
 ### Phase 9 — owner-requested capability acquisition
 
+**STATUS: SOFTWARE IMPLEMENTATION COMPLETE / OWNER-MACHINE REAL-CAPABILITY ACCEPTANCE PENDING — 2026-09-27**
+
+Slices 9A–9G are merged on protected `main` at `4bea63255ea366d74cc5268c3f56baea3a1a53e3`. Exact-head CI passed the 24-case deterministic Phase-9 replay on Linux and Windows together with all inherited Phase-7/8 promotion, lifecycle and acceptance regressions. Phase 9 is not declared complete until one genuine owner-requested external capability exercises the full lifecycle with exact owner/external-state evidence, production observation and rollback/disable verification.
+
 This is the first complete "capability to build capabilities" milestone.
 
 Example owner request:
