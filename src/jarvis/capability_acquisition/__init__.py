@@ -16,6 +16,14 @@ from .architecture import (
     CapabilityAcquisitionSourceCompletionHandler,
     ensure_capability_acquisition_architecture_current,
 )
+from .evaluation import (
+    Phase9ReplayCase,
+    Phase9ReplayReport,
+    RealCapabilityEvidenceError,
+    build_real_capability_evidence,
+    validate_real_capability_evidence,
+)
+from .evaluation import run_replay_suite as run_phase9_replay_suite
 from .models import (
     AcquisitionCandidateEvaluationV1,
     AcquisitionCandidateV1,
@@ -72,6 +80,7 @@ from .verification import (
     CapabilityCandidateVerification,
     CapabilityCandidateVerifier,
     ensure_capability_candidate_acceptance_current,
+    ensure_capability_substrate_requirements_current,
 )
 from .workflow import (
     AcquisitionProtocolError,
@@ -124,6 +133,9 @@ __all__ = [
     "OpenApiCapabilitySourceAdapter",
     "OwnerCapabilityGoalV1",
     "OwnerConfiguredCapabilitySourceAdapter",
+    "Phase9ReplayCase",
+    "Phase9ReplayReport",
+    "RealCapabilityEvidenceError",
     "SdkLibraryCapabilitySourceAdapter",
     "SourceEvidenceError",
     "StandardSourceEvidenceV1",
@@ -131,11 +143,15 @@ __all__ = [
     "acquisition_completion_guard",
     "asyncapi_contract_evidence",
     "build_acquisition_protocol_executors",
+    "build_real_capability_evidence",
     "ensure_capability_acquisition_architecture_current",
     "ensure_capability_candidate_acceptance_current",
     "ensure_capability_release_bridge_current",
+    "ensure_capability_substrate_requirements_current",
     "mcp_server_evidence",
     "openapi_contract_evidence",
     "owner_configured_evidence",
+    "run_phase9_replay_suite",
     "sdk_library_evidence",
+    "validate_real_capability_evidence",
 ]
