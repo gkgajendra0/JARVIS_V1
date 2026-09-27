@@ -547,6 +547,62 @@ def _start_jarvis(
     return process
 
 
+class SupervisorReleaseRuntimeDriver:
+    """Parent-process runtime switcher used by governed Phase-7 deployment."""
+
+    def __init__(
+        self,
+        process: subprocess.Popen[bytes],
+        control: VoiceControlServer,
+        config: DevSupervisorConfig,
+    ) -> None:
+        self._process: subprocess.Popen[bytes] | None = process
+        self._control = control
+        self._config = config
+
+    @property
+    def process(self) -> subprocess.Popen[bytes] | None:
+        return self._process
+
+    def stop_active(self, *, timeout_seconds: float) -> None:
+        process = self._process
+        if process is None:
+            return
+        _stop_jarvis(
+            process,
+            timeout_seconds=timeout_seconds,
+            control=self._control,
+        )
+        self._process = None
+
+    def start_release(self, identity: RuntimeReleaseIdentity) -> None:
+        if self._process is not None and self._process.poll() is None:
+            raise RuntimeError("a supervised JARVIS runtime is already active")
+        root = Path(identity.release_root).resolve()
+        self._process = _start_jarvis(
+            root,
+            self._control,
+            release_identity=identity,
+        )
+
+    def wait_ready(
+        self,
+        identity: RuntimeReleaseIdentity,
+        *,
+        timeout_seconds: float,
+    ) -> None:
+        process = self._process
+        if process is None or process.poll() is not None:
+            raise RuntimeError("release runtime is not active")
+        self._control.wait_for_child_ready(
+            timeout_seconds=timeout_seconds,
+            expected_release=identity,
+        )
+
+    def stop_candidate(self, *, timeout_seconds: float) -> None:
+        self.stop_active(timeout_seconds=timeout_seconds)
+
+
 def _attach_windows_runtime_job(process: subprocess.Popen[bytes]) -> None:
     """Assign the runtime and any already-created descendants to one Windows job."""
 
