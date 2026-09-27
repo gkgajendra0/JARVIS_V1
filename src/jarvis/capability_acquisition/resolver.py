@@ -77,9 +77,7 @@ class AcquisitionResolutionResult:
 
     def candidate(self, candidate_id: str) -> AcquisitionCandidateV1:
         normalized = str(candidate_id).strip()
-        return next(
-            item for item in self.candidates if item.candidate_id == normalized
-        )
+        return next(item for item in self.candidates if item.candidate_id == normalized)
 
     def evaluation(
         self,
@@ -201,12 +199,10 @@ class CapabilityAcquisitionResolver:
     ) -> AcquisitionCandidateEvaluationV1:
         evidence_complete = bool(candidate.evidence_refs) and (
             candidate.source_digest is not None
-            or candidate.trust_class
-            is AcquisitionTrustClass.UNVERIFIED_CANDIDATE
+            or candidate.trust_class is AcquisitionTrustClass.UNVERIFIED_CANDIDATE
         )
         trust_allowed = (
-            candidate.trust_class
-            is not AcquisitionTrustClass.UNVERIFIED_CANDIDATE
+            candidate.trust_class is not AcquisitionTrustClass.UNVERIFIED_CANDIDATE
         )
         requirements_compatible = True
         reason_codes = list(candidate.reason_codes)
