@@ -68,7 +68,9 @@ def _utc_now() -> datetime:
 
 def _timestamp_text(value: datetime) -> str:
     if value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError("capability registry clock must return a timezone-aware datetime")
+        raise ValueError(
+            "capability registry clock must return a timezone-aware datetime"
+        )
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
@@ -157,9 +159,11 @@ class CapabilityRegistryStore:
         migration_runner: CapabilityRegistryMigrationRunner | None = None,
         clock: Callable[[], datetime] = _utc_now,
     ) -> None:
-        self.path = pathlib.Path(
-            path or default_capability_registry_path()
-        ).expanduser().resolve()
+        self.path = (
+            pathlib.Path(path or default_capability_registry_path())
+            .expanduser()
+            .resolve()
+        )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._migration_runner = migration_runner or CapabilityRegistryMigrationRunner()
         self._clock = clock
@@ -824,9 +828,7 @@ class CapabilityRegistryStore:
                 )
 
             event_package_id = (
-                target_id
-                if target_id is not None
-                else current.selected_package_id
+                target_id if target_id is not None else current.selected_package_id
             )
             event_package_version = (
                 target_version
