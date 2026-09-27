@@ -454,7 +454,9 @@ class GrimpImportGraphAnalyzer:
             output.append(ImportEdge(importer=importer, imported=imported))
             if len(output) >= limit:
                 break
-        return tuple(sorted(set(output), key=lambda item: (item.importer, item.imported)))
+        return tuple(
+            sorted(set(output), key=lambda item: (item.importer, item.imported))
+        )
 
 
 class DiagnosticCodeIndex:
@@ -618,7 +620,9 @@ class DiagnosticCodeIndex:
                 if hint and (hint in path_folded or path_folded in hint):
                     score += 8.0
             score += 3.0 * sum(
-                1 for term in normalized_terms if term in path_tokens or term in path_folded
+                1
+                for term in normalized_terms
+                if term in path_tokens or term in path_folded
             )
             file_symbols = symbols_by_path.get(file.path, [])
             symbol_names = {item.name.casefold() for item in file_symbols}
@@ -697,7 +701,9 @@ class DiagnosticCodeIndexExecutor:
     def __init__(self, index: DiagnosticCodeIndex) -> None:
         self._index = index
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("cpu",)
 
@@ -741,7 +747,9 @@ class DiagnosticStructuralSearchExecutor:
     def __init__(self, index: DiagnosticCodeIndex) -> None:
         self._index = index
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("cpu",)
 
@@ -810,7 +818,9 @@ class DiagnosticRepositoryMapExecutor:
     def __init__(self, index: DiagnosticCodeIndex) -> None:
         self._index = index
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("cpu",)
 
