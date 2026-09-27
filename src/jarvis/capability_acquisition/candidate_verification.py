@@ -313,6 +313,7 @@ class CapabilityAcquisitionCandidateVerifier:
         *,
         work: WorkItem,
         package: CapabilityPackageV1,
+        architecture: ChangeArtifact,
         changed_paths: tuple[str, ...],
     ) -> tuple[CapabilityManifest, str]:
         manifest_paths = tuple(
@@ -362,11 +363,8 @@ class CapabilityAcquisitionCandidateVerifier:
             )
         manifest, relative = matches[0]
         requested_operations = set(
-            self._store.latest_artifact(
-                work.source_session_id.removeprefix("change:"),
-                "architecture",
-            ).payload.get("requested_operations") or ()
-        ) if work.source_session_id.startswith("change:") else set()
+            architecture.payload.get("requested_operations") or ()
+        )
         if requested_operations and not requested_operations.issubset(
             set(manifest.operations)
         ):
@@ -489,6 +487,7 @@ class CapabilityAcquisitionCandidateVerifier:
         manifest, manifest_path = self._manifest(
             work=work,
             package=package,
+            architecture=architecture,
             changed_paths=git.changed_paths,
         )
         substrate, binding_digest = self._substrate(
