@@ -9,8 +9,8 @@ from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.gates import GateKind, GateService
 from jarvis.engineering_change.models import ChangeConflict
 from jarvis.incident_repair.architecture import (
-    IncidentRepairSourceCompletionHandler,
     ensure_incident_repair_architecture_current,
+    IncidentRepairSourceCompletionHandler,
 )
 from jarvis.incident_repair.models import (
     DiagnosisDisposition,
