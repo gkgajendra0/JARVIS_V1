@@ -135,6 +135,142 @@ class ReleaseRecord:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class DeploymentRequest:
+    request_id: str
+    change_id: str
+    attempt_id: str
+    merge_sha: str
+    evidence_digest: str
+    config_digest: str
+    expected_lkg_sha: str
+    schema_versions: tuple[tuple[str, int], ...]
+    created_at_epoch: float
+    digest: str
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        change_id: str,
+        attempt_id: str,
+        merge_sha: str,
+        evidence_digest: str,
+        config_digest: str,
+        expected_lkg_sha: str,
+        schema_versions: tuple[tuple[str, int], ...] = (),
+        now_epoch: float,
+    ) -> "DeploymentRequest":
+        normalized_change = str(change_id).strip()
+        normalized_attempt = str(attempt_id).strip()
+        if not normalized_change:
+            raise ValueError("change_id must not be empty")
+        if not normalized_attempt.startswith("promotion_"):
+            raise ValueError("attempt_id must use promotion_ prefix")
+        if not math.isfinite(float(now_epoch)) or float(now_epoch) <= 0:
+            raise ValueError("created_at_epoch must be finite and positive")
+        normalized_schema = tuple(sorted(schema_versions))
+        payload: dict[str, object] = {
+            "schema_version": 1,
+            "change_id": normalized_change,
+            "attempt_id": normalized_attempt,
+            "merge_sha": _sha(merge_sha, field="merge_sha"),
+            "evidence_digest": _digest(
+                evidence_digest,
+                field="evidence_digest",
+            ),
+            "config_digest": _digest(config_digest, field="config_digest"),
+            "expected_lkg_sha": _sha(
+                expected_lkg_sha,
+                field="expected_lkg_sha",
+            ),
+            "schema_versions": {
+                name: version for name, version in normalized_schema
+            },
+            "created_at_epoch": float(now_epoch),
+        }
+        digest = canonical_digest(payload)
+        return cls(
+            request_id=f"deployment_request_{digest[:16]}",
+            change_id=normalized_change,
+            attempt_id=normalized_attempt,
+            merge_sha=str(payload["merge_sha"]),
+            evidence_digest=str(payload["evidence_digest"]),
+            config_digest=str(payload["config_digest"]),
+            expected_lkg_sha=str(payload["expected_lkg_sha"]),
+            schema_versions=normalized_schema,
+            created_at_epoch=float(now_epoch),
+            digest=digest,
+        )
+
+    def canonical_payload(self) -> dict[str, object]:
+        return {
+            "schema_version": 1,
+            "change_id": self.change_id,
+            "attempt_id": self.attempt_id,
+            "merge_sha": self.merge_sha,
+            "evidence_digest": self.evidence_digest,
+            "config_digest": self.config_digest,
+            "expected_lkg_sha": self.expected_lkg_sha,
+            "schema_versions": {
+                name: version for name, version in self.schema_versions
+            },
+            "created_at_epoch": self.created_at_epoch,
+        }
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "request_id": self.request_id,
+            **self.canonical_payload(),
+            "digest": self.digest,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> "DeploymentRequest":
+        raw_schema = payload.get("schema_versions")
+        if not isinstance(raw_schema, dict):
+            raise ReleaseError("deployment request schema_versions is malformed")
+        request = cls(
+            request_id=str(payload.get("request_id", "")),
+            change_id=str(payload.get("change_id", "")),
+            attempt_id=str(payload.get("attempt_id", "")),
+            merge_sha=str(payload.get("merge_sha", "")),
+            evidence_digest=str(payload.get("evidence_digest", "")),
+            config_digest=str(payload.get("config_digest", "")),
+            expected_lkg_sha=str(payload.get("expected_lkg_sha", "")),
+            schema_versions=tuple(
+                sorted((str(name), int(version)) for name, version in raw_schema.items())
+            ),
+            created_at_epoch=float(payload.get("created_at_epoch", 0.0)),
+            digest=str(payload.get("digest", "")),
+        )
+        if request.request_id != f"deployment_request_{request.digest[:16]}":
+            raise ReleaseError("deployment request id is not digest-derived")
+        if canonical_digest(request.canonical_payload()) != request.digest:
+            raise ReleaseError("deployment request digest mismatch")
+        return request
+
+    def __post_init__(self) -> None:
+        if not self.change_id.strip():
+            raise ValueError("change_id must not be empty")
+        if not self.attempt_id.startswith("promotion_"):
+            raise ValueError("attempt_id must use promotion_ prefix")
+        _sha(self.merge_sha, field="merge_sha")
+        _digest(self.evidence_digest, field="evidence_digest")
+        _digest(self.config_digest, field="config_digest")
+        _sha(self.expected_lkg_sha, field="expected_lkg_sha")
+        if not math.isfinite(self.created_at_epoch) or self.created_at_epoch <= 0:
+            raise ValueError("created_at_epoch must be finite and positive")
+        names: set[str] = set()
+        for name, version in self.schema_versions:
+            if not name.strip() or name in names:
+                raise ValueError("schema version names must be unique and non-empty")
+            if type(version) is not int or version < 0:
+                raise ValueError("schema versions must be non-negative integers")
+            names.add(name)
+
+
+
 class RecoveryPhase(str, Enum):
     STAGED = "staged"
     OLD_RUNTIME_STOPPED = "old_runtime_stopped"
@@ -244,6 +380,10 @@ class DeploymentMetadataStore:
         payload = self._read(self._path("recovery"))
         return None if payload is None else RecoveryRecord.from_payload(payload)
 
+    def request(self) -> DeploymentRequest | None:
+        payload = self._read(self._path("request"))
+        return None if payload is None else DeploymentRequest.from_payload(payload)
+
     def set_active(self, record: ReleaseRecord) -> None:
         self._write_atomic(self._path("active"), record.to_payload())
 
@@ -252,6 +392,12 @@ class DeploymentMetadataStore:
 
     def set_recovery(self, record: RecoveryRecord) -> None:
         self._write_atomic(self._path("recovery"), record.to_payload())
+
+    def set_request(self, request: DeploymentRequest) -> None:
+        self._write_atomic(self._path("request"), request.to_payload())
+
+    def clear_request(self) -> None:
+        self._path("request").unlink(missing_ok=True)
 
     def clear_recovery(self) -> None:
         self._path("recovery").unlink(missing_ok=True)
