@@ -71,3 +71,5 @@ def test_phase9_owner_voice_tools_are_exposed() -> None:
     assert hasattr(WorkAgentTools, "start_capability_acquisition")
     assert hasattr(WorkAgentTools, "activate_acquired_capability")
     assert hasattr(WorkAgentTools, "disable_acquired_capability")
+    assert hasattr(WorkAgentTools, "prepare_change_promotion")
+    assert hasattr(WorkAgentTools, "execute_change_promotion")
