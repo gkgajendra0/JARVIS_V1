@@ -61,6 +61,7 @@ from jarvis.promotion.release import (
     default_deployment_root,
     load_active_release_for_startup,
 )
+from jarvis.promotion.runtime import PromotionRuntimeConfig
 from jarvis.provider_resilience import ProviderResilienceState
 from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.vision.health_observers import (
@@ -383,6 +384,10 @@ def build_production_voice_runtime(
             capability_reconciler=(
                 None if package_stack is None else package_stack.reconciler
             ),
+            promotion_release_identity=(
+                None if active_release is None else active_release.runtime_identity()
+            ),
+            promotion_runtime_config=PromotionRuntimeConfig.from_environment(),
         )
         LOGGER.info(
             "Persistent work runtime configured: provider=%s physical_concurrency=%s "
