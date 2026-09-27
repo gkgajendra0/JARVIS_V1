@@ -25,9 +25,7 @@ _SCHEMA_EXACT = {
 _DBOS_EXACT = {
     "src/jarvis/work/dbos_backend.py",
 }
-_DEPENDENCY_PREFIXES = (
-    "src/jarvis/engineering_substrate/dependency/",
-)
+_DEPENDENCY_PREFIXES = ("src/jarvis/engineering_substrate/dependency/",)
 _DEPENDENCY_EXACT = {
     "pyproject.toml",
 }
@@ -36,7 +34,9 @@ _DEPENDENCY_EXACT = {
 def assess_ordinary_compatibility(
     changed_paths: tuple[str, ...] | list[str],
 ) -> CompatibilityAssessment:
-    paths = tuple(dict.fromkeys(str(item).replace("\\", "/").strip() for item in changed_paths))
+    paths = tuple(
+        dict.fromkeys(str(item).replace("\\", "/").strip() for item in changed_paths)
+    )
     if not paths or any(not item for item in paths):
         raise ValueError("compatibility assessment requires changed paths")
 
