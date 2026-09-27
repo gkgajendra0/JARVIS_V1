@@ -875,7 +875,7 @@ class CapabilityRegistryStore:
                 SELECT *
                 FROM capability_lifecycle_events
                 WHERE capability_id=?
-                ORDER BY occurred_at, event_id
+                ORDER BY event_sequence
                 """,
                 (normalized,),
             ).fetchall()
