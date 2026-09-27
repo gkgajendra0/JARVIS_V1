@@ -228,7 +228,7 @@ Persistent Concurrent Work Orchestration and the deterministic repair/R2 foundat
 
 **Current next cross-cutting work is Phase 9 — Owner-Requested Capability Acquisition research and architecture.**
 
-Phases 5, 6 and 7 are DONE / OWNER-MACHINE ACCEPTED 2026-09-27. Phase-8 implementation must not begin until its research and architecture are completed and explicitly owner-approved.
+Phases 5, 6, 7 and 8 are DONE / OWNER-MACHINE ACCEPTED 2026-09-27. Phase 9 Owner-Requested Capability Acquisition is next for research and architecture; Phase-9 implementation must not begin until its architecture is explicitly owner-approved.
 
 Step 8 remains the next numbered product slice when numbered roadmap work resumes.
 
