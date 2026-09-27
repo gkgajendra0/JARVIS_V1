@@ -329,9 +329,7 @@ class PromotionEvidenceV1:
             raise ValueError("promotion evidence schema version is unsupported")
         raw_checks = payload.get("required_checks")
         raw_compatibility = payload.get("compatibility")
-        if not isinstance(raw_checks, list) or not isinstance(
-            raw_compatibility, dict
-        ):
+        if not isinstance(raw_checks, list) or not isinstance(raw_compatibility, dict):
             raise ValueError("promotion evidence payload is malformed")
         try:
             checks = tuple(
