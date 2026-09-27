@@ -117,8 +117,7 @@ def test_verifier_requirements_are_exact_and_phase5_broker_compatible() -> None:
     assert requirements[0].version_constraint == f"=={COVERAGE_VERSION}"
     assert requirements[1].version_constraint == f"=={PYRIGHT_VERSION}"
     assert all(
-        item.registered_source_ids == ("pypi.public.v1",)
-        for item in requirements
+        item.registered_source_ids == ("pypi.public.v1",) for item in requirements
     )
     assert all(item.change_id == "change-1" for item in requirements)
     assert all(item.work_id == "work-1" for item in requirements)
