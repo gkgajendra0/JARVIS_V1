@@ -332,7 +332,10 @@ class _Session:
                 "candidate_workspace_invalid",
                 "candidate workspace is not a Git worktree",
             )
-        if _require_sha(self._git(workspace, "rev-parse", "HEAD"), field="local HEAD") != head_sha:
+        if (
+            _require_sha(self._git(workspace, "rev-parse", "HEAD"), field="local HEAD")
+            != head_sha
+        ):
             raise HelperError(
                 "candidate_workspace_mismatch",
                 "candidate workspace HEAD differs from approved commit",
@@ -522,9 +525,7 @@ class _Session:
             f"/actions/workflows/{workflow}/runs",
             query={"event": "pull_request", "per_page": 100},
         )
-        raw_runs = (
-            payload.get("workflow_runs", []) if isinstance(payload, dict) else []
-        )
+        raw_runs = payload.get("workflow_runs", []) if isinstance(payload, dict) else []
         candidates: list[tuple[int, int, dict[str, Any], str]] = []
         for raw in raw_runs:
             if not isinstance(raw, dict):
@@ -679,7 +680,9 @@ def main() -> int:
             raise HelperError("bootstrap_invalid", "GitHub helper bootstrap is invalid")
         repository = str(bootstrap.get("repository_full_name") or "").strip()
         if _REPOSITORY.fullmatch(repository) is None:
-            raise HelperError("repository_invalid", "repository must use owner/name form")
+            raise HelperError(
+                "repository_invalid", "repository must use owner/name form"
+            )
         repository_name = repository.split("/", 1)[1]
         timeout_seconds = float(bootstrap.get("timeout_seconds") or 20.0)
         if not 1.0 <= timeout_seconds <= 60.0:
