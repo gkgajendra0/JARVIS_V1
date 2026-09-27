@@ -78,9 +78,7 @@ def _registry_file_handle_acceptance(root: pathlib.Path) -> dict[str, object]:
     reopened = CapabilityRegistryStore(path)
     connection = sqlite3.connect(reopened.path)
     try:
-        reopened_version = int(
-            connection.execute("PRAGMA user_version").fetchone()[0]
-        )
+        reopened_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
     finally:
         connection.close()
     if reopened_version != user_version:
