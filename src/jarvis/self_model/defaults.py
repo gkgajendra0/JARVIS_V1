@@ -489,6 +489,18 @@ def build_default_self_model() -> SelfModelRegistry:
             logger_prefixes=("jarvis.capabilities",),
         ),
         C(
+            "capability.registry",
+            "Governed capability package identity and lifecycle-registry contracts.",
+            ("src/jarvis/capability_registry",),
+            parent_component_id="capability_runtime",
+            tests=("tests/test_capability_registry_contracts.py",),
+            logger_prefixes=("jarvis.capability_registry",),
+            docs=(
+                "docs/PHASE8_CAPABILITY_PACKAGE_REGISTRY_ARCHITECTURE.md",
+                "docs/PHASE8_CAPABILITY_PACKAGE_REGISTRY_IMPLEMENTATION_PLAN.md",
+            ),
+        ),
+        C(
             "capability.discovery",
             "Provider-neutral capability sources, catalog refresh and semantic resolution.",
             (
