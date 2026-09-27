@@ -15,6 +15,7 @@ from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.incident_repair.models import ProtectedSurfaceVerdict
 from jarvis.incident_repair.protected_surfaces import RepairProtectedSurfacePolicy
 
+from .evaluation import run_replay_suite
 from .release import DeploymentMetadataStore, GitReleaseStager, ReleaseRecord
 
 
@@ -143,6 +144,16 @@ def run_acceptance(
         if slot_status:
             raise Phase7AcceptanceError("staged release has tracked mutations")
 
+        replay = run_replay_suite(root / "replay")
+        replay_failures = {
+            item.case_id: item.evidence for item in replay.cases if not item.passed
+        }
+        if replay.status != "PASS" or replay_failures:
+            raise Phase7AcceptanceError(
+                "deterministic Phase-7 replay failed: "
+                + json.dumps(replay_failures, sort_keys=True)
+            )
+
         after = _snapshot(repo)
         if after != before:
             raise Phase7AcceptanceError("acceptance changed protected repository state")
@@ -160,6 +171,11 @@ def run_acceptance(
                 "active_sha": metadata.active().release_sha,
                 "lkg_sha": metadata.lkg().release_sha,
                 "config_digest": config_digest,
+            },
+            "replay": {
+                "status": replay.status,
+                "case_count": len(replay.cases),
+                "suite_digest": replay.suite_digest,
             },
             "protected_surface_policy": {
                 "policy_id": protected.policy_id,
