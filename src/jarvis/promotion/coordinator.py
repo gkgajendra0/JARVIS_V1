@@ -13,7 +13,11 @@ from jarvis.work.models import WorkDeliveryKind
 from .candidate import PromotionCandidateVerifier, VerifiedPromotionCandidate
 from .compatibility import assess_ordinary_compatibility
 from .evidence import PromotionEvidenceBuilder
-from .github import GitHubPromotionAdapter, GitHubPromotionPolicy, VerifiedGitHubEvidence
+from .github import (
+    GitHubPromotionAdapter,
+    GitHubPromotionPolicy,
+    VerifiedGitHubEvidence,
+)
 from .models import PromotionAttempt, PromotionAttemptState, PromotionEvidenceV1
 from .release import DeploymentMetadataStore
 from .store import PromotionStore
