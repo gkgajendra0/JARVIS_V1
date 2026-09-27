@@ -120,12 +120,16 @@ def _persist_completed(
 
 
 def _completed_step(kind: str, observation: dict) -> WorkStep:
-    return WorkStep(
-        work_id="work-diagnostic",
-        kind=kind,
-        summary=kind,
-        input_data={},
-    ).start().complete(observation)
+    return (
+        WorkStep(
+            work_id="work-diagnostic",
+            kind=kind,
+            summary=kind,
+            input_data={},
+        )
+        .start()
+        .complete(observation)
+    )
 
 
 def test_incident_and_knowledge_actions_read_only_admitted_artifacts(tmp_path) -> None:
@@ -214,9 +218,7 @@ def test_finalize_persists_supported_diagnosis_bound_to_evidence(tmp_path) -> No
         DiagnosticFinalizeExecutor(resolver).execute(
             work=changes.work.require(work_id),
             parameters={
-                "selected_hypothesis_id": hypothesis["hypothesis"][
-                    "hypothesis_id"
-                ],
+                "selected_hypothesis_id": hypothesis["hypothesis"]["hypothesis_id"],
                 "affected_paths": ["src/jarvis/voice/runtime.py"],
                 "affected_components": ["runtime.voice"],
                 "proposed_repair_scope": "serialize supervisor state commit",
@@ -230,9 +232,9 @@ def test_finalize_persists_supported_diagnosis_bound_to_evidence(tmp_path) -> No
     diagnosis = result["diagnosis"]
     assert result["finalized"] is True
     assert diagnosis["disposition"] == "supported_repair"
-    assert diagnosis["selected_hypothesis_id"] == hypothesis["hypothesis"][
-        "hypothesis_id"
-    ]
+    assert (
+        diagnosis["selected_hypothesis_id"] == hypothesis["hypothesis"]["hypothesis_id"]
+    )
     assert "e1" in diagnosis["evidence_ids"]
     assert "reproduction_test" in diagnosis["evidence_ids"]
     assert diagnosis["knowledge_revision_ids"] == ["knowledge-r1"]
@@ -244,7 +246,9 @@ def test_finalize_persists_supported_diagnosis_bound_to_evidence(tmp_path) -> No
     assert artifact.artifact_id == result["diagnosis_artifact_id"]
 
 
-def test_finalize_without_reproduction_requires_typed_impossible_reason(tmp_path) -> None:
+def test_finalize_without_reproduction_requires_typed_impossible_reason(
+    tmp_path,
+) -> None:
     work_store, changes, work_id = _fixture(tmp_path)
     resolver = DiagnosticContextResolver(changes)
     work = changes.work.require(work_id)
