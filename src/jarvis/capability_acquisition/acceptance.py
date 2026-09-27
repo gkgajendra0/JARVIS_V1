@@ -133,10 +133,26 @@ def _validate_live_acquisition(
         normalized_change_id,
         "capability_lifecycle_proposal",
     )
-    if candidate is None or admission is None or lifecycle is None:
+    activation = changes.latest_artifact(
+        normalized_change_id,
+        "capability_lifecycle_activation",
+    )
+    disable = changes.latest_artifact(
+        normalized_change_id,
+        "capability_lifecycle_disable",
+    )
+    if any(
+        item is None
+        for item in (candidate, admission, lifecycle, activation, disable)
+    ):
         raise Phase9AcceptanceError(
             "Phase-9 durable candidate/package/lifecycle evidence is incomplete"
         )
+    assert candidate is not None
+    assert admission is not None
+    assert lifecycle is not None
+    assert activation is not None
+    assert disable is not None
 
     attempt_id = str(admission.payload.get("attempt_id") or "").strip()
     if not attempt_id:
@@ -222,6 +238,33 @@ def _validate_live_acquisition(
         raise Phase9AcceptanceError(
             "package admission/lifecycle evidence is stale or bypasses Authority"
         )
+    for artifact, expected_effective in (
+        (disable, False),
+        (activation, True),
+    ):
+        if (
+            artifact.payload.get("candidate_artifact_id") != candidate.artifact_id
+            or artifact.payload.get("candidate_artifact_digest") != candidate.digest
+            or artifact.payload.get("admission_artifact_id") != admission.artifact_id
+            or artifact.payload.get("admission_artifact_digest") != admission.digest
+            or artifact.payload.get("package_id") != package_id
+            or artifact.payload.get("package_version") != package_version
+            or artifact.payload.get("package_digest") != package_digest
+            or artifact.payload.get("effective_enabled") is not expected_effective
+        ):
+            raise Phase9AcceptanceError(
+                "governed activation/disable evidence is stale or mismatched"
+            )
+    disable_generation = disable.payload.get("registry_generation")
+    activation_generation = activation.payload.get("registry_generation")
+    if (
+        type(disable_generation) is not int
+        or type(activation_generation) is not int
+        or activation_generation <= disable_generation
+    ):
+        raise Phase9AcceptanceError(
+            "final governed activation did not occur after disable/rollback verification"
+        )
 
     return {
         "change_id": normalized_change_id,
@@ -240,6 +283,10 @@ def _validate_live_acquisition(
         "package_admission_digest": admission.digest,
         "lifecycle_proposal_artifact_id": lifecycle.artifact_id,
         "lifecycle_proposal_digest": lifecycle.digest,
+        "lifecycle_disable_artifact_id": disable.artifact_id,
+        "lifecycle_disable_digest": disable.digest,
+        "lifecycle_activation_artifact_id": activation.artifact_id,
+        "lifecycle_activation_digest": activation.digest,
         "registry_generation": state.generation,
         "registry_desired_state": state.desired_state.value,
         "selected_package_id": state.selected_package_id,
