@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -17,6 +18,7 @@ from jarvis.capability_acquisition.source import AcquisitionContextV1
 from jarvis.engineering_substrate.canonical import canonical_digest
 
 _MAX_SOURCE_DOCUMENT_BYTES = 1024 * 1024
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _MAX_OPERATIONS = 256
 _HTTP_METHODS = frozenset(
     {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
@@ -110,6 +112,12 @@ class StandardSourceEvidenceV1:
     reason_codes: tuple[str, ...]
 
     def __post_init__(self) -> None:
+        if not isinstance(self.source_kind, AcquisitionSourceKind):
+            raise TypeError("source_kind must be AcquisitionSourceKind")
+        if not isinstance(self.trust_class, AcquisitionTrustClass):
+            raise TypeError("trust_class must be AcquisitionTrustClass")
+        if _SHA256.fullmatch(self.source_digest) is None:
+            raise SourceEvidenceError("source_digest must be a lowercase SHA-256 digest")
         if self.source_kind in {
             AcquisitionSourceKind.EXISTING_CAPABILITY,
             AcquisitionSourceKind.CUSTOM_BUILD,
