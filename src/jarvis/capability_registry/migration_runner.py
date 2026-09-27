@@ -47,7 +47,9 @@ def _sql_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def discover_capability_registry_migrations() -> tuple[CapabilityRegistryMigration, ...]:
+def discover_capability_registry_migrations() -> tuple[
+    CapabilityRegistryMigration, ...
+]:
     package_root = resources.files("jarvis.capability_registry.migrations")
     discovered: list[CapabilityRegistryMigration] = []
     for entry in package_root.iterdir():
