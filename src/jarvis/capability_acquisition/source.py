@@ -181,11 +181,7 @@ class ExistingCapabilitySourceAdapter:
                 continue
 
             snapshot = context.effective_snapshot
-            state = (
-                None
-                if snapshot is None
-                else snapshot.state_for_key(descriptor.key)
-            )
+            state = None if snapshot is None else snapshot.state_for_key(descriptor.key)
             if (
                 state is None
                 or state.selected_package_id is None
