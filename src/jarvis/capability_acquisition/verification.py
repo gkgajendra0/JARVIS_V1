@@ -117,9 +117,7 @@ class CapabilityCandidateEvidenceV1:
             "protected_surface_policy_id": self.protected_surface_policy_id,
             "protected_surface_policy_version": self.protected_surface_policy_version,
             "verification_contract_ids": list(self.verification_contract_ids),
-            "owner_acceptance_contract_ids": list(
-                self.owner_acceptance_contract_ids
-            ),
+            "owner_acceptance_contract_ids": list(self.owner_acceptance_contract_ids),
         }
 
     @property
@@ -319,9 +317,9 @@ class CapabilityCandidateVerifier:
                 "canonical DEVELOPMENT result differs from committed Git state",
             )
 
-        source_revision = str(
-            architecture.payload.get("source_revision") or ""
-        ).strip().lower()
+        source_revision = (
+            str(architecture.payload.get("source_revision") or "").strip().lower()
+        )
         if not source_revision:
             raise CapabilityCandidateError(
                 "source_revision_missing",
@@ -435,9 +433,7 @@ class CapabilityCandidateVerifier:
         changed_paths: tuple[str, ...],
     ) -> ProtectedSurfaceAssessment:
         package_paths = tuple(
-            path
-            for path in changed_paths
-            if path.startswith(_PACKAGE_ROOT + "/")
+            path for path in changed_paths if path.startswith(_PACKAGE_ROOT + "/")
         )
         for path in package_paths:
             pure = pathlib.PurePosixPath(path)
@@ -523,9 +519,7 @@ class CapabilityCandidateVerifier:
                     for executed in executed_targets
                 ):
                     covered.add(required)
-        missing = tuple(
-            target for target in required_targets if target not in covered
-        )
+        missing = tuple(target for target in required_targets if target not in covered)
         if missing:
             raise CapabilityCandidateError(
                 "required_development_tests_missing",
@@ -569,10 +563,7 @@ class CapabilityCandidateVerifier:
                 "candidate requires a clean local commit after final diff",
             )
         verification = work.result.get("verification")
-        if (
-            not isinstance(verification, dict)
-            or verification.get("passed") is not True
-        ):
+        if not isinstance(verification, dict) or verification.get("passed") is not True:
             raise CapabilityCandidateError(
                 "canonical_verification_missing",
                 "canonical DEVELOPMENT result does not record passing verification",
@@ -834,8 +825,7 @@ def ensure_capability_candidate_acceptance_current(
         or payload.get("architecture_digest") != architecture.digest
         or payload.get("plan_id") != architecture.payload.get("plan_id")
         or payload.get("plan_digest") != architecture.payload.get("plan_digest")
-        or payload.get("package_id")
-        != architecture.payload.get("proposed_package_id")
+        or payload.get("package_id") != architecture.payload.get("proposed_package_id")
         or payload.get("package_version")
         != architecture.payload.get("proposed_package_version")
         or payload.get("capability_id")
