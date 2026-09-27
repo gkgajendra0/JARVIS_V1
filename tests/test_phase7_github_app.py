@@ -42,7 +42,9 @@ def test_github_app_jwt_is_rs256_bound_and_short_lived() -> None:
 
     assert header == {"alg": "RS256", "typ": "JWT"}
     assert payload == {"exp": 1540, "iat": 940, "iss": "Iv1.phase7"}
-    signature = base64.urlsafe_b64decode(signature_text + "=" * (-len(signature_text) % 4))
+    signature = base64.urlsafe_b64decode(
+        signature_text + "=" * (-len(signature_text) % 4)
+    )
     private_key.public_key().verify(
         signature,
         f"{header_text}.{payload_text}".encode("ascii"),
@@ -130,9 +132,7 @@ class _FakeStdin:
             result = {"shutdown": True}
         else:
             raise AssertionError(f"unexpected RPC operation: {op}")
-        self.process.responses.append(
-            json.dumps({"ok": True, "result": result}) + "\n"
-        )
+        self.process.responses.append(json.dumps({"ok": True, "result": result}) + "\n")
         return len(text)
 
     def flush(self) -> None:
