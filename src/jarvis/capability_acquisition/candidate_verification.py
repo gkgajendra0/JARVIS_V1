@@ -92,8 +92,7 @@ class CapabilityAcquisitionProtectedSurfacePolicy(RepairProtectedSurfacePolicy):
         descriptors = tuple(
             path
             for path in normalized
-            if self._is_package_descriptor(path)
-            or self._is_manifest_descriptor(path)
+            if self._is_package_descriptor(path) or self._is_manifest_descriptor(path)
         )
         ordinary = tuple(path for path in normalized if path not in descriptors)
         if ordinary:
