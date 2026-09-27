@@ -60,6 +60,7 @@ class CapabilityAcquisitionCandidateEvidenceV1:
     sandbox_profile: str
     sandbox_profile_version: int
     package_descriptor_path: str
+    manifest_descriptor_path: str
     package_id: str
     package_version: str
     package_digest: str
@@ -94,6 +95,7 @@ class CapabilityAcquisitionCandidateEvidenceV1:
         sandbox_profile: str,
         sandbox_profile_version: int,
         package_descriptor_path: str,
+        manifest_descriptor_path: str,
         package_id: str,
         package_version: str,
         package_digest: str,
@@ -162,6 +164,10 @@ class CapabilityAcquisitionCandidateEvidenceV1:
                 package_descriptor_path,
                 field="package_descriptor_path",
             ),
+            "manifest_descriptor_path": _text(
+                manifest_descriptor_path,
+                field="manifest_descriptor_path",
+            ),
             "package_id": _text(package_id, field="package_id").casefold(),
             "package_version": _text(package_version, field="package_version"),
             "package_digest": _digest(package_digest, field="package_digest"),
@@ -216,6 +222,7 @@ class CapabilityAcquisitionCandidateEvidenceV1:
             "sandbox_profile": self.sandbox_profile,
             "sandbox_profile_version": self.sandbox_profile_version,
             "package_descriptor_path": self.package_descriptor_path,
+            "manifest_descriptor_path": self.manifest_descriptor_path,
             "package_id": self.package_id,
             "package_version": self.package_version,
             "package_digest": self.package_digest,
