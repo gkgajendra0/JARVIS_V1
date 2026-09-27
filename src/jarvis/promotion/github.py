@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pathlib
 import re
 from dataclasses import dataclass
 from typing import Protocol
@@ -82,11 +83,20 @@ class VerifiedGitHubEvidence:
 
 
 class GitHubPromotionClient(Protocol):
-    """Narrow future GitHub App transport used by the Phase-7 adapter."""
+    """Narrow least-privilege GitHub transport used by the Phase-7 adapter."""
+
+    def publish_candidate(
+        self,
+        *,
+        workspace_root: pathlib.Path,
+        branch: str,
+        head_sha: str,
+    ) -> None: ...
 
     def ensure_pull_request(
         self,
         *,
+        branch: str,
         head_sha: str,
         base_sha: str,
         title: str,
@@ -214,6 +224,18 @@ class GitHubPromotionAdapter:
     def __init__(self, client: GitHubPromotionClient) -> None:
         self._client = client
 
+    def publish_candidate(
+        self,
+        candidate: VerifiedPromotionCandidate,
+        *,
+        workspace_root: pathlib.Path,
+    ) -> None:
+        self._client.publish_candidate(
+            workspace_root=workspace_root,
+            branch=candidate.branch,
+            head_sha=candidate.head_sha,
+        )
+
     def ensure_pull_request(
         self,
         candidate: VerifiedPromotionCandidate,
@@ -222,6 +244,7 @@ class GitHubPromotionAdapter:
         body: str,
     ) -> GitHubPullRequestSnapshot:
         return self._client.ensure_pull_request(
+            branch=candidate.branch,
             head_sha=candidate.head_sha,
             base_sha=candidate.base_sha,
             title=title,
