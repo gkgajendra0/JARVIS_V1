@@ -44,6 +44,14 @@ def test_external_acceptance_requires_observed_real_effect() -> None:
         validate_external_acceptance(payload)
 
 
+def test_external_acceptance_requires_timezone_aware_timestamp() -> None:
+    payload = _external_payload()
+    payload["recorded_at"] = "2026-09-27T20:00:00"
+
+    with pytest.raises(Phase9ExternalAcceptanceError, match="timezone"):
+        validate_external_acceptance(payload)
+
+
 def test_external_acceptance_rejects_secret_material() -> None:
     payload = _external_payload()
     payload["token"] = "must-never-be-recorded"
