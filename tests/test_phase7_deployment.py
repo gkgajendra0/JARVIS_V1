@@ -61,6 +61,14 @@ class FakeRuntime:
     def stop_candidate(self, *, timeout_seconds: float) -> None:
         self.events.append(("stop_candidate", timeout_seconds))
 
+    def ensure_release(
+        self,
+        identity: RuntimeReleaseIdentity,
+        *,
+        timeout_seconds: float,
+    ) -> None:
+        self.events.append(("ensure", (identity, timeout_seconds)))
+
 
 def _fixture(tmp_path: Path):
     changes = ChangeStore(SQLiteWorkStore(tmp_path / "work.sqlite3"))
@@ -350,3 +358,74 @@ def test_external_failure_cannot_request_automatic_rollback(tmp_path: Path) -> N
         assert "candidate-local" in str(exc)
     else:
         raise AssertionError("external provider failure triggered code rollback")
+
+
+
+def test_deployment_resume_from_staged_boundary_is_idempotent(tmp_path: Path) -> None:
+    changes, promotions, attempt, evidence = _fixture(tmp_path)
+    metadata = DeploymentMetadataStore(tmp_path / "deployment")
+    runtime = FakeRuntime()
+    coordinator = DeploymentCoordinator(
+        changes,
+        promotions,
+        stager=FakeStager(tmp_path / "releases"),
+        metadata=metadata,
+        runtime=runtime,
+    )
+    coordinator.bootstrap_lkg(
+        release_sha=BASE,
+        config_digest=CONFIG,
+        verified=True,
+        now_epoch=1.0,
+    )
+
+    # Simulate a crash after the durable STAGED marker but before the old
+    # runtime was stopped by reproducing the durable prefix of deploy().
+    lkg = metadata.lkg()
+    release_root = FakeStager(tmp_path / "releases").stage(MERGE)
+    from jarvis.promotion.release import RecoveryPhase, RecoveryRecord, ReleaseRecord, deployment_id
+
+    candidate = ReleaseRecord(
+        release_sha=MERGE,
+        release_root=str(release_root),
+        promotion_attempt_id=attempt.attempt_id,
+        promotion_evidence_digest=evidence.digest,
+        config_digest=CONFIG,
+        schema_versions=(),
+        accepted_at_epoch=2.0,
+    )
+    identifier = deployment_id(
+        attempt_id=attempt.attempt_id,
+        merge_sha=MERGE,
+        evidence_digest=evidence.digest,
+    )
+    metadata.set_recovery(
+        RecoveryRecord(
+            identifier,
+            attempt.attempt_id,
+            RecoveryPhase.STAGED,
+            candidate,
+            lkg,
+        )
+    )
+    deploying = promotions.transition(
+        attempt.attempt_id,
+        PromotionAttemptState.DEPLOYING,
+        expected_version=attempt.version,
+        deployment_id=identifier,
+        lkg_sha=BASE,
+    )
+
+    resumed = coordinator.resume(deploying)
+    assert resumed.release == candidate
+    assert metadata.active() == candidate
+    assert metadata.recovery().phase is RecoveryPhase.NEW_RUNTIME_VERIFIED
+    assert promotions.require(attempt.attempt_id).state is PromotionAttemptState.OBSERVING
+    assert [event[0] for event in runtime.events[-3:]] == [
+        "stop",
+        "start",
+        "ensure",
+    ]
+
+    again = coordinator.resume(promotions.require(attempt.attempt_id))
+    assert again == resumed
