@@ -844,6 +844,7 @@ def _recover_unexpected_exit(
     config: DevSupervisorConfig,
     repair: SupervisorRepairController,
     *,
+    release_identity: RuntimeReleaseIdentity | None = None,
     sleep_fn: Any = time.sleep,
     now_fn: Any = time.time,
     stabilization_verifier: Any = _verify_child_stabilization,
@@ -861,7 +862,7 @@ def _recover_unexpected_exit(
         timeout_seconds=config.shutdown_timeout_seconds,
         control=control,
     )
-    commit_sha = repo.local_sha()
+    commit_sha = _runtime_revision(repo, root, release_identity)
 
     while True:
         plan = repair.plan_unexpected_exit(
@@ -887,7 +888,7 @@ def _recover_unexpected_exit(
         if wait_seconds > 0:
             sleep_fn(wait_seconds)
 
-        if repo.local_sha() != commit_sha:
+        if _runtime_revision(repo, root, release_identity) != commit_sha:
             print(
                 "Local revision changed while crash recovery was waiting; "
                 "automatic restart aborted rather than repairing a different revision."
@@ -896,11 +897,15 @@ def _recover_unexpected_exit(
 
         attempt = repair.start_attempt(
             plan,
-            current_revision=repo.local_sha(),
+            current_revision=_runtime_revision(repo, root, release_identity),
             now_epoch=float(now_fn()),
         )
         try:
-            restarted = _start_jarvis(root, control)
+            restarted = _start_jarvis(
+                root,
+                control,
+                release_identity=release_identity,
+            )
         except (OSError, WindowsJobObjectError):
             repair.complete_attempt(
                 plan,
@@ -914,7 +919,10 @@ def _recover_unexpected_exit(
             continue
 
         try:
-            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+            control.wait_for_child_ready(
+                timeout_seconds=config.startup_timeout_seconds,
+                expected_release=release_identity,
+            )
         except RuntimeError:
             _stop_jarvis(
                 restarted,
@@ -1046,7 +1054,7 @@ def _recover_liveness_failure(
         if wait_seconds > 0:
             sleep_fn(wait_seconds)
 
-        if repo.local_sha() != commit_sha:
+        if _runtime_revision(repo, root, release_identity) != commit_sha:
             print(
                 "Local revision changed while liveness recovery was waiting; "
                 "automatic restart aborted rather than repairing a different revision."
@@ -1055,7 +1063,7 @@ def _recover_liveness_failure(
 
         attempt = repair.start_attempt(
             plan,
-            current_revision=repo.local_sha(),
+            current_revision=_runtime_revision(repo, root, release_identity),
             now_epoch=float(now_fn()),
         )
         _stop_jarvis(
@@ -1064,7 +1072,11 @@ def _recover_liveness_failure(
             control=control,
         )
         try:
-            restarted = _start_jarvis(root, control)
+            restarted = _start_jarvis(
+                root,
+                control,
+                release_identity=release_identity,
+            )
         except (OSError, WindowsJobObjectError):
             repair.complete_attempt(
                 plan,
@@ -1078,7 +1090,10 @@ def _recover_liveness_failure(
             continue
 
         try:
-            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+            control.wait_for_child_ready(
+                timeout_seconds=config.startup_timeout_seconds,
+                expected_release=release_identity,
+            )
         except RuntimeError:
             _stop_jarvis(
                 restarted,
@@ -1166,7 +1181,10 @@ def _apply_approved_update(
         print("Restarting the existing local JARVIS version.")
         process = _start_jarvis(root, control)
         try:
-            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+            control.wait_for_child_ready(
+                timeout_seconds=config.startup_timeout_seconds,
+                expected_release=release_identity,
+            )
         except RuntimeError as ready_exc:
             _stop_jarvis(
                 process,
@@ -1203,7 +1221,10 @@ def _apply_approved_update(
         print(f"Rolled back JARVIS to {previous_sha[:10]}.")
         process = _start_jarvis(root, control)
         try:
-            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+            control.wait_for_child_ready(
+                timeout_seconds=config.startup_timeout_seconds,
+                expected_release=release_identity,
+            )
         except RuntimeError as rollback_ready_exc:
             _stop_jarvis(
                 process,
@@ -1269,7 +1290,10 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
 
     try:
         try:
-            control.wait_for_child_ready(timeout_seconds=config.startup_timeout_seconds)
+            control.wait_for_child_ready(
+                timeout_seconds=config.startup_timeout_seconds,
+                expected_release=release_identity,
+            )
         except RuntimeError as exc:
             print(f"Initial JARVIS startup readiness failed: {exc}")
             return _escalation_exit_code(config)
