@@ -143,6 +143,7 @@ truth/status but not runtime behavior.
 - **#90** Phase-1H foundation hardening: sustained restart budget semantics, shared restart circuit breaker, typed verification/preconditions/provenance, versioned engineering DB migrations, Windows Job Object ownership, local-only production supervisor and bounded Windows guardian; owner-machine accepted 2026-09-24.
 - **#133** Phase-5 final secure-engineering-substrate acceptance harness and Windows integration corrections; owner-machine accepted 2026-09-27.
 - **#148** Phase-6 deterministic replay + owner-machine acceptance closure, including Windows replay CI and deterministic persistent-SQLite cleanup; owner-machine accepted 2026-09-27.
+- **#150** Phase-7 governed promotion / production verification / rollback implementation, exact-head CI, Windows release/rollback regressions and owner-machine acceptance; owner-approved and merged 2026-09-27.
 
 Final deterministic Self-Repair acceptance:
 - crash recovery passed;
@@ -345,6 +346,6 @@ The active cross-cutting slice is:
 
 Phases 5, 6 and 7 are complete and owner-machine accepted. The next cross-cutting action is Phase-8 repository inspection, technology research and architecture. Phase-8 implementation requires explicit owner architecture approval.
 
-The north-star documentation reconciliation runs in parallel and does not broaden current runtime authority or interrupt Phase 5.
+The north-star documentation reconciliation does not broaden runtime authority or pre-authorize Phase-8 implementation.
 
 Capability package/registry lifecycle is Phase 8. Step 8 remains the next numbered product slice when numbered roadmap work resumes.
