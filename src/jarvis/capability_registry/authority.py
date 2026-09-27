@@ -36,6 +36,7 @@ class CapabilityLifecycleAction(str, Enum):
     SELECT_VERSION = "select_version"
     ROLLBACK_VERSION = "rollback_version"
     RETIRE_PACKAGE = "retire_package"
+    QUARANTINE_PACKAGE = "quarantine_package"
 
 
 @dataclass(frozen=True, slots=True)
