@@ -145,9 +145,7 @@ def run_acceptance(
 
         after = _snapshot(repo)
         if after != before:
-            raise Phase7AcceptanceError(
-                "acceptance changed protected repository state"
-            )
+            raise Phase7AcceptanceError("acceptance changed protected repository state")
 
         evidence = {
             "status": "PASS",
