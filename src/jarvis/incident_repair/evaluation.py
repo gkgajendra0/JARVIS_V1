@@ -202,6 +202,7 @@ def _base_incident(
     revision: str,
     summary: str = "deterministic source failure",
 ) -> tuple[IncidentService, EvidenceReference, IncidentRepairTrigger]:
+    root.mkdir(parents=True, exist_ok=True)
     incidents = IncidentService(SqliteIncidentStore(root / "incidents.sqlite3"))
     incident = incidents.create_manual(
         title="Phase6 controlled incident",
