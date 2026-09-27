@@ -333,12 +333,12 @@ ACCEPTED
   Phase 5   Secure Autonomous Engineering Substrate
   Phase 6   Unknown-Incident Investigation + Source Repair
   Phase 7   Governed Promotion / Production Verification / Rollback
+  Phase 8   Capability Package + Registry Lifecycle — owner-machine accepted 2026-09-27
 
 CURRENT / NEXT
-  Phase 8   Capability Package + Registry Lifecycle — owner-approved / implementation active (8A)
+  Phase 9   Owner-Requested Capability Acquisition — research + architecture required
 
 THEN
-  Phase 9   Owner-Requested Capability Acquisition
   Phase 10  Closed-Loop Engineering Learning
 
 INSERT
