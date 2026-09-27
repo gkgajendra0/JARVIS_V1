@@ -28,6 +28,8 @@ def _candidate() -> VerifiedPromotionCandidate:
         candidate_artifact_digest=DIGEST,
         candidate_id="candidate_1",
         candidate_digest=DIGEST,
+        development_work_id="work_1",
+        branch="repair/phase7",
         base_sha=BASE,
         head_sha=HEAD,
         diff_digest=DIFF,
