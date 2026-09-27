@@ -43,7 +43,7 @@ class RuntimeReleaseIdentity:
             raise ValueError("config_digest must be a lowercase SHA-256 digest")
 
     @classmethod
-    def from_environment(cls) -> "RuntimeReleaseIdentity | None":
+    def from_environment(cls) -> RuntimeReleaseIdentity | None:
         values = (
             os.environ.get(RELEASE_SHA_ENV, "").strip().casefold(),
             os.environ.get(RELEASE_ROOT_ENV, "").strip(),
