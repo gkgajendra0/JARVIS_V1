@@ -98,9 +98,7 @@ class DiagnosticWorkspaceManager:
             workspace_root or (default_work_state_dir() / "diagnostics")
         ).resolve()
         if not (self.repository_root / ".git").exists():
-            raise DiagnosticWorkspaceError(
-                "JARVIS source root is not a Git repository"
-            )
+            raise DiagnosticWorkspaceError("JARVIS source root is not a Git repository")
         if self.workspace_root == self.repository_root:
             raise DiagnosticWorkspaceError(
                 "diagnostic workspace root cannot be protected main"
@@ -251,9 +249,7 @@ class DiagnosticWorkspaceManager:
                     "symlink paths are blocked in diagnostics"
                 )
         if require_file and not target.is_file():
-            raise DiagnosticWorkspaceError(
-                "diagnostic target is not a regular file"
-            )
+            raise DiagnosticWorkspaceError("diagnostic target is not a regular file")
         return target
 
     def tracked_files(
@@ -280,15 +276,11 @@ class DiagnosticWorkspaceManager:
     def read_file(self, work_id: str, relative_path: str) -> dict[str, Any]:
         target = self.resolve(work_id, relative_path, require_file=True)
         if target.stat().st_size > _MAX_FILE_BYTES:
-            raise DiagnosticWorkspaceError(
-                "diagnostic file exceeds bounded read size"
-            )
+            raise DiagnosticWorkspaceError("diagnostic file exceeds bounded read size")
         try:
             text = target.read_text(encoding="utf-8")
         except UnicodeError as exc:
-            raise DiagnosticWorkspaceError(
-                "diagnostic file is not UTF-8 text"
-            ) from exc
+            raise DiagnosticWorkspaceError("diagnostic file is not UTF-8 text") from exc
         if _contains_secret(text):
             raise DiagnosticWorkspaceError(
                 "credential-like content is blocked from diagnostic model context"
@@ -362,9 +354,7 @@ class DiagnosticWorkspaceManager:
                     continue
                 for number, line in enumerate(lines, 1):
                     if needle in line and not _contains_secret(line):
-                        matches.append(
-                            f"{relative_text}:{number}:{line[:800]}"
-                        )
+                        matches.append(f"{relative_text}:{number}:{line[:800]}")
                         if len(matches) >= limit:
                             break
         self.assert_pristine(work_id)
@@ -554,7 +544,9 @@ class DiagnosticListFilesExecutor:
     def __init__(self, manager: DiagnosticWorkspaceManager) -> None:
         self._manager = manager
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("git",)
 
@@ -596,7 +588,9 @@ class DiagnosticReadFileExecutor:
     def __init__(self, manager: DiagnosticWorkspaceManager) -> None:
         self._manager = manager
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ()
 
@@ -634,7 +628,9 @@ class DiagnosticSearchSourceExecutor:
     def __init__(self, manager: DiagnosticWorkspaceManager) -> None:
         self._manager = manager
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("cpu",)
 
@@ -684,7 +680,9 @@ class DiagnosticHistoryExecutor:
     def __init__(self, manager: DiagnosticWorkspaceManager) -> None:
         self._manager = manager
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("git",)
 
@@ -739,7 +737,9 @@ class DiagnosticBisectExecutor:
     def __init__(self, manager: DiagnosticWorkspaceManager) -> None:
         self._manager = manager
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("git", "cpu")
 
