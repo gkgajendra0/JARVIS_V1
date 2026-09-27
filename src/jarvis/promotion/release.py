@@ -410,9 +410,14 @@ class GitReleaseStager:
         self,
         repository_root: pathlib.Path | str,
         releases_root: pathlib.Path | str,
+        *,
+        remote: str = "origin",
     ) -> None:
         self.repository_root = pathlib.Path(repository_root).resolve()
         self.releases_root = pathlib.Path(releases_root).expanduser().resolve()
+        self.remote = str(remote).strip()
+        if not self.remote:
+            raise ValueError("release staging remote must not be empty")
         if self.repository_root == self.releases_root:
             raise ValueError("release root must be separate from repository root")
         self.releases_root.mkdir(parents=True, exist_ok=True)
@@ -458,7 +463,21 @@ class GitReleaseStager:
             return target
 
         try:
-            self._run("cat-file", "-e", f"{sha}^{{commit}}")
+            available = self._run(
+                "cat-file",
+                "-e",
+                f"{sha}^{{commit}}",
+                check=False,
+            )
+            if available.returncode != 0:
+                self._run(
+                    "fetch",
+                    "--no-tags",
+                    "--depth=1",
+                    self.remote,
+                    sha,
+                )
+                self._run("cat-file", "-e", f"{sha}^{{commit}}")
             self._run("worktree", "add", "--detach", str(target), sha)
             self._validate_existing(target, sha)
         except (OSError, subprocess.SubprocessError) as exc:
