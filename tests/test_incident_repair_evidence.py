@@ -2,12 +2,8 @@ from __future__ import annotations
 
 import json
 
-from jarvis.incident_repair import (
-    IncidentEvidencePackager,
-    IncidentEvidencePolicy,
-)
+from jarvis.incident_repair import IncidentEvidencePackager, IncidentEvidencePolicy
 from jarvis.incidents.models import EvidenceReference, IncidentRecord
-
 
 REVISION = "a" * 40
 TRIGGER_DIGEST = "b" * 64
