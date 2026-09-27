@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from jarvis.capability_registry.evaluation import run_replay_suite
 
-
 _EXPECTED_CASES = [
     "01_package_schema_validation",
     "02_strict_semver",
