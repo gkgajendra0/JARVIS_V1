@@ -558,13 +558,17 @@ def _runtime_revision(
     if Path(release_identity.release_root).resolve() != root.resolve():
         raise RuntimeError("release identity root does not match runtime root")
     try:
-        observed = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "HEAD"],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=15.0,
-        ).stdout.strip().casefold()
+        observed = (
+            subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=15.0,
+            )
+            .stdout.strip()
+            .casefold()
+        )
     except (OSError, subprocess.SubprocessError) as exc:
         raise RuntimeError("release Git identity is unavailable") from exc
     if observed != release_identity.release_sha:
