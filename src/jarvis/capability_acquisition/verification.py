@@ -274,7 +274,6 @@ def ensure_capability_substrate_requirements_current(
             "Phase-5 manifest does not cover approved discovery scopes",
         )
 
-
 class CapabilityCandidateVerifier:
     """Re-derive Phase-9 candidate truth from Git, package schema and WorkSteps."""
 
