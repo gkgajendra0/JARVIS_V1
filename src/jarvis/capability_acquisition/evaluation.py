@@ -53,6 +53,7 @@ from jarvis.capability_acquisition.standard_sources import (
     mcp_server_evidence,
     openapi_contract_evidence,
 )
+from jarvis.capability_acquisition.workflow import acquisition_completion_guard
 from jarvis.capability_registry.compatibility import CompatibilityVerdict
 from jarvis.capability_registry.evaluation import run_replay_suite as run_phase8_replay
 from jarvis.capability_registry.models import (
@@ -489,14 +490,45 @@ def _architecture_ready(root: pathlib.Path, *, turn_id: str):
         },
     )
     source_work = work.require(admission.acquisition_work_id)
-    step = WorkStep(
+    inspect = WorkStep(
+        work_id=source_work.work_id,
+        kind="acq_inspect_goal",
+        summary="inspect exact owner goal",
+    )
+    work.add_step(inspect)
+    work.save_step(
+        inspect.start().complete(
+            {
+                "goal": {
+                    "goal_id": goal.goal_id,
+                    "digest": goal.digest,
+                }
+            }
+        )
+    )
+    resolved = WorkStep(
+        work_id=source_work.work_id,
+        kind="acq_resolve",
+        summary="resolve exact acquisition candidates",
+    )
+    work.add_step(resolved)
+    work.save_step(
+        resolved.start().complete(
+            {
+                "resolved": True,
+                "resolution_artifact_id": resolution_artifact.artifact_id,
+                "resolution_artifact_digest": resolution_artifact.digest,
+            }
+        )
+    )
+    finalize = WorkStep(
         work_id=source_work.work_id,
         kind="acq_finalize",
         summary="finalize exact Phase-9 plan",
     )
-    work.add_step(step)
+    work.add_step(finalize)
     work.save_step(
-        step.start().complete(
+        finalize.start().complete(
             {
                 "finalized": True,
                 "plan_id": plan.plan_id,
@@ -506,6 +538,13 @@ def _architecture_ready(root: pathlib.Path, *, turn_id: str):
             }
         )
     )
+    allowed, reason = acquisition_completion_guard(
+        work.list_steps(source_work.work_id)
+    )
+    if not allowed:
+        raise AssertionError(
+            f"Phase-9 acquisition completion guard rejected replay: {reason}"
+        )
     running = work.save(
         source_work.transition(WorkState.RUNNING),
         expected_version=source_work.version,
