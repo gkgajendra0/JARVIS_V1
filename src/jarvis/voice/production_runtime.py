@@ -14,6 +14,9 @@ import sys
 from pathlib import Path
 
 from jarvis.capabilities.runtime import build_default_capability_runtime
+from jarvis.capability_acquisition.runtime_context import (
+    CapabilityRuntimeAcquisitionContextProvider,
+)
 from jarvis.capabilities.self_awareness_reads import SelfAwarenessReadExecutor
 from jarvis.config import JarvisConfig
 from jarvis.health_adapters import (
@@ -278,25 +281,6 @@ def build_production_voice_runtime(
         research_service.provider_name,
     )
 
-    work_runtime = None
-    if config.work_orchestration_enabled:
-        work_runtime = build_work_runtime(
-            provider=config.ai_provider,
-            research_service=research_service,
-            model=config.work_orchestration_model,
-            global_concurrency=config.work_global_concurrency,
-            development_test_image=config.development_test_docker_image,
-            dbos_database_url=config.work_dbos_database_url,
-            event_loop=asyncio.get_running_loop(),
-        )
-        LOGGER.info(
-            "Persistent work runtime configured: provider=%s physical_concurrency=%s "
-            "dev_sandbox=%s canonical_store=True durable_backend=DBOS",
-            config.ai_provider,
-            config.work_global_concurrency,
-            bool(config.development_test_docker_image),
-        )
-
     result_observer = (
         CapabilityExecutionHealthObserver(self_awareness)
         if self_awareness is not None
@@ -332,6 +316,29 @@ def build_production_voice_runtime(
         getattr(hands_planner, "provider_name", "none"),
         getattr(hands_planner, "model_name", "none"),
     )
+
+    work_runtime = None
+    if config.work_orchestration_enabled:
+        work_runtime = build_work_runtime(
+            provider=config.ai_provider,
+            research_service=research_service,
+            model=config.work_orchestration_model,
+            global_concurrency=config.work_global_concurrency,
+            development_test_image=config.development_test_docker_image,
+            dbos_database_url=config.work_dbos_database_url,
+            event_loop=asyncio.get_running_loop(),
+            acquisition_context_provider=(
+                CapabilityRuntimeAcquisitionContextProvider(capability_runtime)
+            ),
+        )
+        LOGGER.info(
+            "Persistent work runtime configured: provider=%s physical_concurrency=%s "
+            "dev_sandbox=%s canonical_store=True durable_backend=DBOS "
+            "capability_acquisition_live_catalog=True",
+            config.ai_provider,
+            config.work_global_concurrency,
+            bool(config.development_test_docker_image),
+        )
 
     provider_resilience_state = ProviderResilienceState()
     provider_health_observer = (
