@@ -55,9 +55,7 @@ class ChangeCoordinator:
         source_completion_handlers: tuple[
             ArchitectureSourceCompletionHandler, ...
         ] = (),
-        development_completion_handlers: tuple[
-            DevelopmentCompletionHandler, ...
-        ] = (),
+        development_completion_handlers: tuple[DevelopmentCompletionHandler, ...] = (),
     ) -> None:
         self.store = store
         self.backend = backend
@@ -72,15 +70,12 @@ class ChangeCoordinator:
             handlers[key] = handler
         self._source_completion_handlers = handlers
 
-        development_handlers: dict[
-            tuple[str, int], DevelopmentCompletionHandler
-        ] = {}
+        development_handlers: dict[tuple[str, int], DevelopmentCompletionHandler] = {}
         for handler in development_completion_handlers:
             key = (handler.process_key, handler.process_version)
             if key in development_handlers:
                 raise ValueError(
-                    "duplicate development completion handler: "
-                    f"{key[0]}/{key[1]}"
+                    f"duplicate development completion handler: {key[0]}/{key[1]}"
                 )
             development_handlers[key] = handler
         self._development_completion_handlers = development_handlers
