@@ -81,7 +81,9 @@ def _bounded_json_digest(payload: Mapping[str, object], *, field: str) -> str:
             separators=(",", ":"),
         ).encode("utf-8")
     except (TypeError, ValueError) as exc:
-        raise SourceEvidenceError(f"{field} must contain JSON-compatible values") from exc
+        raise SourceEvidenceError(
+            f"{field} must contain JSON-compatible values"
+        ) from exc
     if not encoded or len(encoded) > _MAX_SOURCE_DOCUMENT_BYTES:
         raise SourceEvidenceError(
             f"{field} must be between 1 and {_MAX_SOURCE_DOCUMENT_BYTES} bytes"
@@ -117,7 +119,9 @@ class StandardSourceEvidenceV1:
         if not isinstance(self.trust_class, AcquisitionTrustClass):
             raise TypeError("trust_class must be AcquisitionTrustClass")
         if _SHA256.fullmatch(self.source_digest) is None:
-            raise SourceEvidenceError("source_digest must be a lowercase SHA-256 digest")
+            raise SourceEvidenceError(
+                "source_digest must be a lowercase SHA-256 digest"
+            )
         if self.source_kind in {
             AcquisitionSourceKind.EXISTING_CAPABILITY,
             AcquisitionSourceKind.CUSTOM_BUILD,
@@ -152,9 +156,7 @@ class StandardSourceEvidenceV1:
             provenance_refs=self.provenance_refs,
             strategy=strategy,
             verification_requirements=self.verification_requirements,
-            external_acceptance_requirements=(
-                self.external_acceptance_requirements
-            ),
+            external_acceptance_requirements=(self.external_acceptance_requirements),
             reason_codes=self.reason_codes,
         )
 
@@ -201,8 +203,7 @@ def _evidence(
         network_scopes=_refs(network_scopes, field="network_scope"),
         device_scopes=_refs(device_scopes, field="device_scope"),
         discovery_scopes=tuple(
-            item.casefold()
-            for item in _refs(discovery_scopes, field="discovery_scope")
+            item.casefold() for item in _refs(discovery_scopes, field="discovery_scope")
         ),
         evidence_refs=_refs(evidence_refs, field="evidence_ref", required=True),
         license_id=(
@@ -468,7 +469,9 @@ class _EvidenceSourceAdapter:
             for item in items
         )
         if len(identities) != len(set(identities)):
-            raise SourceEvidenceError("source adapter evidence identities must be unique")
+            raise SourceEvidenceError(
+                "source adapter evidence identities must be unique"
+            )
         self._evidence = tuple(
             sorted(
                 items,
