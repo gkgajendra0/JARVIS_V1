@@ -14,10 +14,10 @@ import sys
 from pathlib import Path
 
 from jarvis.capabilities.runtime import build_default_capability_runtime
+from jarvis.capabilities.self_awareness_reads import SelfAwarenessReadExecutor
 from jarvis.capability_acquisition.runtime_context import (
     CapabilityRuntimeAcquisitionContextProvider,
 )
-from jarvis.capabilities.self_awareness_reads import SelfAwarenessReadExecutor
 from jarvis.config import JarvisConfig
 from jarvis.health_adapters import (
     CapabilityExecutionHealthObserver,
