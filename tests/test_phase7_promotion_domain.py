@@ -45,6 +45,8 @@ def _ready_candidate(tmp_path):
         payload={
             "candidate_id": "candidate_123",
             "digest": DIGEST,
+            "development_work_id": "work_candidate",
+            "branch": "repair/phase7-candidate",
             "source_revision": BASE,
             "commit": HEAD,
             "diff_digest": DIFF,
@@ -88,6 +90,8 @@ def test_candidate_verification_creates_idempotent_exact_attempt(tmp_path) -> No
     assert first.state is PromotionAttemptState.CREATED
     assert first.base_sha == BASE
     assert first.head_sha == HEAD
+    assert verified.development_work_id == "work_candidate"
+    assert verified.branch == "repair/phase7-candidate"
     assert verified.candidate_artifact_id == candidate.artifact_id
     assert verified.acceptance_artifact_id == acceptance.artifact_id
 
