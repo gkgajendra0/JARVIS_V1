@@ -531,7 +531,11 @@ Research/architecture was owner-approved on 2026-09-27. The accepted implementat
 
 ### Phase 8 — capability package and registry lifecycle
 
+**STATUS: RESEARCH + ARCHITECTURE COMPLETE / OWNER IMPLEMENTATION APPROVAL REQUIRED 2026-09-27**
+
 Create normalized capability packages/manifests, compatibility and health truth, enable/disable semantics and versioned registry lifecycle.
+
+Repository inspection and external technology research are complete. The proposed architecture reuses the accepted Phase-5 CapabilityManifest/ArtifactStore/provenance/Authority boundaries, adds a separate strict-SemVer package contract and durable lifecycle registry, and explicitly rejects automatic plugin imports or production package installation. Canonical design documents are `PHASE8_CAPABILITY_PACKAGE_REGISTRY_RESEARCH.md`, `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ARCHITECTURE.md`, and `PHASE8_CAPABILITY_PACKAGE_REGISTRY_IMPLEMENTATION_PLAN.md`. Runtime implementation must not begin until explicit owner architecture approval.
 
 ### Phase 9 — owner-requested capability acquisition
 
@@ -712,7 +716,7 @@ Rules:
 5. Phase 5 Secure Autonomous Engineering Substrate is complete and owner-machine accepted on 2026-09-27.
 6. Phase 6 Unknown-Incident Investigation + Source Repair is complete and owner-machine accepted on 2026-09-27; preserve its exact diagnosis/architecture/candidate provenance and protected-surface boundaries.
 7. Phase 7 Governed Promotion / Production Verification / Rollback is complete and owner-machine accepted on 2026-09-27; preserve exact evidence binding, owner/Authority separation, release identity and rollback-safety boundaries.
-8. Begin Phase 8 Capability Package + Registry Lifecycle with repository inspection, technology research and architecture only; implementation requires explicit owner architecture approval.
+8. Phase 8 Capability Package + Registry Lifecycle research and architecture are complete; implementation remains blocked pending explicit owner architecture approval.
 9. Insert Phase 10A Autonomous Operations Control Plane before Phase 11, as defined by `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
 10. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6 or Phase 7 without new concrete evidence.
 11. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
