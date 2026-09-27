@@ -12,7 +12,19 @@ from jarvis.incident_repair.code_index import (
     DiagnosticCodeIndex,
     build_diagnostic_code_intelligence_executors,
 )
+from jarvis.incident_repair.diagnostics import (
+    DiagnosticContextResolver,
+    build_diagnostic_protocol_executors,
+)
 from jarvis.incident_repair.process import UNKNOWN_INCIDENT_REPAIR_PROCESS
+from jarvis.incident_repair.reproduction import (
+    DiagnosticRunReproductionExecutor,
+    build_diagnostic_reproduction_runner,
+)
+from jarvis.incident_repair.static_analysis import (
+    DiagnosticStaticCheckExecutor,
+    build_diagnostic_static_runner,
+)
 from jarvis.incident_repair.workspace import (
     ChangeStoreDiagnosticRevisionResolver,
     DiagnosticWorkspaceManager,
@@ -156,6 +168,7 @@ def build_work_runtime(
     max_reasoning_cycles: int = 64,
     min_available_memory_mb: int = 768,
     development_test_image: str | None = None,
+    diagnostic_test_image: str | None = None,
     store_path: str | Path | None = None,
     dbos_database_url: str | None = None,
     event_loop: asyncio.AbstractEventLoop | None = None,
@@ -204,10 +217,28 @@ def build_work_runtime(
         ChangeStoreDiagnosticRevisionResolver(change_store)
     )
     diagnostic_code_index = DiagnosticCodeIndex(diagnostic_workspace_manager)
+    diagnostic_context = DiagnosticContextResolver(change_store)
+    diagnostic_image = diagnostic_test_image or development_test_image
+    diagnostic_reproduction_runner = build_diagnostic_reproduction_runner(
+        diagnostic_image
+    )
+    diagnostic_static_runner = build_diagnostic_static_runner(
+        diagnostic_image,
+        protected_main_root=diagnostic_workspace_manager.repository_root,
+    )
     executors = (
         ResearchWorkExecutor(research_service),
         *build_diagnostic_workspace_executors(diagnostic_workspace_manager),
         *build_diagnostic_code_intelligence_executors(diagnostic_code_index),
+        *build_diagnostic_protocol_executors(diagnostic_context),
+        DiagnosticRunReproductionExecutor(
+            diagnostic_workspace_manager,
+            diagnostic_reproduction_runner,
+        ),
+        DiagnosticStaticCheckExecutor(
+            diagnostic_workspace_manager,
+            diagnostic_static_runner,
+        ),
         *build_development_executors(
             workspace_manager,
             test_runner=build_development_test_runner(development_test_image),

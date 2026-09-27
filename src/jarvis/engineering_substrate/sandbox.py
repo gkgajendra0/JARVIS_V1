@@ -16,6 +16,21 @@ from jarvis.engineering_substrate.contracts import (
 
 _DOCKER_IMAGE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$")
 
+_DIAGNOSTIC_REPRODUCTION_SCRIPT = (
+    "import json, subprocess, sys\n"
+    "targets = sys.argv[1:]\n"
+    "pytest_cmd = [sys.executable, '-m', 'coverage', 'run', '--branch', "
+    "'--data-file=/evidence/.coverage', '-m', 'pytest', '-q', "
+    "'-p', 'no:cacheprovider', *targets]\n"
+    "pytest_result = subprocess.run(pytest_cmd, cwd='/workspace', check=False)\n"
+    "coverage_cmd = [sys.executable, '-m', 'coverage', 'json', "
+    "'--data-file=/evidence/.coverage', '-o', '/evidence/coverage.json']\n"
+    "coverage_result = subprocess.run(coverage_cmd, cwd='/workspace', check=False)\n"
+    "print(json.dumps({'pytest_returncode': pytest_result.returncode, "
+    "'coverage_returncode': coverage_result.returncode}, sort_keys=True))\n"
+    "raise SystemExit(pytest_result.returncode)\n"
+)
+
 _DEPENDENCY_VERIFY_SCRIPT = (
     "uv --cache-dir /tmp/uv-cache venv /candidate/.venv "
     "--python 3.11 --no-python-downloads --no-progress 1>&2\n"
@@ -246,7 +261,11 @@ class SandboxRegistry:
         image_token = self._image(image)
 
         if trusted_suffix:
-            if profile.profile_id == "test.offline.v1":
+            if profile.profile_id in {
+                "test.offline.v1",
+                "diagnostic.reproduction.v1",
+                "diagnostic.static.v1",
+            }:
                 for item in trusted_suffix:
                     text = str(item).strip()
                     path_token = text.split("::", 1)[0]
@@ -375,6 +394,33 @@ DEFAULT_SANDBOX_DEFINITIONS = (
         mount_policies=(SandboxMountPolicy("workspace_ro", "/workspace", True),),
         image_workdir="/workspace",
         fixed_entrypoint=("python", "-m", "pytest", "-q", "-p", "no:cacheprovider"),
+    ),
+    SandboxDefinition(
+        profile=_profile(
+            profile_id="diagnostic.reproduction.v1",
+            entrypoint_id="diagnostic_reproduction.v1",
+            network_mode=SandboxNetworkMode.NONE,
+            mount_policy_ids=("workspace_ro", "evidence_rw"),
+            timeout_seconds=300,
+        ),
+        mount_policies=(
+            SandboxMountPolicy("workspace_ro", "/workspace", True),
+            SandboxMountPolicy("evidence_rw", "/evidence", False),
+        ),
+        image_workdir="/workspace",
+        fixed_entrypoint=("python", "-c", _DIAGNOSTIC_REPRODUCTION_SCRIPT),
+    ),
+    SandboxDefinition(
+        profile=_profile(
+            profile_id="diagnostic.static.v1",
+            entrypoint_id="pyright_json.v1",
+            network_mode=SandboxNetworkMode.NONE,
+            mount_policy_ids=("workspace_ro",),
+            timeout_seconds=300,
+        ),
+        mount_policies=(SandboxMountPolicy("workspace_ro", "/workspace", True),),
+        image_workdir="/workspace",
+        fixed_entrypoint=("python", "-m", "pyright", "--outputjson"),
     ),
     SandboxDefinition(
         profile=_profile(

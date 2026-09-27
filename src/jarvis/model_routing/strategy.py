@@ -116,6 +116,9 @@ def derive_work_step_signals(
     structured_output_failure_count = 0
     interrupted_count = 0
     completion_guard_block_count = 0
+    failed_hypothesis_count = 0
+    conflicting_evidence_count = 0
+    reproduction_failure_count = 0
 
     for step in steps[-limit:]:
         if not isinstance(step, WorkStep):
@@ -127,6 +130,30 @@ def derive_work_step_signals(
             continue
 
         if step.state is WorkStepState.COMPLETED:
+            if kind == "diag_record_hypothesis":
+                hypothesis = step.observation.get("hypothesis")
+                if (
+                    isinstance(hypothesis, dict)
+                    and hypothesis.get("status") == "refuted"
+                ):
+                    failed_hypothesis_count += 1
+                    failures.append("failed_hypothesis")
+            elif kind == "diag_run_reproduction":
+                reproduction_state = step.observation.get("reproduction_state")
+                if reproduction_state in {"not_reproduced", "inconclusive"}:
+                    reproduction_failure_count += 1
+                    failures.append("stalled_progress")
+            elif kind == "diag_finalize":
+                diagnosis = step.observation.get("diagnosis")
+                reason_codes = (
+                    diagnosis.get("reason_codes") if isinstance(diagnosis, dict) else ()
+                )
+                if (
+                    isinstance(reason_codes, list)
+                    and "conflicting_evidence" in reason_codes
+                ):
+                    conflicting_evidence_count += 1
+                    failures.append("conflicting_evidence")
             if kind == "completion_guard" and step.observation.get("allowed") is False:
                 completion_guard_block_count += 1
                 failures.append("completion_guard_blocked")
@@ -160,6 +187,9 @@ def derive_work_step_signals(
         "structured_output_failure_count": structured_output_failure_count,
         "interrupted_count": interrupted_count,
         "completion_guard_block_count": completion_guard_block_count,
+        "failed_hypothesis_count": failed_hypothesis_count,
+        "conflicting_evidence_count": conflicting_evidence_count,
+        "reproduction_failure_count": reproduction_failure_count,
     }
     return StageRoutingSignals(
         progress_signals=_ordered_unique(progress),

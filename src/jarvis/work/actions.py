@@ -29,7 +29,7 @@ class ResearchWorkExecutor:
             "additionalProperties": False,
         },
     )
-    work_types = frozenset({WorkType.RESEARCH})
+    work_types = frozenset({WorkType.RESEARCH, WorkType.DIAGNOSTICS})
 
     def __init__(self, service: CurrentResearchService) -> None:
         self._service = service
