@@ -566,7 +566,9 @@ class CapabilityAcquisitionPlanV1:
                 _tokens(tuple(changed_paths), field="changed_path", normalized=False)
             ),
             "dependency_refs": list(
-                _tokens(tuple(dependency_refs), field="dependency_ref", normalized=False)
+                _tokens(
+                    tuple(dependency_refs), field="dependency_ref", normalized=False
+                )
             ),
             "secret_scopes": list(_tokens(tuple(secret_scopes), field="secret_scope")),
             "sandbox_profile_ids": list(
