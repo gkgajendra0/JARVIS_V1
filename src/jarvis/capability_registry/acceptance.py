@@ -57,7 +57,7 @@ def _snapshot(repo: pathlib.Path) -> RepositorySnapshot:
 
 def _registry_file_handle_acceptance(root: pathlib.Path) -> dict[str, object]:
     path = root / "registry-file-handle.sqlite3"
-    store = CapabilityRegistryStore(path)
+    CapabilityRegistryStore(path)
     if not path.is_file():
         raise Phase8AcceptanceError("capability registry database was not created")
 
