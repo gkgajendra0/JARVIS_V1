@@ -49,6 +49,7 @@ class CapabilityAcquisitionArchitecturePlan:
     sandbox_profile_ids: tuple[str, ...]
     discovery_scopes: tuple[str, ...]
     network_scopes: tuple[str, ...]
+    device_scopes: tuple[str, ...]
     verification_targets: tuple[str, ...]
     owner_acceptance_contract_ids: tuple[str, ...]
     proposed_capability_id: str
@@ -104,6 +105,7 @@ class CapabilityAcquisitionArchitecturePlan:
             "sandbox_profile_ids": list(self.sandbox_profile_ids),
             "discovery_scopes": list(self.discovery_scopes),
             "network_scopes": list(self.network_scopes),
+            "device_scopes": list(self.device_scopes),
             "verification_targets": list(self.verification_targets),
             "owner_acceptance_contract_ids": list(self.owner_acceptance_contract_ids),
             "proposed_capability_id": self.proposed_capability_id,
@@ -235,6 +237,7 @@ def derive_capability_acquisition_architecture(
         sandbox_profile_ids=plan.sandbox_profile_ids,
         discovery_scopes=plan.discovery_scopes,
         network_scopes=plan.network_scopes,
+        device_scopes=plan.device_scopes,
         verification_targets=plan.verification_contract_ids,
         owner_acceptance_contract_ids=plan.owner_acceptance_contract_ids,
         proposed_capability_id=plan.proposed_capability_id,
