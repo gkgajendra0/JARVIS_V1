@@ -115,7 +115,7 @@ Deliver:
 
 ## Stop condition
 
-After research/architecture docs are complete, stop before Phase-8 runtime implementation and request explicit owner architecture approval.
+This pre-implementation gate was satisfied on 2026-09-27. Phase-8 runtime implementation subsequently completed through slices 8A–8F and passed owner-machine acceptance.
 
 ## Final acceptance
 
