@@ -16,6 +16,7 @@ from jarvis.capability_acquisition.architecture import (
     CapabilityAcquisitionSourceCompletionHandler,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
+from jarvis.capability_acquisition.promotion import CapabilityAcquisitionReleaseBridge
 from jarvis.capability_acquisition.runtime_context import (
     AcquisitionContextProvider,
     StaticAcquisitionContextProvider,
@@ -36,7 +37,9 @@ from jarvis.capability_acquisition.workflow import (
     acquisition_completion_guard,
     build_acquisition_protocol_executors,
 )
+from jarvis.capability_registry.admission import CapabilityPackageAdmissionService
 from jarvis.capability_registry.lifecycle import CapabilityLifecycleService
+from jarvis.capability_registry.reconciliation import CapabilityLifecycleReconciler
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.incident_repair.architecture import (
@@ -81,7 +84,9 @@ from jarvis.model_routing.router import (
 )
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.model_routing.strategy import EngineeringStageStrategy
+from jarvis.promotion.models import PromotionAttemptState
 from jarvis.promotion.release import DeploymentMetadataStore
+from jarvis.promotion.store import PromotionStore
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
 from jarvis.work.dbos_backend import (
@@ -145,6 +150,7 @@ class WorkRuntime:
         model_router: ModelRouter | None = None,
         capability_acquisition: CapabilityAcquisitionCoordinator | None = None,
         capability_lifecycle: CapabilityAcquisitionLifecycleCoordinator | None = None,
+        capability_release_bridge: CapabilityAcquisitionReleaseBridge | None = None,
     ) -> None:
         self.store = store
         self.engine = engine
@@ -157,6 +163,7 @@ class WorkRuntime:
         self.model_router = model_router
         self.capability_acquisition = capability_acquisition
         self.capability_lifecycle = capability_lifecycle
+        self.capability_release_bridge = capability_release_bridge
         self._closed = False
 
     def supports(self, work_type: WorkType) -> bool:
@@ -233,8 +240,11 @@ def build_work_runtime(
     dbos_database_url: str | None = None,
     event_loop: asyncio.AbstractEventLoop | None = None,
     acquisition_context_provider: AcquisitionContextProvider | None = None,
+    capability_acquisition_source_revision: str | None = None,
     capability_lifecycle_service: CapabilityLifecycleService | None = None,
     capability_deployment_metadata: DeploymentMetadataStore | None = None,
+    capability_package_admission: CapabilityPackageAdmissionService | None = None,
+    capability_reconciler: CapabilityLifecycleReconciler | None = None,
 ) -> WorkRuntime:
     """Build one durable work runtime around the configured JARVIS brain provider."""
 
@@ -406,25 +416,61 @@ def build_work_runtime(
             ),
         ),
     )
+    source_revision = str(capability_acquisition_source_revision or "").strip().casefold()
     capability_acquisition = CapabilityAcquisitionCoordinator(
         changes=changes,
         context_provider=acquisition_context,
+        source_revision_provider=(None if not source_revision else lambda: source_revision),
     )
-    if (capability_lifecycle_service is None) != (
-        capability_deployment_metadata is None
+    lifecycle_inputs = (
+        capability_lifecycle_service,
+        capability_deployment_metadata,
+        capability_package_admission,
+        capability_reconciler,
+    )
+    if any(item is not None for item in lifecycle_inputs) and any(
+        item is None for item in lifecycle_inputs
     ):
         raise ValueError(
-            "capability lifecycle service and deployment metadata must be supplied together"
+            "capability lifecycle, deployment, admission and reconciler "
+            "must be supplied together"
         )
-    capability_lifecycle = (
-        None
-        if capability_lifecycle_service is None
-        else CapabilityAcquisitionLifecycleCoordinator(
+
+    capability_lifecycle = None
+    capability_release_bridge = None
+    if capability_lifecycle_service is not None:
+        assert capability_deployment_metadata is not None
+        assert capability_package_admission is not None
+        assert capability_reconciler is not None
+        capability_lifecycle = CapabilityAcquisitionLifecycleCoordinator(
             change_store,
             capability_deployment_metadata,
             capability_lifecycle_service,
         )
-    )
+        promotion_store = PromotionStore(change_store)
+        capability_release_bridge = CapabilityAcquisitionReleaseBridge(
+            change_store,
+            promotion_store,
+            capability_deployment_metadata,
+            admission=capability_package_admission,
+            reconciler=capability_reconciler,
+        )
+        active_release = capability_deployment_metadata.active()
+        if active_release is not None:
+            attempt = promotion_store.get(active_release.promotion_attempt_id)
+            if attempt is not None and attempt.state is PromotionAttemptState.OBSERVING:
+                change = change_store.get(attempt.change_id)
+                if (
+                    change is not None
+                    and change.process_key == OWNER_CAPABILITY_ACQUISITION_PROCESS.key
+                    and change.process_version
+                    == OWNER_CAPABILITY_ACQUISITION_PROCESS.version
+                ):
+                    capability_release_bridge.reconcile(
+                        change.change_id,
+                        attempt_id=attempt.attempt_id,
+                    )
+
     configure_terminal_reconciliation(changes.reconcile_for_work)
     changes.reconcile_active()
     return WorkRuntime(
@@ -439,4 +485,5 @@ def build_work_runtime(
         model_router=model_router,
         capability_acquisition=capability_acquisition,
         capability_lifecycle=capability_lifecycle,
+        capability_release_bridge=capability_release_bridge,
     )
