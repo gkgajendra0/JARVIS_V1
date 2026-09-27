@@ -478,8 +478,10 @@ def capability_candidate_completion_guard(
     if last_substrate <= last_commit:
         return (
             False,
-            "Phase-9 development requires current satisfied substrate binding "
-            "after the final clean commit",
+            (
+                "Phase-9 development requires current satisfied substrate binding "
+                "after the final clean commit"
+            ),
         )
     return True, None
 
