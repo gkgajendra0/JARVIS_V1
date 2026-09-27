@@ -499,6 +499,8 @@ The frozen Phase-4 design is JARVIS-owned rather than a mandatory external gatew
 
 ### Phase 5 — Secure autonomous engineering substrate
 
+**STATUS: DONE / OWNER-MACHINE ACCEPTED 2026-09-27**
+
 Build the governed primitives needed before JARVIS can acquire arbitrary new capabilities safely:
 
 - DependencyBroker;
@@ -511,13 +513,21 @@ Build the governed primitives needed before JARVIS can acquire arbitrary new cap
 
 ### Phase 6 — unknown-incident investigation and source repair
 
+**STATUS: DONE / OWNER-MACHINE ACCEPTED 2026-09-27**
+
 Use EngineeringKnowledge + router + EngineeringChange + existing isolated development to investigate unknown incidents, generate repairs, test them and present owner-reviewable candidates.
+
+Accepted result: bounded exact-revision diagnostics, typed diagnosis, owner-gated repair architecture, isolated source-revision-pinned development, post-edit verification, protected-surface fail-closed policy, exact candidate provenance, 15-case deterministic replay and real Windows/Docker acceptance. Canonical evidence is recorded in `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`.
+
+Phase 6 intentionally ends at an owner-reviewable candidate and does not grant protected-main merge or production deployment authority.
 
 ### Phase 7 — governed promotion, production verification and rollback
 
+**STATUS: NEXT / RESEARCH + ARCHITECTURE REQUIRED**
+
 Connect accepted candidates to PR/CI/protected-main governance and existing deployment/readiness/rollback boundaries.
 
-No automatic protected-main merge is implied.
+No automatic protected-main merge is implied. Phase-7 implementation must not begin until its research/architecture is completed and explicitly owner-approved.
 
 ### Phase 8 — capability package and registry lifecycle
 
@@ -699,12 +709,14 @@ Rules:
 2. Phase 2 EngineeringKnowledge is complete and owner-machine accepted.
 3. Phase 3 EngineeringChange is complete and owner-machine accepted.
 4. Phase 4 Research + Diagnostic Model Router is complete and owner-machine accepted on 2026-09-26; preserve its routing/health/fallback boundary.
-5. Continue Phase 5 Secure Autonomous Engineering Substrate implementation; the 2026-09-26 north-star clarification does not interrupt or rewrite Phase 5.
-6. Continue Phases 6–10 as the governed engineering effectors required by the larger self-management goal.
-7. Insert Phase 10A Autonomous Operations Control Plane before Phase 11, as defined by `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
-8. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2, Phase 3 or Phase 4 without new concrete evidence.
-9. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
-10. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.
+5. Phase 5 Secure Autonomous Engineering Substrate is complete and owner-machine accepted on 2026-09-27.
+6. Phase 6 Unknown-Incident Investigation + Source Repair is complete and owner-machine accepted on 2026-09-27; preserve its exact diagnosis/architecture/candidate provenance and protected-surface boundaries.
+7. Begin Phase 7 Governed Promotion / Production Verification / Rollback with research and architecture only; implementation requires explicit owner architecture approval.
+8. Continue later Phases 8–10 as the governed engineering effectors required by the larger self-management goal.
+9. Insert Phase 10A Autonomous Operations Control Plane before Phase 11, as defined by `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
+10. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2, Phase 3, Phase 4, Phase 5 or Phase 6 without new concrete evidence.
+11. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
+12. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.
 
 The program is considered aligned only while each active slice can answer:
 

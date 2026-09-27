@@ -24,7 +24,7 @@ This roadmap owns **numbered product sequence only**. It does not select technol
 | 16 | Extensibility and Plugin/Skill Lifecycle | CAP-033 | PLANNED |
 | 17 | Daily Assistant and Multi-Capability Workflows | CAP-042 | PLANNED |
 | 18 | Learning, Gap Detection, Governed Skill Creation | CAP-043–045 | PLANNED |
-| 19 | Governed Self-Diagnostics and Repair | CAP-046 | PARTIAL — deterministic R1/R2 + Phase 1H + Phase 2 EngineeringKnowledge accepted; Phase 3 EngineeringChange active |
+| 19 | Governed Self-Diagnostics and Repair | CAP-046 | PARTIAL — deterministic R1/R2 + Phases 1H–6 accepted; Phase 7 promotion/rollback research is next |
 | 20 | Governed Self-Improvement and Advanced Autonomy | CAP-047 | PLANNED |
 
 ## Accepted interludes that do not renumber the roadmap
@@ -107,9 +107,9 @@ Phase 1H  foundation hardening — DONE / OWNER-MACHINE ACCEPTED 2026-09-24
 Phase 2   EngineeringKnowledge — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 3   EngineeringChange lifecycle / mission orchestration — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 4   Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 2026-09-26
-Phase 5   Secure autonomous engineering substrate — ACTIVE / IMPLEMENTATION; 5A–5F merged, 5G underway
-Phase 6   Unknown-incident investigation + source repair
-Phase 7   Governed promotion / production verification / rollback
+Phase 5   Secure autonomous engineering substrate — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
+Phase 6   Unknown-incident investigation + source repair — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
+Phase 7   Governed promotion / production verification / rollback — NEXT / RESEARCH + ARCHITECTURE REQUIRED
 Phase 8   Capability package + registry lifecycle
 Phase 9   Owner-requested capability acquisition
 Phase 10  Closed-loop engineering learning
@@ -122,7 +122,7 @@ Phase 14  Governed self-evolution
 
 Phase 2 generalized the earlier RepairKnowledge design into shared `EngineeringKnowledge`, with `REPAIR` as the first implemented vertical. Owner-machine acceptance passed on 2026-09-25, including R2-independence, real repair projection/promotion/retrieval, poisoning/secret gates, future-facet extensibility, and lexical/hybrid qrel safety.
 
-Phase 3 and Phase 4 are owner-machine accepted. Phase 5 is the active cross-cutting slice; Phases 5A–5F are merged and Phase 5G bounded discovery is underway in parallel with this documentation-only north-star reconciliation.
+Phases 3–6 are owner-machine accepted. Phase 6 final acceptance passed 15/15 deterministic replay cases on the real Windows owner machine, with exact source-revision worktree, read-only/network-disabled Docker verification, protected-main non-mutation and exact candidate provenance. Phase 7 is next for research and architecture; implementation is not authorized until a Phase-7 architecture receives explicit owner approval.
 
 Owner-requested capability acquisition intentionally comes before autonomous gap detection. If the owner explicitly says "get this capability", JARVIS should not need repeated failures or repeated requests before it can run the governed acquisition lifecycle.
 
@@ -226,9 +226,9 @@ The same lifecycle applies to JARVIS-generated engineering candidates; autonomy 
 
 Persistent Concurrent Work Orchestration and the deterministic repair/R2 foundation are owner accepted.
 
-**Current active cross-cutting work is Phase 5 — Secure Autonomous Engineering Substrate implementation.** Phases 5A–5F are merged; Phase 5G bounded discovery is currently underway.
+**Current next cross-cutting work is Phase 7 — Governed Promotion / Production Verification / Rollback research and architecture.**
 
-The 2026-09-26 autonomous self-management north-star clarification is documentation/architecture alignment only and does not interrupt active Phase 5 implementation.
+Phase 5 and Phase 6 are DONE / OWNER-MACHINE ACCEPTED 2026-09-27. Phase-7 implementation must not begin until its research and architecture are completed and explicitly owner-approved.
 
 Step 8 remains the next numbered product slice when numbered roadmap work resumes.
 

@@ -73,8 +73,8 @@ Phase 2   EngineeringKnowledge Foundation — DONE / OWNER-MACHINE ACCEPTED 2026
 Phase 3   EngineeringChange Lifecycle / Mission Orchestration — DONE / OWNER-MACHINE ACCEPTED 2026-09-25
 Phase 4   Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 2026-09-26
 Phase 5   Secure Autonomous Engineering Substrate — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
-Phase 6   Unknown-Incident Investigation + Source Repair
-Phase 7   Governed Promotion / Production Verification / Rollback
+Phase 6   Unknown-Incident Investigation + Source Repair — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
+Phase 7   Governed Promotion / Production Verification / Rollback — NEXT / RESEARCH + ARCHITECTURE REQUIRED
 Phase 8   Capability Package + Registry Lifecycle
 Phase 9   Owner-Requested Capability Acquisition
 Phase 10  Closed-Loop Engineering Learning
@@ -88,6 +88,10 @@ Phase 14  Governed Self-Evolution
 The full requirements, objects, entry/exit gates and permanent governance invariants for these phases are defined in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`.
 
 Phase-4 implementation details are preserved in `PHASE4_MODEL_ROUTER_RESEARCH.md`, `PHASE4_MODEL_ROUTER_ARCHITECTURE.md`, and `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md`; final owner-machine evidence is in `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`. Jev remains deferred to a separate later optimization experiment.
+
+Phase 6 Unknown-Incident Investigation + Source Repair is owner-machine accepted on 2026-09-27. Its canonical evidence is recorded in `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`. The accepted path covers bounded exact-revision diagnostics, typed diagnosis, owner-gated repair architecture, isolated source-revision-pinned development, protected-surface fail-closed verification, exact candidate provenance, deterministic replay and Windows acceptance. It stops before protected-main promotion/deployment.
+
+Phase 7 Governed Promotion / Production Verification / Rollback is the next cross-cutting phase, but only its research and architecture work is authorized by sequence. Phase-7 implementation requires its own owner-approved architecture.
 
 ---
 
