@@ -103,8 +103,13 @@ def test_unknown_incident_creates_one_canonical_diagnostics_change(tmp_path) -> 
     assert first.evidence_artifact_id == second.evidence_artifact_id
     assert first.package.source_revision == REVISION
     assert first.package.trigger_digest == trigger.digest
-    assert changes.require(first.change.change_id).process_key == "unknown_incident_repair"
-    assert changes.work.require(first.diagnostics_work_id).work_type is WorkType.DIAGNOSTICS
+    assert (
+        changes.require(first.change.change_id).process_key == "unknown_incident_repair"
+    )
+    assert (
+        changes.work.require(first.diagnostics_work_id).work_type
+        is WorkType.DIAGNOSTICS
+    )
     assert incidents.get(incident.incident_id).status is IncidentStatus.INVESTIGATING
 
     restarted_work = SQLiteWorkStore(work_path)
@@ -219,7 +224,10 @@ def test_new_incident_evidence_revises_package_without_duplicate_work(tmp_path) 
     assert second.change.change_id == first.change.change_id
     assert second.diagnostics_work_id == first.diagnostics_work_id
     assert second.evidence_artifact_id != first.evidence_artifact_id
-    assert changes.latest_artifact(
-        first.change.change_id,
-        "incident_evidence",
-    ).revision == 2
+    assert (
+        changes.latest_artifact(
+            first.change.change_id,
+            "incident_evidence",
+        ).revision
+        == 2
+    )
