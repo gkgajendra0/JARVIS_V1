@@ -22,10 +22,14 @@ def test_default_sandbox_profiles_are_exact_and_hardened(tmp_path: Path) -> None
 
     assert set(profiles) == {
         "test.offline.v1",
+        "diagnostic.reproduction.v1",
+        "diagnostic.static.v1",
         "dependency.acquire.v1",
         "dependency.verify.v1",
     }
     assert profiles["test.offline.v1"].network_mode.value == "none"
+    assert profiles["diagnostic.reproduction.v1"].network_mode.value == "none"
+    assert profiles["diagnostic.static.v1"].network_mode.value == "none"
     assert profiles["dependency.verify.v1"].network_mode.value == "none"
     assert profiles["dependency.acquire.v1"].network_mode.value == "registered_sources"
     assert all(item.no_new_privileges for item in profiles.values())
@@ -69,6 +73,102 @@ def test_offline_pytest_command_uses_only_registered_security_switches(
     ]
     assert command[-1] == "tests/test_example.py"
     assert launch.timeout_seconds == 45
+
+
+def test_diagnostic_profiles_are_network_disabled_and_source_read_only(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    evidence = tmp_path / "evidence"
+    workspace.mkdir()
+    evidence.mkdir()
+    registry = default_sandbox_registry(docker_executable="docker")
+
+    reproduction = registry.build_launch(
+        profile_id="diagnostic.reproduction.v1",
+        image="jarvis-diagnostics:locked",
+        mounts=(
+            SandboxMountBinding("workspace_ro", workspace),
+            SandboxMountBinding("evidence_rw", evidence),
+        ),
+        trusted_suffix=("tests/test_fault.py::test_repro",),
+    )
+    static = registry.build_launch(
+        profile_id="diagnostic.static.v1",
+        image="jarvis-diagnostics:locked",
+        mounts=(SandboxMountBinding("workspace_ro", workspace),),
+        trusted_suffix=("src/jarvis/example.py",),
+    )
+
+    reproduction_command = list(reproduction.command)
+    static_command = list(static.command)
+    assert reproduction_command[
+        reproduction_command.index("--network") + 1
+    ] == "none"
+    assert static_command[static_command.index("--network") + 1] == "none"
+    assert "--read-only" in reproduction_command
+    assert "--read-only" in static_command
+
+    reproduction_mounts = [
+        reproduction_command[index + 1]
+        for index, token in enumerate(reproduction_command)
+        if token == "--mount"
+    ]
+    assert any(
+        "target=/workspace" in mount and "readonly" in mount
+        for mount in reproduction_mounts
+    )
+    assert any(
+        "target=/evidence" in mount and "readonly" not in mount
+        for mount in reproduction_mounts
+    )
+
+    static_mounts = [
+        static_command[index + 1]
+        for index, token in enumerate(static_command)
+        if token == "--mount"
+    ]
+    assert len(static_mounts) == 1
+    assert "target=/workspace" in static_mounts[0]
+    assert "readonly" in static_mounts[0]
+    assert reproduction_command[-1] == "tests/test_fault.py::test_repro"
+    assert static_command[-1] == "src/jarvis/example.py"
+
+
+def test_diagnostic_targets_cannot_become_container_options(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    evidence = tmp_path / "evidence"
+    workspace.mkdir()
+    evidence.mkdir()
+    registry = default_sandbox_registry(docker_executable="docker")
+
+    for profile_id, mounts in (
+        (
+            "diagnostic.reproduction.v1",
+            (
+                SandboxMountBinding("workspace_ro", workspace),
+                SandboxMountBinding("evidence_rw", evidence),
+            ),
+        ),
+        (
+            "diagnostic.static.v1",
+            (SandboxMountBinding("workspace_ro", workspace),),
+        ),
+    ):
+        for target in (
+            "../outside.py",
+            "--unsafe",
+            "/absolute/test.py",
+            r"\absolute\test.py",
+            r"C:\absolute\test.py",
+        ):
+            with pytest.raises(SandboxPolicyError, match="relative non-option"):
+                registry.build_launch(
+                    profile_id=profile_id,
+                    image="jarvis-diagnostics:locked",
+                    mounts=mounts,
+                    trusted_suffix=(target,),
+                )
 
 
 def test_dependency_profiles_build_fixed_commands_without_runtime_suffix(
