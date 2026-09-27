@@ -8,6 +8,10 @@ from pathlib import Path
 
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.store import ChangeStore
+from jarvis.incident_repair.architecture import (
+    IncidentRepairDevelopmentRevisionResolver,
+    IncidentRepairSourceCompletionHandler,
+)
 from jarvis.incident_repair.code_index import (
     DiagnosticCodeIndex,
     build_diagnostic_code_intelligence_executors,
@@ -212,7 +216,9 @@ def build_work_runtime(
         reasoner,
         interactive_gate=interactive_brain_gate,
     )
-    workspace_manager = DevelopmentWorkspaceManager()
+    workspace_manager = DevelopmentWorkspaceManager(
+        base_revision_resolver=IncidentRepairDevelopmentRevisionResolver(change_store)
+    )
     diagnostic_workspace_manager = DiagnosticWorkspaceManager(
         ChangeStoreDiagnosticRevisionResolver(change_store)
     )
@@ -279,7 +285,13 @@ def build_work_runtime(
     )
     orchestrator = WorkOrchestrator(store, backend)
     orchestrator.reconcile_active()
-    changes = ChangeCoordinator(change_store, backend)
+    changes = ChangeCoordinator(
+        change_store,
+        backend,
+        source_completion_handlers=(
+            IncidentRepairSourceCompletionHandler(change_store),
+        ),
+    )
     configure_terminal_reconciliation(changes.reconcile_for_work)
     changes.reconcile_active()
     return WorkRuntime(

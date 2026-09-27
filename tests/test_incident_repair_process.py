@@ -104,31 +104,15 @@ def test_phase6_coordinator_uses_diagnostics_before_owner_gated_development(
     assert changes.require(change.change_id).state is ChangeState.ARCHITECTURE_READY
 
     gates = GateService(changes, verify_owner=lambda *_: True)
-    gate = gates.present(
-        change.change_id,
-        GateKind.ARCHITECTURE,
-        architecture.artifact_id,
-    )
-    gates.decide(
-        gate.gate_id,
-        approved=True,
-        artifact_digest=architecture.digest,
-        actor_id="owner",
-        source_session_id="owner-session",
-        source_turn_id="approval-turn",
-        request_key="phase6a:approval",
-    )
+    with pytest.raises(ChangeConflict, match="architecture contract is invalid"):
+        gates.present(
+            change.change_id,
+            GateKind.ARCHITECTURE,
+            architecture.artifact_id,
+        )
 
-    coordinator.reconcile(change.change_id)
     stages = changes.list_stages(change.change_id)
-    assert len(stages) == 2
-    development = stages[1]
-    assert development.stage_key == "development"
-    development_work = work.require(development.work_id)
-    assert development_work.work_type is WorkType.DEVELOPMENT
-    assert development_work.dependencies == (diagnostics.work_id,)
-    assert development.plan_artifact_id == architecture.artifact_id
-    assert changes.require(change.change_id).state is ChangeState.DEVELOPING
+    assert [stage.stage_key for stage in stages] == ["diagnostics"]
 
 
 def test_phase6_process_fails_closed_if_handler_is_not_registered_after_restart(
