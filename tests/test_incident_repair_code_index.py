@@ -158,7 +158,9 @@ def _index(tmp_path):
     return index, manager, old, new
 
 
-def test_code_index_digest_is_deterministic_and_bound_to_pinned_revision(tmp_path) -> None:
+def test_code_index_digest_is_deterministic_and_bound_to_pinned_revision(
+    tmp_path,
+) -> None:
     index, _, old, _ = _index(tmp_path)
 
     first = index.build("work-1")
@@ -225,8 +227,7 @@ def test_analyzer_requirements_are_exact_and_phase5_broker_compatible() -> None:
     assert requirements[0].version_constraint == f"=={AST_GREP_VERSION}"
     assert requirements[1].version_constraint == f"=={GRIMP_VERSION}"
     assert all(
-        item.registered_source_ids == ("pypi.public.v1",)
-        for item in requirements
+        item.registered_source_ids == ("pypi.public.v1",) for item in requirements
     )
     assert all(item.change_id == "change-1" for item in requirements)
     assert all(item.work_id == "work-1" for item in requirements)
