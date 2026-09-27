@@ -15,7 +15,12 @@ from jarvis.capability_acquisition.evaluation import (
     run_replay_suite,
     validate_real_capability_evidence,
 )
+from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
+from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.canonical import canonical_digest
+from jarvis.promotion.release import DeploymentMetadataStore, default_deployment_root
+from jarvis.work.privacy import build_default_work_payload_codec
+from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 from jarvis.incident_repair.models import ProtectedSurfaceVerdict
 from jarvis.incident_repair.protected_surfaces import RepairProtectedSurfacePolicy
 
@@ -192,6 +197,212 @@ def run_acceptance(
     return evidence
 
 
+def _artifact_ref(artifact) -> str:
+    return f"{artifact.artifact_id}:sha256:{artifact.digest}"
+
+
+def collect_real_capability_evidence(
+    *,
+    repo_root: pathlib.Path,
+    change_id: str,
+    operation: str,
+    target: str,
+    observed_effect: str,
+    observation_method: str,
+) -> dict[str, object]:
+    """Build real evidence from canonical durable Phase-9 state plus owner observation."""
+
+    repo = pathlib.Path(repo_root).resolve()
+    tested_commit = _snapshot(repo).head_sha
+    store_path = default_work_store_path()
+    work = SQLiteWorkStore(
+        store_path,
+        payload_codec=build_default_work_payload_codec(store_path),
+    )
+    changes = ChangeStore(
+        work,
+        processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,),
+    )
+    change = changes.require(str(change_id).strip())
+    if change.process_key != OWNER_CAPABILITY_ACQUISITION_PROCESS.key:
+        raise Phase9AcceptanceError("change is not Phase-9 capability acquisition")
+
+    stages = changes.list_stages(change.change_id)
+    acquisition_stage = next(
+        (
+            item
+            for item in stages
+            if item.stage_key
+            == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
+        ),
+        None,
+    )
+    development_stage = next(
+        (
+            item
+            for item in reversed(stages)
+            if item.stage_key
+            == OWNER_CAPABILITY_ACQUISITION_PROCESS.development_stage.stage_key
+        ),
+        None,
+    )
+    if acquisition_stage is None or development_stage is None:
+        raise Phase9AcceptanceError(
+            "Phase-9 acquisition/development WorkItem lineage is incomplete"
+        )
+
+    goal = changes.latest_artifact(change.change_id, "capability_goal")
+    plan = changes.latest_artifact(change.change_id, "acquisition_plan")
+    architecture = changes.latest_artifact(change.change_id, "architecture")
+    candidate = changes.latest_artifact(change.change_id, "capability_candidate")
+    admission = changes.latest_artifact(
+        change.change_id,
+        "capability_package_admission",
+    )
+    activation = changes.latest_artifact(
+        change.change_id,
+        "capability_lifecycle_activation",
+    )
+    disabled = changes.latest_artifact(
+        change.change_id,
+        "capability_lifecycle_disable",
+    )
+    observations = changes.list_artifacts(
+        change.change_id,
+        kind="production_observation",
+    )
+    healthy_observation = next(
+        (
+            item
+            for item in reversed(observations)
+            if item.payload.get("healthy") is True
+        ),
+        None,
+    )
+    required = {
+        "goal": goal,
+        "plan": plan,
+        "architecture": architecture,
+        "candidate": candidate,
+        "admission": admission,
+        "activation": activation,
+        "disable": disabled,
+        "production_observation": healthy_observation,
+    }
+    missing = tuple(name for name, artifact in required.items() if artifact is None)
+    if missing:
+        raise Phase9AcceptanceError(
+            "real capability evidence is incomplete: " + ", ".join(missing)
+        )
+    assert goal is not None
+    assert plan is not None
+    assert architecture is not None
+    assert candidate is not None
+    assert admission is not None
+    assert activation is not None
+    assert disabled is not None
+    assert healthy_observation is not None
+
+    if activation.payload.get("effective_enabled") is not True:
+        raise Phase9AcceptanceError(
+            "latest acquisition activation did not become effectively enabled"
+        )
+    if disabled.payload.get("effective_enabled") is not False:
+        raise Phase9AcceptanceError(
+            "latest acquisition disable did not restore disabled effective state"
+        )
+    if (
+        activation.payload.get("candidate_artifact_id") != candidate.artifact_id
+        or activation.payload.get("candidate_artifact_digest") != candidate.digest
+        or disabled.payload.get("candidate_artifact_id") != candidate.artifact_id
+        or disabled.payload.get("candidate_artifact_digest") != candidate.digest
+    ):
+        raise Phase9AcceptanceError(
+            "activation/disable evidence is not bound to current candidate"
+        )
+
+    active = DeploymentMetadataStore(default_deployment_root()).active()
+    active_release_sha = str(admission.payload.get("active_release_sha") or "").strip()
+    attempt_id = str(admission.payload.get("attempt_id") or "").strip()
+    if (
+        active is None
+        or active.release_sha != active_release_sha
+        or active.promotion_attempt_id != attempt_id
+    ):
+        raise Phase9AcceptanceError(
+            "current active release differs from Phase-9 package admission"
+        )
+
+    goal_digest = str(goal.payload.get("digest") or "").strip().casefold()
+    plan_digest = str(plan.payload.get("digest") or "").strip().casefold()
+    candidate_digest = str(candidate.payload.get("digest") or "").strip().casefold()
+    if not all((goal_digest, plan_digest, candidate_digest)):
+        raise Phase9AcceptanceError(
+            "canonical Phase-9 goal/plan/candidate digest evidence is incomplete"
+        )
+
+    payload = build_real_capability_evidence(
+        tested_commit=tested_commit,
+        change_id=change.change_id,
+        acquisition_work_id=acquisition_stage.work_id,
+        development_work_id=development_stage.work_id,
+        goal_digest=goal_digest,
+        plan_digest=plan_digest,
+        architecture_digest=architecture.digest,
+        candidate_digest=candidate_digest,
+        capability_id=str(candidate.payload.get("capability_id") or ""),
+        package_id=str(candidate.payload.get("package_id") or ""),
+        package_version=str(candidate.payload.get("package_version") or ""),
+        package_digest=str(candidate.payload.get("package_digest") or "").casefold(),
+        promotion_attempt_id=attempt_id,
+        active_release_sha=active_release_sha.casefold(),
+        lifecycle_evidence_ref=_artifact_ref(activation),
+        operation=str(operation).strip(),
+        target=str(target).strip(),
+        observed_effect=str(observed_effect).strip(),
+        observation_method=str(observation_method).strip().casefold(),
+        production_observation_ref=_artifact_ref(healthy_observation),
+        rollback_disable_evidence_ref=_artifact_ref(disabled),
+        recorded_at=datetime.now(UTC).isoformat(),
+        owner_confirmed=True,
+        production_observed=True,
+        rollback_disable_verified=True,
+    )
+    return validate_real_capability_evidence(
+        payload,
+        tested_commit=tested_commit,
+    )
+
+
+def _record_change_real(args: argparse.Namespace) -> int:
+    payload = collect_real_capability_evidence(
+        repo_root=args.repo_root,
+        change_id=args.change_id,
+        operation=args.operation,
+        target=args.target,
+        observed_effect=args.observed_effect,
+        observation_method=args.observation_method,
+    )
+    output = args.output.resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        json.dumps(
+            {
+                "status": "RECORDED",
+                "change_id": payload["change_id"],
+                "evidence_digest": payload["evidence_digest"],
+                "output": str(output),
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def _record_real(args: argparse.Namespace) -> int:
     payload = build_real_capability_evidence(
         tested_commit=args.tested_commit.strip().casefold(),
@@ -296,6 +507,34 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--rollback-disable-evidence-ref", required=True)
     record.add_argument("--output", type=pathlib.Path, required=True)
     record.set_defaults(handler=_record_real)
+
+    record_change = sub.add_parser(
+        "record-change-real",
+        help=(
+            "Collect canonical Phase-9 evidence for one real owner-observed "
+            "capability effect."
+        ),
+    )
+    record_change.add_argument(
+        "--repo-root",
+        type=pathlib.Path,
+        default=pathlib.Path.cwd(),
+    )
+    record_change.add_argument("--change-id", required=True)
+    record_change.add_argument("--operation", required=True)
+    record_change.add_argument("--target", required=True)
+    record_change.add_argument("--observed-effect", required=True)
+    record_change.add_argument(
+        "--observation-method",
+        choices=(
+            "owner_observed",
+            "device_state_readback",
+            "external_system_readback",
+        ),
+        default="owner_observed",
+    )
+    record_change.add_argument("--output", type=pathlib.Path, required=True)
+    record_change.set_defaults(handler=_record_change_real)
 
     accept = sub.add_parser(
         "accept",
