@@ -48,6 +48,8 @@ from jarvis.capability_registry.lifecycle import (
     CapabilityLifecycleService,
 )
 from jarvis.capability_registry.models import (
+    CapabilityLifecycleEventKind,
+    DesiredActivationState,
     PackageDisposition,
 )
 from jarvis.capability_registry.projection import (
@@ -62,6 +64,7 @@ from jarvis.capability_registry.reconciliation import (
     CapabilityHealthBridge,
     CapabilityLifecycleReconciler,
 )
+from jarvis.capability_registry.retention import CapabilityArtifactRetentionPlanner
 from jarvis.capability_registry.source import ReleaseCapabilityPackageSource
 from jarvis.capability_registry.store import (
     CapabilityRegistrySelectionError,
@@ -822,6 +825,107 @@ def test_readmission_tightens_existing_package_to_quarantine(tmp_path) -> None:
     assert package.disposition is PackageDisposition.QUARANTINED
     event = env["store"].list_events("example.capability")[-1]
     assert event.reason_code == "automatic_admission_quarantine"
+
+
+def test_retirement_store_rejects_stale_authorized_generation(tmp_path) -> None:
+    env = _environment(tmp_path, versions=("1.0.0", "2.0.0"))
+    _select(env, "2.0.0", 1)
+    _enable(env, 2)
+    approved_generation = env["store"].require_registry(
+        "example.capability"
+    ).generation
+
+    env["lifecycle"].disable(
+        "example.capability",
+        expected_generation=approved_generation,
+        authority_session_id=SESSION,
+        source=_owner_source(),
+    )
+
+    with pytest.raises(StaleRegistryGenerationError, match="stale registry generation"):
+        env["store"].set_package_disposition(
+            "example.package",
+            "1.0.0",
+            disposition=PackageDisposition.RETIRED,
+            reason_code="stale_authorized_retirement",
+            expected_generation=approved_generation,
+            authority_ref="authority:stale:test",
+        )
+
+    package = env["store"].get_package("example.package", "1.0.0")
+    assert package is not None
+    assert package.disposition is PackageDisposition.AVAILABLE
+
+
+def test_retention_keeps_selected_and_retired_rollback_artifacts(tmp_path) -> None:
+    release = _release(tmp_path)
+    artifact_store = ArtifactStore(tmp_path / "retention-artifacts")
+    manifests = (_manifest("1.0.0"), _manifest("2.0.0"))
+    packages: dict[str, CapabilityPackageV1] = {}
+    digests: dict[str, str] = {}
+
+    for manifest in manifests:
+        payload = f"phase8e-retention-{manifest.capability_version}".encode()
+        source_file = tmp_path / f"payload-{manifest.capability_version}.bin"
+        source_file.write_bytes(payload)
+        digest = hashlib.sha256(payload).hexdigest()
+        artifact_store.admit_file(source_file, expected_sha256=digest)
+        artifact = PackageArtifactDescriptorV1(
+            role="payload",
+            sha256=digest,
+            size_bytes=len(payload),
+            media_type="application/octet-stream",
+        )
+        package = _package(manifest, artifacts=(artifact,))
+        packages[manifest.capability_version] = package
+        digests[manifest.capability_version] = digest
+        _write_package(release, package)
+
+    source = ReleaseCapabilityPackageSource(release)
+    store = CapabilityRegistryStore(tmp_path / "retention-registry.sqlite3")
+    for package in packages.values():
+        store.admit_package(
+            package,
+            admitted_release_sha=RELEASE_SHA,
+            evidence_digest=package.digest,
+        )
+
+    store.transition_registry(
+        "example.capability",
+        expected_generation=1,
+        desired_state=DesiredActivationState.DISABLED,
+        selected_package_id="example.package",
+        selected_package_version="1.0.0",
+        event_kind=CapabilityLifecycleEventKind.VERSION_SELECTED,
+        reason_code="retention_select_v1",
+    )
+    store.transition_registry(
+        "example.capability",
+        expected_generation=2,
+        desired_state=DesiredActivationState.DISABLED,
+        selected_package_id="example.package",
+        selected_package_version="2.0.0",
+        event_kind=CapabilityLifecycleEventKind.VERSION_SELECTED,
+        reason_code="retention_select_v2",
+    )
+    store.set_package_disposition(
+        "example.package",
+        "1.0.0",
+        disposition=PackageDisposition.RETIRED,
+        reason_code="retention_retire_v1",
+        expected_generation=3,
+    )
+
+    refs = CapabilityArtifactRetentionPlanner(
+        store=store,
+        package_source=source,
+        rollback_depth=1,
+    ).references()
+
+    assert set(refs.referenced_sha256) == {
+        digests["1.0.0"],
+        digests["2.0.0"],
+    }
 
 
 def test_owner_turn_source_must_match_authority_session(tmp_path) -> None:
