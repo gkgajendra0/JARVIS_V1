@@ -234,8 +234,7 @@ class WorkEngine:
         finalize_index, finalize_step = finalized
 
         reproduction_exists = any(
-            step.kind == "diag_run_reproduction"
-            and step.state.value == "completed"
+            step.kind == "diag_run_reproduction" and step.state.value == "completed"
             for step in steps
         )
         impossible_reason = str(
@@ -317,9 +316,7 @@ class WorkEngine:
             raise ValueError("diagnostic finalize observation is malformed")
         return {
             "diagnosis": diagnosis,
-            "diagnosis_artifact_id": step.observation.get(
-                "diagnosis_artifact_id"
-            ),
+            "diagnosis_artifact_id": step.observation.get("diagnosis_artifact_id"),
             "diagnosis_artifact_digest": step.observation.get(
                 "diagnosis_artifact_digest"
             ),
