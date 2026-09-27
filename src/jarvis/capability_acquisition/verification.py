@@ -207,6 +207,75 @@ def _completed_steps(
     ]
 
 
+def ensure_capability_substrate_requirements_current(
+    store: ChangeStore,
+    change_id: str,
+    architecture: ChangeArtifact,
+) -> None:
+        dependency_refs = tuple(
+            str(item).strip()
+            for item in architecture.payload.get("dependency_refs", [])
+            if str(item).strip()
+        )
+        secret_scopes = {
+            str(item).strip().casefold()
+            for item in architecture.payload.get("secret_scopes", [])
+            if str(item).strip()
+        }
+        discovery_scopes = {
+            str(item).strip().casefold()
+            for item in architecture.payload.get("discovery_scopes", [])
+            if str(item).strip()
+        }
+        if not (dependency_refs or secret_scopes or discovery_scopes):
+            return
+
+        manifest = store.latest_artifact(change_id, MANIFEST_KIND)
+        if manifest is None:
+            raise CapabilityCandidateError(
+                "substrate_manifest_missing",
+                "approved dependency/secret/discovery requirements require "
+                "Phase-5 manifest evidence",
+            )
+        substrate = EngineeringSubstrateChangeService(store)
+        if not substrate.verification_current(change_id):
+            raise CapabilityCandidateError(
+                "substrate_verification_missing",
+                "approved dependency/secret/discovery requirements require "
+                "current satisfied Phase-5 substrate verification",
+            )
+
+        if dependency_refs and not tuple(
+            manifest.payload.get("dependency_resolution_ids", ())
+        ):
+            raise CapabilityCandidateError(
+                "dependency_provenance_missing",
+                "approved dependency requirements have no bound Phase-5 "
+                "dependency/provenance lineage",
+            )
+        manifest_secret_scopes = {
+            str(item).strip().casefold()
+            for item in manifest.payload.get("secret_scope_requirements", ())
+            if str(item).strip()
+        }
+        if not secret_scopes.issubset(manifest_secret_scopes):
+            raise CapabilityCandidateError(
+                "secret_scope_evidence_mismatch",
+                "Phase-5 manifest does not cover approved secret scopes",
+            )
+        manifest_discovery_scopes = {
+            str(item).strip().casefold()
+            for item in manifest.payload.get("discovery_scope_ids", ())
+            if str(item).strip()
+        }
+        if not discovery_scopes.issubset(manifest_discovery_scopes):
+            raise CapabilityCandidateError(
+                "discovery_scope_evidence_mismatch",
+                "Phase-5 manifest does not cover approved discovery scopes",
+            )
+
+
+
 class CapabilityCandidateVerifier:
     """Re-derive Phase-9 candidate truth from Git, package schema and WorkSteps."""
 
@@ -579,67 +648,11 @@ class CapabilityCandidateVerifier:
         change_id: str,
         architecture: ChangeArtifact,
     ) -> None:
-        dependency_refs = tuple(
-            str(item).strip()
-            for item in architecture.payload.get("dependency_refs", [])
-            if str(item).strip()
+        ensure_capability_substrate_requirements_current(
+            self._store,
+            change_id,
+            architecture,
         )
-        secret_scopes = {
-            str(item).strip().casefold()
-            for item in architecture.payload.get("secret_scopes", [])
-            if str(item).strip()
-        }
-        discovery_scopes = {
-            str(item).strip().casefold()
-            for item in architecture.payload.get("discovery_scopes", [])
-            if str(item).strip()
-        }
-        if not (dependency_refs or secret_scopes or discovery_scopes):
-            return
-
-        manifest = self._store.latest_artifact(change_id, MANIFEST_KIND)
-        if manifest is None:
-            raise CapabilityCandidateError(
-                "substrate_manifest_missing",
-                "approved dependency/secret/discovery requirements require "
-                "Phase-5 manifest evidence",
-            )
-        substrate = EngineeringSubstrateChangeService(self._store)
-        if not substrate.verification_current(change_id):
-            raise CapabilityCandidateError(
-                "substrate_verification_missing",
-                "approved dependency/secret/discovery requirements require "
-                "current satisfied Phase-5 substrate verification",
-            )
-
-        if dependency_refs and not tuple(
-            manifest.payload.get("dependency_resolution_ids", ())
-        ):
-            raise CapabilityCandidateError(
-                "dependency_provenance_missing",
-                "approved dependency requirements have no bound Phase-5 "
-                "dependency/provenance lineage",
-            )
-        manifest_secret_scopes = {
-            str(item).strip().casefold()
-            for item in manifest.payload.get("secret_scope_requirements", ())
-            if str(item).strip()
-        }
-        if not secret_scopes.issubset(manifest_secret_scopes):
-            raise CapabilityCandidateError(
-                "secret_scope_evidence_mismatch",
-                "Phase-5 manifest does not cover approved secret scopes",
-            )
-        manifest_discovery_scopes = {
-            str(item).strip().casefold()
-            for item in manifest.payload.get("discovery_scope_ids", ())
-            if str(item).strip()
-        }
-        if not discovery_scopes.issubset(manifest_discovery_scopes):
-            raise CapabilityCandidateError(
-                "discovery_scope_evidence_mismatch",
-                "Phase-5 manifest does not cover approved discovery scopes",
-            )
 
     def _package(
         self,
