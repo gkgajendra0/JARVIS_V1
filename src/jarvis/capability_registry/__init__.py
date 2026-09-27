@@ -107,12 +107,13 @@ from jarvis.capability_registry.store import (
 )
 
 __all__ = [
-    "AdmittedCapabilityPackage",
-    "AuthorizedCapabilityLifecycle",
     "CAPABILITY_PACKAGE_SCHEMA_URI_V1",
     "CAPABILITY_PACKAGE_SCHEMA_VERSION_V1",
     "CAPABILITY_RUNTIME_API_ID",
     "CAPABILITY_RUNTIME_API_VERSION_V1",
+    "PACKAGE_DIRECTORY_NAME",
+    "AdmittedCapabilityPackage",
+    "AuthorizedCapabilityLifecycle",
     "CapabilityArtifactRetentionError",
     "CapabilityArtifactRetentionPlanner",
     "CapabilityCompatibilityEvaluator",
@@ -163,7 +164,6 @@ __all__ = [
     "DesiredActivationState",
     "DuplicateCapabilityProviderError",
     "EffectiveCapabilityState",
-    "PACKAGE_DIRECTORY_NAME",
     "PackageArtifactDescriptorV1",
     "PackageDisposition",
     "PackageVersionReuseConflict",
