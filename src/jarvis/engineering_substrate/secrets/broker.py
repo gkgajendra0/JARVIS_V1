@@ -498,6 +498,17 @@ PRIVATE_INDEX_TOKEN_CONSUMER = SecretConsumerPolicy(
     secret_environment_variable="JARVIS_DEPENDENCY_INDEX_TOKEN",
 )
 
+GITHUB_PROMOTION_APP_CONSUMER = SecretConsumerPolicy(
+    consumer_id="github.promotion.v1",
+    allowed_scopes=("repository.promotion",),
+    secret_environment_variable="JARVIS_GITHUB_APP_PRIVATE_KEY",
+)
+
 
 def default_secret_consumer_registry() -> SecretConsumerRegistry:
-    return SecretConsumerRegistry((PRIVATE_INDEX_TOKEN_CONSUMER,))
+    return SecretConsumerRegistry(
+        (
+            GITHUB_PROMOTION_APP_CONSUMER,
+            PRIVATE_INDEX_TOKEN_CONSUMER,
+        )
+    )
