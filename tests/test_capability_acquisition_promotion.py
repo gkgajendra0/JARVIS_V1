@@ -24,11 +24,11 @@ from jarvis.capability_registry.compatibility import (
     CompatibilityVerdict,
 )
 from jarvis.capability_registry.contracts import parse_capability_package_v1
+from jarvis.capability_registry.projection import CapabilityRegistryProjection
 from jarvis.capability_registry.provider import (
     CapabilityProviderRegistration,
     CapabilityProviderRegistry,
 )
-from jarvis.capability_registry.projection import CapabilityRegistryProjection
 from jarvis.capability_registry.reconciliation import CapabilityLifecycleReconciler
 from jarvis.capability_registry.source import ReleaseCapabilityPackageSource
 from jarvis.capability_registry.store import CapabilityRegistryStore
