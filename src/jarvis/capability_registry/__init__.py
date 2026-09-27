@@ -1,5 +1,16 @@
 """Governed Phase-8 capability package and lifecycle registry primitives."""
 
+from jarvis.capability_registry.admission import (
+    CapabilityPackageAdmissionResult,
+    CapabilityPackageAdmissionService,
+)
+from jarvis.capability_registry.compatibility import (
+    CapabilityCompatibilityEvaluator,
+    CapabilityCompatibilityReportV1,
+    CompatibilityReason,
+    CompatibilityVerdict,
+    current_platform_tags,
+)
 from jarvis.capability_registry.contracts import (
     CAPABILITY_PACKAGE_SCHEMA_URI_V1,
     CAPABILITY_PACKAGE_SCHEMA_VERSION_V1,
@@ -28,9 +39,24 @@ from jarvis.capability_registry.models import (
     DesiredActivationState,
     PackageDisposition,
 )
+from jarvis.capability_registry.provider import (
+    CapabilityHealthProbe,
+    CapabilityProviderRegistration,
+    CapabilityProviderRegistry,
+    CapabilityProviderRegistryError,
+    DuplicateCapabilityProviderError,
+    UnknownCapabilityProviderError,
+)
 from jarvis.capability_registry.schema import (
     capability_package_v1_json_schema,
     capability_package_v1_schema_digest,
+)
+from jarvis.capability_registry.source import (
+    PACKAGE_DIRECTORY_NAME,
+    CapabilityPackageSource,
+    CapabilityPackageSourceError,
+    ReleaseCapabilityPackageSource,
+    SourcedCapabilityPackage,
 )
 from jarvis.capability_registry.store import (
     CapabilityRegistryIntegrityError,
@@ -50,12 +76,23 @@ __all__ = [
     "CAPABILITY_PACKAGE_SCHEMA_VERSION_V1",
     "CAPABILITY_RUNTIME_API_ID",
     "CAPABILITY_RUNTIME_API_VERSION_V1",
+    "PACKAGE_DIRECTORY_NAME",
     "AdmittedCapabilityPackage",
+    "CapabilityCompatibilityEvaluator",
+    "CapabilityCompatibilityReportV1",
+    "CapabilityHealthProbe",
     "CapabilityLifecycleEvent",
     "CapabilityLifecycleEventKind",
+    "CapabilityPackageAdmissionResult",
+    "CapabilityPackageAdmissionService",
     "CapabilityPackageContractError",
     "CapabilityPackageKind",
+    "CapabilityPackageSource",
+    "CapabilityPackageSourceError",
     "CapabilityPackageV1",
+    "CapabilityProviderRegistration",
+    "CapabilityProviderRegistry",
+    "CapabilityProviderRegistryError",
     "CapabilityRegistryIntegrityError",
     "CapabilityRegistryMigration",
     "CapabilityRegistryMigrationError",
@@ -66,16 +103,23 @@ __all__ = [
     "CapabilityRegistryState",
     "CapabilityRegistryStore",
     "CapabilityRegistryStoreError",
+    "CompatibilityReason",
+    "CompatibilityVerdict",
     "DesiredActivationState",
+    "DuplicateCapabilityProviderError",
     "PackageArtifactDescriptorV1",
     "PackageDisposition",
     "PackageVersionReuseConflict",
+    "ReleaseCapabilityPackageSource",
+    "SourcedCapabilityPackage",
     "StaleRegistryGenerationError",
     "StrictSemVer",
     "UnknownCapabilityPackageError",
+    "UnknownCapabilityProviderError",
     "UnknownManagedCapabilityError",
     "capability_package_v1_json_schema",
     "capability_package_v1_schema_digest",
+    "current_platform_tags",
     "default_capability_registry_path",
     "default_capability_registry_state_dir",
     "discover_capability_registry_migrations",

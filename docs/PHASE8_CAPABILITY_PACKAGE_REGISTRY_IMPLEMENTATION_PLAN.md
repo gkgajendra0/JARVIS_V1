@@ -2,7 +2,7 @@
 
 ## Status
 
-**OWNER-APPROVED — IMPLEMENTATION IN PROGRESS — 8A DONE / 8B ACTIVE — 2026-09-27**
+**OWNER-APPROVED — IMPLEMENTATION IN PROGRESS — 8A–8B DONE / 8C ACTIVE — 2026-09-27**
 
 ## 8A — package contracts and schema — DONE
 
@@ -18,7 +18,7 @@ Deliver:
 - forbidden executable/secret fields tests;
 - explicit separation of package-schema version, manifest-contract version and package SemVer.
 
-## 8B — durable registry — IN IMPLEMENTATION
+## 8B — durable registry — DONE
 
 Deliver:
 
@@ -32,7 +32,7 @@ Deliver:
 - atomic registry-CAS + lifecycle-event commit;
 - optimistic CAS/concurrent-writer/restart tests.
 
-## 8C — admission and compatibility
+## 8C — admission and compatibility — IN IMPLEMENTATION
 
 Deliver:
 

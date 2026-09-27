@@ -496,6 +496,7 @@ def build_default_self_model() -> SelfModelRegistry:
             tests=(
                 "tests/test_capability_registry_contracts.py",
                 "tests/test_capability_registry_store.py",
+                "tests/test_capability_registry_compatibility.py",
             ),
             logger_prefixes=("jarvis.capability_registry",),
             docs=(
