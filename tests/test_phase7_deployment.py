@@ -178,7 +178,9 @@ def test_deployment_bootstrap_and_exact_release_switch(tmp_path: Path) -> None:
     assert metadata.active() == result.release
     assert metadata.lkg() == lkg
     assert metadata.recovery().phase.value == "new_runtime_verified"
-    assert promotions.require(attempt.attempt_id).state is PromotionAttemptState.OBSERVING
+    assert (
+        promotions.require(attempt.attempt_id).state is PromotionAttemptState.OBSERVING
+    )
     assert changes.require(evidence.change_id).state is ChangeState.OBSERVING
     started = runtime.events[1][1]
     assert isinstance(started, RuntimeReleaseIdentity)
@@ -299,7 +301,10 @@ def test_candidate_local_failure_rolls_back_exact_lkg_once(tmp_path: Path) -> No
     assert result.restored == lkg
     assert result.already_reconciled is False
     assert metadata.active() == lkg
-    assert promotions.require(attempt.attempt_id).state is PromotionAttemptState.ROLLED_BACK
+    assert (
+        promotions.require(attempt.attempt_id).state
+        is PromotionAttemptState.ROLLED_BACK
+    )
     assert changes.require(evidence.change_id).state is ChangeState.ROLLED_BACK
 
     reconciled = rollback.rollback(
