@@ -80,8 +80,7 @@ class PromotionRuntimeConfig:
         if not environment:
             raise ValueError("promotion deployment_environment must not be empty")
         if self.expected_ci_app_id is not None and (
-            type(self.expected_ci_app_id) is not int
-            or self.expected_ci_app_id <= 0
+            type(self.expected_ci_app_id) is not int or self.expected_ci_app_id <= 0
         ):
             raise ValueError("expected_ci_app_id must be positive")
         object.__setattr__(self, "client_id", client_id)
@@ -282,7 +281,9 @@ class PromotionRuntime:
         if lease.change_id != change_id or lease.work_id != work_id:
             raise PromotionRuntimeError("GitHub secret lease binding changed")
         if turn is not self._latest_owner_turn(session):
-            raise PromotionRuntimeError("owner turn changed during GitHub authorization")
+            raise PromotionRuntimeError(
+                "owner turn changed during GitHub authorization"
+            )
         return broker, lease.lease_id
 
     @contextmanager
@@ -367,7 +368,9 @@ class PromotionRuntime:
         ).get(gate_id)
         if resolved is None:
             raise PromotionRuntimeError("unknown promotion gate")
-        challenge = resolved.challenge if isinstance(resolved, GateDecision) else resolved
+        challenge = (
+            resolved.challenge if isinstance(resolved, GateDecision) else resolved
+        )
         change_id = challenge.change_id
         with self._github_session(session=session, change_id=change_id) as (
             bundle,
@@ -400,5 +403,7 @@ class PromotionRuntime:
             )
             result = service.authorize_and_merge(gate_id)
             if result.gate_decision.source_turn_id != turn.turn_id:
-                raise PromotionRuntimeError("promotion approval used a stale owner turn")
+                raise PromotionRuntimeError(
+                    "promotion approval used a stale owner turn"
+                )
             return result
