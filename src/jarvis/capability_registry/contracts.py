@@ -141,14 +141,7 @@ def _sha256(value: str, *, field: str) -> str:
 
 
 def _references(values: tuple[str, ...], *, field: str) -> tuple[str, ...]:
-    return tuple(
-        sorted(
-            {
-                _text(item, field=field, max_length=1000)
-                for item in values
-            }
-        )
-    )
+    return tuple(sorted({_text(item, field=field, max_length=1000) for item in values}))
 
 
 class PackageArtifactDescriptorV1(BaseModel):
@@ -274,8 +267,7 @@ class CapabilityPackageV1(BaseModel):
     def _require_supported_schema(self) -> CapabilityPackageV1:
         if self.schema_version != CAPABILITY_PACKAGE_SCHEMA_VERSION_V1:
             raise ValueError(
-                "unsupported capability package schema version: "
-                f"{self.schema_version}"
+                f"unsupported capability package schema version: {self.schema_version}"
             )
         return self
 
