@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from threading import Event, RLock, Thread
+
 from jarvis.capability_registry.compatibility import (
     CapabilityCompatibilityEvaluator,
     CompatibilityVerdict,
@@ -393,7 +394,7 @@ class PeriodicCapabilityReconciler:
         while not self._stop.wait(self.interval_seconds):
             try:
                 self.run_once()
-            except Exception:  # noqa: BLE001 - reconciler already failed routing closed
+            except Exception:
                 _LOGGER.exception("periodic capability reconciliation failed")
                 continue
 
