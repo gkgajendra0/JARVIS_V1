@@ -117,9 +117,7 @@ class PromotionMerger:
                 expected_version=change.version,
             )
         elif change.state is not ChangeState.PROMOTED:
-            raise PromotionMergeError(
-                "EngineeringChange is not in a promotable state"
-            )
+            raise PromotionMergeError("EngineeringChange is not in a promotable state")
         return updated
 
     def execute(
@@ -137,7 +135,9 @@ class PromotionMerger:
             if attempt.merge_sha is None:
                 raise PromotionMergeError("merged attempt has no merge SHA")
             if self._github.read_protected_main_sha() != attempt.merge_sha:
-                raise PromotionMergeError("protected main no longer equals stored merge")
+                raise PromotionMergeError(
+                    "protected main no longer equals stored merge"
+                )
             return MergeResult(attempt.merge_sha, True)
         if attempt.state is not PromotionAttemptState.AUTHORIZED:
             raise PromotionMergeError("promotion attempt is not authorized")
