@@ -17,30 +17,6 @@ class UnsupportedProcess(ChangeConflict):
     """A process contract is not registered in this runtime."""
 
 
-@dataclass(frozen=True, slots=True)
-class ProcessContract:
-    """Registered process family with core gate sequence enforced independently."""
-
-    key: str
-    version: int
-    research_type: WorkType = WorkType.RESEARCH
-    development_type: WorkType = WorkType.DEVELOPMENT
-
-    def __post_init__(self) -> None:
-        if (
-            not isinstance(self.key, str)
-            or not self.key.strip()
-            or type(self.version) is not int
-            or self.version < 1
-        ):
-            raise ValueError("process key and positive version are required")
-        if (
-            self.research_type is not WorkType.RESEARCH
-            or self.development_type is not WorkType.DEVELOPMENT
-        ):
-            raise ValueError("unavailable process stage executor")
-
-
 class ChangeState(str, Enum):
     PROPOSED = "proposed"
     RESEARCHING = "researching"
@@ -60,6 +36,117 @@ class ChangeState(str, Enum):
     FAILED = "failed"
     SUPERSEDED = "superseded"
     ROLLED_BACK = "rolled_back"
+
+
+class ProcessStageRole(str, Enum):
+    """Stable lifecycle role; stage names and WorkTypes remain process-specific."""
+
+    ARCHITECTURE_SOURCE = "architecture_source"
+    DEVELOPMENT = "development"
+
+
+@dataclass(frozen=True, slots=True)
+class ProcessStageContract:
+    """One registered WorkItem stage inside a governed EngineeringChange process."""
+
+    stage_key: str
+    work_type: WorkType
+    role: ProcessStageRole
+
+    def __post_init__(self) -> None:
+        normalized = str(self.stage_key).strip().lower()
+        if not normalized or normalized != self.stage_key:
+            raise ValueError("process stage_key must be normalized and non-empty")
+        if not isinstance(self.work_type, WorkType):
+            raise TypeError("process stage work_type must be WorkType")
+        if not isinstance(self.role, ProcessStageRole):
+            raise TypeError("process stage role must be ProcessStageRole")
+        if self.role is ProcessStageRole.ARCHITECTURE_SOURCE:
+            if self.work_type not in {WorkType.RESEARCH, WorkType.DIAGNOSTICS}:
+                raise ValueError(
+                    "architecture-source stage must use research or diagnostics work"
+                )
+        elif (
+            self.role is ProcessStageRole.DEVELOPMENT
+            and self.work_type is not WorkType.DEVELOPMENT
+        ):
+            raise ValueError("development stage must use development work")
+
+
+_DEFAULT_PROCESS_STAGES = (
+    ProcessStageContract(
+        "research",
+        WorkType.RESEARCH,
+        ProcessStageRole.ARCHITECTURE_SOURCE,
+    ),
+    ProcessStageContract(
+        "development",
+        WorkType.DEVELOPMENT,
+        ProcessStageRole.DEVELOPMENT,
+    ),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ProcessContract:
+    """Registered process family with stage semantics and gates owned by JARVIS."""
+
+    key: str
+    version: int
+    stages: tuple[ProcessStageContract, ...] = _DEFAULT_PROCESS_STAGES
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.key, str)
+            or not self.key.strip()
+            or self.key != self.key.strip().lower()
+            or type(self.version) is not int
+            or self.version < 1
+        ):
+            raise ValueError("normalized process key and positive version are required")
+        if not isinstance(self.stages, tuple) or not self.stages:
+            raise ValueError("process stages must be a non-empty tuple")
+        if any(not isinstance(stage, ProcessStageContract) for stage in self.stages):
+            raise TypeError("process stages must contain ProcessStageContract values")
+        if len({stage.stage_key for stage in self.stages}) != len(self.stages):
+            raise ValueError("process stage keys must be unique")
+        roles = [stage.role for stage in self.stages]
+        if roles.count(ProcessStageRole.ARCHITECTURE_SOURCE) != 1:
+            raise ValueError("process requires exactly one architecture-source stage")
+        if roles.count(ProcessStageRole.DEVELOPMENT) != 1:
+            raise ValueError("process requires exactly one development stage")
+
+    def stage_for_key(self, stage_key: str) -> ProcessStageContract:
+        normalized = str(stage_key).strip().lower()
+        for stage in self.stages:
+            if stage.stage_key == normalized:
+                return stage
+        raise ChangeConflict(f"unregistered change stage: {stage_key}")
+
+    def stage_for_role(self, role: ProcessStageRole) -> ProcessStageContract:
+        if not isinstance(role, ProcessStageRole):
+            raise TypeError("role must be ProcessStageRole")
+        return next(stage for stage in self.stages if stage.role is role)
+
+    @property
+    def architecture_source_stage(self) -> ProcessStageContract:
+        return self.stage_for_role(ProcessStageRole.ARCHITECTURE_SOURCE)
+
+    @property
+    def development_stage(self) -> ProcessStageContract:
+        return self.stage_for_role(ProcessStageRole.DEVELOPMENT)
+
+    @property
+    def research_type(self) -> WorkType:
+        """Compatibility view for pre-Phase-6 callers."""
+
+        return self.architecture_source_stage.work_type
+
+    @property
+    def development_type(self) -> WorkType:
+        """Compatibility view for pre-Phase-6 callers."""
+
+        return self.development_stage.work_type
 
 
 TRANSITIONS: dict[ChangeState, frozenset[ChangeState]] = {
