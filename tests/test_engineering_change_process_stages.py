@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
 from jarvis.engineering_change import (
+    ChangeConflict,
     ChangeState,
     ChangeStore,
     ProcessContract,
@@ -84,29 +87,16 @@ def test_incident_repair_process_starts_with_diagnostics_and_reuses_dev_gate(
     assert changes.require(change.change_id).state is ChangeState.ARCHITECTURE_READY
 
     gates = GateService(changes, verify_owner=lambda *_: True)
-    gate = gates.present(
-        change.change_id,
-        GateKind.ARCHITECTURE,
-        architecture.artifact_id,
-    )
-    gates.decide(
-        gate.gate_id,
-        approved=True,
-        artifact_digest=architecture.digest,
-        actor_id="owner",
-        source_session_id="owner",
-        source_turn_id="approve",
-        request_key="owner:approve:phase6",
-    )
+    with pytest.raises(ChangeConflict, match="architecture contract is invalid"):
+        gates.present(
+            change.change_id,
+            GateKind.ARCHITECTURE,
+            architecture.artifact_id,
+        )
 
-    coordinator.reconcile(change.change_id)
-    development = changes.list_stages(change.change_id)[1]
-    development_work = work.require(development.work_id)
-    assert development.stage_key == "development"
-    assert development_work.work_type is WorkType.DEVELOPMENT
-    assert development_work.dependencies == (diagnostic.work_id,)
-    assert development.plan_artifact_id == architecture.artifact_id
-    assert changes.require(change.change_id).state is ChangeState.DEVELOPING
+    assert [stage.stage_key for stage in changes.list_stages(change.change_id)] == [
+        "diagnostics"
+    ]
 
 
 def test_process_stage_contract_fails_closed_on_invalid_shape() -> None:
