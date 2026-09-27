@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from jarvis.capability_acquisition.models import (
     AcquisitionCandidateEvaluationV1,
     AcquisitionCandidateV1,
