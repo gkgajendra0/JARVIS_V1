@@ -146,9 +146,7 @@ def derive_work_step_signals(
             elif kind == "diag_finalize":
                 diagnosis = step.observation.get("diagnosis")
                 reason_codes = (
-                    diagnosis.get("reason_codes")
-                    if isinstance(diagnosis, dict)
-                    else ()
+                    diagnosis.get("reason_codes") if isinstance(diagnosis, dict) else ()
                 )
                 if (
                     isinstance(reason_codes, list)
