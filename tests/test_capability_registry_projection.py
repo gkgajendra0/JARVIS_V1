@@ -446,9 +446,7 @@ def test_disabling_overrides_fresh_failed_probe_health(tmp_path) -> None:
     assert disabled_state.health_state is HealthState.DISABLED
     assert not disabled_state.effective_enabled
     assert (
-        env["health"]
-        .snapshot(disabled_state.component_id, now_epoch=NOW)
-        .state
+        env["health"].snapshot(disabled_state.component_id, now_epoch=NOW).state
         is HealthState.DISABLED
     )
 
