@@ -1,5 +1,10 @@
 """Governed Phase-7 promotion, deployment, observation, and rollback."""
 
+from .authority import (
+    AuthorizedPromotion,
+    PromotionAuthorizationError,
+    PromotionAuthorityBridge,
+)
 from .candidate import (
     PromotionCandidateError,
     PromotionCandidateVerifier,
@@ -16,6 +21,7 @@ from .github import (
     GitHubWorkflowSnapshot,
     VerifiedGitHubEvidence,
 )
+from .merge import MergeResult, PromotionMergeError, PromotionMerger
 from .models import (
     CheckEvidence,
     CompatibilityEvidence,
@@ -27,6 +33,7 @@ from .models import (
 from .store import PromotionStore
 
 __all__ = [
+    "AuthorizedPromotion",
     "CheckEvidence",
     "CompatibilityAssessment",
     "CompatibilityEvidence",
@@ -36,12 +43,17 @@ __all__ = [
     "GitHubPromotionPolicy",
     "GitHubPullRequestSnapshot",
     "GitHubWorkflowSnapshot",
+    "MergeResult",
     "PreparedPromotionEvidence",
     "PromotionAttempt",
     "PromotionAttemptState",
+    "PromotionAuthorizationError",
+    "PromotionAuthorityBridge",
     "PromotionCandidateError",
     "PromotionCandidateVerifier",
     "PromotionEvidenceBuilder",
+    "PromotionMergeError",
+    "PromotionMerger",
     "PromotionEvidenceV1",
     "PromotionStore",
     "StalePromotionCandidate",
