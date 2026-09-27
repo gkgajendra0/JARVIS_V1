@@ -107,6 +107,11 @@ class WorkEngine:
         resources: ResourceLeaseManager | None = None,
         base_resource_keys: tuple[str, ...] = (),
         action_admission: Callable[[str], bool] | None = None,
+        completion_guard: Callable[
+            [WorkItem, tuple[WorkStep, ...]],
+            tuple[bool, str | None] | None,
+        ]
+        | None = None,
     ) -> None:
         self._store = store
         self._brain = brain
@@ -114,6 +119,7 @@ class WorkEngine:
         self._resources = resources or ResourceLeaseManager()
         self._base_resource_keys = self._resources.normalize(base_resource_keys)
         self._action_admission = action_admission
+        self._custom_completion_guard = completion_guard
 
     def _check_action_admission(self, work: WorkItem) -> WorkAdvanceResult | None:
         if self._action_admission is None or self._action_admission(work.work_id):
@@ -328,11 +334,15 @@ class WorkEngine:
             ),
         }
 
-    @staticmethod
     def _completion_guard(
+        self,
         work: WorkItem,
         steps: tuple[WorkStep, ...],
     ) -> tuple[bool, str | None]:
+        if self._custom_completion_guard is not None:
+            custom = self._custom_completion_guard(work, steps)
+            if custom is not None:
+                return custom
         if work.work_type is WorkType.RESEARCH:
             successful = any(
                 step.kind == "research_web"
