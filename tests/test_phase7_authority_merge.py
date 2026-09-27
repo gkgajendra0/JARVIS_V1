@@ -286,3 +286,61 @@ def test_authorized_merge_rechecks_external_state_and_promotes_change(tmp_path) 
     assert authority.consumed == 1
     assert promotions.require(attempt.attempt_id).state is PromotionAttemptState.MERGED
     assert changes.require(evidence.change_id).state is ChangeState.PROMOTED
+
+
+
+def test_restart_reconciles_exact_external_merge_without_second_merge(tmp_path) -> None:
+    changes, promotions, attempt, evidence, gate = _fixture(tmp_path)
+    verifier = FakeVerifier()
+    authority = FakeAuthority()
+    bridge = PromotionAuthorityBridge(
+        changes,
+        promotions,
+        approvals=ApprovalService(),
+        authority=authority,
+        verifier=verifier,
+    )
+    authorized = bridge.authorize(
+        gate_id=gate.gate_id,
+        evidence=evidence,
+        attempt=attempt,
+        session_id="session",
+        source_turn_id="turn-2",
+        request_key="phase7:turn-2",
+        repository_full_name="gkgajendra0/JARVIS_V1",
+    )
+    attempt = promotions.require(attempt.attempt_id)
+    github = FakeGitHub()
+
+    # Simulate GitHub completing the exact approved merge and the local
+    # executor crashing before it could persist MERGED.
+    github.main = MERGE
+    github.merged = True
+    github.pr = GitHubPullRequestSnapshot(
+        12,
+        BASE,
+        HEAD,
+        False,
+        "closed",
+        merged=True,
+        merge_sha=MERGE,
+    )
+    merger = PromotionMerger(
+        changes,
+        promotions,
+        github=github,
+        policy=GitHubPromotionPolicy(),
+        authority=bridge,
+    )
+
+    result = merger.execute(
+        evidence=evidence,
+        attempt=attempt,
+        authorized=authorized,
+    )
+
+    assert result.merge_sha == MERGE
+    assert result.reconciled_after_external_merge is True
+    assert authority.consumed == 0
+    assert promotions.require(attempt.attempt_id).state is PromotionAttemptState.MERGED
+    assert changes.require(evidence.change_id).state is ChangeState.PROMOTED
