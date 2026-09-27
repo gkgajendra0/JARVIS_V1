@@ -49,8 +49,24 @@ class VerifiedPromotionCandidate:
     protected_verdict: str
 
 
+def current_promotion_candidate_artifact(
+    changes: ChangeStore,
+    change_id: str,
+) -> ChangeArtifact | None:
+    """Resolve the canonical candidate artifact for the EngineeringChange process."""
+
+    change = changes.require(change_id)
+    if change.process_key == "owner_capability_acquisition":
+        from jarvis.capability_acquisition.candidate_verification import (
+            ensure_capability_acquisition_candidate_current,
+        )
+
+        return ensure_capability_acquisition_candidate_current(changes, change_id)
+    return changes.latest_artifact(change_id, "source_repair_candidate")
+
+
 class PromotionCandidateVerifier:
-    """Fail closed unless canonical Phase-6 candidate evidence is current and exact."""
+    """Fail closed unless canonical candidate evidence is current and exact."""
 
     def __init__(self, changes: ChangeStore, promotions: PromotionStore) -> None:
         if not isinstance(changes, ChangeStore):
@@ -117,7 +133,11 @@ class PromotionCandidateVerifier:
                 "protected_surface_malformed",
                 "candidate protected-surface policy identity is malformed",
             )
-        candidate_id = str(payload.get("candidate_id") or "").strip()
+        candidate_id = str(
+            payload.get("candidate_id")
+            or payload.get("candidate_evidence_id")
+            or ""
+        ).strip()
         if not candidate_id:
             raise PromotionCandidateError(
                 "candidate_id_missing",
@@ -208,14 +228,14 @@ class PromotionCandidateVerifier:
                 "EngineeringChange is not ready for promotion",
             )
         acceptance = self._changes.latest_artifact(change_id, "acceptance")
-        candidate = self._changes.latest_artifact(
+        candidate = current_promotion_candidate_artifact(
+            self._changes,
             change_id,
-            "source_repair_candidate",
         )
         if acceptance is None or candidate is None:
             raise PromotionCandidateError(
                 "candidate_evidence_missing",
-                "promotion requires canonical acceptance and source-repair candidate evidence",
+                "promotion requires canonical acceptance and candidate evidence",
             )
         verified = self._candidate_from_artifact(candidate, acceptance)
         attempt = self._promotions.create_or_get(
