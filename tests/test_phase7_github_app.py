@@ -92,17 +92,7 @@ class _FakeStdin:
                 "head_sha": request["head_sha"],
                 "published": True,
             }
-        elif op == "ensure_pull_request":
-            result = {
-                "number": 12,
-                "base_sha": BASE,
-                "head_sha": HEAD,
-                "draft": False,
-                "state": "open",
-                "merged": False,
-                "merge_sha": None,
-            }
-        elif op == "read_pull_request":
+        elif op == "ensure_pull_request" or op == "read_pull_request":
             result = {
                 "number": 12,
                 "base_sha": BASE,
