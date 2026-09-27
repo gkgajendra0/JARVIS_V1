@@ -1,5 +1,10 @@
 """Phase-9 owner-requested capability acquisition contracts."""
 
+from .activation import (
+    CapabilityAcquisitionLifecycleCoordinator,
+    CapabilityAcquisitionLifecycleError,
+    CapabilityAcquisitionLifecycleResult,
+)
 from .admission import (
     CapabilityAcquisitionAdmission,
     CapabilityAcquisitionAdmissionDisposition,
@@ -96,6 +101,9 @@ __all__ = [
     "CapabilityAcquisitionCoordinator",
     "CapabilityAcquisitionDevelopmentCompletionHandler",
     "CapabilityAcquisitionDevelopmentRevisionResolver",
+    "CapabilityAcquisitionLifecycleCoordinator",
+    "CapabilityAcquisitionLifecycleError",
+    "CapabilityAcquisitionLifecycleResult",
     "CapabilityAcquisitionPlanV1",
     "CapabilityAcquisitionReleaseBridge",
     "CapabilityAcquisitionReleaseBridgeError",
