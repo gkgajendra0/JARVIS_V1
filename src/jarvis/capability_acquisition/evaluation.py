@@ -462,14 +462,11 @@ def _11_waiting_owner_identity() -> dict[str, object]:
 
 
 def _gate_fixture(root: pathlib.Path, *, turn: str):
-    store = ChangeStore(
-        SQLiteWorkStore(root / "work.sqlite3"),
-        processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,),
-    )
+    store = ChangeStore(SQLiteWorkStore(root / "work.sqlite3"))
     change = store.create(
-        request="Phase9 gate replay",
-        process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
-        process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
+        request="Shared owner gate replay",
+        process_key="engineering.change",
+        process_version=1,
         source_session_id="phase9-replay",
         source_turn_id=turn,
     )
