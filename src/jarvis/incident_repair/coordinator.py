@@ -60,7 +60,9 @@ class IncidentRepairCoordinator:
             raise TypeError("incidents must be IncidentService")
         if not isinstance(changes, ChangeCoordinator):
             raise TypeError("changes must be ChangeCoordinator")
-        if repair_registry is not None and not isinstance(repair_registry, RepairRegistry):
+        if repair_registry is not None and not isinstance(
+            repair_registry, RepairRegistry
+        ):
             raise TypeError("repair_registry must be RepairRegistry")
         self._incidents = incidents
         self._changes = changes
