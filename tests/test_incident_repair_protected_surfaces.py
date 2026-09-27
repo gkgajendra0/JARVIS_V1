@@ -45,7 +45,7 @@ def test_ordinary_source_and_test_paths_are_clear() -> None:
             "self_acceptance_or_evaluator",
         ),
         (".github/workflows/code-quality.yml", "repository_governance_ci"),
-        ("src/jarvis/promotion/store.py", "promotion_and_deployment_governance"),
+        ("src/jarvis/promotion/store.py", "promotion_and_deployment_governance"),\n        (\n            "src/jarvis/capability_registry/contracts.py",\n            "capability_lifecycle_governance",\n        ),
         ("src/jarvis/dev_supervisor.py", "production_deployment_boundary"),
         ("src/jarvis/runtime_supervisor.py", "production_deployment_boundary"),
         (
@@ -62,7 +62,7 @@ def test_ordinary_source_and_test_paths_are_clear() -> None:
             "src/jarvis/memory/migrations/001_initial.sql",
             "durable_state_schema_boundary",
         ),
-        ("tests/test_phase7_promotion_domain.py", "protected_boundary_verifier"),
+        ("tests/test_phase7_promotion_domain.py", "protected_boundary_verifier"),\n        (\n            "tests/test_capability_registry_contracts.py",\n            "protected_boundary_verifier",\n        ),
     ],
 )
 def test_protected_paths_require_separate_change(path: str, category: str) -> None:
