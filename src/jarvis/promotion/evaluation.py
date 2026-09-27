@@ -274,6 +274,7 @@ def _candidate_fixture(root: pathlib.Path):
         payload={
             "candidate_id": "candidate-phase7",
             "digest": DIGEST,
+            "development_work_id": "work-phase7-replay",
             "source_revision": BASE,
             "branch": "repair/phase7-replay",
             "commit": HEAD,
