@@ -79,6 +79,7 @@ class WorkAgentTools:
             self.revise_change_architecture,
             self.prepare_change_acceptance,
             self.prepare_change_promotion,
+            self.execute_change_promotion,
             self.decide_change_gate,
             self.get_engineering_change_status,
         ]
@@ -316,15 +317,76 @@ class WorkAgentTools:
     async def prepare_change_promotion(
         self, context: RunContext, change_id: str
     ) -> dict[str, object]:
-        """Present promotion intent after owner acceptance without promoting anything."""
+        """Publish the exact verified candidate and prepare Phase-7 PR/CI evidence.
+
+        Use after owner acceptance when the change is READY_FOR_PROMOTION. The
+        latest canonical USER turn authorizes only the short-lived GitHub credential
+        lease needed to publish/read the exact candidate. This tool never merges.
+        If CI is still running, report that truthfully and retry this same operation
+        later; PR/ref reconciliation is idempotent.
+        """
         del context
-        gate = self._change_service().prepare_promotion(change_id)
+        runtime = self._runtime.promotion_runtime
+        if runtime is None:
+            return {
+                "ok": False,
+                "status": "promotion_runtime_unavailable",
+                "change_id": change_id,
+            }
+        review = await asyncio.to_thread(
+            runtime.prepare_review,
+            change_id,
+            session=self._conversation,
+        )
         return {
             "ok": True,
             "change_id": change_id,
-            "gate_id": gate.gate_id,
-            "artifact_digest": gate.artifact_digest,
+            "attempt_id": review.attempt.attempt_id,
+            "gate_id": review.gate.gate_id,
+            "artifact_digest": review.artifact.digest,
+            "evidence_digest": review.evidence.digest,
+            "pr_number": review.evidence.pr_number,
+            "candidate_head_sha": review.evidence.candidate_head_sha,
             "status": "awaiting_explicit_owner_promotion_decision",
+        }
+
+    @function_tool()
+    async def execute_change_promotion(
+        self,
+        context: RunContext,
+        gate_id: str,
+    ) -> dict[str, object]:
+        """Authorize and merge the exact current Phase-7 promotion gate.
+
+        Use only after the latest canonical USER turn explicitly says
+        "approve <gate_id>" or otherwise satisfies the existing exact Phase-7
+        promotion decision grammar. GitHub credentials receive a fresh one-use
+        SecretBroker lease and the merge still consumes one-shot Authority.
+        """
+        del context
+        runtime = self._runtime.promotion_runtime
+        if runtime is None:
+            return {"ok": False, "status": "promotion_runtime_unavailable"}
+        result = await asyncio.to_thread(
+            runtime.authorize_and_merge,
+            gate_id,
+            session=self._conversation,
+        )
+        return {
+            "ok": True,
+            "status": "merged",
+            "change_id": result.evidence.change_id,
+            "gate_id": gate_id,
+            "promotion_attempt_id": result.evidence.attempt_id,
+            "evidence_digest": result.evidence.digest,
+            "merge_sha": result.merge.merge_sha,
+            "reconciled_after_external_merge": (
+                result.merge.reconciled_after_external_merge
+            ),
+            "truth_note": (
+                "merge is complete; the production supervisor owns exact-release "
+                "deployment, observation and rollback"
+            ),
         }
 
     @function_tool()
