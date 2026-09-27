@@ -261,7 +261,7 @@ class CapabilityLifecycleService:
     def _restore_after_failed_transition(self) -> None:
         try:
             self.reconciler.reconcile(ReconciliationTrigger.LIFECYCLE)
-        except Exception:
+        except Exception:  # noqa: BLE001 - restore failure must leave routing closed
             self.projection.fail_closed("lifecycle_restore_failed")
 
     def select_version(
@@ -342,9 +342,7 @@ class CapabilityLifecycleService:
             expected_state=committed,
             action=CapabilityLifecycleAction.SELECT_VERSION,
             require_effective=(
-                True
-                if committed.desired_state is DesiredActivationState.ENABLED
-                else False
+                committed.desired_state is DesiredActivationState.ENABLED
             ),
         )
         return CapabilityLifecycleMutationResult(
