@@ -18,7 +18,10 @@ from jarvis.capabilities.models import (
 )
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capability_registry.compatibility import CapabilityCompatibilityEvaluator
-from jarvis.capability_registry.contracts import CapabilityPackageV1, parse_capability_package_v1
+from jarvis.capability_registry.contracts import (
+    CapabilityPackageV1,
+    parse_capability_package_v1,
+)
 from jarvis.capability_registry.models import (
     CapabilityLifecycleEventKind,
     DesiredActivationState,
@@ -73,7 +76,9 @@ class RecordingAuthority:
     def consume(self, authorized) -> None:
         self.consume_calls += 1
 
-    def audit_result(self, *, session_id: str, authorized, result: CapabilityResult) -> None:
+    def audit_result(
+        self, *, session_id: str, authorized, result: CapabilityResult
+    ) -> None:
         self.audit_calls += 1
 
     def close(self) -> None:
@@ -415,7 +420,9 @@ def test_missing_or_failed_fresh_health_blocks_effective_execution(
     assert state.health_state in {HealthState.UNKNOWN, HealthState.FAILED}
 
 
-def test_transition_fence_blocks_cached_routing_before_durable_mutation(tmp_path) -> None:
+def test_transition_fence_blocks_cached_routing_before_durable_mutation(
+    tmp_path,
+) -> None:
     env = _environment(tmp_path)
     _enable(env)
     env["reconciler"].reconcile(ReconciliationTrigger.LIFECYCLE)
@@ -542,7 +549,9 @@ def test_runtime_executes_ready_package_without_reconsulting_store(tmp_path) -> 
     assert authority.audit_calls == 1
 
 
-def test_reconcile_failure_keeps_package_routing_fail_closed(tmp_path, monkeypatch) -> None:
+def test_reconcile_failure_keeps_package_routing_fail_closed(
+    tmp_path, monkeypatch
+) -> None:
     env = _environment(tmp_path)
     _enable(env)
     env["reconciler"].reconcile(ReconciliationTrigger.LIFECYCLE)
