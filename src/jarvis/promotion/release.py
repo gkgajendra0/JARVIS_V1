@@ -99,12 +99,12 @@ class ReleaseRecord:
             release_sha=str(payload.get("release_sha", "")),
             release_root=str(payload.get("release_root", "")),
             promotion_attempt_id=str(payload.get("promotion_attempt_id", "")),
-            promotion_evidence_digest=str(
-                payload.get("promotion_evidence_digest", "")
-            ),
+            promotion_evidence_digest=str(payload.get("promotion_evidence_digest", "")),
             config_digest=str(payload.get("config_digest", "")),
             schema_versions=tuple(
-                sorted((str(name), int(version)) for name, version in raw_schema.items())
+                sorted(
+                    (str(name), int(version)) for name, version in raw_schema.items()
+                )
             ),
             accepted_at_epoch=float(payload.get("accepted_at_epoch", 0.0)),
         )
