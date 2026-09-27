@@ -139,7 +139,7 @@ Phase 14 Governed self-evolution
 
 Owner-requested capability acquisition intentionally precedes autonomous gap detection: an explicit owner request to acquire a capability must not wait for repeated failures or repeated requests.
 
-The owner-approved 2026-09-26 sequencing clarification inserts Phase 10A before Phase 11. Phase 10A will add the Objective/DesiredState model, whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, owner-attention handling and autonomy evaluation. It does not interrupt or broaden authority during the current Phase-8 architecture gate.
+The owner-approved 2026-09-26 sequencing clarification inserts Phase 10A before Phase 11. Phase 10A will add the Objective/DesiredState model, whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, owner-attention handling and autonomy evaluation. It does not interrupt or broaden authority during the current Phase-9 research/architecture gate.
 
 ## Next numbered product slice
 
@@ -151,7 +151,7 @@ The active Self-Repair/Evolution/Autonomous-Engineering program is cross-cutting
 
 Current open/deferred items are tracked only in `PROJECT_STATE.md`. The important open issues are #19, #44, #45, #46, #63 and #69.
 
-They remain separate unless evidence shows that one directly blocks the current Phase-8 research/architecture work.
+They remain separate unless evidence shows that one directly blocks the current Phase-9 research/architecture work.
 
 ## Documentation ownership
 
@@ -186,8 +186,8 @@ They remain separate unless evidence shows that one directly blocks the current 
 - `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md` — canonical Phase-8 owner-machine acceptance record.
 - `PHASE8_CAPABILITY_PACKAGE_REGISTRY_RESEARCH.md` — Phase-8 foundation repository/technology research and initial dispositions.
 - `PHASE8_CAPABILITY_PACKAGE_REGISTRY_IMPLEMENTATION_RESEARCH.md` — implementation-focused comparison of mature lifecycle/plugin/package technologies and the research basis for the revised reconciler/generation-fenced design.
-- `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ARCHITECTURE.md` — revised Phase-8 architecture awaiting explicit owner approval.
-- `PHASE8_CAPABILITY_PACKAGE_REGISTRY_IMPLEMENTATION_PLAN.md` — revised Phase-8 implementation slices and acceptance gates; not yet implementation-authorized.
+- `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ARCHITECTURE.md` — accepted Phase-8 package/registry architecture and binding invariants.
+- `PHASE8_CAPABILITY_PACKAGE_REGISTRY_IMPLEMENTATION_PLAN.md` — completed Phase-8 implementation slices 8A–8F and final acceptance status.
 
 Historical experiments, old acceptance transcripts and superseded research remain available through Git history rather than becoming competing planning truth.
 
