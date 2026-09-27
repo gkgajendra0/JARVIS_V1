@@ -276,7 +276,9 @@ class ChangeService:
             evidence = PromotionEvidenceV1.from_payload(promotion.payload)
         except (TypeError, ValueError) as exc:
             raise ChangeConflict("exact Phase-7 promotion evidence is invalid") from exc
-        candidate = store.latest_artifact(change_id, "source_repair_candidate")
+        from jarvis.promotion.candidate import current_promotion_candidate_artifact
+
+        candidate = current_promotion_candidate_artifact(store, change_id)
         work_id = (
             str(candidate.payload.get("development_work_id") or "")
             if candidate is not None
