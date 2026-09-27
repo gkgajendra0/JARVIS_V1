@@ -206,7 +206,9 @@ def test_selectable_candidate_produces_digest_bound_plan() -> None:
         secret_scopes=("tv.remote",),
         sandbox_profile_ids=("network-bounded",),
         network_scopes=("https://example.test",),
+        device_scopes=("device:living-room-tv",),
         verification_contract_ids=("tv-contract-v1",),
+        development_test_targets=("tests/test_tv_control.py",),
         owner_acceptance_contract_ids=("tv-physical-v1",),
         evidence_refs=("registry:example", "docs:vendor"),
     )
@@ -217,6 +219,8 @@ def test_selectable_candidate_produces_digest_bound_plan() -> None:
     assert plan.strategy is AcquisitionStrategy.WRAP
     assert plan.proposed_capability_id == "device.tv.control"
     assert plan.proposed_package_id == "device.tv.control.mcp"
+    assert plan.device_scopes == ("device:living-room-tv",)
+    assert plan.development_test_targets == ("tests/test_tv_control.py",)
     assert len(plan.digest) == 64
 
 
@@ -241,6 +245,7 @@ def test_blocked_candidate_cannot_produce_plan() -> None:
             proposed_package_version="1.0.0",
             rollback_summary="Disable.",
             verification_contract_ids=("tv-contract-v1",),
+            development_test_targets=("tests/test_tv_control.py",),
             evidence_refs=("registry:example",),
         )
 
@@ -260,6 +265,7 @@ def test_plan_rejects_invalid_semver_and_missing_verification() -> None:
             proposed_package_version="v1",
             rollback_summary="Disable.",
             verification_contract_ids=("tv-contract-v1",),
+            development_test_targets=("tests/test_tv_control.py",),
             evidence_refs=("registry:example",),
         )
 
