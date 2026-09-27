@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -10,6 +11,10 @@ from pathlib import Path
 from jarvis.capabilities.models import CapabilityCatalog
 from jarvis.capability_acquisition.activation import (
     CapabilityAcquisitionLifecycleCoordinator,
+)
+from jarvis.capability_acquisition.promotion import (
+    CapabilityAcquisitionReleaseBridge,
+    CapabilityAcquisitionReleaseBridgeError,
 )
 from jarvis.capability_acquisition.admission import CapabilityAcquisitionCoordinator
 from jarvis.capability_acquisition.architecture import (
@@ -37,7 +42,9 @@ from jarvis.capability_acquisition.workflow import (
     acquisition_completion_guard,
     build_acquisition_protocol_executors,
 )
+from jarvis.capability_registry.admission import CapabilityPackageAdmissionService
 from jarvis.capability_registry.lifecycle import CapabilityLifecycleService
+from jarvis.capability_registry.reconciliation import CapabilityLifecycleReconciler
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.incident_repair.architecture import (
@@ -83,6 +90,8 @@ from jarvis.model_routing.router import (
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.model_routing.strategy import EngineeringStageStrategy
 from jarvis.promotion.release import DeploymentMetadataStore
+from jarvis.promotion.runtime_composition import PromotionRuntime, PromotionRuntimeConfig
+from jarvis.promotion.store import PromotionStore
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
 from jarvis.work.dbos_backend import (
@@ -103,6 +112,9 @@ from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.reasoner import RoutedWorkReasoner
 from jarvis.work.resources import ResourceLeaseManager, engineering_resource_capacities
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _application_version() -> str:
@@ -146,6 +158,8 @@ class WorkRuntime:
         model_router: ModelRouter | None = None,
         capability_acquisition: CapabilityAcquisitionCoordinator | None = None,
         capability_lifecycle: CapabilityAcquisitionLifecycleCoordinator | None = None,
+        promotion_runtime: PromotionRuntime | None = None,
+        release_bridge_task: asyncio.Task[None] | None = None,
         source_revision_provider: Callable[[], str] | None = None,
     ) -> None:
         self.store = store
@@ -159,6 +173,8 @@ class WorkRuntime:
         self.model_router = model_router
         self.capability_acquisition = capability_acquisition
         self.capability_lifecycle = capability_lifecycle
+        self.promotion_runtime = promotion_runtime
+        self._release_bridge_task = release_bridge_task
         self._source_revision_provider = source_revision_provider
         self._closed = False
 
@@ -230,6 +246,9 @@ class WorkRuntime:
         # reasoning first, then give already-running DBOS workflow code a bounded
         # window to checkpoint before database connections are closed.
         self._interactive_brain_gate.set_interactive_active(True)
+        task = self._release_bridge_task
+        if task is not None and not task.done():
+            task.cancel()
         shutdown_dbos_work_runtime(workflow_completion_timeout_sec=5)
 
 
@@ -249,6 +268,9 @@ def build_work_runtime(
     acquisition_context_provider: AcquisitionContextProvider | None = None,
     capability_lifecycle_service: CapabilityLifecycleService | None = None,
     capability_deployment_metadata: DeploymentMetadataStore | None = None,
+    capability_package_admission: CapabilityPackageAdmissionService | None = None,
+    capability_package_reconciler: CapabilityLifecycleReconciler | None = None,
+    promotion_runtime_config: PromotionRuntimeConfig | None = None,
 ) -> WorkRuntime:
     """Build one durable work runtime around the configured JARVIS brain provider."""
 
@@ -439,6 +461,84 @@ def build_work_runtime(
             capability_lifecycle_service,
         )
     )
+    promotion_runtime = None
+    if promotion_runtime_config is not None:
+        if capability_deployment_metadata is None:
+            raise ValueError(
+                "live promotion requires canonical deployment metadata"
+            )
+        promotion_runtime = PromotionRuntime(
+            change_store,
+            workspace_manager,
+            capability_deployment_metadata,
+            promotion_runtime_config,
+        )
+
+    release_bridge_task = None
+    if (
+        capability_package_admission is not None
+        or capability_package_reconciler is not None
+    ):
+        if (
+            capability_package_admission is None
+            or capability_package_reconciler is None
+            or capability_deployment_metadata is None
+        ):
+            raise ValueError(
+                "Phase-9 release bridge requires admission, reconciler and deployment metadata"
+            )
+        bridge = CapabilityAcquisitionReleaseBridge(
+            change_store,
+            PromotionStore(change_store),
+            capability_deployment_metadata,
+            admission=capability_package_admission,
+            reconciler=capability_package_reconciler,
+        )
+
+        async def reconcile_release_bridge() -> None:
+            last_success: tuple[str, str] | None = None
+            while True:
+                try:
+                    active = capability_deployment_metadata.active()
+                    if active is not None:
+                        key = (active.release_sha, active.promotion_attempt_id)
+                        if key != last_success:
+                            attempt = PromotionStore(change_store).get(
+                                active.promotion_attempt_id
+                            )
+                            if attempt is not None:
+                                change = change_store.require(attempt.change_id)
+                                if (
+                                    change.process_key
+                                    == OWNER_CAPABILITY_ACQUISITION_PROCESS.key
+                                ):
+                                    await asyncio.to_thread(
+                                        bridge.reconcile,
+                                        change.change_id,
+                                        attempt_id=attempt.attempt_id,
+                                    )
+                                    last_success = key
+                                    LOGGER.info(
+                                        "Phase-9 active release bridge reconciled: "
+                                        "change=%s release=%s",
+                                        change.change_id,
+                                        active.release_sha,
+                                    )
+                except CapabilityAcquisitionReleaseBridgeError as exc:
+                    # DEPLOYING -> OBSERVING is parent-owned. Retry the same exact
+                    # release after the supervisor commits the durable transition.
+                    LOGGER.debug(
+                        "Phase-9 release bridge not ready yet: %s",
+                        exc.reason_code,
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    LOGGER.exception("Phase-9 release bridge reconciliation failed")
+                await asyncio.sleep(1.0)
+
+        release_bridge_task = loop.create_task(reconcile_release_bridge())
+
     configure_terminal_reconciliation(changes.reconcile_for_work)
     changes.reconcile_active()
     return WorkRuntime(
@@ -453,5 +553,7 @@ def build_work_runtime(
         model_router=model_router,
         capability_acquisition=capability_acquisition,
         capability_lifecycle=capability_lifecycle,
+        promotion_runtime=promotion_runtime,
+        release_bridge_task=release_bridge_task,
         source_revision_provider=workspace_manager.current_revision,
     )
