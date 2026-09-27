@@ -6,6 +6,30 @@ import asyncio
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
+from jarvis.capabilities.models import CapabilityCatalog
+from jarvis.capability_acquisition.admission import CapabilityAcquisitionCoordinator
+from jarvis.capability_acquisition.architecture import (
+    CapabilityAcquisitionDevelopmentRevisionResolver,
+    CapabilityAcquisitionSourceCompletionHandler,
+)
+from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
+from jarvis.capability_acquisition.runtime_context import (
+    AcquisitionContextProvider,
+    StaticAcquisitionContextProvider,
+)
+from jarvis.capability_acquisition.source import (
+    AcquisitionContextV1,
+    CapabilitySourceRegistry,
+    ExistingCapabilitySourceAdapter,
+)
+from jarvis.capability_acquisition.standard_sources import (
+    CustomBuildCapabilitySourceAdapter,
+)
+from jarvis.capability_acquisition.workflow import (
+    AcquisitionWorkContextResolver,
+    acquisition_completion_guard,
+    build_acquisition_protocol_executors,
+)
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.incident_repair.architecture import (
@@ -79,6 +103,23 @@ def _application_version() -> str:
         return "0.1.0"
 
 
+class _CompositeDevelopmentRevisionResolver:
+    def __init__(self, *resolvers) -> None:
+        self._resolvers = tuple(resolvers)
+
+    def revision_for(self, work_id: str) -> str | None:
+        revisions = tuple(
+            revision
+            for resolver in self._resolvers
+            if (revision := resolver.revision_for(work_id)) is not None
+        )
+        if not revisions:
+            return None
+        if len(set(revisions)) != 1:
+            raise RuntimeError("development revision resolvers disagree")
+        return revisions[0]
+
+
 class WorkRuntime:
     """Long-lived work subsystem that survives individual voice conversations."""
 
@@ -94,6 +135,7 @@ class WorkRuntime:
         changes: ChangeCoordinator | None = None,
         routing_store: ModelRoutingStore | None = None,
         model_router: ModelRouter | None = None,
+        capability_acquisition: CapabilityAcquisitionCoordinator | None = None,
     ) -> None:
         self.store = store
         self.engine = engine
@@ -104,6 +146,7 @@ class WorkRuntime:
         self.changes = changes
         self.routing_store = routing_store
         self.model_router = model_router
+        self.capability_acquisition = capability_acquisition
         self._closed = False
 
     def supports(self, work_type: WorkType) -> bool:
@@ -179,6 +222,7 @@ def build_work_runtime(
     store_path: str | Path | None = None,
     dbos_database_url: str | None = None,
     event_loop: asyncio.AbstractEventLoop | None = None,
+    acquisition_context_provider: AcquisitionContextProvider | None = None,
 ) -> WorkRuntime:
     """Build one durable work runtime around the configured JARVIS brain provider."""
 
@@ -192,8 +236,25 @@ def build_work_runtime(
     store.protect_existing_payloads()
     change_store = ChangeStore(
         store,
-        processes=(UNKNOWN_INCIDENT_REPAIR_PROCESS,),
+        processes=(
+            UNKNOWN_INCIDENT_REPAIR_PROCESS,
+            OWNER_CAPABILITY_ACQUISITION_PROCESS,
+        ),
     )
+    acquisition_context = acquisition_context_provider or StaticAcquisitionContextProvider(
+        AcquisitionContextV1(
+            catalog=CapabilityCatalog(sources=(), capabilities=()),
+            inventory=(),
+        )
+    )
+    acquisition_sources = CapabilitySourceRegistry(
+        (
+            ExistingCapabilitySourceAdapter(),
+            CustomBuildCapabilitySourceAdapter(),
+        )
+    )
+    acquisition_work_context = AcquisitionWorkContextResolver(change_store)
+
     adapter_registry = build_default_model_adapter_registry()
     work_targets = build_default_work_targets(
         configured_provider=provider,
@@ -220,7 +281,10 @@ def build_work_runtime(
         interactive_gate=interactive_brain_gate,
     )
     workspace_manager = DevelopmentWorkspaceManager(
-        base_revision_resolver=IncidentRepairDevelopmentRevisionResolver(change_store)
+        base_revision_resolver=_CompositeDevelopmentRevisionResolver(
+            IncidentRepairDevelopmentRevisionResolver(change_store),
+            CapabilityAcquisitionDevelopmentRevisionResolver(change_store),
+        )
     )
     diagnostic_workspace_manager = DiagnosticWorkspaceManager(
         ChangeStoreDiagnosticRevisionResolver(change_store)
@@ -237,6 +301,11 @@ def build_work_runtime(
     )
     executors = (
         ResearchWorkExecutor(research_service),
+        *build_acquisition_protocol_executors(
+            acquisition_work_context,
+            context_provider=acquisition_context,
+            sources=acquisition_sources,
+        ),
         *build_diagnostic_workspace_executors(diagnostic_workspace_manager),
         *build_diagnostic_code_intelligence_executors(diagnostic_code_index),
         *build_diagnostic_protocol_executors(diagnostic_context),
@@ -269,6 +338,20 @@ def build_work_runtime(
         resource_capacities,
         min_available_memory_mb=min_available_memory_mb,
     )
+    def _completion_guard(work: WorkItem, steps):
+        stage = change_store.stage_for_work(work.work_id)
+        if stage is None:
+            return None
+        change = change_store.require(stage.change_id)
+        if (
+            change.process_key == OWNER_CAPABILITY_ACQUISITION_PROCESS.key
+            and change.process_version == OWNER_CAPABILITY_ACQUISITION_PROCESS.version
+            and stage.stage_key
+            == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
+        ):
+            return acquisition_completion_guard(steps)
+        return None
+
     engine = WorkEngine(
         store=store,
         brain=brain,
@@ -276,6 +359,7 @@ def build_work_runtime(
         resources=resources,
         base_resource_keys=("work",),
         action_admission=change_store.work_admitted,
+        completion_guard=_completion_guard,
     )
     engine.reconcile_interrupted_steps()
     backend = initialize_dbos_work_runtime(
@@ -293,6 +377,7 @@ def build_work_runtime(
         backend,
         source_completion_handlers=(
             IncidentRepairSourceCompletionHandler(change_store),
+            CapabilityAcquisitionSourceCompletionHandler(change_store),
         ),
         development_completion_handlers=(
             IncidentRepairDevelopmentCompletionHandler(
@@ -300,6 +385,10 @@ def build_work_runtime(
                 workspace_manager,
             ),
         ),
+    )
+    capability_acquisition = CapabilityAcquisitionCoordinator(
+        changes=changes,
+        context_provider=acquisition_context,
     )
     configure_terminal_reconciliation(changes.reconcile_for_work)
     changes.reconcile_active()
@@ -313,4 +402,5 @@ def build_work_runtime(
         changes=changes,
         routing_store=routing_store,
         model_router=model_router,
+        capability_acquisition=capability_acquisition,
     )
