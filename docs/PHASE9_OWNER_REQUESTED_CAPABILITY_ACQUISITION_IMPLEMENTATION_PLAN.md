@@ -2,7 +2,19 @@
 
 ## Status
 
-**OWNER-APPROVED / IMPLEMENTATION AUTHORIZED — STARTING 9A — 2026-09-27**
+**SOFTWARE IMPLEMENTATION COMPLETE ON PROTECTED MAIN / REAL EXTERNAL OWNER-MACHINE ACCEPTANCE PENDING — 2026-09-27**
+
+Reviewed implementation head: `81d498a22bb2293d69c6b6a848b08740fae30f75`
+
+Protected-main merge: `e73db07abad7ab0e73ee2f0030ff6e58e9f3ee76`
+
+PRs: 9A–9F plus 9G and final live-path hardening are merged. PR #178 completed the owner voice entrypoint, secure Phase-7 promotion composition, restart-safe Phase-8 package/lifecycle bridge, reusable owner-approved source registry, immediate catalog refresh and canonical real-capability evidence collection.
+
+CI on the exact PR head passed Ruff, full pytest, Windows Hello, Windows DPAPI, inherited Phase-6/7/8 regression/acceptance coverage, Phase-9 replay regressions and the promotion-policy gate.
+
+Phase 9 is **not yet owner-machine accepted**. Its final exit criterion still requires one genuine owner-requested external capability to complete the full lifecycle and produce exact real-world acceptance evidence. Phase 10 does not become active merely because the software implementation is merged.
+
+Canonical acceptance-status record: `PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_ACCEPTANCE_2026-09-27.md`
 
 Architecture: `PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_ARCHITECTURE.md`
 
