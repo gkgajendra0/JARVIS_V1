@@ -253,12 +253,9 @@ class CapabilityCompatibilityEvaluator:
         provider_descriptor_digest: str | None = None
         provider = None
         if manifest is not None:
-            if (
+            if manifest.manifest.platform_constraints and not set(
                 manifest.manifest.platform_constraints
-                and not set(manifest.manifest.platform_constraints).intersection(
-                    self.platform_tags
-                )
-            ):
+            ).intersection(self.platform_tags):
                 reasons.add(CompatibilityReason.PLATFORM_UNSUPPORTED)
             provider = self.provider_registry.get(
                 descriptor.capability_id,
