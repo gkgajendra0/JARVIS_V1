@@ -77,7 +77,7 @@ from jarvis.incident_repair.models import ProtectedSurfaceVerdict
 from jarvis.incident_repair.protected_surfaces import RepairProtectedSurfacePolicy
 from jarvis.promotion.evaluation import run_replay_suite as run_phase7_replay
 from jarvis.self_model.health import HealthState
-from jarvis.work.models import WorkItem, WorkPriority, WorkState, WorkStep, WorkType
+from jarvis.work.models import WorkPriority, WorkState, WorkStep
 from jarvis.work.store import SQLiteWorkStore
 
 _REVISION = "a" * 40
@@ -613,29 +613,6 @@ def _11_waiting_owner_identity(root: pathlib.Path) -> dict[str, object]:
         "work_id": reopened.work_id,
         "wait_state": reopened.state.value,
     }
-
-
-def _gate_fixture(root: pathlib.Path, *, turn: str):
-    store = ChangeStore(SQLiteWorkStore(root / "work.sqlite3"))
-    change = store.create(
-        request="Shared owner gate replay",
-        process_key="engineering.change",
-        process_version=1,
-        source_session_id="phase9-replay",
-        source_turn_id=turn,
-    )
-    with store.work._lock, store.work._connect() as db:
-        db.execute(
-            "UPDATE engineering_changes SET state=? WHERE change_id=?",
-            (ChangeState.ARCHITECTURE_READY.value, change.change_id),
-        )
-    artifact = store.add_artifact(
-        change.change_id,
-        kind="architecture",
-        payload={"schema": "phase9-replay-architecture", "plan_digest": "5" * 64},
-    )
-    gates = GateService(store, verify_owner=lambda *_: True)
-    return store, change, artifact, gates
 
 
 def _12_exact_architecture_digest(root: pathlib.Path) -> dict[str, object]:
