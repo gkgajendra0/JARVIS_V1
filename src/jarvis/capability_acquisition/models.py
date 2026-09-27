@@ -493,6 +493,7 @@ class CapabilityAcquisitionPlanV1:
     sandbox_profile_ids: tuple[str, ...]
     discovery_scopes: tuple[str, ...]
     network_scopes: tuple[str, ...]
+    device_scopes: tuple[str, ...]
     verification_contract_ids: tuple[str, ...]
     owner_acceptance_contract_ids: tuple[str, ...]
     proposed_capability_id: str
@@ -520,6 +521,7 @@ class CapabilityAcquisitionPlanV1:
         sandbox_profile_ids: tuple[str, ...] | list[str] = (),
         discovery_scopes: tuple[str, ...] | list[str] = (),
         network_scopes: tuple[str, ...] | list[str] = (),
+        device_scopes: tuple[str, ...] | list[str] = (),
         verification_contract_ids: tuple[str, ...] | list[str] = (),
         owner_acceptance_contract_ids: tuple[str, ...] | list[str] = (),
         evidence_refs: tuple[str, ...] | list[str] = (),
@@ -580,6 +582,9 @@ class CapabilityAcquisitionPlanV1:
             "network_scopes": list(
                 _tokens(tuple(network_scopes), field="network_scope", normalized=False)
             ),
+            "device_scopes": list(
+                _tokens(tuple(device_scopes), field="device_scope", normalized=False)
+            ),
             "verification_contract_ids": list(
                 _tokens(
                     tuple(verification_contract_ids),
@@ -629,6 +634,7 @@ class CapabilityAcquisitionPlanV1:
             sandbox_profile_ids=tuple(payload["sandbox_profile_ids"]),
             discovery_scopes=tuple(payload["discovery_scopes"]),
             network_scopes=tuple(payload["network_scopes"]),
+            device_scopes=tuple(payload["device_scopes"]),
             verification_contract_ids=tuple(payload["verification_contract_ids"]),
             owner_acceptance_contract_ids=tuple(
                 payload["owner_acceptance_contract_ids"]
@@ -657,6 +663,7 @@ class CapabilityAcquisitionPlanV1:
             "sandbox_profile_ids": list(self.sandbox_profile_ids),
             "discovery_scopes": list(self.discovery_scopes),
             "network_scopes": list(self.network_scopes),
+            "device_scopes": list(self.device_scopes),
             "verification_contract_ids": list(self.verification_contract_ids),
             "owner_acceptance_contract_ids": list(self.owner_acceptance_contract_ids),
             "proposed_capability_id": self.proposed_capability_id,
