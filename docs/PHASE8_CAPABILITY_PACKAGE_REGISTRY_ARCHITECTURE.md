@@ -2,9 +2,9 @@
 
 ## Status
 
-**ARCHITECTURE REVISED AFTER IMPLEMENTATION RESEARCH — OWNER APPROVAL REQUIRED — 2026-09-27**
+**OWNER-APPROVED — IMPLEMENTATION AUTHORIZED — 2026-09-27**
 
-No Phase-8 runtime implementation is authorized until the owner approves this architecture.
+Owner approval to begin Phase-8 implementation was recorded on 2026-09-27. The approved architecture and hard invariants remain binding through implementation.
 
 ## 1. Purpose
 
