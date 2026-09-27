@@ -45,7 +45,7 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 The active cross-cutting engineering boundary is now:
 
-**Phase 8 — Capability Package + Registry Lifecycle — NEXT FOR RESEARCH + ARCHITECTURE**
+**Phase 8 — Capability Package + Registry Lifecycle — RESEARCH V2 + REVISED ARCHITECTURE COMPLETE / OWNER APPROVAL REQUIRED**
 
 Phase 5 Secure Autonomous Engineering Substrate is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Its final evidence is recorded in `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`. PR #133 merged to protected main at `78f25fb192b926ee30a028cfc02c829e1197cc9e`.
 
@@ -85,7 +85,7 @@ PR #150 was explicitly owner-approved and merged to protected `main` as `d2c7dc3
 
 The accepted Phase-7 path adds exact candidate/PR/CI binding, digest-bound owner promotion, one-shot Authority execution, exact-head protected merge, immutable Windows release staging, runtime release identity verification, bounded observation and compatibility-safe rollback. It does not grant JARVIS ownership authority.
 
-**Current state: Phase 8 is not implementation-authorized yet.** The next action is Phase-8 repository inspection, technology research and architecture under the permanent engineering rule; implementation requires a new owner architecture approval.
+**Current state: Phase 8 implementation-focused technology research and the resulting architecture revision are complete, but runtime implementation is not authorized.** The second research pass found a stale-routing/crash failure window in the original commit-then-refresh design and closes it with deterministic lifecycle reconciliation, per-capability transition fencing, generation-aware runtime projection and atomic registry-CAS/lifecycle-event transactions. Implementation requires explicit owner approval of the revised Phase-8 architecture.
 
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
@@ -127,7 +127,7 @@ Phase 4  Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 20
 Phase 5  Secure autonomous engineering substrate — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 6  Unknown-incident investigation + source repair — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 7  Governed promotion / production verification / rollback — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
-Phase 8  Capability package + registry lifecycle — NEXT / RESEARCH + ARCHITECTURE REQUIRED
+Phase 8  Capability package + registry lifecycle — REVISED ARCHITECTURE READY / OWNER APPROVAL REQUIRED
 Phase 9  Owner-requested capability acquisition
 Phase 10 Closed-loop engineering learning
 Phase 10A Autonomous Operations Control Plane — approved future integration point; not active yet
@@ -139,7 +139,7 @@ Phase 14 Governed self-evolution
 
 Owner-requested capability acquisition intentionally precedes autonomous gap detection: an explicit owner request to acquire a capability must not wait for repeated failures or repeated requests.
 
-The owner-approved 2026-09-26 sequencing clarification inserts Phase 10A before Phase 11. Phase 10A will add the Objective/DesiredState model, whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, owner-attention handling and autonomy evaluation. It does not interrupt or broaden authority during the next Phase-7 research/architecture work.
+The owner-approved 2026-09-26 sequencing clarification inserts Phase 10A before Phase 11. Phase 10A will add the Objective/DesiredState model, whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, owner-attention handling and autonomy evaluation. It does not interrupt or broaden authority during the current Phase-8 architecture gate.
 
 ## Next numbered product slice
 
@@ -183,9 +183,13 @@ They remain separate unless evidence shows that one directly blocks the current 
 - `PHASE7_GOVERNED_PROMOTION_ARCHITECTURE.md` — owner-approved Phase-7 stable contracts/invariants.
 - `PHASE7_GOVERNED_PROMOTION_IMPLEMENTATION_PLAN.md` — completed Phase-7 implementation slices and acceptance matrix.
 - `PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md` — canonical Phase-7 owner-machine acceptance record.
+- `PHASE8_CAPABILITY_PACKAGE_REGISTRY_RESEARCH.md` — Phase-8 foundation repository/technology research and initial dispositions.
+- `PHASE8_CAPABILITY_PACKAGE_REGISTRY_IMPLEMENTATION_RESEARCH.md` — implementation-focused comparison of mature lifecycle/plugin/package technologies and the research basis for the revised reconciler/generation-fenced design.
+- `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ARCHITECTURE.md` — revised Phase-8 architecture awaiting explicit owner approval.
+- `PHASE8_CAPABILITY_PACKAGE_REGISTRY_IMPLEMENTATION_PLAN.md` — revised Phase-8 implementation slices and acceptance gates; not yet implementation-authorized.
 
 Historical experiments, old acceptance transcripts and superseded research remain available through Git history rather than becoming competing planning truth.
 
 ## Immediate next action
 
-**Begin Phase 8 repository inspection, technology research and architecture for Capability Package + Registry Lifecycle. Do not begin Phase-8 implementation until the resulting architecture receives explicit owner approval.**
+**Review the revised Phase-8 Capability Package + Registry Lifecycle architecture after implementation-focused research. Do not begin Phase-8 runtime implementation until the owner explicitly approves the revised architecture.**
