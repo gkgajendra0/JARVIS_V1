@@ -80,6 +80,7 @@ def test_promotion_setup_seals_key_reference_and_persists_only_metadata(
     assert result["status"] == "CONFIGURED"
     assert result["secret_disposition"] == "enrolled"
     assert store.values["github-promotion-private-key"] == _pem()
+    assert _pem() not in machine.read_bytes()
     settings = load_machine_settings(machine)
     assert settings["JARVIS_GITHUB_PROMOTION_ENABLED"] == "true"
     assert settings["JARVIS_GITHUB_APP_SECRET_ID"] == "github-promotion-private-key"
@@ -130,6 +131,24 @@ def test_promotion_setup_rejects_non_pem_key(
     key_path.write_text("not a private key", encoding="utf-8")
 
     with pytest.raises(promotion_setup.PromotionSetupError, match="PEM"):
+        promotion_setup.configure_github_promotion(
+            private_key_file=key_path,
+            client_id="Iv1.phase9",
+            installation_id=12345,
+            repository_full_name="gkgajendra0/JARVIS_V1",
+            machine_config_path=tmp_path / "machine.json",
+            secret_store=FakeSecretStore(),
+        )
+
+
+
+def test_promotion_setup_rejects_non_windows(tmp_path) -> None:
+    if promotion_setup.sys.platform == "win32":
+        pytest.skip("non-Windows rejection is covered on Linux CI")
+    key_path = tmp_path / "github-app.pem"
+    key_path.write_bytes(_pem())
+
+    with pytest.raises(promotion_setup.PromotionSetupError, match="Windows DPAPI"):
         promotion_setup.configure_github_promotion(
             private_key_file=key_path,
             client_id="Iv1.phase9",
