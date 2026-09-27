@@ -359,7 +359,6 @@ class CapabilityAcquisitionReleaseBridge:
         )
 
 
-
 def ensure_capability_release_bridge_current(
     changes: ChangeStore,
     deployment: DeploymentMetadataStore,
