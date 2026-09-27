@@ -324,18 +324,20 @@ prioritization and eventually delegated authority envelopes.
 
 ## 9. Approved implementation sequence
 
-This north-star clarification **does not interrupt or rewrite Phase 5**.
+This north-star clarification does not rewrite accepted phase contracts.
 
-Approved sequencing:
+Approved sequencing and current status:
 
 ```text
-CURRENT
-  Phase 5   Secure Autonomous Engineering Substrate — continue
-
-THEN
+ACCEPTED
+  Phase 5   Secure Autonomous Engineering Substrate
   Phase 6   Unknown-Incident Investigation + Source Repair
   Phase 7   Governed Promotion / Production Verification / Rollback
-  Phase 8   Capability Package + Registry Lifecycle
+
+CURRENT / NEXT
+  Phase 8   Capability Package + Registry Lifecycle — research + architecture
+
+THEN
   Phase 9   Owner-Requested Capability Acquisition
   Phase 10  Closed-Loop Engineering Learning
 
@@ -363,8 +365,7 @@ and learn through the governed engineering lifecycle. The top-level controller
 should not receive broad responsibility before its effectors and verification
 substrate are mature.
 
-Phase 10A is a planning commitment, not permission to implement it during active
-Phase 5.
+Phase 10A is a planning commitment, not permission to implement it before its approved future integration point.
 
 ## 10. Autonomy evaluation
 
@@ -502,7 +503,7 @@ Canonical hierarchy after owner approval:
 Rules:
 
 - future north-star behavior must never be represented as current production truth;
-- Phase 5 continues unchanged unless new evidence requires an owner-approved change;
+- accepted Phases 5–7 remain stable unless new concrete evidence requires an owner-approved change;
 - future agents must not reinterpret "autonomy" as unrestricted self-authorization;
 - future feature/project work must be evaluated against the whole-JARVIS
   self-management north star, not only local task completion;
