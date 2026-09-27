@@ -2,9 +2,9 @@
 
 ## Status
 
-**OWNER-APPROVED — IMPLEMENTATION AUTHORIZED — 2026-09-27**
+**DONE / OWNER-MACHINE ACCEPTED — 2026-09-27**
 
-Owner approval to begin Phase-8 implementation was recorded on 2026-09-27. The approved architecture and hard invariants remain binding through implementation.
+Owner approval to begin Phase-8 implementation was recorded on 2026-09-27. The architecture was implemented through slices 8A–8F and owner-machine accepted on protected-main SHA `1eda461be022ee30753b3d981e33290442f38a80`. Canonical final evidence is `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`. The accepted hard invariants remain binding for later phases.
 
 ## 1. Purpose
 
