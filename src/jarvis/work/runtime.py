@@ -25,6 +25,9 @@ from jarvis.capability_acquisition.source import (
 from jarvis.capability_acquisition.standard_sources import (
     CustomBuildCapabilitySourceAdapter,
 )
+from jarvis.capability_acquisition.verification import (
+    CapabilityAcquisitionDevelopmentCompletionHandler,
+)
 from jarvis.capability_acquisition.workflow import (
     AcquisitionWorkContextResolver,
     acquisition_completion_guard,
@@ -385,6 +388,10 @@ def build_work_runtime(
         ),
         development_completion_handlers=(
             IncidentRepairDevelopmentCompletionHandler(
+                change_store,
+                workspace_manager,
+            ),
+            CapabilityAcquisitionDevelopmentCompletionHandler(
                 change_store,
                 workspace_manager,
             ),
