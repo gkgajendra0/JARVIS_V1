@@ -61,8 +61,11 @@ def _registry_file_handle_acceptance(root: pathlib.Path) -> dict[str, object]:
     if not path.is_file():
         raise Phase8AcceptanceError("capability registry database was not created")
 
-    with sqlite3.connect(path) as connection:
+    connection = sqlite3.connect(path)
+    try:
         user_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+    finally:
+        connection.close()
     if user_version <= 0:
         raise Phase8AcceptanceError("capability registry schema was not initialized")
 
@@ -73,8 +76,13 @@ def _registry_file_handle_acceptance(root: pathlib.Path) -> dict[str, object]:
     os.replace(moved, path)
 
     reopened = CapabilityRegistryStore(path)
-    with sqlite3.connect(reopened.path) as connection:
-        reopened_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+    connection = sqlite3.connect(reopened.path)
+    try:
+        reopened_version = int(
+            connection.execute("PRAGMA user_version").fetchone()[0]
+        )
+    finally:
+        connection.close()
     if reopened_version != user_version:
         raise Phase8AcceptanceError(
             "capability registry schema changed after file-handle restart proof"
