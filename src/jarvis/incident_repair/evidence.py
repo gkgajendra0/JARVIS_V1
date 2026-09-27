@@ -429,9 +429,7 @@ class IncidentEvidencePackager:
             verdict=None if attempt.verdict is None else attempt.verdict.value,
             trigger_source=None if snapshot is None else snapshot.source,
             reason_code=None if snapshot is None else snapshot.reason_code,
-            health_state=(
-                None if snapshot is None else snapshot.health_state.value
-            ),
+            health_state=(None if snapshot is None else snapshot.health_state.value),
             verification_contract=(
                 None if verification is None else verification.contract_id
             ),
