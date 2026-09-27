@@ -601,9 +601,7 @@ class CapabilityLifecycleService:
             expected_state=committed,
             action=CapabilityLifecycleAction.ROLLBACK_VERSION,
             require_effective=(
-                True
-                if committed.desired_state is DesiredActivationState.ENABLED
-                else False
+                committed.desired_state is DesiredActivationState.ENABLED
             ),
         )
         return CapabilityLifecycleMutationResult(
