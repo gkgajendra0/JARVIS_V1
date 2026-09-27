@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
+
+import jarvis.promotion.release as release_module
 
 from jarvis.dev_control import RuntimeReleaseIdentity
 from jarvis.engineering_change import ChangeState, ChangeStore
@@ -435,3 +438,37 @@ def test_deployment_resume_from_staged_boundary_is_idempotent(tmp_path: Path) ->
 
     again = coordinator.resume(promotions.require(attempt.attempt_id))
     assert again == resumed
+
+
+def test_durable_active_release_is_supervisor_startup_truth(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    deployment_root = tmp_path / "deployment"
+    releases_root = tmp_path / "releases"
+    release_root = releases_root / MERGE
+    release_root.mkdir(parents=True)
+    record = ReleaseRecord(
+        release_sha=MERGE,
+        release_root=str(release_root.resolve()),
+        promotion_attempt_id="promotion_restart_test",
+        promotion_evidence_digest=DIGEST,
+        config_digest=CONFIG,
+        schema_versions=(),
+        accepted_at_epoch=1.0,
+    )
+    DeploymentMetadataStore(deployment_root).set_active(record)
+    monkeypatch.setenv("JARVIS_DEPLOYMENT_ROOT", str(deployment_root))
+    monkeypatch.setenv("JARVIS_RELEASES_ROOT", str(releases_root))
+
+    def fake_run(args, **kwargs):
+        del kwargs
+        if args[-2:] == ["rev-parse", "HEAD"]:
+            return SimpleNamespace(stdout=MERGE + "\n")
+        if "status" in args:
+            return SimpleNamespace(stdout="")
+        raise AssertionError(f"unexpected Git command: {args}")
+
+    monkeypatch.setattr(release_module.subprocess, "run", fake_run)
+
+    assert load_active_release_for_startup() == record
