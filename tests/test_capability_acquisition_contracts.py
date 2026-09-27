@@ -290,8 +290,7 @@ def test_phase9_process_reuses_research_and_development_roles() -> None:
     assert process.architecture_source_stage.stage_key == "acquisition"
     assert process.architecture_source_stage.work_type is WorkType.RESEARCH
     assert (
-        process.architecture_source_stage.role
-        is ProcessStageRole.ARCHITECTURE_SOURCE
+        process.architecture_source_stage.role is ProcessStageRole.ARCHITECTURE_SOURCE
     )
     assert process.development_stage.stage_key == "development"
     assert process.development_stage.work_type is WorkType.DEVELOPMENT
