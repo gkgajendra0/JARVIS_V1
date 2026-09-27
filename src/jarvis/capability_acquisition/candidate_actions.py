@@ -85,9 +85,7 @@ def _metadata_path(
         or pure.name.startswith(".")
         or ".." in pure.parts
     ):
-        raise CapabilityCandidateActionError(
-            f"{label} must be {directory}/<name>.json"
-        )
+        raise CapabilityCandidateActionError(f"{label} must be {directory}/<name>.json")
     return pure.as_posix()
 
 
@@ -117,8 +115,7 @@ def _manifest_from_payload(payload: dict[str, object]) -> CapabilityManifest:
     unknown = set(payload) - expected
     if unknown:
         raise CapabilityCandidateActionError(
-            "candidate manifest contains unknown fields: "
-            + ", ".join(sorted(unknown))
+            "candidate manifest contains unknown fields: " + ", ".join(sorted(unknown))
         )
     try:
         return CapabilityManifest(**payload)  # type: ignore[arg-type]
@@ -161,9 +158,7 @@ def _validate_manifest_alignment(
             raise CapabilityCandidateActionError(
                 f"candidate manifest {label} differs from approved architecture"
             )
-    requested_operations = set(
-        architecture.payload.get("requested_operations") or ()
-    )
+    requested_operations = set(architecture.payload.get("requested_operations") or ())
     if not requested_operations.issubset(set(manifest.operations)):
         raise CapabilityCandidateActionError(
             "candidate manifest does not cover all owner-requested operations"
@@ -414,8 +409,7 @@ class CapabilityBindSubstrateExecutor:
             or latest_manifest.payload.get("manifest_digest") != manifest_digest
             or latest_manifest.payload.get("architecture_artifact_id")
             != architecture.artifact_id
-            or latest_manifest.payload.get("architecture_digest")
-            != architecture.digest
+            or latest_manifest.payload.get("architecture_digest") != architecture.digest
         ):
             latest_manifest = service.bind_manifest(
                 change.change_id,
