@@ -29,7 +29,11 @@ from .process import UNKNOWN_INCIDENT_REPAIR_PROCESS
 
 __all__ = [
     "UNKNOWN_INCIDENT_REPAIR_PROCESS",
+    "DiagnosisDisposition",
+    "DiagnosticHypothesis",
     "ExcludedEvidenceReference",
+    "HypothesisState",
+    "IncidentDiagnosis",
     "IncidentEvidencePackage",
     "IncidentEvidencePackager",
     "IncidentEvidencePolicy",
@@ -38,10 +42,6 @@ __all__ = [
     "IncidentRepairAdmissionBlocked",
     "IncidentRepairAdmissionError",
     "IncidentRepairCoordinator",
-    "DiagnosisDisposition",
-    "DiagnosticHypothesis",
-    "HypothesisState",
-    "IncidentDiagnosis",
     "IncidentRepairTrigger",
     "PackagedEvidenceReference",
     "PackagedRepairAttempt",
