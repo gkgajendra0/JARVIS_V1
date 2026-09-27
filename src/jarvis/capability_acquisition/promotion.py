@@ -182,6 +182,14 @@ class CapabilityAcquisitionReleaseBridge:
             )
 
         attempt = self._attempt(change_id, attempt_id)
+        if (
+            attempt.candidate_artifact_id != candidate.artifact_id
+            or attempt.candidate_artifact_digest != candidate.digest
+        ):
+            raise CapabilityAcquisitionReleaseBridgeError(
+                "promotion_candidate_stale",
+                "deployed promotion attempt is not bound to current Phase-9 candidate",
+            )
         active = self._deployment.active()
         if (
             active is None
