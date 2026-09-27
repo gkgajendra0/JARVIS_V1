@@ -53,7 +53,9 @@ class PromotionEvidenceBuilder:
             or attempt.base_sha != candidate.base_sha
             or attempt.head_sha != candidate.head_sha
         ):
-            raise ChangeConflict(\n                "promotion attempt no longer matches candidate evidence"\n            )
+            raise ChangeConflict(
+                "promotion attempt no longer matches candidate evidence"
+            )
         if attempt.state not in {
             PromotionAttemptState.CREATED,
             PromotionAttemptState.EVIDENCE_READY,
@@ -96,7 +98,9 @@ class PromotionEvidenceBuilder:
         if latest is not None and latest.payload == payload:
             artifact = latest
         elif attempt.state is PromotionAttemptState.EVIDENCE_READY:
-            raise ChangeConflict(\n                "existing promotion evidence differs from current inputs"\n            )
+            raise ChangeConflict(
+                "existing promotion evidence differs from current inputs"
+            )
         else:
             artifact = self._changes.add_artifact(
                 candidate.change_id,
