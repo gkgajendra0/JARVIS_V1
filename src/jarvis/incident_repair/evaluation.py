@@ -210,34 +210,38 @@ def _base_incident(
 ]:
     root.mkdir(parents=True, exist_ok=True)
     incident_store = SqliteIncidentStore(root / "incidents.sqlite3")
-    incidents = IncidentService(incident_store)
-    incident = incidents.create_manual(
-        title="Phase6 controlled incident",
-        symptom=summary,
-        affected_components=("runtime.demo",),
-        now_epoch=100.0,
-    )
-    evidence = EvidenceReference.create(
-        kind="test_failure",
-        reference="pytest:tests/test_demo_logic.py::test_value",
-        summary=summary,
-        component_id="runtime.demo",
-        occurred_at_epoch=100.0,
-    )
-    incident = incidents.add_evidence(
-        incident.incident_id,
-        evidence,
-        now_epoch=101.0,
-    )
-    trigger = IncidentRepairTrigger.create(
-        incident_id=incident.incident_id,
-        source_revision=revision,
-        component_ids=("runtime.demo",),
-        evidence_ids=(evidence.evidence_id,),
-        reason_code="unknown_failure",
-        now_epoch=102.0,
-    )
-    return incidents, incident_store, evidence, trigger
+    try:
+        incidents = IncidentService(incident_store)
+        incident = incidents.create_manual(
+            title="Phase6 controlled incident",
+            symptom=summary,
+            affected_components=("runtime.demo",),
+            now_epoch=100.0,
+        )
+        evidence = EvidenceReference.create(
+            kind="test_failure",
+            reference="pytest:tests/test_demo_logic.py::test_value",
+            summary=summary,
+            component_id="runtime.demo",
+            occurred_at_epoch=100.0,
+        )
+        incident = incidents.add_evidence(
+            incident.incident_id,
+            evidence,
+            now_epoch=101.0,
+        )
+        trigger = IncidentRepairTrigger.create(
+            incident_id=incident.incident_id,
+            source_revision=revision,
+            component_ids=("runtime.demo",),
+            evidence_ids=(evidence.evidence_id,),
+            reason_code="unknown_failure",
+            now_epoch=102.0,
+        )
+        return incidents, incident_store, evidence, trigger
+    except BaseException:
+        incident_store.close()
+        raise
 
 
 def _change_stack(
@@ -289,23 +293,27 @@ def _admit(
 ]:
     work, changes, coordinator, manager, gates = _change_stack(root, repository_root)
     incidents, incident_store, _, trigger = _base_incident(root, revision=revision)
-    admission = IncidentRepairCoordinator(
-        incidents=incidents,
-        changes=coordinator,
-        knowledge=knowledge,
-        repair_registry=repair_registry,
-    )
-    admitted = admission.admit(trigger)
-    return (
-        work,
-        changes,
-        coordinator,
-        manager,
-        gates,
-        incident_store,
-        admission,
-        admitted,
-    )
+    try:
+        admission = IncidentRepairCoordinator(
+            incidents=incidents,
+            changes=coordinator,
+            knowledge=knowledge,
+            repair_registry=repair_registry,
+        )
+        admitted = admission.admit(trigger)
+        return (
+            work,
+            changes,
+            coordinator,
+            manager,
+            gates,
+            incident_store,
+            admission,
+            admitted,
+        )
+    except BaseException:
+        incident_store.close()
+        raise
 
 
 def _complete_diagnosis(
@@ -855,6 +863,7 @@ def _case_restart_after_approval(root: pathlib.Path) -> dict[str, object]:
     finally:
         incident_store.close()
 
+
 def _case_restart_during_development(root: pathlib.Path) -> dict[str, object]:
     repository_root, revision = _new_repo(root)
     work, changes, coordinator, _, gates, incident_store, _, admitted = _admit(
@@ -932,34 +941,34 @@ def _case_protected_surface() -> dict[str, object]:
 
 def _case_secret_evidence(root: pathlib.Path) -> dict[str, object]:
     incident_store = SqliteIncidentStore(root / "incidents.sqlite3")
-    incidents = IncidentService(incident_store)
-    incident = incidents.create_manual(
-        symptom="secret-bearing evidence test",
-        affected_components=("runtime.demo",),
-        now_epoch=100.0,
-    )
-    secret = "sk-" + ("a" * 32)
-    evidence = EvidenceReference.create(
-        kind="structured_log",
-        reference=f"token={secret}",
-        summary="credential leaked into diagnostic source",
-        component_id="runtime.demo",
-        occurred_at_epoch=100.0,
-    )
-    incident = incidents.add_evidence(
-        incident.incident_id,
-        evidence,
-        now_epoch=101.0,
-    )
-    package = IncidentEvidencePackager().build(
-        incident=incident,
-        source_revision="a" * 40,
-        trigger_digest="b" * 64,
-        now_epoch=102.0,
-    )
-    included_ids = {item.evidence_id for item in package.evidence}
-    excluded_ids = {item.evidence_id for item in package.excluded_evidence}
     try:
+        incidents = IncidentService(incident_store)
+        incident = incidents.create_manual(
+            symptom="secret-bearing evidence test",
+            affected_components=("runtime.demo",),
+            now_epoch=100.0,
+        )
+        secret = "sk-" + ("a" * 32)
+        evidence = EvidenceReference.create(
+            kind="structured_log",
+            reference=f"token={secret}",
+            summary="credential leaked into diagnostic source",
+            component_id="runtime.demo",
+            occurred_at_epoch=100.0,
+        )
+        incident = incidents.add_evidence(
+            incident.incident_id,
+            evidence,
+            now_epoch=101.0,
+        )
+        package = IncidentEvidencePackager().build(
+            incident=incident,
+            source_revision="a" * 40,
+            trigger_digest="b" * 64,
+            now_epoch=102.0,
+        )
+        included_ids = {item.evidence_id for item in package.evidence}
+        excluded_ids = {item.evidence_id for item in package.excluded_evidence}
         if (
             evidence.evidence_id in included_ids
             or evidence.evidence_id not in excluded_ids
@@ -998,31 +1007,33 @@ def _case_known_repair_priority(root: pathlib.Path) -> dict[str, object]:
         revision,
     )
     del work, coordinator, admitted
-    incidents, known_incident_store, evidence, trigger = _base_incident(
-        root / "known",
-        revision=revision,
-    )
-    admission = IncidentRepairCoordinator(
-        incidents=incidents,
-        changes=ChangeCoordinator(changes, _Backend()),
-        repair_registry=RepairRegistry((policy,)),
-    )
-    repair_trigger = RepairTrigger.create(
-        component_id="runtime.demo",
-        reason_code="unknown_failure",
-        source="replay",
-        health_state=HealthState.FAILED,
-        evidence_references=(evidence.reference,),
-        observed_at_epoch=102.0,
-    )
+    known_incident_store: SqliteIncidentStore | None = None
     try:
+        incidents, known_incident_store, evidence, trigger = _base_incident(
+            root / "known",
+            revision=revision,
+        )
+        admission = IncidentRepairCoordinator(
+            incidents=incidents,
+            changes=ChangeCoordinator(changes, _Backend()),
+            repair_registry=RepairRegistry((policy,)),
+        )
+        repair_trigger = RepairTrigger.create(
+            component_id="runtime.demo",
+            reason_code="unknown_failure",
+            source="replay",
+            health_state=HealthState.FAILED,
+            evidence_references=(evidence.reference,),
+            observed_at_epoch=102.0,
+        )
         try:
             admission.admit(trigger, repair_trigger=repair_trigger)
         except IncidentRepairAdmissionBlocked as exc:
             return {"blocked": True, "reason": str(exc)}
         raise Phase6EvaluationError("known deterministic repair did not retain priority")
     finally:
-        known_incident_store.close()
+        if known_incident_store is not None:
+            known_incident_store.close()
         base_incident_store.close()
 
 
@@ -1033,15 +1044,16 @@ def _case_duplicate_trigger(root: pathlib.Path) -> dict[str, object]:
         repository_root,
         revision,
     )
-    incidents, duplicate_incident_store, _, trigger = _base_incident(
-        root / "duplicate",
-        revision=revision,
-    )
-    admission = IncidentRepairCoordinator(
-        incidents=incidents,
-        changes=coordinator,
-    )
+    duplicate_incident_store: SqliteIncidentStore | None = None
     try:
+        incidents, duplicate_incident_store, _, trigger = _base_incident(
+            root / "duplicate",
+            revision=revision,
+        )
+        admission = IncidentRepairCoordinator(
+            incidents=incidents,
+            changes=coordinator,
+        )
         first = admission.admit(trigger)
         second = admission.admit(trigger)
         if first.change.change_id != second.change.change_id:
@@ -1055,7 +1067,8 @@ def _case_duplicate_trigger(root: pathlib.Path) -> dict[str, object]:
             "work_store": str(work.path),
         }
     finally:
-        duplicate_incident_store.close()
+        if duplicate_incident_store is not None:
+            duplicate_incident_store.close()
         base_incident_store.close()
 
 
