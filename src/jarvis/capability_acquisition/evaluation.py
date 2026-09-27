@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pathlib
+from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import Callable
 
 from jarvis.capabilities.models import (
     CapabilityCatalog,
@@ -63,7 +63,7 @@ from jarvis.incident_repair.models import ProtectedSurfaceVerdict
 from jarvis.incident_repair.protected_surfaces import RepairProtectedSurfacePolicy
 from jarvis.promotion.evaluation import run_replay_suite as run_phase7_replay
 from jarvis.self_model.health import HealthState
-from jarvis.work.models import WorkItem, WorkPriority, WorkState, WorkType
+from jarvis.work.models import WorkPriority, WorkState
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -128,7 +128,14 @@ def _case(
 ) -> Phase9ReplayCase:
     try:
         return Phase9ReplayCase(case_id, True, operation())
-    except Exception as exc:  # deterministic report must preserve exact failure
+    except (
+        AssertionError,
+        LookupError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ) as exc:
         return Phase9ReplayCase(
             case_id,
             False,
