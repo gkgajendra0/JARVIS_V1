@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pathlib
 from dataclasses import dataclass
+from typing import ClassVar
 
 from .models import ProtectedSurfaceVerdict
 
@@ -47,7 +48,7 @@ class RepairProtectedSurfacePolicy:
     policy_id = "repair.protected_surfaces"
     policy_version = 1
 
-    _EXACT_PROTECTED = {
+    _EXACT_PROTECTED: ClassVar[dict[str, str]] = {
         "pyproject.toml": "repository_build_and_dependency_policy",
         "policies/step3_authority.rego": "authority_policy",
         "src/jarvis/capabilities/authority_bridge.py": "authority_boundary",
