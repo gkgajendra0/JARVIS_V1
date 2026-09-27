@@ -38,7 +38,7 @@ from jarvis.capability_acquisition.verification import (
     CapabilityCandidateError,
     CapabilityCandidateVerifier,
 )
-from jarvis.engineering_change import ChangeState, ChangeStore
+from jarvis.engineering_change import ChangeConflict, ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.gates import GateKind, GateService
 from jarvis.work.development import DevelopmentWorkspaceManager
