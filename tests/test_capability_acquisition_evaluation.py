@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
-
 import pytest
 
 from jarvis.capability_acquisition.evaluation import run_replay_suite
