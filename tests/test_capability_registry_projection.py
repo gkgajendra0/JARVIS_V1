@@ -27,7 +27,6 @@ from jarvis.capability_registry.models import (
     DesiredActivationState,
 )
 from jarvis.capability_registry.projection import (
-    CapabilityEffectiveSnapshot,
     CapabilityManagementMode,
     CapabilityRegistryProjection,
     CapabilitySelfModelProjection,
