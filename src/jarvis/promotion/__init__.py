@@ -2,8 +2,8 @@
 
 from .authority import (
     AuthorizedPromotion,
-    PromotionAuthorizationError,
     PromotionAuthorityBridge,
+    PromotionAuthorizationError,
 )
 from .candidate import (
     PromotionCandidateError,
@@ -12,6 +12,12 @@ from .candidate import (
     VerifiedPromotionCandidate,
 )
 from .compatibility import CompatibilityAssessment, assess_ordinary_compatibility
+from .deployment import (
+    DeploymentCoordinator,
+    DeploymentError,
+    DeploymentResult,
+    RuntimeDeploymentDriver,
+)
 from .evidence import PreparedPromotionEvidence, PromotionEvidenceBuilder
 from .github import (
     GitHubPromotionAdapter,
@@ -21,19 +27,7 @@ from .github import (
     GitHubWorkflowSnapshot,
     VerifiedGitHubEvidence,
 )
-from .deployment import (
-    DeploymentCoordinator,
-    DeploymentError,
-    DeploymentResult,
-    RuntimeDeploymentDriver,
-)
 from .merge import MergeResult, PromotionMergeError, PromotionMerger
-from .observation import (
-    FailureAttribution,
-    ObservationAssessment,
-    ObservationController,
-    ObservationDisposition,
-)
 from .models import (
     CheckEvidence,
     CompatibilityEvidence,
@@ -41,6 +35,12 @@ from .models import (
     PromotionAttempt,
     PromotionAttemptState,
     PromotionEvidenceV1,
+)
+from .observation import (
+    FailureAttribution,
+    ObservationAssessment,
+    ObservationController,
+    ObservationDisposition,
 )
 from .release import (
     DeploymentMetadataStore,
@@ -63,13 +63,13 @@ __all__ = [
     "DeploymentError",
     "DeploymentMetadataStore",
     "DeploymentResult",
+    "FailureAttribution",
     "GitHubPromotionAdapter",
     "GitHubPromotionError",
     "GitHubPromotionPolicy",
     "GitHubPullRequestSnapshot",
     "GitHubWorkflowSnapshot",
     "GitReleaseStager",
-    "FailureAttribution",
     "MergeResult",
     "ObservationAssessment",
     "ObservationController",
@@ -77,14 +77,14 @@ __all__ = [
     "PreparedPromotionEvidence",
     "PromotionAttempt",
     "PromotionAttemptState",
-    "PromotionAuthorizationError",
     "PromotionAuthorityBridge",
+    "PromotionAuthorizationError",
     "PromotionCandidateError",
     "PromotionCandidateVerifier",
     "PromotionEvidenceBuilder",
+    "PromotionEvidenceV1",
     "PromotionMergeError",
     "PromotionMerger",
-    "PromotionEvidenceV1",
     "PromotionStore",
     "RecoveryPhase",
     "RecoveryRecord",
