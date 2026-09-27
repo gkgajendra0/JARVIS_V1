@@ -75,7 +75,7 @@ Phase 4   Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 2
 Phase 5   Secure Autonomous Engineering Substrate — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 6   Unknown-Incident Investigation + Source Repair — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 7   Governed Promotion / Production Verification / Rollback — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
-Phase 8   Capability Package + Registry Lifecycle
+Phase 8   Capability Package + Registry Lifecycle — RESEARCH + ARCHITECTURE COMPLETE / OWNER APPROVAL REQUIRED
 Phase 9   Owner-Requested Capability Acquisition
 Phase 10  Closed-Loop Engineering Learning
 Phase 10A Autonomous Operations Control Plane — whole-JARVIS integration point
