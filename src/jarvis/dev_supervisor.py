@@ -737,7 +737,7 @@ def _resume_pending_phase7_deployment(
         return process, None, "merged promotion evidence artifact is missing or stale"
     try:
         evidence = PromotionEvidenceV1.from_payload(artifact.payload)
-    except ValueError as exc:
+    except (TypeError, ValueError) as exc:
         return process, None, f"merged promotion evidence is invalid: {exc}"
     if evidence.attempt_id != attempt.attempt_id:
         return process, None, "merged promotion evidence attempt identity mismatch"
