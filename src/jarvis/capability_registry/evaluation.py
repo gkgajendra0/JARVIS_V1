@@ -6,10 +6,10 @@ import json
 import os
 import pathlib
 import sqlite3
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from threading import Barrier
-from typing import Callable
 
 from jarvis.capabilities.execution import PreparedCapability
 from jarvis.capabilities.models import (
@@ -32,7 +32,6 @@ from jarvis.capability_registry.contracts import (
     StrictSemVer,
     parse_capability_package_v1,
 )
-from jarvis.capability_registry.schema import capability_package_v1_json_schema
 from jarvis.capability_registry.lifecycle import (
     CapabilityLifecyclePreconditionError,
     CapabilityLifecycleService,
@@ -59,6 +58,7 @@ from jarvis.capability_registry.reconciliation import (
     ReconciliationTrigger,
 )
 from jarvis.capability_registry.retention import CapabilityArtifactRetentionPlanner
+from jarvis.capability_registry.schema import capability_package_v1_json_schema
 from jarvis.capability_registry.source import ReleaseCapabilityPackageSource
 from jarvis.capability_registry.store import (
     CapabilityRegistryIntegrityError,
@@ -505,7 +505,7 @@ def _case(
     case_root.mkdir(parents=True, exist_ok=True)
     try:
         evidence = operation(case_root)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - replay converts any case failure to evidence
         return Phase8ReplayCase(
             case_id=case_id,
             passed=False,
