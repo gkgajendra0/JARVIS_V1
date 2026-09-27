@@ -144,6 +144,8 @@ truth/status but not runtime behavior.
 - **#133** Phase-5 final secure-engineering-substrate acceptance harness and Windows integration corrections; owner-machine accepted 2026-09-27.
 - **#148** Phase-6 deterministic replay + owner-machine acceptance closure, including Windows replay CI and deterministic persistent-SQLite cleanup; owner-machine accepted 2026-09-27.
 - **#150** Phase-7 governed promotion / production verification / rollback implementation, exact-head CI, Windows release/rollback regressions and owner-machine acceptance; owner-approved and merged 2026-09-27.
+- **#154** Phase-8 Capability Package + Registry Lifecycle implementation-focused research and revised architecture; owner-approved 2026-09-27.
+- **#156–#161** Phase-8 slices 8A–8F: package contracts, durable registry, release admission/compatibility, runtime projection/health, Authority lifecycle/rollback, deterministic evaluation and Windows acceptance; final owner-machine acceptance passed 2026-09-27.
 
 Final deterministic Self-Repair acceptance:
 - crash recovery passed;
@@ -290,7 +292,7 @@ old acceptance transcripts and superseded proposals.
 
 At the Phase-4 owner-acceptance documentation head:
 
-- Phase-4 accepted baseline was promoted through PR #118; subsequent accepted Phases 5–7 are now also on protected `main`;
+- Phase-4 accepted baseline was promoted through PR #118; subsequent accepted Phases 5–8 are now also on protected `main`;
 - Phase-2 implementation/acceptance PRs #92–#106: **merged / accepted**;
 - Phase-3 PR #108: **merged / owner-machine accepted 2026-09-25**;
 - Phase-4 documentation freeze: PR #109;
