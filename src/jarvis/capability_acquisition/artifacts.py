@@ -184,6 +184,9 @@ def plan_from_payload(
             verification_contract_ids=tuple(
                 payload.get("verification_contract_ids") or ()
             ),
+            development_test_targets=tuple(
+                payload.get("development_test_targets") or ()
+            ),
             owner_acceptance_contract_ids=tuple(
                 payload.get("owner_acceptance_contract_ids") or ()
             ),
