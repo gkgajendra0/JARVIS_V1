@@ -196,7 +196,9 @@ class CapabilityCompatibilityEvaluator:
                     for record_path in records:
                         payload = json.loads(record_path.read_text(encoding="utf-8"))
                         if not isinstance(payload, dict):
-                            raise ValueError("artifact admission metadata is not an object")
+                            raise ValueError(
+                                "artifact admission metadata is not an object"
+                            )
                         provenance_id = (
                             str(payload.get("provenance_id") or "").strip().casefold()
                         )
