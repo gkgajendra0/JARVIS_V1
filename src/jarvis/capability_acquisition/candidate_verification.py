@@ -273,7 +273,7 @@ class CapabilityAcquisitionCandidateVerifier:
             try:
                 raw = json.loads(target.read_text(encoding="utf-8"))
                 if not isinstance(raw, dict):
-                    raise ValueError("package descriptor must be an object")
+                    raise TypeError("package descriptor must be an object")
                 package = parse_capability_package_v1(raw)
             except (
                 OSError,
@@ -335,7 +335,7 @@ class CapabilityAcquisitionCandidateVerifier:
             try:
                 raw = json.loads(target.read_text(encoding="utf-8"))
                 if not isinstance(raw, dict):
-                    raise ValueError("manifest descriptor must be an object")
+                    raise TypeError("manifest descriptor must be an object")
                 manifest = CapabilityManifest(**raw)  # type: ignore[arg-type]
             except (
                 OSError,
