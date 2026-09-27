@@ -74,9 +74,7 @@ def test_evidence_package_fails_closed_on_unregistered_kind() -> None:
 
     assert package.evidence == ()
     assert package.excluded_evidence[0].evidence_id == unknown.evidence_id
-    assert package.excluded_evidence[0].reason_codes == (
-        "evidence_kind_not_allowed",
-    )
+    assert package.excluded_evidence[0].reason_codes == ("evidence_kind_not_allowed",)
 
 
 def test_evidence_package_enforces_item_and_text_bounds() -> None:
