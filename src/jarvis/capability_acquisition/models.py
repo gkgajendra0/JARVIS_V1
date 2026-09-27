@@ -381,6 +381,13 @@ class AcquisitionCandidateEvaluationV1:
             raise TypeError("candidate must be AcquisitionCandidateV1")
         if type(evaluator_version) is not int or evaluator_version <= 0:
             raise ValueError("evaluator_version must be a positive integer")
+        for field_name, value in (
+            ("evidence_complete", evidence_complete),
+            ("trust_allowed", trust_allowed),
+            ("requirements_compatible", requirements_compatible),
+        ):
+            if type(value) is not bool:
+                raise TypeError(f"{field_name} must be bool")
         requested = _tokens(
             tuple(requested_operations),
             field="requested_operation",
@@ -573,6 +580,7 @@ class CapabilityAcquisitionPlanV1:
                 _tokens(
                     tuple(verification_contract_ids),
                     field="verification_contract_id",
+                    require_nonempty=True,
                 )
             ),
             "owner_acceptance_contract_ids": list(
@@ -592,7 +600,12 @@ class CapabilityAcquisitionPlanV1:
             "proposed_package_version": package_version,
             "rollback_summary": _text(rollback_summary, field="rollback_summary"),
             "evidence_refs": list(
-                _tokens(tuple(evidence_refs), field="evidence_ref", normalized=False)
+                _tokens(
+                    tuple(evidence_refs),
+                    field="evidence_ref",
+                    normalized=False,
+                    require_nonempty=True,
+                )
             ),
         }
         digest = canonical_digest(payload)
