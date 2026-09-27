@@ -399,20 +399,19 @@ def test_two_writers_with_same_generation_produce_one_winner(tmp_path) -> None:
         return f"winner:{result.desired_state.value}"
 
     with ThreadPoolExecutor(max_workers=2) as pool:
-        outcomes = {
-            pool.submit(
-                transition,
-                first_store,
-                DesiredActivationState.ENABLED,
-                "writer_one",
-            ).result(),
-            pool.submit(
-                transition,
-                second_store,
-                DesiredActivationState.DISABLED,
-                "writer_two",
-            ).result(),
-        }
+        first = pool.submit(
+            transition,
+            first_store,
+            DesiredActivationState.ENABLED,
+            "writer_one",
+        )
+        second = pool.submit(
+            transition,
+            second_store,
+            DesiredActivationState.DISABLED,
+            "writer_two",
+        )
+        outcomes = {first.result(), second.result()}
 
     assert "stale" in outcomes
     assert len(outcomes) == 2
