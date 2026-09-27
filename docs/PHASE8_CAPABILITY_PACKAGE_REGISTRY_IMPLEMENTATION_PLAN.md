@@ -2,7 +2,7 @@
 
 ## Status
 
-**OWNER-APPROVED — IMPLEMENTATION IN PROGRESS — 8A–8B DONE / 8C ACTIVE — 2026-09-27**
+**OWNER-APPROVED — IMPLEMENTATION IN PROGRESS — 8A–8C DONE / 8D ACTIVE — 2026-09-27**
 
 ## 8A — package contracts and schema — DONE
 
@@ -32,7 +32,7 @@ Deliver:
 - atomic registry-CAS + lifecycle-event commit;
 - optimistic CAS/concurrent-writer/restart tests.
 
-## 8C — admission and compatibility — IN IMPLEMENTATION
+## 8C — admission and compatibility — DONE
 
 Deliver:
 
@@ -47,7 +47,7 @@ Deliver:
 - quarantine;
 - compatibility evidence digest.
 
-## 8D — runtime projection + health
+## 8D — runtime projection + health — IN IMPLEMENTATION
 
 Deliver:
 
