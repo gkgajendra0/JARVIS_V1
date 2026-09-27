@@ -116,7 +116,7 @@ class ReleaseRecord:
         }
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "ReleaseRecord":
+    def from_payload(cls, payload: dict[str, Any]) -> ReleaseRecord:
         raw_schema = payload.get("schema_versions")
         if not isinstance(raw_schema, dict):
             raise ReleaseError("release record schema_versions is malformed")
@@ -169,7 +169,7 @@ class RecoveryRecord:
         }
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "RecoveryRecord":
+    def from_payload(cls, payload: dict[str, Any]) -> RecoveryRecord:
         candidate = payload.get("candidate")
         lkg = payload.get("lkg")
         if not isinstance(candidate, dict) or not isinstance(lkg, dict):
