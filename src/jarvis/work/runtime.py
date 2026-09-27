@@ -16,6 +16,7 @@ from jarvis.incident_repair.diagnostics import (
     DiagnosticContextResolver,
     build_diagnostic_protocol_executors,
 )
+from jarvis.incident_repair.handoff import IncidentRepairProcessAdapter
 from jarvis.incident_repair.process import UNKNOWN_INCIDENT_REPAIR_PROCESS
 from jarvis.incident_repair.reproduction import (
     DiagnosticRunReproductionExecutor,
@@ -52,6 +53,7 @@ from jarvis.work.dbos_backend import (
     shutdown_dbos_work_runtime,
 )
 from jarvis.work.development import (
+    ChangeStoreDevelopmentRevisionResolver,
     DevelopmentWorkspaceManager,
     build_development_executors,
     build_development_test_runner,
@@ -212,7 +214,9 @@ def build_work_runtime(
         reasoner,
         interactive_gate=interactive_brain_gate,
     )
-    workspace_manager = DevelopmentWorkspaceManager()
+    workspace_manager = DevelopmentWorkspaceManager(
+        revision_resolver=ChangeStoreDevelopmentRevisionResolver(change_store)
+    )
     diagnostic_workspace_manager = DiagnosticWorkspaceManager(
         ChangeStoreDiagnosticRevisionResolver(change_store)
     )
@@ -279,7 +283,11 @@ def build_work_runtime(
     )
     orchestrator = WorkOrchestrator(store, backend)
     orchestrator.reconcile_active()
-    changes = ChangeCoordinator(change_store, backend)
+    changes = ChangeCoordinator(
+        change_store,
+        backend,
+        process_adapters=(IncidentRepairProcessAdapter(),),
+    )
     configure_terminal_reconciliation(changes.reconcile_for_work)
     changes.reconcile_active()
     return WorkRuntime(
