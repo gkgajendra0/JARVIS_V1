@@ -490,10 +490,13 @@ def build_default_self_model() -> SelfModelRegistry:
         ),
         C(
             "capability.registry",
-            "Governed capability package identity and lifecycle-registry contracts.",
+            "Governed capability package identity and durable lifecycle-registry truth.",
             ("src/jarvis/capability_registry",),
             parent_component_id="capability_runtime",
-            tests=("tests/test_capability_registry_contracts.py",),
+            tests=(
+                "tests/test_capability_registry_contracts.py",
+                "tests/test_capability_registry_store.py",
+            ),
             logger_prefixes=("jarvis.capability_registry",),
             docs=(
                 "docs/PHASE8_CAPABILITY_PACKAGE_REGISTRY_ARCHITECTURE.md",

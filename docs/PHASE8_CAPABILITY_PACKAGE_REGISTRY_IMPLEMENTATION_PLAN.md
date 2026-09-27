@@ -2,9 +2,9 @@
 
 ## Status
 
-**OWNER-APPROVED — IMPLEMENTATION IN PROGRESS — 8A ACTIVE — 2026-09-27**
+**OWNER-APPROVED — IMPLEMENTATION IN PROGRESS — 8A DONE / 8B ACTIVE — 2026-09-27**
 
-## 8A — package contracts and schema — IN IMPLEMENTATION
+## 8A — package contracts and schema — DONE
 
 Deliver:
 
@@ -18,7 +18,7 @@ Deliver:
 - forbidden executable/secret fields tests;
 - explicit separation of package-schema version, manifest-contract version and package SemVer.
 
-## 8B — durable registry
+## 8B — durable registry — IN IMPLEMENTATION
 
 Deliver:
 

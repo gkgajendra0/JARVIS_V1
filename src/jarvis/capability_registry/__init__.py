@@ -12,9 +12,37 @@ from jarvis.capability_registry.contracts import (
     StrictSemVer,
     parse_capability_package_v1,
 )
+from jarvis.capability_registry.migration_runner import (
+    CapabilityRegistryMigration,
+    CapabilityRegistryMigrationError,
+    CapabilityRegistryMigrationIntegrityError,
+    CapabilityRegistryMigrationRunner,
+    CapabilityRegistrySchemaTooNewError,
+    discover_capability_registry_migrations,
+)
+from jarvis.capability_registry.models import (
+    AdmittedCapabilityPackage,
+    CapabilityLifecycleEvent,
+    CapabilityLifecycleEventKind,
+    CapabilityRegistryState,
+    DesiredActivationState,
+    PackageDisposition,
+)
 from jarvis.capability_registry.schema import (
     capability_package_v1_json_schema,
     capability_package_v1_schema_digest,
+)
+from jarvis.capability_registry.store import (
+    CapabilityRegistryIntegrityError,
+    CapabilityRegistrySelectionError,
+    CapabilityRegistryStore,
+    CapabilityRegistryStoreError,
+    PackageVersionReuseConflict,
+    StaleRegistryGenerationError,
+    UnknownCapabilityPackageError,
+    UnknownManagedCapabilityError,
+    default_capability_registry_path,
+    default_capability_registry_state_dir,
 )
 
 __all__ = [
@@ -22,12 +50,34 @@ __all__ = [
     "CAPABILITY_PACKAGE_SCHEMA_VERSION_V1",
     "CAPABILITY_RUNTIME_API_ID",
     "CAPABILITY_RUNTIME_API_VERSION_V1",
+    "AdmittedCapabilityPackage",
+    "CapabilityLifecycleEvent",
+    "CapabilityLifecycleEventKind",
     "CapabilityPackageContractError",
     "CapabilityPackageKind",
     "CapabilityPackageV1",
+    "CapabilityRegistryIntegrityError",
+    "CapabilityRegistryMigration",
+    "CapabilityRegistryMigrationError",
+    "CapabilityRegistryMigrationIntegrityError",
+    "CapabilityRegistryMigrationRunner",
+    "CapabilityRegistrySchemaTooNewError",
+    "CapabilityRegistrySelectionError",
+    "CapabilityRegistryState",
+    "CapabilityRegistryStore",
+    "CapabilityRegistryStoreError",
+    "DesiredActivationState",
     "PackageArtifactDescriptorV1",
+    "PackageDisposition",
+    "PackageVersionReuseConflict",
+    "StaleRegistryGenerationError",
     "StrictSemVer",
+    "UnknownCapabilityPackageError",
+    "UnknownManagedCapabilityError",
     "capability_package_v1_json_schema",
     "capability_package_v1_schema_digest",
+    "default_capability_registry_path",
+    "default_capability_registry_state_dir",
+    "discover_capability_registry_migrations",
     "parse_capability_package_v1",
 ]

@@ -162,6 +162,7 @@ where = ["src"]
 "jarvis.identity" = ["manifests/*.json"]
 "jarvis.memory" = ["migrations/*.sql"]
 "jarvis.incidents" = ["migrations/*.sql"]
+"jarvis.capability_registry" = ["migrations/*.sql"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
