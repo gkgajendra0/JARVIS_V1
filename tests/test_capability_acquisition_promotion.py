@@ -303,7 +303,9 @@ def _phase8_stack(tmp_path, release: ReleaseRecord, manifest: CapabilityManifest
 
 
 def test_phase7_promotion_verifier_uses_phase9_candidate_artifact(tmp_path) -> None:
-    changes, promotions, change, candidate, acceptance, _ = _change_and_attempt(tmp_path)
+    changes, promotions, change, candidate, acceptance, _ = _change_and_attempt(
+        tmp_path
+    )
     _set_change_state(changes, change.change_id, ChangeState.READY_FOR_PROMOTION)
 
     verified, attempt = PromotionCandidateVerifier(
@@ -369,7 +371,9 @@ def test_promoted_package_is_admitted_without_auto_activation(
     assert state.desired_state.value == "disabled"
     assert not state.has_selection
     assert result.admission_artifact.payload["auto_activated"] is False
-    assert result.admission_artifact.payload["effective_enabled_after_admission"] is False
+    assert (
+        result.admission_artifact.payload["effective_enabled_after_admission"] is False
+    )
     assert result.lifecycle_proposal.proposed_actions == (
         "select_version",
         "enable",
