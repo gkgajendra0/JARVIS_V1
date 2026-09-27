@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from jarvis.capabilities.local_reads import default_project_root
+from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.sandbox import (
     SandboxMountBinding,
     SandboxPolicyError,
@@ -33,6 +34,7 @@ from jarvis.work.store import default_work_state_dir
 _MAX_READ_CHARS = 40_000
 _MAX_WRITE_BYTES = 1_000_000
 _MAX_TEST_SECONDS = 300.0
+_GIT_OBJECT = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 _BLOCKED_NAMES = frozenset(
     {
         ".env",
@@ -58,6 +60,38 @@ _SECRET_PATTERNS = (
 
 class DevelopmentWorkspaceError(RuntimeError):
     pass
+
+
+class DevelopmentRevisionResolver(Protocol):
+    def revision_for(self, work_id: str) -> str | None: ...
+
+
+class ChangeStoreDevelopmentRevisionResolver:
+    """Resolve an optional immutable base SHA from the approved architecture."""
+
+    def __init__(self, store: ChangeStore) -> None:
+        if not isinstance(store, ChangeStore):
+            raise TypeError("store must be ChangeStore")
+        self._store = store
+
+    def revision_for(self, work_id: str) -> str | None:
+        stage = self._store.stage_for_work(str(work_id).strip())
+        if stage is None or not stage.plan_artifact_id:
+            return None
+        artifact = self._store.get_artifact(stage.plan_artifact_id)
+        if artifact is None or artifact.kind != "architecture":
+            raise DevelopmentWorkspaceError(
+                "development stage references missing architecture"
+            )
+        value = artifact.payload.get("source_revision")
+        if value is None:
+            return None
+        revision = str(value).strip().lower()
+        if _GIT_OBJECT.fullmatch(revision) is None:
+            raise DevelopmentWorkspaceError(
+                "approved architecture source_revision is not an exact Git object id"
+            )
+        return revision
 
 
 def _contains_secret(text: str) -> bool:
@@ -98,6 +132,7 @@ class DevelopmentWorkspaceManager:
         *,
         repository_root: str | pathlib.Path | None = None,
         workspace_root: str | pathlib.Path | None = None,
+        revision_resolver: DevelopmentRevisionResolver | None = None,
     ) -> None:
         self.repository_root = pathlib.Path(
             repository_root or default_project_root()
@@ -110,6 +145,7 @@ class DevelopmentWorkspaceManager:
                 "JARVIS source root is not a Git repository"
             )
         self.workspace_root.mkdir(parents=True, exist_ok=True)
+        self._revision_resolver = revision_resolver
         self._disabled_hooks_root = (
             self.workspace_root / ".disabled-git-hooks"
         ).resolve()
@@ -161,9 +197,61 @@ class DevelopmentWorkspaceManager:
             ) from exc
         return DevelopmentWorkspace(work_id=work_id, branch=branch, path=path)
 
+    def _base_revision(self, work_id: str) -> str | None:
+        if self._revision_resolver is None:
+            return None
+        value = self._revision_resolver.revision_for(work_id)
+        if value is None:
+            return None
+        revision = str(value).strip().lower()
+        if _GIT_OBJECT.fullmatch(revision) is None:
+            raise DevelopmentWorkspaceError(
+                "development base revision must be an exact Git object id"
+            )
+        exists = self._run(
+            self.repository_root,
+            "cat-file",
+            "-e",
+            f"{revision}^{{commit}}",
+            check=False,
+        )
+        if exists.returncode != 0:
+            raise DevelopmentWorkspaceError(
+                "approved development base revision is unavailable"
+            )
+        return revision
+
+    def _assert_base_ancestor(
+        self,
+        workspace: DevelopmentWorkspace,
+        base_revision: str | None,
+    ) -> None:
+        if base_revision is None:
+            return
+        location = (
+            workspace.path
+            if workspace.path.is_dir()
+            else self.repository_root
+        )
+        target = "HEAD" if workspace.path.is_dir() else workspace.branch
+        result = self._run(
+            location,
+            "merge-base",
+            "--is-ancestor",
+            base_revision,
+            target,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise DevelopmentWorkspaceError(
+                "development workspace is not descended from approved source revision"
+            )
+
     def ensure(self, work_id: str) -> DevelopmentWorkspace:
         workspace = self.workspace_for(work_id)
+        base_revision = self._base_revision(work_id)
         if (workspace.path / ".git").exists() or (workspace.path / ".git").is_file():
+            self._assert_base_ancestor(workspace, base_revision)
             return workspace
         if workspace.path.exists():
             raise DevelopmentWorkspaceError(
@@ -180,12 +268,21 @@ class DevelopmentWorkspaceManager:
         )
         args = ["worktree", "add"]
         if branch_check.returncode == 0:
+            self._assert_base_ancestor(workspace, base_revision)
             args.extend([str(workspace.path), workspace.branch])
         else:
-            args.extend(["-b", workspace.branch, str(workspace.path), "HEAD"])
+            args.extend(
+                [
+                    "-b",
+                    workspace.branch,
+                    str(workspace.path),
+                    base_revision or "HEAD",
+                ]
+            )
         self._run(self.repository_root, *args, timeout=120.0)
         if not workspace.path.is_dir():
             raise DevelopmentWorkspaceError("Git worktree creation was not verified")
+        self._assert_base_ancestor(workspace, base_revision)
         return workspace
 
     def resolve(
