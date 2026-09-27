@@ -89,7 +89,9 @@ def test_phase9_owner_voice_tools_are_exposed() -> None:
     assert hasattr(WorkAgentTools, "execute_change_promotion")
 
 
-def test_phase9_voice_instructions_route_explicit_acquisition_to_governed_tool() -> None:
+def test_phase9_voice_instructions_route_explicit_acquisition_to_governed_tool() -> (
+    None
+):
     assert "start_capability_acquisition" in INSTRUCTIONS
     assert "target_hints" in INSTRUCTIONS
     assert "superficially similar local operation" in INSTRUCTIONS
