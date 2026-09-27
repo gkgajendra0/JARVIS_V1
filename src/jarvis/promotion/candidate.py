@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from jarvis.engineering_change.models import ChangeArtifact, ChangeConflict, ChangeState
 from jarvis.engineering_change.store import ChangeStore
 
+from .models import PromotionAttemptState
 from .store import PromotionStore
 
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -207,10 +208,7 @@ class PromotionCandidateVerifier:
             if attempt.state.value == "created":
                 attempt = self._promotions.transition(
                     attempt.attempt_id,
-                    state=__import__(
-                        "jarvis.promotion.models",
-                        fromlist=["PromotionAttemptState"],
-                    ).PromotionAttemptState.STALE,
+                    state=PromotionAttemptState.STALE,
                     expected_version=attempt.version,
                     reason=(
                         "candidate base does not equal current protected main; "
