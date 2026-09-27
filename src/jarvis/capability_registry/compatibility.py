@@ -195,10 +195,19 @@ class CapabilityCompatibilityEvaluator:
                     )
                     for record_path in records:
                         payload = json.loads(record_path.read_text(encoding="utf-8"))
-                        provenance_id = str(payload.get("provenance_id") or "").strip().casefold()
+                        if not isinstance(payload, dict):
+                            raise ValueError("artifact admission metadata is not an object")
+                        provenance_id = (
+                            str(payload.get("provenance_id") or "").strip().casefold()
+                        )
                         if provenance_id:
                             observed.add(provenance_id)
-                except (OSError, json.JSONDecodeError, ArtifactStoreError):
+                except (
+                    OSError,
+                    ValueError,
+                    json.JSONDecodeError,
+                    ArtifactStoreError,
+                ):
                     reasons.add(CompatibilityReason.ARTIFACT_PROVENANCE_MISSING)
                     continue
                 required = {item.casefold() for item in descriptor.provenance_refs}
