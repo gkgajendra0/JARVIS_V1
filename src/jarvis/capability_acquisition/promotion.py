@@ -351,3 +351,59 @@ class CapabilityAcquisitionReleaseBridge:
             lifecycle_proposal=proposal,
             lifecycle_artifact=lifecycle_artifact,
         )
+
+
+
+def ensure_capability_release_bridge_current(
+    changes: ChangeStore,
+    deployment: DeploymentMetadataStore,
+    change_id: str,
+    *,
+    attempt_id: str,
+) -> ChangeArtifact:
+    """Require exact active-release Phase-8 admission before Phase-7 close."""
+
+    change = changes.require(change_id)
+    if (
+        change.process_key != OWNER_CAPABILITY_ACQUISITION_PROCESS.key
+        or change.process_version != OWNER_CAPABILITY_ACQUISITION_PROCESS.version
+    ):
+        raise CapabilityAcquisitionReleaseBridgeError(
+            "wrong_process",
+            "change is not Phase-9 capability acquisition",
+        )
+    candidate = changes.latest_artifact(change_id, "capability_candidate")
+    admission = changes.latest_artifact(change_id, "capability_package_admission")
+    lifecycle = changes.latest_artifact(change_id, "capability_lifecycle_proposal")
+    if candidate is None or admission is None or lifecycle is None:
+        raise CapabilityAcquisitionReleaseBridgeError(
+            "release_bridge_evidence_missing",
+            "Phase-9 close requires package admission and lifecycle proposal evidence",
+        )
+    active = deployment.active()
+    if active is None or active.promotion_attempt_id != str(attempt_id).strip():
+        raise CapabilityAcquisitionReleaseBridgeError(
+            "active_release_mismatch",
+            "current active release does not match Phase-9 promotion attempt",
+        )
+    if (
+        admission.payload.get("attempt_id") != active.promotion_attempt_id
+        or admission.payload.get("active_release_sha") != active.release_sha
+        or admission.payload.get("candidate_artifact_id") != candidate.artifact_id
+        or admission.payload.get("candidate_artifact_digest") != candidate.digest
+        or admission.payload.get("auto_activated") is not False
+    ):
+        raise CapabilityAcquisitionReleaseBridgeError(
+            "release_bridge_evidence_stale",
+            "Phase-9 package admission evidence is stale or unsafe",
+        )
+    if (
+        lifecycle.payload.get("admission_artifact_id") != admission.artifact_id
+        or lifecycle.payload.get("admission_artifact_digest") != admission.digest
+        or lifecycle.payload.get("authority_required") is not True
+    ):
+        raise CapabilityAcquisitionReleaseBridgeError(
+            "lifecycle_proposal_stale",
+            "Phase-9 lifecycle proposal is stale or bypasses Authority",
+        )
+    return admission
