@@ -5,10 +5,10 @@ import pytest
 from jarvis.engineering_change import ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.incident_repair import (
+    UNKNOWN_INCIDENT_REPAIR_PROCESS,
     IncidentRepairAdmissionBlocked,
     IncidentRepairCoordinator,
     IncidentRepairTrigger,
-    UNKNOWN_INCIDENT_REPAIR_PROCESS,
 )
 from jarvis.incidents import IncidentService, SqliteIncidentStore
 from jarvis.incidents.models import EvidenceReference, IncidentStatus
