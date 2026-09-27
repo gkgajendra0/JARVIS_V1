@@ -180,6 +180,7 @@ def plan_from_payload(
             sandbox_profile_ids=tuple(payload.get("sandbox_profile_ids") or ()),
             discovery_scopes=tuple(payload.get("discovery_scopes") or ()),
             network_scopes=tuple(payload.get("network_scopes") or ()),
+            device_scopes=tuple(payload.get("device_scopes") or ()),
             verification_contract_ids=tuple(
                 payload.get("verification_contract_ids") or ()
             ),
