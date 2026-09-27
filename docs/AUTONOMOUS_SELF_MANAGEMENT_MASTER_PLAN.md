@@ -456,19 +456,48 @@ This architecture adapts established ideas rather than inventing autonomy as
 These references guide principles. They are not claims that current JARVIS
 implements every control in those systems.
 
-## 14. Documentation authority
+## 14. Advanced intelligence extension: Universal Knowledge and Discovery
+
+The owner approved an additional long-horizon intelligence goal on 2026-09-27:
+JARVIS should eventually be able to draw on as much accessible human knowledge as
+possible across domains and, beyond answering known questions, systematically investigate
+the boundary between known and unknown.
+
+This extension has two parts:
+
+1. **Universal Knowledge Intelligence** — a shared, model-independent Knowledge Fabric
+   that can retrieve, verify, structure, connect, retain, refresh and reason over
+   source-backed human knowledge and JARVIS's own verified experience.
+2. **Discovery Intelligence** — a governed research system that uses that Knowledge
+   Fabric to identify gaps/anomalies/contradictions, generate competing hypotheses,
+   aggressively falsify them, check prior art, run reproducible computational and
+   eventually physical experiments, and learn from results.
+
+This is **not** permission to claim omniscience, treat model output as fact, download the
+internet into one datastore, or begin speculative discovery work before the truth,
+provenance, sandbox, learning and self-evolution foundations are mature.
+
+The authoritative detailed plan is
+`UNIVERSAL_KNOWLEDGE_AND_DISCOVERY_MASTER_PLAN.md`.
+
+This advanced intelligence extension is subordinate to the constitutional self-management
+north star in this document. It does not grant JARVIS any additional authority and does not
+interrupt or renumber the active governed autonomous-engineering program.
+
+## 15. Documentation authority
 
 Canonical hierarchy after owner approval:
 
 1. `PRODUCT.md` — durable product identity, behavioral contract and capability catalogue.
 2. `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md` — top-level operating north star.
-3. `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` — autonomous-engineering subsystem.
-4. `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — specialized repair/evolution program.
-5. `ROADMAP.md` — numbered product sequence and approved cross-cutting sequencing.
-6. `CURRENT_PLAN.md` — active work only.
-7. `CURRENT_ARCHITECTURE.md` — accepted running architecture only.
-8. `PROJECT_STATE.md` — accepted/deferred/superseded/rejected ledger.
-9. phase-specific research/architecture/implementation/acceptance documents.
+3. `UNIVERSAL_KNOWLEDGE_AND_DISCOVERY_MASTER_PLAN.md` — subordinate advanced knowledge/discovery north star.
+4. `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` — autonomous-engineering subsystem.
+5. `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — specialized repair/evolution program.
+6. `ROADMAP.md` — numbered product sequence and approved cross-cutting sequencing.
+7. `CURRENT_PLAN.md` — active work only.
+8. `CURRENT_ARCHITECTURE.md` — accepted running architecture only.
+9. `PROJECT_STATE.md` — accepted/deferred/superseded/rejected ledger.
+10. phase-specific research/architecture/implementation/acceptance documents.
 
 Rules:
 
@@ -480,7 +509,7 @@ Rules:
 - do not create competing north-star documents; amend this one and PRODUCT.md if the
   owner changes the top-level goal.
 
-## 15. North-star acceptance test
+## 16. North-star acceptance test
 
 The system approaches the intended end state only if the answer increasingly becomes
 "yes" to this question:
