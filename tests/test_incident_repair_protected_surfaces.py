@@ -47,6 +47,10 @@ def test_ordinary_source_and_test_paths_are_clear() -> None:
         (".github/workflows/code-quality.yml", "repository_governance_ci"),
         ("src/jarvis/promotion/store.py", "promotion_and_deployment_governance"),
         (
+            "src/jarvis/capabilities/runtime.py",
+            "capability_lifecycle_governance",
+        ),
+        (
             "src/jarvis/capability_registry/contracts.py",
             "capability_lifecycle_governance",
         ),
