@@ -208,15 +208,11 @@ class PromotionCandidateVerifier:
                 "EngineeringChange is not ready for promotion",
             )
         acceptance = self._changes.latest_artifact(change_id, "acceptance")
-        candidate_kind = {
-            "unknown_incident_repair": "source_repair_candidate",
-            "owner_capability_acquisition": "capability_candidate",
-        }.get(change.process_key)
-        if candidate_kind is None:
-            raise PromotionCandidateError(
-                "unsupported_candidate_process",
-                f"promotion has no candidate artifact contract for {change.process_key}",
-            )
+        candidate_kind = (
+            "capability_candidate"
+            if change.process_key == "owner_capability_acquisition"
+            else "source_repair_candidate"
+        )
         candidate = self._changes.latest_artifact(change_id, candidate_kind)
         if acceptance is None or candidate is None:
             raise PromotionCandidateError(
