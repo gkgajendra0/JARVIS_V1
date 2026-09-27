@@ -19,6 +19,7 @@ from typing import Any
 
 import psutil
 
+from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.dev_control import (
     DEV_CONTROL_HOST_ENV,
     DEV_CONTROL_PORT_ENV,
@@ -665,7 +666,10 @@ def _phase7_promotion_stores() -> tuple[ChangeStore, PromotionStore]:
     )
     changes = ChangeStore(
         work,
-        processes=(UNKNOWN_INCIDENT_REPAIR_PROCESS,),
+        processes=(
+            UNKNOWN_INCIDENT_REPAIR_PROCESS,
+            OWNER_CAPABILITY_ACQUISITION_PROCESS,
+        ),
     )
     return changes, PromotionStore(changes)
 
