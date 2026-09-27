@@ -169,7 +169,9 @@ class GitHubPromotionPolicy:
                 "CI did not run for the exact candidate head",
             )
         checks = {item.context: item for item in workflow.checks}
-        missing = tuple(\n            context for context in self.required_contexts if context not in checks\n        )
+        missing = tuple(
+            context for context in self.required_contexts if context not in checks
+        )
         if missing:
             raise GitHubPromotionError(
                 "required_ci_missing",
