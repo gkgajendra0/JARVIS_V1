@@ -335,7 +335,7 @@ ACCEPTED
   Phase 7   Governed Promotion / Production Verification / Rollback
 
 CURRENT / NEXT
-  Phase 8   Capability Package + Registry Lifecycle — research + architecture
+  Phase 8   Capability Package + Registry Lifecycle — architecture ready / owner approval required
 
 THEN
   Phase 9   Owner-Requested Capability Acquisition
