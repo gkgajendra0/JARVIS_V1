@@ -255,7 +255,12 @@ def load_owner_source_registry(
         raise OwnerSourceRegistryError("owner source registry sources are invalid")
     evidence = tuple(_source(item) for item in sources)
     identities = tuple(
-        (item.source_kind, item.source_identity, item.source_version, item.source_digest)
+        (
+            item.source_kind,
+            item.source_identity,
+            item.source_version,
+            item.source_digest,
+        )
         for item in evidence
     )
     if len(identities) != len(set(identities)):
