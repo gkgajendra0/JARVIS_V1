@@ -330,7 +330,7 @@ class PromotionEvidenceV1:
         raw_checks = payload.get("required_checks")
         raw_compatibility = payload.get("compatibility")
         if not isinstance(raw_checks, list) or not isinstance(raw_compatibility, dict):
-            raise ValueError("promotion evidence payload is malformed")
+            raise TypeError("promotion evidence payload is malformed")
         try:
             checks = tuple(
                 CheckEvidence(
