@@ -586,7 +586,9 @@ def _full_candidate_fixture(root: pathlib.Path) -> dict[str, object]:
             development_work=development,
         )
 
-        main_after = _git(repository_root, "rev-parse", "HEAD").stdout.strip().casefold()
+        main_after = (
+            _git(repository_root, "rev-parse", "HEAD").stdout.strip().casefold()
+        )
         status_after = _git(repository_root, "status", "--porcelain=v1").stdout
         return {
             **result,
@@ -803,7 +805,9 @@ def _case_restart_after_approval(root: pathlib.Path) -> dict[str, object]:
             disposition=DiagnosisDisposition.SUPPORTED_REPAIR,
             supported=True,
         )
-        architecture = changes.latest_artifact(admitted.change.change_id, "architecture")
+        architecture = changes.latest_artifact(
+            admitted.change.change_id, "architecture"
+        )
         if architecture is None:
             raise Phase6EvaluationError("architecture missing before restart")
         gate = gates.present(
@@ -903,6 +907,7 @@ def _case_restart_during_development(root: pathlib.Path) -> dict[str, object]:
         }
     finally:
         incident_store.close()
+
 
 def _case_failed_candidate_tests() -> dict[str, object]:
     work = WorkItem(
@@ -1030,7 +1035,9 @@ def _case_known_repair_priority(root: pathlib.Path) -> dict[str, object]:
             admission.admit(trigger, repair_trigger=repair_trigger)
         except IncidentRepairAdmissionBlocked as exc:
             return {"blocked": True, "reason": str(exc)}
-        raise Phase6EvaluationError("known deterministic repair did not retain priority")
+        raise Phase6EvaluationError(
+            "known deterministic repair did not retain priority"
+        )
     finally:
         if known_incident_store is not None:
             known_incident_store.close()
@@ -1059,7 +1066,9 @@ def _case_duplicate_trigger(root: pathlib.Path) -> dict[str, object]:
         if first.change.change_id != second.change.change_id:
             raise Phase6EvaluationError("duplicate trigger created duplicate change")
         if first.diagnostics_work_id != second.diagnostics_work_id:
-            raise Phase6EvaluationError("duplicate trigger created duplicate diagnostics")
+            raise Phase6EvaluationError(
+                "duplicate trigger created duplicate diagnostics"
+            )
         return {
             "change_id": first.change.change_id,
             "diagnostics_work_id": first.diagnostics_work_id,
