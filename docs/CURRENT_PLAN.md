@@ -45,7 +45,7 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 The active cross-cutting engineering boundary is now:
 
-**Phase 7 — Governed Promotion / Production Verification / Rollback — NEXT FOR RESEARCH + ARCHITECTURE**
+**Phase 8 — Capability Package + Registry Lifecycle — NEXT FOR RESEARCH + ARCHITECTURE**
 
 Phase 5 Secure Autonomous Engineering Substrate is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Its final evidence is recorded in `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`. PR #133 merged to protected main at `78f25fb192b926ee30a028cfc02c829e1197cc9e`.
 
@@ -66,7 +66,26 @@ PR #148 merged the accepted Phase-6 implementation to protected `main` as `aaa1f
 
 The accepted Phase-6 path adds bounded read-only diagnostics, typed diagnosis evidence, exact owner-gated architecture handoff, source-revision-pinned isolated development, post-edit verification, protected-surface fail-closed policy, exact candidate provenance and deterministic replay/Windows acceptance. It deliberately stops before protected-main promotion/deployment.
 
-**Current state: Phase 7 is not implementation-authorized yet.** The next action is Phase-7 research and architecture under the permanent engineering rule; implementation requires a new owner architecture approval.
+Phase 7 Governed Promotion / Production Verification / Rollback is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**.
+
+Canonical Phase-7 documents are:
+
+- `PHASE7_GOVERNED_PROMOTION_RESEARCH.md`;
+- `PHASE7_GOVERNED_PROMOTION_ARCHITECTURE.md`;
+- `PHASE7_GOVERNED_PROMOTION_IMPLEMENTATION_PLAN.md`;
+- `PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`.
+
+Accepted implementation head: `19beb542295fa4e3ab23407564847a82d8621258`.
+
+Owner-machine evidence digest: `9fb2bb940a855c1d0ab32e444e00d7e922bd66d5edd7915c31efe6dd5fa77a9b`.
+
+Replay digest: `07f53707a42760f53b6dadb4fc8740ea4553437d33551038b2ba0f726c0356ae`.
+
+PR #150 was explicitly owner-approved and merged to protected `main` as `d2c7dc360386dab22bff6406d405b298601bff81`.
+
+The accepted Phase-7 path adds exact candidate/PR/CI binding, digest-bound owner promotion, one-shot Authority execution, exact-head protected merge, immutable Windows release staging, runtime release identity verification, bounded observation and compatibility-safe rollback. It does not grant JARVIS ownership authority.
+
+**Current state: Phase 8 is not implementation-authorized yet.** The next action is Phase-8 repository inspection, technology research and architecture under the permanent engineering rule; implementation requires a new owner architecture approval.
 
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
@@ -107,11 +126,11 @@ Phase 3  EngineeringChange lifecycle / mission orchestration — DONE / OWNER-MA
 Phase 4  Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 2026-09-26
 Phase 5  Secure autonomous engineering substrate — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 6  Unknown-incident investigation + source repair — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
-Phase 7  Governed promotion / production verification / rollback — NEXT / RESEARCH + ARCHITECTURE REQUIRED
-Phase 8  Capability package + registry lifecycle
+Phase 7  Governed promotion / production verification / rollback — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
+Phase 8  Capability package + registry lifecycle — NEXT / RESEARCH + ARCHITECTURE REQUIRED
 Phase 9  Owner-requested capability acquisition
 Phase 10 Closed-loop engineering learning
-Phase 10A Autonomous Operations Control Plane — approved future integration point; not active during Phase 5
+Phase 10A Autonomous Operations Control Plane — approved future integration point; not active yet
 Phase 11 Autonomous capability-gap / weakness detection
 Phase 12 Shadow improvement + baseline benchmarking
 Phase 13 Engineering curriculum + specialist model evaluation
@@ -160,9 +179,13 @@ They remain separate unless evidence shows that one directly blocks the next Pha
 - `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ARCHITECTURE.md` — owner-approved Phase-6 stable contracts/invariants.
 - `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_IMPLEMENTATION_PLAN.md` — completed Phase-6 implementation slices and acceptance matrix.
 - `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md` — canonical Phase-6 owner-machine acceptance record.
+- `PHASE7_GOVERNED_PROMOTION_RESEARCH.md` — Phase-7 technology/repository research and dispositions.
+- `PHASE7_GOVERNED_PROMOTION_ARCHITECTURE.md` — owner-approved Phase-7 stable contracts/invariants.
+- `PHASE7_GOVERNED_PROMOTION_IMPLEMENTATION_PLAN.md` — completed Phase-7 implementation slices and acceptance matrix.
+- `PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md` — canonical Phase-7 owner-machine acceptance record.
 
 Historical experiments, old acceptance transcripts and superseded research remain available through Git history rather than becoming competing planning truth.
 
 ## Immediate next action
 
-**Begin Phase 7 research and architecture for governed promotion / production verification / rollback. Do not begin Phase-7 implementation until the resulting architecture receives explicit owner approval.**
+**Begin Phase 8 repository inspection, technology research and architecture for Capability Package + Registry Lifecycle. Do not begin Phase-8 implementation until the resulting architecture receives explicit owner approval.**
