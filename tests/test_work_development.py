@@ -64,6 +64,35 @@ def _development_item() -> WorkItem:
     )
 
 
+def test_workspace_can_pin_exact_approved_base_revision(
+    git_project: Path,
+    tmp_path: Path,
+) -> None:
+    approved = _git(git_project, "rev-parse", "HEAD").stdout.strip().lower()
+    (git_project / "module.py").write_text("VALUE = 99\n", encoding="utf-8")
+    _git(git_project, "add", "module.py")
+    _git(git_project, "commit", "-m", "advance protected checkout")
+    latest = _git(git_project, "rev-parse", "HEAD").stdout.strip().lower()
+    assert latest != approved
+
+    class Resolver:
+        def revision_for(self, work_id: str) -> str | None:
+            assert work_id == "work_dev_test"
+            return approved
+
+    manager = DevelopmentWorkspaceManager(
+        repository_root=git_project,
+        workspace_root=tmp_path / "worktrees",
+        base_revision_resolver=Resolver(),
+    )
+    workspace = manager.ensure("work_dev_test")
+
+    assert _git(workspace.path, "merge-base", "--is-ancestor", approved, "HEAD").returncode == 0
+    assert _git(workspace.path, "rev-parse", "HEAD").stdout.strip().lower() == approved
+    assert (workspace.path / "module.py").read_text(encoding="utf-8") == "VALUE = 1\n"
+    assert (git_project / "module.py").read_text(encoding="utf-8") == "VALUE = 99\n"
+
+
 def test_workspace_is_separate_from_protected_checkout(
     git_project: Path,
     tmp_path: Path,
