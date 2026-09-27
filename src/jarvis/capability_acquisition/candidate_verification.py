@@ -361,6 +361,19 @@ class CapabilityAcquisitionCandidateVerifier:
                 "candidate must contain exactly one manifest matching the package digest",
             )
         manifest, relative = matches[0]
+        requested_operations = set(
+            self._store.latest_artifact(
+                work.source_session_id.removeprefix("change:"),
+                "architecture",
+            ).payload.get("requested_operations") or ()
+        ) if work.source_session_id.startswith("change:") else set()
+        if requested_operations and not requested_operations.issubset(
+            set(manifest.operations)
+        ):
+            raise CapabilityAcquisitionCandidateError(
+                "manifest_operation_mismatch",
+                "candidate manifest does not cover owner-requested operations",
+            )
         if (
             manifest.capability_id != package.capability_id
             or manifest.capability_version != package.package_version
