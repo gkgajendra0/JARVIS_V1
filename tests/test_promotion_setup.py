@@ -62,9 +62,7 @@ class _FakeSecretStore:
 
 def _pem(path: Path, marker: bytes = b"phase9-private") -> bytes:
     payload = (
-        b"-----BEGIN PRIVATE KEY-----\n"
-        + marker
-        + b"\n-----END PRIVATE KEY-----\n"
+        b"-----BEGIN PRIVATE KEY-----\n" + marker + b"\n-----END PRIVATE KEY-----\n"
     )
     path.write_bytes(payload)
     return payload
