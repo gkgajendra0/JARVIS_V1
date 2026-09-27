@@ -550,7 +550,6 @@ def test_bridge_blocks_package_when_phase8_provider_is_missing(
         ).reconcile(change.change_id, attempt_id=attempt.attempt_id)
 
 
-
 def test_release_bridge_current_rejects_candidate_supersession(
     monkeypatch,
     tmp_path,
