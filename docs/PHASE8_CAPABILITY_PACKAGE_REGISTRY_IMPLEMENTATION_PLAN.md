@@ -2,7 +2,7 @@
 
 ## Status
 
-**OWNER-APPROVED — IMPLEMENTATION IN PROGRESS — 8A–8D DONE / 8E ACTIVE — 2026-09-27**
+**OWNER-APPROVED — IMPLEMENTATION IN PROGRESS — 8A–8E DONE / 8F ACTIVE — 2026-09-27**
 
 ## 8A — package contracts and schema — DONE
 
@@ -66,7 +66,7 @@ Deliver:
 - no SQLite read on every normal capability invocation solely for generation checking;
 - no dynamic Python reload.
 
-## 8E — lifecycle Authority + version rollback — IN IMPLEMENTATION
+## 8E — lifecycle Authority + version rollback — DONE
 
 Deliver:
 
@@ -83,7 +83,7 @@ Deliver:
 - restart/idempotency tests;
 - DBOS explicitly outside canonical registry truth; use only if a future lifecycle operation genuinely needs durable multi-step orchestration.
 
-## 8F — evaluation and acceptance
+## 8F — evaluation and acceptance — IN IMPLEMENTATION
 
 Deliver:
 
