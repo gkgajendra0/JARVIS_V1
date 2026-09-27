@@ -415,6 +415,26 @@ class AcquisitionFinalizeExecutor:
                     "items": {"type": "string", "minLength": 1, "maxLength": 1000},
                     "maxItems": 100,
                 },
+                "secret_scopes": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 180},
+                    "maxItems": 50,
+                },
+                "network_scopes": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 1000},
+                    "maxItems": 50,
+                },
+                "device_scopes": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 1000},
+                    "maxItems": 50,
+                },
+                "discovery_scopes": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 180},
+                    "maxItems": 50,
+                },
                 "sandbox_profile_ids": {
                     "type": "array",
                     "items": {"type": "string", "minLength": 1, "maxLength": 180},
@@ -528,10 +548,31 @@ class AcquisitionFinalizeExecutor:
                     *(parameters.get("dependency_refs") or ()),
                 }
             ),
-            secret_scopes=candidate.secret_scopes,
+            secret_scopes=tuple(
+                {
+                    *candidate.secret_scopes,
+                    *(parameters.get("secret_scopes") or ()),
+                }
+            ),
             sandbox_profile_ids=tuple(parameters.get("sandbox_profile_ids") or ()),
-            discovery_scopes=candidate.discovery_scopes,
-            network_scopes=candidate.network_scopes,
+            discovery_scopes=tuple(
+                {
+                    *candidate.discovery_scopes,
+                    *(parameters.get("discovery_scopes") or ()),
+                }
+            ),
+            network_scopes=tuple(
+                {
+                    *candidate.network_scopes,
+                    *(parameters.get("network_scopes") or ()),
+                }
+            ),
+            device_scopes=tuple(
+                {
+                    *candidate.device_scopes,
+                    *(parameters.get("device_scopes") or ()),
+                }
+            ),
             verification_contract_ids=tuple(
                 {
                     *candidate.verification_requirements,
