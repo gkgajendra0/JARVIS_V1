@@ -18,6 +18,9 @@ from jarvis.capabilities.self_awareness_reads import SelfAwarenessReadExecutor
 from jarvis.capability_acquisition.runtime_context import (
     CapabilityRuntimeAcquisitionContextProvider,
 )
+from jarvis.capability_registry.runtime_composition import (
+    build_package_managed_runtime_stack,
+)
 from jarvis.config import JarvisConfig
 from jarvis.health_adapters import (
     CapabilityExecutionHealthObserver,
@@ -53,6 +56,7 @@ from jarvis.memory.query_interpreters import build_memory_query_interpreter
 from jarvis.memory.release_guard import build_memory_release_guard
 from jarvis.memory.runtime import build_default_memory_runtime
 from jarvis.preflight import StartupPreflightError, require_startup_preflight
+from jarvis.promotion.release import load_active_release_for_startup
 from jarvis.provider_resilience import ProviderResilienceState
 from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.vision.health_observers import (
@@ -286,16 +290,39 @@ def build_production_voice_runtime(
         if self_awareness is not None
         else None
     )
-    extra_executors = (
+    package_stack = None
+    try:
+        active_release = load_active_release_for_startup()
+        if active_release is not None:
+            package_stack = build_package_managed_runtime_stack(
+                active_release,
+            )
+    except Exception as exc:  # noqa: BLE001 - package-managed capabilities fail closed
+        LOGGER.exception(
+            "Package-managed capability runtime is unavailable; acquired "
+            "capabilities remain disabled: %s",
+            type(exc).__name__,
+        )
+        package_stack = None
+
+    self_awareness_executors = (
         (SelfAwarenessReadExecutor(self_awareness),)
         if self_awareness is not None
         else ()
     )
+    package_executors = () if package_stack is None else package_stack.executors
+    extra_executors = self_awareness_executors + package_executors
     capability_runtime = build_default_capability_runtime(
         ai_provider=config.ai_provider,
         hands_planner_model=config.hands_planner_model,
         result_observer=result_observer,
         extra_executors=extra_executors,
+        catalog_projection=(
+            None if package_stack is None else package_stack.projection
+        ),
+        close_callbacks=(
+            () if package_stack is None else (package_stack.close,)
+        ),
     )
     capability_catalog = capability_runtime.refresh_catalog()
     if self_awareness is not None:
@@ -308,13 +335,14 @@ def build_production_voice_runtime(
     LOGGER.info(
         "Governed capability runtime configured: capabilities=%s "
         "structured_desktop_control=%s visual_fallback=%s browser_control=%s "
-        "hands_planner=%s/%s raw_shell=False",
+        "hands_planner=%s/%s package_managed=%s raw_shell=False",
         len(capability_catalog.capabilities),
         bool(structured_hands and structured_hands.execution_enabled),
         bool(visual_hands and visual_hands.execution_enabled),
         bool(browser_hands and browser_hands.execution_enabled),
         getattr(hands_planner, "provider_name", "none"),
         getattr(hands_planner, "model_name", "none"),
+        len(package_executors),
     )
 
     work_runtime = None
@@ -328,7 +356,12 @@ def build_production_voice_runtime(
             dbos_database_url=config.work_dbos_database_url,
             event_loop=asyncio.get_running_loop(),
             acquisition_context_provider=(
-                CapabilityRuntimeAcquisitionContextProvider(capability_runtime)
+                CapabilityRuntimeAcquisitionContextProvider(
+                    capability_runtime,
+                    projection=(
+                        None if package_stack is None else package_stack.projection
+                    ),
+                )
             ),
         )
         LOGGER.info(
