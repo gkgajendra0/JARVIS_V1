@@ -52,6 +52,8 @@ class PromotionMerger:
             candidate_artifact_digest=evidence.candidate_artifact_digest,
             candidate_id=evidence.candidate_id,
             candidate_digest=evidence.candidate_digest,
+            development_work_id="promotion_evidence",
+            branch="promotion/evidence",
             base_sha=evidence.candidate_base_sha,
             head_sha=evidence.candidate_head_sha,
             diff_digest=evidence.candidate_diff_digest,
