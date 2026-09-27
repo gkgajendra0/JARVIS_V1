@@ -57,6 +57,7 @@ from .release import (
     ReleaseRecord,
 )
 from .rollback import RollbackCoordinator, RollbackError, RollbackResult
+from .service import PromotionExecutionResult, PromotionSessionError, PromotionSessionService
 from .store import PromotionStore
 
 __all__ = [
@@ -93,9 +94,12 @@ __all__ = [
     "PromotionCoordinator",
     "PromotionEvidenceBuilder",
     "PromotionEvidenceV1",
+    "PromotionExecutionResult",
     "PromotionMergeError",
     "PromotionMerger",
     "PromotionPreparationError",
+    "PromotionSessionError",
+    "PromotionSessionService",
     "PromotionStore",
     "RecoveryPhase",
     "RecoveryRecord",
