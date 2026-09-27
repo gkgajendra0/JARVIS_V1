@@ -22,6 +22,13 @@ from .models import (
     OwnerCapabilityGoalV1,
 )
 from .process import OWNER_CAPABILITY_ACQUISITION_PROCESS
+from .promotion import (
+    CapabilityAcquisitionReleaseBridge,
+    CapabilityAcquisitionReleaseBridgeError,
+    CapabilityAcquisitionReleaseBridgeResult,
+    CapabilityLifecycleProposalV1,
+    ensure_capability_release_bridge_current,
+)
 from .resolver import (
     AcquisitionResolutionError,
     AcquisitionResolutionResult,
@@ -90,6 +97,10 @@ __all__ = [
     "CapabilityAcquisitionDevelopmentCompletionHandler",
     "CapabilityAcquisitionDevelopmentRevisionResolver",
     "CapabilityAcquisitionPlanV1",
+    "CapabilityAcquisitionReleaseBridge",
+    "CapabilityAcquisitionReleaseBridgeError",
+    "CapabilityAcquisitionReleaseBridgeResult",
+    "CapabilityLifecycleProposalV1",
     "CapabilityAcquisitionResolver",
     "CapabilityAcquisitionSourceCompletionHandler",
     "CapabilityCandidateError",
@@ -114,6 +125,7 @@ __all__ = [
     "build_acquisition_protocol_executors",
     "ensure_capability_acquisition_architecture_current",
     "ensure_capability_candidate_acceptance_current",
+    "ensure_capability_release_bridge_current",
     "mcp_server_evidence",
     "openapi_contract_evidence",
     "owner_configured_evidence",
