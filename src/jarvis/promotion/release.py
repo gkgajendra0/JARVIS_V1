@@ -19,6 +19,31 @@ from jarvis.engineering_substrate.canonical import canonical_digest
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
+_DEPLOYMENT_ROOT_ENV = "JARVIS_DEPLOYMENT_ROOT"
+_RELEASES_ROOT_ENV = "JARVIS_RELEASES_ROOT"
+
+
+def _jarvis_state_root() -> pathlib.Path:
+    if os.name == "nt":
+        local = os.getenv("LOCALAPPDATA", "").strip()
+        if local:
+            return pathlib.Path(local).expanduser().resolve() / "JARVIS"
+    return pathlib.Path.home().expanduser().resolve() / ".jarvis"
+
+
+def default_deployment_root() -> pathlib.Path:
+    configured = os.getenv(_DEPLOYMENT_ROOT_ENV, "").strip()
+    if configured:
+        return pathlib.Path(configured).expanduser().resolve()
+    return _jarvis_state_root() / "deployment"
+
+
+def default_releases_root() -> pathlib.Path:
+    configured = os.getenv(_RELEASES_ROOT_ENV, "").strip()
+    if configured:
+        return pathlib.Path(configured).expanduser().resolve()
+    return _jarvis_state_root() / "releases"
+
 
 class ReleaseError(RuntimeError):
     pass
@@ -293,6 +318,50 @@ class GitReleaseStager:
         except (OSError, subprocess.SubprocessError) as exc:
             raise ReleaseError(f"failed to stage exact release {sha}") from exc
         return target
+
+
+def load_active_release_for_startup() -> ReleaseRecord | None:
+    """Load and verify the exact active release used by production supervisor startup."""
+    metadata = DeploymentMetadataStore(default_deployment_root())
+    active = metadata.active()
+    if active is None:
+        return None
+
+    release_root = pathlib.Path(active.release_root).expanduser().resolve()
+    releases_root = default_releases_root().resolve()
+    if release_root.parent != releases_root:
+        raise ReleaseError("active release root is outside the managed releases directory")
+    if release_root.is_symlink() or not release_root.is_dir():
+        raise ReleaseError("active release root is unavailable or unsafe")
+    try:
+        observed = subprocess.run(
+            ["git", "-C", str(release_root), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=15.0,
+        ).stdout.strip().casefold()
+        tracked = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(release_root),
+                "status",
+                "--porcelain=v1",
+                "--untracked-files=no",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=15.0,
+        ).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ReleaseError("active release Git identity is unavailable") from exc
+    if observed != active.release_sha:
+        raise ReleaseError("active release root does not match recorded release SHA")
+    if tracked.strip():
+        raise ReleaseError("active release root contains tracked source mutations")
+    return active
 
 
 def deployment_id(
