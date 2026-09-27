@@ -23,6 +23,7 @@ from jarvis.dev_control import (
     DEV_CONTROL_HOST_ENV,
     DEV_CONTROL_PORT_ENV,
     DEV_CONTROL_TOKEN_ENV,
+    RuntimeReleaseIdentity,
 )
 from jarvis.incidents import IncidentService, SqliteIncidentStore
 from jarvis.self_awareness import default_incident_store_path
@@ -244,6 +245,7 @@ class VoiceControlServer:
         self._host, self._port = self._listener.getsockname()
         self._token = secrets.token_urlsafe(32)
         self._connection: socket.socket | None = None
+        self._child_release_identity: RuntimeReleaseIdentity | None = None
         self._receive_buffer = bytearray()
         self._request_sequence = 0
 
@@ -261,6 +263,7 @@ class VoiceControlServer:
     def _reset_child(self) -> None:
         connection = self._connection
         self._connection = None
+        self._child_release_identity = None
         self._receive_buffer.clear()
         if connection is not None:
             try:
@@ -308,12 +311,34 @@ class VoiceControlServer:
             hello = self._receive()
             if hello.get("type") != "hello" or hello.get("token") != self._token:
                 raise RuntimeError("JARVIS voice control authentication failed")
+            raw_identity = hello.get("release_identity")
+            if raw_identity is not None:
+                if not isinstance(raw_identity, dict):
+                    raise RuntimeError("JARVIS release identity is malformed")
+                try:
+                    self._child_release_identity = RuntimeReleaseIdentity(
+                        release_sha=str(raw_identity.get("release_sha", "")),
+                        release_root=str(raw_identity.get("release_root", "")),
+                        promotion_attempt_id=str(
+                            raw_identity.get("promotion_attempt_id", "")
+                        ),
+                        config_digest=str(raw_identity.get("config_digest", "")),
+                    )
+                except ValueError as exc:
+                    raise RuntimeError(
+                        f"JARVIS release identity is invalid: {exc}"
+                    ) from exc
         except Exception:
             self._reset_child()
             raise
 
-    def wait_for_child_ready(self, *, timeout_seconds: float) -> None:
-        """Require authenticated control plus explicit core-runtime readiness."""
+    def wait_for_child_ready(
+        self,
+        *,
+        timeout_seconds: float,
+        expected_release: RuntimeReleaseIdentity | None = None,
+    ) -> None:
+        """Require authenticated readiness and, when supplied, exact release identity."""
         deadline = time.monotonic() + timeout_seconds
         try:
             self._ensure_child(timeout_seconds=timeout_seconds)
@@ -338,6 +363,28 @@ class VoiceControlServer:
 
                 ready = response.get("ready")
                 if ready is True:
+                    if expected_release is not None:
+                        raw_identity = response.get("release_identity")
+                        if not isinstance(raw_identity, dict):
+                            raise RuntimeError(
+                                "runtime readiness omitted expected release identity"
+                            )
+                        observed = RuntimeReleaseIdentity(
+                            release_sha=str(raw_identity.get("release_sha", "")),
+                            release_root=str(raw_identity.get("release_root", "")),
+                            promotion_attempt_id=str(
+                                raw_identity.get("promotion_attempt_id", "")
+                            ),
+                            config_digest=str(raw_identity.get("config_digest", "")),
+                        )
+                        if observed != expected_release:
+                            raise RuntimeError(
+                                "runtime readiness release identity mismatch"
+                            )
+                        if self._child_release_identity != expected_release:
+                            raise RuntimeError(
+                                "runtime hello release identity mismatch"
+                            )
                     return
                 if ready is not False:
                     raise TypeError("invalid JARVIS readiness state")
@@ -465,9 +512,23 @@ def _find_repo_root() -> Path:
 def _start_jarvis(
     root: Path,
     control: VoiceControlServer,
+    *,
+    release_identity: RuntimeReleaseIdentity | None = None,
 ) -> subprocess.Popen[bytes]:
     child_env = os.environ.copy()
     child_env.update(control.child_environment())
+    if release_identity is not None:
+        if Path(release_identity.release_root).resolve() != root.resolve():
+            raise RuntimeError("release identity root does not match runtime root")
+        child_env.update(release_identity.environment())
+        source_root = str((root / "src").resolve())
+        existing_pythonpath = child_env.get("PYTHONPATH", "").strip()
+        child_env["PYTHONPATH"] = (
+            source_root
+            if not existing_pythonpath
+            else os.pathsep.join((source_root, existing_pythonpath))
+        )
+        child_env["PYTHONDONTWRITEBYTECODE"] = "1"
     kwargs: dict[str, object] = {"cwd": root, "env": child_env}
     if os.name == "nt":
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
