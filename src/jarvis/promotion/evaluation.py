@@ -607,7 +607,10 @@ def _case_external_failure_no_rollback(root: pathlib.Path) -> dict[str, object]:
     )
     observations.record_healthy(attempt, now_epoch=4.0)
     observations.record_healthy(attempt, now_epoch=5.0)
-    if observations.assess(attempt).disposition is not ObservationDisposition.READY_TO_CLOSE:
+    if (
+        observations.assess(attempt).disposition
+        is not ObservationDisposition.READY_TO_CLOSE
+    ):
         raise Phase7EvaluationError("external provider failure blocked healthy close")
     try:
         RollbackCoordinator(
@@ -636,7 +639,10 @@ def _case_candidate_rollback(root: pathlib.Path) -> dict[str, object]:
         evidence=("runtime:readiness",),
         now_epoch=3.0,
     )
-    if observations.assess(attempt).disposition is not ObservationDisposition.ROLLBACK_REQUIRED:
+    if (
+        observations.assess(attempt).disposition
+        is not ObservationDisposition.ROLLBACK_REQUIRED
+    ):
         raise Phase7EvaluationError("candidate failure did not require rollback")
     rollback = RollbackCoordinator(
         changes,
@@ -748,12 +754,19 @@ def run_replay_suite(root: pathlib.Path) -> Phase7ReplayReport:
     root.mkdir(parents=True, exist_ok=True)
     cases = (
         _case("01_exact_candidate_attempt", lambda: _case_exact_candidate(root / "01")),
-        _case("02_stale_candidate_fails_closed", lambda: _case_stale_candidate(root / "02")),
+        _case(
+            "02_stale_candidate_fails_closed",
+            lambda: _case_stale_candidate(root / "02"),
+        ),
         _case("03_moved_pr_head_rejected", lambda: _case_moved_head(root / "03")),
         _case("04_wrong_ci_app_rejected", lambda: _case_wrong_ci_app(root / "04")),
-        _case("05_skipped_windows_rejected", lambda: _case_skipped_windows(root / "05")),
+        _case(
+            "05_skipped_windows_rejected", lambda: _case_skipped_windows(root / "05")
+        ),
         _case("06_exact_authorized_merge", lambda: _case_exact_merge(root / "06")),
-        _case("07_external_merge_reconciled", lambda: _case_merge_reconcile(root / "07")),
+        _case(
+            "07_external_merge_reconciled", lambda: _case_merge_reconcile(root / "07")
+        ),
         _case("08_full_success_closes", lambda: _case_full_success(root / "08")),
         _case(
             "09_external_failure_does_not_rollback",
