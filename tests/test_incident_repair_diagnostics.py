@@ -21,7 +21,6 @@ from jarvis.work.engine import WorkEngine
 from jarvis.work.models import WorkItem, WorkStep, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
-
 REVISION = "a" * 40
 
 
