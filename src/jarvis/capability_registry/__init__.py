@@ -39,14 +39,6 @@ from jarvis.capability_registry.models import (
     DesiredActivationState,
     PackageDisposition,
 )
-from jarvis.capability_registry.provider import (
-    CapabilityHealthProbe,
-    CapabilityProviderRegistration,
-    CapabilityProviderRegistry,
-    CapabilityProviderRegistryError,
-    DuplicateCapabilityProviderError,
-    UnknownCapabilityProviderError,
-)
 from jarvis.capability_registry.projection import (
     CapabilityEffectiveSnapshot,
     CapabilityInventoryEntry,
@@ -56,6 +48,14 @@ from jarvis.capability_registry.projection import (
     CapabilityTransitionFence,
     EffectiveCapabilityState,
     package_component_id,
+)
+from jarvis.capability_registry.provider import (
+    CapabilityHealthProbe,
+    CapabilityProviderRegistration,
+    CapabilityProviderRegistry,
+    CapabilityProviderRegistryError,
+    DuplicateCapabilityProviderError,
+    UnknownCapabilityProviderError,
 )
 from jarvis.capability_registry.reconciliation import (
     CapabilityHealthBridge,
@@ -88,13 +88,12 @@ from jarvis.capability_registry.store import (
 )
 
 __all__ = [
-    "AdmittedCapabilityPackage",
     "CAPABILITY_PACKAGE_SCHEMA_URI_V1",
     "CAPABILITY_PACKAGE_SCHEMA_VERSION_V1",
-    "capability_package_v1_json_schema",
-    "capability_package_v1_schema_digest",
     "CAPABILITY_RUNTIME_API_ID",
     "CAPABILITY_RUNTIME_API_VERSION_V1",
+    "PACKAGE_DIRECTORY_NAME",
+    "AdmittedCapabilityPackage",
     "CapabilityCompatibilityEvaluator",
     "CapabilityCompatibilityReportV1",
     "CapabilityEffectiveSnapshot",
@@ -130,19 +129,12 @@ __all__ = [
     "CapabilityTransitionFence",
     "CompatibilityReason",
     "CompatibilityVerdict",
-    "current_platform_tags",
-    "default_capability_registry_path",
-    "default_capability_registry_state_dir",
     "DesiredActivationState",
-    "discover_capability_registry_migrations",
     "DuplicateCapabilityProviderError",
     "EffectiveCapabilityState",
-    "package_component_id",
-    "PACKAGE_DIRECTORY_NAME",
     "PackageArtifactDescriptorV1",
     "PackageDisposition",
     "PackageVersionReuseConflict",
-    "parse_capability_package_v1",
     "PeriodicCapabilityReconciler",
     "ReconciliationTrigger",
     "ReleaseCapabilityPackageSource",
@@ -152,4 +144,12 @@ __all__ = [
     "UnknownCapabilityPackageError",
     "UnknownCapabilityProviderError",
     "UnknownManagedCapabilityError",
+    "capability_package_v1_json_schema",
+    "capability_package_v1_schema_digest",
+    "current_platform_tags",
+    "default_capability_registry_path",
+    "default_capability_registry_state_dir",
+    "discover_capability_registry_migrations",
+    "package_component_id",
+    "parse_capability_package_v1",
 ]
