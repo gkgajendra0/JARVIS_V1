@@ -80,8 +80,8 @@ from jarvis.model_routing.router import (
     build_default_work_targets,
 )
 from jarvis.model_routing.store import ModelRoutingStore
-from jarvis.promotion.release import DeploymentMetadataStore
 from jarvis.model_routing.strategy import EngineeringStageStrategy
+from jarvis.promotion.release import DeploymentMetadataStore
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
 from jarvis.work.dbos_backend import (
