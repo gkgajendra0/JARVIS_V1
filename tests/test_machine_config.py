@@ -137,7 +137,6 @@ def test_work_database_url_cannot_be_persisted(tmp_path: Path) -> None:
         )
 
 
-
 def test_github_promotion_non_secret_settings_can_be_persisted(tmp_path: Path) -> None:
     path = tmp_path / "machine.json"
     save_machine_settings(
