@@ -288,7 +288,6 @@ def test_authorized_merge_rechecks_external_state_and_promotes_change(tmp_path) 
     assert changes.require(evidence.change_id).state is ChangeState.PROMOTED
 
 
-
 def test_restart_reconciles_exact_external_merge_without_second_merge(tmp_path) -> None:
     changes, promotions, attempt, evidence, gate = _fixture(tmp_path)
     verifier = FakeVerifier()
