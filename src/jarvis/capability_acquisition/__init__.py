@@ -53,14 +53,12 @@ from .standard_sources import (
     owner_configured_evidence,
     sdk_library_evidence,
 )
-
 from .workflow import (
     AcquisitionProtocolError,
     AcquisitionWorkContextResolver,
     acquisition_completion_guard,
     build_acquisition_protocol_executors,
 )
-
 
 __all__ = [
     "OWNER_CAPABILITY_ACQUISITION_PROCESS",
