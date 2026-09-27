@@ -105,7 +105,7 @@ class PromotionSessionService:
             raise PromotionSessionError("promotion evidence artifact is unavailable")
         try:
             evidence = PromotionEvidenceV1.from_payload(artifact.payload)
-        except ValueError as exc:
+        except (TypeError, ValueError) as exc:
             raise PromotionSessionError("promotion evidence is invalid") from exc
         attempt = self._promotions.require(evidence.attempt_id)
         if attempt.state in {
