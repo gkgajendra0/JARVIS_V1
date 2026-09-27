@@ -1,6 +1,6 @@
 # Phase 6 Unknown-Incident Investigation + Source Repair — Implementation Plan
 
-Status: **OWNER-APPROVED / AUTHORIZED FOR IMPLEMENTATION**
+Status: **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**
 
 Date: 2026-09-27
 
@@ -8,7 +8,23 @@ Date: 2026-09-27
 
 research thoroughly -> architecture -> owner approval -> isolated implementation / PR -> CI -> owner-machine acceptance where required -> documentation -> promotion approval -> protected-main merge
 
-Phase-6 runtime implementation is authorized under the owner-approved architecture.
+Phase-6 runtime implementation is complete and owner-machine accepted under the owner-approved architecture.
+
+## Completion record
+
+Phase 6 completed all slices 6A–6G and passed final owner-machine acceptance on 2026-09-27.
+
+- accepted implementation head: `45643efc80ae1394022f22f778d0a67568326f94`;
+- owner-machine evidence digest: `7d4be9e5154d0e17e839b0d7bd6823e9bcec88aba564b2188c8d4e8164f75492`;
+- deterministic replay: `PASS 15/15`;
+- Docker sandbox: `test.offline.v1`, network disabled, workspace read-only;
+- protected checkout: unchanged;
+- PR #148 protected-main squash merge: `aaa1fa52224f6582c32706b7bdb72f26169c54be`;
+- canonical acceptance record: `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`.
+
+The final Windows acceptance also exposed and corrected deterministic cleanup of persistent incident SQLite handles. The full Phase-6 replay suite now runs on Windows CI so this class of host-specific lifecycle defect is checked before owner-machine acceptance.
+
+Phase 6 remains intentionally bounded at an owner-reviewable source-repair candidate. It does not authorize protected-main merge or production deployment.
 
 ## 2. Implementation sequence
 
