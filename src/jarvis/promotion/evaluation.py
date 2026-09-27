@@ -419,7 +419,9 @@ def _case_stale_candidate(root: pathlib.Path) -> dict[str, object]:
     except StalePromotionCandidate as exc:
         current = promotions.require(attempt.attempt_id)
         if current.state is not PromotionAttemptState.STALE:
-            raise Phase7EvaluationError("stale candidate was not durably marked") from exc
+            raise Phase7EvaluationError(
+                "stale candidate was not durably marked"
+            ) from exc
         return {"reason_code": exc.reason_code, "state": current.state.value}
     raise Phase7EvaluationError("stale candidate was accepted")
 
