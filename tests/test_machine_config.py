@@ -135,3 +135,33 @@ def test_work_database_url_cannot_be_persisted(tmp_path: Path) -> None:
             },
             tmp_path / "machine.json",
         )
+
+
+
+def test_github_promotion_non_secret_settings_can_be_persisted(tmp_path: Path) -> None:
+    path = tmp_path / "machine.json"
+    save_machine_settings(
+        {
+            "JARVIS_GITHUB_PROMOTION_ENABLED": "true",
+            "JARVIS_GITHUB_APP_CLIENT_ID": "Iv1.phase9",
+            "JARVIS_GITHUB_APP_INSTALLATION_ID": "12345",
+            "JARVIS_GITHUB_REPOSITORY": "gkgajendra0/JARVIS_V1",
+            "JARVIS_GITHUB_APP_SECRET_ID": "github-promotion-private-key",
+            "JARVIS_GITHUB_BASE_BRANCH": "main",
+            "JARVIS_GITHUB_WORKFLOW_FILE": "code-quality.yml",
+            "JARVIS_GITHUB_EXPECTED_CI_APP_ID": "15368",
+        },
+        path,
+    )
+    settings = load_machine_settings(path)
+    assert settings["JARVIS_GITHUB_PROMOTION_ENABLED"] == "true"
+    assert settings["JARVIS_GITHUB_APP_SECRET_ID"] == "github-promotion-private-key"
+    assert "PRIVATE_KEY" not in settings
+
+
+def test_github_private_key_plaintext_cannot_be_persisted(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="may not be persisted"):
+        save_machine_settings(
+            {"JARVIS_GITHUB_APP_PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----"},
+            tmp_path / "machine.json",
+        )
