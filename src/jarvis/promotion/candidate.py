@@ -145,7 +145,7 @@ class PromotionCandidateVerifier:
                 "changed_paths_missing",
                 "candidate has no changed paths",
             )
-        changed_paths = tuple(sorted(dict.fromkeys(str(item).strip() for item in raw_paths)))
+        changed_paths = tuple(\n            sorted(dict.fromkeys(str(item).strip() for item in raw_paths))\n        )
         if any(not item for item in changed_paths):
             raise PromotionCandidateError(
                 "changed_paths_malformed",
