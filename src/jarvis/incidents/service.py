@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import time
+from dataclasses import replace
+
 from jarvis.incidents.models import (
     EvidenceReference,
     IncidentRecord,
@@ -183,6 +186,35 @@ class IncidentService:
         """Return bounded recent engineering incidents through the service API."""
 
         return self._store.list_recent(limit=limit, status=status)
+
+    def get(self, incident_id: str) -> IncidentRecord | None:
+        """Return one canonical incident without exposing the underlying store."""
+
+        return self._store.get(str(incident_id).strip())
+
+    def mark_investigating(
+        self,
+        incident_id: str,
+        *,
+        now_epoch: float | None = None,
+    ) -> IncidentRecord:
+        """Move one active incident into investigation without reopening terminal truth."""
+
+        incident = self._require(incident_id)
+        if incident.status in {IncidentStatus.RESOLVED, IncidentStatus.CLOSED}:
+            raise ValueError("resolved or closed incident cannot enter investigation")
+        if incident.status is IncidentStatus.INVESTIGATING:
+            return incident
+        timestamp = time.time() if now_epoch is None else float(now_epoch)
+        if timestamp <= 0:
+            raise ValueError("now_epoch must be positive")
+        updated = replace(
+            incident,
+            status=IncidentStatus.INVESTIGATING,
+            updated_at_epoch=timestamp,
+        )
+        self._store.upsert(updated)
+        return updated
 
     def _recent_open_for_component(
         self,
