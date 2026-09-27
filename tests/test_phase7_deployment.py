@@ -26,6 +26,7 @@ from jarvis.promotion.release import (
     RecoveryRecord,
     ReleaseRecord,
     deployment_id,
+    load_active_release_for_startup,
 )
 from jarvis.promotion.rollback import RollbackCoordinator, RollbackError
 from jarvis.promotion.store import PromotionStore
