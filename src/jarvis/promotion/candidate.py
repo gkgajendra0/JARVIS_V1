@@ -50,7 +50,7 @@ class VerifiedPromotionCandidate:
 
 
 class PromotionCandidateVerifier:
-    """Fail closed unless canonical Phase-6 candidate evidence is current and exact."""
+    """Fail closed unless canonical process-specific candidate evidence is current and exact."""
 
     def __init__(self, changes: ChangeStore, promotions: PromotionStore) -> None:
         if not isinstance(changes, ChangeStore):
@@ -208,14 +208,20 @@ class PromotionCandidateVerifier:
                 "EngineeringChange is not ready for promotion",
             )
         acceptance = self._changes.latest_artifact(change_id, "acceptance")
-        candidate = self._changes.latest_artifact(
-            change_id,
-            "source_repair_candidate",
-        )
+        candidate_kind = {
+            "unknown_incident_repair": "source_repair_candidate",
+            "owner_capability_acquisition": "capability_candidate",
+        }.get(change.process_key)
+        if candidate_kind is None:
+            raise PromotionCandidateError(
+                "unsupported_candidate_process",
+                f"promotion has no candidate artifact contract for {change.process_key}",
+            )
+        candidate = self._changes.latest_artifact(change_id, candidate_kind)
         if acceptance is None or candidate is None:
             raise PromotionCandidateError(
                 "candidate_evidence_missing",
-                "promotion requires canonical acceptance and source-repair candidate evidence",
+                "promotion requires canonical acceptance and current candidate evidence",
             )
         verified = self._candidate_from_artifact(candidate, acceptance)
         attempt = self._promotions.create_or_get(
