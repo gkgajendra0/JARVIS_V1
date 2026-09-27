@@ -266,7 +266,7 @@ class ChangeService:
 
         try:
             evidence = PromotionEvidenceV1.from_payload(promotion.payload)
-        except ValueError as exc:
+        except (TypeError, ValueError) as exc:
             raise ChangeConflict("exact Phase-7 promotion evidence is invalid") from exc
         candidate = store.latest_artifact(change_id, "source_repair_candidate")
         work_id = (
