@@ -74,9 +74,7 @@ class ChangeService:
             research is None
             or store.work.require(research.work_id).state is not WorkState.COMPLETED
         ):
-            raise ChangeConflict(
-                f"{source_stage.stage_key} WorkItem has not completed"
-            )
+            raise ChangeConflict(f"{source_stage.stage_key} WorkItem has not completed")
         if not isinstance(payload, dict) or not payload:
             raise ChangeConflict("architecture proposal is empty")
         rendered = json.dumps(payload, ensure_ascii=False, sort_keys=True)
