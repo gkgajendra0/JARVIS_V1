@@ -101,6 +101,7 @@ class DeploymentCoordinator:
             return existing
         release_root = self._stager.stage(release_sha)
         accepted_at = time.time() if now_epoch is None else float(now_epoch)
+        normalized_schema_versions = tuple(sorted(schema_versions))
         bootstrap_digest = canonical_digest(
             {
                 "kind": "phase7_lkg_bootstrap",
