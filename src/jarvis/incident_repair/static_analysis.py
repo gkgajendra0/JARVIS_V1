@@ -312,9 +312,7 @@ class DiagnosticStaticCheckExecutor:
         workspace = self._manager.assert_pristine(work.work_id)
         raw_targets = parameters.get("targets")
         if not isinstance(raw_targets, list):
-            raise DiagnosticWorkspaceError(
-                "static-check targets must be an array"
-            )
+            raise DiagnosticWorkspaceError("static-check targets must be an array")
         targets = tuple(_normalize_target(item) for item in raw_targets)
         runner = self._runner
         if runner is None:
