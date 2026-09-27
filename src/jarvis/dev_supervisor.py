@@ -25,8 +25,20 @@ from jarvis.dev_control import (
     DEV_CONTROL_TOKEN_ENV,
     RuntimeReleaseIdentity,
 )
+from jarvis.engineering_change.store import ChangeStore
+from jarvis.incident_repair.process import UNKNOWN_INCIDENT_REPAIR_PROCESS
 from jarvis.incidents import IncidentService, SqliteIncidentStore
-from jarvis.promotion.release import load_active_release_for_startup
+from jarvis.promotion.deployment import DeploymentCoordinator, DeploymentError
+from jarvis.promotion.models import PromotionAttemptState
+from jarvis.promotion.release import (
+    DeploymentMetadataStore,
+    GitReleaseStager,
+    RecoveryPhase,
+    default_deployment_root,
+    default_releases_root,
+    load_active_release_for_startup,
+)
+from jarvis.promotion.store import PromotionStore
 from jarvis.self_awareness import default_incident_store_path
 from jarvis.self_repair import RepairVerificationStatus
 from jarvis.self_repair.supervisor import (
@@ -38,6 +50,8 @@ from jarvis.self_repair.windows_job import (
     WindowsJobObjectError,
     WindowsRuntimeJob,
 )
+from jarvis.work.privacy import build_default_work_payload_codec
+from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
 _BRANCH_ENV = "JARVIS_DEV_BRANCH"
 
@@ -581,7 +595,7 @@ class SupervisorReleaseRuntimeDriver:
 
     def __init__(
         self,
-        process: subprocess.Popen[bytes],
+        process: subprocess.Popen[bytes] | None,
         control: VoiceControlServer,
         config: DevSupervisorConfig,
     ) -> None:
@@ -641,6 +655,61 @@ class SupervisorReleaseRuntimeDriver:
         if process is None or process.poll() is not None:
             self.start_release(identity)
         self.wait_ready(identity, timeout_seconds=timeout_seconds)
+
+
+def _phase7_promotion_stores() -> tuple[ChangeStore, PromotionStore]:
+    store_path = default_work_store_path()
+    work = SQLiteWorkStore(
+        store_path,
+        payload_codec=build_default_work_payload_codec(store_path),
+    )
+    changes = ChangeStore(
+        work,
+        processes=(UNKNOWN_INCIDENT_REPAIR_PROCESS,),
+    )
+    return changes, PromotionStore(changes)
+
+
+def _resume_pending_phase7_deployment(
+    repository_root: Path,
+    process: subprocess.Popen[bytes] | None,
+    control: VoiceControlServer,
+    config: DevSupervisorConfig,
+) -> tuple[subprocess.Popen[bytes] | None, RuntimeReleaseIdentity | None, str | None]:
+    """Resume only a durable DEPLOYING attempt; all process effects stay parent-owned."""
+    metadata = DeploymentMetadataStore(default_deployment_root())
+    recovery = metadata.recovery()
+    if recovery is None:
+        return process, None, None
+    if recovery.phase in {
+        RecoveryPhase.STARTUP_FAILED,
+        RecoveryPhase.ROLLBACK_STARTED,
+        RecoveryPhase.ROLLBACK_VERIFIED,
+    }:
+        return process, None, None
+
+    changes, promotions = _phase7_promotion_stores()
+    attempt = promotions.get(recovery.attempt_id)
+    if attempt is None or attempt.state is not PromotionAttemptState.DEPLOYING:
+        return process, None, None
+
+    driver = SupervisorReleaseRuntimeDriver(process, control, config)
+    coordinator = DeploymentCoordinator(
+        changes,
+        promotions,
+        stager=GitReleaseStager(repository_root, default_releases_root()),
+        metadata=metadata,
+        runtime=driver,
+        shutdown_timeout_seconds=config.shutdown_timeout_seconds,
+        startup_timeout_seconds=config.startup_timeout_seconds,
+    )
+    try:
+        result = coordinator.resume(attempt)
+    except DeploymentError as exc:
+        active = metadata.active()
+        active_identity = None if active is None else active.runtime_identity()
+        return driver.process, active_identity, str(exc)
+    return driver.process, result.release.runtime_identity(), None
 
 
 def _attach_windows_runtime_job(process: subprocess.Popen[bytes]) -> None:
