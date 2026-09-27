@@ -11,15 +11,33 @@ from .models import (
     OwnerCapabilityGoalV1,
 )
 from .process import OWNER_CAPABILITY_ACQUISITION_PROCESS
+from .resolver import (
+    AcquisitionResolutionError,
+    AcquisitionResolutionResult,
+    CapabilityAcquisitionResolver,
+)
+from .source import (
+    AcquisitionContextV1,
+    CapabilitySourceAdapter,
+    CapabilitySourceRegistry,
+    ExistingCapabilitySourceAdapter,
+)
 
 __all__ = [
     "OWNER_CAPABILITY_ACQUISITION_PROCESS",
     "AcquisitionCandidateEvaluationV1",
     "AcquisitionCandidateV1",
+    "AcquisitionContextV1",
     "AcquisitionDisposition",
+    "AcquisitionResolutionError",
+    "AcquisitionResolutionResult",
     "AcquisitionSourceKind",
     "AcquisitionStrategy",
     "AcquisitionTrustClass",
     "CapabilityAcquisitionPlanV1",
+    "CapabilityAcquisitionResolver",
+    "CapabilitySourceAdapter",
+    "CapabilitySourceRegistry",
+    "ExistingCapabilitySourceAdapter",
     "OwnerCapabilityGoalV1",
 ]
