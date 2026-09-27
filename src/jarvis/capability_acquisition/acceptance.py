@@ -123,9 +123,7 @@ def run_acceptance(
 
         shutil.rmtree(replay_root, ignore_errors=True)
 
-    failures = {
-        item.case_id: item.evidence for item in replay.cases if not item.passed
-    }
+    failures = {item.case_id: item.evidence for item in replay.cases if not item.passed}
     if replay.status != "PASS" or failures:
         raise Phase9AcceptanceError(
             "deterministic Phase-9 replay failed: "
@@ -176,9 +174,7 @@ def run_acceptance(
             "target": real_evidence["target"],
             "observed_effect": real_evidence["observed_effect"],
             "observation_method": real_evidence["observation_method"],
-            "production_observation_ref": real_evidence[
-                "production_observation_ref"
-            ],
+            "production_observation_ref": real_evidence["production_observation_ref"],
             "rollback_disable_evidence_ref": real_evidence[
                 "rollback_disable_evidence_ref"
             ],
