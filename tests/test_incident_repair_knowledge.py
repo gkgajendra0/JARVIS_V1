@@ -25,7 +25,9 @@ class RecordingIndex(EngineeringKnowledgeRetrievalIndex):
         )
 
 
-def test_incident_knowledge_retrieval_uses_sanitized_package_and_component_context() -> None:
+def test_incident_knowledge_retrieval_uses_sanitized_package_and_component_context() -> (
+    None
+):
     incident = IncidentRecord.create(
         title="routing failure",
         symptom="provider cooldown state became stale",
