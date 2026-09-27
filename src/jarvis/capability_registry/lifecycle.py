@@ -663,6 +663,7 @@ class CapabilityLifecycleService:
                     package.package.package_version,
                     disposition=PackageDisposition.RETIRED,
                     reason_code="package_retired",
+                    expected_generation=current.generation,
                     authority_ref=authorized.authority_ref,
                     evidence_ref=report.digest,
                 )
