@@ -230,6 +230,7 @@ jobs:
           tests/test_phase7_authority_merge.py
           tests/test_phase7_deployment.py
           tests/test_phase7_release_staging.py
+          tests/test_phase7_evaluation.py
 
       - name: Run non-destructive Windows Phase 7 acceptance harness
         run: python -m jarvis.promotion.acceptance --repo-root .
