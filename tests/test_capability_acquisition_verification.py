@@ -25,7 +25,9 @@ from jarvis.capability_acquisition.models import (
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.resolver import CapabilityAcquisitionResolver
-from jarvis.capability_acquisition.runtime_context import StaticAcquisitionContextProvider
+from jarvis.capability_acquisition.runtime_context import (
+    StaticAcquisitionContextProvider,
+)
 from jarvis.capability_acquisition.source import (
     AcquisitionContextV1,
     CapabilitySourceRegistry,
@@ -447,9 +449,7 @@ def test_protected_acquisition_governance_path_is_rejected(
     ) = _build_change(tmp_path, repository_root, revision)
     verifier = CapabilityCandidateVerifier(store, manager)
     with pytest.raises(CapabilityCandidateError, match="governance/security"):
-        verifier._protected_surface(
-            ("src/jarvis/capability_acquisition/models.py",)
-        )
+        verifier._protected_surface(("src/jarvis/capability_acquisition/models.py",))
     assert store.require(change_id).state is ChangeState.DEVELOPING
 
 
