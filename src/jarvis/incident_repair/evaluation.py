@@ -202,9 +202,15 @@ def _base_incident(
     *,
     revision: str,
     summary: str = "deterministic source failure",
-) -> tuple[IncidentService, EvidenceReference, IncidentRepairTrigger]:
+) -> tuple[
+    IncidentService,
+    SqliteIncidentStore,
+    EvidenceReference,
+    IncidentRepairTrigger,
+]:
     root.mkdir(parents=True, exist_ok=True)
-    incidents = IncidentService(SqliteIncidentStore(root / "incidents.sqlite3"))
+    incident_store = SqliteIncidentStore(root / "incidents.sqlite3")
+    incidents = IncidentService(incident_store)
     incident = incidents.create_manual(
         title="Phase6 controlled incident",
         symptom=summary,
@@ -231,7 +237,7 @@ def _base_incident(
         reason_code="unknown_failure",
         now_epoch=102.0,
     )
-    return incidents, evidence, trigger
+    return incidents, incident_store, evidence, trigger
 
 
 def _change_stack(
@@ -277,11 +283,12 @@ def _admit(
     ChangeCoordinator,
     DevelopmentWorkspaceManager,
     GateService,
+    SqliteIncidentStore,
     IncidentRepairCoordinator,
     object,
 ]:
     work, changes, coordinator, manager, gates = _change_stack(root, repository_root)
-    incidents, _, trigger = _base_incident(root, revision=revision)
+    incidents, incident_store, _, trigger = _base_incident(root, revision=revision)
     admission = IncidentRepairCoordinator(
         incidents=incidents,
         changes=coordinator,
@@ -289,7 +296,16 @@ def _admit(
         repair_registry=repair_registry,
     )
     admitted = admission.admit(trigger)
-    return work, changes, coordinator, manager, gates, admission, admitted
+    return (
+        work,
+        changes,
+        coordinator,
+        manager,
+        gates,
+        incident_store,
+        admission,
+        admitted,
+    )
 
 
 def _complete_diagnosis(
@@ -532,49 +548,53 @@ def _full_candidate_fixture(root: pathlib.Path) -> dict[str, object]:
         coordinator,
         manager,
         gates,
+        incident_store,
         _,
         admitted,
     ) = _admit(root, repository_root, revision)
-    diagnosis = _complete_diagnosis(
-        work=work,
-        changes=changes,
-        coordinator=coordinator,
-        change_id=admitted.change.change_id,
-        diagnostics_work_id=admitted.diagnostics_work_id,
-        source_revision=revision,
-        disposition=DiagnosisDisposition.SUPPORTED_REPAIR,
-        supported=True,
-    )
-    development = _approve_architecture(
-        changes=changes,
-        coordinator=coordinator,
-        gates=gates,
-        change_id=admitted.change.change_id,
-    )
-    result = _complete_candidate(
-        work=work,
-        changes=changes,
-        coordinator=coordinator,
-        manager=manager,
-        change_id=admitted.change.change_id,
-        development_work=development,
-    )
+    try:
+        diagnosis = _complete_diagnosis(
+            work=work,
+            changes=changes,
+            coordinator=coordinator,
+            change_id=admitted.change.change_id,
+            diagnostics_work_id=admitted.diagnostics_work_id,
+            source_revision=revision,
+            disposition=DiagnosisDisposition.SUPPORTED_REPAIR,
+            supported=True,
+        )
+        development = _approve_architecture(
+            changes=changes,
+            coordinator=coordinator,
+            gates=gates,
+            change_id=admitted.change.change_id,
+        )
+        result = _complete_candidate(
+            work=work,
+            changes=changes,
+            coordinator=coordinator,
+            manager=manager,
+            change_id=admitted.change.change_id,
+            development_work=development,
+        )
 
-    main_after = _git(repository_root, "rev-parse", "HEAD").stdout.strip().casefold()
-    status_after = _git(repository_root, "status", "--porcelain=v1").stdout
-    return {
-        **result,
-        "source_revision": revision,
-        "diagnosis_id": diagnosis.diagnosis_id,
-        "diagnosis_digest": diagnosis.digest,
-        "change_id": admitted.change.change_id,
-        "diagnostics_work_id": admitted.diagnostics_work_id,
-        "development_work_id": development.work_id,
-        "protected_main_unchanged": (
-            main_before == main_after == revision
-            and status_before == status_after == ""
-        ),
-    }
+        main_after = _git(repository_root, "rev-parse", "HEAD").stdout.strip().casefold()
+        status_after = _git(repository_root, "status", "--porcelain=v1").stdout
+        return {
+            **result,
+            "source_revision": revision,
+            "diagnosis_id": diagnosis.diagnosis_id,
+            "diagnosis_digest": diagnosis.digest,
+            "change_id": admitted.change.change_id,
+            "diagnostics_work_id": admitted.diagnostics_work_id,
+            "development_work_id": development.work_id,
+            "protected_main_unchanged": (
+                main_before == main_after == revision
+                and status_before == status_after == ""
+            ),
+        }
+    finally:
+        incident_store.close()
 
 
 def _case_repaired(root: pathlib.Path) -> dict[str, object]:
@@ -596,28 +616,34 @@ def _case_repaired(root: pathlib.Path) -> dict[str, object]:
 
 def _case_inconclusive(root: pathlib.Path) -> dict[str, object]:
     repository_root, revision = _new_repo(root)
-    work, changes, coordinator, _, _, _, admitted = _admit(
+    work, changes, coordinator, _, _, incident_store, _, admitted = _admit(
         root,
         repository_root,
         revision,
     )
-    diagnosis = _complete_diagnosis(
-        work=work,
-        changes=changes,
-        coordinator=coordinator,
-        change_id=admitted.change.change_id,
-        diagnostics_work_id=admitted.diagnostics_work_id,
-        source_revision=revision,
-        disposition=DiagnosisDisposition.INCONCLUSIVE,
-        supported=False,
-    )
-    if changes.latest_artifact(admitted.change.change_id, "architecture") is not None:
-        raise Phase6EvaluationError("inconclusive diagnosis created architecture")
-    return {
-        "disposition": diagnosis.disposition.value,
-        "selected_hypothesis_id": diagnosis.selected_hypothesis_id,
-        "change_state": changes.require(admitted.change.change_id).state.value,
-    }
+    try:
+        diagnosis = _complete_diagnosis(
+            work=work,
+            changes=changes,
+            coordinator=coordinator,
+            change_id=admitted.change.change_id,
+            diagnostics_work_id=admitted.diagnostics_work_id,
+            source_revision=revision,
+            disposition=DiagnosisDisposition.INCONCLUSIVE,
+            supported=False,
+        )
+        if (
+            changes.latest_artifact(admitted.change.change_id, "architecture")
+            is not None
+        ):
+            raise Phase6EvaluationError("inconclusive diagnosis created architecture")
+        return {
+            "disposition": diagnosis.disposition.value,
+            "selected_hypothesis_id": diagnosis.selected_hypothesis_id,
+            "change_state": changes.require(admitted.change.change_id).state.value,
+        }
+    finally:
+        incident_store.close()
 
 
 def _case_wrong_first_hypothesis() -> dict[str, object]:
@@ -660,29 +686,32 @@ def _case_knowledge_advisory(root: pathlib.Path) -> dict[str, object]:
             del package, now_epoch
             return ("knowledge-r1",)
 
-    _, changes, _, _, _, _, admitted = _admit(
+    _, changes, _, _, _, incident_store, _, admitted = _admit(
         root,
         repository_root,
         revision,
         knowledge=Knowledge(),
     )
-    resolver = DiagnosticContextResolver(changes)
-    executor = DiagnosticRetrieveKnowledgeExecutor(
-        resolver,
-        reader=_KnowledgeReader(),
-    )
-    result = asyncio.run(
-        executor.execute(
-            work=changes.work.require(admitted.diagnostics_work_id),
-            parameters={},
+    try:
+        resolver = DiagnosticContextResolver(changes)
+        executor = DiagnosticRetrieveKnowledgeExecutor(
+            resolver,
+            reader=_KnowledgeReader(),
         )
-    )
-    if result.get("advisory_only") is not True:
-        raise Phase6EvaluationError("retrieved knowledge became executable")
-    return {
-        "revision_ids": result["revision_ids"],
-        "advisory_only": result["advisory_only"],
-    }
+        result = asyncio.run(
+            executor.execute(
+                work=changes.work.require(admitted.diagnostics_work_id),
+                parameters={},
+            )
+        )
+        if result.get("advisory_only") is not True:
+            raise Phase6EvaluationError("retrieved knowledge became executable")
+        return {
+            "revision_ids": result["revision_ids"],
+            "advisory_only": result["advisory_only"],
+        }
+    finally:
+        incident_store.close()
 
 
 def _case_provider_pressure() -> dict[str, object]:
@@ -712,148 +741,159 @@ def _case_provider_pressure() -> dict[str, object]:
 
 def _case_restart_diagnostics(root: pathlib.Path) -> dict[str, object]:
     repository_root, revision = _new_repo(root)
-    work, _, _, _, _, _, admitted = _admit(root, repository_root, revision)
-    work.add_step(
-        _completed_step(
-            admitted.diagnostics_work_id,
-            "diag_record_hypothesis",
-            observation={
-                "hypothesis": {
-                    "hypothesis_id": "hypothesis-replay",
-                    "status": "proposed",
-                }
-            },
+    work, _, _, _, _, incident_store, _, admitted = _admit(
+        root,
+        repository_root,
+        revision,
+    )
+    try:
+        work.add_step(
+            _completed_step(
+                admitted.diagnostics_work_id,
+                "diag_record_hypothesis",
+                observation={
+                    "hypothesis": {
+                        "hypothesis_id": "hypothesis-replay",
+                        "status": "proposed",
+                    }
+                },
+            )
         )
-    )
-    reopened_work = SQLiteWorkStore(work.path)
-    reopened_changes = ChangeStore(
-        reopened_work,
-        processes=(UNKNOWN_INCIDENT_REPAIR_PROCESS,),
-    )
-    stage = reopened_changes.stage_for_work(admitted.diagnostics_work_id)
-    steps = reopened_work.list_steps(admitted.diagnostics_work_id)
-    if stage is None or stage.change_id != admitted.change.change_id:
-        raise Phase6EvaluationError("diagnostic lineage changed after restart")
-    return {
-        "change_id": stage.change_id,
-        "work_id": admitted.diagnostics_work_id,
-        "step_count": len(steps),
-    }
+        reopened_work = SQLiteWorkStore(work.path)
+        reopened_changes = ChangeStore(
+            reopened_work,
+            processes=(UNKNOWN_INCIDENT_REPAIR_PROCESS,),
+        )
+        stage = reopened_changes.stage_for_work(admitted.diagnostics_work_id)
+        steps = reopened_work.list_steps(admitted.diagnostics_work_id)
+        if stage is None or stage.change_id != admitted.change.change_id:
+            raise Phase6EvaluationError("diagnostic lineage changed after restart")
+        return {
+            "change_id": stage.change_id,
+            "work_id": admitted.diagnostics_work_id,
+            "step_count": len(steps),
+        }
+    finally:
+        incident_store.close()
 
 
 def _case_restart_after_approval(root: pathlib.Path) -> dict[str, object]:
     repository_root, revision = _new_repo(root)
-    work, changes, coordinator, manager, gates, _, admitted = _admit(
+    work, changes, coordinator, manager, gates, incident_store, _, admitted = _admit(
         root,
         repository_root,
         revision,
     )
-    _complete_diagnosis(
-        work=work,
-        changes=changes,
-        coordinator=coordinator,
-        change_id=admitted.change.change_id,
-        diagnostics_work_id=admitted.diagnostics_work_id,
-        source_revision=revision,
-        disposition=DiagnosisDisposition.SUPPORTED_REPAIR,
-        supported=True,
-    )
-    architecture = changes.latest_artifact(admitted.change.change_id, "architecture")
-    if architecture is None:
-        raise Phase6EvaluationError("architecture missing before restart")
-    gate = gates.present(
-        admitted.change.change_id,
-        GateKind.ARCHITECTURE,
-        architecture.artifact_id,
-    )
-    gates.decide(
-        gate.gate_id,
-        approved=True,
-        artifact_digest=architecture.digest,
-        actor_id="phase6-replay-owner",
-        source_session_id="phase6-replay",
-        source_turn_id="approve-before-restart",
-        request_key="phase6-replay:restart-approval",
-    )
-
-    reopened_work = SQLiteWorkStore(work.path)
-    reopened_changes = ChangeStore(
-        reopened_work,
-        processes=(UNKNOWN_INCIDENT_REPAIR_PROCESS,),
-    )
-    reopened_manager = DevelopmentWorkspaceManager(
-        repository_root=repository_root,
-        workspace_root=manager.workspace_root,
-        base_revision_resolver=IncidentRepairDevelopmentRevisionResolver(
-            reopened_changes
-        ),
-    )
-    reopened = ChangeCoordinator(
-        reopened_changes,
-        _Backend(),
-        source_completion_handlers=(
-            IncidentRepairSourceCompletionHandler(reopened_changes),
-        ),
-        development_completion_handlers=(
-            IncidentRepairDevelopmentCompletionHandler(
-                reopened_changes,
-                reopened_manager,
-            ),
-        ),
-    )
-    reopened.reconcile(admitted.change.change_id)
-    development = [
-        item
-        for item in reopened_changes.list_stages(admitted.change.change_id)
-        if item.stage_key == "development"
-    ]
-    if len(development) != 1:
-        raise Phase6EvaluationError(
-            "restart did not create exactly one development stage"
+    try:
+        _complete_diagnosis(
+            work=work,
+            changes=changes,
+            coordinator=coordinator,
+            change_id=admitted.change.change_id,
+            diagnostics_work_id=admitted.diagnostics_work_id,
+            source_revision=revision,
+            disposition=DiagnosisDisposition.SUPPORTED_REPAIR,
+            supported=True,
         )
-    return {
-        "development_work_id": development[0].work_id,
-        "plan_artifact_id": development[0].plan_artifact_id,
-    }
+        architecture = changes.latest_artifact(admitted.change.change_id, "architecture")
+        if architecture is None:
+            raise Phase6EvaluationError("architecture missing before restart")
+        gate = gates.present(
+            admitted.change.change_id,
+            GateKind.ARCHITECTURE,
+            architecture.artifact_id,
+        )
+        gates.decide(
+            gate.gate_id,
+            approved=True,
+            artifact_digest=architecture.digest,
+            actor_id="phase6-replay-owner",
+            source_session_id="phase6-replay",
+            source_turn_id="approve-before-restart",
+            request_key="phase6-replay:restart-approval",
+        )
 
+        reopened_work = SQLiteWorkStore(work.path)
+        reopened_changes = ChangeStore(
+            reopened_work,
+            processes=(UNKNOWN_INCIDENT_REPAIR_PROCESS,),
+        )
+        reopened_manager = DevelopmentWorkspaceManager(
+            repository_root=repository_root,
+            workspace_root=manager.workspace_root,
+            base_revision_resolver=IncidentRepairDevelopmentRevisionResolver(
+                reopened_changes
+            ),
+        )
+        reopened = ChangeCoordinator(
+            reopened_changes,
+            _Backend(),
+            source_completion_handlers=(
+                IncidentRepairSourceCompletionHandler(reopened_changes),
+            ),
+            development_completion_handlers=(
+                IncidentRepairDevelopmentCompletionHandler(
+                    reopened_changes,
+                    reopened_manager,
+                ),
+            ),
+        )
+        reopened.reconcile(admitted.change.change_id)
+        development = [
+            item
+            for item in reopened_changes.list_stages(admitted.change.change_id)
+            if item.stage_key == "development"
+        ]
+        if len(development) != 1:
+            raise Phase6EvaluationError(
+                "restart did not create exactly one development stage"
+            )
+        return {
+            "development_work_id": development[0].work_id,
+            "plan_artifact_id": development[0].plan_artifact_id,
+        }
+    finally:
+        incident_store.close()
 
 def _case_restart_during_development(root: pathlib.Path) -> dict[str, object]:
     repository_root, revision = _new_repo(root)
-    work, changes, coordinator, _, gates, _, admitted = _admit(
+    work, changes, coordinator, _, gates, incident_store, _, admitted = _admit(
         root,
         repository_root,
         revision,
     )
-    _complete_diagnosis(
-        work=work,
-        changes=changes,
-        coordinator=coordinator,
-        change_id=admitted.change.change_id,
-        diagnostics_work_id=admitted.diagnostics_work_id,
-        source_revision=revision,
-        disposition=DiagnosisDisposition.SUPPORTED_REPAIR,
-        supported=True,
-    )
-    development = _approve_architecture(
-        changes=changes,
-        coordinator=coordinator,
-        gates=gates,
-        change_id=admitted.change.change_id,
-    )
-    running = work.save(
-        development.transition(WorkState.RUNNING),
-        expected_version=development.version,
-    )
-    reopened = SQLiteWorkStore(work.path)
-    same = reopened.require(running.work_id)
-    if same.state is not WorkState.RUNNING:
-        raise Phase6EvaluationError("development state was not durable")
-    return {
-        "work_id": same.work_id,
-        "state": same.state.value,
-        "version": same.version,
-    }
-
+    try:
+        _complete_diagnosis(
+            work=work,
+            changes=changes,
+            coordinator=coordinator,
+            change_id=admitted.change.change_id,
+            diagnostics_work_id=admitted.diagnostics_work_id,
+            source_revision=revision,
+            disposition=DiagnosisDisposition.SUPPORTED_REPAIR,
+            supported=True,
+        )
+        development = _approve_architecture(
+            changes=changes,
+            coordinator=coordinator,
+            gates=gates,
+            change_id=admitted.change.change_id,
+        )
+        running = work.save(
+            development.transition(WorkState.RUNNING),
+            expected_version=development.version,
+        )
+        reopened = SQLiteWorkStore(work.path)
+        same = reopened.require(running.work_id)
+        if same.state is not WorkState.RUNNING:
+            raise Phase6EvaluationError("development state was not durable")
+        return {
+            "work_id": same.work_id,
+            "state": same.state.value,
+            "version": same.version,
+        }
+    finally:
+        incident_store.close()
 
 def _case_failed_candidate_tests() -> dict[str, object]:
     work = WorkItem(
@@ -891,7 +931,8 @@ def _case_protected_surface() -> dict[str, object]:
 
 
 def _case_secret_evidence(root: pathlib.Path) -> dict[str, object]:
-    incidents = IncidentService(SqliteIncidentStore(root / "incidents.sqlite3"))
+    incident_store = SqliteIncidentStore(root / "incidents.sqlite3")
+    incidents = IncidentService(incident_store)
     incident = incidents.create_manual(
         symptom="secret-bearing evidence test",
         affected_components=("runtime.demo",),
@@ -918,12 +959,18 @@ def _case_secret_evidence(root: pathlib.Path) -> dict[str, object]:
     )
     included_ids = {item.evidence_id for item in package.evidence}
     excluded_ids = {item.evidence_id for item in package.excluded_evidence}
-    if evidence.evidence_id in included_ids or evidence.evidence_id not in excluded_ids:
-        raise Phase6EvaluationError("secret-bearing evidence was admitted")
-    return {
-        "included_count": len(package.evidence),
-        "excluded_count": len(package.excluded_evidence),
-    }
+    try:
+        if (
+            evidence.evidence_id in included_ids
+            or evidence.evidence_id not in excluded_ids
+        ):
+            raise Phase6EvaluationError("secret-bearing evidence was admitted")
+        return {
+            "included_count": len(package.evidence),
+            "excluded_count": len(package.excluded_evidence),
+        }
+    finally:
+        incident_store.close()
 
 
 def _case_known_repair_priority(root: pathlib.Path) -> dict[str, object]:
@@ -945,13 +992,13 @@ def _case_known_repair_priority(root: pathlib.Path) -> dict[str, object]:
         reversible=True,
         automatic=True,
     )
-    work, changes, coordinator, _, _, _, admitted = _admit(
+    work, changes, coordinator, _, _, base_incident_store, _, admitted = _admit(
         root,
         repository_root,
         revision,
     )
     del work, coordinator, admitted
-    incidents, evidence, trigger = _base_incident(
+    incidents, known_incident_store, evidence, trigger = _base_incident(
         root / "known",
         revision=revision,
     )
@@ -969,36 +1016,47 @@ def _case_known_repair_priority(root: pathlib.Path) -> dict[str, object]:
         observed_at_epoch=102.0,
     )
     try:
-        admission.admit(trigger, repair_trigger=repair_trigger)
-    except IncidentRepairAdmissionBlocked as exc:
-        return {"blocked": True, "reason": str(exc)}
-    raise Phase6EvaluationError("known deterministic repair did not retain priority")
+        try:
+            admission.admit(trigger, repair_trigger=repair_trigger)
+        except IncidentRepairAdmissionBlocked as exc:
+            return {"blocked": True, "reason": str(exc)}
+        raise Phase6EvaluationError("known deterministic repair did not retain priority")
+    finally:
+        known_incident_store.close()
+        base_incident_store.close()
 
 
 def _case_duplicate_trigger(root: pathlib.Path) -> dict[str, object]:
     repository_root, revision = _new_repo(root)
-    work, changes, coordinator, _, _, _, _ = _admit(
+    work, changes, coordinator, _, _, base_incident_store, _, _ = _admit(
         root,
         repository_root,
         revision,
     )
-    incidents, _, trigger = _base_incident(root / "duplicate", revision=revision)
+    incidents, duplicate_incident_store, _, trigger = _base_incident(
+        root / "duplicate",
+        revision=revision,
+    )
     admission = IncidentRepairCoordinator(
         incidents=incidents,
         changes=coordinator,
     )
-    first = admission.admit(trigger)
-    second = admission.admit(trigger)
-    if first.change.change_id != second.change.change_id:
-        raise Phase6EvaluationError("duplicate trigger created duplicate change")
-    if first.diagnostics_work_id != second.diagnostics_work_id:
-        raise Phase6EvaluationError("duplicate trigger created duplicate diagnostics")
-    return {
-        "change_id": first.change.change_id,
-        "diagnostics_work_id": first.diagnostics_work_id,
-        "stage_count": len(changes.list_stages(first.change.change_id)),
-        "work_store": str(work.path),
-    }
+    try:
+        first = admission.admit(trigger)
+        second = admission.admit(trigger)
+        if first.change.change_id != second.change.change_id:
+            raise Phase6EvaluationError("duplicate trigger created duplicate change")
+        if first.diagnostics_work_id != second.diagnostics_work_id:
+            raise Phase6EvaluationError("duplicate trigger created duplicate diagnostics")
+        return {
+            "change_id": first.change.change_id,
+            "diagnostics_work_id": first.diagnostics_work_id,
+            "stage_count": len(changes.list_stages(first.change.change_id)),
+            "work_store": str(work.path),
+        }
+    finally:
+        duplicate_incident_store.close()
+        base_incident_store.close()
 
 
 def _case_protected_main(root: pathlib.Path) -> dict[str, object]:
