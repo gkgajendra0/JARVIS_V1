@@ -420,6 +420,7 @@ class GrimpImportGraphAnalyzer:
                 [
                     sys.executable,
                     "-I",
+                    "-B",
                     "-c",
                     _GRIMP_SCRIPT,
                     str(source_root),
