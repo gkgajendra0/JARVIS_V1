@@ -52,9 +52,7 @@ class IncidentRepairArchitecturePlan:
             "rollback_strategy",
         ):
             if not str(getattr(self, field_name)).strip():
-                raise IncidentRepairArchitectureError(
-                    f"{field_name} must not be empty"
-                )
+                raise IncidentRepairArchitectureError(f"{field_name} must not be empty")
         if not self.verification_targets:
             raise IncidentRepairArchitectureError(
                 "repair architecture requires verification targets"
