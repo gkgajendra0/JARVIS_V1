@@ -236,8 +236,13 @@ def test_one_strong_verification_binds_gate_and_authority_permit(tmp_path) -> No
 
     assert verifier.calls == 1
     assert authorized.gate_decision.approved is True
-    assert promotions.require(attempt.attempt_id).state is PromotionAttemptState.AUTHORIZED
-    assert changes.require(evidence.change_id).state is ChangeState.WAITING_PROMOTION_APPROVAL
+    assert (
+        promotions.require(attempt.attempt_id).state is PromotionAttemptState.AUTHORIZED
+    )
+    assert (
+        changes.require(evidence.change_id).state
+        is ChangeState.WAITING_PROMOTION_APPROVAL
+    )
 
 
 def test_authorized_merge_rechecks_external_state_and_promotes_change(tmp_path) -> None:
