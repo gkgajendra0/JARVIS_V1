@@ -2,11 +2,15 @@
 
 ## Status
 
-**OWNER-APPROVED / IMPLEMENTATION AUTHORIZED — STARTING 9A — 2026-09-27**
+**SOFTWARE IMPLEMENTATION COMPLETE (9A–9G) / OWNER-MACHINE REAL-CAPABILITY ACCEPTANCE PENDING — 2026-09-27**
 
 Architecture: `PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_ARCHITECTURE.md`
 
 Research: `PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_RESEARCH.md`
+
+Protected-main software implementation SHA: `4bea63255ea366d74cc5268c3f56baea3a1a53e3`
+
+All slices 9A–9G are implemented and merged. Exact-head CI passed Ruff, full pytest, Windows Hello, full Windows regression, inherited Phase-7/8 acceptance harnesses, the Phase-9 24-case deterministic replay, and promotion policy. Phase 9 remains incomplete until one genuine owner-requested external capability passes the real owner-machine acceptance path.
 
 ## 9A — acquisition contracts + EngineeringChange process
 
