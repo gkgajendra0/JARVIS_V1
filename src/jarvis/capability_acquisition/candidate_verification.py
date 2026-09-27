@@ -26,11 +26,13 @@ from jarvis.engineering_change.models import (
     EngineeringChange,
 )
 from jarvis.engineering_change.store import ChangeStore
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.engineering_substrate.change_integration import (
     MANIFEST_KIND,
     VERIFICATION_KIND,
     EngineeringSubstrateChangeService,
 )
+from jarvis.engineering_substrate.contracts import CapabilityManifest
 from jarvis.incident_repair.models import ProtectedSurfaceVerdict
 from jarvis.incident_repair.protected_surfaces import (
     ProtectedSurfaceAssessment,
@@ -62,15 +64,23 @@ class CapabilityAcquisitionProtectedSurfacePolicy(RepairProtectedSurfacePolicy):
     policy_id = "capability_acquisition.protected_surfaces"
     policy_version = 1
 
-    @classmethod
-    def _is_package_descriptor(cls, path: str) -> bool:
+    @staticmethod
+    def _is_metadata_descriptor(path: str, directory: str) -> bool:
         pure = pathlib.PurePosixPath(path)
         return (
             len(pure.parts) == 2
-            and pure.parts[0].casefold() == "capability_packages"
+            and pure.parts[0].casefold() == directory
             and pure.suffix.casefold() == ".json"
             and not pure.name.startswith(".")
         )
+
+    @classmethod
+    def _is_package_descriptor(cls, path: str) -> bool:
+        return cls._is_metadata_descriptor(path, "capability_packages")
+
+    @classmethod
+    def _is_manifest_descriptor(cls, path: str) -> bool:
+        return cls._is_metadata_descriptor(path, "capability_manifests")
 
     def assess(
         self,
@@ -80,7 +90,10 @@ class CapabilityAcquisitionProtectedSurfacePolicy(RepairProtectedSurfacePolicy):
             dict.fromkeys(self.normalize_path(item) for item in changed_paths)
         )
         descriptors = tuple(
-            path for path in normalized if self._is_package_descriptor(path)
+            path
+            for path in normalized
+            if self._is_package_descriptor(path)
+            or self._is_manifest_descriptor(path)
         )
         ordinary = tuple(path for path in normalized if path not in descriptors)
         if ordinary:
@@ -295,6 +308,69 @@ class CapabilityAcquisitionCandidateVerifier:
             )
         return package, relative
 
+    def _manifest(
+        self,
+        *,
+        work: WorkItem,
+        package: CapabilityPackageV1,
+        changed_paths: tuple[str, ...],
+    ) -> tuple[CapabilityManifest, str]:
+        manifest_paths = tuple(
+            path
+            for path in changed_paths
+            if self._protected._is_manifest_descriptor(path)
+        )
+        if not manifest_paths:
+            raise CapabilityAcquisitionCandidateError(
+                "manifest_descriptor_missing",
+                "Phase-9 candidate must change a capability_manifests/*.json descriptor",
+            )
+        matches: list[tuple[CapabilityManifest, str]] = []
+        for relative in manifest_paths:
+            target = self._workspace.resolve(
+                work.work_id,
+                relative,
+                require_file=True,
+            )
+            try:
+                raw = json.loads(target.read_text(encoding="utf-8"))
+                if not isinstance(raw, dict):
+                    raise ValueError("manifest descriptor must be an object")
+                manifest = CapabilityManifest(**raw)  # type: ignore[arg-type]
+            except (
+                OSError,
+                UnicodeDecodeError,
+                json.JSONDecodeError,
+                TypeError,
+                ValueError,
+            ) as exc:
+                raise CapabilityAcquisitionCandidateError(
+                    "manifest_descriptor_invalid",
+                    f"invalid capability manifest descriptor: {relative}",
+                ) from exc
+            digest = canonical_digest(manifest)
+            if (
+                manifest.manifest_id == package.manifest_id
+                and manifest.manifest_version == package.manifest_version
+                and digest == package.manifest_digest
+            ):
+                matches.append((manifest, relative))
+        if len(matches) != 1:
+            raise CapabilityAcquisitionCandidateError(
+                "manifest_descriptor_identity_mismatch",
+                "candidate must contain exactly one manifest matching the package digest",
+            )
+        manifest, relative = matches[0]
+        if (
+            manifest.capability_id != package.capability_id
+            or manifest.capability_version != package.package_version
+        ):
+            raise CapabilityAcquisitionCandidateError(
+                "manifest_package_capability_mismatch",
+                "candidate manifest capability/version differs from package",
+            )
+        return manifest, relative
+
     def _substrate(
         self,
         *,
@@ -397,6 +473,11 @@ class CapabilityAcquisitionCandidateVerifier:
             architecture=architecture,
             changed_paths=git.changed_paths,
         )
+        manifest, manifest_path = self._manifest(
+            work=work,
+            package=package,
+            changed_paths=git.changed_paths,
+        )
         substrate, binding_digest = self._substrate(
             change_id=change_id,
             package=package,
@@ -420,13 +501,14 @@ class CapabilityAcquisitionCandidateVerifier:
                 passing.observation.get("sandbox_profile_version") or 0
             ),
             package_descriptor_path=package_path,
+            manifest_descriptor_path=manifest_path,
             package_id=package.package_id,
             package_version=package.package_version,
             package_digest=package.digest,
             capability_id=package.capability_id,
             manifest_id=package.manifest_id,
             manifest_version=package.manifest_version,
-            manifest_digest=package.manifest_digest,
+            manifest_digest=canonical_digest(manifest),
             substrate_verification_artifact_id=substrate.artifact_id,
             substrate_verification_artifact_digest=substrate.digest,
             substrate_binding_digest=binding_digest,
