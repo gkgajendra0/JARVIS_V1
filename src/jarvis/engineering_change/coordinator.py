@@ -4,9 +4,15 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from jarvis.work.models import WorkItem, WorkPriority, WorkState, WorkType
+from jarvis.work.models import WorkItem, WorkPriority, WorkState
 
-from .models import ChangeConflict, ChangeState, EngineeringChange, UnsupportedProcess
+from .models import (
+    ChangeConflict,
+    ChangeState,
+    EngineeringChange,
+    ProcessStageRole,
+    UnsupportedProcess,
+)
 from .store import ChangeStore
 
 
@@ -39,17 +45,22 @@ class ChangeCoordinator:
 
     def submit_stage(self, change_id: str, stage_key: str, attempt: int):
         change = self.store.require(change_id)
+        process = self.store.process_contract(
+            change.process_key,
+            change.process_version,
+        )
+        stage_contract = process.stage_for_key(stage_key)
         stages = self.store.list_stages(change_id)
         existing = next(
             (s for s in stages if s.stage_key == stage_key and s.attempt == attempt),
             None,
         )
-        if stage_key == "research":
-            work_type = WorkType.RESEARCH
+
+        architecture = None
+        if stage_contract.role is ProcessStageRole.ARCHITECTURE_SOURCE:
             request = change.request
             dependencies: tuple[str, ...] = ()
-        elif stage_key == "development":
-            work_type = WorkType.DEVELOPMENT
+        elif stage_contract.role is ProcessStageRole.DEVELOPMENT:
             architecture = self.store.latest_artifact(change_id, "architecture")
             if architecture is None:
                 raise ChangeConflict("approved architecture is missing")
@@ -57,16 +68,22 @@ class ChangeCoordinator:
                 f"{change.request}\nApproved architecture revision "
                 f"{architecture.revision}: {architecture.payload}"
             )
-            research = [s.work_id for s in stages if s.stage_key == "research"]
-            if not research:
-                raise ChangeConflict("development requires completed research")
-            dependencies = tuple(research)
-        else:
-            raise ChangeConflict("unregistered change stage")
+            source_stage = process.architecture_source_stage
+            source_work = [
+                s.work_id for s in stages if s.stage_key == source_stage.stage_key
+            ]
+            if not source_work:
+                raise ChangeConflict(
+                    "development requires completed architecture-source work"
+                )
+            dependencies = tuple(source_work)
+        else:  # pragma: no cover - ProcessContract validation owns known roles
+            raise ChangeConflict("unregistered change stage role")
+
         if existing is None:
             item = WorkItem(
                 request=request,
-                work_type=work_type,
+                work_type=stage_contract.work_type,
                 source_session_id=f"change:{change_id}",
                 source_turn_id=f"{stage_key}:{attempt}",
                 priority=WorkPriority.NORMAL,
@@ -79,13 +96,14 @@ class ChangeCoordinator:
             # The gate is checked again before re-submitting after a restart.
             with self.store.work._lock, self.store.work._connect() as db:
                 self.store._admit_stage(db, change, stage_key)
-            if stage_key == "development" and (
+            if stage_contract.role is ProcessStageRole.DEVELOPMENT and (
                 architecture is None
                 or stage.plan_artifact_id != architecture.artifact_id
             ):
                 raise ChangeConflict(
                     "development attempt belongs to an older architecture"
                 )
+
         if not item.state.terminal:
             execution_id = self.backend.submit(item.work_id, priority=item.priority)
             if execution_id != item.work_id:
@@ -109,19 +127,27 @@ class ChangeCoordinator:
 
     def reconcile(self, change_id: str) -> EngineeringChange:
         change = self.store.require(change_id)
+        process = self.store.process_contract(
+            change.process_key,
+            change.process_version,
+        )
+        source_stage = process.architecture_source_stage
+        development_stage = process.development_stage
+
         if change.state is ChangeState.PROPOSED:
             change = self.store.transition(
                 change_id, ChangeState.RESEARCHING, expected_version=change.version
             )
+
         if change.state is ChangeState.RESEARCHING:
-            stage = self.submit_stage(change_id, "research", 1)
-            research = self.store.work.require(stage.work_id)
-            if research.state in {WorkState.FAILED, WorkState.CANCELLED}:
+            stage = self.submit_stage(change_id, source_stage.stage_key, 1)
+            source_work = self.store.work.require(stage.work_id)
+            if source_work.state in {WorkState.FAILED, WorkState.CANCELLED}:
                 return self.store.transition(
                     change_id, ChangeState.FAILED, expected_version=change.version
                 )
             if (
-                research.state is WorkState.COMPLETED
+                source_work.state is WorkState.COMPLETED
                 and self.store.latest_artifact(change_id, "architecture") is not None
             ):
                 return self.store.transition(
@@ -129,6 +155,7 @@ class ChangeCoordinator:
                     ChangeState.ARCHITECTURE_READY,
                     expected_version=change.version,
                 )
+
         elif change.state is ChangeState.APPROVED_FOR_BUILD:
             architecture = self.store.latest_artifact(change_id, "architecture")
             if architecture is None:
@@ -136,7 +163,7 @@ class ChangeCoordinator:
             attempts = [
                 s
                 for s in self.store.list_stages(change_id)
-                if s.stage_key == "development"
+                if s.stage_key == development_stage.stage_key
             ]
             matching = next(
                 (s for s in attempts if s.plan_artifact_id == architecture.artifact_id),
@@ -144,7 +171,7 @@ class ChangeCoordinator:
             )
             self.submit_stage(
                 change_id,
-                "development",
+                development_stage.stage_key,
                 matching.attempt
                 if matching is not None
                 else max((s.attempt for s in attempts), default=0) + 1,
@@ -152,13 +179,14 @@ class ChangeCoordinator:
             return self.store.transition(
                 change_id, ChangeState.DEVELOPING, expected_version=change.version
             )
+
         elif change.state is ChangeState.DEVELOPING:
             architecture = self.store.latest_artifact(change_id, "architecture")
             stage = next(
                 (
                     s
                     for s in reversed(self.store.list_stages(change_id))
-                    if s.stage_key == "development"
+                    if s.stage_key == development_stage.stage_key
                     and architecture is not None
                     and s.plan_artifact_id == architecture.artifact_id
                 ),
@@ -173,12 +201,20 @@ class ChangeCoordinator:
                 )
             if item.state is WorkState.COMPLETED:
                 with self.store.work._lock, self.store.work._connect() as db:
-                    self.store._admit_stage(db, change, "development")
+                    self.store._admit_stage(
+                        db,
+                        change,
+                        development_stage.stage_key,
+                    )
                 return self.store.transition(
                     change_id,
                     ChangeState.VERIFYING,
                     expected_version=change.version,
                 )
             if not item.state.terminal:
-                self.submit_stage(change_id, "development", stage.attempt)
+                self.submit_stage(
+                    change_id,
+                    development_stage.stage_key,
+                    stage.attempt,
+                )
         return self.store.require(change_id)

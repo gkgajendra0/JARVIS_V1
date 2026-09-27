@@ -20,6 +20,7 @@ from .models import (
     ChangeState,
     EngineeringChange,
     ProcessContract,
+    ProcessStageRole,
     UnsupportedProcess,
 )
 
@@ -232,9 +233,18 @@ class ChangeStore:
             for row in rows
         )
 
-    def _assert_supported(self, key: str, version: int) -> None:
-        if type(version) is not int or (key, version) not in self._processes:
+    def process_contract(self, key: str, version: int) -> ProcessContract:
+        if type(version) is not int:
             raise UnsupportedProcess(f"unsupported change process: {key}/{version}")
+        try:
+            return self._processes[(key, version)]
+        except KeyError as exc:
+            raise UnsupportedProcess(
+                f"unsupported change process: {key}/{version}"
+            ) from exc
+
+    def _assert_supported(self, key: str, version: int) -> None:
+        self.process_contract(key, version)
 
     def create(
         self,
@@ -388,8 +398,14 @@ class ChangeStore:
             if row is None:
                 return False
             try:
-                self._admit_stage(db, self._from_row(row), stage["stage_key"])
-                if stage["stage_key"] == "development":
+                change = self._from_row(row)
+                self._admit_stage(db, change, stage["stage_key"])
+                process = self.process_contract(
+                    change.process_key,
+                    change.process_version,
+                )
+                stage_contract = process.stage_for_key(stage["stage_key"])
+                if stage_contract.role is ProcessStageRole.DEVELOPMENT:
                     latest = db.execute(
                         """SELECT artifact_id FROM engineering_change_artifacts
                         WHERE change_id=? AND kind='architecture'
@@ -405,15 +421,19 @@ class ChangeStore:
                 return False
             return True
 
-    @staticmethod
     def _admit_stage(
-        db: sqlite3.Connection, change: EngineeringChange, stage_key: str
+        self,
+        db: sqlite3.Connection,
+        change: EngineeringChange,
+        stage_key: str,
     ) -> None:
-        if stage_key == "research":
+        process = self.process_contract(change.process_key, change.process_version)
+        stage = process.stage_for_key(stage_key)
+        if stage.role is ProcessStageRole.ARCHITECTURE_SOURCE:
             if change.state is not ChangeState.RESEARCHING:
-                raise ChangeConflict("research stage is not admitted")
+                raise ChangeConflict("architecture-source stage is not admitted")
             return
-        if stage_key != "development" or change.state not in {
+        if stage.role is not ProcessStageRole.DEVELOPMENT or change.state not in {
             ChangeState.APPROVED_FOR_BUILD,
             ChangeState.DEVELOPING,
         }:
@@ -623,13 +643,19 @@ class ChangeStore:
                     ).fetchone()[0],
                 )
             plan_artifact_id = None
-            if stage_key == "development":
-                plan_artifact_id = connection.execute(
+            change = self._from_row(change_row)
+            process = self.process_contract(change.process_key, change.process_version)
+            stage_contract = process.stage_for_key(stage_key)
+            if stage_contract.role is ProcessStageRole.DEVELOPMENT:
+                latest = connection.execute(
                     """SELECT artifact_id FROM engineering_change_artifacts
                     WHERE change_id=? AND kind='architecture'
                     ORDER BY revision DESC LIMIT 1""",
                     (change_id,),
-                ).fetchone()[0]
+                ).fetchone()
+                if latest is None:
+                    raise ChangeConflict("approved architecture is missing")
+                plan_artifact_id = latest[0]
             self.work._validate_dependency_graph(connection, item)
             try:
                 self.work._insert_item(connection, item)
