@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pathlib
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Iterator
 
 from jarvis.authority.approval import ApprovalService
 from jarvis.authority.audit import SqliteAuditEventStore
