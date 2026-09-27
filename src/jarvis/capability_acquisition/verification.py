@@ -172,6 +172,28 @@ def _scope_covers(path: str, approved: str) -> bool:
     return False
 
 
+def _split_pytest_target(value: object) -> tuple[str, tuple[str, ...]]:
+    text = str(value or "").strip()
+    parts = text.split("::")
+    path = _normalize_repo_path(parts[0])
+    selectors = tuple(part.strip() for part in parts[1:] if part.strip())
+    return path, selectors
+
+
+def _test_target_covers(required: str, executed: str) -> bool:
+    required_path, required_selectors = _split_pytest_target(required)
+    executed_path, executed_selectors = _split_pytest_target(executed)
+    if required_path == executed_path:
+        if not executed_selectors:
+            return True
+        if not required_selectors:
+            return False
+        return required_selectors[: len(executed_selectors)] == executed_selectors
+    if executed_selectors:
+        return False
+    return _scope_covers(required_path, executed_path)
+
+
 def _completed_steps(
     steps: tuple[WorkStep, ...],
     kind: str,
@@ -463,6 +485,7 @@ class CapabilityCandidateVerifier:
     def _verification_step(
         work: WorkItem,
         steps: tuple[WorkStep, ...],
+        required_targets: tuple[str, ...],
     ) -> WorkStep:
         writes = _completed_steps(steps, "dev_write_file")
         if not writes:
@@ -480,6 +503,34 @@ class CapabilityCandidateVerifier:
             raise CapabilityCandidateError(
                 "post_edit_tests_missing",
                 "capability candidate lacks passing sandbox tests after latest edit",
+            )
+        if not required_targets:
+            raise CapabilityCandidateError(
+                "development_test_targets_missing",
+                "approved acquisition architecture has no development test targets",
+            )
+        covered: set[str] = set()
+        for _, step in passing:
+            raw_targets = step.input_data.get("targets")
+            executed_targets = (
+                ("tests",)
+                if raw_targets is None or raw_targets == ()
+                else tuple(raw_targets)
+            )
+            for required in required_targets:
+                if any(
+                    _test_target_covers(required, str(executed))
+                    for executed in executed_targets
+                ):
+                    covered.add(required)
+        missing = tuple(
+            target for target in required_targets if target not in covered
+        )
+        if missing:
+            raise CapabilityCandidateError(
+                "required_development_tests_missing",
+                "approved development test targets were not exercised after latest edit: "
+                + ", ".join(missing),
             )
         test_index, test_step = passing[-1]
         if (
@@ -525,17 +576,6 @@ class CapabilityCandidateVerifier:
             raise CapabilityCandidateError(
                 "canonical_verification_missing",
                 "canonical DEVELOPMENT result does not record passing verification",
-            )
-        raw_targets = test_step.input_data.get("targets")
-        targets = ("tests",) if not raw_targets else tuple(raw_targets)
-        if not targets or not all(
-            str(item).strip() == "tests"
-            or str(item).strip().replace("\\", "/").startswith("tests/")
-            for item in targets
-        ):
-            raise CapabilityCandidateError(
-                "test_scope_invalid",
-                "capability candidate verification must execute bounded repository tests",
             )
         return test_step
 
@@ -634,9 +674,16 @@ class CapabilityCandidateVerifier:
         git = self._git_evidence(work, architecture)
         self._approved_scope(architecture, git.changed_paths)
         protected = self._protected_surface(git.changed_paths)
+        raw_targets = architecture.payload.get("verification_targets")
+        required_targets = tuple(
+            str(item).strip()
+            for item in (raw_targets if isinstance(raw_targets, list) else [])
+            if str(item).strip()
+        )
         test_step = self._verification_step(
             work,
             self._store.work.list_steps(work.work_id),
+            required_targets,
         )
         package_path, package = self._package(work, architecture)
         if package_path not in git.changed_paths:
