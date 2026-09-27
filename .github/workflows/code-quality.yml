@@ -250,6 +250,11 @@ jobs:
       - name: Run non-destructive Windows Phase 8 acceptance harness
         run: python -m jarvis.capability_registry.acceptance --repo-root .
 
+      - name: Run Windows Phase 9 capability-acquisition replay regressions
+        run: >-
+          python -m pytest -q
+          tests/test_phase9_evaluation.py
+
 
   promotion-policy:
     if: always()
