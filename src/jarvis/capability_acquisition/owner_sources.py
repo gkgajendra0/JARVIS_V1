@@ -10,7 +10,6 @@ from jarvis.capability_acquisition.models import (
     AcquisitionSourceKind,
     AcquisitionTrustClass,
 )
-from jarvis.capability_acquisition.source import CapabilitySourceRegistry
 from jarvis.capability_acquisition.standard_sources import (
     AsyncApiCapabilitySourceAdapter,
     McpCapabilitySourceAdapter,
