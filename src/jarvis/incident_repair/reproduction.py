@@ -209,8 +209,7 @@ def _normalize_coverage_path(value: object) -> str | None:
     text = str(value or "").replace("\\", "/").strip()
     if not text:
         return None
-    if text.startswith("/workspace/"):
-        text = text[len("/workspace/") :]
+    text = text.removeprefix("/workspace/")
     pure = pathlib.PurePosixPath(text)
     if pure.is_absolute() or ".." in pure.parts:
         return None
