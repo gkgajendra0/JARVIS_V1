@@ -930,8 +930,12 @@ def _25_restart(root: pathlib.Path) -> dict[str, object]:
 
 def _26_newer_schema(root: pathlib.Path) -> dict[str, object]:
     path = root / "newer.sqlite3"
-    with sqlite3.connect(path) as connection:
+    connection = sqlite3.connect(path)
+    try:
         connection.execute("PRAGMA user_version=99")
+        connection.commit()
+    finally:
+        connection.close()
     try:
         CapabilityRegistryStore(path)
     except CapabilityRegistrySchemaTooNewError:
@@ -1208,7 +1212,8 @@ def _39_stale_projection(root: pathlib.Path) -> dict[str, object]:
 def _40_corrupt_selected(root: pathlib.Path) -> dict[str, object]:
     env = _environment(root)
     _select_direct(env, "1.0.0")
-    with sqlite3.connect(env.store.path) as connection:
+    connection = sqlite3.connect(env.store.path)
+    try:
         connection.execute(
             """
             UPDATE capability_packages
@@ -1217,6 +1222,9 @@ def _40_corrupt_selected(root: pathlib.Path) -> dict[str, object]:
             """,
             ('{"schema_version":1}', "example.package", "1.0.0"),
         )
+        connection.commit()
+    finally:
+        connection.close()
     try:
         env.reconciler.reconcile(ReconciliationTrigger.STARTUP)
     except CapabilityRegistryIntegrityError:
