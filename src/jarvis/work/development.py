@@ -155,6 +155,22 @@ class DevelopmentWorkspaceManager:
         ) as exc:
             raise DevelopmentWorkspaceError(str(exc)) from exc
 
+    def current_revision(self) -> str:
+        """Return the exact commit currently checked out at the trusted source root."""
+
+        revision = self._run(
+            self.repository_root,
+            "rev-parse",
+            "HEAD",
+        ).stdout.strip().casefold()
+        if len(revision) != 40 or any(
+            char not in "0123456789abcdef" for char in revision
+        ):
+            raise DevelopmentWorkspaceError(
+                "trusted JARVIS source revision is not an exact Git SHA"
+            )
+        return revision
+
     def _approved_base_revision(self, work_id: str) -> str | None:
         resolver = self._base_revision_resolver
         if resolver is None:
