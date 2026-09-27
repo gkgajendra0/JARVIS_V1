@@ -445,6 +445,43 @@ class CapabilityBindSubstrateExecutor:
         }
 
 
+def capability_candidate_completion_guard(
+    work: WorkItem,
+    steps,
+) -> tuple[bool, str | None]:
+    base_allowed, base_reason = WorkEngine._completion_guard(work, steps)
+    if not base_allowed:
+        return base_allowed, base_reason
+    last_commit = max(
+        (
+            index
+            for index, step in enumerate(steps)
+            if step.kind == "dev_commit"
+            and step.state.value == "completed"
+            and step.observation.get("committed") is True
+            and step.observation.get("clean") is True
+        ),
+        default=-1,
+    )
+    last_substrate = max(
+        (
+            index
+            for index, step in enumerate(steps)
+            if step.kind == "dev_phase9_bind_substrate"
+            and step.state.value == "completed"
+            and step.observation.get("substrate_satisfied") is True
+        ),
+        default=-1,
+    )
+    if last_substrate <= last_commit:
+        return (
+            False,
+            "Phase-9 development requires current satisfied substrate binding "
+            "after the final clean commit",
+        )
+    return True, None
+
+
 def build_capability_candidate_executors(
     store: ChangeStore,
     workspace_manager: DevelopmentWorkspaceManager,
