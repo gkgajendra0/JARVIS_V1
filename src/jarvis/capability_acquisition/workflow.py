@@ -247,7 +247,9 @@ class AcquisitionRecordCandidateExecutor:
         try:
             source_kind = AcquisitionSourceKind(str(parameters.get("source_kind")))
         except ValueError as exc:
-            raise AcquisitionProtocolError("unsupported acquisition source kind") from exc
+            raise AcquisitionProtocolError(
+                "unsupported acquisition source kind"
+            ) from exc
         strategy = {
             AcquisitionSourceKind.MCP: AcquisitionStrategy.WRAP,
             AcquisitionSourceKind.OPENAPI: AcquisitionStrategy.GENERATE_CONTRACT_CLIENT,
@@ -494,8 +496,12 @@ class AcquisitionFinalizeExecutor:
             resolution_artifact.payload
         )
         if selected_id is None:
-            raise AcquisitionProtocolError("no safe acquisition candidate is selectable")
-        candidate = next(item for item in candidates if item.candidate_id == selected_id)
+            raise AcquisitionProtocolError(
+                "no safe acquisition candidate is selectable"
+            )
+        candidate = next(
+            item for item in candidates if item.candidate_id == selected_id
+        )
         evaluation = next(
             item for item in evaluations if item.candidate_id == selected_id
         )
