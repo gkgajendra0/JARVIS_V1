@@ -30,7 +30,10 @@ def goal_payload(goal: OwnerCapabilityGoalV1) -> dict[str, object]:
 
 
 def goal_from_payload(payload: object) -> OwnerCapabilityGoalV1:
-    if not isinstance(payload, dict) or payload.get("schema") != "owner_capability_goal.v1":
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != "owner_capability_goal.v1"
+    ):
         raise AcquisitionArtifactError("invalid owner capability goal artifact")
     try:
         goal = OwnerCapabilityGoalV1.create(
@@ -43,7 +46,9 @@ def goal_from_payload(payload: object) -> OwnerCapabilityGoalV1:
             now_epoch=float(payload["created_at_epoch"]),
         )
     except (KeyError, TypeError, ValueError) as exc:
-        raise AcquisitionArtifactError("owner capability goal artifact is malformed") from exc
+        raise AcquisitionArtifactError(
+            "owner capability goal artifact is malformed"
+        ) from exc
     if goal.goal_id != payload.get("goal_id") or goal.digest != payload.get("digest"):
         raise AcquisitionArtifactError("owner capability goal artifact digest mismatch")
     return goal
@@ -59,7 +64,10 @@ def candidate_payload(candidate: AcquisitionCandidateV1) -> dict[str, object]:
 
 
 def candidate_from_payload(payload: object) -> AcquisitionCandidateV1:
-    if not isinstance(payload, dict) or payload.get("schema") != "acquisition_candidate.v1":
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != "acquisition_candidate.v1"
+    ):
         raise AcquisitionArtifactError("invalid acquisition candidate artifact")
     try:
         candidate = AcquisitionCandidateV1.create(
@@ -85,11 +93,12 @@ def candidate_from_payload(payload: object) -> AcquisitionCandidateV1:
             reason_codes=tuple(payload.get("reason_codes") or ()),
         )
     except (KeyError, TypeError, ValueError) as exc:
-        raise AcquisitionArtifactError("acquisition candidate artifact is malformed") from exc
-    if (
-        candidate.candidate_id != payload.get("candidate_id")
-        or candidate.digest != payload.get("digest")
-    ):
+        raise AcquisitionArtifactError(
+            "acquisition candidate artifact is malformed"
+        ) from exc
+    if candidate.candidate_id != payload.get(
+        "candidate_id"
+    ) or candidate.digest != payload.get("digest"):
         raise AcquisitionArtifactError("acquisition candidate artifact digest mismatch")
     return candidate
 
@@ -186,7 +195,9 @@ def plan_from_payload(
             "capability acquisition plan artifact is malformed"
         ) from exc
     if plan.plan_id != payload.get("plan_id") or plan.digest != payload.get("digest"):
-        raise AcquisitionArtifactError("capability acquisition plan artifact digest mismatch")
+        raise AcquisitionArtifactError(
+            "capability acquisition plan artifact digest mismatch"
+        )
     return plan
 
 
@@ -215,11 +226,15 @@ def typed_resolution_from_payload(
         not isinstance(payload, dict)
         or payload.get("schema") != "capability_acquisition_resolution.v1"
     ):
-        raise AcquisitionArtifactError("invalid capability acquisition resolution artifact")
+        raise AcquisitionArtifactError(
+            "invalid capability acquisition resolution artifact"
+        )
     raw_candidates = payload.get("candidates")
     raw_evaluations = payload.get("evaluations")
     if not isinstance(raw_candidates, list) or not isinstance(raw_evaluations, list):
-        raise AcquisitionArtifactError("resolution candidate/evaluation lists are missing")
+        raise AcquisitionArtifactError(
+            "resolution candidate/evaluation lists are missing"
+        )
     candidates = tuple(candidate_from_payload(item) for item in raw_candidates)
     evaluations = tuple(evaluation_from_payload(item) for item in raw_evaluations)
     selected = payload.get("selected_candidate_id")
