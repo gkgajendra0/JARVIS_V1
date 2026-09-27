@@ -124,7 +124,9 @@ def _managed_context(
 
 def _resolver(*adapters) -> CapabilityAcquisitionResolver:
     return CapabilityAcquisitionResolver(
-        CapabilitySourceRegistry(tuple(adapters) or (ExistingCapabilitySourceAdapter(),))
+        CapabilitySourceRegistry(
+            tuple(adapters) or (ExistingCapabilitySourceAdapter(),)
+        )
     )
 
 
@@ -144,8 +146,7 @@ def test_existing_core_capability_is_reused_without_build() -> None:
     assert result.selected_candidate is not None
     assert result.selected_candidate.strategy is AcquisitionStrategy.REUSE
     assert (
-        result.selected_candidate.trust_class
-        is AcquisitionTrustClass.ACCEPTED_RELEASE
+        result.selected_candidate.trust_class is AcquisitionTrustClass.ACCEPTED_RELEASE
     )
     evaluation = result.evaluation(result.selected_candidate.candidate_id)
     assert evaluation.disposition.value == "selectable"
@@ -206,7 +207,9 @@ def test_unsafe_package_state_cannot_be_selected(
     assert reason in result.evaluations[0].reason_codes
 
 
-def test_existing_source_skips_capability_that_does_not_cover_owner_operations() -> None:
+def test_existing_source_skips_capability_that_does_not_cover_owner_operations() -> (
+    None
+):
     result = _resolver().resolve(
         _goal("power", "input.change"),
         _core_context(),
@@ -251,7 +254,9 @@ def test_exact_duplicate_candidates_are_deduplicated() -> None:
     assert len(result.candidates) == 1
 
 
-def test_same_immutable_source_identity_with_conflicting_semantics_fails_closed() -> None:
+def test_same_immutable_source_identity_with_conflicting_semantics_fails_closed() -> (
+    None
+):
     context = _core_context()
     candidate = ExistingCapabilitySourceAdapter().discover(_goal("power"), context)[0]
     conflicting = AcquisitionCandidateV1.create(
@@ -324,5 +329,8 @@ def test_reuse_beats_verified_wrap_deterministically() -> None:
     result = resolver.resolve(_goal("power", "volume"), context)
 
     assert result.selected_candidate is not None
-    assert result.selected_candidate.source_kind is AcquisitionSourceKind.EXISTING_CAPABILITY
+    assert (
+        result.selected_candidate.source_kind
+        is AcquisitionSourceKind.EXISTING_CAPABILITY
+    )
     assert result.selected_candidate.strategy is AcquisitionStrategy.REUSE
