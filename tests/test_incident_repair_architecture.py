@@ -42,9 +42,7 @@ def _coordinator(store: ChangeStore, backend: Backend) -> ChangeCoordinator:
     return ChangeCoordinator(
         store,
         backend,
-        source_completion_handlers=(
-            IncidentRepairSourceCompletionHandler(store),
-        ),
+        source_completion_handlers=(IncidentRepairSourceCompletionHandler(store),),
     )
 
 
@@ -187,29 +185,33 @@ def _fixture(tmp_path, *, inconclusive: bool = False):
 def test_supported_diagnosis_derives_exact_architecture_without_development(
     tmp_path,
 ) -> None:
-    _, store, _, coordinator, change_id, diagnostic_work_id, diagnosis, diagnosis_artifact = (
-        _fixture(tmp_path)
-    )
+    (
+        _,
+        store,
+        _,
+        coordinator,
+        change_id,
+        diagnostic_work_id,
+        diagnosis,
+        diagnosis_artifact,
+    ) = _fixture(tmp_path)
 
     reconciled = coordinator.reconcile_for_work(diagnostic_work_id)
 
     assert reconciled is not None
     assert reconciled.state is ChangeState.ARCHITECTURE_READY
     architecture = ensure_incident_repair_architecture_current(store, change_id)
-    assert architecture.payload["diagnosis_artifact_id"] == diagnosis_artifact.artifact_id
     assert (
-        architecture.payload["diagnosis_artifact_digest"]
-        == diagnosis_artifact.digest
+        architecture.payload["diagnosis_artifact_id"] == diagnosis_artifact.artifact_id
+    )
+    assert (
+        architecture.payload["diagnosis_artifact_digest"] == diagnosis_artifact.digest
     )
     assert architecture.payload["diagnosis_id"] == diagnosis.diagnosis_id
     assert architecture.payload["diagnosis_digest"] == diagnosis.digest
     assert architecture.payload["source_revision"] == REVISION
-    assert architecture.payload["repair_scope"] == (
-        "serialize supervisor state commit"
-    )
-    assert architecture.payload["allowed_paths"] == [
-        "src/jarvis/voice/runtime.py"
-    ]
+    assert architecture.payload["repair_scope"] == ("serialize supervisor state commit")
+    assert architecture.payload["allowed_paths"] == ["src/jarvis/voice/runtime.py"]
     assert architecture.payload["verification_targets"] == [
         "tests/test_voice_runtime.py"
     ]
@@ -220,9 +222,7 @@ def test_supported_diagnosis_derives_exact_architecture_without_development(
 
 
 def test_owner_rejection_never_creates_development_work(tmp_path) -> None:
-    _, store, _, coordinator, change_id, diagnostic_work_id, _, _ = _fixture(
-        tmp_path
-    )
+    _, store, _, coordinator, change_id, diagnostic_work_id, _, _ = _fixture(tmp_path)
     coordinator.reconcile_for_work(diagnostic_work_id)
     architecture = store.latest_artifact(change_id, "architecture")
     assert architecture is not None
@@ -322,9 +322,7 @@ def test_exact_owner_approval_creates_one_bound_development_workitem(
     assert diagnosis.diagnosis_id in dev_work.request
     assert diagnosis.digest in dev_work.request
     assert backend.submitted.count(development.work_id) >= 1
-    assert len(
-        [stage for stage in stages if stage.stage_key == "development"]
-    ) == 1
+    assert len([stage for stage in stages if stage.stage_key == "development"]) == 1
 
 
 def test_restart_cannot_skip_architecture_owner_gate(tmp_path) -> None:
@@ -348,10 +346,13 @@ def test_restart_cannot_skip_architecture_owner_gate(tmp_path) -> None:
     assert [stage.stage_key for stage in restarted_store.list_stages(change_id)] == [
         "diagnostics"
     ]
-    assert architecture.artifact_id == restarted_store.latest_artifact(
-        change_id,
-        "architecture",
-    ).artifact_id
+    assert (
+        architecture.artifact_id
+        == restarted_store.latest_artifact(
+            change_id,
+            "architecture",
+        ).artifact_id
+    )
 
 
 def test_inconclusive_diagnosis_stops_without_build_architecture(tmp_path) -> None:
