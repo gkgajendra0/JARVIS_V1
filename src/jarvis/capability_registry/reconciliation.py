@@ -36,7 +36,6 @@ from jarvis.self_model.health import (
     HealthState,
 )
 
-
 _LOGGER = logging.getLogger(__name__)
 
 
