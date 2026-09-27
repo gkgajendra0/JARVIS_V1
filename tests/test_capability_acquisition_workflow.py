@@ -267,6 +267,7 @@ def test_completed_acquisition_derives_digest_bound_architecture(tmp_path) -> No
         changed_paths=("src/jarvis/tv_control.py",),
         sandbox_profile_ids=("test.offline.v1",),
         verification_contract_ids=("tv-control-contract-v1",),
+        development_test_targets=("tests/test_tv_control.py",),
         evidence_refs=("owner-goal",),
     )
     plan_artifact = store.add_artifact(
