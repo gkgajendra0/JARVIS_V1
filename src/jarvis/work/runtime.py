@@ -29,6 +29,9 @@ from jarvis.incident_repair.static_analysis import (
     DiagnosticStaticCheckExecutor,
     build_diagnostic_static_runner,
 )
+from jarvis.incident_repair.verification import (
+    IncidentRepairDevelopmentCompletionHandler,
+)
 from jarvis.incident_repair.workspace import (
     ChangeStoreDiagnosticRevisionResolver,
     DiagnosticWorkspaceManager,
@@ -290,6 +293,12 @@ def build_work_runtime(
         backend,
         source_completion_handlers=(
             IncidentRepairSourceCompletionHandler(change_store),
+        ),
+        development_completion_handlers=(
+            IncidentRepairDevelopmentCompletionHandler(
+                change_store,
+                workspace_manager,
+            ),
         ),
     )
     configure_terminal_reconciliation(changes.reconcile_for_work)
