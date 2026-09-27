@@ -7,6 +7,8 @@ from .models import (
     ChangeState,
     EngineeringChange,
     ProcessContract,
+    ProcessStageContract,
+    ProcessStageRole,
     UnsupportedProcess,
 )
 from .store import ChangeStore
@@ -19,5 +21,7 @@ __all__ = [
     "ChangeStore",
     "EngineeringChange",
     "ProcessContract",
+    "ProcessStageContract",
+    "ProcessStageRole",
     "UnsupportedProcess",
 ]
