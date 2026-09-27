@@ -237,9 +237,8 @@ def _evaluator(
 ) -> CapabilityCompatibilityEvaluator:
     return CapabilityCompatibilityEvaluator(
         manifest_registry=_manifest_registry(manifest),
-        provider_registry=provider_registry or _provider_registry(
-            release_sha=runtime_release_sha
-        ),
+        provider_registry=provider_registry
+        or _provider_registry(release_sha=runtime_release_sha),
         artifact_store=artifact_store,
         package_source=package_source,
         runtime_release_sha=runtime_release_sha,
@@ -371,7 +370,9 @@ def test_ready_compatibility_report_is_deterministic_and_nonexecuting(tmp_path) 
     assert len(first.digest) == 64
 
 
-def test_admission_is_disabled_by_default_and_binds_compatibility_digest(tmp_path) -> None:
+def test_admission_is_disabled_by_default_and_binds_compatibility_digest(
+    tmp_path,
+) -> None:
     release = _release(tmp_path)
     manifest = _manifest()
     package = _package(manifest)
