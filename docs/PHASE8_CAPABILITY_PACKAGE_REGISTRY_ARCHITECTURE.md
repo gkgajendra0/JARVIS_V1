@@ -2,7 +2,7 @@
 
 ## Status
 
-**ARCHITECTURE PROPOSED — OWNER APPROVAL REQUIRED — 2026-09-27**
+**ARCHITECTURE REVISED AFTER IMPLEMENTATION RESEARCH — OWNER APPROVAL REQUIRED — 2026-09-27**
 
 No Phase-8 runtime implementation is authorized until the owner approves this architecture.
 
@@ -32,17 +32,23 @@ package metadata
 admission + exact evidence
       |
       v
-durable registry desired state
+durable registry desired state/generation
       |
-      +----------------------+
-      |                      |
-      v                      v
-compatibility truth     HealthRegistry
-      |                      |
-      +----------+-----------+
+      +----------------------+------------------+
+      |                      |                  |
+      v                      v                  v
+compatibility truth     HealthRegistry    active release truth
+      |                      |                  |
+      +----------+-----------+------------------+
                  |
                  v
-       runtime catalog projection
+      CapabilityLifecycleReconciler
+                 |
+                 v
+     generation-fenced effective snapshot
+                 |
+                 v
+       CapabilityRegistryProjection
                  |
                  v
        existing CapabilityRuntime
@@ -127,7 +133,9 @@ Rules:
 - the provider registry is code, not data;
 - a package can activate only when its manifest references a trusted provider already present in the active accepted release;
 - future Phase-9 changes may add provider code through EngineeringChange + Phase 7;
-- provider-registry code is a protected engineering surface.
+- provider-registry code is a protected engineering surface;
+- persistent package metadata never selects an arbitrary execution backend;
+- v1 providers may be trusted in-process Python implementations, but the provider abstraction must remain execution-model neutral so a later reviewed WASM/AppContainer/subprocess executor can implement the same trusted CapabilityExecutor boundary without redesigning package lifecycle truth.
 
 ## 6. Release package source
 
@@ -219,6 +227,25 @@ Exactly:
 
 This is durable owner/system intent, not proof the package can run.
 
+### 7.4 Transaction and concurrency rule
+
+Lifecycle mutation uses explicit transactional CAS. The registry row mutation and its lifecycle event are one atomic SQLite transaction.
+
+Recommended v1 mutation boundary:
+
+```text
+BEGIN IMMEDIATE
+-> verify expected generation
+-> verify exact package identity/digest/disposition
+-> update selected version / desired state
+-> append lifecycle event for the resulting generation
+COMMIT
+```
+
+A transaction may not commit lifecycle state without its event, and an event may not claim a transition whose CAS failed. Concurrent writers for one expected generation must produce one winner and a deterministic stale-generation rejection.
+
+SQLite remains canonical domain truth. DBOS may orchestrate future long-running lifecycle work, but DBOS workflow state is never the capability registry.
+
 ## 8. Compatibility truth
 
 Introduce immutable `CapabilityCompatibilityReportV1` evaluated against:
@@ -257,6 +284,8 @@ effective_enabled(C) =
     AND compatibility == READY
     AND trusted provider exists
     AND required health is acceptable
+    AND transition_fence == CLEAR
+    AND applied_projection_generation == current_registry_generation
 ```
 
 If any term becomes false, new capability routing fails closed.
@@ -285,16 +314,29 @@ Rules:
 
 Existing `CapabilityRuntime` remains the execution engine.
 
-Introduce `CapabilityRegistryProjection` between trusted providers and `CapabilityCatalog`.
+Introduce two components between durable lifecycle truth and `CapabilityCatalog`:
 
-It:
+- `CapabilityLifecycleReconciler`;
+- `CapabilityRegistryProjection`.
+
+The reconciler is deterministic, idempotent and Authority-free. It reads the exact active release, release package inventory, durable selected/desired state and generation, manifest/provider/artifact/provenance compatibility and current HealthRegistry evidence. It produces an immutable effective-state snapshot with deterministic reason codes.
+
+The reconciler may make execution less permissive when evidence is missing/stale/invalid. It may not create desired state, grant Authority, lower package disposition or make execution more permissive than authorized durable intent.
+
+Reconciliation runs at least on startup, package admission/rescan, successful lifecycle mutation, active-release identity change, relevant health change where practical, and a bounded periodic safety sweep.
+
+The projection:
 
 - produces execution-enabled descriptors only for effectively enabled packages;
+- carries the applied registry generation;
+- fails closed for PACKAGE_MANAGED routing while a capability is transition-fenced or the applied generation is stale;
 - preserves discovery-only descriptors as execution-disabled;
 - preserves current core built-ins that have not yet migrated;
 - marks inventory management mode:
   - `CORE_PINNED`;
   - `PACKAGE_MANAGED`.
+
+The hot routing path should use an atomic in-process registry/effective snapshot rather than querying SQLite for every invocation. Canonical SQLite truth is loaded/reconciled into that snapshot.
 
 Existing Hands semantic operations remain owned by `HandsCapabilityRegistry`.
 
@@ -302,13 +344,34 @@ A package may implement an existing semantic operation only when its trusted pro
 
 ## 12. Enable / disable behavior
 
+### Transition fence
+
+Every state-changing PACKAGE_MANAGED lifecycle operation uses a per-capability transition fence.
+
+Before the durable mutation, the in-process projection makes that capability temporarily non-routable for new work. This closes the failure window where durable truth changes but a crash or projection-refresh failure leaves stale routing active.
+
+General transition shape:
+
+```text
+acquire per-capability transition fence
+-> remove new routing for that capability
+-> compute exact current compatibility
+-> obtain/consume required Authority
+-> atomic registry CAS + lifecycle-event commit
+-> reconcile from committed durable truth
+-> verify effective routing/health
+-> release transition fence
+```
+
+If validation, Authority or DB commit fails, durable desired state remains unchanged and reconciliation restores the prior effective truth.
+
+If DB commit succeeds but runtime reconciliation fails, desired state remains committed but effective routing stays blocked until reconciliation succeeds.
+
 ### Disable
 
 Disable is a routing decision, not Python unloading.
 
-After the registry CAS commits:
-
-- new resolutions must stop selecting the package;
+- new resolutions stop before/through the durable transition, not after a best-effort refresh;
 - in-flight operations may finish unless a trusted cancellation contract exists;
 - loaded Python objects may remain resident until normal process restart.
 
@@ -316,7 +379,7 @@ After the registry CAS commits:
 
 Enable is allowed only after exact package admission and a current READY compatibility report.
 
-If the trusted provider is already present in the current runtime, catalog refresh can make it routable without Python re-import/reload.
+If the trusted provider is already present in the current runtime, reconciliation can make it routable without Python re-import/reload after the authorized registry commit.
 
 If code/provider presence changed, activation reports `RESTART_REQUIRED` and uses the normal supervisor/release-start boundary; Phase 8 never hot-reloads code.
 
@@ -328,14 +391,15 @@ Registering a new version never auto-selects or auto-enables it.
 
 Version switch:
 
-1. verify package is AVAILABLE;
-2. verify exact descriptor exists in current release;
-3. produce compatibility report;
-4. obtain required Authority permit;
-5. CAS selected package generation;
-6. refresh runtime projection;
-7. verify health/routing;
-8. append lifecycle event.
+1. acquire the capability transition fence and stop new routing;
+2. verify candidate package is AVAILABLE;
+3. verify exact descriptor/provider exists in the current release;
+4. produce a current compatibility report;
+5. obtain/consume required Authority bound to exact package, compatibility digest and expected generation;
+6. atomically CAS selected package generation **and append the lifecycle event in the same SQLite transaction**;
+7. reconcile runtime projection from committed durable truth;
+8. verify health/routing and applied generation;
+9. release the transition fence.
 
 Rollback to an older version uses the same path.
 
@@ -439,17 +503,24 @@ Every mutation is idempotent by:
 - registry generation;
 - lifecycle event key.
 
-On restart:
+On restart, PACKAGE_MANAGED routing begins fail-closed and startup reconciliation runs before those packages become routable:
 
-- re-read active release identity;
+- verify the exact active Phase-7 release identity using the existing release boundary;
 - re-scan exact release package descriptors;
 - revalidate selected package;
 - re-evaluate compatibility;
-- restore desired state;
-- regenerate current health/routing truth;
+- restore durable desired state;
+- regenerate current health/effective-state snapshot;
+- publish one generation-consistent runtime projection;
 - never replay an already committed generation transition.
 
-No mutable “half enabled” state exists outside the durable registry.
+Crash cases are intentionally asymmetric and safe:
+
+- crash before DB commit -> canonical lifecycle truth did not change;
+- crash after DB commit but before projection update -> no process remains to route stale work, and startup reconciliation rebuilds from committed truth;
+- projection/reconcile failure while process remains alive -> affected PACKAGE_MANAGED capability stays blocked.
+
+No mutable “half enabled” permission state may outlive the generation-fenced projection.
 
 ## 20. Acceptance matrix
 
@@ -484,7 +555,22 @@ Phase 8 must deterministically test at least:
 27. installed Python entry point without trusted provider cannot execute;
 28. artifact retention includes selected/rollback references;
 29. existing CORE_PINNED capabilities remain unaffected;
-30. existing Authority/Phase5/Phase7 regressions remain green.
+30. existing Authority/Phase5/Phase7 regressions remain green;
+31. disable commit cannot leave the old package routable;
+32. version-switch commit cannot leave the previous generation routable;
+33. reconciler is idempotent;
+34. crash after registry commit but before projection refresh recovers correctly on startup;
+35. registry generation mutation and lifecycle event append are atomic;
+36. reconciler never grants Authority or silently changes desired state;
+37. DBOS unavailability does not invalidate or replace canonical capability-registry truth;
+38. concurrent mutations with one expected generation produce one winner and one stale-CAS rejection;
+39. stale in-process projection generation fails closed for PACKAGE_MANAGED routing;
+40. startup with corrupt/unknown selected package remains blocked rather than falling back;
+41. active release SHA change invalidates incompatible package projection until exact new-release support passes;
+42. package metadata cannot select an arbitrary execution model;
+43. CORE_PINNED routing remains unaffected by package-registry generation fencing;
+44. Windows file/restart test proves registry handles close cleanly and the database can be reopened/replaced by the test harness;
+45. safety quarantine removes new routing even while durable desired state remains ENABLED.
 
 Windows CI must exercise registry file handles/restart behavior. Final owner-machine acceptance should use a harmless disposable representative package and one consolidated PowerShell block.
 
@@ -512,7 +598,9 @@ Phase 8 does not:
 - install arbitrary wheels into production;
 - auto-load Python entry points;
 - introduce OCI/TUF infrastructure;
-- introduce WASI/Wasmtime;
+- introduce WASI/Wasmtime/Extism;
+- introduce Windows AppContainer/LPAC execution as part of v1;
+- introduce Kubernetes, Dapr, Nix or another external lifecycle control plane;
 - hot-reload Python code;
 - replace Hands;
 - replace CapabilityRuntime;
