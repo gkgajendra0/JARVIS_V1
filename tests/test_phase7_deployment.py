@@ -12,7 +12,13 @@ from jarvis.promotion.models import (
     PromotionAttemptState,
     PromotionEvidenceV1,
 )
+from jarvis.promotion.observation import (
+    FailureAttribution,
+    ObservationController,
+    ObservationDisposition,
+)
 from jarvis.promotion.release import DeploymentMetadataStore
+from jarvis.promotion.rollback import RollbackCoordinator, RollbackError
 from jarvis.promotion.store import PromotionStore
 from jarvis.work.store import SQLiteWorkStore
 
@@ -192,3 +198,150 @@ def test_release_identity_rejects_incomplete_or_wrong_digest(monkeypatch) -> Non
         assert "incomplete" in str(exc)
     else:
         raise AssertionError("incomplete release identity was accepted")
+
+
+
+def test_external_provider_failure_does_not_rollback_and_healthy_window_closes(
+    tmp_path: Path,
+) -> None:
+    changes, promotions, attempt, evidence = _fixture(tmp_path)
+    metadata = DeploymentMetadataStore(tmp_path / "deployment")
+    runtime = FakeRuntime()
+    coordinator = DeploymentCoordinator(
+        changes,
+        promotions,
+        stager=FakeStager(tmp_path / "releases"),
+        metadata=metadata,
+        runtime=runtime,
+    )
+    coordinator.bootstrap_lkg(
+        release_sha=BASE,
+        config_digest=CONFIG,
+        verified=True,
+        now_epoch=1.0,
+    )
+    coordinator.deploy(evidence=evidence, attempt=attempt, now_epoch=2.0)
+    observing = promotions.require(attempt.attempt_id)
+    observations = ObservationController(
+        changes,
+        promotions,
+        metadata,
+        required_healthy_samples=3,
+    )
+
+    observations.record_failure(
+        observing,
+        attribution=FailureAttribution.EXTERNAL_PROVIDER,
+        reason_code="provider_quota",
+        evidence=("provider:http_429",),
+        now_epoch=3.0,
+    )
+    for index in range(3):
+        observations.record_healthy(
+            observing,
+            evidence=(f"liveness:{index}",),
+            now_epoch=4.0 + index,
+        )
+
+    assessment = observations.assess(observing)
+    assert assessment.disposition is ObservationDisposition.READY_TO_CLOSE
+    assert assessment.external_failures == 1
+    completed = observations.close_success(observing)
+    assert completed.state is PromotionAttemptState.COMPLETED
+    assert changes.require(evidence.change_id).state is ChangeState.CLOSED
+    assert metadata.lkg().release_sha == MERGE
+    assert metadata.recovery() is None
+
+
+def test_candidate_local_failure_rolls_back_exact_lkg_once(tmp_path: Path) -> None:
+    changes, promotions, attempt, evidence = _fixture(tmp_path)
+    metadata = DeploymentMetadataStore(tmp_path / "deployment")
+    runtime = FakeRuntime()
+    coordinator = DeploymentCoordinator(
+        changes,
+        promotions,
+        stager=FakeStager(tmp_path / "releases"),
+        metadata=metadata,
+        runtime=runtime,
+    )
+    lkg = coordinator.bootstrap_lkg(
+        release_sha=BASE,
+        config_digest=CONFIG,
+        verified=True,
+        now_epoch=1.0,
+    )
+    coordinator.deploy(evidence=evidence, attempt=attempt, now_epoch=2.0)
+    observing = promotions.require(attempt.attempt_id)
+    observations = ObservationController(changes, promotions, metadata)
+    observations.record_failure(
+        observing,
+        attribution=FailureAttribution.CANDIDATE_LOCAL,
+        reason_code="candidate_runtime_regression",
+        evidence=("runtime:readiness_regressed",),
+        now_epoch=3.0,
+    )
+    assert (
+        observations.assess(observing).disposition
+        is ObservationDisposition.ROLLBACK_REQUIRED
+    )
+
+    rollback = RollbackCoordinator(
+        changes,
+        promotions,
+        metadata=metadata,
+        runtime=runtime,
+    )
+    result = rollback.rollback(
+        evidence=evidence,
+        attempt=observing,
+        attribution=FailureAttribution.CANDIDATE_LOCAL,
+    )
+    assert result.restored == lkg
+    assert result.already_reconciled is False
+    assert metadata.active() == lkg
+    assert promotions.require(attempt.attempt_id).state is PromotionAttemptState.ROLLED_BACK
+    assert changes.require(evidence.change_id).state is ChangeState.ROLLED_BACK
+
+    reconciled = rollback.rollback(
+        evidence=evidence,
+        attempt=promotions.require(attempt.attempt_id),
+        attribution=FailureAttribution.CANDIDATE_LOCAL,
+    )
+    assert reconciled.already_reconciled is True
+
+
+def test_external_failure_cannot_request_automatic_rollback(tmp_path: Path) -> None:
+    changes, promotions, attempt, evidence = _fixture(tmp_path)
+    metadata = DeploymentMetadataStore(tmp_path / "deployment")
+    runtime = FakeRuntime()
+    coordinator = DeploymentCoordinator(
+        changes,
+        promotions,
+        stager=FakeStager(tmp_path / "releases"),
+        metadata=metadata,
+        runtime=runtime,
+    )
+    coordinator.bootstrap_lkg(
+        release_sha=BASE,
+        config_digest=CONFIG,
+        verified=True,
+        now_epoch=1.0,
+    )
+    coordinator.deploy(evidence=evidence, attempt=attempt, now_epoch=2.0)
+
+    rollback = RollbackCoordinator(
+        changes,
+        promotions,
+        metadata=metadata,
+        runtime=runtime,
+    )
+    try:
+        rollback.rollback(
+            evidence=evidence,
+            attempt=promotions.require(attempt.attempt_id),
+            attribution=FailureAttribution.EXTERNAL_PROVIDER,
+        )
+    except RollbackError as exc:
+        assert "candidate-local" in str(exc)
+    else:
+        raise AssertionError("external provider failure triggered code rollback")
