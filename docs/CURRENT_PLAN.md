@@ -45,7 +45,7 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 The active cross-cutting engineering boundary is now:
 
-**Phase 8 — Capability Package + Registry Lifecycle — NEXT FOR RESEARCH + ARCHITECTURE**
+**Phase 8 — Capability Package + Registry Lifecycle — ARCHITECTURE READY / OWNER IMPLEMENTATION APPROVAL REQUIRED**
 
 Phase 5 Secure Autonomous Engineering Substrate is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Its final evidence is recorded in `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`. PR #133 merged to protected main at `78f25fb192b926ee30a028cfc02c829e1197cc9e`.
 
@@ -85,7 +85,7 @@ PR #150 was explicitly owner-approved and merged to protected `main` as `d2c7dc3
 
 The accepted Phase-7 path adds exact candidate/PR/CI binding, digest-bound owner promotion, one-shot Authority execution, exact-head protected merge, immutable Windows release staging, runtime release identity verification, bounded observation and compatibility-safe rollback. It does not grant JARVIS ownership authority.
 
-**Current state: Phase 8 is not implementation-authorized yet.** The next action is Phase-8 repository inspection, technology research and architecture under the permanent engineering rule; implementation requires a new owner architecture approval.
+**Current state: Phase 8 research and architecture are complete, but implementation is not authorized yet.** The proposed design extends the accepted Phase-5 CapabilityManifest into a strict-SemVer immutable package contract, durable package registry, compatibility/health truth and Authority-governed enable/disable/version selection without dynamic plugin loading. Implementation requires explicit owner architecture approval.
 
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
@@ -127,7 +127,7 @@ Phase 4  Research + Diagnostic Model Router — DONE / OWNER-MACHINE ACCEPTED 20
 Phase 5  Secure autonomous engineering substrate — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 6  Unknown-incident investigation + source repair — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 7  Governed promotion / production verification / rollback — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
-Phase 8  Capability package + registry lifecycle — NEXT / RESEARCH + ARCHITECTURE REQUIRED
+Phase 8  Capability package + registry lifecycle — ARCHITECTURE READY / OWNER APPROVAL REQUIRED
 Phase 9  Owner-requested capability acquisition
 Phase 10 Closed-loop engineering learning
 Phase 10A Autonomous Operations Control Plane — approved future integration point; not active yet
@@ -188,4 +188,4 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Begin Phase 8 repository inspection, technology research and architecture for Capability Package + Registry Lifecycle. Do not begin Phase-8 implementation until the resulting architecture receives explicit owner approval.**
+**Review the proposed Phase-8 Capability Package + Registry Lifecycle architecture. Do not begin Phase-8 runtime implementation until the owner explicitly approves the architecture.**
