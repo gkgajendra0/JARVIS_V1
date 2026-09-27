@@ -2,7 +2,7 @@
 
 ## Status
 
-**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC REPAIR FRAMEWORK AND R2 RUNTIME CRASH/HANG RECOVERY FOUNDATION ARE OWNER ACCEPTED ON 2026-09-23. PHASE 1H FOUNDATION HARDENING IS OWNER-MACHINE ACCEPTED ON 2026-09-24. PHASE 2 ENGINEERINGKNOWLEDGE AND PHASE 3 ENGINEERINGCHANGE ARE OWNER-MACHINE ACCEPTED ON 2026-09-25. PHASE 4 RESEARCH + DIAGNOSTIC MODEL ROUTER IS OWNER-MACHINE ACCEPTED ON 2026-09-26. PHASE 5 SECURE AUTONOMOUS ENGINEERING SUBSTRATE IS THE NEXT CROSS-CUTTING SLICE; STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
+**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC REPAIR FRAMEWORK AND R2 RUNTIME CRASH/HANG RECOVERY FOUNDATION ARE OWNER ACCEPTED ON 2026-09-23. PHASE 1H FOUNDATION HARDENING IS OWNER-MACHINE ACCEPTED ON 2026-09-24. PHASE 2 ENGINEERINGKNOWLEDGE AND PHASE 3 ENGINEERINGCHANGE ARE OWNER-MACHINE ACCEPTED ON 2026-09-25. PHASE 4 RESEARCH + DIAGNOSTIC MODEL ROUTER IS OWNER-MACHINE ACCEPTED ON 2026-09-26. PHASES 5, 6 AND 7 ARE OWNER-MACHINE ACCEPTED ON 2026-09-27. PHASE 8 CAPABILITY PACKAGE + REGISTRY LIFECYCLE IS THE NEXT CROSS-CUTTING RESEARCH/ARCHITECTURE SLICE; STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
 
 The latest owner-machine accepted Self-Repair runtime baseline includes Phase 1H foundation hardening promoted through PR #90 on 2026-09-24; later documentation-only reconciliation commits may advance protected `main` without changing that runtime behavior.
 
@@ -388,6 +388,35 @@ Realtime voice routing is not part of this foundation. Interactive voice/Hands r
 Canonical final record:
 `docs/PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`.
 
+## Secure Autonomous Engineering Substrate production foundation
+
+Phase 5 is owner-machine accepted on 2026-09-27.
+
+Current architecture includes governed dependency acquisition, opaque child-only secret handling, least-privilege development sandboxing, exact dependency provenance, hardware-in-the-loop acceptance support, and protected engineering-control surfaces. Models do not receive raw credentials or unrestricted package/shell authority.
+
+Canonical final record:
+`docs/PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`.
+
+## Unknown-Incident Investigation + Source Repair production foundation
+
+Phase 6 is owner-machine accepted on 2026-09-27.
+
+Current architecture includes bounded read-only evidence collection, typed diagnosis evidence, owner-gated repair architecture, exact source-revision-pinned isolated development, protected-surface classification, post-edit verification, exact repair-candidate provenance, deterministic replay, and Windows acceptance. The Phase-6 boundary produces a verified source candidate and deliberately stops before protected-main promotion.
+
+Canonical final record:
+`docs/PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`.
+
+## Governed Promotion / Production Verification / Rollback production foundation
+
+Phase 7 is owner-machine accepted on 2026-09-27 and merged to protected `main` through PR #150.
+
+Current architecture includes exact candidate/PR/CI identity binding, immutable promotion evidence, explicit digest-bound owner promotion, one-shot Authority execution, expected-head protected squash merge, immutable single-active Windows release slots, exact runtime release identity, durable deployment reconciliation, bounded observation, Last Known Good tracking, attributable failure classification and compatibility-safe one-attempt automatic rollback.
+
+External provider/hardware/network failures do not independently trigger code rollback. Schema, DBOS durable-workflow/persistence, runtime dependency and deployment/governance changes remain high-risk paths requiring explicit compatibility planning.
+
+Canonical final record:
+`docs/PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`.
+
 ## Known residuals / deliberate deferrals
 
 Not currently claimed as solved:
@@ -410,9 +439,9 @@ Repository-wide accepted/deferred/superseded/rejected truth is centralized in `P
 
 ## Next architecture acceptance
 
-Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. Its final evidence is recorded in `docs/PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`.
+Phases 4–7 are **DONE / OWNER-MACHINE ACCEPTED**. Phase 7's final evidence is recorded in `docs/PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`.
 
-The next active cross-cutting slice is **Phase 5 — Secure Autonomous Engineering Substrate**. Its research and architecture must define governed dependency acquisition, opaque secret handling, capability manifests, bounded device/service discovery, least-privilege sandbox profiles, provenance and hardware-in-the-loop acceptance without broadening model authority.
+The next active cross-cutting slice is **Phase 8 — Capability Package + Registry Lifecycle**. Its work begins with repository inspection, technology research and architecture. Phase-8 implementation requires explicit owner architecture approval and must reuse the accepted WorkItem, EngineeringChange, EngineeringKnowledge, Authority, sandbox, provenance, promotion and rollback foundations rather than create a parallel capability system.
 
 **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027/CAP-028)** remains
 the next numbered product slice and must still reuse the accepted durable

@@ -151,7 +151,7 @@ The active Self-Repair/Evolution/Autonomous-Engineering program is cross-cutting
 
 Current open/deferred items are tracked only in `PROJECT_STATE.md`. The important open issues are #19, #44, #45, #46, #63 and #69.
 
-They remain separate unless evidence shows that one directly blocks the next Phase-7 research/architecture work.
+They remain separate unless evidence shows that one directly blocks the current Phase-8 research/architecture work.
 
 ## Documentation ownership
 
