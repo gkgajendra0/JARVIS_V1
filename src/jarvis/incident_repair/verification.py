@@ -398,7 +398,11 @@ class SourceRepairCandidateVerifier:
                 "clean_commit_missing",
                 "repair candidate requires a clean local commit after final diff",
             )
-        if work.result.get("verification", {}).get("passed") is not True:
+        canonical_verification = work.result.get("verification")
+        if (
+            not isinstance(canonical_verification, dict)
+            or canonical_verification.get("passed") is not True
+        ):
             raise SourceRepairCandidateError(
                 "canonical_verification_missing",
                 "canonical development result does not record passing verification",
