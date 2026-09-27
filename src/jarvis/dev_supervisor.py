@@ -931,8 +931,7 @@ def _recover_unexpected_exit(
 
         try:
             control.wait_for_child_ready(
-                timeout_seconds=config.startup_timeout_seconds,
-                expected_release=release_identity,
+                timeout_seconds=config.startup_timeout_seconds
             )
         except RuntimeError:
             _stop_jarvis(
@@ -1102,8 +1101,7 @@ def _recover_liveness_failure(
 
         try:
             control.wait_for_child_ready(
-                timeout_seconds=config.startup_timeout_seconds,
-                expected_release=release_identity,
+                timeout_seconds=config.startup_timeout_seconds
             )
         except RuntimeError:
             _stop_jarvis(
@@ -1278,6 +1276,14 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
             "commit or stash them first"
         )
 
+    runtime_root = root
+    release_identity: RuntimeReleaseIdentity | None = None
+    if not config.git_updates_enabled:
+        active_release = load_active_release_for_startup()
+        if active_release is not None:
+            runtime_root = Path(active_release.release_root).resolve()
+            release_identity = active_release.runtime_identity()
+
     if config.git_updates_enabled:
         print("JARVIS development supervisor")
         print(
@@ -1288,10 +1294,19 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
     else:
         print("JARVIS production runtime supervisor")
         print("Git/network update polling is disabled; Self-Repair remains local-only.")
+        if release_identity is not None:
+            print(
+                "Starting durable active release "
+                f"{release_identity.release_sha[:10]} from {runtime_root}."
+            )
 
     control = VoiceControlServer()
     repair, repair_store = _build_supervisor_repair_controller(config)
-    process = _start_jarvis(root, control)
+    process = _start_jarvis(
+        runtime_root,
+        control,
+        release_identity=release_identity,
+    )
     update_poller = (
         RemoteUpdatePoller(root, config) if config.git_updates_enabled else None
     )
@@ -1327,11 +1342,12 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                     )
                 restarted = _recover_unexpected_exit(
                     repo,
-                    root,
+                    runtime_root,
                     process,
                     control,
                     config,
                     repair,
+                    release_identity=release_identity,
                 )
                 if restarted is None:
                     return _escalation_exit_code(
@@ -1361,11 +1377,12 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                     return _escalation_exit_code(config)
                 restarted = _recover_liveness_failure(
                     repo,
-                    root,
+                    runtime_root,
                     process,
                     control,
                     config,
                     repair,
+                    release_identity=release_identity,
                 )
                 if restarted is None:
                     return _escalation_exit_code(config)
