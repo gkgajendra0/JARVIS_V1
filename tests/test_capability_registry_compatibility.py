@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import replace
+import pathlib
 
 import pytest
 
@@ -12,7 +12,6 @@ from jarvis.capabilities.models import (
     CapabilityKind,
     CapabilityRequest,
     CapabilityResult,
-    CapabilityStatus,
 )
 from jarvis.capability_registry.admission import CapabilityPackageAdmissionService
 from jarvis.capability_registry.compatibility import (
@@ -213,8 +212,12 @@ def _package(
     )
 
 
-def _write_package(release: ReleaseRecord, package: CapabilityPackageV1, name: str = "example.json") -> None:
-    root = release_root = __import__("pathlib").Path(release.release_root)
+def _write_package(
+    release: ReleaseRecord,
+    package: CapabilityPackageV1,
+    name: str = "example.json",
+) -> None:
+    release_root = pathlib.Path(release.release_root)
     package_root = release_root / "capability_packages"
     package_root.mkdir(parents=True, exist_ok=True)
     (package_root / name).write_text(
@@ -257,7 +260,7 @@ def test_release_source_reads_only_fixed_package_directory(tmp_path) -> None:
     )
     _write_package(release, second, "z.json")
     _write_package(release, first, "a.json")
-    package_root = __import__("pathlib").Path(release.release_root) / "capability_packages"
+    package_root = pathlib.Path(release.release_root) / "capability_packages"
     (package_root / "ignored.txt").write_text("not a package", encoding="utf-8")
 
     source = ReleaseCapabilityPackageSource(release)
@@ -286,7 +289,7 @@ def test_release_source_rejects_duplicate_package_identity(tmp_path) -> None:
 
 def test_release_source_rejects_json_named_directory(tmp_path) -> None:
     release = _release(tmp_path)
-    package_root = __import__("pathlib").Path(release.release_root) / "capability_packages"
+    package_root = pathlib.Path(release.release_root) / "capability_packages"
     package_root.mkdir()
     (package_root / "escape.json").mkdir()
 
@@ -304,7 +307,7 @@ def test_from_active_release_reuses_phase7_loader(monkeypatch, tmp_path) -> None
     source = ReleaseCapabilityPackageSource.from_active_release()
 
     assert source.release_sha == release.release_sha
-    assert source.release_root == __import__("pathlib").Path(release.release_root).resolve()
+    assert source.release_root == pathlib.Path(release.release_root).resolve()
 
 
 def test_from_active_release_fails_closed_on_phase7_verification_error(
