@@ -137,7 +137,7 @@ class RollbackCoordinator:
         )
         self._metadata.set_recovery(verified)
 
-        rolled = self._promotions.transition(
+        self._promotions.transition(
             current.attempt_id,
             PromotionAttemptState.ROLLED_BACK,
             expected_version=current.version,
