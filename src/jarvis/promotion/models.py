@@ -114,7 +114,9 @@ class CheckEvidence:
         conclusion = _token(self.conclusion, field="check conclusion").casefold()
         if conclusion != self.conclusion:
             raise ValueError("check conclusion must be lowercase")
-        if self.app_id is not None and (\n            type(self.app_id) is not int or self.app_id <= 0\n        ):
+        if self.app_id is not None and (
+            type(self.app_id) is not int or self.app_id <= 0
+        ):
             raise ValueError("check app_id must be positive")
 
 
@@ -223,7 +225,9 @@ class PromotionEvidenceV1:
         contexts = tuple(item.context for item in checks)
         if len(set(contexts)) != len(contexts):
             raise ValueError("required CI check contexts must be unique")
-        paths = tuple(\n            sorted(dict.fromkeys(str(item).strip() for item in changed_paths))\n        )
+        paths = tuple(
+            sorted(dict.fromkeys(str(item).strip() for item in changed_paths))
+        )
         if not paths or any(not item for item in paths):
             raise ValueError("promotion requires changed paths")
         created = time.time() if now_epoch is None else float(now_epoch)
