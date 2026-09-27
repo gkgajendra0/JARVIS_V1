@@ -86,10 +86,14 @@ class CapabilityAcquisitionLifecycleCoordinator:
 
     @staticmethod
     def _identity(candidate: ChangeArtifact) -> tuple[str, str, str, str]:
-        capability_id = str(candidate.payload.get("capability_id") or "").strip().casefold()
+        capability_id = (
+            str(candidate.payload.get("capability_id") or "").strip().casefold()
+        )
         package_id = str(candidate.payload.get("package_id") or "").strip().casefold()
         package_version = str(candidate.payload.get("package_version") or "").strip()
-        package_digest = str(candidate.payload.get("package_digest") or "").strip().casefold()
+        package_digest = (
+            str(candidate.payload.get("package_digest") or "").strip().casefold()
+        )
         if not all((capability_id, package_id, package_version, package_digest)):
             raise CapabilityAcquisitionLifecycleError(
                 "Phase-9 candidate package identity is incomplete"
