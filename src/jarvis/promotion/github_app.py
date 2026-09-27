@@ -9,11 +9,12 @@ import subprocess
 import sys
 import threading
 from dataclasses import dataclass
+from collections.abc import Iterator, Mapping
+from contextlib import AbstractContextManager
 from types import TracebackType
+from typing import Protocol
 
 from jarvis.dev_control import RuntimeReleaseIdentity
-from jarvis.engineering_substrate.secrets.broker import SecretBroker
-
 from .github import (
     GitHubPromotionError,
     GitHubPullRequestSnapshot,
@@ -69,6 +70,16 @@ class GitHubAppConfig:
         object.__setattr__(self, "request_timeout_seconds", timeout)
 
 
+class SecretEnvironmentBroker(Protocol):
+    def child_environment(
+        self,
+        lease_id: str,
+        *,
+        consumer_id: str,
+        parent_environment: Mapping[str, str] | None = None,
+    ) -> AbstractContextManager[dict[str, str]]: ...
+
+
 class BrokeredGitHubAppClient:
     """One process-local GitHub App session with child-only credentials.
 
@@ -79,14 +90,12 @@ class BrokeredGitHubAppClient:
     def __init__(
         self,
         *,
-        broker: SecretBroker,
+        broker: SecretEnvironmentBroker,
         lease_id: str,
         config: GitHubAppConfig,
         release_identity: RuntimeReleaseIdentity,
         process_factory=subprocess.Popen,
     ) -> None:
-        if not isinstance(broker, SecretBroker):
-            raise TypeError("broker must be SecretBroker")
         if not isinstance(config, GitHubAppConfig):
             raise TypeError("config must be GitHubAppConfig")
         if not isinstance(release_identity, RuntimeReleaseIdentity):
