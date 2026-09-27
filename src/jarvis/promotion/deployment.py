@@ -10,6 +10,8 @@ from jarvis.dev_control import RuntimeReleaseIdentity
 from jarvis.engineering_change.models import ChangeConflict, ChangeState
 from jarvis.engineering_change.store import ChangeStore
 
+from jarvis.engineering_substrate.canonical import canonical_digest
+
 from .models import PromotionAttempt, PromotionAttemptState, PromotionEvidenceV1
 from .release import (
     DeploymentMetadataStore,
@@ -75,6 +77,48 @@ class DeploymentCoordinator:
         self._runtime = runtime
         self._shutdown_timeout = float(shutdown_timeout_seconds)
         self._startup_timeout = float(startup_timeout_seconds)
+
+    def bootstrap_lkg(
+        self,
+        *,
+        release_sha: str,
+        config_digest: str,
+        schema_versions: tuple[tuple[str, int], ...] = (),
+        verified: bool,
+        now_epoch: float | None = None,
+    ) -> ReleaseRecord:
+        """Adopt one already-accepted production revision as initial Phase-7 LKG."""
+        if verified is not True:
+            raise DeploymentError("initial LKG requires independent runtime verification")
+        existing = self._metadata.lkg()
+        if existing is not None:
+            if existing.release_sha != release_sha:
+                raise DeploymentError("Last Known Good is already initialized differently")
+            return existing
+        release_root = self._stager.stage(release_sha)
+        accepted_at = time.time() if now_epoch is None else float(now_epoch)
+        bootstrap_digest = canonical_digest(
+            {
+                "kind": "phase7_lkg_bootstrap",
+                "release_sha": release_sha,
+                "config_digest": config_digest,
+                "schema_versions": {
+                    name: version for name, version in sorted(schema_versions)
+                },
+            }
+        )
+        record = ReleaseRecord(
+            release_sha=release_sha,
+            release_root=str(release_root),
+            promotion_attempt_id=f"promotion_bootstrap_{release_sha[:16]}",
+            promotion_evidence_digest=bootstrap_digest,
+            config_digest=config_digest,
+            schema_versions=tuple(sorted(schema_versions)),
+            accepted_at_epoch=accepted_at,
+        )
+        self._metadata.set_lkg(record)
+        self._metadata.set_active(record)
+        return record
 
     def deploy(
         self,
