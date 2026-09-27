@@ -249,7 +249,7 @@ class WorkRuntime:
         # reasoning first, then give already-running DBOS workflow code a bounded
         # window to checkpoint before database connections are closed.
         self._interactive_brain_gate.set_interactive_active(True)
-        task = self._release_bridge_task
+        task = getattr(self, "_release_bridge_task", None)
         if task is not None and not task.done():
             task.cancel()
         shutdown_dbos_work_runtime(workflow_completion_timeout_sec=5)
