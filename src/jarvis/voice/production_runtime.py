@@ -324,9 +324,7 @@ def build_production_voice_runtime(
         catalog_projection=(
             None if package_stack is None else package_stack.projection
         ),
-        close_callbacks=(
-            () if package_stack is None else (package_stack.close,)
-        ),
+        close_callbacks=(() if package_stack is None else (package_stack.close,)),
     )
     capability_catalog = capability_runtime.refresh_catalog()
     if self_awareness is not None:
