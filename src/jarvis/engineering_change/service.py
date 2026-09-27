@@ -244,7 +244,8 @@ class ChangeService:
         return decision
 
     def prepare_promotion(self, change_id: str) -> GateChallenge:
-        """Present promotion intent without performing any merge or deployment."""
+        """Present already-prepared exact Phase-7 evidence; never create intent-only evidence."""
+
         store = self.coordinator.store
         change = store.require(change_id)
         if change.state not in {
@@ -252,51 +253,44 @@ class ChangeService:
             ChangeState.WAITING_PROMOTION_APPROVAL,
         }:
             raise ChangeConflict("change is not ready for promotion review")
-        acceptance = store.latest_artifact(change_id, "acceptance")
-        if acceptance is None:
-            raise ChangeConflict("promotion requires accepted development evidence")
-
         promotion = store.latest_artifact(change_id, "promotion")
-        payload = {
-            "acceptance_artifact_id": acceptance.artifact_id,
-            "acceptance_digest": acceptance.digest,
-            "work_id": acceptance.payload.get("work_id"),
-            "result": acceptance.payload.get("result"),
-        }
-        if change.state is ChangeState.READY_FOR_PROMOTION:
-            if promotion is None:
-                promotion = store.add_artifact(
-                    change_id, kind="promotion", payload=payload
-                )
-            elif promotion.payload != payload:
-                raise ChangeConflict(
-                    "promotion review does not match current acceptance"
-                )
-        elif promotion is None or promotion.payload != payload:
-            raise ChangeConflict("promotion review does not match current acceptance")
-        gate = GateService(store, verify_owner=lambda *_: False).present(
-            change_id, GateKind.PROMOTION, promotion.artifact_id
+        if (
+            promotion is None
+            or promotion.payload.get("schema_version") != 1
+            or not promotion.payload.get("evidence_id")
+            or promotion.payload.get("digest") != promotion.digest
+        ):
+            raise ChangeConflict(
+                "exact Phase-7 promotion evidence must be prepared before owner review"
+            )
+        candidate = store.latest_artifact(change_id, "source_repair_candidate")
+        work_id = (
+            str(candidate.payload.get("development_work_id") or "")
+            if candidate is not None
+            else ""
         )
-        work_id = str(acceptance.payload.get("work_id", ""))
         stage = store.stage_for_work(work_id)
         if stage is None or stage.change_id != change_id:
             raise ChangeConflict("promotion evidence has no canonical development")
-        work = store.work.require(work_id)
-        result = acceptance.payload.get("result")
-        branch = result.get("branch") if isinstance(result, dict) else None
-        commit = result.get("commit") if isinstance(result, dict) else None
+        gate = GateService(store, verify_owner=lambda *_: False).present(
+            change_id,
+            GateKind.PROMOTION,
+            promotion.artifact_id,
+        )
         store.work.enqueue_delivery(
-            work=work,
+            work=store.work.require(work_id),
             kind=WorkDeliveryKind.OWNER_INPUT,
             message=(
-                f"Review EngineeringChange {change_id} promotion intent for "
-                f"branch {branch}, commit {commit}. Digest: {promotion.digest}. "
-                f"Approval records promotion intent only and does not push, merge, "
-                f"deploy, or mark the change promoted. Say 'approve promotion' for "
-                f"a single pending review, or 'approve {gate.gate_id}' to identify "
-                f"it exactly. Use 'reject promotion' or 'reject {gate.gate_id}' to decline."
+                f"Review EngineeringChange {change_id} exact Phase-7 promotion "
+                f"evidence for PR #{promotion.payload.get('pr_number')}, candidate "
+                f"{promotion.payload.get('candidate_head_sha')}, tested merge "
+                f"{promotion.payload.get('tested_merge_sha')}. Evidence SHA-256: "
+                f"{promotion.payload.get('digest')}. Approval must execute through "
+                f"the governed PromotionAuthorityBridge; this gate alone is not an "
+                f"execution permit. Say 'approve promotion' for a single pending "
+                f"promotion, or 'approve {gate.gate_id}'."
             ),
-            event_key=f"change:{change_id}:{gate.gate_id}:{promotion.digest}",
+            event_key=f"phase7-review:{gate.gate_id}:{promotion.digest}",
         )
         return gate
 
