@@ -79,7 +79,7 @@ def _require_timestamp(value: object, *, field: str) -> str:
     if not text:
         raise CapabilityRegistryIntegrityError(f"{field} must not be empty")
     try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(text)
     except ValueError as exc:
         raise CapabilityRegistryIntegrityError(f"{field} is not ISO-8601") from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
