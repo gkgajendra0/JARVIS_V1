@@ -276,7 +276,12 @@ class ChangeService:
             evidence = PromotionEvidenceV1.from_payload(promotion.payload)
         except (TypeError, ValueError) as exc:
             raise ChangeConflict("exact Phase-7 promotion evidence is invalid") from exc
-        candidate = store.latest_artifact(change_id, "source_repair_candidate")
+        candidate_kind = (
+            "capability_candidate"
+            if change.process_key == "owner_capability_acquisition"
+            else "source_repair_candidate"
+        )
+        candidate = store.latest_artifact(change_id, candidate_kind)
         work_id = (
             str(candidate.payload.get("development_work_id") or "")
             if candidate is not None
@@ -334,7 +339,22 @@ class ChangeService:
         ):
             raise ChangeConflict("canonical development has no verified commit")
         payload = {"work_id": stage.work_id, "result": result}
-        artifact = store.add_artifact(change_id, kind="acceptance", payload=payload)
+        if change.process_key == "owner_capability_acquisition":
+            artifact = store.latest_artifact(change_id, "acceptance")
+            if (
+                artifact is None
+                or artifact.payload.get("work_id") != stage.work_id
+                or artifact.payload.get("result") != result
+            ):
+                raise ChangeConflict(
+                    "Phase-9 acceptance requires current candidate-bound evidence"
+                )
+        else:
+            artifact = store.add_artifact(
+                change_id,
+                kind="acceptance",
+                payload=payload,
+            )
         gate = GateService(store, verify_owner=lambda *_: False).present(
             change_id, GateKind.ACCEPTANCE, artifact.artifact_id
         )
