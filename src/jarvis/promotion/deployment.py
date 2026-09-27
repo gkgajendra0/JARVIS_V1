@@ -44,6 +44,13 @@ class RuntimeDeploymentDriver(Protocol):
 
     def stop_candidate(self, *, timeout_seconds: float) -> None: ...
 
+    def ensure_release(
+        self,
+        identity: RuntimeReleaseIdentity,
+        *,
+        timeout_seconds: float,
+    ) -> None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class DeploymentResult:
@@ -124,6 +131,110 @@ class DeploymentCoordinator:
         self._metadata.set_lkg(record)
         self._metadata.set_active(record)
         return record
+
+    def _finish_verified(
+        self,
+        *,
+        attempt: PromotionAttempt,
+        recovery: RecoveryRecord,
+    ) -> DeploymentResult:
+        self._metadata.set_active(recovery.candidate)
+        verified = RecoveryRecord(
+            recovery.deployment_id,
+            recovery.attempt_id,
+            RecoveryPhase.NEW_RUNTIME_VERIFIED,
+            recovery.candidate,
+            recovery.lkg,
+        )
+        self._metadata.set_recovery(verified)
+        current = self._promotions.require(attempt.attempt_id)
+        if current.state is PromotionAttemptState.DEPLOYING:
+            current = self._promotions.transition(
+                current.attempt_id,
+                PromotionAttemptState.OBSERVING,
+                expected_version=current.version,
+            )
+        elif current.state is not PromotionAttemptState.OBSERVING:
+            raise DeploymentError("deployment attempt is not reconcilable")
+        change = self._changes.require(current.change_id)
+        if change.state is ChangeState.PROMOTED:
+            self._changes.transition(
+                change.change_id,
+                ChangeState.OBSERVING,
+                expected_version=change.version,
+            )
+        elif change.state is not ChangeState.OBSERVING:
+            raise DeploymentError(
+                "EngineeringChange is not reconcilable after deployment"
+            )
+        return DeploymentResult(
+            recovery.deployment_id,
+            recovery.candidate,
+            recovery.lkg,
+        )
+
+    def resume(self, attempt: PromotionAttempt) -> DeploymentResult:
+        """Resume one exact deployment from durable recovery metadata."""
+        current = self._promotions.require(attempt.attempt_id)
+        recovery = self._metadata.recovery()
+        if recovery is None or recovery.attempt_id != current.attempt_id:
+            raise DeploymentError("deployment recovery record is missing or stale")
+        if current.state is PromotionAttemptState.OBSERVING:
+            active = self._metadata.active()
+            if (
+                recovery.phase is not RecoveryPhase.NEW_RUNTIME_VERIFIED
+                or active != recovery.candidate
+            ):
+                raise DeploymentError(
+                    "observing deployment does not match durable active release"
+                )
+            return DeploymentResult(
+                recovery.deployment_id,
+                recovery.candidate,
+                recovery.lkg,
+            )
+        if current.state is not PromotionAttemptState.DEPLOYING:
+            raise DeploymentError("promotion attempt is not deployment-recoverable")
+
+        if recovery.phase is RecoveryPhase.STAGED:
+            self._runtime.stop_active(timeout_seconds=self._shutdown_timeout)
+            recovery = RecoveryRecord(
+                recovery.deployment_id,
+                recovery.attempt_id,
+                RecoveryPhase.OLD_RUNTIME_STOPPED,
+                recovery.candidate,
+                recovery.lkg,
+            )
+            self._metadata.set_recovery(recovery)
+
+        if recovery.phase is RecoveryPhase.OLD_RUNTIME_STOPPED:
+            self._runtime.start_release(recovery.candidate.runtime_identity())
+            recovery = RecoveryRecord(
+                recovery.deployment_id,
+                recovery.attempt_id,
+                RecoveryPhase.NEW_RUNTIME_STARTED,
+                recovery.candidate,
+                recovery.lkg,
+            )
+            self._metadata.set_recovery(recovery)
+
+        if recovery.phase is RecoveryPhase.NEW_RUNTIME_STARTED:
+            self._runtime.ensure_release(
+                recovery.candidate.runtime_identity(),
+                timeout_seconds=self._startup_timeout,
+            )
+            return self._finish_verified(attempt=current, recovery=recovery)
+
+        if recovery.phase is RecoveryPhase.NEW_RUNTIME_VERIFIED:
+            return self._finish_verified(attempt=current, recovery=recovery)
+
+        if recovery.phase is RecoveryPhase.STARTUP_FAILED:
+            raise DeploymentError(
+                "candidate startup previously failed; rollback decision required"
+            )
+        raise DeploymentError(
+            f"deployment phase {recovery.phase.value} belongs to rollback recovery"
+        )
 
     def deploy(
         self,
@@ -226,28 +337,4 @@ class DeploymentCoordinator:
             self._metadata.set_recovery(recovery)
             raise
 
-        self._metadata.set_active(candidate)
-        recovery = RecoveryRecord(
-            identifier,
-            attempt.attempt_id,
-            RecoveryPhase.NEW_RUNTIME_VERIFIED,
-            candidate,
-            lkg,
-        )
-        self._metadata.set_recovery(recovery)
-        self._promotions.transition(
-            attempt.attempt_id,
-            PromotionAttemptState.OBSERVING,
-            expected_version=attempt.version,
-        )
-        change = self._changes.require(attempt.change_id)
-        if change.state is not ChangeState.PROMOTED:
-            raise DeploymentError(
-                "EngineeringChange is not PROMOTED at deployment verification"
-            )
-        self._changes.transition(
-            change.change_id,
-            ChangeState.OBSERVING,
-            expected_version=change.version,
-        )
-        return DeploymentResult(identifier, candidate, lkg)
+        return self._finish_verified(attempt=attempt, recovery=recovery)
