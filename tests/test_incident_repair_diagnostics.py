@@ -18,7 +18,7 @@ from jarvis.incident_repair.diagnostics import (
 from jarvis.incident_repair.process import UNKNOWN_INCIDENT_REPAIR_PROCESS
 from jarvis.model_routing.strategy import derive_work_step_signals
 from jarvis.work.engine import WorkEngine
-from jarvis.work.models import WorkItem, WorkState, WorkStep, WorkType
+from jarvis.work.models import WorkItem, WorkStep, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
 
