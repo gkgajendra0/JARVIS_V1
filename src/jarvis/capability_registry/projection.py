@@ -185,7 +185,9 @@ class CapabilityRegistryProjection:
             key = registration.descriptor.key
             existing = self._managed_keys.get(key)
             if existing is not None and existing != registration.capability_id:
-                raise ValueError("provider descriptor key maps to multiple capabilities")
+                raise ValueError(
+                    "provider descriptor key maps to multiple capabilities"
+                )
             self._managed_keys[key] = registration.capability_id
 
     @property
@@ -290,9 +292,7 @@ class CapabilityRegistryProjection:
                         or self.transition_fence.is_fenced(item.capability_id)
                     ),
                     effective_enabled=False,
-                    reason_codes=tuple(
-                        sorted({*item.reason_codes, normalized_reason})
-                    ),
+                    reason_codes=tuple(sorted({*item.reason_codes, normalized_reason})),
                 )
                 for item in snapshot.states
             )
