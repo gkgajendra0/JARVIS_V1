@@ -24,6 +24,7 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 ApprovalHandler = Callable[[str, str], Awaitable[bool]]
 ShutdownHandler = Callable[[], None]
 
+
 @dataclass(frozen=True, slots=True)
 class RuntimeReleaseIdentity:
     release_sha: str
