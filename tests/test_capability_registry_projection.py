@@ -419,6 +419,40 @@ def test_missing_or_failed_fresh_health_blocks_effective_execution(
     assert state.health_state in {HealthState.UNKNOWN, HealthState.FAILED}
 
 
+def test_disabling_overrides_fresh_failed_probe_health(tmp_path) -> None:
+    env = _environment(tmp_path, probe=FailedProbe())
+    _enable(env)
+
+    failed = env["reconciler"].reconcile(ReconciliationTrigger.HEALTH)
+    failed_state = failed.state("example.capability")
+    assert failed_state is not None
+    assert failed_state.health_state is HealthState.FAILED
+
+    current = env["store"].require_registry("example.capability")
+    env["store"].transition_registry(
+        "example.capability",
+        expected_generation=current.generation,
+        desired_state=DesiredActivationState.DISABLED,
+        selected_package_id="example.package",
+        selected_package_version="1.0.0",
+        event_kind=CapabilityLifecycleEventKind.DESIRED_STATE_CHANGED,
+        reason_code="phase8d_test_disable",
+    )
+
+    disabled = env["reconciler"].reconcile(ReconciliationTrigger.LIFECYCLE)
+    disabled_state = disabled.state("example.capability")
+
+    assert disabled_state is not None
+    assert disabled_state.health_state is HealthState.DISABLED
+    assert not disabled_state.effective_enabled
+    assert (
+        env["health"]
+        .snapshot(disabled_state.component_id, now_epoch=NOW)
+        .state
+        is HealthState.DISABLED
+    )
+
+
 def test_transition_fence_blocks_cached_routing_before_durable_mutation(
     tmp_path,
 ) -> None:
