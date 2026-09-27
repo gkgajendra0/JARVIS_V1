@@ -831,37 +831,49 @@ def _18_protected_surface() -> dict[str, object]:
     }
 
 
+def _upstream_case(report, case_id: str):
+    return next(item for item in report.cases if item.case_id == case_id)
+
+
 def _19_no_auto_enable(phase8) -> dict[str, object]:
-    if phase8.status != "PASS":
-        raise AssertionError("Phase-8 lifecycle replay failed")
-    return {
-        "phase8_suite_digest": phase8.suite_digest,
-        "invariant": "package_admission_does_not_authorize_activation",
-    }
+    item = _upstream_case(phase8, "11_registration_does_not_enable")
+    if not item.passed:
+        raise AssertionError("Phase-8 registration/no-enable regression failed")
+    return {"phase8_case": item.case_id, **item.evidence}
 
 
 def _20_compatibility_fail_closed(phase8) -> dict[str, object]:
-    if phase8.status != "PASS":
-        raise AssertionError("Phase-8 compatibility replay failed")
+    readiness = _upstream_case(phase8, "12_enable_requires_ready")
+    health = _upstream_case(phase8, "23_failed_health_blocks")
+    if not readiness.passed or not health.passed:
+        raise AssertionError("Phase-8 compatibility fail-closed regression failed")
     return {
-        "phase8_suite_digest": phase8.suite_digest,
-        "invariant": "blocked_or_quarantined_package_not_effective",
+        "readiness_case": readiness.case_id,
+        "health_case": health.case_id,
     }
 
 
 def _21_phase7_only_promotion(phase7) -> dict[str, object]:
-    if phase7.status != "PASS" or len(phase7.cases) != 14:
-        raise AssertionError("accepted Phase-7 promotion replay is not green")
-    return {"phase7_cases": len(phase7.cases), "suite_digest": phase7.suite_digest}
+    exact = _upstream_case(phase7, "06_exact_authorized_merge")
+    moved = _upstream_case(phase7, "03_moved_pr_head_rejected")
+    if not exact.passed or not moved.passed:
+        raise AssertionError("Phase-7 protected-main promotion regression failed")
+    return {
+        "authorized_merge": exact.evidence,
+        "moved_head_rejected": moved.evidence,
+    }
 
 
 def _22_rollback_safe(phase7, phase8) -> dict[str, object]:
-    if phase7.status != "PASS" or phase8.status != "PASS":
-        raise AssertionError("rollback/lifecycle dependency replay failed")
+    code_rollback = _upstream_case(phase7, "10_candidate_failure_rolls_back_lkg")
+    disable = _upstream_case(phase8, "15_disable_removes_routing")
+    package_rollback = _upstream_case(phase8, "19_supported_rollback_succeeds")
+    if not code_rollback.passed or not disable.passed or not package_rollback.passed:
+        raise AssertionError("rollback/disable safe-state regression failed")
     return {
-        "phase7_suite_digest": phase7.suite_digest,
-        "phase8_suite_digest": phase8.suite_digest,
-        "rollback_invariant": "governed_rollback_or_disable_only",
+        "phase7_rollback": code_rollback.evidence,
+        "phase8_disable": disable.evidence,
+        "phase8_package_rollback": package_rollback.evidence,
     }
 
 
