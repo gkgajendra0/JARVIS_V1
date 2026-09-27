@@ -18,11 +18,11 @@ from jarvis.capability_acquisition.evaluation import (
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.canonical import canonical_digest
+from jarvis.incident_repair.models import ProtectedSurfaceVerdict
+from jarvis.incident_repair.protected_surfaces import RepairProtectedSurfacePolicy
 from jarvis.promotion.release import DeploymentMetadataStore, default_deployment_root
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
-from jarvis.incident_repair.models import ProtectedSurfaceVerdict
-from jarvis.incident_repair.protected_surfaces import RepairProtectedSurfacePolicy
 
 
 class Phase9AcceptanceError(RuntimeError):
