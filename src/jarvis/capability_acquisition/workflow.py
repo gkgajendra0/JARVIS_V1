@@ -8,7 +8,6 @@ from typing import Any
 from jarvis.capability_acquisition.artifacts import (
     candidate_from_payload,
     candidate_payload,
-    evaluation_from_payload,
     evaluation_payload,
     goal_from_payload,
     plan_payload,
@@ -16,7 +15,6 @@ from jarvis.capability_acquisition.artifacts import (
     typed_resolution_from_payload,
 )
 from jarvis.capability_acquisition.models import (
-    AcquisitionCandidateEvaluationV1,
     AcquisitionCandidateV1,
     AcquisitionSourceKind,
     AcquisitionStrategy,
@@ -25,10 +23,7 @@ from jarvis.capability_acquisition.models import (
     OwnerCapabilityGoalV1,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
-from jarvis.capability_acquisition.resolver import (
-    AcquisitionResolutionResult,
-    CapabilityAcquisitionResolver,
-)
+from jarvis.capability_acquisition.resolver import CapabilityAcquisitionResolver
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
 from jarvis.capability_acquisition.source import CapabilitySourceRegistry
 from jarvis.engineering_change import ChangeArtifact, ChangeStore
