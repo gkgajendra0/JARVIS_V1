@@ -89,8 +89,7 @@ def _normalize_target(value: object) -> str:
 
 def _normalize_file(value: object) -> str | None:
     text = str(value or "").replace("\\", "/").strip()
-    if text.startswith("/workspace/"):
-        text = text[len("/workspace/") :]
+    text = text.removeprefix("/workspace/")
     pure = pathlib.PurePosixPath(text)
     if not text or pure.is_absolute() or ".." in pure.parts:
         return None
