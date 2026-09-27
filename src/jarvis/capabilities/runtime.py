@@ -77,6 +77,14 @@ class CapabilityResultObserver(Protocol):
     def __call__(self, result: CapabilityResult) -> None: ...
 
 
+class CapabilityCatalogProjection(Protocol):
+    """Optional in-process lifecycle projection on the governed runtime hot path."""
+
+    def project(self, catalog: CapabilityCatalog) -> CapabilityCatalog: ...
+
+    def allows(self, capability_key: str) -> bool: ...
+
+
 class CapabilityRuntime:
     """Resolve -> validate -> authorize -> revalidate -> execute -> audit."""
 
@@ -89,6 +97,7 @@ class CapabilityRuntime:
         hands_registry: HandsCapabilityRegistry | None = None,
         hands_planner=None,
         result_observer: CapabilityResultObserver | None = None,
+        catalog_projection: CapabilityCatalogProjection | None = None,
     ) -> None:
         self._executors = {executor.capability_key: executor for executor in executors}
         if len(self._executors) != len(executors):
@@ -104,11 +113,20 @@ class CapabilityRuntime:
         self._hands_registry = hands_registry or HandsCapabilityRegistry.default()
         self._hands_planner = hands_planner
         self._result_observer = result_observer
+        self._catalog_projection = catalog_projection
         self._catalog: CapabilityCatalog | None = None
 
+    def _routing_allowed(self, capability_key: str) -> bool:
+        if self._catalog_projection is None:
+            return True
+        return self._catalog_projection.allows(capability_key)
+
     def refresh_catalog(self) -> CapabilityCatalog:
-        self._catalog = self._resolver.refresh()
-        return self._catalog
+        catalog = self._resolver.refresh()
+        if self._catalog_projection is not None:
+            catalog = self._catalog_projection.project(catalog)
+        self._catalog = catalog
+        return catalog
 
     @property
     def catalog(self) -> CapabilityCatalog:
@@ -135,7 +153,11 @@ class CapabilityRuntime:
             descriptor = self.catalog.by_key(candidates[0])
             return (
                 candidates[0]
-                if descriptor is not None and descriptor.execution_enabled
+                if (
+                    descriptor is not None
+                    and descriptor.execution_enabled
+                    and self._routing_allowed(candidates[0])
+                )
                 else None
             )
 
@@ -156,7 +178,11 @@ class CapabilityRuntime:
         ranked: list[tuple[int, str]] = []
         for key in candidates:
             descriptor = self.catalog.by_key(key)
-            if descriptor is None or not descriptor.execution_enabled:
+            if (
+                descriptor is None
+                or not descriptor.execution_enabled
+                or not self._routing_allowed(key)
+            ):
                 continue
             substrate = kind_to_substrate.get(descriptor.kind.value)
             if substrate in preference:
@@ -221,6 +247,13 @@ class CapabilityRuntime:
                 CapabilityStatus.UNAVAILABLE,
                 started,
                 "capability executor is unavailable on this machine",
+            )
+        if not self._routing_allowed(request.capability_key):
+            return self._failure(
+                request,
+                CapabilityStatus.UNAVAILABLE,
+                started,
+                "capability routing is blocked by lifecycle projection",
             )
         if (
             request.operation not in descriptor.operations
@@ -327,6 +360,7 @@ def build_default_capability_runtime(
     visual_computer_use_enabled: bool | None = None,
     result_observer: CapabilityResultObserver | None = None,
     extra_executors: tuple[CapabilityExecutor, ...] = (),
+    catalog_projection: CapabilityCatalogProjection | None = None,
 ) -> CapabilityRuntime:
     project = LocalProjectReadExecutor()
     system = SystemReadExecutor()
@@ -403,4 +437,5 @@ def build_default_capability_runtime(
         hands_registry=HandsCapabilityRegistry.default(),
         hands_planner=hands_planner,
         result_observer=result_observer,
+        catalog_projection=catalog_projection,
     )
