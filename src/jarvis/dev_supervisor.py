@@ -627,6 +627,17 @@ class SupervisorReleaseRuntimeDriver:
     def stop_candidate(self, *, timeout_seconds: float) -> None:
         self.stop_active(timeout_seconds=timeout_seconds)
 
+    def ensure_release(
+        self,
+        identity: RuntimeReleaseIdentity,
+        *,
+        timeout_seconds: float,
+    ) -> None:
+        process = self._process
+        if process is None or process.poll() is not None:
+            self.start_release(identity)
+        self.wait_ready(identity, timeout_seconds=timeout_seconds)
+
 
 def _attach_windows_runtime_job(process: subprocess.Popen[bytes]) -> None:
     """Assign the runtime and any already-created descendants to one Windows job."""
