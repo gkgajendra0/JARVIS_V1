@@ -99,7 +99,11 @@ class WorkAgentTools:
         service. The owner's exact request comes from the canonical latest USER
         turn. requested_capability, required_operations and target_hints are only
         structured interpretation fields; they do not grant extra Authority.
-        JARVIS binds the acquisition to its trusted current Git revision.
+        target_hints must preserve every explicit target, device, service, or
+        transport qualifier in that USER turn. Do not collapse an external target
+        into a superficially similar local operation, and omit target_hints only
+        when the owner supplied no target qualifier. JARVIS binds the acquisition
+        to its trusted current Git revision.
         """
         del context
         coordinator = self._runtime.capability_acquisition
