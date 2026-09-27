@@ -8,6 +8,7 @@ from jarvis.authority.verifier import (
     StrongVerificationResult,
     StrongVerificationStatus,
 )
+from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.engineering_change import ChangeState, ChangeStore
 from jarvis.engineering_change.gates import GateKind, GateService
 from jarvis.promotion.authority import PromotionAuthorityBridge
@@ -24,6 +25,7 @@ from jarvis.promotion.models import (
     PromotionAttemptState,
     PromotionEvidenceV1,
 )
+from jarvis.promotion.service import PromotionSessionService
 from jarvis.promotion.store import PromotionStore
 from jarvis.work.store import SQLiteWorkStore
 
@@ -343,3 +345,50 @@ def test_restart_reconciles_exact_external_merge_without_second_merge(tmp_path) 
     assert authority.consumed == 0
     assert promotions.require(attempt.attempt_id).state is PromotionAttemptState.MERGED
     assert changes.require(evidence.change_id).state is ChangeState.PROMOTED
+
+
+def test_owner_session_service_binds_latest_turn_to_exact_merge(tmp_path) -> None:
+    changes, promotions, attempt, evidence, gate = _fixture(tmp_path)
+    verifier = FakeVerifier()
+    authority = FakeAuthority()
+    bridge = PromotionAuthorityBridge(
+        changes,
+        promotions,
+        approvals=ApprovalService(),
+        authority=authority,
+        verifier=verifier,
+    )
+    github = FakeGitHub()
+    merger = PromotionMerger(
+        changes,
+        promotions,
+        github=github,
+        policy=GitHubPromotionPolicy(),
+        authority=bridge,
+    )
+    session = ConversationSession(session_id="session")
+    session.start()
+    turn = session.accept_turn(ConversationRole.USER, "Approve promotion")
+
+    service = PromotionSessionService(
+        changes,
+        promotions,
+        session=session,
+        authority=bridge,
+        merger=merger,
+        repository_full_name="gkgajendra0/JARVIS_V1",
+    )
+    result = service.authorize_and_merge(gate.gate_id)
+
+    assert result.merge.merge_sha == MERGE
+    assert result.gate_decision.source_turn_id == turn.turn_id
+    assert verifier.calls == 1
+    assert authority.consumed == 1
+    assert promotions.require(attempt.attempt_id).state is PromotionAttemptState.MERGED
+    assert changes.require(evidence.change_id).state is ChangeState.PROMOTED
+
+    replay = service.authorize_and_merge(gate.gate_id)
+    assert replay.merge.merge_sha == MERGE
+    assert replay.merge.reconciled_after_external_merge is True
+    assert verifier.calls == 1
+    assert authority.consumed == 1
