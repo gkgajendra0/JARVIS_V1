@@ -1,9 +1,22 @@
 from __future__ import annotations
 
 from jarvis.incident_repair.evaluation import run_replay_suite
+from jarvis.incidents import SqliteIncidentStore
 
 
-def test_phase6_replay_suite_covers_all_approved_cases(tmp_path) -> None:
+def test_phase6_replay_suite_covers_all_approved_cases(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    original_close = SqliteIncidentStore.close
+    closed_paths = []
+
+    def tracked_close(store) -> None:
+        closed_paths.append(store.path.resolve())
+        original_close(store)
+
+    monkeypatch.setattr(SqliteIncidentStore, "close", tracked_close)
+
     report = run_replay_suite(tmp_path / "phase6-replay")
 
     failures = {item.case_id: item.evidence for item in report.cases if not item.passed}
@@ -28,3 +41,5 @@ def test_phase6_replay_suite_covers_all_approved_cases(tmp_path) -> None:
         "15_candidate_exact_digest",
     ]
     assert len(report.suite_digest) == 64
+    assert len(closed_paths) == 13
+    assert len(set(closed_paths)) == 13
