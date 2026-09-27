@@ -330,17 +330,23 @@ def load_active_release_for_startup() -> ReleaseRecord | None:
     release_root = pathlib.Path(active.release_root).expanduser().resolve()
     releases_root = default_releases_root().resolve()
     if release_root.parent != releases_root:
-        raise ReleaseError("active release root is outside the managed releases directory")
+        raise ReleaseError(
+            "active release root is outside the managed releases directory"
+        )
     if release_root.is_symlink() or not release_root.is_dir():
         raise ReleaseError("active release root is unavailable or unsafe")
     try:
-        observed = subprocess.run(
-            ["git", "-C", str(release_root), "rev-parse", "HEAD"],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=15.0,
-        ).stdout.strip().casefold()
+        observed = (
+            subprocess.run(
+                ["git", "-C", str(release_root), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=15.0,
+            )
+            .stdout.strip()
+            .casefold()
+        )
         tracked = subprocess.run(
             [
                 "git",
