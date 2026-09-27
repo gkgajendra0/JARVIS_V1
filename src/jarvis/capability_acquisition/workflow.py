@@ -447,6 +447,12 @@ class AcquisitionFinalizeExecutor:
                     "minItems": 1,
                     "maxItems": 30,
                 },
+                "development_test_targets": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
+                    "minItems": 1,
+                    "maxItems": 30,
+                },
                 "owner_acceptance_contract_ids": {
                     "type": "array",
                     "items": {"type": "string", "minLength": 1, "maxLength": 180},
@@ -465,6 +471,7 @@ class AcquisitionFinalizeExecutor:
                 "rollback_summary",
                 "sandbox_profile_ids",
                 "verification_contract_ids",
+                "development_test_targets",
             ],
             "additionalProperties": False,
         },
@@ -578,6 +585,9 @@ class AcquisitionFinalizeExecutor:
                     *candidate.verification_requirements,
                     *(parameters.get("verification_contract_ids") or ()),
                 }
+            ),
+            development_test_targets=tuple(
+                parameters.get("development_test_targets") or ()
             ),
             owner_acceptance_contract_ids=tuple(
                 {
