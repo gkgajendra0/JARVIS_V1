@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import unicodedata
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -12,9 +13,64 @@ from dataclasses import dataclass
 DEV_CONTROL_HOST_ENV = "JARVIS_DEV_CONTROL_HOST"
 DEV_CONTROL_PORT_ENV = "JARVIS_DEV_CONTROL_PORT"
 DEV_CONTROL_TOKEN_ENV = "JARVIS_DEV_CONTROL_TOKEN"
+RELEASE_SHA_ENV = "JARVIS_RELEASE_SHA"
+RELEASE_ROOT_ENV = "JARVIS_RELEASE_ROOT"
+PROMOTION_ATTEMPT_ENV = "JARVIS_PROMOTION_ATTEMPT_ID"
+RELEASE_CONFIG_DIGEST_ENV = "JARVIS_RELEASE_CONFIG_DIGEST"
+
+_GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 ApprovalHandler = Callable[[str, str], Awaitable[bool]]
 ShutdownHandler = Callable[[], None]
+
+@dataclass(frozen=True, slots=True)
+class RuntimeReleaseIdentity:
+    release_sha: str
+    release_root: str
+    promotion_attempt_id: str
+    config_digest: str
+
+    def __post_init__(self) -> None:
+        if _GIT_SHA.fullmatch(self.release_sha) is None:
+            raise ValueError("release_sha must be an exact lowercase Git SHA")
+        if not self.release_root.strip():
+            raise ValueError("release_root must not be empty")
+        if not self.promotion_attempt_id.startswith("promotion_"):
+            raise ValueError("promotion_attempt_id must use promotion_ prefix")
+        if _SHA256.fullmatch(self.config_digest) is None:
+            raise ValueError("config_digest must be a lowercase SHA-256 digest")
+
+    @classmethod
+    def from_environment(cls) -> "RuntimeReleaseIdentity | None":
+        values = (
+            os.environ.get(RELEASE_SHA_ENV, "").strip().casefold(),
+            os.environ.get(RELEASE_ROOT_ENV, "").strip(),
+            os.environ.get(PROMOTION_ATTEMPT_ENV, "").strip(),
+            os.environ.get(RELEASE_CONFIG_DIGEST_ENV, "").strip().casefold(),
+        )
+        if not any(values):
+            return None
+        if not all(values):
+            raise RuntimeError("incomplete JARVIS release identity configuration")
+        return cls(*values)
+
+    def to_payload(self) -> dict[str, str]:
+        return {
+            "release_sha": self.release_sha,
+            "release_root": self.release_root,
+            "promotion_attempt_id": self.promotion_attempt_id,
+            "config_digest": self.config_digest,
+        }
+
+    def environment(self) -> dict[str, str]:
+        return {
+            RELEASE_SHA_ENV: self.release_sha,
+            RELEASE_ROOT_ENV: self.release_root,
+            PROMOTION_ATTEMPT_ENV: self.promotion_attempt_id,
+            RELEASE_CONFIG_DIGEST_ENV: self.config_digest,
+        }
+
 
 _YES_CONFIRMATIONS = frozenset({"yes", "yeah", "yep", "haan", "han", "हाँ", "हां"})
 _NO_CONFIRMATIONS = frozenset({"no", "nope", "nah", "nahi", "nahin", "नहीं", "नही"})
@@ -105,6 +161,7 @@ class DevControlClient:
     def __init__(self, config: DevControlClientConfig) -> None:
         self.config = config
         self._runtime_ready = False
+        self._release_identity = RuntimeReleaseIdentity.from_environment()
 
     def mark_ready(self) -> None:
         """Publish that core runtime initialization completed successfully."""
@@ -128,10 +185,13 @@ class DevControlClient:
                     self.config.host,
                     self.config.port,
                 )
-                await _write_message(
-                    writer,
-                    {"type": "hello", "token": self.config.token},
-                )
+                hello: dict[str, object] = {
+                    "type": "hello",
+                    "token": self.config.token,
+                }
+                if self._release_identity is not None:
+                    hello["release_identity"] = self._release_identity.to_payload()
+                await _write_message(writer, hello)
                 while True:
                     line = await reader.readline()
                     if not line:
@@ -146,6 +206,15 @@ class DevControlClient:
                                 "type": "readiness_response",
                                 "request_id": request_id,
                                 "ready": self._runtime_ready,
+                                **(
+                                    {
+                                        "release_identity": (
+                                            self._release_identity.to_payload()
+                                        )
+                                    }
+                                    if self._release_identity is not None
+                                    else {}
+                                ),
                             },
                         )
                     elif message_type == "liveness_probe":
