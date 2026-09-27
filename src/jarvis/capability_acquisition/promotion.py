@@ -74,7 +74,9 @@ class CapabilityAcquisitionReleaseBridgeResult:
     lifecycle_artifact: ChangeArtifact
 
 
-def _registry_payload(state: CapabilityRegistryState | None) -> dict[str, object] | None:
+def _registry_payload(
+    state: CapabilityRegistryState | None,
+) -> dict[str, object] | None:
     if state is None:
         return None
     return {
@@ -105,7 +107,9 @@ class CapabilityAcquisitionReleaseBridge:
         if admission.store is not reconciler.store:
             raise ValueError("admission and reconciler must share registry store")
         if admission.evaluator is not reconciler.evaluator:
-            raise ValueError("admission and reconciler must share compatibility evaluator")
+            raise ValueError(
+                "admission and reconciler must share compatibility evaluator"
+            )
         if admission.package_source is not reconciler.evaluator.package_source:
             raise ValueError("admission and reconciler must share package source")
         self._changes = changes
@@ -209,7 +213,9 @@ class CapabilityAcquisitionReleaseBridge:
         package_id = str(candidate.payload.get("package_id") or "").strip().casefold()
         package_version = str(candidate.payload.get("package_version") or "").strip()
         package_digest = str(candidate.payload.get("package_digest") or "").strip()
-        capability_id = str(candidate.payload.get("capability_id") or "").strip().casefold()
+        capability_id = (
+            str(candidate.payload.get("capability_id") or "").strip().casefold()
+        )
         package_path = str(candidate.payload.get("package_path") or "").strip()
         if not all(
             (package_id, package_version, package_digest, capability_id, package_path)
