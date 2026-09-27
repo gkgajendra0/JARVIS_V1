@@ -88,7 +88,9 @@ class CapabilityLifecycleService:
         authority: CapabilityLifecycleAuthorityBridge,
     ) -> None:
         if reconciler.store is not store:
-            raise ValueError("lifecycle service and reconciler must share registry store")
+            raise ValueError(
+                "lifecycle service and reconciler must share registry store"
+            )
         self.store = store
         self.reconciler = reconciler
         self.authority = authority
@@ -246,7 +248,10 @@ class CapabilityLifecycleService:
             raise CapabilityLifecycleReconciliationError(
                 "reconciled lifecycle generation does not match durable registry"
             )
-        if require_effective is not None and state.effective_enabled is not require_effective:
+        if (
+            require_effective is not None
+            and state.effective_enabled is not require_effective
+        ):
             self.projection.fail_closed("lifecycle_effective_state_mismatch")
             raise CapabilityLifecycleReconciliationError(
                 f"{action.value} did not produce the required effective routing state"
@@ -499,7 +504,9 @@ class CapabilityLifecycleService:
                     reason_code="capability_disabled",
                     authority_ref=authorized.authority_ref,
                     evidence_ref=(
-                        binding.compatibility_digest if report is None else report.digest
+                        binding.compatibility_digest
+                        if report is None
+                        else report.digest
                     ),
                 )
                 self.reconciler.reconcile(ReconciliationTrigger.LIFECYCLE)
