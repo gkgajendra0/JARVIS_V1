@@ -390,6 +390,7 @@ def build_production_voice_runtime(
                     expected_ci_app_id=config.github_expected_ci_app_id,
                 )
             ),
+            capability_catalog_refresher=capability_runtime.refresh_catalog,
         )
         LOGGER.info(
             "Persistent work runtime configured: provider=%s physical_concurrency=%s "
