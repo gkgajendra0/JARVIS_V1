@@ -56,7 +56,11 @@ from jarvis.memory.query_interpreters import build_memory_query_interpreter
 from jarvis.memory.release_guard import build_memory_release_guard
 from jarvis.memory.runtime import build_default_memory_runtime
 from jarvis.preflight import StartupPreflightError, require_startup_preflight
-from jarvis.promotion.release import load_active_release_for_startup
+from jarvis.promotion.release import (
+    DeploymentMetadataStore,
+    default_deployment_root,
+    load_active_release_for_startup,
+)
 from jarvis.provider_resilience import ProviderResilienceState
 from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.vision.health_observers import (
@@ -362,6 +366,14 @@ def build_production_voice_runtime(
                         None if package_stack is None else package_stack.projection
                     ),
                 )
+            ),
+            capability_lifecycle_service=(
+                None if package_stack is None else package_stack.lifecycle
+            ),
+            capability_deployment_metadata=(
+                None
+                if package_stack is None
+                else DeploymentMetadataStore(default_deployment_root())
             ),
         )
         LOGGER.info(
