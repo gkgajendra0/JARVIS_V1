@@ -2,7 +2,7 @@
 
 ## Status
 
-**OWNER-APPROVED — IMPLEMENTATION IN PROGRESS — 8A–8E DONE / 8F ACTIVE — 2026-09-27**
+**DONE / OWNER-MACHINE ACCEPTED — 8A–8F COMPLETE — 2026-09-27**
 
 ## 8A — package contracts and schema — DONE
 
@@ -83,7 +83,7 @@ Deliver:
 - restart/idempotency tests;
 - DBOS explicitly outside canonical registry truth; use only if a future lifecycle operation genuinely needs durable multi-step orchestration.
 
-## 8F — evaluation and acceptance — IN IMPLEMENTATION
+## 8F — evaluation and acceptance — DONE
 
 Deliver:
 
@@ -116,3 +116,11 @@ Deliver:
 ## Stop condition
 
 After research/architecture docs are complete, stop before Phase-8 runtime implementation and request explicit owner architecture approval.
+
+## Final acceptance
+
+Phase 8 was owner-machine accepted on 2026-09-27 against protected-main SHA `1eda461be022ee30753b3d981e33290442f38a80`.
+
+Canonical evidence: `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
+
+The Windows owner-machine run passed 45/45 deterministic replay cases with replay digest `7e20c17d2a94567b051a92366987100b76e439afa48252f456aa738fd00c7a0c` and evidence digest `16de093d87b12bd9918e87fd160f9efa25c3787fe30fca2fbc0c630089893900`.
