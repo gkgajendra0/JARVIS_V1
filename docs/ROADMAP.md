@@ -59,7 +59,7 @@ The authoritative product-level architecture is `docs/AUTONOMOUS_SELF_MANAGEMENT
 
 This clarification does **not** invalidate or interrupt the existing autonomous-engineering program. That program becomes the governed engineering subsystem JARVIS uses whenever self-management requires research, source change, repair, capability acquisition or improvement.
 
-A future **Phase 10A — Autonomous Operations Control Plane** is inserted after closed-loop engineering learning and before autonomous gap/weakness detection. It will add the Objective/DesiredState model, whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, owner-attention handling and autonomy evaluation. It is not active during Phase 5.
+A future **Phase 10A — Autonomous Operations Control Plane** is inserted after closed-loop engineering learning and before autonomous gap/weakness detection. It will add the Objective/DesiredState model, whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, owner-attention handling and autonomy evaluation. It remains a future integration point and is not active during Phase 8.
 
 ### Advanced intelligence north star — Universal Knowledge + Discovery
 
