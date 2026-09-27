@@ -182,6 +182,7 @@ class WorkAgentTools:
             authority_session_id=self._conversation.session_id,
             source_turn_id=turn.turn_id,
         )
+        self._runtime.refresh_capability_catalog()
         return {
             "ok": True,
             "status": "enabled",
@@ -218,6 +219,7 @@ class WorkAgentTools:
             authority_session_id=self._conversation.session_id,
             source_turn_id=turn.turn_id,
         )
+        self._runtime.refresh_capability_catalog()
         return {
             "ok": True,
             "status": "disabled",
