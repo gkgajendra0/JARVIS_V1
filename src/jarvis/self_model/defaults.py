@@ -669,6 +669,19 @@ def build_default_self_model() -> SelfModelRegistry:
             logger_prefixes=("jarvis.engineering_change",),
         ),
         C(
+            "work.capability_acquisition",
+            "Owner-requested capability acquisition contracts and governed engineering "
+            "process.",
+            ("src/jarvis/capability_acquisition",),
+            parent_component_id="work",
+            tests=("tests/test_capability_acquisition_contracts.py",),
+            logger_prefixes=("jarvis.capability_acquisition",),
+            docs=(
+                "docs/PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_ARCHITECTURE.md",
+                "docs/PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_IMPLEMENTATION_PLAN.md",
+            ),
+        ),
+        C(
             "work.promotion",
             "Governed protected-main promotion, exact production activation, "
             "observation and rollback.",
@@ -857,6 +870,16 @@ def build_default_self_model() -> SelfModelRegistry:
             "hands.orchestrator",
             "provider.planner",
             criticality=DependencyCriticality.DEGRADING,
+        ),
+        DependencyDescriptor(
+            "work.capability_acquisition",
+            "capability_runtime",
+            criticality=DependencyCriticality.BLOCKING,
+        ),
+        DependencyDescriptor(
+            "work.capability_acquisition",
+            "work.engineering_change",
+            criticality=DependencyCriticality.BLOCKING,
         ),
         DependencyDescriptor(
             "knowledge.research",

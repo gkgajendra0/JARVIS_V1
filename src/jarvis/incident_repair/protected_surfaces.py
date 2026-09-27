@@ -43,10 +43,10 @@ class ProtectedSurfaceAssessment:
 
 
 class RepairProtectedSurfacePolicy:
-    """Deterministic v4 classifier; ambiguous repository surfaces fail closed."""
+    """Deterministic v5 classifier; ambiguous repository surfaces fail closed."""
 
     policy_id = "repair.protected_surfaces"
-    policy_version = 4
+    policy_version = 5
 
     _EXACT_PROTECTED: ClassVar[dict[str, str]] = {
         "pyproject.toml": "repository_build_and_dependency_policy",
@@ -54,6 +54,7 @@ class RepairProtectedSurfacePolicy:
         "src/jarvis/capabilities/authority_bridge.py": "authority_boundary",
         "src/jarvis/capabilities/runtime.py": "capability_lifecycle_governance",
         "src/jarvis/engineering_substrate/sandbox.py": "sandbox_policy",
+        "src/jarvis/incident_repair/protected_surfaces.py": "protected_surface_policy",
         "src/jarvis/dev_supervisor.py": "production_deployment_boundary",
         "src/jarvis/runtime_supervisor.py": "production_deployment_boundary",
         "src/jarvis/self_repair/windows_guardian.py": "production_deployment_boundary",
@@ -69,6 +70,7 @@ class RepairProtectedSurfacePolicy:
         ("src/jarvis/authority/", "authority_boundary"),
         ("src/jarvis/engineering_change/", "engineering_governance"),
         ("src/jarvis/capability_registry/", "capability_lifecycle_governance"),
+        ("src/jarvis/capability_acquisition/", "capability_acquisition_governance"),
         ("src/jarvis/promotion/", "promotion_and_deployment_governance"),
         ("src/jarvis/incidents/migrations/", "durable_state_schema_boundary"),
         ("src/jarvis/memory/migrations/", "durable_state_schema_boundary"),
@@ -82,6 +84,7 @@ class RepairProtectedSurfacePolicy:
         "tests/test_opa_policy",
         "tests/test_engineering_change",
         "tests/test_capability_registry_",
+        "tests/test_capability_acquisition_",
         "tests/test_engineering_substrate_sandbox",
         "tests/test_engineering_substrate_secrets",
         "tests/test_phase5_acceptance",
