@@ -255,6 +255,30 @@ class PromotionStore:
             raise ChangeConflict(f"unknown promotion attempt: {attempt_id}")
         return attempt
 
+    def list_by_states(
+        self,
+        states: tuple[PromotionAttemptState, ...],
+        *,
+        limit: int = 20,
+    ) -> tuple[PromotionAttempt, ...]:
+        if not states or any(
+            not isinstance(state, PromotionAttemptState) for state in states
+        ):
+            raise ValueError("promotion state filter must be non-empty and typed")
+        if type(limit) is not int or limit <= 0:
+            raise ValueError("promotion list limit must be positive")
+        placeholders = ",".join("?" for _ in states)
+        work = self.changes.work
+        with work._lock, work._connect() as db:
+            rows = db.execute(
+                f"""SELECT * FROM promotion_attempts
+                WHERE state IN ({placeholders})
+                ORDER BY created_at, attempt_id
+                LIMIT ?""",
+                (*[state.value for state in states], limit),
+            ).fetchall()
+        return tuple(self._from_row(row) for row in rows)
+
     def transition(
         self,
         attempt_id: str,
