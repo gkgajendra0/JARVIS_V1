@@ -173,7 +173,6 @@ def test_work_orchestration_requires_production_postgres() -> None:
     assert config.work_dbos_database_url == "postgresql://localhost/jarvis_work"
 
 
-
 def test_github_promotion_requires_non_secret_identifiers() -> None:
     with pytest.raises(ValueError, match="CLIENT_ID"):
         JarvisConfig(github_promotion_enabled=True)
