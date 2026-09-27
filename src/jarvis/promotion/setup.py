@@ -90,9 +90,9 @@ def configure_github_promotion(
         )
         disposition = "enrolled"
     else:
-        if descriptor.allowed_consumers != (_CONSUMER_ID,) or descriptor.allowed_scopes != (
-            _SCOPE,
-        ):
+        if descriptor.allowed_consumers != (
+            _CONSUMER_ID,
+        ) or descriptor.allowed_scopes != (_SCOPE,):
             raise PromotionSetupError(
                 "existing GitHub promotion secret has incompatible consumer/scope policy"
             )
