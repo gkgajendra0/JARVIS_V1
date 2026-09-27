@@ -67,6 +67,19 @@ def test_work_runtime_source_revision_provider_is_fail_closed() -> None:
         runtime.current_source_revision()
 
 
+def test_work_runtime_refreshes_live_capability_catalog() -> None:
+    runtime = object.__new__(WorkRuntime)
+    calls: list[str] = []
+    runtime._capability_catalog_refresher = lambda: calls.append("refresh")
+
+    runtime.refresh_capability_catalog()
+
+    assert calls == ["refresh"]
+
+    runtime._capability_catalog_refresher = None
+    runtime.refresh_capability_catalog()
+
+
 def test_phase9_owner_voice_tools_are_exposed() -> None:
     assert hasattr(WorkAgentTools, "start_capability_acquisition")
     assert hasattr(WorkAgentTools, "activate_acquired_capability")
