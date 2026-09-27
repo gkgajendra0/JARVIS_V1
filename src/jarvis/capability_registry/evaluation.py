@@ -30,9 +30,9 @@ from jarvis.capability_registry.contracts import (
     CapabilityPackageV1,
     PackageArtifactDescriptorV1,
     StrictSemVer,
-    capability_package_v1_json_schema,
     parse_capability_package_v1,
 )
+from jarvis.capability_registry.schema import capability_package_v1_json_schema
 from jarvis.capability_registry.lifecycle import (
     CapabilityLifecyclePreconditionError,
     CapabilityLifecycleService,
