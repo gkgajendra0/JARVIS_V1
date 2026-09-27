@@ -6,6 +6,7 @@ import json
 import pathlib
 import re
 from dataclasses import dataclass
+from datetime import datetime
 
 from jarvis.engineering_substrate.canonical import canonical_digest
 
@@ -226,6 +227,24 @@ def validate_external_acceptance(
         if payload.get(field) is not True:
             raise Phase9ExternalAcceptanceError(f"{field} must be true")
 
+    recorded_at = _text(
+        payload.get("recorded_at"),
+        field="recorded_at",
+        max_length=100,
+    )
+    try:
+        parsed_recorded_at = datetime.fromisoformat(
+            recorded_at.replace("Z", "+00:00")
+        )
+    except ValueError as exc:
+        raise Phase9ExternalAcceptanceError(
+            "recorded_at must be ISO-8601"
+        ) from exc
+    if parsed_recorded_at.tzinfo is None or parsed_recorded_at.utcoffset() is None:
+        raise Phase9ExternalAcceptanceError(
+            "recorded_at must include a timezone"
+        )
+
     evidence = Phase9ExternalAcceptanceEvidenceV1(
         capability_id=_text(
             payload.get("capability_id"),
@@ -253,11 +272,7 @@ def validate_external_acceptance(
         effective_enabled_verified=True,
         disable_rollback_verified=True,
         owner_confirmed=True,
-        recorded_at=_text(
-            payload.get("recorded_at"),
-            field="recorded_at",
-            max_length=100,
-        ),
+        recorded_at=recorded_at,
         source=_text(payload.get("source"), field="source", max_length=200),
     )
     expected = payload.get("evidence_digest")
