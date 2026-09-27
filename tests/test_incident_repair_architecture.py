@@ -247,9 +247,7 @@ def test_owner_rejection_never_creates_development_work(tmp_path) -> None:
 
 
 def test_stale_architecture_gate_cannot_be_approved(tmp_path) -> None:
-    _, store, _, coordinator, change_id, diagnostic_work_id, _, _ = _fixture(
-        tmp_path
-    )
+    _, store, _, coordinator, change_id, diagnostic_work_id, _, _ = _fixture(tmp_path)
     coordinator.reconcile_for_work(diagnostic_work_id)
     architecture = store.latest_artifact(change_id, "architecture")
     assert architecture is not None
