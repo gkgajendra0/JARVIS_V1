@@ -345,9 +345,14 @@ class CapabilityRegistryStore:
             raise CapabilityRegistryIntegrityError(
                 "stored capability package identity does not match package JSON"
             )
-        release_sha = _release_sha(row["admitted_release_sha"])
-        evidence_digest = _sha256(row["evidence_digest"], field="evidence_digest")
-        admitted_at = _require_timestamp(row["admitted_at"], field="admitted_at")
+        try:
+            release_sha = _release_sha(row["admitted_release_sha"])
+            evidence_digest = _sha256(row["evidence_digest"], field="evidence_digest")
+            admitted_at = _require_timestamp(row["admitted_at"], field="admitted_at")
+        except (ValueError, CapabilityRegistryIntegrityError) as exc:
+            raise CapabilityRegistryIntegrityError(
+                "stored capability package admission metadata is invalid"
+            ) from exc
         return AdmittedCapabilityPackage(
             package=package,
             package_digest=package.digest,
@@ -537,6 +542,8 @@ class CapabilityRegistryStore:
                     raise CapabilityRegistryIntegrityError(
                         "admitted package is missing managed capability state"
                     )
+                registry = self._registry_from_row(registry_row)
+                self._verify_registry_selection(connection, registry)
                 return admitted
 
             connection.execute(
@@ -586,6 +593,7 @@ class CapabilityRegistryStore:
                 generation = 1
             else:
                 registry = self._registry_from_row(registry_row)
+                self._verify_registry_selection(connection, registry)
                 generation = registry.generation
 
             self._append_event(
