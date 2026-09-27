@@ -78,7 +78,10 @@ class CapabilityArtifactRetentionPlanner:
                 else None
             )
             for event in reversed(self.store.list_events(state.capability_id)):
-                if event.event_kind is not CapabilityLifecycleEventKind.VERSION_SELECTED:
+                if (
+                    event.event_kind
+                    is not CapabilityLifecycleEventKind.VERSION_SELECTED
+                ):
                     continue
                 if event.package_id is None or event.package_version is None:
                     continue
