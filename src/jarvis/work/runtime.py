@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
@@ -145,6 +146,7 @@ class WorkRuntime:
         model_router: ModelRouter | None = None,
         capability_acquisition: CapabilityAcquisitionCoordinator | None = None,
         capability_lifecycle: CapabilityAcquisitionLifecycleCoordinator | None = None,
+        source_revision_provider: Callable[[], str] | None = None,
     ) -> None:
         self.store = store
         self.engine = engine
@@ -157,7 +159,19 @@ class WorkRuntime:
         self.model_router = model_router
         self.capability_acquisition = capability_acquisition
         self.capability_lifecycle = capability_lifecycle
+        self._source_revision_provider = source_revision_provider
         self._closed = False
+
+    def current_source_revision(self) -> str:
+        provider = self._source_revision_provider
+        if provider is None:
+            raise RuntimeError("trusted JARVIS source revision is unavailable")
+        revision = str(provider()).strip().casefold()
+        if len(revision) != 40 or any(
+            char not in "0123456789abcdef" for char in revision
+        ):
+            raise RuntimeError("trusted JARVIS source revision is invalid")
+        return revision
 
     def supports(self, work_type: WorkType) -> bool:
         return work_type in self.supported_work_types
@@ -439,4 +453,5 @@ def build_work_runtime(
         model_router=model_router,
         capability_acquisition=capability_acquisition,
         capability_lifecycle=capability_lifecycle,
+        source_revision_provider=workspace_manager.current_revision,
     )
