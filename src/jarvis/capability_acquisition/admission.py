@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -59,11 +60,13 @@ class CapabilityAcquisitionCoordinator:
         *,
         changes: ChangeCoordinator,
         context_provider: AcquisitionContextProvider,
+        source_revision_provider: Callable[[], str] | None = None,
     ) -> None:
         if not isinstance(changes, ChangeCoordinator):
             raise TypeError("changes must be ChangeCoordinator")
         self._changes = changes
         self._context_provider = context_provider
+        self._source_revision_provider = source_revision_provider
         self._existing = CapabilityAcquisitionResolver(
             CapabilitySourceRegistry((ExistingCapabilitySourceAdapter(),))
         )
@@ -111,6 +114,19 @@ class CapabilityAcquisitionCoordinator:
         } & reasons:
             return CapabilityAcquisitionAdmissionDisposition.EXISTING_READY
         return None
+
+    def admit_current(
+        self,
+        goal: OwnerCapabilityGoalV1,
+    ) -> CapabilityAcquisitionAdmission:
+        if self._source_revision_provider is None:
+            raise CapabilityAcquisitionAdmissionError(
+                "Phase-9 production admission has no accepted active-release identity"
+            )
+        return self.admit(
+            goal,
+            source_revision=self._source_revision_provider(),
+        )
 
     def admit(
         self,
