@@ -241,10 +241,13 @@ def build_work_runtime(
             OWNER_CAPABILITY_ACQUISITION_PROCESS,
         ),
     )
-    acquisition_context = acquisition_context_provider or StaticAcquisitionContextProvider(
-        AcquisitionContextV1(
-            catalog=CapabilityCatalog(sources=(), capabilities=()),
-            inventory=(),
+    acquisition_context = (
+        acquisition_context_provider
+        or StaticAcquisitionContextProvider(
+            AcquisitionContextV1(
+                catalog=CapabilityCatalog(sources=(), capabilities=()),
+                inventory=(),
+            )
         )
     )
     acquisition_sources = CapabilitySourceRegistry(
@@ -338,6 +341,7 @@ def build_work_runtime(
         resource_capacities,
         min_available_memory_mb=min_available_memory_mb,
     )
+
     def _completion_guard(work: WorkItem, steps):
         stage = change_store.stage_for_work(work.work_id)
         if stage is None:
