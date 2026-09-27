@@ -6,6 +6,8 @@ import asyncio
 
 from livekit.agents import RunContext, function_tool
 
+from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
+from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.engineering_change.models import ChangeConflict
 from jarvis.engineering_change.service import ChangeService
@@ -71,6 +73,10 @@ class WorkAgentTools:
             self.reprioritize_background_work,
             self.continue_background_work,
             self.start_engineering_change,
+            self.start_capability_acquisition,
+            self.prepare_capability_acquisition_architecture,
+            self.activate_acquired_capability,
+            self.disable_acquired_capability,
             self.propose_change_architecture,
             self.revise_change_architecture,
             self.prepare_change_acceptance,
@@ -94,6 +100,175 @@ class WorkAgentTools:
         del context
         change = self._change_service().start(self._latest_user_turn())
         return {"ok": True, "change_id": change.change_id, "state": change.state.value}
+
+    @function_tool()
+    async def start_capability_acquisition(
+        self,
+        context: RunContext,
+        requested_capability: str,
+        required_operations: list[str],
+        target_hints: list[str] | None = None,
+    ) -> dict[str, object]:
+        """Start governed Phase-9 capability acquisition from the latest USER request.
+
+        Use when the owner asks JARVIS to gain a capability it does not currently
+        have, such as controlling a device or integrating a service. The exact
+        accepted USER utterance remains the canonical request. These parameters are
+        semantic interpretation only and grant no execution Authority.
+        """
+        del context
+        coordinator = self._runtime.capability_acquisition
+        if coordinator is None:
+            return {"ok": False, "status": "capability_acquisition_unavailable"}
+        capability = requested_capability.strip()
+        operations = tuple(
+            dict.fromkeys(
+                str(item).strip().casefold()
+                for item in required_operations
+                if str(item).strip()
+            )
+        )
+        hints = tuple(
+            dict.fromkeys(
+                str(item).strip()
+                for item in (target_hints or [])
+                if str(item).strip()
+            )
+        )
+        if not capability or not operations:
+            raise WorkToolGroundingError(
+                "capability acquisition requires a capability and semantic operations"
+            )
+        turn = self._latest_user_turn()
+        goal = OwnerCapabilityGoalV1.create(
+            request=turn.text,
+            requested_capability=capability,
+            required_operations=operations,
+            target_hints=hints,
+            source_session_id=self._conversation.session_id,
+            source_turn_id=turn.turn_id,
+        )
+        admission = coordinator.admit_current(goal)
+        selected = admission.initial_resolution.selected_candidate
+        return {
+            "ok": True,
+            "status": admission.disposition.value,
+            "goal_id": goal.goal_id,
+            "goal_digest": goal.digest,
+            "change_id": (
+                None if admission.change is None else admission.change.change_id
+            ),
+            "change_state": (
+                None if admission.change is None else admission.change.state.value
+            ),
+            "acquisition_work_id": admission.acquisition_work_id,
+            "selected_candidate_id": (
+                None if selected is None else selected.candidate_id
+            ),
+            "selected_strategy": (
+                None if selected is None else selected.strategy.value
+            ),
+            "canonical_user_turn_id": turn.turn_id,
+            "truth_note": (
+                "existing_ready means no engineering work is needed; "
+                "existing_lifecycle means use the governed lifecycle route; "
+                "engineering_change means durable Phase-9 acquisition started"
+            ),
+        }
+
+    @function_tool()
+    async def prepare_capability_acquisition_architecture(
+        self,
+        context: RunContext,
+        change_id: str,
+    ) -> dict[str, object]:
+        """Present Phase-9's canonical derived architecture for explicit owner review.
+
+        Do not generate or paraphrase a replacement architecture. This tool presents
+        only the exact architecture artifact derived from the completed acquisition plan.
+        """
+        del context
+        service = self._change_service()
+        store = service.coordinator.store
+        change = store.require(change_id)
+        if change.process_key != OWNER_CAPABILITY_ACQUISITION_PROCESS.key:
+            raise ChangeConflict("change is not Phase-9 capability acquisition")
+        architecture = store.latest_artifact(change_id, "architecture")
+        if architecture is None:
+            raise ChangeConflict("Phase-9 canonical architecture is not ready")
+        gate = service.propose_architecture(change_id, architecture.payload)
+        return {
+            "ok": True,
+            "change_id": change_id,
+            "gate_id": gate.gate_id,
+            "artifact_id": architecture.artifact_id,
+            "artifact_digest": architecture.digest,
+            "status": "awaiting_explicit_owner_architecture_decision",
+        }
+
+    @function_tool()
+    async def activate_acquired_capability(
+        self,
+        context: RunContext,
+        change_id: str,
+    ) -> dict[str, object]:
+        """Activate the exact promoted Phase-9 package through Phase-8 Authority.
+
+        Use only when the owner explicitly asks to enable/activate the acquired
+        capability. The lifecycle service performs its own Authority/owner verification.
+        """
+        del context
+        lifecycle = self._runtime.capability_lifecycle
+        if lifecycle is None:
+            return {"ok": False, "status": "capability_lifecycle_unavailable"}
+        turn = self._latest_user_turn()
+        result = await asyncio.to_thread(
+            lifecycle.activate,
+            change_id,
+            authority_session_id=self._conversation.session_id,
+            source_turn_id=turn.turn_id,
+        )
+        return {
+            "ok": True,
+            "status": "activated",
+            "change_id": change_id,
+            "artifact_id": result.activation_artifact.artifact_id,
+            "artifact_digest": result.activation_artifact.digest,
+            "evidence": result.activation_artifact.payload,
+            "canonical_user_turn_id": turn.turn_id,
+        }
+
+    @function_tool()
+    async def disable_acquired_capability(
+        self,
+        context: RunContext,
+        change_id: str,
+    ) -> dict[str, object]:
+        """Disable the exact Phase-9 acquired capability through Phase-8 Authority.
+
+        Use only when the owner explicitly asks to disable/rollback the acquired
+        capability. This preserves the package while removing effective routing.
+        """
+        del context
+        lifecycle = self._runtime.capability_lifecycle
+        if lifecycle is None:
+            return {"ok": False, "status": "capability_lifecycle_unavailable"}
+        turn = self._latest_user_turn()
+        result = await asyncio.to_thread(
+            lifecycle.disable,
+            change_id,
+            authority_session_id=self._conversation.session_id,
+            source_turn_id=turn.turn_id,
+        )
+        return {
+            "ok": True,
+            "status": "disabled",
+            "change_id": change_id,
+            "artifact_id": result.activation_artifact.artifact_id,
+            "artifact_digest": result.activation_artifact.digest,
+            "evidence": result.activation_artifact.payload,
+            "canonical_user_turn_id": turn.turn_id,
+        }
 
     @function_tool()
     async def propose_change_architecture(
