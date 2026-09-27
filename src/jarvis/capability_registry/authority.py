@@ -113,7 +113,9 @@ class CapabilityLifecycleProposalBinding:
             raise ValueError("capability_id must not be empty")
         if type(self.expected_generation) is not int or self.expected_generation <= 0:
             raise ValueError("expected_generation must be a positive integer")
-        package_id = None if self.package_id is None else str(self.package_id).strip()
+        package_id = (
+            None if self.package_id is None else str(self.package_id).strip().casefold()
+        )
         package_version = (
             None if self.package_version is None else str(self.package_version).strip()
         )
@@ -137,7 +139,12 @@ class CapabilityLifecycleProposalBinding:
         if not isinstance(self.manifest_risk_floor, RiskClass):
             raise TypeError("manifest_risk_floor must be RiskClass")
         authority_attributes = tuple(
-            sorted({str(item).strip() for item in self.manifest_authority_attributes})
+            sorted(
+                {
+                    str(item).strip().casefold()
+                    for item in self.manifest_authority_attributes
+                }
+            )
         )
         if any(not item for item in authority_attributes):
             raise ValueError("manifest authority attributes must be non-empty tokens")
@@ -215,11 +222,11 @@ class CapabilityLifecycleAuthorityBridge:
         authority_session_id: str,
     ) -> tuple[dict[str, object], ActionOrigin, bool]:
         source = binding.source
+        if source.source_session_id != authority_session_id:
+            raise CapabilityLifecycleAuthorizationError(
+                "lifecycle source session does not match Authority session"
+            )
         if source.source_turn_id is not None:
-            if source.source_session_id != authority_session_id:
-                raise CapabilityLifecycleAuthorizationError(
-                    "owner-turn source session does not match Authority session"
-                )
             return (
                 {
                     "kind": "owner_turn",
