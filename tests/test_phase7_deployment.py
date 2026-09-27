@@ -4,7 +4,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import jarvis.promotion.release as release_module
-
 from jarvis.dev_control import RuntimeReleaseIdentity
 from jarvis.engineering_change import ChangeState, ChangeStore
 from jarvis.promotion.deployment import DeploymentCoordinator
