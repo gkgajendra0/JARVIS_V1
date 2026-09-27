@@ -29,6 +29,8 @@ class GitHubPullRequestSnapshot:
     head_sha: str
     draft: bool
     state: str
+    merged: bool = False
+    merge_sha: str | None = None
 
     def __post_init__(self) -> None:
         if type(self.number) is not int or self.number <= 0:
@@ -37,6 +39,10 @@ class GitHubPullRequestSnapshot:
         _require_sha(self.head_sha, field="PR head SHA")
         if self.state not in {"open", "closed"}:
             raise ValueError("PR state must be open or closed")
+        if self.merge_sha is not None:
+            _require_sha(self.merge_sha, field="PR merge SHA")
+        if self.merged and (self.state != "closed" or self.merge_sha is None):
+            raise ValueError("merged PR requires closed state and merge SHA")
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +96,8 @@ class GitHubPromotionClient(Protocol):
     def read_pull_request(self, number: int) -> GitHubPullRequestSnapshot: ...
 
     def read_workflow(self, number: int) -> GitHubWorkflowSnapshot: ...
+
+    def read_protected_main_sha(self) -> str: ...
 
     def squash_merge(self, number: int, *, expected_head_sha: str) -> str: ...
 
@@ -223,6 +231,12 @@ class GitHubPromotionAdapter:
 
     def read_workflow(self, number: int) -> GitHubWorkflowSnapshot:
         return self._client.read_workflow(number)
+
+    def read_protected_main_sha(self) -> str:
+        return _require_sha(
+            self._client.read_protected_main_sha(),
+            field="protected main SHA",
+        )
 
     def squash_merge(self, number: int, *, expected_head_sha: str) -> str:
         merge_sha = self._client.squash_merge(
