@@ -61,14 +61,25 @@ class CapabilityProviderRegistration:
         if not versions or any(type(item) is not int or item <= 0 for item in versions):
             raise ValueError("supported runtime API versions must be positive integers")
         health = tuple(
-            sorted({_token(item, field="health_probe_id") for item in self.health_probe_ids})
+            sorted(
+                {
+                    _token(item, field="health_probe_id")
+                    for item in self.health_probe_ids
+                }
+            )
         )
         if self.descriptor.capability_id != capability_id:
-            raise ValueError("provider descriptor capability_id does not match registration")
+            raise ValueError(
+                "provider descriptor capability_id does not match registration"
+            )
         if self.executor.capability_key != self.descriptor.key:
-            raise ValueError("provider executor capability_key does not match descriptor key")
+            raise ValueError(
+                "provider executor capability_key does not match descriptor key"
+            )
         if set(self.executor.operations) != set(self.descriptor.operations):
-            raise ValueError("provider executor operations do not match descriptor operations")
+            raise ValueError(
+                "provider executor operations do not match descriptor operations"
+            )
         if not self.descriptor.execution_enabled:
             raise ValueError("trusted provider descriptor must be execution-enabled")
         object.__setattr__(self, "capability_id", capability_id)
@@ -91,7 +102,9 @@ class CapabilityProviderRegistration:
 class CapabilityProviderRegistry:
     """Code-owned provider inventory; package data cannot manufacture registrations."""
 
-    def __init__(self, registrations: tuple[CapabilityProviderRegistration, ...] = ()) -> None:
+    def __init__(
+        self, registrations: tuple[CapabilityProviderRegistration, ...] = ()
+    ) -> None:
         self._registrations: dict[
             tuple[str, str, str], CapabilityProviderRegistration
         ] = {}
@@ -139,6 +152,4 @@ class CapabilityProviderRegistry:
         return registration
 
     def registrations(self) -> tuple[CapabilityProviderRegistration, ...]:
-        return tuple(
-            self._registrations[key] for key in sorted(self._registrations)
-        )
+        return tuple(self._registrations[key] for key in sorted(self._registrations))
