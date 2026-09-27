@@ -185,7 +185,7 @@ def _write_package(release: ReleaseRecord, package) -> str:
     return "capability_packages/tv.control.package.json"
 
 
-def _change_and_attempt(tmp_path):
+def _change_and_attempt(tmp_path, *, package_digest: str = DIGEST):
     changes = ChangeStore(
         SQLiteWorkStore(tmp_path / "work.sqlite3"),
         processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,),
@@ -215,7 +215,7 @@ def _change_and_attempt(tmp_path):
             "package_path": "capability_packages/tv.control.package.json",
             "package_id": PACKAGE_ID,
             "package_version": PACKAGE_VERSION,
-            "package_digest": "",
+            "package_digest": package_digest,
             "capability_id": CAPABILITY_ID,
             "protected_surface": {
                 "policy_id": "repair.protected_surfaces",
@@ -322,9 +322,12 @@ def test_promoted_package_is_admitted_without_auto_activation(
     monkeypatch,
     tmp_path,
 ) -> None:
-    changes, promotions, change, candidate, _, attempt = _change_and_attempt(tmp_path)
     manifest = _manifest()
     package = _package(manifest)
+    changes, promotions, change, _, _, attempt = _change_and_attempt(
+        tmp_path,
+        package_digest=package.digest,
+    )
     release_root = tmp_path / "release"
     release_root.mkdir()
     release = ReleaseRecord(
@@ -336,16 +339,7 @@ def test_promoted_package_is_admitted_without_auto_activation(
         schema_versions=(("capability_registry", 1),),
         accepted_at_epoch=1.0,
     )
-    package_path = _write_package(release, package)
-    changes.add_artifact(
-        change.change_id,
-        kind="capability_candidate",
-        payload={
-            **candidate.payload,
-            "package_path": package_path,
-            "package_digest": package.digest,
-        },
-    )
+    _write_package(release, package)
     _set_change_state(changes, change.change_id, ChangeState.OBSERVING)
     _set_attempt_observing(changes, attempt.attempt_id)
 
@@ -386,9 +380,12 @@ def test_bridge_rejects_active_release_that_does_not_match_promotion(
     monkeypatch,
     tmp_path,
 ) -> None:
-    changes, promotions, change, candidate, _, attempt = _change_and_attempt(tmp_path)
     manifest = _manifest()
     package = _package(manifest)
+    changes, promotions, change, _, _, attempt = _change_and_attempt(
+        tmp_path,
+        package_digest=package.digest,
+    )
     release_root = tmp_path / "release"
     release_root.mkdir()
     release = ReleaseRecord(
@@ -401,11 +398,6 @@ def test_bridge_rejects_active_release_that_does_not_match_promotion(
         accepted_at_epoch=1.0,
     )
     _write_package(release, package)
-    changes.add_artifact(
-        change.change_id,
-        kind="capability_candidate",
-        payload={**candidate.payload, "package_digest": package.digest},
-    )
     _set_change_state(changes, change.change_id, ChangeState.OBSERVING)
     _set_attempt_observing(changes, attempt.attempt_id, merge_sha=MERGE)
     deployment = DeploymentMetadataStore(tmp_path / "deployment")
@@ -434,9 +426,12 @@ def test_bridge_rejects_candidate_package_digest_drift(
     monkeypatch,
     tmp_path,
 ) -> None:
-    changes, promotions, change, _, _, attempt = _change_and_attempt(tmp_path)
     manifest = _manifest()
     package = _package(manifest)
+    changes, promotions, change, _, _, attempt = _change_and_attempt(
+        tmp_path,
+        package_digest=DIGEST,
+    )
     release_root = tmp_path / "release"
     release_root.mkdir()
     release = ReleaseRecord(
@@ -477,9 +472,12 @@ def test_bridge_blocks_package_when_phase8_provider_is_missing(
     monkeypatch,
     tmp_path,
 ) -> None:
-    changes, promotions, change, candidate, _, attempt = _change_and_attempt(tmp_path)
     manifest = _manifest()
     package = _package(manifest)
+    changes, promotions, change, _, _, attempt = _change_and_attempt(
+        tmp_path,
+        package_digest=package.digest,
+    )
     release_root = tmp_path / "release"
     release_root.mkdir()
     release = ReleaseRecord(
@@ -492,20 +490,16 @@ def test_bridge_blocks_package_when_phase8_provider_is_missing(
         accepted_at_epoch=1.0,
     )
     _write_package(release, package)
-    changes.add_artifact(
-        change.change_id,
-        kind="capability_candidate",
-        payload={**candidate.payload, "package_digest": package.digest},
-    )
     _set_change_state(changes, change.change_id, ChangeState.OBSERVING)
     _set_attempt_observing(changes, attempt.attempt_id)
     deployment = DeploymentMetadataStore(tmp_path / "deployment")
     deployment.set_active(release)
 
     source = ReleaseCapabilityPackageSource(release)
+    providers = CapabilityProviderRegistry()
     evaluator = CapabilityCompatibilityEvaluator(
         manifest_registry=_manifest_registry(manifest),
-        provider_registry=CapabilityProviderRegistry(),
+        provider_registry=providers,
         artifact_store=ArtifactStore(tmp_path / "artifacts"),
         package_source=source,
         runtime_release_sha=MERGE,
@@ -517,13 +511,11 @@ def test_bridge_blocks_package_when_phase8_provider_is_missing(
         package_source=source,
         evaluator=evaluator,
     )
-    projection = CapabilityRegistryProjection(
-        provider_registry=CapabilityProviderRegistry()
-    )
+    projection = CapabilityRegistryProjection(provider_registry=providers)
     reconciler = CapabilityLifecycleReconciler(
         store=registry,
         evaluator=evaluator,
-        provider_registry=evaluator.provider_registry,
+        provider_registry=providers,
         health_registry=HealthRegistry(),
         projection=projection,
     )
