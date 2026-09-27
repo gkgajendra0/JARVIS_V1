@@ -163,6 +163,7 @@ class WorkRuntime:
         capability_lifecycle: CapabilityAcquisitionLifecycleCoordinator | None = None,
         promotion_runtime: PromotionRuntime | None = None,
         release_bridge_task: asyncio.Task[None] | None = None,
+        capability_catalog_refresher: Callable[[], object] | None = None,
         source_revision_provider: Callable[[], str] | None = None,
     ) -> None:
         self.store = store
@@ -178,8 +179,14 @@ class WorkRuntime:
         self.capability_lifecycle = capability_lifecycle
         self.promotion_runtime = promotion_runtime
         self._release_bridge_task = release_bridge_task
+        self._capability_catalog_refresher = capability_catalog_refresher
         self._source_revision_provider = source_revision_provider
         self._closed = False
+
+    def refresh_capability_catalog(self) -> None:
+        refresher = getattr(self, "_capability_catalog_refresher", None)
+        if refresher is not None:
+            refresher()
 
     def current_source_revision(self) -> str:
         provider = self._source_revision_provider
@@ -274,6 +281,7 @@ def build_work_runtime(
     capability_package_admission: CapabilityPackageAdmissionService | None = None,
     capability_package_reconciler: CapabilityLifecycleReconciler | None = None,
     promotion_runtime_config: PromotionRuntimeConfig | None = None,
+    capability_catalog_refresher: Callable[[], object] | None = None,
 ) -> WorkRuntime:
     """Build one durable work runtime around the configured JARVIS brain provider."""
 
@@ -558,5 +566,6 @@ def build_work_runtime(
         capability_lifecycle=capability_lifecycle,
         promotion_runtime=promotion_runtime,
         release_bridge_task=release_bridge_task,
+        capability_catalog_refresher=capability_catalog_refresher,
         source_revision_provider=workspace_manager.current_revision,
     )
