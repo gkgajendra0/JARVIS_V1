@@ -222,6 +222,15 @@ jobs:
       - name: Run Windows Self-Repair Job Object smoke tests
         run: python -m pytest -q tests/test_self_repair_windows_job.py
 
+      - name: Run Windows Phase 7 release and promotion regressions
+        run: >-
+          python -m pytest -q
+          tests/test_phase7_promotion_domain.py
+          tests/test_phase7_github_evidence.py
+          tests/test_phase7_authority_merge.py
+          tests/test_phase7_deployment.py
+          tests/test_phase7_release_staging.py
+
 
   promotion-policy:
     if: always()
