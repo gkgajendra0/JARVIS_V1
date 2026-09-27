@@ -15,6 +15,15 @@ from jarvis.capability_acquisition.admission import (
     CapabilityAcquisitionAdmissionDisposition,
     CapabilityAcquisitionCoordinator,
 )
+from jarvis.capability_acquisition.architecture import (
+    CapabilityAcquisitionSourceCompletionHandler,
+)
+from jarvis.capability_acquisition.artifacts import (
+    candidate_payload,
+    evaluation_payload,
+    plan_payload,
+    resolution_payload,
+)
 from jarvis.capability_acquisition.external_acceptance import (
     Phase9ExternalAcceptanceError,
     validate_external_acceptance,
@@ -60,11 +69,15 @@ from jarvis.engineering_change import ChangeConflict, ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.gates import GateKind, GateService
 from jarvis.engineering_substrate.canonical import canonical_digest
+from jarvis.engineering_substrate.change_integration import (
+    EngineeringSubstrateChangeService,
+    ensure_substrate_acceptance_current,
+)
 from jarvis.incident_repair.models import ProtectedSurfaceVerdict
 from jarvis.incident_repair.protected_surfaces import RepairProtectedSurfacePolicy
 from jarvis.promotion.evaluation import run_replay_suite as run_phase7_replay
 from jarvis.self_model.health import HealthState
-from jarvis.work.models import WorkItem, WorkPriority, WorkState, WorkType
+from jarvis.work.models import WorkItem, WorkPriority, WorkState, WorkStep, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
 _REVISION = "a" * 40
@@ -404,6 +417,110 @@ def _admission_environment(root: pathlib.Path, *, turn_id: str):
         source_revision=_REVISION,
     )
     return store, backend, admission
+
+
+def _architecture_ready(root: pathlib.Path, *, turn_id: str):
+    root.mkdir(parents=True, exist_ok=True)
+    work = SQLiteWorkStore(root / "work.sqlite3")
+    store = ChangeStore(
+        work,
+        processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,),
+    )
+    backend = _Backend([])
+    coordinator = ChangeCoordinator(
+        store,
+        backend,
+        source_completion_handlers=(
+            CapabilityAcquisitionSourceCompletionHandler(store),
+        ),
+    )
+    acquisition = CapabilityAcquisitionCoordinator(
+        changes=coordinator,
+        context_provider=StaticAcquisitionContextProvider(_empty_context()),
+    )
+    goal = _goal("power", turn_id=turn_id)
+    admission = acquisition.admit(goal, source_revision=_REVISION)
+    if admission.change is None or admission.acquisition_work_id is None:
+        raise AssertionError("expected build acquisition EngineeringChange")
+
+    resolver = _resolver(CustomBuildCapabilitySourceAdapter())
+    resolution = resolver.resolve(goal, _empty_context())
+    candidate = resolution.selected_candidate
+    if candidate is None:
+        raise AssertionError("custom build fallback was not selected")
+    evaluation = resolution.evaluation(candidate.candidate_id)
+    resolution_artifact = store.add_artifact(
+        admission.change.change_id,
+        kind="acquisition_resolution",
+        payload=resolution_payload(
+            candidates=resolution.candidates,
+            evaluations=resolution.evaluations,
+            selected_candidate_id=resolution.selected_candidate_id,
+        ),
+    )
+    plan = CapabilityAcquisitionPlanV1.create(
+        goal,
+        candidate,
+        evaluation,
+        proposed_capability_id="tv.control",
+        proposed_package_id="tv.control.package",
+        proposed_package_version="1.0.0",
+        rollback_summary="Disable package and revert promoted release.",
+        changed_paths=(
+            "src/jarvis/tv_control.py",
+            "tests/test_tv_control.py",
+            "capability_packages/tv.control.package.json",
+        ),
+        sandbox_profile_ids=("test.offline.v1",),
+        verification_contract_ids=("verify.tv.v1",),
+        development_test_targets=("tests/test_tv_control.py",),
+        owner_acceptance_contract_ids=("owner.tv.effect.v1",),
+        evidence_refs=("phase9-replay:owner-goal",),
+    )
+    plan_artifact = store.add_artifact(
+        admission.change.change_id,
+        kind="acquisition_plan",
+        payload={
+            **plan_payload(plan),
+            "resolution_artifact_id": resolution_artifact.artifact_id,
+            "resolution_artifact_digest": resolution_artifact.digest,
+            "selected_candidate": candidate_payload(candidate),
+            "selected_evaluation": evaluation_payload(evaluation),
+        },
+    )
+    source_work = work.require(admission.acquisition_work_id)
+    step = WorkStep(
+        work_id=source_work.work_id,
+        kind="acq_finalize",
+        summary="finalize exact Phase-9 plan",
+    )
+    work.add_step(step)
+    work.save_step(
+        step.start().complete(
+            {
+                "finalized": True,
+                "plan_id": plan.plan_id,
+                "plan_digest": plan.digest,
+                "plan_artifact_id": plan_artifact.artifact_id,
+                "plan_artifact_digest": plan_artifact.digest,
+            }
+        )
+    )
+    running = work.save(
+        source_work.transition(WorkState.RUNNING),
+        expected_version=source_work.version,
+    )
+    work.save(
+        running.transition(WorkState.COMPLETED, result={"summary": "plan complete"}),
+        expected_version=running.version,
+    )
+    change = coordinator.reconcile_for_work(source_work.work_id)
+    if change is None or change.state is not ChangeState.ARCHITECTURE_READY:
+        raise AssertionError("Phase-9 architecture did not become ready")
+    architecture = store.latest_artifact(change.change_id, "architecture")
+    if architecture is None:
+        raise AssertionError("Phase-9 architecture artifact is missing")
+    return work, store, backend, coordinator, change, plan, architecture
 
 
 def _09_idempotent_admission(root: pathlib.Path) -> dict[str, object]:
