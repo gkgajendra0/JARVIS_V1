@@ -1,5 +1,6 @@
 """Phase-9 owner-requested capability acquisition contracts."""
 
+from .acceptance import Phase9AcceptanceError
 from .admission import (
     CapabilityAcquisitionAdmission,
     CapabilityAcquisitionAdmissionDisposition,
@@ -10,6 +11,14 @@ from .architecture import (
     CapabilityAcquisitionDevelopmentRevisionResolver,
     CapabilityAcquisitionSourceCompletionHandler,
     ensure_capability_acquisition_architecture_current,
+)
+from .evaluation import Phase9ReplayCase, Phase9ReplayReport
+from .external_acceptance import (
+    ExternalCapabilityOperationEvidenceV1,
+    Phase9ExternalAcceptanceError,
+    Phase9ExternalAcceptanceEvidenceV1,
+    load_external_acceptance,
+    validate_external_acceptance,
 )
 from .models import (
     AcquisitionCandidateEvaluationV1,
@@ -77,6 +86,12 @@ from .workflow import (
 
 __all__ = [
     "OWNER_CAPABILITY_ACQUISITION_PROCESS",
+    "ExternalCapabilityOperationEvidenceV1",
+    "Phase9AcceptanceError",
+    "Phase9ExternalAcceptanceError",
+    "Phase9ExternalAcceptanceEvidenceV1",
+    "Phase9ReplayCase",
+    "Phase9ReplayReport",
     "AcquisitionCandidateEvaluationV1",
     "AcquisitionCandidateV1",
     "AcquisitionContextProvider",
@@ -126,8 +141,10 @@ __all__ = [
     "ensure_capability_acquisition_architecture_current",
     "ensure_capability_candidate_acceptance_current",
     "ensure_capability_release_bridge_current",
+    "load_external_acceptance",
     "mcp_server_evidence",
     "openapi_contract_evidence",
     "owner_configured_evidence",
     "sdk_library_evidence",
+    "validate_external_acceptance",
 ]
