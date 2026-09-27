@@ -148,6 +148,16 @@ class GateService:
             )
 
             ensure_substrate_acceptance_current(self.store, change_id)
+            change = self.store.require(change_id)
+            if change.process_key == "owner_capability_acquisition":
+                from jarvis.capability_acquisition.verification import (
+                    ensure_capability_candidate_acceptance_current,
+                )
+
+                ensure_capability_candidate_acceptance_current(
+                    self.store,
+                    change_id,
+                )
         work = self.store.work
         with work._lock, work._connect() as db:
             change = self._require_change(db, change_id)
