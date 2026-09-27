@@ -325,7 +325,5 @@ def test_completed_acquisition_derives_digest_bound_architecture(tmp_path) -> No
     assert architecture.payload["verification_contract_ids"] == [
         "tv-control-contract-v1"
     ]
-    assert architecture.payload["verification_targets"] == [
-        "tests/test_tv_control.py"
-    ]
+    assert architecture.payload["verification_targets"] == ["tests/test_tv_control.py"]
     assert architecture.payload["build_permitted"] is True
