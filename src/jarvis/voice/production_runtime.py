@@ -301,7 +301,7 @@ def build_production_voice_runtime(
             package_stack = build_package_managed_runtime_stack(
                 active_release,
             )
-    except Exception as exc:  # noqa: BLE001 - package-managed capabilities fail closed
+    except Exception as exc:
         LOGGER.exception(
             "Package-managed capability runtime is unavailable; acquired "
             "capabilities remain disabled: %s",
