@@ -806,9 +806,7 @@ def _record_phase7_healthy_observation() -> None:
         # Phase-9 package bridge may still be reconciling in the child release.
         # Keep OBSERVING and retry after the next authenticated liveness sample.
         return
-    print(
-        "Phase-7 production observation completed: exact active release is now LKG."
-    )
+    print("Phase-7 production observation completed: exact active release is now LKG.")
 
 
 def _attach_windows_runtime_job(process: subprocess.Popen[bytes]) -> None:
