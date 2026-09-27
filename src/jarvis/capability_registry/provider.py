@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Protocol
 
 from jarvis.capabilities.execution import CapabilityExecutor
 from jarvis.capabilities.models import CapabilityDescriptor
 from jarvis.engineering_substrate.canonical import canonical_digest
+from jarvis.self_model.health import HealthObservation
 
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 
@@ -38,6 +40,14 @@ def _release_sha(value: object) -> str:
     return normalized
 
 
+class CapabilityHealthProbe(Protocol):
+    """Release-owned deterministic health probe implementation."""
+
+    probe_id: str
+
+    def observe(self, *, component_id: str) -> HealthObservation: ...
+
+
 @dataclass(frozen=True, slots=True)
 class CapabilityProviderRegistration:
     """Trusted source-owned binding from manifest identity to runtime implementation."""
@@ -50,7 +60,7 @@ class CapabilityProviderRegistration:
     release_sha: str
     runtime_api_id: str = "jarvis.capability_runtime"
     supported_runtime_api_versions: tuple[int, ...] = (1,)
-    health_probe_ids: tuple[str, ...] = ()
+    health_probes: tuple[CapabilityHealthProbe, ...] = ()
 
     def __post_init__(self) -> None:
         capability_id = _token(self.capability_id, field="capability_id")
@@ -61,14 +71,16 @@ class CapabilityProviderRegistration:
         versions = tuple(sorted(set(self.supported_runtime_api_versions)))
         if not versions or any(type(item) is not int or item <= 0 for item in versions):
             raise ValueError("supported runtime API versions must be positive integers")
-        health = tuple(
-            sorted(
-                {
-                    _token(item, field="health_probe_id")
-                    for item in self.health_probe_ids
-                }
-            )
-        )
+        normalized_probes: list[CapabilityHealthProbe] = []
+        probe_ids: set[str] = set()
+        for probe in self.health_probes:
+            probe_id = _token(probe.probe_id, field="health_probe_id")
+            if probe_id in probe_ids:
+                raise ValueError(f"duplicate trusted health probe: {probe_id}")
+            if not callable(getattr(probe, "observe", None)):
+                raise TypeError("trusted health probe must implement observe()")
+            probe_ids.add(probe_id)
+            normalized_probes.append(probe)
         if self.descriptor.capability_id != capability_id:
             raise ValueError(
                 "provider descriptor capability_id does not match registration"
@@ -89,7 +101,26 @@ class CapabilityProviderRegistration:
         object.__setattr__(self, "runtime_api_id", runtime_api_id)
         object.__setattr__(self, "release_sha", release_sha)
         object.__setattr__(self, "supported_runtime_api_versions", versions)
-        object.__setattr__(self, "health_probe_ids", health)
+        object.__setattr__(
+            self,
+            "health_probes",
+            tuple(
+                sorted(
+                    normalized_probes,
+                    key=lambda probe: _token(
+                        probe.probe_id,
+                        field="health_probe_id",
+                    ),
+                )
+            ),
+        )
+
+    @property
+    def health_probe_ids(self) -> tuple[str, ...]:
+        return tuple(
+            _token(probe.probe_id, field="health_probe_id")
+            for probe in self.health_probes
+        )
 
     @property
     def descriptor_digest(self) -> str:
