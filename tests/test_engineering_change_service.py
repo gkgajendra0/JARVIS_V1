@@ -242,8 +242,9 @@ def test_verified_commit_requires_separate_owner_acceptance(tmp_path) -> None:
         service.prepare_promotion(change.change_id)
     assert store.require(change.change_id).state is ChangeState.READY_FOR_PROMOTION
     report = inspect_change(store, change.change_id)
-    assert report["result"] == "PENDING"
-    assert set(report["store_gates"].values()) == {"PASS"}
+    assert report["result"] == "FAIL"
+    assert report["store_gates"]["current_promotion_intent_approved"] == "FAIL"
+    assert report["store_gates"]["no_automatic_promotion"] == "PASS"
 
 
 def test_revise_approved_architecture_reopens_gate_and_creates_fresh_build_attempt(
