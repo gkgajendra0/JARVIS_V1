@@ -1379,11 +1379,27 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
 
     control = VoiceControlServer()
     repair, repair_store = _build_supervisor_repair_controller(config)
-    process = _start_jarvis(
-        runtime_root,
-        control,
-        release_identity=release_identity,
-    )
+    process: subprocess.Popen[bytes] | None = None
+    if not config.git_updates_enabled:
+        process, recovered_identity, deployment_error = (
+            _resume_pending_phase7_deployment(
+                root,
+                None,
+                control,
+                config,
+            )
+        )
+        if recovered_identity is not None:
+            release_identity = recovered_identity
+            runtime_root = Path(recovered_identity.release_root).resolve()
+        if deployment_error is not None:
+            print(f"Phase-7 deployment recovery: {deployment_error}")
+    if process is None:
+        process = _start_jarvis(
+            runtime_root,
+            control,
+            release_identity=release_identity,
+        )
     update_poller = (
         RemoteUpdatePoller(root, config) if config.git_updates_enabled else None
     )
@@ -1437,6 +1453,38 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
             time.sleep(config.poll_seconds)
             if process.poll() is not None:
                 continue
+
+            if not config.git_updates_enabled:
+                resumed_process, resumed_identity, deployment_error = (
+                    _resume_pending_phase7_deployment(
+                        root,
+                        process,
+                        control,
+                        config,
+                    )
+                )
+                if resumed_identity is not None or deployment_error is not None:
+                    if resumed_process is None:
+                        print(
+                            "Phase-7 deployment handoff left no runnable JARVIS; "
+                            "failing closed."
+                        )
+                        return _escalation_exit_code(config)
+                    process = resumed_process
+                    if resumed_identity is not None:
+                        release_identity = resumed_identity
+                        runtime_root = Path(
+                            resumed_identity.release_root
+                        ).resolve()
+                    if deployment_error is not None:
+                        print(f"Phase-7 deployment handoff: {deployment_error}")
+                    else:
+                        print(
+                            "Phase-7 deployment activated exact release "
+                            f"{release_identity.release_sha[:10]}."
+                        )
+                    liveness_failure_streak = 0
+                    continue
 
             liveness_failure_streak, restart_required = _liveness_restart_required(
                 control,
