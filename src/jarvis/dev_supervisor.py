@@ -931,7 +931,8 @@ def _recover_unexpected_exit(
 
         try:
             control.wait_for_child_ready(
-                timeout_seconds=config.startup_timeout_seconds
+                timeout_seconds=config.startup_timeout_seconds,
+                expected_release=release_identity,
             )
         except RuntimeError:
             _stop_jarvis(
@@ -1101,7 +1102,8 @@ def _recover_liveness_failure(
 
         try:
             control.wait_for_child_ready(
-                timeout_seconds=config.startup_timeout_seconds
+                timeout_seconds=config.startup_timeout_seconds,
+                expected_release=release_identity,
             )
         except RuntimeError:
             _stop_jarvis(
@@ -1192,7 +1194,6 @@ def _apply_approved_update(
         try:
             control.wait_for_child_ready(
                 timeout_seconds=config.startup_timeout_seconds,
-                expected_release=release_identity,
             )
         except RuntimeError as ready_exc:
             _stop_jarvis(
@@ -1232,7 +1233,6 @@ def _apply_approved_update(
         try:
             control.wait_for_child_ready(
                 timeout_seconds=config.startup_timeout_seconds,
-                expected_release=release_identity,
             )
         except RuntimeError as rollback_ready_exc:
             _stop_jarvis(
