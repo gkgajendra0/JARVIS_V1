@@ -242,7 +242,6 @@ def test_runtime_composition_rejects_provider_from_another_release(tmp_path) -> 
         )
 
 
-
 class FakeLifecycleAuthority:
     def authorize(self, binding, *, authority_session_id: str):
         assert binding.source.source_session_id == authority_session_id
