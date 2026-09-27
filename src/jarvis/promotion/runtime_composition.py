@@ -359,30 +359,16 @@ class PromotionRuntime:
         session: ConversationSession,
     ) -> PromotionExecutionResult:
         turn = self._latest_owner_turn(session)
-        gate = self._changes.get_artifact
-        del gate  # no model-provided repository state is used here
-        challenge = next(
-            (
-                item
-                for item in self._changes.list_gates()
-                if item.gate_id == str(gate_id).strip()
-            ),
-            None,
-        )
-        if challenge is None:
-            from jarvis.engineering_change.gates import GateService
+        from jarvis.engineering_change.gates import GateDecision, GateService
 
-            resolved = GateService(
-                self._changes,
-                verify_owner=lambda *_: False,
-            ).get(gate_id)
-            if resolved is None:
-                raise PromotionRuntimeError("unknown promotion gate")
-            change_id = resolved.challenge.change_id if hasattr(
-                resolved, "challenge"
-            ) else resolved.change_id
-        else:
-            change_id = challenge.change_id
+        resolved = GateService(
+            self._changes,
+            verify_owner=lambda *_: False,
+        ).get(gate_id)
+        if resolved is None:
+            raise PromotionRuntimeError("unknown promotion gate")
+        challenge = resolved.challenge if isinstance(resolved, GateDecision) else resolved
+        change_id = challenge.change_id
         with self._github_session(session=session, change_id=change_id) as (
             bundle,
             github,
