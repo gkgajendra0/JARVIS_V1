@@ -21,7 +21,19 @@ from .github import (
     GitHubWorkflowSnapshot,
     VerifiedGitHubEvidence,
 )
+from .deployment import (
+    DeploymentCoordinator,
+    DeploymentError,
+    DeploymentResult,
+    RuntimeDeploymentDriver,
+)
 from .merge import MergeResult, PromotionMergeError, PromotionMerger
+from .observation import (
+    FailureAttribution,
+    ObservationAssessment,
+    ObservationController,
+    ObservationDisposition,
+)
 from .models import (
     CheckEvidence,
     CompatibilityEvidence,
@@ -30,6 +42,15 @@ from .models import (
     PromotionAttemptState,
     PromotionEvidenceV1,
 )
+from .release import (
+    DeploymentMetadataStore,
+    GitReleaseStager,
+    RecoveryPhase,
+    RecoveryRecord,
+    ReleaseError,
+    ReleaseRecord,
+)
+from .rollback import RollbackCoordinator, RollbackError, RollbackResult
 from .store import PromotionStore
 
 __all__ = [
@@ -38,12 +59,21 @@ __all__ = [
     "CompatibilityAssessment",
     "CompatibilityEvidence",
     "CompatibilityVerdict",
+    "DeploymentCoordinator",
+    "DeploymentError",
+    "DeploymentMetadataStore",
+    "DeploymentResult",
     "GitHubPromotionAdapter",
     "GitHubPromotionError",
     "GitHubPromotionPolicy",
     "GitHubPullRequestSnapshot",
     "GitHubWorkflowSnapshot",
+    "GitReleaseStager",
+    "FailureAttribution",
     "MergeResult",
+    "ObservationAssessment",
+    "ObservationController",
+    "ObservationDisposition",
     "PreparedPromotionEvidence",
     "PromotionAttempt",
     "PromotionAttemptState",
@@ -56,6 +86,14 @@ __all__ = [
     "PromotionMerger",
     "PromotionEvidenceV1",
     "PromotionStore",
+    "RecoveryPhase",
+    "RecoveryRecord",
+    "ReleaseError",
+    "ReleaseRecord",
+    "RollbackCoordinator",
+    "RollbackError",
+    "RollbackResult",
+    "RuntimeDeploymentDriver",
     "StalePromotionCandidate",
     "VerifiedGitHubEvidence",
     "VerifiedPromotionCandidate",
