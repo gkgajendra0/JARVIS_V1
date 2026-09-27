@@ -391,9 +391,7 @@ def test_promoted_package_is_admitted_without_auto_activation(
     assert result.lifecycle_proposal.authority_required is True
     pending = changes.work.list_pending_deliveries(limit=10)
     lifecycle_deliveries = tuple(
-        item
-        for item in pending
-        if item.event_key.startswith("phase9-lifecycle:")
+        item for item in pending if item.event_key.startswith("phase9-lifecycle:")
     )
     assert len(lifecycle_deliveries) == 1
     assert change.change_id in lifecycle_deliveries[0].message
