@@ -21,6 +21,7 @@ from jarvis.capability_acquisition.architecture import (
     CapabilityAcquisitionDevelopmentRevisionResolver,
     CapabilityAcquisitionSourceCompletionHandler,
 )
+from jarvis.capability_acquisition.owner_sources import registered_source_adapters
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.runtime_context import (
     AcquisitionContextProvider,
@@ -304,6 +305,7 @@ def build_work_runtime(
     acquisition_sources = CapabilitySourceRegistry(
         (
             ExistingCapabilitySourceAdapter(),
+            *registered_source_adapters(),
             CustomBuildCapabilitySourceAdapter(),
         )
     )
