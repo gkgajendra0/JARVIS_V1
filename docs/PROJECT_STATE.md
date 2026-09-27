@@ -49,12 +49,18 @@ Snapshot baseline verified from protected `main` at
 | Persistent concurrent work | DONE foundation | durable WorkItems/steps/deliveries, restart recovery, background research/development, priority/resource control |
 | Deterministic Self-Repair | PARTIAL foundation for Step 19 | R1/R2 typed framework plus Phase-1H-hardened R2 production recovery: sustained rolling budgets, shared target/action circuit breaker, typed verification/preconditions/provenance, versioned persistence, Windows Job Object runtime ownership and bounded production guardian |
 | EngineeringKnowledge | DONE foundation | Phase 2 owner-machine accepted 2026-09-25: immutable engineering knowledge, deterministic REPAIR projection, lifecycle/provenance/applicability, grounded local hybrid retrieval, integrity/security gates and open-ended facet extensibility |
-| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H, 2, 3 and 4 are accepted; Phase 5 Secure Autonomous Engineering Substrate research/architecture is next |
+| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H, 2, 3, 4, 5 and 6 are accepted; Phase 7 governed promotion/verification/rollback research + architecture is next |
 | Step 8 notes/tasks/reminders | PLANNED | still the next numbered product slice when numbered roadmap work resumes |
 
 Phase 3 EngineeringChange is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The canonical record is `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The owner-machine run proved durable same-identity recovery across a full Windows shutdown/reboot and live Exa research; persistent Gemini HTTP 429 pressure was accepted as an external limitation and did not weaken governance.
 
 Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. Canonical final evidence is `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`. The live run proved deterministic two-target eligibility, Gemini `rate_limited` -> OpenAI fallback, target-local quota cooldown, restart-safe lineage, zero duplicate routing-request IDs and unchanged Authority/security boundaries.
+
+Phase 5 Secure Autonomous Engineering Substrate is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical final evidence is `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`.
+
+Phase 6 Unknown-Incident Investigation + Source Repair is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical final evidence is `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`. The accepted implementation head `45643efc80ae1394022f22f778d0a67568326f94` passed 15/15 deterministic replay cases and real Windows/Docker owner-machine acceptance with evidence digest `7d4be9e5154d0e17e839b0d7bd6823e9bcec88aba564b2188c8d4e8164f75492`. PR #148 merged the accepted implementation to protected `main` as `aaa1fa52224f6582c32706b7bdb72f26169c54be`.
+
+Phase 7 Governed Promotion / Production Verification / Rollback is next for research and architecture. No Phase-7 implementation authority is implied by Phase-6 completion.
 
 ---
 
@@ -133,6 +139,8 @@ truth/status but not runtime behavior.
 - **#86** final owner-machine Self-Repair acceptance record.
 - **#87** complete Self-Repair/Self-Evolution master-plan reconciliation.
 - **#90** Phase-1H foundation hardening: sustained restart budget semantics, shared restart circuit breaker, typed verification/preconditions/provenance, versioned engineering DB migrations, Windows Job Object ownership, local-only production supervisor and bounded Windows guardian; owner-machine accepted 2026-09-24.
+- **#133** Phase-5 final secure-engineering-substrate acceptance harness and Windows integration corrections; owner-machine accepted 2026-09-27.
+- **#148** Phase-6 deterministic replay + owner-machine acceptance closure, including Windows replay CI and deterministic persistent-SQLite cleanup; owner-machine accepted 2026-09-27.
 
 Final deterministic Self-Repair acceptance:
 - crash recovery passed;
