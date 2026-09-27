@@ -99,11 +99,7 @@ def _merge_references(
 ) -> ManifestReferenceCatalog:
     references = tuple(item.references for item in definitions)
     dependencies = _merge_unique_objects(
-        (
-            item
-            for reference in references
-            for item in reference.dependency_resolutions
-        ),
+        (item for reference in references for item in reference.dependency_resolutions),
         key=lambda item: item.resolution_id,
         kind="dependency resolution",
     )
@@ -136,7 +132,9 @@ def _merge_references(
 
     return ManifestReferenceCatalog(
         dependency_resolutions=tuple(
-            item for item in dependencies if isinstance(item, DependencyResolutionRegistration)
+            item
+            for item in dependencies
+            if isinstance(item, DependencyResolutionRegistration)
         ),
         provenance=tuple(
             item for item in provenance if isinstance(item, DigestRegistration)
@@ -148,9 +146,7 @@ def _merge_references(
             item for item in discovery if isinstance(item, DigestRegistration)
         ),
         verification_contract_ids=tokens("verification_contract_ids"),
-        hardware_acceptance_contract_ids=tokens(
-            "hardware_acceptance_contract_ids"
-        ),
+        hardware_acceptance_contract_ids=tokens("hardware_acceptance_contract_ids"),
         disable_rollback_contract_ids=tokens("disable_rollback_contract_ids"),
         health_probe_ids=tokens("health_probe_ids"),
         resource_requirement_ids=tokens("resource_requirement_ids"),
@@ -162,7 +158,9 @@ def _authority_audit_path() -> pathlib.Path:
     configured = os.getenv("JARVIS_AUTHORITY_AUDIT_DB", "").strip()
     if configured:
         base = pathlib.Path(configured).expanduser()
-        return base.with_name(f"{base.stem}.capability_lifecycle{base.suffix or '.sqlite3'}")
+        return base.with_name(
+            f"{base.stem}.capability_lifecycle{base.suffix or '.sqlite3'}"
+        )
     return (
         pathlib.Path.home()
         / ".jarvis"
@@ -303,9 +301,7 @@ def build_package_managed_runtime_stack(
         for manifest in definition.manifests:
             manifests.register(manifest)
 
-    providers = CapabilityProviderRegistry(
-        tuple(item.provider for item in definitions)
-    )
+    providers = CapabilityProviderRegistry(tuple(item.provider for item in definitions))
     source = ReleaseCapabilityPackageSource(release)
     artifacts = artifact_store or ArtifactStore()
     evaluator = CapabilityCompatibilityEvaluator(
