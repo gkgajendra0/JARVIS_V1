@@ -7,6 +7,7 @@ from typing import Protocol
 from jarvis.work.models import WorkItem, WorkPriority, WorkState
 
 from .models import (
+    ChangeArtifact,
     ChangeConflict,
     ChangeState,
     EngineeringChange,
@@ -20,10 +21,62 @@ class WorkBackend(Protocol):
     def submit(self, work_id: str, *, priority: WorkPriority) -> str: ...
 
 
+class ChangeProcessAdapter(Protocol):
+    """Optional process-specific derivation while lifecycle/gates remain generic."""
+
+    process_key: str
+    process_version: int
+
+    def derive_architecture(
+        self,
+        *,
+        store: ChangeStore,
+        change: EngineeringChange,
+        source_work: WorkItem,
+    ) -> ChangeArtifact | None: ...
+
+    def build_development_request(
+        self,
+        *,
+        store: ChangeStore,
+        change: EngineeringChange,
+        architecture: ChangeArtifact,
+        source_work_ids: tuple[str, ...],
+    ) -> str: ...
+
+
 class ChangeCoordinator:
-    def __init__(self, store: ChangeStore, backend: WorkBackend) -> None:
+    def __init__(
+        self,
+        store: ChangeStore,
+        backend: WorkBackend,
+        *,
+        process_adapters: tuple[ChangeProcessAdapter, ...] = (),
+    ) -> None:
         self.store = store
         self.backend = backend
+        self._process_adapters: dict[
+            tuple[str, int],
+            ChangeProcessAdapter,
+        ] = {}
+        for adapter in process_adapters:
+            identity = (
+                str(adapter.process_key).strip().lower(),
+                int(adapter.process_version),
+            )
+            if not identity[0] or identity[1] < 1:
+                raise ValueError("process adapter identity must be normalized")
+            if identity in self._process_adapters:
+                raise ValueError("duplicate change process adapter")
+            self._process_adapters[identity] = adapter
+
+    def _process_adapter(
+        self,
+        change: EngineeringChange,
+    ) -> ChangeProcessAdapter | None:
+        return self._process_adapters.get(
+            (change.process_key, change.process_version)
+        )
 
     def start(
         self,
@@ -64,10 +117,6 @@ class ChangeCoordinator:
             architecture = self.store.latest_artifact(change_id, "architecture")
             if architecture is None:
                 raise ChangeConflict("approved architecture is missing")
-            request = (
-                f"{change.request}\nApproved architecture revision "
-                f"{architecture.revision}: {architecture.payload}"
-            )
             source_stage = process.architecture_source_stage
             source_work = [
                 s.work_id for s in stages if s.stage_key == source_stage.stage_key
@@ -77,6 +126,19 @@ class ChangeCoordinator:
                     "development requires completed architecture-source work"
                 )
             dependencies = tuple(source_work)
+            adapter = self._process_adapter(change)
+            if adapter is None:
+                request = (
+                    f"{change.request}\nApproved architecture revision "
+                    f"{architecture.revision}: {architecture.payload}"
+                )
+            else:
+                request = adapter.build_development_request(
+                    store=self.store,
+                    change=change,
+                    architecture=architecture,
+                    source_work_ids=dependencies,
+                )
         else:  # pragma: no cover - ProcessContract validation owns known roles
             raise ChangeConflict("unregistered change stage role")
 
@@ -146,15 +208,24 @@ class ChangeCoordinator:
                 return self.store.transition(
                     change_id, ChangeState.FAILED, expected_version=change.version
                 )
-            if (
-                source_work.state is WorkState.COMPLETED
-                and self.store.latest_artifact(change_id, "architecture") is not None
-            ):
-                return self.store.transition(
+            if source_work.state is WorkState.COMPLETED:
+                architecture = self.store.latest_artifact(
                     change_id,
-                    ChangeState.ARCHITECTURE_READY,
-                    expected_version=change.version,
+                    "architecture",
                 )
+                adapter = self._process_adapter(change)
+                if architecture is None and adapter is not None:
+                    architecture = adapter.derive_architecture(
+                        store=self.store,
+                        change=change,
+                        source_work=source_work,
+                    )
+                if architecture is not None:
+                    return self.store.transition(
+                        change_id,
+                        ChangeState.ARCHITECTURE_READY,
+                        expected_version=change.version,
+                    )
 
         elif change.state is ChangeState.APPROVED_FOR_BUILD:
             architecture = self.store.latest_artifact(change_id, "architecture")
