@@ -1160,11 +1160,14 @@ def _recover_liveness_failure(
             control=control,
         )
         try:
-            restarted = _start_jarvis(
-                root,
-                control,
-                release_identity=release_identity,
-            )
+            if release_identity is None:
+                restarted = _start_jarvis(root, control)
+            else:
+                restarted = _start_jarvis(
+                    root,
+                    control,
+                    release_identity=release_identity,
+                )
         except (OSError, WindowsJobObjectError):
             repair.complete_attempt(
                 plan,
@@ -1473,9 +1476,7 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                     process = resumed_process
                     if resumed_identity is not None:
                         release_identity = resumed_identity
-                        runtime_root = Path(
-                            resumed_identity.release_root
-                        ).resolve()
+                        runtime_root = Path(resumed_identity.release_root).resolve()
                     if deployment_error is not None:
                         print(f"Phase-7 deployment handoff: {deployment_error}")
                     else:
