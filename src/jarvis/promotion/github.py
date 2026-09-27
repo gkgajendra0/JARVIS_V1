@@ -63,12 +63,22 @@ class GitHubWorkflowSnapshot:
             raise ValueError("promotion CI must be a pull_request workflow")
         _require_sha(self.head_sha, field="workflow head SHA")
         _require_sha(self.tested_merge_sha, field="tested merge SHA")
-        if self.status != "completed":
-            raise ValueError("workflow must be completed")
-        if self.conclusion != "success":
-            raise ValueError("workflow conclusion must be success")
-        if not self.checks:
-            raise ValueError("workflow requires check evidence")
+        if self.status not in {"queued", "in_progress", "completed"}:
+            raise ValueError("workflow status is invalid")
+        if self.conclusion not in {
+            "",
+            "action_required",
+            "cancelled",
+            "failure",
+            "neutral",
+            "skipped",
+            "stale",
+            "success",
+            "timed_out",
+        }:
+            raise ValueError("workflow conclusion is invalid")
+        if self.status != "completed" and self.conclusion:
+            raise ValueError("incomplete workflow cannot have a conclusion")
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,6 +182,11 @@ class GitHubPromotionPolicy:
             raise GitHubPromotionError(
                 "pr_head_moved",
                 "PR head no longer equals the verified candidate commit",
+            )
+        if workflow.status != "completed" or workflow.conclusion != "success":
+            raise GitHubPromotionError(
+                "workflow_not_success",
+                "promotion CI has not completed successfully",
             )
         if workflow.head_sha != candidate.head_sha:
             raise GitHubPromotionError(
