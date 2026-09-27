@@ -12,6 +12,11 @@ from .candidate import (
     VerifiedPromotionCandidate,
 )
 from .compatibility import CompatibilityAssessment, assess_ordinary_compatibility
+from .coordinator import (
+    PreparedPromotionReview,
+    PromotionCoordinator,
+    PromotionPreparationError,
+)
 from .deployment import (
     DeploymentCoordinator,
     DeploymentError,
@@ -27,6 +32,7 @@ from .github import (
     GitHubWorkflowSnapshot,
     VerifiedGitHubEvidence,
 )
+from .github_app import BrokeredGitHubAppClient, GitHubAppConfig
 from .merge import MergeResult, PromotionMergeError, PromotionMerger
 from .models import (
     CheckEvidence,
@@ -55,6 +61,7 @@ from .store import PromotionStore
 
 __all__ = [
     "AuthorizedPromotion",
+    "BrokeredGitHubAppClient",
     "CheckEvidence",
     "CompatibilityAssessment",
     "CompatibilityEvidence",
@@ -64,6 +71,7 @@ __all__ = [
     "DeploymentMetadataStore",
     "DeploymentResult",
     "FailureAttribution",
+    "GitHubAppConfig",
     "GitHubPromotionAdapter",
     "GitHubPromotionError",
     "GitHubPromotionPolicy",
@@ -75,7 +83,9 @@ __all__ = [
     "ObservationController",
     "ObservationDisposition",
     "PreparedPromotionEvidence",
+    "PreparedPromotionReview",
     "PromotionAttempt",
+    "PromotionCoordinator",
     "PromotionAttemptState",
     "PromotionAuthorityBridge",
     "PromotionAuthorizationError",
@@ -84,6 +94,7 @@ __all__ = [
     "PromotionEvidenceBuilder",
     "PromotionEvidenceV1",
     "PromotionMergeError",
+    "PromotionPreparationError",
     "PromotionMerger",
     "PromotionStore",
     "RecoveryPhase",
