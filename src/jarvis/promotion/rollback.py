@@ -95,7 +95,9 @@ class RollbackCoordinator:
             if recovery.phase is RecoveryPhase.ROLLBACK_VERIFIED:
                 active = self._metadata.active()
                 if active != recovery.lkg:
-                    raise RollbackError("rollback metadata disagrees with active release")
+                    raise RollbackError(
+                        "rollback metadata disagrees with active release"
+                    )
                 return RollbackResult(recovery.lkg, True)
             raise RollbackError(
                 "rollback already started; restart reconciliation is required"
