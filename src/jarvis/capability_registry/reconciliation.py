@@ -88,14 +88,38 @@ class CapabilityHealthBridge:
         )
 
     def disabled(self, component_id: str) -> HealthSnapshot:
-        self._record(
-            component_id=component_id,
-            source="capability_registry.lifecycle",
-            state=HealthState.DISABLED,
-            reason_code="desired_disabled",
-            summary="Package-managed capability is durably disabled.",
+        observed_at = self.clock()
+        existing = self.health_registry.observations(
+            component_id,
+            now_epoch=observed_at,
         )
-        return self.health_registry.snapshot(component_id, now_epoch=self.clock())
+        for observation in existing:
+            self.health_registry.record(
+                HealthObservation.create(
+                    component_id=component_id,
+                    source=observation.source,
+                    state=HealthState.DISABLED,
+                    reason_code="desired_disabled",
+                    summary="Package-managed capability is durably disabled.",
+                    ttl_seconds=self.ttl_seconds,
+                    observed_at_epoch=observed_at,
+                )
+            )
+        self.health_registry.record(
+            HealthObservation.create(
+                component_id=component_id,
+                source="capability_registry.lifecycle",
+                state=HealthState.DISABLED,
+                reason_code="desired_disabled",
+                summary="Package-managed capability is durably disabled.",
+                ttl_seconds=self.ttl_seconds,
+                observed_at_epoch=observed_at,
+            )
+        )
+        return self.health_registry.snapshot(
+            component_id,
+            now_epoch=observed_at,
+        )
 
     def incompatible(
         self,
