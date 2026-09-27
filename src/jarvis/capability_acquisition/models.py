@@ -259,11 +259,11 @@ class AcquisitionCandidateV1:
             "trust_class": trust_class.value,
             "supported_operations": list(operations),
             "dependency_refs": list(
-                _tokens(tuple(dependency_refs), field="dependency_ref", normalized=False)
+                _tokens(
+                    tuple(dependency_refs), field="dependency_ref", normalized=False
+                )
             ),
-            "secret_scopes": list(
-                _tokens(tuple(secret_scopes), field="secret_scope")
-            ),
+            "secret_scopes": list(_tokens(tuple(secret_scopes), field="secret_scope")),
             "network_scopes": list(
                 _tokens(tuple(network_scopes), field="network_scope", normalized=False)
             ),
@@ -276,7 +276,9 @@ class AcquisitionCandidateV1:
             "evidence_refs": list(evidence),
             "license_id": _optional_text(license_id, field="license_id"),
             "provenance_refs": list(
-                _tokens(tuple(provenance_refs), field="provenance_ref", normalized=False)
+                _tokens(
+                    tuple(provenance_refs), field="provenance_ref", normalized=False
+                )
             ),
             "strategy": strategy.value,
             "verification_requirements": list(verification),
@@ -654,9 +656,7 @@ class CapabilityAcquisitionPlanV1:
             "discovery_scopes": list(self.discovery_scopes),
             "network_scopes": list(self.network_scopes),
             "verification_contract_ids": list(self.verification_contract_ids),
-            "owner_acceptance_contract_ids": list(
-                self.owner_acceptance_contract_ids
-            ),
+            "owner_acceptance_contract_ids": list(self.owner_acceptance_contract_ids),
             "proposed_capability_id": self.proposed_capability_id,
             "proposed_package_id": self.proposed_package_id,
             "proposed_package_version": self.proposed_package_version,
