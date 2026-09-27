@@ -43,9 +43,7 @@ def _git(repo: pathlib.Path, *args: str) -> str:
             shell=False,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        raise Phase8AcceptanceError(
-            f"Git command failed: {' '.join(args)}"
-        ) from exc
+        raise Phase8AcceptanceError(f"Git command failed: {' '.join(args)}") from exc
     return completed.stdout.strip()
 
 
@@ -76,9 +74,7 @@ def _registry_file_handle_acceptance(root: pathlib.Path) -> dict[str, object]:
 
     reopened = CapabilityRegistryStore(path)
     with sqlite3.connect(reopened.path) as connection:
-        reopened_version = int(
-            connection.execute("PRAGMA user_version").fetchone()[0]
-        )
+        reopened_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
     if reopened_version != user_version:
         raise Phase8AcceptanceError(
             "capability registry schema changed after file-handle restart proof"
