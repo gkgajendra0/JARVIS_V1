@@ -105,9 +105,7 @@ class CapabilityAcquisitionArchitecturePlan:
             "discovery_scopes": list(self.discovery_scopes),
             "network_scopes": list(self.network_scopes),
             "verification_targets": list(self.verification_targets),
-            "owner_acceptance_contract_ids": list(
-                self.owner_acceptance_contract_ids
-            ),
+            "owner_acceptance_contract_ids": list(self.owner_acceptance_contract_ids),
             "proposed_capability_id": self.proposed_capability_id,
             "proposed_package_id": self.proposed_package_id,
             "proposed_package_version": self.proposed_package_version,
@@ -172,10 +170,8 @@ def _validate_completed_acquisition(
             "completed acquisition WorkItem lacks canonical acq_finalize"
         )
     if (
-        finalize_step.observation.get("plan_artifact_id")
-        != plan_artifact.artifact_id
-        or finalize_step.observation.get("plan_artifact_digest")
-        != plan_artifact.digest
+        finalize_step.observation.get("plan_artifact_id") != plan_artifact.artifact_id
+        or finalize_step.observation.get("plan_artifact_digest") != plan_artifact.digest
     ):
         raise CapabilityAcquisitionArchitectureError(
             "acquisition plan artifact differs from final WorkStep"
