@@ -10,6 +10,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
