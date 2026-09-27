@@ -26,6 +26,7 @@ from jarvis.dev_control import (
     RuntimeReleaseIdentity,
 )
 from jarvis.incidents import IncidentService, SqliteIncidentStore
+from jarvis.promotion.release import load_active_release_for_startup
 from jarvis.self_awareness import default_incident_store_path
 from jarvis.self_repair import RepairVerificationStatus
 from jarvis.self_repair.supervisor import (
@@ -545,6 +546,30 @@ def _start_jarvis(
         raise
     print(f"JARVIS started (pid={process.pid}).")
     return process
+
+
+def _runtime_revision(
+    repo: GitRepo,
+    root: Path,
+    release_identity: RuntimeReleaseIdentity | None,
+) -> str:
+    if release_identity is None:
+        return repo.local_sha()
+    if Path(release_identity.release_root).resolve() != root.resolve():
+        raise RuntimeError("release identity root does not match runtime root")
+    try:
+        observed = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=15.0,
+        ).stdout.strip().casefold()
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("release Git identity is unavailable") from exc
+    if observed != release_identity.release_sha:
+        raise RuntimeError("release runtime root no longer matches release SHA")
+    return observed
 
 
 class SupervisorReleaseRuntimeDriver:
