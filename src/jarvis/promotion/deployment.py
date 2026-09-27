@@ -113,7 +113,7 @@ class DeploymentCoordinator:
             promotion_attempt_id=f"promotion_bootstrap_{release_sha[:16]}",
             promotion_evidence_digest=bootstrap_digest,
             config_digest=config_digest,
-            schema_versions=tuple(sorted(schema_versions)),
+            schema_versions=normalized_schema_versions,
             accepted_at_epoch=accepted_at,
         )
         self._metadata.set_lkg(record)
@@ -149,6 +149,11 @@ class DeploymentCoordinator:
                 "approved promotion evidence no longer matches Last Known Good"
             )
 
+        normalized_schema_versions = tuple(sorted(schema_versions))
+        if normalized_schema_versions != lkg.schema_versions:
+            raise DeploymentError(
+                "ordinary deployment cannot change durable schema versions"
+            )
         release_root = self._stager.stage(attempt.merge_sha)
         accepted_at = time.time() if now_epoch is None else float(now_epoch)
         candidate = ReleaseRecord(
