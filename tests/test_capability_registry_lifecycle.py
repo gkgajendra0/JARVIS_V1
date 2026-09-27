@@ -344,9 +344,7 @@ def _environment(
     packages = {
         manifest.capability_version: _package(
             manifest,
-            artifacts=(
-                () if artifact_descriptor is None else (artifact_descriptor,)
-            ),
+            artifacts=(() if artifact_descriptor is None else (artifact_descriptor,)),
         )
         for manifest in manifests
     }
@@ -506,7 +504,8 @@ def test_select_enable_and_rollback_are_exact_authority_bound(tmp_path) -> None:
     transition_events = [
         event
         for event in events
-        if event.reason_code in {
+        if event.reason_code
+        in {
             "version_selected",
             "capability_enabled",
             "version_rollback",
@@ -581,10 +580,7 @@ def test_critical_manifest_floor_requires_strong_owner_verification(tmp_path) ->
     assert selected.changed
     assert env["verifier"].calls == 1
     assert env["verifier"].last_proposal is not None
-    assert (
-        env["verifier"].last_proposal.attributes.secret_or_credential_access
-        is True
-    )
+    assert env["verifier"].last_proposal.attributes.secret_or_credential_access is True
 
 
 def test_approved_engineering_gate_source_is_reverified_and_bound(tmp_path) -> None:
