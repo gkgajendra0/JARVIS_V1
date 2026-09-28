@@ -88,6 +88,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 "tests/test_autonomy_findings_resolution.py",
                 "tests/test_autonomy_budgets_portfolio_attention.py",
                 "tests/test_autonomy_dispatch.py",
+                "tests/test_autonomy_reconciler.py",
             ),
             logger_prefixes=("jarvis.autonomy",),
             docs=(
