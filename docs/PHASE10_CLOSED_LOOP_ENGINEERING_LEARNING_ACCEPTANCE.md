@@ -54,7 +54,7 @@ end-to-end validation.
 ## Required owner-machine command
 
 Run from PowerShell in the local repository after checking out the exact
-Phase-10.7 head supplied during acceptance:
+Phase-10.7 implementation/acceptance-harness head supplied during acceptance:
 
 ~~~powershell
 $repo = "C:\Users\gkgaj\Desktop\jarvis_v1"
@@ -87,11 +87,14 @@ The evidence must report:
 
 Phase 10 may be marked **DONE** only after:
 
-1. PR #201 automated CI is green on the final documentation head;
-2. the owner-machine harness passes against that exact head;
-3. returned evidence validates against that exact commit;
-4. Phase-10 status documents are updated to accepted;
-5. the accepted documentation/code PR is merged to protected main.
+1. PR #201 automated CI is green on the exact Phase-10.7 implementation/acceptance head;
+2. the owner-machine harness passes against that exact implementation head;
+3. returned evidence validates against that exact tested commit;
+4. a documentation-only acceptance record/status update records the tested commit and evidence digests;
+5. the accepted documentation/code PR is revalidated and merged to protected main.
+
+The implementation head remains the owner-tested runtime identity even though the final
+merge may contain a later documentation-only acceptance-record commit.
 
 The deferred Phase-9 full physical-device lifecycle validation remains a separate
 whole-system acceptance item and is not silently claimed by Phase 10.
