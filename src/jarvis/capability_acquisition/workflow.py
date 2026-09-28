@@ -660,6 +660,7 @@ def acquisition_completion_guard(
     finalize_index, _ = finalized[-1]
     relevant = {
         "research_web",
+        "acq_discover_local",
         "acq_record_candidate",
         "acq_resolve",
     }
