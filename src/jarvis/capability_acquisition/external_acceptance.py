@@ -592,6 +592,7 @@ class ExternalAcceptancePrepareExecutor:
             ),
             operation=operation,
             expected_observation=expected,
+            ttl_seconds=86_400.0,
             request_id=request_id,
         )
         return {
