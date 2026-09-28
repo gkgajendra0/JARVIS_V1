@@ -119,17 +119,17 @@ def _applicability_from_payload(
 ) -> tuple[OutcomeApplicability, ...]:
     raw = payload.get("applicability")
     if not isinstance(raw, list):
-        raise ValueError("outcome applicability must be a list")
+        raise TypeError("outcome applicability must be a list")
     result: list[OutcomeApplicability] = []
     for item in raw:
         if not isinstance(item, dict):
-            raise ValueError("outcome applicability item must be an object")
+            raise TypeError("outcome applicability item must be an object")
         constraint = item.get("constraint")
         if not isinstance(constraint, dict):
-            raise ValueError("outcome applicability constraint must be an object")
+            raise TypeError("outcome applicability constraint must be an object")
         required = item.get("required")
         if not isinstance(required, bool):
-            raise ValueError("outcome applicability required must be a bool")
+            raise TypeError("outcome applicability required must be a bool")
         result.append(
             OutcomeApplicability(
                 target_namespace=str(item["target_namespace"]),
@@ -145,7 +145,7 @@ def _applicability_from_payload(
 def _lineage(payload: dict[str, JSONValue]) -> dict[str, JSONValue]:
     value = payload.get("lineage")
     if not isinstance(value, dict):
-        raise ValueError("outcome lineage must be an object")
+        raise TypeError("outcome lineage must be an object")
     return value
 
 
