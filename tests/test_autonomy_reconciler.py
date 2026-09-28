@@ -79,9 +79,7 @@ class _ComponentSource:
     ) -> SystemStateSourceResultV1:
         facts: list[SystemStateFactV1] = []
         targets = tuple(
-            item
-            for item in request.targets
-            if item.target_namespace == "component"
+            item for item in request.targets if item.target_namespace == "component"
         )
         for target in targets:
             if "self_model" in request.requested_namespaces:
@@ -94,9 +92,7 @@ class _ComponentSource:
                         target_identity=target.target_identity,
                         value_json={"component_id": target.target_identity},
                         observed_at_epoch=self.clock(),
-                        evidence_references=(
-                            f"component:{target.target_identity}",
-                        ),
+                        evidence_references=(f"component:{target.target_identity}",),
                         source_adapter_key=self.source_key,
                         source_adapter_version=self.source_version,
                         fresh_until_epoch=self.clock() + 60,
@@ -112,9 +108,7 @@ class _ComponentSource:
                         target_identity=target.target_identity,
                         value_json={"state": self.state},
                         observed_at_epoch=self.clock(),
-                        evidence_references=(
-                            f"health:{target.target_identity}",
-                        ),
+                        evidence_references=(f"health:{target.target_identity}",),
                         source_adapter_key=self.source_key,
                         source_adapter_version=self.source_version,
                         fresh_until_epoch=self.clock() + 60,
@@ -194,9 +188,7 @@ def _build(
     reconciler = AutonomyReconciler(
         store=store,
         aggregator=aggregator,
-        evaluator=DesiredStateEvaluator(
-            build_default_desired_state_rule_registry()
-        ),
+        evaluator=DesiredStateEvaluator(build_default_desired_state_rule_registry()),
         stabilizer=DesiredStateStabilizer(),
         findings=FindingLifecycleManager(store),
         resolution=ActionResolutionService(
@@ -279,9 +271,10 @@ def test_reconciler_quiet_violation_replay_and_recovery(tmp_path: Path) -> None:
     )
     assert replay_violation.replayed is True
     with sqlite3.connect(store.path) as db:
-        assert db.execute(
-            "SELECT COUNT(*) FROM autonomy_action_candidates"
-        ).fetchone()[0] == 1
+        assert (
+            db.execute("SELECT COUNT(*) FROM autonomy_action_candidates").fetchone()[0]
+            == 1
+        )
 
     source.state = "healthy"
     clock.advance()
@@ -407,9 +400,10 @@ def test_restart_reconstructs_stabilization_without_duplicate_candidate(
     )
     assert again.desired_results[0].candidate_id == candidate_id
     with sqlite3.connect(store.path) as db:
-        assert db.execute(
-            "SELECT COUNT(*) FROM autonomy_action_candidates"
-        ).fetchone()[0] == 1
+        assert (
+            db.execute("SELECT COUNT(*) FROM autonomy_action_candidates").fetchone()[0]
+            == 1
+        )
 
 
 def test_periodic_wrapper_starts_sweeps_and_stops_cleanly(tmp_path: Path) -> None:
