@@ -463,21 +463,23 @@ def test_suppression_survives_repeated_violating_observation(
     ).finding
     assert suppressed is not None
 
-    observed = lifecycle.observe(
+    repeated_evaluation = _evaluation(
         desired,
-        _evaluation(
-            desired,
-            status=DesiredStateEvaluationStatus.VIOLATED,
-            now=NOW + 2,
-            consecutive=2,
-            snapshot_digest="f" * 64,
-        ),
-    ).finding
+        status=DesiredStateEvaluationStatus.VIOLATED,
+        now=NOW + 2,
+        consecutive=2,
+        snapshot_digest="f" * 64,
+    )
+    observed_result = lifecycle.observe(desired, repeated_evaluation)
+    observed = observed_result.finding
+    replay = lifecycle.observe(desired, repeated_evaluation)
 
     assert observed is not None
     assert observed.status is FindingStatus.SUPPRESSED
     assert observed.suppression_finding_id == root.finding_id
     assert observed.root_finding_id == root.finding_id
+    assert replay.changed is False
+    assert replay.finding == observed
 
 
 def test_suppression_links_root_and_obsoletes_candidate(tmp_path: Path) -> None:
