@@ -75,11 +75,15 @@ class FakeResolver:
 
     def completed_steps(self, work_id: str):
         assert work_id == self._work_id
-        step = WorkStep(
-            work_id=work_id,
-            kind="acq_record_candidate",
-            summary="record SDK",
-        ).start().complete({"candidate": candidate_payload(self._candidate)})
+        step = (
+            WorkStep(
+                work_id=work_id,
+                kind="acq_record_candidate",
+                summary="record SDK",
+            )
+            .start()
+            .complete({"candidate": candidate_payload(self._candidate)})
+        )
         return (step,)
 
 
