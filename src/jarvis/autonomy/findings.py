@@ -89,6 +89,22 @@ class FindingLifecycleManager:
             raise TypeError("store must be an AutonomyStore")
         self.store = store
 
+    def _require_related_finding(
+        self,
+        related_finding_id: str,
+        *,
+        current_finding_id: str,
+        field_name: str,
+    ) -> AutonomyFindingV1:
+        if related_finding_id == current_finding_id:
+            raise ValueError(f"{field_name} cannot self-reference")
+        try:
+            return self.store.require_finding(related_finding_id)
+        except KeyError as exc:
+            raise ValueError(
+                f"{field_name} must reference a canonical Finding"
+            ) from exc
+
     def _ensure_event(
         self,
         finding: AutonomyFindingV1,
@@ -104,6 +120,7 @@ class FindingLifecycleManager:
         finding_kind: str = "state_gap",
         root_finding_id: str | None = None,
         suppression_finding_id: str | None = None,
+        release_suppression: bool = False,
     ) -> FindingLifecycleResultV1:
         if not isinstance(desired, DesiredStateV1):
             raise TypeError("desired must be a DesiredStateV1")
@@ -114,6 +131,30 @@ class FindingLifecycleManager:
 
         finding_id = finding_id_for(desired, finding_kind=finding_kind)
         current = _optional_finding(self.store, finding_id)
+        if release_suppression and suppression_finding_id is not None:
+            raise ValueError(
+                "release_suppression cannot be combined with suppression_finding_id"
+            )
+        for related_id, field_name in (
+            (root_finding_id, "root_finding_id"),
+            (suppression_finding_id, "suppression_finding_id"),
+        ):
+            if related_id is not None:
+                self._require_related_finding(
+                    related_id,
+                    current_finding_id=finding_id,
+                    field_name=field_name,
+                )
+        if (
+            current is not None
+            and current.status is FindingStatus.SUPPRESSED
+            and current.suppression_finding_id is not None
+        ):
+            self._require_related_finding(
+                current.suppression_finding_id,
+                current_finding_id=finding_id,
+                field_name="suppression_finding_id",
+            )
 
         if desired.status is not DesiredStateStatus.ACTIVE:
             if current is None:
@@ -220,7 +261,17 @@ class FindingLifecycleManager:
             if evaluation.status is DesiredStateEvaluationStatus.STABILIZING
             else FindingStatus.ACTIVE
         )
-        if suppression_finding_id is not None:
+        effective_suppression_id = suppression_finding_id
+        effective_root_id = root_finding_id
+        if (
+            current is not None
+            and current.status is FindingStatus.SUPPRESSED
+            and not release_suppression
+            and effective_suppression_id is None
+        ):
+            effective_suppression_id = current.suppression_finding_id
+            effective_root_id = effective_root_id or current.root_finding_id
+        if effective_suppression_id is not None:
             desired_status = FindingStatus.SUPPRESSED
 
         count = max(1, evaluation.consecutive_violations)
@@ -243,8 +294,8 @@ class FindingLifecycleManager:
                 violation_count=count,
                 reason_codes=evaluation.reason_codes,
                 supporting_fact_digests=evaluation.supporting_fact_digests,
-                root_finding_id=root_finding_id,
-                suppression_finding_id=suppression_finding_id,
+                root_finding_id=effective_root_id,
+                suppression_finding_id=effective_suppression_id,
             )
             persisted = self.store.create_finding(proposed)
             event = self._ensure_event(persisted)
@@ -269,8 +320,8 @@ class FindingLifecycleManager:
             violation_count=max(current.violation_count, count),
             reason_codes=evaluation.reason_codes,
             supporting_fact_digests=evaluation.supporting_fact_digests,
-            root_finding_id=root_finding_id or current.root_finding_id,
-            suppression_finding_id=suppression_finding_id,
+            root_finding_id=effective_root_id or current.root_finding_id,
+            suppression_finding_id=effective_suppression_id,
             version=current.version + 1,
         )
         if _same_persisted_state(current, proposed):
