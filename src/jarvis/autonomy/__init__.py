@@ -21,6 +21,7 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "CandidateDisposition",
             "DesiredStateStatus",
             "DesiredStateV1",
+            "DispatchIntentV1",
             "FindingStatus",
             "ObjectiveOrigin",
             "ObjectiveStatus",
@@ -35,6 +36,27 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "contract_digest",
             "deterministic_id",
             "finding_id_for",
+        ),
+    ),
+    (
+        "jarvis.autonomy.findings",
+        (
+            "FindingLifecycleManager",
+            "FindingLifecycleResultV1",
+        ),
+    ),
+    (
+        "jarvis.autonomy.resolution",
+        (
+            "ActionResolutionResultV1",
+            "ActionResolutionService",
+            "ActionResolver",
+            "ActionResolverRegistry",
+            "ActionResponseSpecV1",
+            "DuplicateActionResolverError",
+            "LeastPowerfulActionResolverV1",
+            "UnknownActionResolverError",
+            "build_default_action_resolver_registry",
         ),
     ),
     (

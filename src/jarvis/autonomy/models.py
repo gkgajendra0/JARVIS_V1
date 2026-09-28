@@ -830,6 +830,82 @@ class ActionCandidateV1:
 
 
 @dataclass(frozen=True, slots=True)
+class DispatchIntentV1:
+    dispatch_intent_id: str
+    candidate_id: str
+    dispatch_role: str
+    action_kind: ActionKind
+    disposition: CandidateDisposition
+    source_identity: str
+    reason_codes: tuple[str, ...]
+    created_at_epoch: float
+    schema_version: str = AUTONOMY_CONTRACT_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "dispatch_intent_id",
+            _text(
+                self.dispatch_intent_id,
+                "dispatch_intent_id",
+                max_length=240,
+            ),
+        )
+        object.__setattr__(
+            self,
+            "candidate_id",
+            _text(self.candidate_id, "candidate_id", max_length=240),
+        )
+        object.__setattr__(
+            self,
+            "dispatch_role",
+            _token(self.dispatch_role, "dispatch_role"),
+        )
+        if not isinstance(self.action_kind, ActionKind):
+            raise TypeError("action_kind must be an ActionKind")
+        if not isinstance(self.disposition, CandidateDisposition):
+            raise TypeError("disposition must be a CandidateDisposition")
+        object.__setattr__(
+            self,
+            "source_identity",
+            _text(self.source_identity, "source_identity", max_length=500),
+        )
+        object.__setattr__(
+            self,
+            "reason_codes",
+            _unique_tokens(self.reason_codes, "reason_codes"),
+        )
+        object.__setattr__(
+            self,
+            "created_at_epoch",
+            _epoch(self.created_at_epoch, "created_at_epoch"),
+        )
+        if self.schema_version != AUTONOMY_CONTRACT_SCHEMA_VERSION:
+            raise ValueError("unsupported dispatch-intent schema_version")
+
+    def to_payload(self) -> dict[str, JSONValue]:
+        return {
+            "dispatch_intent_id": self.dispatch_intent_id,
+            "candidate_id": self.candidate_id,
+            "dispatch_role": self.dispatch_role,
+            "action_kind": self.action_kind.value,
+            "disposition": self.disposition.value,
+            "source_identity": self.source_identity,
+            "reason_codes": list(self.reason_codes),
+            "created_at_epoch": self.created_at_epoch,
+            "schema_version": self.schema_version,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> Self:
+        data = dict(payload)
+        data["action_kind"] = ActionKind(data["action_kind"])
+        data["disposition"] = CandidateDisposition(data["disposition"])
+        data["reason_codes"] = tuple(data["reason_codes"])
+        return cls(**data)
+
+
+@dataclass(frozen=True, slots=True)
 class OwnerAttentionItemV1:
     attention_id: str
     fingerprint: str
