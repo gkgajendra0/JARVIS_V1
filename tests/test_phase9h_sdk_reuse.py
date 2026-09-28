@@ -48,9 +48,7 @@ def test_verified_sdk_outranks_custom_build_fallback() -> None:
         supported_operations=("device.control",),
         evidence_refs=("pypi-source:https://pypi.org/simple",),
         provenance_refs=("pypi-integrity:test",),
-        dependency_refs=(
-            "pypi:example-device-sdk==1.2.3#lock-sha256=" + "b" * 64,
-        ),
+        dependency_refs=("pypi:example-device-sdk==1.2.3#lock-sha256=" + "b" * 64,),
         network_scopes=("local-network",),
         device_scopes=("owner-selected-device",),
         discovery_scopes=("ssdp_upnp.v1",),
@@ -97,8 +95,10 @@ def test_verified_sdk_preserves_owner_review_constraints() -> None:
 
 
 def _step(kind: str, observation: dict[str, object]) -> WorkStep:
-    return WorkStep(work_id="work-sdk", kind=kind, summary=kind).start().complete(
-        observation
+    return (
+        WorkStep(work_id="work-sdk", kind=kind, summary=kind)
+        .start()
+        .complete(observation)
     )
 
 
