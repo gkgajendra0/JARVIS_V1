@@ -18,7 +18,7 @@ class VisionAgentTools:
         # Manual software-follow controls are intentionally not exposed to the
         # realtime agent. Native Pocket 3 OWNER lock already owns continuous
         # camera tracking in production.
-        return [self.inspect_vision]
+        return [self.inspect_vision, self.switch_vision_camera]
 
     def _voice_report(self, *, event_limit: int) -> dict[str, object]:
         """Expose tracker truth without detector-candidate telemetry to the LLM."""
@@ -92,6 +92,34 @@ class VisionAgentTools:
                 "facial_appearance_or_identity",
             ],
             **self._voice_report(event_limit=16),
+        }
+
+    @function_tool()
+    async def switch_vision_camera(
+        self,
+        context: RunContext,
+        camera: str,
+    ) -> dict[str, object]:
+        """Switch JARVIS eyes only when the owner explicitly asks.
+
+        Supported camera profiles are configured by the local runtime. Production
+        defaults to the Lenovo 510 RGB camera. The optional Pocket 3 profile is
+        lazy: if it is unavailable, the switch fails and the previous camera is
+        restored. This tool changes only the visual source; it does not arm pan,
+        tilt, zoom, native tracking, or any other camera movement.
+        """
+        del context
+        try:
+            result = self._service.switch_camera(camera)
+        except (RuntimeError, ValueError) as exc:
+            return {
+                "ok": False,
+                "reason": str(exc),
+                "vision": self._voice_report(event_limit=8),
+            }
+        return {
+            **result,
+            "vision": self._voice_report(event_limit=8),
         }
 
     @function_tool()
