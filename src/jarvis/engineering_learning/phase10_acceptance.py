@@ -83,9 +83,7 @@ def run_acceptance(*, repo_root: pathlib.Path) -> dict[str, object]:
     _require_windows()
     repo = pathlib.Path(repo_root)
     if repo.is_symlink() or not repo.is_dir():
-        raise Phase10AcceptanceError(
-            "acceptance repo_root must be a regular directory"
-        )
+        raise Phase10AcceptanceError("acceptance repo_root must be a regular directory")
     repo = repo.resolve()
     snapshot = _repo_snapshot(repo)
 
@@ -126,9 +124,8 @@ def validate_acceptance_evidence(
     if not isinstance(payload, dict):
         raise Phase10AcceptanceError("acceptance evidence must be an object")
     expected_commit = str(tested_commit).strip().casefold()
-    if (
-        len(expected_commit) != 40
-        or any(char not in "0123456789abcdef" for char in expected_commit)
+    if len(expected_commit) != 40 or any(
+        char not in "0123456789abcdef" for char in expected_commit
     ):
         raise Phase10AcceptanceError("expected tested commit is invalid")
 
