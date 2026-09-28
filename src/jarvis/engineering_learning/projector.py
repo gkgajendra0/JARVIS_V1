@@ -113,8 +113,15 @@ def _required_applicability_key(
 
 
 def _reference_digest(reference: str) -> str | None:
-    match = _SHA256_REF.search(reference.casefold())
-    return match.group(1) if match is not None else None
+    normalized = reference.casefold()
+    match = _SHA256_REF.search(normalized)
+    if match is not None:
+        return match.group(1)
+    if "sha256:" in normalized:
+        raise EngineeringLearningProjectionError(
+            "evidence reference contains malformed sha256 integrity syntax"
+        )
+    return None
 
 
 class EngineeringLearningProjector:
