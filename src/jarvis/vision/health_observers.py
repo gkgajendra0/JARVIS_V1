@@ -157,6 +157,20 @@ class NativeTrackingHealthObserver:
                 metadata={"tracking_state": self._delegate.controller.state.value},
             )
 
+    def deactivate(self) -> None:
+        self._delegate.deactivate()
+        self._last_connected = False
+        self._last_emit_at = time.monotonic()
+        _observe_safely(
+            self._awareness,
+            component_id="vision.pocket3",
+            source="native_tracking_transport",
+            state=HealthState.DISABLED,
+            reason_code="native_tracking_inactive_camera",
+            summary="Pocket 3 native tracking is inactive while another camera is selected",
+            ttl_seconds=self._ttl_seconds,
+        )
+
     def close(self) -> None:
         try:
             self._delegate.close()
