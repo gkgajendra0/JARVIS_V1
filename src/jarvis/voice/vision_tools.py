@@ -48,8 +48,10 @@ class VisionAgentTools:
                     )
                 safe_events.append(event)
 
+        camera = report.get("camera")
         return {
             "status": status,
+            "camera": camera if isinstance(camera, dict) else None,
             "recent_events": safe_events,
             "count_semantics": (
                 "visible_people is the only canonical visible-person count. "
@@ -82,6 +84,7 @@ class VisionAgentTools:
                 "framing_source",
                 "adaptive_target_zoom",
                 "recent_tracking_transitions",
+                "active_camera_profile",
             ],
             "not_available": [
                 "raw_image_pixels",
