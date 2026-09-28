@@ -169,12 +169,15 @@ def test_phase10a_contract_ids_and_digests_are_deterministic() -> None:
     finding = _finding(desired)
 
     assert finding_id_for(desired, finding_kind="state_gap") == finding.finding_id
-    assert candidate_id_for(
-        finding,
-        action_kind=ActionKind.WORK_ITEM,
-        resolver_key="diagnostics_work",
-        resolver_version=1,
-    ) == _candidate(finding).candidate_id
+    assert (
+        candidate_id_for(
+            finding,
+            action_kind=ActionKind.WORK_ITEM,
+            resolver_key="diagnostics_work",
+            resolver_version=1,
+        )
+        == _candidate(finding).candidate_id
+    )
     assert deterministic_id("example", {"b": 2, "a": 1}) == deterministic_id(
         "example",
         {"a": 1, "b": 2},
@@ -264,9 +267,7 @@ def test_autonomy_store_uses_workstore_only_and_round_trips_contracts(
     assert store.require_action_candidate(candidate.candidate_id) == candidate
     assert store.list_finding_events(finding.finding_id) == (finding_event,)
     assert store.require_owner_attention(attention.attention_id) == attention
-    assert store.list_attention_events(attention.attention_id) == (
-        attention_event,
-    )
+    assert store.list_attention_events(attention.attention_id) == (attention_event,)
     assert store.require_outcome(outcome.outcome_record_id) == outcome
     assert store.require_reconcile_run_by_token(run.request_token) == run
 
@@ -329,9 +330,7 @@ def test_autonomy_store_idempotency_conflicts_and_cas_fail_closed(
     assert store.create_objective(objective) == objective
 
     with pytest.raises(AutonomyConflictError):
-        store.create_objective(
-            replace(objective, title="same ID, different semantics")
-        )
+        store.create_objective(replace(objective, title="same ID, different semantics"))
 
     objective_v2 = replace(
         objective,
@@ -339,10 +338,13 @@ def test_autonomy_store_idempotency_conflicts_and_cas_fail_closed(
         generation=2,
         updated_at_epoch=NOW + 1,
     )
-    assert store.update_objective(
-        objective_v2,
-        expected_generation=1,
-    ) == objective_v2
+    assert (
+        store.update_objective(
+            objective_v2,
+            expected_generation=1,
+        )
+        == objective_v2
+    )
 
     conflicting_v2 = replace(objective_v2, title="conflicting retry")
     with pytest.raises(AutonomyConflictError):
@@ -381,9 +383,7 @@ def test_autonomy_store_schema_ledger_tamper_fails_closed(
     AutonomyStore(work)
 
     with sqlite3.connect(path) as db:
-        row = db.execute(
-            "SELECT version, checksum FROM autonomy_schema"
-        ).fetchone()
+        row = db.execute("SELECT version, checksum FROM autonomy_schema").fetchone()
         assert row == (AUTONOMY_SCHEMA_VERSION, AUTONOMY_SCHEMA_CHECKSUM)
         db.execute(
             "UPDATE autonomy_schema SET checksum=?",
