@@ -160,7 +160,7 @@ class CapabilityDependencyResolveExecutor:
         parameters: dict[str, Any],
     ) -> tuple[str, ...]:
         del work, parameters
-        return ("network", "dependency_resolver", "artifact_store")
+        return ("network", "resolver", "artifact")
 
     async def execute(
         self,
@@ -309,7 +309,7 @@ class CapabilityManifestBindExecutor:
         parameters: dict[str, Any],
     ) -> tuple[str, ...]:
         del work, parameters
-        return ("artifact_store",)
+        return ("artifact",)
 
     async def execute(
         self,
