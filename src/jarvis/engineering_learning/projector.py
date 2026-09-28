@@ -278,7 +278,9 @@ class EngineeringLearningProjector:
             )
         else:
             if not isinstance(identity, EngineeringKnowledgeIdentity):
-                raise TypeError("identity must be an EngineeringKnowledgeIdentity or None")
+                raise TypeError(
+                    "identity must be an EngineeringKnowledgeIdentity or None"
+                )
             if identity.knowledge_id != knowledge_id:
                 raise EngineeringLearningProjectionError(
                     "existing knowledge identity does not match projected proposition"
