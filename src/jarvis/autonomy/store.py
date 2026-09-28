@@ -12,6 +12,8 @@ from jarvis.work.store import SQLiteWorkStore
 
 from .models import (
     ActionCandidateV1,
+    CandidateDispositionRecordV1,
+    DispatchIntentV1,
     AutonomyFindingEventV1,
     AutonomyFindingV1,
     AutonomyOutcomeRecordV1,
@@ -23,7 +25,10 @@ from .models import (
 )
 from .system_state import SystemStateSnapshotV1
 
-AUTONOMY_SCHEMA_VERSION = 1
+AUTONOMY_SCHEMA_VERSION = 2
+_AUTONOMY_SCHEMA_V1_CHECKSUM = (
+    "f4a0bd325651c34576debdbe58f2aee82486540b7b517553cf07acf514ca4c5e"
+)
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS autonomy_schema (
@@ -93,6 +98,30 @@ CREATE TABLE IF NOT EXISTS autonomy_action_candidates (
     payload_digest TEXT NOT NULL CHECK(length(payload_digest) = 64),
     payload TEXT NOT NULL,
     created_at_epoch REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS autonomy_candidate_decisions (
+    decision_id TEXT PRIMARY KEY,
+    candidate_id TEXT NOT NULL
+        REFERENCES autonomy_action_candidates(candidate_id),
+    disposition TEXT NOT NULL,
+    source_identity TEXT NOT NULL,
+    payload_digest TEXT NOT NULL CHECK(length(payload_digest) = 64),
+    payload TEXT NOT NULL,
+    created_at_epoch REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS autonomy_dispatch_intents (
+    intent_id TEXT PRIMARY KEY,
+    candidate_id TEXT NOT NULL
+        REFERENCES autonomy_action_candidates(candidate_id),
+    action_kind TEXT NOT NULL,
+    dispatch_role TEXT NOT NULL,
+    source_identity TEXT NOT NULL,
+    payload_digest TEXT NOT NULL CHECK(length(payload_digest) = 64),
+    payload TEXT NOT NULL,
+    created_at_epoch REAL NOT NULL,
+    UNIQUE(candidate_id, dispatch_role)
 );
 
 CREATE TABLE IF NOT EXISTS autonomy_dispatch_links (
@@ -197,6 +226,10 @@ CREATE INDEX IF NOT EXISTS idx_autonomy_findings_status_last_seen
     ON autonomy_findings(status, last_seen_epoch);
 CREATE INDEX IF NOT EXISTS idx_autonomy_candidates_finding_created
     ON autonomy_action_candidates(finding_id, created_at_epoch);
+CREATE INDEX IF NOT EXISTS idx_autonomy_candidate_decisions_candidate_created
+    ON autonomy_candidate_decisions(candidate_id, created_at_epoch);
+CREATE INDEX IF NOT EXISTS idx_autonomy_dispatch_intents_candidate_created
+    ON autonomy_dispatch_intents(candidate_id, created_at_epoch);
 CREATE INDEX IF NOT EXISTS idx_autonomy_attention_status_priority
     ON autonomy_owner_attention(status, priority DESC, last_occurrence_epoch);
 CREATE INDEX IF NOT EXISTS idx_autonomy_reconcile_status_started
@@ -204,7 +237,7 @@ CREATE INDEX IF NOT EXISTS idx_autonomy_reconcile_status_started
 """
 
 AUTONOMY_SCHEMA_CHECKSUM = hashlib.sha256(
-    (_SCHEMA_SQL.strip() + "|phase10a.1-workstore-extension-v1").encode()
+    (_SCHEMA_SQL.strip() + "|phase10a.4-workstore-extension-v2").encode()
 ).hexdigest()
 
 _EXPECTED_COLUMNS: dict[str, frozenset[str]] = {
@@ -267,6 +300,29 @@ _EXPECTED_COLUMNS: dict[str, frozenset[str]] = {
             "desired_generation",
             "action_kind",
             "mode",
+            "payload_digest",
+            "payload",
+            "created_at_epoch",
+        }
+    ),
+    "autonomy_candidate_decisions": frozenset(
+        {
+            "decision_id",
+            "candidate_id",
+            "disposition",
+            "source_identity",
+            "payload_digest",
+            "payload",
+            "created_at_epoch",
+        }
+    ),
+    "autonomy_dispatch_intents": frozenset(
+        {
+            "intent_id",
+            "candidate_id",
+            "action_kind",
+            "dispatch_role",
+            "source_identity",
             "payload_digest",
             "payload",
             "created_at_epoch",
@@ -420,17 +476,30 @@ class AutonomyStore:
                         "autonomy schema ledger must contain exactly one version"
                     )
                 row = ledger_rows[0]
-                if int(row["version"]) != AUTONOMY_SCHEMA_VERSION:
-                    raise AutonomyIntegrityError("unsupported autonomy schema version")
-                if str(row["checksum"]) != AUTONOMY_SCHEMA_CHECKSUM:
-                    raise AutonomyIntegrityError("autonomy schema checksum mismatch")
-                expected_tables = set(_EXPECTED_COLUMNS)
-                if existing_tables != expected_tables:
-                    missing = sorted(expected_tables - existing_tables)
-                    extra = sorted(existing_tables - expected_tables)
-                    raise AutonomyIntegrityError(
-                        f"autonomy schema table mismatch missing={missing} extra={extra}"
+                version = int(row["version"])
+                checksum = str(row["checksum"])
+                if version == 1:
+                    if checksum != _AUTONOMY_SCHEMA_V1_CHECKSUM:
+                        raise AutonomyIntegrityError("autonomy schema checksum mismatch")
+                    db.executescript(_SCHEMA_SQL)
+                    db.execute(
+                        "UPDATE autonomy_schema SET version=?, checksum=? WHERE version=1",
+                        (AUTONOMY_SCHEMA_VERSION, AUTONOMY_SCHEMA_CHECKSUM),
                     )
+                    existing_tables = set(_EXPECTED_COLUMNS)
+                elif version == AUTONOMY_SCHEMA_VERSION:
+                    if checksum != AUTONOMY_SCHEMA_CHECKSUM:
+                        raise AutonomyIntegrityError("autonomy schema checksum mismatch")
+                    expected_tables = set(_EXPECTED_COLUMNS)
+                    if existing_tables != expected_tables:
+                        missing = sorted(expected_tables - existing_tables)
+                        extra = sorted(existing_tables - expected_tables)
+                        raise AutonomyIntegrityError(
+                            "autonomy schema table mismatch "
+                            f"missing={missing} extra={extra}"
+                        )
+                else:
+                    raise AutonomyIntegrityError("unsupported autonomy schema version")
 
             db.executescript(_SCHEMA_SQL)
 
