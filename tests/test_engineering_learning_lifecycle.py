@@ -215,6 +215,7 @@ def test_successor_must_be_accepted_before_prior_is_superseded(
             result=EngineeringOutcomeResult.ROLLED_BACK,
             attribution=EngineeringOutcomeAttribution.CANDIDATE,
             reason_codes=("candidate_runtime_regression",),
+            observed_at_epoch=101.0,
         )
         _, successor_revision_id = _persist(
             store,
@@ -272,6 +273,7 @@ def test_supersession_replay_is_idempotent(tmp_path: Path) -> None:
             result=EngineeringOutcomeResult.ROLLED_BACK,
             attribution=EngineeringOutcomeAttribution.CANDIDATE,
             reason_codes=("candidate_runtime_regression",),
+            observed_at_epoch=101.0,
         )
         _, successor_revision_id = _persist(
             store,
@@ -428,4 +430,3 @@ def test_older_or_same_time_evidence_cannot_be_promoted_as_successor(
         )
     finally:
         store.close()
-
