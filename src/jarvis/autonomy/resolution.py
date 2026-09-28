@@ -388,13 +388,15 @@ class ActionResolutionService:
                 candidate,
                 disposition=disposition,
                 source_identity="action_resolution:phase10a4",
+                basis_identity=f"finding_version:{finding.version}",
                 reason_codes=decision_reasons,
             ),
             candidate_id=candidate.candidate_id,
             disposition=disposition,
             reason_codes=decision_reasons,
             source_identity="action_resolution:phase10a4",
-            created_at_epoch=candidate.created_at_epoch,
+            basis_identity=f"finding_version:{finding.version}",
+            created_at_epoch=finding.last_seen_epoch,
         )
         decision = self.store.record_candidate_decision(decision)
 
