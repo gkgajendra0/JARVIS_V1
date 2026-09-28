@@ -45,7 +45,7 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 The active cross-cutting engineering boundary is now:
 
-**Phase 10A — Autonomous Operations Control Plane — 10A.1–10A.6 MERGED; 10A.7 FINAL CI + OWNER-MACHINE ACCEPTANCE PENDING**
+**Phase 10A — Autonomous Operations Control Plane — OWNER-MACHINE ACCEPTED; PR #219 FINAL MERGE PENDING**
 
 Phase 5 Secure Autonomous Engineering Substrate is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Its final evidence is recorded in `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`. PR #133 merged to protected main at `78f25fb192b926ee30a028cfc02c829e1197cc9e`.
 
@@ -136,7 +136,7 @@ Phase 7  Governed promotion / production verification / rollback — DONE / OWNE
 Phase 8  Capability package + registry lifecycle — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 9  Owner-requested capability acquisition — DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28; FINAL E2E EXTERNAL VALIDATION DEFERRED
 Phase 10 Closed-loop engineering learning — DONE / OWNER-MACHINE ACCEPTED 2026-09-28
-Phase 10A Autonomous Operations Control Plane — 10A.1–10A.6 MERGED; 10A.7 FINAL CI + OWNER-MACHINE ACCEPTANCE PENDING
+Phase 10A Autonomous Operations Control Plane — OWNER-MACHINE ACCEPTED 2026-09-28; FINAL PR #219 MERGE PENDING
 Phase 11 Autonomous capability-gap / weakness detection
 Phase 12 Shadow improvement + baseline benchmarking
 Phase 13 Engineering curriculum + specialist model evaluation
@@ -145,7 +145,7 @@ Phase 14 Governed self-evolution
 
 Owner-requested capability acquisition intentionally precedes autonomous gap detection: an explicit owner request to acquire a capability must not wait for repeated failures or repeated requests.
 
-The owner-approved 2026-09-26 sequencing clarification inserts Phase 10A before Phase 11. Phase-10A research is complete and the owner approved its architecture on 2026-09-28. Slices 10A.1–10A.6 are merged. Slice 10A.7 now contains the bounded reconciliation runtime, clean trigger lifecycle, locked 30-case replay corpus and exact-commit Windows owner-machine acceptance harness. Phase 10A remains open until exact-head CI and the required owner-machine run pass. Production autonomy remains SHADOW and Authority is unchanged.
+The owner-approved 2026-09-26 sequencing clarification inserts Phase 10A before Phase 11. Phase-10A research is complete and the owner approved its architecture on 2026-09-28. Slices 10A.1–10A.6 are merged. Slice 10A.7 contains the bounded reconciliation runtime, clean trigger lifecycle, locked 30-case replay corpus and exact-commit Windows owner-machine acceptance harness. The real owner-machine run passed on exact head `4d1cb077cf3b0c5d9271edf05b47a5012ca14695` with all 30 locked cases represented, replay digest `2a8205a1a84165effd813aee088d298c5c25ba290585d20753f17e750be77258` and evidence digest `fa85ee31a0d63609167be4556f8cab587c980d20311de88396bbf70e16b9bae3`. Production autonomy remains SHADOW and Authority is unchanged. The only remaining Phase-10A repository action is final PR #219 merge and closure-document reconciliation.
 
 ## Next numbered product slice
 
@@ -201,9 +201,10 @@ They remain separate unless evidence shows that one directly blocks the current 
 - `PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_IMPLEMENTATION_PLAN.md` — implemented Phase-9 slices 9A–9G and final real-world exit gate.
 - `PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_ACCEPTANCE_2026-09-27.md` — canonical Phase-9 software/CI completion record and pending real external acceptance gate.
 - `PHASE10_CLOSED_LOOP_ENGINEERING_LEARNING_ACCEPTANCE.md` — canonical Phase-10 owner-machine acceptance record.
+- `PHASE10A_AUTONOMOUS_OPERATIONS_CONTROL_PLANE_ACCEPTANCE.md` — canonical Phase-10A owner-machine acceptance record and final merge boundary.
 
 Historical experiments, old acceptance transcripts and superseded research remain available through Git history rather than becoming competing planning truth.
 
 ## Immediate next action
 
-**Finish Phase 10A.7 exact-head CI, then run the exact-commit Windows owner-machine acceptance harness. Do not mark Phase 10A DONE or merge the final acceptance slice until that evidence passes. Preserve production SHADOW, existing Authority, and the deferred Phase-9 full external lifecycle.**
+**Phase 10A owner-machine acceptance has passed. Finish the final exact-head documentation/state CI, merge PR #219, then reconcile the closure documents with the protected-main merge SHA. Preserve production SHADOW, existing Authority, and the deferred Phase-9 full external lifecycle.**
