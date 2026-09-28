@@ -479,6 +479,59 @@ def test_unknown_breaks_consecutive_violation_progression() -> None:
     assert restarted.evaluation.consecutive_violations == 1
 
 
+def test_active_violation_survives_unknown_until_stable_recovery() -> None:
+    desired = _component_desired(
+        policy=StabilizationPolicyV1(required_consecutive_violations=1)
+    )
+    stabilizer = DesiredStateStabilizer()
+    active_raw = ComponentHealthRuleV1().evaluate(
+        desired,
+        _component_snapshot(state="failed"),
+    )
+    active = stabilizer.apply(desired, active_raw)
+    assert active.evaluation.status is DesiredStateEvaluationStatus.VIOLATED
+    assert active.cursor.violation_active is True
+
+    unknown_snapshot = _component_snapshot(
+        state="failed",
+        incomplete=("health_registry",),
+    )
+    unknown_snapshot = SystemStateSnapshotV1.create(
+        evaluated_source_namespaces=unknown_snapshot.evaluated_source_namespaces,
+        facts=unknown_snapshot.facts,
+        source_errors=unknown_snapshot.source_errors,
+        incomplete_namespaces=unknown_snapshot.incomplete_namespaces,
+        started_at_epoch=NOW + 1,
+        ended_at_epoch=NOW + 1,
+    )
+    unknown_raw = ComponentHealthRuleV1().evaluate(desired, unknown_snapshot)
+    unknown = stabilizer.apply(
+        desired,
+        unknown_raw,
+        previous=active.cursor,
+    )
+    assert unknown.evaluation.status is DesiredStateEvaluationStatus.UNKNOWN
+    assert unknown.cursor.violation_active is True
+
+    failed_snapshot = _component_snapshot(state="failed")
+    failed_snapshot = SystemStateSnapshotV1.create(
+        evaluated_source_namespaces=failed_snapshot.evaluated_source_namespaces,
+        facts=failed_snapshot.facts,
+        source_errors=failed_snapshot.source_errors,
+        incomplete_namespaces=failed_snapshot.incomplete_namespaces,
+        started_at_epoch=NOW + 2,
+        ended_at_epoch=NOW + 2,
+    )
+    failed_raw = ComponentHealthRuleV1().evaluate(desired, failed_snapshot)
+    repeated = stabilizer.apply(
+        desired,
+        failed_raw,
+        previous=unknown.cursor,
+    )
+    assert repeated.evaluation.status is DesiredStateEvaluationStatus.VIOLATED
+    assert repeated.cursor.violation_active is True
+
+
 def test_stable_recovery_requires_configured_age() -> None:
     desired = _component_desired(
         policy=StabilizationPolicyV1(
