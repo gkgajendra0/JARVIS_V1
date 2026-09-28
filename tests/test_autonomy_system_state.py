@@ -375,9 +375,7 @@ def test_malformed_canonical_timestamp_is_explicitly_incomplete(
     assert result.facts == ()
     assert result.status is SystemStateSourceStatus.INCOMPLETE
     assert result.incomplete_namespaces == ("engineering_change",)
-    assert {item.reason_code for item in result.errors} == {
-        "source_timestamp_invalid"
-    }
+    assert {item.reason_code for item in result.errors} == {"source_timestamp_invalid"}
 
 
 def test_work_change_and_incident_sources_do_not_copy_sensitive_requests(
