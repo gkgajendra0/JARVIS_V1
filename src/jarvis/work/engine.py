@@ -38,6 +38,7 @@ class WorkOwnerInputRequired(RuntimeError):
         *,
         sensitive: bool = False,
         input_key: str | None = None,
+        resume_context: dict[str, Any] | None = None,
     ) -> None:
         normalized = question.strip()
         if not normalized:
@@ -49,6 +50,7 @@ class WorkOwnerInputRequired(RuntimeError):
         self.question = normalized
         self.sensitive = bool(sensitive)
         self.input_key = key
+        self.resume_context = dict(resume_context or {})
 
 
 class WorkActionExecutor(Protocol):
@@ -1055,6 +1057,8 @@ class WorkEngine:
             }
             if exc.input_key is not None:
                 waiting_observation["input_key"] = exc.input_key
+            if exc.resume_context:
+                waiting_observation["resume_context"] = dict(exc.resume_context)
             waiting_step = running_step.complete(waiting_observation)
             self._store.save_step(waiting_step)
             latest = self._store.require(work.work_id)
