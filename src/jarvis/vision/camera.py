@@ -192,12 +192,7 @@ class OpenCVCameraSource:
         fps = self.config.fps
 
         if codec is not None or fps is not None:
-            params: list[int] = [
-                cv2.CAP_PROP_FRAME_WIDTH,
-                self.config.width,
-                cv2.CAP_PROP_FRAME_HEIGHT,
-                self.config.height,
-            ]
+            params: list[int] = []
             if codec is not None:
                 params.extend(
                     [
@@ -205,6 +200,14 @@ class OpenCVCameraSource:
                         cv2.VideoWriter_fourcc(*codec),
                     ]
                 )
+            params.extend(
+                [
+                    cv2.CAP_PROP_FRAME_WIDTH,
+                    self.config.width,
+                    cv2.CAP_PROP_FRAME_HEIGHT,
+                    self.config.height,
+                ]
+            )
             if fps is not None:
                 params.extend([cv2.CAP_PROP_FPS, int(round(fps))])
 
