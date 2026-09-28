@@ -515,7 +515,18 @@ def test_assisted_engineering_change_uses_governed_change_lifecycle(
     change = changes_store.require(result.link.downstream_id)
     assert change.state is ChangeState.RESEARCHING
     assert changes_store.latest_artifact(change.change_id, "architecture") is None
-    assert changes_store.list_decisions(change.change_id) == ()
+    with work.extension_transaction() as db:
+        assert (
+            db.execute(
+                """
+                SELECT COUNT(*) FROM engineering_change_decisions AS decision
+                JOIN engineering_change_gates AS gate USING (gate_id)
+                WHERE gate.change_id=?
+                """,
+                (change.change_id,),
+            ).fetchone()[0]
+            == 0
+        )
     assert len(changes_store.list_stages(change.change_id)) == 1
 
 
