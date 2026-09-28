@@ -78,11 +78,14 @@ def _promotion_fixture(
         pr_number=1,
         promotion_artifact_id=None,
         promotion_artifact_digest=None,
-        merge_sha=MERGE if state in {
+        merge_sha=MERGE
+        if state
+        in {
             PromotionAttemptState.COMPLETED,
             PromotionAttemptState.ROLLED_BACK,
             PromotionAttemptState.FAILED,
-        } else None,
+        }
+        else None,
         deployment_id="deploy-1",
         lkg_sha=BASE,
         last_reason=None,
@@ -341,8 +344,7 @@ def test_compatibility_adapter_scopes_exact_package_and_release(
         for item in outcome.applicability
     )
     assert any(
-        item.target_namespace == "jarvis.revision"
-        and item.target_identity == MERGE
+        item.target_namespace == "jarvis.revision" and item.target_identity == MERGE
         for item in outcome.applicability
     )
 
