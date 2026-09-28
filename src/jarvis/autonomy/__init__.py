@@ -38,6 +38,27 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "jarvis.autonomy.findings",
+        (
+            "FindingLifecycleManager",
+            "FindingLifecycleResultV1",
+        ),
+    ),
+    (
+        "jarvis.autonomy.resolution",
+        (
+            "ActionResolutionResultV1",
+            "ActionResolutionService",
+            "ActionResolver",
+            "ActionResolverRegistry",
+            "ActionResponseSpecV1",
+            "DuplicateActionResolverError",
+            "LeastPowerfulActionResolverV1",
+            "UnknownActionResolverError",
+            "build_default_action_resolver_registry",
+        ),
+    ),
+    (
         "jarvis.autonomy.rules",
         (
             "CapabilityEffectiveStateRuleV1",
