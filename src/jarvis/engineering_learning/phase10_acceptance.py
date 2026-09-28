@@ -75,6 +75,22 @@ def _repo_snapshot(repo: pathlib.Path) -> dict[str, str]:
     }
 
 
+def _require_output_outside_repo(
+    output: pathlib.Path,
+    *,
+    repo: pathlib.Path,
+) -> pathlib.Path:
+    resolved_output = output.expanduser().resolve()
+    resolved_repo = repo.expanduser().resolve()
+    try:
+        resolved_output.relative_to(resolved_repo)
+    except ValueError:
+        return resolved_output
+    raise Phase10AcceptanceError(
+        "acceptance evidence output must be outside the tested repository"
+    )
+
+
 def _require_windows() -> None:
     if os.name != "nt":
         raise Phase10AcceptanceError(
@@ -197,7 +213,10 @@ def _main() -> int:
     evidence = run_acceptance(repo_root=args.repo_root)
     rendered = json.dumps(evidence, indent=2, sort_keys=True)
     if args.output is not None:
-        output = args.output.expanduser().resolve()
+        output = _require_output_outside_repo(
+            args.output,
+            repo=args.repo_root,
+        )
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(rendered + "\n", encoding="utf-8")
     print(rendered)
