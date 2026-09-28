@@ -481,6 +481,17 @@ class AutonomyStore:
                 if version == 1:
                     if checksum != _AUTONOMY_SCHEMA_V1_CHECKSUM:
                         raise AutonomyIntegrityError("autonomy schema checksum mismatch")
+                    legacy_expected_tables = set(_EXPECTED_COLUMNS) - {
+                        "autonomy_candidate_decisions",
+                        "autonomy_dispatch_intents",
+                    }
+                    if existing_tables != legacy_expected_tables:
+                        missing = sorted(legacy_expected_tables - existing_tables)
+                        extra = sorted(existing_tables - legacy_expected_tables)
+                        raise AutonomyIntegrityError(
+                            "legacy autonomy schema table mismatch "
+                            f"missing={missing} extra={extra}"
+                        )
                     db.executescript(_SCHEMA_SQL)
                     db.execute(
                         "UPDATE autonomy_schema SET version=?, checksum=? WHERE version=1",
