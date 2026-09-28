@@ -81,7 +81,10 @@ def build_default_self_model() -> SelfModelRegistry:
             "accepted objectives, canonical state, findings and governed responses.",
             ("src/jarvis/autonomy",),
             parent_component_id="jarvis",
-            tests=("tests/test_autonomy_store.py",),
+            tests=(
+                "tests/test_autonomy_store.py",
+                "tests/test_autonomy_system_state.py",
+            ),
             logger_prefixes=("jarvis.autonomy",),
             docs=(
                 "docs/PHASE10A_AUTONOMOUS_OPERATIONS_CONTROL_PLANE_ARCHITECTURE.md",

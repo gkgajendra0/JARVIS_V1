@@ -38,6 +38,37 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "jarvis.autonomy.system_state",
+        (
+            "SYSTEM_STATE_PRODUCER_VERSION",
+            "SYSTEM_STATE_SCHEMA_VERSION",
+            "DuplicateSystemStateSourceError",
+            "SystemStateAggregator",
+            "SystemStateFactV1",
+            "SystemStateReadRequestV1",
+            "SystemStateSnapshotV1",
+            "SystemStateSource",
+            "SystemStateSourceErrorV1",
+            "SystemStateSourceRegistry",
+            "SystemStateSourceResultV1",
+            "SystemStateSourceStatus",
+            "SystemStateTargetV1",
+        ),
+    ),
+    (
+        "jarvis.autonomy.sources",
+        (
+            "CapabilityStateSource",
+            "EngineeringChangeSource",
+            "IncidentSource",
+            "ModelProviderStateSource",
+            "ProductionObservationSource",
+            "ResourceStateSource",
+            "SelfModelHealthSource",
+            "WorkPortfolioSource",
+        ),
+    ),
+    (
         "jarvis.autonomy.store",
         (
             "AUTONOMY_SCHEMA_CHECKSUM",
