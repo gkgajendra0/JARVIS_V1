@@ -226,6 +226,8 @@ class FindingLifecycle:
             if evaluation.status is DesiredStateEvaluationStatus.VIOLATED
             else FindingStatus.STABILIZING
         )
+        if current is not None and current.status is FindingStatus.SUPPRESSED:
+            target_status = FindingStatus.SUPPRESSED
         violation_count = max(1, evaluation.consecutive_violations)
 
         if current is None:
@@ -278,16 +280,28 @@ class FindingLifecycle:
             violation_count=violation_count,
             reason_codes=evaluation.reason_codes,
             supporting_fact_digests=evaluation.supporting_fact_digests,
-            root_finding_id=root_finding_id,
-            suppression_finding_id=None,
+            root_finding_id=(
+                current.root_finding_id
+                if target_status is FindingStatus.SUPPRESSED
+                else root_finding_id
+            ),
+            suppression_finding_id=(
+                current.suppression_finding_id
+                if target_status is FindingStatus.SUPPRESSED
+                else None
+            ),
             version=current.version + 1,
         )
+        if target_status is FindingStatus.ACTIVE:
+            event_kind = "activated"
+        elif target_status is FindingStatus.SUPPRESSED:
+            event_kind = "suppressed_observation"
+        else:
+            event_kind = "stabilizing"
         return self._persist_transition(
             updated,
             previous=current,
-            kind="activated"
-            if target_status is FindingStatus.ACTIVE
-            else "stabilizing",
+            kind=event_kind,
         )
 
     def suppress(
