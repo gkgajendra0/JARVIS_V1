@@ -65,8 +65,7 @@ class ActionResponseSpecV1:
             "policy_reason_codes",
             tuple(
                 dict.fromkeys(
-                    str(item).strip().casefold()
-                    for item in self.policy_reason_codes
+                    str(item).strip().casefold() for item in self.policy_reason_codes
                 )
             ),
         )
@@ -101,8 +100,7 @@ class ActionResolutionResultV1:
             raise ValueError("reason_codes must not be empty")
         object.__setattr__(self, "reason_codes", normalized)
         if any(
-            not isinstance(item, DispatchIntentV1)
-            for item in self.dispatch_intents
+            not isinstance(item, DispatchIntentV1) for item in self.dispatch_intents
         ):
             raise TypeError("dispatch_intents must contain DispatchIntentV1 values")
 
@@ -197,7 +195,9 @@ class LeastPowerfulActionResolverV1:
         self.supported_finding_kinds = tuple(
             str(item).strip().casefold() for item in supported_finding_kinds
         )
-        if any(not rule_key or version <= 0 for rule_key, version in self.supported_rules):
+        if any(
+            not rule_key or version <= 0 for rule_key, version in self.supported_rules
+        ):
             raise ValueError("supported_rules contain invalid values")
         if any(not item for item in self.supported_finding_kinds):
             raise ValueError("supported_finding_kinds contain invalid values")
@@ -479,9 +479,7 @@ class ActionResolutionService:
             dependencies=response.dependencies,
             mode=AutonomyMode.SHADOW,
             policy_reason_codes=tuple(
-                dict.fromkeys(
-                    (*response.policy_reason_codes, "phase10a4_shadow_only")
-                )
+                dict.fromkeys((*response.policy_reason_codes, "phase10a4_shadow_only"))
             ),
             created_at_epoch=finding.last_seen_epoch,
         )
