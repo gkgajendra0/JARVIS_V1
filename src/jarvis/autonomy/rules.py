@@ -997,9 +997,12 @@ class DesiredStateStabilizer:
                 else raw.evaluated_at_epoch
             )
             violation_age = raw.evaluated_at_epoch - first_violation
-            active = bool(
+            threshold_met = bool(
                 consecutive >= policy.required_consecutive_violations
                 and violation_age >= policy.minimum_violation_age_seconds
+            )
+            active = bool(
+                threshold_met or (previous is not None and previous.violation_active)
             )
             cursor = StabilizationCursorV1(
                 desired_state_id=desired.desired_state_id,
