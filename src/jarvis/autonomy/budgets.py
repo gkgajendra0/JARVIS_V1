@@ -163,6 +163,12 @@ class AutonomyBudgetEvaluator:
             raise TypeError("mode must be an AutonomyMode")
         if not isinstance(usage, BudgetUsageV1):
             raise TypeError("usage must be a BudgetUsageV1")
+        if candidate.mode is not mode:
+            return BudgetAssessmentV1(
+                disposition=CandidateDisposition.BLOCKED_POLICY,
+                reason_codes=("candidate_mode_mismatch",),
+                policy_id=None if policy is None else policy.policy_id,
+            )
 
         if mode is AutonomyMode.SHADOW:
             return BudgetAssessmentV1(
@@ -351,6 +357,10 @@ class AutonomyBudgetLedger:
         if canonical_digest(payload) != expected:
             raise AutonomyIntegrityError("budget-window payload digest mismatch")
         window = AutonomyBudgetWindowV1.from_payload(payload)
+        if window.window_seconds != policy.window_seconds:
+            raise AutonomyIntegrityError(
+                "budget policy window changed without policy identity change"
+            )
         if (
             float(row["window_seconds"]) != window.window_seconds
             or float(row["used_value"]) != window.used_value
@@ -430,6 +440,10 @@ class AutonomyBudgetLedger:
             if canonical_digest(payload) != str(row["payload_digest"]):
                 raise AutonomyIntegrityError("budget-window payload digest mismatch")
             current = AutonomyBudgetWindowV1.from_payload(payload)
+            if current.window_seconds != policy.window_seconds:
+                raise AutonomyIntegrityError(
+                    "budget policy window changed without policy identity change"
+                )
             updated = AutonomyBudgetWindowV1(
                 policy_id=current.policy_id,
                 dimension_key=current.dimension_key,
