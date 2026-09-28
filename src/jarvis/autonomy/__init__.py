@@ -103,6 +103,17 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "jarvis.autonomy.reconciler",
+        (
+            "AutonomyReconciler",
+            "BudgetUsageProvider",
+            "DesiredReconcileResultV1",
+            "PeriodicAutonomyReconciler",
+            "PriorityFactorProvider",
+            "ReconcileBatchResultV1",
+        ),
+    ),
+    (
         "jarvis.autonomy.resolution",
         (
             "ActionResolutionResultV1",
