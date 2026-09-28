@@ -15,6 +15,7 @@ from jarvis.autonomy.dispatch import AutonomyDispatchResultV1, AutonomyDispatchS
 from jarvis.autonomy.findings import FindingLifecycleManager
 from jarvis.autonomy.models import (
     AutonomyBudgetPolicyV1,
+    AutonomyFindingEventV1,
     AutonomyFindingV1,
     AutonomyMode,
     CandidateDisposition,
@@ -225,9 +226,24 @@ def _default_priority_factors(
     )
 
 
+def _recovery_started_from_events(
+    events: tuple[AutonomyFindingEventV1, ...],
+) -> float | None:
+    last_active_index = -1
+    for index, event in enumerate(events):
+        if event.kind in {"activated", "suppressed"}:
+            last_active_index = index
+    for event in events[last_active_index + 1 :]:
+        if event.kind == "stabilizing":
+            return event.created_at_epoch
+    return None
+
+
 def _stabilization_from_finding(
     desired: DesiredStateV1,
     finding: AutonomyFindingV1 | None,
+    *,
+    events: tuple[AutonomyFindingEventV1, ...] = (),
 ) -> StabilizationStateV1 | None:
     if finding is None or finding.desired_generation != desired.generation:
         return None
@@ -242,13 +258,18 @@ def _stabilization_from_finding(
         }
         or recovery
     )
+    recovery_started = (
+        _recovery_started_from_events(events) if recovery else None
+    )
+    if recovery and recovery_started is None:
+        recovery_started = finding.last_seen_epoch
     return StabilizationStateV1(
         desired_state_id=desired.desired_state_id,
         desired_generation=desired.generation,
         consecutive_violations=(0 if recovery else max(1, finding.violation_count)),
         first_violation_at_epoch=finding.first_seen_epoch,
         last_violation_at_epoch=finding.last_seen_epoch,
-        recovery_started_at_epoch=(finding.last_seen_epoch if recovery else None),
+        recovery_started_at_epoch=recovery_started,
         stable_violation=stable,
         last_raw_status=(
             DesiredStateEvaluationStatus.SATISFIED
@@ -555,7 +576,15 @@ class AutonomyReconciler:
                 current = None
             previous = self._stabilization.get(desired.desired_state_id)
             if previous is None:
-                previous = _stabilization_from_finding(desired, current)
+                previous = _stabilization_from_finding(
+                    desired,
+                    current,
+                    events=(
+                        ()
+                        if current is None
+                        else self.store.list_finding_events(current.finding_id)
+                    ),
+                )
             stabilized = self.stabilizer.apply(
                 desired,
                 raw,
