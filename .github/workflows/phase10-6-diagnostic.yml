@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - diag/phase10-6-pytest-hang
+  pull_request:
 
 jobs:
   targeted-learning:
