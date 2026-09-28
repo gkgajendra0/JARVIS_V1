@@ -153,9 +153,7 @@ def _repair_outcome(
         result=result,
         attribution=EngineeringOutcomeAttribution.NOT_APPLICABLE,
         reason_codes=(reason,),
-        evidence_references=(
-            f"repair-attempt:phase10-eval:sha256:{_EVIDENCE_DIGEST}",
-        ),
+        evidence_references=(f"repair-attempt:phase10-eval:sha256:{_EVIDENCE_DIGEST}",),
         applicability=(
             OutcomeApplicability(
                 target_namespace="jarvis.component",
