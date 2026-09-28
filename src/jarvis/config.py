@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from jarvis.ai_provider import configured_ai_provider, normalize_ai_provider
+from jarvis.autonomy.models import AutonomyMode
 from jarvis.machine_config import configured_text, load_machine_settings
 
 VALID_LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})
@@ -61,6 +62,21 @@ def _configured_int(
         raise ValueError(f"Unsupported {name}: {value!r}") from exc
 
 
+def _configured_autonomy_mode(
+    machine_settings: Mapping[str, str],
+) -> AutonomyMode:
+    value = configured_text(
+        "JARVIS_AUTONOMY_MODE",
+        machine_settings,
+        AutonomyMode.SHADOW.value,
+    )
+    assert value is not None
+    try:
+        return AutonomyMode(value.strip().casefold())
+    except ValueError as exc:
+        raise ValueError(f"Unsupported JARVIS_AUTONOMY_MODE: {value!r}") from exc
+
+
 def _configured_optional_text(
     name: str,
     machine_settings: Mapping[str, str],
@@ -91,6 +107,7 @@ class JarvisConfig:
     gemini_realtime_model: str = "gemini-3.1-flash-live-preview"
     gemini_realtime_voice: str = "Charon"
     hands_planner_model: str | None = None
+    autonomy_mode: AutonomyMode = AutonomyMode.SHADOW
     work_orchestration_enabled: bool = False
     work_orchestration_model: str | None = None
     work_dbos_database_url: str | None = field(default=None, repr=False)
@@ -148,6 +165,9 @@ class JarvisConfig:
         object.__setattr__(self, "log_level", normalized)
 
         object.__setattr__(self, "ai_provider", normalize_ai_provider(self.ai_provider))
+
+        if not isinstance(self.autonomy_mode, AutonomyMode):
+            raise TypeError("autonomy_mode must be an AutonomyMode")
 
         camera_source = str(self.vision_default_camera).strip().lower()
         if camera_source not in {"lenovo", "pocket3"}:
@@ -349,6 +369,7 @@ class JarvisConfig:
             hands_planner_model=_configured_optional_text(
                 "JARVIS_HANDS_PLANNER_MODEL", machine
             ),
+            autonomy_mode=_configured_autonomy_mode(machine),
             work_orchestration_enabled=_configured_bool(
                 "JARVIS_WORK_ORCHESTRATION_ENABLED", False, machine
             ),
