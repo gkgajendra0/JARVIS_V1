@@ -169,7 +169,7 @@ class VisionRuntime:
     def switch_camera_source(self, source_name: str) -> str:
         switch = getattr(self._camera, "switch", None)
         if not callable(switch):
-            raise RuntimeError("active vision camera does not support source switching")
+            raise TypeError("active vision camera does not support source switching")
 
         normalized = str(source_name).strip().lower()
         if not normalized:
