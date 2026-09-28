@@ -39,6 +39,8 @@ from jarvis.engineering_knowledge.security import (
     EngineeringKnowledgeIntegrityVerifier,
     EvidenceAdmissionRequest,
 )
+from jarvis.engineering_learning.integrity import EngineeringLearningIntegrityVerifier
+from jarvis.engineering_learning.projector import ENGINEERING_LEARNING_KIND_NAMESPACE
 from jarvis.incidents.migration_runner import EngineeringMigrationRunner
 from jarvis.memory.embeddings import (
     QWEN3_EMBEDDING_CONTRACT,
