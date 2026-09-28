@@ -81,9 +81,7 @@ def _repo_snapshot(repo: pathlib.Path) -> dict[str, str]:
     return {
         "head": _git_revision(repo, "HEAD"),
         "main": _git_revision(repo, "main"),
-        "status_sha256": hashlib.sha256(
-            status.stdout.encode("utf-8")
-        ).hexdigest(),
+        "status_sha256": hashlib.sha256(status.stdout.encode("utf-8")).hexdigest(),
     }
 
 
@@ -112,9 +110,7 @@ def _require_output_outside_repo(
 
 def _validate_exact_commit(expected_commit: str, actual_commit: str) -> str:
     expected = str(expected_commit).strip().casefold()
-    if len(expected) != 40 or any(
-        char not in "0123456789abcdef" for char in expected
-    ):
+    if len(expected) != 40 or any(char not in "0123456789abcdef" for char in expected):
         raise Phase10AAcceptanceError("expected acceptance commit is invalid")
     if actual_commit != expected:
         raise Phase10AAcceptanceError(
@@ -168,12 +164,8 @@ def _run_locked_replay(
     evidence = {
         "returncode": completed.returncode,
         "node_count": len(node_ids),
-        "stdout_sha256": hashlib.sha256(
-            completed.stdout.encode("utf-8")
-        ).hexdigest(),
-        "stderr_sha256": hashlib.sha256(
-            completed.stderr.encode("utf-8")
-        ).hexdigest(),
+        "stdout_sha256": hashlib.sha256(completed.stdout.encode("utf-8")).hexdigest(),
+        "stderr_sha256": hashlib.sha256(completed.stderr.encode("utf-8")).hexdigest(),
         "stdout_tail": completed.stdout[-4000:],
         "stderr_tail": completed.stderr[-4000:],
     }
@@ -200,9 +192,7 @@ def run_acceptance(
     before = _repo_snapshot(repo)
     tested_commit = _validate_exact_commit(expected_commit, before["head"])
 
-    with tempfile.TemporaryDirectory(
-        prefix="jarvis-phase10a-acceptance-"
-    ) as temp:
+    with tempfile.TemporaryDirectory(prefix="jarvis-phase10a-acceptance-") as temp:
         replay = _run_locked_replay(
             repo,
             temp_root=pathlib.Path(temp),
@@ -253,9 +243,7 @@ def validate_acceptance_evidence(
 
     evidence = dict(payload)
     digest = str(evidence.pop("evidence_digest", "")).strip().casefold()
-    if len(digest) != 64 or any(
-        char not in "0123456789abcdef" for char in digest
-    ):
+    if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
         raise Phase10AAcceptanceError("acceptance evidence digest is invalid")
     if canonical_digest(evidence) != digest:
         raise Phase10AAcceptanceError("acceptance evidence digest mismatch")
@@ -266,21 +254,15 @@ def validate_acceptance_evidence(
     if evidence.get("tested_commit") != expected_commit:
         raise Phase10AAcceptanceError("acceptance evidence tested commit mismatch")
     if evidence.get("repo_unchanged") is not True:
-        raise Phase10AAcceptanceError(
-            "acceptance did not prove checkout immutability"
-        )
+        raise Phase10AAcceptanceError("acceptance did not prove checkout immutability")
     if evidence.get("protected_main_unchanged") is not True:
         raise Phase10AAcceptanceError(
             "acceptance did not prove protected-main immutability"
         )
     if evidence.get("authority_granted") is not False:
-        raise Phase10AAcceptanceError(
-            "acceptance unexpectedly granted Authority"
-        )
+        raise Phase10AAcceptanceError("acceptance unexpectedly granted Authority")
     if evidence.get("production_mutated") is not False:
-        raise Phase10AAcceptanceError(
-            "acceptance unexpectedly mutated production"
-        )
+        raise Phase10AAcceptanceError("acceptance unexpectedly mutated production")
     if evidence.get("production_autonomy_mode_enabled") is not False:
         raise Phase10AAcceptanceError(
             "acceptance unexpectedly enabled production autonomy"
