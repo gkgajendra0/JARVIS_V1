@@ -16,6 +16,7 @@ from .models import (
     AutonomyFindingV1,
     AutonomyOutcomeRecordV1,
     DesiredStateV1,
+    DispatchIntentV1,
     ObjectiveV1,
     OwnerAttentionEventV1,
     OwnerAttentionItemV1,
@@ -839,6 +840,81 @@ class AutonomyStore:
         if row is None:
             raise KeyError(candidate_id)
         return ActionCandidateV1.from_payload(self._decoded_payload(row))
+
+    def record_dispatch_intent(
+        self,
+        intent: DispatchIntentV1,
+    ) -> DispatchIntentV1:
+        if not isinstance(intent, DispatchIntentV1):
+            raise TypeError("intent must be a DispatchIntentV1")
+        digest, encoded = self._encoded_payload(intent)
+        with self.work.extension_transaction() as db:
+            existing = db.execute(
+                """
+                SELECT * FROM autonomy_dispatch_links
+                WHERE candidate_id=? AND dispatch_role=?
+                """,
+                (intent.candidate_id, intent.dispatch_role),
+            ).fetchone()
+            if existing is not None:
+                payload = self._decoded_payload(existing)
+                if str(existing["payload_digest"]) != digest:
+                    raise AutonomyConflictError(
+                        "dispatch intent role reused with different payload"
+                    )
+                if str(existing["downstream_kind"]) != "dispatch_intent":
+                    raise AutonomyIntegrityError(
+                        "dispatch intent role already bound to downstream object"
+                    )
+                return DispatchIntentV1.from_payload(payload)
+            try:
+                db.execute(
+                    """
+                    INSERT INTO autonomy_dispatch_links(
+                        dispatch_link_id, candidate_id, dispatch_role,
+                        downstream_kind, downstream_id, source_identity,
+                        created_at_epoch, payload_digest, payload
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        intent.dispatch_intent_id,
+                        intent.candidate_id,
+                        intent.dispatch_role,
+                        "dispatch_intent",
+                        intent.dispatch_intent_id,
+                        intent.source_identity,
+                        intent.created_at_epoch,
+                        digest,
+                        encoded,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise AutonomyConflictError(
+                    "dispatch intent identity conflict"
+                ) from exc
+        return intent
+
+    def require_dispatch_intent(
+        self,
+        candidate_id: str,
+        *,
+        dispatch_role: str = "intent",
+    ) -> DispatchIntentV1:
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT * FROM autonomy_dispatch_links
+                WHERE candidate_id=? AND dispatch_role=?
+                """,
+                (candidate_id, dispatch_role),
+            ).fetchone()
+        if row is None:
+            raise KeyError((candidate_id, dispatch_role))
+        if str(row["downstream_kind"]) != "dispatch_intent":
+            raise AutonomyIntegrityError(
+                "dispatch role is bound to a downstream object, not an intent"
+            )
+        return DispatchIntentV1.from_payload(self._decoded_payload(row))
 
     def create_owner_attention(
         self,
