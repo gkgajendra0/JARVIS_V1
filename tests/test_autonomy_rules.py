@@ -589,3 +589,5 @@ def test_default_rule_registry_contains_only_initial_reviewed_families(rule) -> 
     resolved = registry.require(rule.rule_key, rule.rule_version)
 
     assert type(resolved) is type(rule)
+    assert isinstance(resolved.default_stabilization_policy, StabilizationPolicyV1)
+    assert resolved.resolver_key
