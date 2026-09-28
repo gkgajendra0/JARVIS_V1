@@ -134,11 +134,7 @@ def test_phase10a_acceptance_evidence_rejects_wrong_commit() -> None:
 def test_phase10a_acceptance_evidence_rejects_incomplete_corpus() -> None:
     commit = "c" * 40
     payload = _payload(commit)
-    body = {
-        key: value
-        for key, value in payload.items()
-        if key != "evidence_digest"
-    }
+    body = {key: value for key, value in payload.items() if key != "evidence_digest"}
     body["case_ids"] = body["case_ids"][:-1]
     body["case_count"] = 29
     payload = {**body, "evidence_digest": canonical_digest(body)}
@@ -163,11 +159,7 @@ def test_phase10a_acceptance_rejects_governance_boundary_failure(
 ) -> None:
     commit = "c" * 40
     payload = _payload(commit)
-    body = {
-        key: value
-        for key, value in payload.items()
-        if key != "evidence_digest"
-    }
+    body = {key: value for key, value in payload.items() if key != "evidence_digest"}
     body[field] = not bool(body[field])
     payload = {**body, "evidence_digest": canonical_digest(body)}
 
