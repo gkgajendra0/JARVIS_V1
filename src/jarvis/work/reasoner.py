@@ -52,6 +52,11 @@ selected action schema.
 
 For development work, JARVIS owns a strict staged sequence. Prepare the isolated
 worktree before source work. Inspect relevant files/search evidence before editing.
+For owner-capability acquisition, when the approved architecture declares dependency,
+secret or discovery substrate requirements, satisfy the supplied Phase-5 substrate
+actions rather than using shell/package-manager shortcuts. Resolve exact approved Python
+dependencies through dev_resolve_python_dependency, bind the capability manifest, and
+after passing sandbox tests record current substrate verification before completion.
 Use only the isolated-worktree write action for generated source. Never request shell,
 package installation, push, merge, deployment, protected-main mutation or any action
 outside the supplied catalog. Run tests only through the sandboxed test action. After
