@@ -580,7 +580,7 @@ class WorkOrchestratorDispatchBridge:
                 existing.request != request
                 or existing.priority is not priority
                 or existing.delivery_policy is not DeliveryPolicy.SILENT
-                or existing.dependencies
+                or existing.dependencies != candidate.dependencies
             ):
                 raise ValueError(
                     "candidate source identity already owns different WorkItem semantics"
@@ -592,7 +592,7 @@ class WorkOrchestratorDispatchBridge:
             source_turn_id=turn_id,
             priority=priority,
             delivery_policy=DeliveryPolicy.SILENT,
-            dependencies=(),
+            dependencies=candidate.dependencies,
         )
         if submission.work.work_type is not work_type:
             raise RuntimeError("WorkOrchestrator returned mismatched work type")
