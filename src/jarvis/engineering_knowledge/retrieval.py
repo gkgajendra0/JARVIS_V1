@@ -641,11 +641,7 @@ class EngineeringKnowledgeRetrievalIndex:
             revision = self.get_engineering_knowledge_revision(revision_id)
             if revision is None:
                 continue
-            if revision.kind_namespace == "engineering.learning":
-                from jarvis.engineering_learning.integrity import (
-                    EngineeringLearningIntegrityVerifier,
-                )
-
+            if revision.kind_namespace == ENGINEERING_LEARNING_KIND_NAMESPACE:
                 integrity = EngineeringLearningIntegrityVerifier().verify(
                     self,
                     revision_id,
