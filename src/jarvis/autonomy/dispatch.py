@@ -318,9 +318,7 @@ class DispatchBridgeRegistrationV1:
             "attention_reason_codes": list(self.attention_reason_codes),
             "attention_question": self.attention_question,
             "attention_option_metadata_json": self.attention_option_metadata_json,
-            "attention_consequence_of_waiting": (
-                self.attention_consequence_of_waiting
-            ),
+            "attention_consequence_of_waiting": (self.attention_consequence_of_waiting),
         }
 
     @property
@@ -375,10 +373,13 @@ class DispatchBridgeRegistry:
         )
 
     def all(self) -> tuple[DispatchBridgeRegistrationV1, ...]:
-        return tuple(self._registrations[key] for key in sorted(
-            self._registrations,
-            key=lambda item: (item[0], item[1], item[2].value),
-        ))
+        return tuple(
+            self._registrations[key]
+            for key in sorted(
+                self._registrations,
+                key=lambda item: (item[0], item[1], item[2].value),
+            )
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -444,12 +445,12 @@ class ExistingControllerRegistry:
             "contract_digest",
             max_length=64,
         ).casefold()
-        if len(digest) != 64 or any(
-            char not in "0123456789abcdef" for char in digest
-        ):
+        if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
             raise ValueError("controller contract_digest must be SHA-256")
         if getattr(controller, "replay_safe", False) is not True:
-            raise ValueError("existing controller must explicitly declare replay safety")
+            raise ValueError(
+                "existing controller must explicitly declare replay safety"
+            )
         if not callable(getattr(controller, "invoke", None)):
             raise TypeError("existing controller must provide invoke")
         identity = (key, version)
@@ -876,7 +877,9 @@ class AutonomyDispatchService:
         now_epoch: float,
     ) -> AutonomyDispatchResultV1:
         if self.work_bridge is None:
-            return self._blocked(candidate, AutonomyMode.ASSISTED, "work_bridge_unavailable")
+            return self._blocked(
+                candidate, AutonomyMode.ASSISTED, "work_bridge_unavailable"
+            )
         try:
             submission = self.work_bridge.dispatch(
                 candidate,
@@ -884,7 +887,9 @@ class AutonomyDispatchService:
                 priority=priority,
             )
         except (RuntimeError, TypeError, ValueError):
-            return self._blocked(candidate, AutonomyMode.ASSISTED, "work_bridge_rejected")
+            return self._blocked(
+                candidate, AutonomyMode.ASSISTED, "work_bridge_rejected"
+            )
         _, _, source_identity = _candidate_source_identity(candidate)
         return self._record_link(
             candidate,
