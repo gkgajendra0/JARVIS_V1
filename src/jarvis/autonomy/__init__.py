@@ -21,6 +21,7 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "CandidateDisposition",
             "DesiredStateStatus",
             "DesiredStateV1",
+            "DispatchIntentV1",
             "FindingStatus",
             "ObjectiveOrigin",
             "ObjectiveStatus",
