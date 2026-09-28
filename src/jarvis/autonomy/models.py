@@ -830,6 +830,150 @@ class ActionCandidateV1:
 
 
 @dataclass(frozen=True, slots=True)
+class CandidateDispositionRecordV1:
+    decision_id: str
+    candidate_id: str
+    disposition: CandidateDisposition
+    reason_codes: tuple[str, ...]
+    source_identity: str
+    created_at_epoch: float
+    schema_version: str = AUTONOMY_CONTRACT_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "decision_id",
+            _text(self.decision_id, "decision_id", max_length=240),
+        )
+        object.__setattr__(
+            self,
+            "candidate_id",
+            _text(self.candidate_id, "candidate_id", max_length=240),
+        )
+        if not isinstance(self.disposition, CandidateDisposition):
+            raise TypeError("disposition must be a CandidateDisposition")
+        object.__setattr__(
+            self,
+            "reason_codes",
+            _unique_tokens(
+                self.reason_codes,
+                "reason_codes",
+                allow_empty=True,
+            ),
+        )
+        object.__setattr__(
+            self,
+            "source_identity",
+            _text(self.source_identity, "source_identity", max_length=500),
+        )
+        object.__setattr__(
+            self,
+            "created_at_epoch",
+            _epoch(self.created_at_epoch, "created_at_epoch"),
+        )
+        if self.schema_version != AUTONOMY_CONTRACT_SCHEMA_VERSION:
+            raise ValueError("unsupported candidate-disposition schema_version")
+
+    def to_payload(self) -> dict[str, JSONValue]:
+        return {
+            "decision_id": self.decision_id,
+            "candidate_id": self.candidate_id,
+            "disposition": self.disposition.value,
+            "reason_codes": list(self.reason_codes),
+            "source_identity": self.source_identity,
+            "created_at_epoch": self.created_at_epoch,
+            "schema_version": self.schema_version,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> Self:
+        data = dict(payload)
+        data["disposition"] = CandidateDisposition(data["disposition"])
+        data["reason_codes"] = tuple(data["reason_codes"])
+        return cls(**data)
+
+
+@dataclass(frozen=True, slots=True)
+class DispatchIntentV1:
+    intent_id: str
+    candidate_id: str
+    action_kind: ActionKind
+    dispatch_role: str
+    source_identity: str
+    target_namespace: str
+    target_identity: str
+    intent_json: dict[str, JSONValue]
+    created_at_epoch: float
+    schema_version: str = AUTONOMY_CONTRACT_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "intent_id",
+            _text(self.intent_id, "intent_id", max_length=240),
+        )
+        object.__setattr__(
+            self,
+            "candidate_id",
+            _text(self.candidate_id, "candidate_id", max_length=240),
+        )
+        if not isinstance(self.action_kind, ActionKind):
+            raise TypeError("action_kind must be an ActionKind")
+        object.__setattr__(
+            self,
+            "dispatch_role",
+            _token(self.dispatch_role, "dispatch_role"),
+        )
+        object.__setattr__(
+            self,
+            "source_identity",
+            _text(self.source_identity, "source_identity", max_length=500),
+        )
+        object.__setattr__(
+            self,
+            "target_namespace",
+            _token(self.target_namespace, "target_namespace"),
+        )
+        object.__setattr__(
+            self,
+            "target_identity",
+            _text(self.target_identity, "target_identity", max_length=500),
+        )
+        object.__setattr__(
+            self,
+            "intent_json",
+            _json_object(self.intent_json, "intent_json"),
+        )
+        object.__setattr__(
+            self,
+            "created_at_epoch",
+            _epoch(self.created_at_epoch, "created_at_epoch"),
+        )
+        if self.schema_version != AUTONOMY_CONTRACT_SCHEMA_VERSION:
+            raise ValueError("unsupported dispatch-intent schema_version")
+
+    def to_payload(self) -> dict[str, JSONValue]:
+        return {
+            "intent_id": self.intent_id,
+            "candidate_id": self.candidate_id,
+            "action_kind": self.action_kind.value,
+            "dispatch_role": self.dispatch_role,
+            "source_identity": self.source_identity,
+            "target_namespace": self.target_namespace,
+            "target_identity": self.target_identity,
+            "intent_json": deepcopy(self.intent_json),
+            "created_at_epoch": self.created_at_epoch,
+            "schema_version": self.schema_version,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> Self:
+        data = dict(payload)
+        data["action_kind"] = ActionKind(data["action_kind"])
+        return cls(**data)
+
+
+@dataclass(frozen=True, slots=True)
 class OwnerAttentionItemV1:
     attention_id: str
     fingerprint: str
@@ -1255,6 +1399,48 @@ def finding_id_for(
             "target_identity": desired_state.target_identity,
             "finding_kind": _token(finding_kind, "finding_kind"),
             "rule_version": desired_state.rule_version,
+        },
+    )
+
+
+def candidate_decision_id_for(
+    candidate: ActionCandidateV1,
+    *,
+    disposition: CandidateDisposition,
+    source_identity: str,
+    reason_codes: tuple[str, ...] = (),
+) -> str:
+    return deterministic_id(
+        "candidate_decision",
+        {
+            "candidate_id": candidate.candidate_id,
+            "disposition": disposition.value,
+            "source_identity": _text(
+                source_identity,
+                "source_identity",
+                max_length=500,
+            ),
+            "reason_codes": list(
+                _unique_tokens(
+                    reason_codes,
+                    "reason_codes",
+                    allow_empty=True,
+                )
+            ),
+        },
+    )
+
+
+def dispatch_intent_id_for(
+    candidate: ActionCandidateV1,
+    *,
+    dispatch_role: str,
+) -> str:
+    return deterministic_id(
+        "dispatch_intent",
+        {
+            "candidate_id": candidate.candidate_id,
+            "dispatch_role": _token(dispatch_role, "dispatch_role"),
         },
     )
 
