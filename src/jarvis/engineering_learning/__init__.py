@@ -1,12 +1,5 @@
 """Phase-10 closed-loop engineering learning contracts."""
 
-from jarvis.engineering_learning.adapters import (
-    CapabilityAcquisitionOutcomeAdapter,
-    CapabilityCompatibilityOutcomeAdapter,
-    EngineeringOutcomeAdapterError,
-    PromotionOutcomeAdapter,
-    RepairOutcomeAdapter,
-)
 from jarvis.engineering_learning.facets import (
     ENGINEERING_COMPATIBILITY_FACET_TYPE,
     ENGINEERING_COMPATIBILITY_V1_SCHEMA,
@@ -37,8 +30,6 @@ from jarvis.engineering_learning.models import (
 )
 
 __all__ = [
-    "CapabilityAcquisitionOutcomeAdapter",
-    "CapabilityCompatibilityOutcomeAdapter",
     "ENGINEERING_COMPATIBILITY_FACET_TYPE",
     "ENGINEERING_COMPATIBILITY_V1_SCHEMA",
     "ENGINEERING_COMPATIBILITY_V1_SCHEMA_DIGEST",
@@ -55,15 +46,12 @@ __all__ = [
     "ENGINEERING_REGRESSION_V1_SCHEMA_DIGEST",
     "ENGINEERING_REGRESSION_V1_SCHEMA_ID",
     "ENGINEERING_REGRESSION_V1_SCHEMA_VERSION",
-    "EngineeringOutcomeAdapterError",
     "EngineeringCompatibilityV1Handler",
     "EngineeringOutcomeAttribution",
     "EngineeringOutcomeResult",
     "EngineeringOutcomeSourceKind",
     "EngineeringOutcomeV1",
     "EngineeringOutcomeV1Handler",
-    "PromotionOutcomeAdapter",
-    "RepairOutcomeAdapter",
     "EngineeringRegressionV1Handler",
     "OutcomeApplicability",
 ]
