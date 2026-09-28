@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 from jarvis.engineering_knowledge import (
@@ -65,6 +64,38 @@ def _outcome(
         observed_at_epoch=100.0,
         producer="phase10-reconciliation-test",
         change_id="change-1",
+        candidate_id="candidate-1",
+        candidate_digest=SHA_A,
+        release_sha=RELEASE,
+    )
+
+
+def _successor_outcome() -> EngineeringOutcomeV1:
+    return EngineeringOutcomeV1.create(
+        source_kind=EngineeringOutcomeSourceKind.PROMOTION,
+        source_identity="promotion-2",
+        subject_type="promotion_candidate",
+        subject_id="candidate-1",
+        subject_digest=SHA_A,
+        result=EngineeringOutcomeResult.ROLLED_BACK,
+        attribution=EngineeringOutcomeAttribution.CANDIDATE,
+        reason_codes=("candidate_runtime_regression",),
+        evidence_references=(
+            "promotion-attempt:promotion-2",
+            f"change-artifact:observation-2:sha256:{EVIDENCE_SHA}",
+        ),
+        applicability=(
+            OutcomeApplicability(
+                target_namespace="jarvis.revision",
+                target_identity=RELEASE,
+                matcher_type="exact",
+                constraint={},
+                required=True,
+            ),
+        ),
+        observed_at_epoch=101.0,
+        producer="phase10-reconciliation-test",
+        change_id="change-2",
         candidate_id="candidate-1",
         candidate_digest=SHA_A,
         release_sha=RELEASE,
@@ -168,13 +199,7 @@ def test_reconciler_recovers_accepted_successor_before_prior_supersession(
         prior_id = first.items[0].revision_id
         assert prior_id is not None
 
-        successor_outcome = replace(
-            _outcome(),
-            result=EngineeringOutcomeResult.ROLLED_BACK,
-            attribution=EngineeringOutcomeAttribution.CANDIDATE,
-            reason_codes=("candidate_runtime_regression",),
-            observed_at_epoch=101.0,
-        )
+        successor_outcome = _successor_outcome()
         projector = EngineeringLearningProjector()
         projection = projector.project(
             store,
@@ -228,13 +253,7 @@ def test_new_verified_contradiction_supersedes_prior_and_retrieval_excludes_old(
         old_id = first.items[0].revision_id
         assert old_id is not None
 
-        regression = replace(
-            _outcome(),
-            result=EngineeringOutcomeResult.ROLLED_BACK,
-            attribution=EngineeringOutcomeAttribution.CANDIDATE,
-            reason_codes=("candidate_runtime_regression",),
-            observed_at_epoch=101.0,
-        )
+        regression = _successor_outcome()
         second = reconciler.reconcile(
             (regression,),
             limit=10,
