@@ -2,17 +2,19 @@
 
 ## Status
 
-**SOFTWARE IMPLEMENTATION COMPLETE ON PROTECTED MAIN / REAL EXTERNAL OWNER-MACHINE ACCEPTANCE PENDING — 2026-09-27**
+**DONE (BOUNDED) / OWNER ACCEPTED — 2026-09-28 — FINAL END-TO-END EXTERNAL VALIDATION DEFERRED**
 
-Reviewed implementation head: `81d498a22bb2293d69c6b6a848b08740fae30f75`
+Original reviewed implementation head: `81d498a22bb2293d69c6b6a848b08740fae30f75`
 
-Protected-main merge: `e73db07abad7ab0e73ee2f0030ff6e58e9f3ee76`
+PR #178 protected-main merge: `e73db07abad7ab0e73ee2f0030ff6e58e9f3ee76`
 
-PRs: 9A–9F plus 9G and final live-path hardening are merged. PR #178 completed the owner voice entrypoint, secure Phase-7 promotion composition, restart-safe Phase-8 package/lifecycle bridge, reusable owner-approved source registry, immediate catalog refresh and canonical real-capability evidence collection.
+Target-aware live-routing hardening was subsequently completed by PR #180 and squash-merged to protected main as `15974c4089aeea014dc68f4a6fb385072278b379`. The final PR #180 CI run passed the required Linux/Windows regression and promotion-policy gates.
 
-CI on the exact PR head passed Ruff, full pytest, Windows Hello, Windows DPAPI, inherited Phase-6/7/8 regression/acceptance coverage, Phase-9 replay regressions and the promotion-policy gate.
+The 2026-09-28 owner-machine run proved target-aware Phase-9 admission, canonical EngineeringChange/WorkItem durability, provider-pressure survival and bounded Gemini -> OpenAI fallback behavior. The run could not progress through the complete external TV lifecycle because Gemini was rate-limited and the configured OpenAI fallback was quota-exhausted.
 
-Phase 9 is **not yet owner-machine accepted**. Its final exit criterion still requires one genuine owner-requested external capability to complete the full lifecycle and produce exact real-world acceptance evidence. Phase 10 does not become active merely because the software implementation is merged.
+The owner explicitly accepted Phase 9 as bounded and chose not to purchase provider quota solely for this intermediate acceptance. The complete external lifecycle — research through real device effect and disable/rollback — remains mandatory final-system validation and must not be represented as already proven.
+
+Phase 10 may now become active under this explicit owner sequencing decision.
 
 Canonical acceptance-status record: `PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_ACCEPTANCE_2026-09-27.md`
 
@@ -163,4 +165,4 @@ Owner-machine acceptance must use one genuine owner-requested capability and rec
 - every new capability is PACKAGE_MANAGED;
 - production activation remains Phase-8 Authority-bound;
 - source promotion remains Phase-7 governed;
-- real-world acceptance is mandatory for Phase-9 completion.
+- real-world acceptance remains mandatory for final integrated-system validation; Phase 9 is owner-accepted bounded because provider quota prevented completion of the live external lifecycle.

@@ -539,11 +539,11 @@ Repository inspection, foundation research, implementation-focused research and 
 
 ### Phase 9 — owner-requested capability acquisition
 
-**STATUS: SOFTWARE COMPLETE ON PROTECTED MAIN / REAL EXTERNAL OWNER-MACHINE ACCEPTANCE PENDING 2026-09-27**
+**STATUS: DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28 — FINAL E2E EXTERNAL VALIDATION DEFERRED**
 
-Reviewed final hardening head `81d498a22bb2293d69c6b6a848b08740fae30f75` passed Ruff, full pytest, Windows Hello, Windows DPAPI, inherited Phase-6/7/8 regression/acceptance coverage, Phase-9 replay regressions and the promotion-policy gate. PR #178 squash-merged the completed live path to protected `main` as `e73db07abad7ab0e73ee2f0030ff6e58e9f3ee76`.
+Reviewed final hardening head `81d498a22bb2293d69c6b6a848b08740fae30f75` passed Ruff, full pytest, Windows Hello, Windows DPAPI, inherited Phase-6/7/8 regression/acceptance coverage, Phase-9 replay regressions and the promotion-policy gate. PR #178 squash-merged the completed live path to protected `main` as `e73db07abad7ab0e73ee2f0030ff6e58e9f3ee76`. A real owner-machine TV request then exposed a cross-target existing-capability reuse defect; PR #180 fixed target-aware acquisition routing and squash-merged to protected `main` as `15974c4089aeea014dc68f4a6fb385072278b379` after all required CI gates passed.
 
-Software completion is not the Phase-9 exit criterion. One genuine owner-requested external capability must still complete the full owner-machine lifecycle with observed external effect and disable/rollback evidence before Phase 9 becomes DONE / OWNER-MACHINE ACCEPTED.
+The 2026-09-28 owner-machine run proved target-aware owner-goal admission, canonical EngineeringChange/WorkItem durability, provider-pressure survival and bounded Gemini -> OpenAI fallback. The complete external lifecycle did not finish because Gemini was rate-limited and the configured OpenAI fallback was quota-exhausted. By explicit owner sequencing decision, Phase 9 is accepted as bounded so Phase 10 may proceed; the unproven research -> implementation -> promotion -> package activation -> observed device effect -> disable/rollback lifecycle remains mandatory final whole-system validation and must not be represented as already proven.
 
 This is the first complete "capability to build capabilities" milestone.
 
@@ -569,7 +569,7 @@ owner goal
 -> EngineeringKnowledge
 ```
 
-Exit criteria: the owner can acquire one real new capability without manually researching, coding, managing Git or debugging the candidate.
+Original full exit criterion: the owner can acquire one real new capability without manually researching, coding, managing Git or debugging the candidate. This criterion remains the deferred final-system validation target; it was not fully proven by the bounded 2026-09-28 acceptance.
 
 ### Phase 10 — closed-loop engineering learning
 
@@ -723,8 +723,8 @@ Rules:
 6. Phase 6 Unknown-Incident Investigation + Source Repair is complete and owner-machine accepted on 2026-09-27; preserve its exact diagnosis/architecture/candidate provenance and protected-surface boundaries.
 7. Phase 7 Governed Promotion / Production Verification / Rollback is complete and owner-machine accepted on 2026-09-27; preserve exact evidence binding, owner/Authority separation, release identity and rollback-safety boundaries.
 8. Phase 8 Capability Package + Registry Lifecycle is complete and owner-machine accepted on 2026-09-27; preserve its exact package/release identity, registry generation, reconciliation, Authority and rollback boundaries.
-9. Phase 9 Owner-Requested Capability Acquisition software is complete on protected main at `e73db07abad7ab0e73ee2f0030ff6e58e9f3ee76`; complete one genuine external owner-machine capability lifecycle before declaring the phase accepted.
-10. Insert Phase 10A Autonomous Operations Control Plane before Phase 11, as defined by `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
+9. Phase 9 Owner-Requested Capability Acquisition is DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28 on the target-aware protected-main baseline `15974c4089aeea014dc68f4a6fb385072278b379`. Preserve the incomplete real external lifecycle as a mandatory final whole-system validation item; do not claim the physical device effect or downstream disable/rollback path was proven.
+10. Begin Phase 10 Closed-Loop Engineering Learning with repository inspection, research and architecture, then insert Phase 10A Autonomous Operations Control Plane before Phase 11 as defined by `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
 11. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6 or Phase 7 without new concrete evidence.
 12. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
 13. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.

@@ -335,11 +335,12 @@ ACCEPTED
   Phase 7   Governed Promotion / Production Verification / Rollback
   Phase 8   Capability Package + Registry Lifecycle — owner-machine accepted 2026-09-27
 
-CURRENT / NEXT
-  Phase 9   Owner-Requested Capability Acquisition — research + architecture required
+ACCEPTED / DEFERRED VALIDATION
+  Phase 9   Owner-Requested Capability Acquisition — DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28
+            - final end-to-end external lifecycle validation deferred to whole-system acceptance
 
-THEN
-  Phase 10  Closed-Loop Engineering Learning
+CURRENT / NEXT
+  Phase 10  Closed-Loop Engineering Learning — research + architecture required
 
 INSERT
   Phase 10A Autonomous Operations Control Plane

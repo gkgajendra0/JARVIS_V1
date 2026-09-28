@@ -45,7 +45,7 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 The active cross-cutting engineering boundary is now:
 
-**Phase 9 — Owner-Requested Capability Acquisition — SOFTWARE COMPLETE / REAL EXTERNAL OWNER-MACHINE ACCEPTANCE PENDING**
+**Phase 10 — Closed-Loop Engineering Learning — RESEARCH + ARCHITECTURE NEXT**
 
 Phase 5 Secure Autonomous Engineering Substrate is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Its final evidence is recorded in `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`. PR #133 merged to protected main at `78f25fb192b926ee30a028cfc02c829e1197cc9e`.
 
@@ -87,7 +87,7 @@ The accepted Phase-7 path adds exact candidate/PR/CI binding, digest-bound owner
 
 **Phase 8 remains DONE / OWNER-MACHINE ACCEPTED 2026-09-27.** Slices 8A–8F are implemented on protected `main` at `1eda461be022ee30753b3d981e33290442f38a80`. The real Windows owner-machine run passed all 45 deterministic replay cases, registry file-handle replace/reopen validation, protected-repository unchanged verification and exact-SHA evidence binding. Canonical evidence is `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
 
-**Current state: Phase 9 software implementation is complete on protected `main`, but Phase 9 is not yet owner-machine accepted.** The reviewed final hardening head `81d498a22bb2293d69c6b6a848b08740fae30f75` passed exact-head CI and was squash-merged by PR #178 as `e73db07abad7ab0e73ee2f0030ff6e58e9f3ee76`. The live path now covers canonical owner-goal admission, trusted source-revision binding, owner-approved reusable source selection, durable research/architecture handoff, isolated development, secure GitHub App PR/CI promotion, supervisor deployment/observation, Phase-8 package admission, restart-safe explicit lifecycle activation, immediate routing-catalog refresh, disable/rollback evidence and canonical final evidence collection. The only remaining Phase-9 completion gate is one genuine owner-requested external capability exercised on the owner machine with observed real-world effect and exact evidence. Canonical status is `PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_ACCEPTANCE_2026-09-27.md`.
+**Phase 9 is DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28.** PR #180 completed the target-aware live-routing correction and squash-merged to protected `main` as `15974c4089aeea014dc68f4a6fb385072278b379`. The owner-machine run proved canonical target-aware admission, durable EngineeringChange/WorkItem persistence, restart/provider-pressure survival and bounded Gemini -> OpenAI fallback. The full external TV lifecycle did not complete because Gemini was rate-limited and OpenAI fallback was quota-exhausted. By explicit owner decision, that end-to-end external lifecycle is deferred to final whole-system acceptance and must not be represented as already proven. Canonical status is `PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_ACCEPTANCE_2026-09-27.md`.
 
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
@@ -130,8 +130,8 @@ Phase 5  Secure autonomous engineering substrate — DONE / OWNER-MACHINE ACCEPT
 Phase 6  Unknown-incident investigation + source repair — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 7  Governed promotion / production verification / rollback — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 8  Capability package + registry lifecycle — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
-Phase 9  Owner-requested capability acquisition — SOFTWARE COMPLETE / REAL EXTERNAL OWNER-MACHINE ACCEPTANCE PENDING
-Phase 10 Closed-loop engineering learning
+Phase 9  Owner-requested capability acquisition — DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28; FINAL E2E EXTERNAL VALIDATION DEFERRED
+Phase 10 Closed-loop engineering learning — NEXT / RESEARCH + ARCHITECTURE REQUIRED
 Phase 10A Autonomous Operations Control Plane — approved future integration point; not active yet
 Phase 11 Autonomous capability-gap / weakness detection
 Phase 12 Shadow improvement + baseline benchmarking
@@ -150,6 +150,8 @@ Step 8 — Notes, Tasks, Reminders and Scheduling — remains the next numbered 
 The active Self-Repair/Evolution/Autonomous-Engineering program is cross-cutting and does not renumber the product roadmap.
 
 ## Open deferred / parallel items
+
+Phase-9 final external lifecycle validation is explicitly deferred to final whole-system acceptance. It must exercise the complete owner-requested external capability path with usable provider resources, observed device effect, production observation and disable/rollback evidence.
 
 Current open/deferred items are tracked only in `PROJECT_STATE.md`. The important open issues are #19, #44, #45, #46, #63 and #69.
 
@@ -199,4 +201,4 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Complete Phase 9 with one genuine owner-requested external capability on the owner machine. Record exact activation, observed external effect, production observation and disable/rollback evidence through the canonical Phase-9 acceptance harness. Do not mark Phase 9 DONE or start Phase 10 as the active phase until this real-world exit gate passes, unless the owner explicitly changes sequencing.**
+**Begin Phase 10 — Closed-Loop Engineering Learning with repository inspection, research and architecture. Preserve the deferred Phase-9 full external lifecycle as a mandatory final whole-system validation item; do not claim the real device effect, downstream promotion/package lifecycle or disable/rollback path were proven by the bounded Phase-9 acceptance.**
