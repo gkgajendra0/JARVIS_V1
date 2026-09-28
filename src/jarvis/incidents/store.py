@@ -13,6 +13,7 @@ from jarvis.engineering_knowledge.models import (
     EngineeringAttestation,
     EngineeringEvidence,
     EngineeringKnowledgeFacet,
+    EngineeringKnowledgeIdentity,
     EngineeringKnowledgeRevision,
     KnowledgeEvidenceLink,
     KnowledgeFreshnessState,
