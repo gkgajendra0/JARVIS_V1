@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import sqlite3
 from dataclasses import dataclass
 from typing import Any, Self
 
@@ -417,7 +418,7 @@ class AutonomyBudgetLedger:
                             encoded,
                         ),
                     )
-                except Exception as exc:
+                except sqlite3.IntegrityError as exc:
                     raise AutonomyConflictError(
                         "budget-window creation conflict"
                     ) from exc
