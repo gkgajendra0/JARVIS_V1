@@ -244,7 +244,9 @@ class EngineeringOutcomeV1:
             raise ValueError("applicability must not be empty")
         if len(self.applicability) > 32:
             raise ValueError("applicability exceeds 32 items")
-        if not all(isinstance(item, OutcomeApplicability) for item in self.applicability):
+        if not all(
+            isinstance(item, OutcomeApplicability) for item in self.applicability
+        ):
             raise TypeError("applicability must contain OutcomeApplicability values")
 
         observed = float(self.observed_at_epoch)
