@@ -174,7 +174,9 @@ def test_admission_creates_one_durable_acquisition_workitem_when_build_is_needed
     assert admission_artifact.payload["source_revision"] == REVISION
 
 
-def test_phase9_completion_guard_requires_resolve_after_latest_source_evidence() -> None:
+def test_phase9_completion_guard_requires_resolve_after_latest_source_evidence() -> (
+    None
+):
     goal_step = (
         WorkStep(
             work_id="w",
