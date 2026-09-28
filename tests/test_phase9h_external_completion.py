@@ -8,7 +8,9 @@ from jarvis.work.models import WorkItem, WorkState, WorkStep, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
 
-def _completed_step(\n    work_id: str, kind: str, observation: dict[str, object]\n) -> WorkStep:
+def _completed_step(
+    work_id: str, kind: str, observation: dict[str, object]
+) -> WorkStep: str, kind: str, observation: dict[str, object]\n) -> WorkStep:
     step = WorkStep(work_id=work_id, kind=kind, summary=kind)
     return step.start().complete(observation)
 
