@@ -30,6 +30,10 @@ from jarvis.autonomy.models import (
 )
 from jarvis.autonomy.portfolio import PrioritizedCandidateV1
 from jarvis.autonomy.store import AutonomyStore
+from jarvis.capability_registry.reconciliation import (
+    CapabilityLifecycleReconciler,
+    ReconciliationTrigger,
+)
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.models import EngineeringChange
 from jarvis.engineering_knowledge.canonical import JSONValue
@@ -462,6 +466,62 @@ class ExistingControllerRegistry:
                 _positive_int(version, "controller_version"),
             )
         )
+
+
+class CapabilityReconciliationControllerV1:
+    """Typed adapter to the accepted Phase-8 deterministic reconciler."""
+
+    controller_key = "capability_registry.reconcile"
+    controller_version = 1
+    replay_safe = True
+    contract_digest = canonical_digest(
+        {
+            "controller_key": controller_key,
+            "controller_version": controller_version,
+            "implementation": "CapabilityLifecycleReconciler.reconcile",
+            "trigger": ReconciliationTrigger.LIFECYCLE.value,
+        }
+    )
+
+    def __init__(self, reconciler: CapabilityLifecycleReconciler) -> None:
+        if not isinstance(reconciler, CapabilityLifecycleReconciler):
+            raise TypeError("reconciler must be CapabilityLifecycleReconciler")
+        self.reconciler = reconciler
+
+    def invoke(
+        self,
+        candidate: ActionCandidateV1,
+        *,
+        source_identity: str,
+    ) -> ControllerDispatchReceiptV1:
+        del source_identity
+        if candidate.target_namespace != "capability":
+            raise ValueError(
+                "capability reconciler requires a capability target namespace"
+            )
+        snapshot = self.reconciler.reconcile(ReconciliationTrigger.LIFECYCLE)
+        state = snapshot.state(candidate.target_identity)
+        if state is None:
+            raise ValueError("capability reconciler did not produce target state")
+        return ControllerDispatchReceiptV1(
+            downstream_id=state.capability_id,
+            downstream_version=snapshot.digest,
+        )
+
+
+def capability_reconciliation_registration(
+    controller: CapabilityReconciliationControllerV1,
+) -> DispatchBridgeRegistrationV1:
+    if not isinstance(controller, CapabilityReconciliationControllerV1):
+        raise TypeError("controller must be CapabilityReconciliationControllerV1")
+    return DispatchBridgeRegistrationV1(
+        resolver_key="capability_effective_state",
+        resolver_version=1,
+        action_kind=ActionKind.EXISTING_CONTROLLER,
+        controller_key=controller.controller_key,
+        controller_version=controller.controller_version,
+        controller_contract_digest=controller.contract_digest,
+    )
 
 
 class WorkOrchestratorDispatchBridge:
