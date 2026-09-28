@@ -76,6 +76,19 @@ def build_default_self_model() -> SelfModelRegistry:
             ),
         ),
         C(
+            "autonomy.control_plane",
+            "Thin deterministic whole-JARVIS operations control plane coordinating "
+            "accepted objectives, canonical state, findings and governed responses.",
+            ("src/jarvis/autonomy",),
+            parent_component_id="jarvis",
+            tests=("tests/test_autonomy_store.py",),
+            logger_prefixes=("jarvis.autonomy",),
+            docs=(
+                "docs/PHASE10A_AUTONOMOUS_OPERATIONS_CONTROL_PLANE_ARCHITECTURE.md",
+                "docs/PHASE10A_AUTONOMOUS_OPERATIONS_CONTROL_PLANE_IMPLEMENTATION_PLAN.md",
+            ),
+        ),
+        C(
             "engineering.substrate",
             "Governed dependency, secret, sandbox, discovery, manifest, provenance "
             "and hardware-acceptance substrate for autonomous engineering.",
