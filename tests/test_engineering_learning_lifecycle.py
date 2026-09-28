@@ -307,7 +307,7 @@ def test_unrelated_revision_cannot_supersede_accepted_knowledge(
 ) -> None:
     store = SqliteIncidentStore(tmp_path / "engineering.sqlite3")
     try:
-        first, first_revision_id = _persist(store, _outcome())
+        _first, first_revision_id = _persist(store, _outcome())
         lifecycle = EngineeringLearningLifecycleService(store)
         lifecycle.promote(
             first_revision_id,
