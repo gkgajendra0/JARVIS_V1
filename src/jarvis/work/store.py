@@ -817,12 +817,11 @@ class SQLiteWorkStore:
         normalized = str(work_id).strip()
         if not normalized:
             return
-        with self._lock, self._connect() as connection:
-            with connection:
-                connection.execute(
-                    "DELETE FROM work_sensitive_inputs WHERE work_id=?",
-                    (normalized,),
-                )
+        with self._lock, self._connect() as connection, connection:
+            connection.execute(
+                "DELETE FROM work_sensitive_inputs WHERE work_id=?",
+                (normalized,),
+            )
 
     def list(
         self,
