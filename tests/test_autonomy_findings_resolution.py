@@ -99,12 +99,8 @@ def _evaluation(
         supporting_fact_digests=(DIGEST_B,),
         evaluated_at_epoch=now,
         consecutive_violations=consecutive,
-        first_violation_at_epoch=(
-            None if consecutive == 0 else NOW
-        ),
-        last_violation_at_epoch=(
-            None if consecutive == 0 else now
-        ),
+        first_violation_at_epoch=(None if consecutive == 0 else NOW),
+        last_violation_at_epoch=(None if consecutive == 0 else now),
     )
 
 
@@ -222,15 +218,19 @@ def test_unsupported_action_mapping_fails_closed_to_no_action(tmp_path: Path) ->
     store.create_objective(objective)
     store.create_desired_state(desired)
 
-    active = FindingLifecycle(store).observe(
-        desired,
-        _evaluation(
+    active = (
+        FindingLifecycle(store)
+        .observe(
             desired,
-            status=DesiredStateEvaluationStatus.VIOLATED,
-            now=NOW,
-            consecutive=1,
-        ),
-    ).finding
+            _evaluation(
+                desired,
+                status=DesiredStateEvaluationStatus.VIOLATED,
+                now=NOW,
+                consecutive=1,
+            ),
+        )
+        .finding
+    )
     assert active is not None
 
     result = ActionResolutionService(
@@ -281,15 +281,19 @@ def test_registered_response_classes_create_proposal_only_intents(
     kind: ActionKind,
 ) -> None:
     store, desired = _store(tmp_path)
-    active = FindingLifecycle(store).observe(
-        desired,
-        _evaluation(
+    active = (
+        FindingLifecycle(store)
+        .observe(
             desired,
-            status=DesiredStateEvaluationStatus.VIOLATED,
-            now=NOW,
-            consecutive=1,
-        ),
-    ).finding
+            _evaluation(
+                desired,
+                status=DesiredStateEvaluationStatus.VIOLATED,
+                now=NOW,
+                consecutive=1,
+            ),
+        )
+        .finding
+    )
     assert active is not None
 
     resolver = StaticActionResolverV1(
@@ -357,7 +361,9 @@ def test_resolved_finding_marks_existing_candidate_obsolete(tmp_path: Path) -> N
     assert latest.disposition is CandidateDisposition.OBSOLETE
 
 
-def test_reopened_finding_can_record_new_decision_after_obsolete(tmp_path: Path) -> None:
+def test_reopened_finding_can_record_new_decision_after_obsolete(
+    tmp_path: Path,
+) -> None:
     store, desired = _store(tmp_path)
     lifecycle = FindingLifecycle(store)
     active = lifecycle.observe(
@@ -420,10 +426,14 @@ def test_suppression_links_root_and_obsoletes_candidate(tmp_path: Path) -> None:
         ),
     ).finding
     assert active is not None
-    candidate = ActionResolutionService(
-        store,
-        build_default_action_resolver_registry(),
-    ).resolve(desired, active, mode=AutonomyMode.SHADOW).candidate
+    candidate = (
+        ActionResolutionService(
+            store,
+            build_default_action_resolver_registry(),
+        )
+        .resolve(desired, active, mode=AutonomyMode.SHADOW)
+        .candidate
+    )
 
     suppressed = lifecycle.suppress(
         active.finding_id,
