@@ -193,13 +193,16 @@ class CapabilityDependencyResolveExecutor:
                 "requested dependency is absent from the owner-approved architecture"
             )
 
-        requirement_id = "phase9:req:" + canonical_digest(
-            {
-                "architecture_digest": context.architecture.digest,
-                "package_name": package,
-                "version": version,
-            }
-        )[:24]
+        requirement_id = (
+            "phase9:req:"
+            + canonical_digest(
+                {
+                    "architecture_digest": context.architecture.digest,
+                    "package_name": package,
+                    "version": version,
+                }
+            )[:24]
+        )
         for artifact in _current_resolution_artifacts(self._resolver.store, context):
             if artifact.payload.get("requirement_id") == requirement_id:
                 return {
@@ -470,15 +473,9 @@ class CapabilityManifestBindExecutor:
             hardware_acceptance_contract_ids=(),
             provenance_ids=(),
             disable_rollback_contract_id=rollback_id,
-            dependency_resolution_digests=tuple(
-                item.digest for item in registrations
-            ),
-            sandbox_profile_digests=tuple(
-                item.digest for item in sandbox_refs
-            ),
-            discovery_scope_digests=tuple(
-                item.digest for item in discovery_refs
-            ),
+            dependency_resolution_digests=tuple(item.digest for item in registrations),
+            sandbox_profile_digests=tuple(item.digest for item in sandbox_refs),
+            discovery_scope_digests=tuple(item.digest for item in discovery_refs),
             provenance_digests=(),
         )
         registered = registry.register(manifest)
@@ -490,10 +487,8 @@ class CapabilityManifestBindExecutor:
             latest is not None
             and latest.payload.get("architecture_artifact_id")
             == context.architecture.artifact_id
-            and latest.payload.get("architecture_digest")
-            == context.architecture.digest
-            and latest.payload.get("manifest_digest")
-            == registered.manifest_digest
+            and latest.payload.get("architecture_digest") == context.architecture.digest
+            and latest.payload.get("manifest_digest") == registered.manifest_digest
         ):
             bound = latest
         else:
@@ -552,10 +547,13 @@ class CapabilitySubstrateVerifyExecutor:
                     None if existing is None else existing.artifact_id
                 ),
             }
-        if self._resolver.store.latest_artifact(
-            context.change_id,
-            MANIFEST_KIND,
-        ) is None:
+        if (
+            self._resolver.store.latest_artifact(
+                context.change_id,
+                MANIFEST_KIND,
+            )
+            is None
+        ):
             raise CapabilitySubstrateProtocolError(
                 "Phase-5 manifest must be bound before substrate verification"
             )
