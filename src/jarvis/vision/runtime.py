@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
-from jarvis.vision.camera import CameraSource, CapturedFrame
+from jarvis.vision.camera import CameraSource, CapturedFrame, OpenCVCameraConfig
 from jarvis.vision.detector import ObjectDetector
 from jarvis.vision.follow import FollowController, ZoomController
 from jarvis.vision.framing import (
@@ -66,6 +67,7 @@ class VisionRuntime:
         detector: ObjectDetector,
         tracker: Tracker,
         target_manager: TargetManager,
+        tracker_factory: Callable[[], Tracker] | None = None,
         follow_controller: FollowController,
         ptz: PtzController,
         config: VisionRuntimeConfig | None = None,
@@ -80,6 +82,7 @@ class VisionRuntime:
         self._camera = camera
         self._detector = detector
         self._tracker = tracker
+        self._tracker_factory = tracker_factory
         self._target_manager = target_manager
         self._follow_controller = follow_controller
         self._zoom_controller = zoom_controller
@@ -222,6 +225,27 @@ class VisionRuntime:
         self._target_manager.clear()
         self._latest_framing_target = None
         self._clear_trusted_head()
+
+    def switch_camera(self, config: OpenCVCameraConfig) -> None:
+        """Switch the active OpenCV source and reset camera-relative tracking state."""
+        switcher = getattr(self._camera, "switch", None)
+        if not callable(switcher):
+            raise RuntimeError("active camera source does not support runtime switching")
+
+        switcher(config)
+
+        self.disarm_follow()
+        self._target_manager.clear()
+        self._latest_frame = None
+        self._latest_tracks = []
+        self._latest_heads = []
+        self._latest_framing_target = None
+        self._clear_trusted_head()
+        if self._head_confirmation_gate is not None:
+            self._head_confirmation_gate.reset()
+
+        if self._tracker_factory is not None:
+            self._tracker = self._tracker_factory()
 
     def process_once(self, *, timeout_seconds: float = 1.0) -> VisionSnapshot | None:
         if not self._started:
