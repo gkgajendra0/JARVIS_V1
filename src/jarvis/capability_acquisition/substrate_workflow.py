@@ -188,21 +188,27 @@ class CapabilityDependencyResolveExecutor:
             for item in context.architecture.payload.get("dependency_refs", ())
             if str(item).strip()
         )
-        matching = tuple(reference for reference in approved if package in reference)
+        pypi_refs = tuple(
+            reference for reference in approved if reference.startswith("pypi:")
+        )
+        matching = (
+            tuple(
+                reference
+                for reference in pypi_refs
+                if reference.startswith(f"pypi:{package}==")
+            )
+            if pypi_refs
+            else tuple(reference for reference in approved if package in reference)
+        )
         if not matching:
             raise CapabilitySubstrateProtocolError(
                 "requested dependency is absent from the owner-approved architecture"
             )
-        exact_pypi = tuple(
-            reference
-            for reference in matching
-            if reference.startswith(f"pypi:{package}==")
-        )
         expected_lock: str | None = None
-        if exact_pypi:
+        if pypi_refs:
             exact_prefix = f"pypi:{package}=={version}#lock-sha256="
             exact = tuple(
-                reference for reference in exact_pypi if reference.startswith(exact_prefix)
+                reference for reference in matching if reference.startswith(exact_prefix)
             )
             if len(exact) != 1:
                 raise CapabilitySubstrateProtocolError(
