@@ -12,8 +12,10 @@ from jarvis.autonomy.models import (
     AutonomyMode,
     CandidateDisposition,
     DesiredStateV1,
+    DispatchIntentV1,
     FindingStatus,
     candidate_id_for,
+    deterministic_id,
 )
 from jarvis.autonomy.store import AutonomyStore
 from jarvis.engineering_knowledge.canonical import JSONValue
@@ -81,6 +83,7 @@ class ActionResolutionResultV1:
     reason_codes: tuple[str, ...]
     resolver_key: str | None = None
     resolver_version: int | None = None
+    dispatch_intents: tuple[DispatchIntentV1, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.disposition, CandidateDisposition):
@@ -97,6 +100,11 @@ class ActionResolutionResultV1:
         if not normalized:
             raise ValueError("reason_codes must not be empty")
         object.__setattr__(self, "reason_codes", normalized)
+        if any(
+            not isinstance(item, DispatchIntentV1)
+            for item in self.dispatch_intents
+        ):
+            raise TypeError("dispatch_intents must contain DispatchIntentV1 values")
 
 
 class ActionResolver(Protocol):
@@ -298,6 +306,42 @@ def build_default_action_resolver_registry() -> ActionResolverRegistry:
     )
 
 
+def _dispatch_intent_for(
+    candidate: ActionCandidateV1,
+    *,
+    disposition: CandidateDisposition,
+    dispatch_role: str,
+    reason_codes: tuple[str, ...],
+    created_at_epoch: float,
+) -> DispatchIntentV1:
+    role = str(dispatch_role).strip().casefold()
+    if not role:
+        raise ValueError("dispatch_role must not be empty")
+    source_identity = (
+        "autonomy:"
+        f"{candidate.resolver_key}:v{candidate.resolver_version}:"
+        f"{candidate.candidate_id}"
+    )
+    intent_id = deterministic_id(
+        "dispatch_intent",
+        {
+            "candidate_id": candidate.candidate_id,
+            "dispatch_role": role,
+            "disposition": disposition.value,
+        },
+    )
+    return DispatchIntentV1(
+        dispatch_intent_id=intent_id,
+        candidate_id=candidate.candidate_id,
+        dispatch_role=role,
+        action_kind=candidate.action_kind,
+        disposition=disposition,
+        source_identity=source_identity,
+        reason_codes=reason_codes,
+        created_at_epoch=created_at_epoch,
+    )
+
+
 class ActionResolutionService:
     """Persist immutable shadow candidates without dispatching downstream actions."""
 
@@ -312,6 +356,28 @@ class ActionResolutionService:
             raise TypeError("registry must be an ActionResolverRegistry")
         self.store = store
         self.registry = registry
+
+    def _record_existing_candidate_dispositions(
+        self,
+        finding: AutonomyFindingV1,
+        *,
+        disposition: CandidateDisposition,
+        reason_codes: tuple[str, ...],
+        dispatch_role: str,
+    ) -> tuple[DispatchIntentV1, ...]:
+        recorded: list[DispatchIntentV1] = []
+        for candidate in self.store.list_action_candidates_for_finding(
+            finding.finding_id
+        ):
+            intent = _dispatch_intent_for(
+                candidate,
+                disposition=disposition,
+                dispatch_role=dispatch_role,
+                reason_codes=reason_codes,
+                created_at_epoch=finding.last_seen_epoch,
+            )
+            recorded.append(self.store.record_dispatch_intent(intent))
+        return tuple(recorded)
 
     def resolve_and_record(
         self,
@@ -335,16 +401,34 @@ class ActionResolutionService:
                 reason_codes=("finding_generation_obsolete",),
             )
         if finding.status in {FindingStatus.RESOLVED, FindingStatus.SUPERSEDED}:
+            intents = self._record_existing_candidate_dispositions(
+                finding,
+                disposition=CandidateDisposition.OBSOLETE,
+                reason_codes=("finding_not_actionable",),
+                dispatch_role="terminal",
+            )
             return ActionResolutionResultV1(
                 candidate=None,
                 disposition=CandidateDisposition.OBSOLETE,
                 reason_codes=("finding_not_actionable",),
+                dispatch_intents=intents,
             )
         if finding.status in {FindingStatus.STABILIZING, FindingStatus.SUPPRESSED}:
+            intents = (
+                self._record_existing_candidate_dispositions(
+                    finding,
+                    disposition=CandidateDisposition.INHIBITED,
+                    reason_codes=("finding_not_stably_actionable",),
+                    dispatch_role="inhibition",
+                )
+                if finding.status is FindingStatus.SUPPRESSED
+                else ()
+            )
             return ActionResolutionResultV1(
                 candidate=None,
                 disposition=CandidateDisposition.INHIBITED,
                 reason_codes=("finding_not_stably_actionable",),
+                dispatch_intents=intents,
             )
         if finding.status is not FindingStatus.ACTIVE:
             return ActionResolutionResultV1(
@@ -435,10 +519,20 @@ class ActionResolutionService:
             persisted = existing
             reason = "candidate_replay_reused"
 
+        intent = self.store.record_dispatch_intent(
+            _dispatch_intent_for(
+                persisted,
+                disposition=CandidateDisposition.SHADOW_ONLY,
+                dispatch_role="intent",
+                reason_codes=("phase10a4_shadow_only",),
+                created_at_epoch=persisted.created_at_epoch,
+            )
+        )
         return ActionResolutionResultV1(
             candidate=persisted,
             disposition=CandidateDisposition.SHADOW_ONLY,
             reason_codes=(reason,),
             resolver_key=resolver.resolver_key,
             resolver_version=resolver.resolver_version,
+            dispatch_intents=(intent,),
         )
