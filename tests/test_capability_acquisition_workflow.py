@@ -174,7 +174,7 @@ def test_admission_creates_one_durable_acquisition_workitem_when_build_is_needed
     assert admission_artifact.payload["source_revision"] == REVISION
 
 
-def test_phase9_completion_guard_requires_finalize_after_latest_evidence() -> None:
+def test_phase9_completion_guard_requires_resolve_after_latest_source_evidence() -> None:
     goal_step = (
         WorkStep(
             work_id="w",
@@ -221,7 +221,7 @@ def test_phase9_completion_guard_requires_finalize_after_latest_evidence() -> No
         (goal_step, resolve_step, finalize_step, later_research)
     )
     assert allowed is False
-    assert reason is not None and "re-finalize" in reason
+    assert reason is not None and "re-resolve" in reason
 
 
 def test_completed_acquisition_derives_digest_bound_architecture(tmp_path) -> None:
