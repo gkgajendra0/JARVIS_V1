@@ -208,7 +208,9 @@ class CapabilityDependencyResolveExecutor:
         if pypi_refs:
             exact_prefix = f"pypi:{package}=={version}#lock-sha256="
             exact = tuple(
-                reference for reference in matching if reference.startswith(exact_prefix)
+                reference
+                for reference in matching
+                if reference.startswith(exact_prefix)
             )
             if len(exact) != 1:
                 raise CapabilitySubstrateProtocolError(
