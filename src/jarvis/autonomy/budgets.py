@@ -128,12 +128,7 @@ class BudgetAssessmentV1:
         if not isinstance(self.disposition, CandidateDisposition):
             raise TypeError("disposition must be a CandidateDisposition")
         normalized = tuple(
-            sorted(
-                {
-                    _token(value, "reason_code")
-                    for value in self.reason_codes
-                }
-            )
+            sorted({_token(value, "reason_code") for value in self.reason_codes})
         )
         if not normalized:
             raise ValueError("reason_codes must not be empty")
