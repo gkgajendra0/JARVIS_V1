@@ -13,6 +13,9 @@ from jarvis.capability_acquisition.activation import (
     CapabilityAcquisitionLifecycleCoordinator,
 )
 from jarvis.capability_acquisition.admission import CapabilityAcquisitionCoordinator
+from jarvis.capability_acquisition.discovery_workflow import (
+    build_acquisition_discovery_executors,
+)
 from jarvis.capability_acquisition.architecture import (
     CapabilityAcquisitionDevelopmentRevisionResolver,
     CapabilityAcquisitionSourceCompletionHandler,
@@ -47,6 +50,7 @@ from jarvis.capability_registry.admission import CapabilityPackageAdmissionServi
 from jarvis.capability_registry.lifecycle import CapabilityLifecycleService
 from jarvis.capability_registry.reconciliation import CapabilityLifecycleReconciler
 from jarvis.engineering_change.coordinator import ChangeCoordinator
+from jarvis.engineering_substrate.discovery import default_discovery_broker
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.incident_repair.architecture import (
     IncidentRepairDevelopmentRevisionResolver,
@@ -345,6 +349,7 @@ def build_work_runtime(
         )
     )
     acquisition_work_context = AcquisitionWorkContextResolver(change_store)
+    acquisition_discovery = default_discovery_broker()
 
     adapter_registry = build_default_model_adapter_registry()
     work_targets = build_default_work_targets(
@@ -392,6 +397,10 @@ def build_work_runtime(
     )
     executors = (
         ResearchWorkExecutor(research_service),
+        *build_acquisition_discovery_executors(
+            acquisition_work_context,
+            broker=acquisition_discovery,
+        ),
         *build_acquisition_protocol_executors(
             acquisition_work_context,
             context_provider=acquisition_context,
@@ -419,6 +428,7 @@ def build_work_runtime(
         "cpu": max(1, min(2, global_concurrency)),
         "git": 1,
         "network": max(1, global_concurrency),
+        "local_discovery": 1,
         "gpu": 1,
         "browser": 1,
         "desktop": 1,
