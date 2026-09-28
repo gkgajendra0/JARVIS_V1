@@ -288,6 +288,8 @@ def test_autonomy_store_uses_workstore_only_and_round_trips_contracts(
         "autonomy_findings",
         "autonomy_finding_events",
         "autonomy_action_candidates",
+        "autonomy_candidate_decisions",
+        "autonomy_dispatch_intents",
         "autonomy_dispatch_links",
         "autonomy_owner_attention",
         "autonomy_attention_events",
@@ -373,6 +375,45 @@ def test_autonomy_store_idempotency_conflicts_and_cas_fail_closed(
         store.append_finding_event(
             replace(event, event_id="other_event", detail_json={"count": 2})
         )
+
+
+def test_autonomy_store_migrates_accepted_v1_schema_in_place(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "work.sqlite3"
+    work = SQLiteWorkStore(path)
+    AutonomyStore(work)
+
+    with sqlite3.connect(path) as db:
+        db.execute("DROP TABLE autonomy_dispatch_intents")
+        db.execute("DROP TABLE autonomy_candidate_decisions")
+        db.execute(
+            "UPDATE autonomy_schema SET version=?, checksum=?",
+            (
+                1,
+                "f4a0bd325651c34576debdbe58f2aee82486540b7b517553cf07acf514ca4c5e",
+            ),
+        )
+        db.commit()
+
+    migrated = AutonomyStore(SQLiteWorkStore(path))
+    assert migrated.path == path
+
+    with sqlite3.connect(path) as db:
+        assert db.execute(
+            "SELECT version, checksum FROM autonomy_schema"
+        ).fetchone() == (AUTONOMY_SCHEMA_VERSION, AUTONOMY_SCHEMA_CHECKSUM)
+        names = {
+            row[0]
+            for row in db.execute(
+                """
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name LIKE 'autonomy_%'
+                """
+            )
+        }
+    assert "autonomy_candidate_decisions" in names
+    assert "autonomy_dispatch_intents" in names
 
 
 def test_autonomy_store_schema_ledger_tamper_fails_closed(
