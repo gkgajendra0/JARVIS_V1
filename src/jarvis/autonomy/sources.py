@@ -116,9 +116,7 @@ class SelfModelHealthSource:
         self.max_components = int(max_components)
 
     def _fresh_until(self, component_id: str, *, now_epoch: float) -> float:
-        observations = list(
-            self.health.observations(component_id, now_epoch=now_epoch)
-        )
+        observations = list(self.health.observations(component_id, now_epoch=now_epoch))
         for dependency in self.model.dependencies_for(component_id):
             observations.extend(
                 self.health.observations(
@@ -128,9 +126,7 @@ class SelfModelHealthSource:
             )
         if not observations:
             return now_epoch
-        return min(
-            item.observed_at_epoch + item.ttl_seconds for item in observations
-        )
+        return min(item.observed_at_epoch + item.ttl_seconds for item in observations)
 
     def read(
         self,
@@ -191,16 +187,12 @@ class SelfModelHealthSource:
                     SystemStateFactV1(
                         fact_namespace="self_model",
                         source_identity=f"self_model:{descriptor.component_id}",
-                        source_version_or_digest=canonical_digest(
-                            descriptor_payload
-                        ),
+                        source_version_or_digest=canonical_digest(descriptor_payload),
                         target_namespace="component",
                         target_identity=descriptor.component_id,
                         value_json=descriptor_payload,
                         observed_at_epoch=request.now_epoch,
-                        evidence_references=(
-                            f"component:{descriptor.component_id}",
-                        ),
+                        evidence_references=(f"component:{descriptor.component_id}",),
                         source_adapter_key=self.source_key,
                         source_adapter_version=self.source_version,
                     )
@@ -227,9 +219,7 @@ class SelfModelHealthSource:
                     SystemStateFactV1(
                         fact_namespace="health_registry",
                         source_identity=f"health:{descriptor.component_id}",
-                        source_version_or_digest=canonical_digest(
-                            health_payload
-                        ),
+                        source_version_or_digest=canonical_digest(health_payload),
                         target_namespace="component",
                         target_identity=descriptor.component_id,
                         value_json=health_payload,
@@ -288,9 +278,7 @@ class WorkPortfolioSource:
         incomplete: set[str] = set()
 
         if target_ids is None:
-            items = self.store.list(
-                limit=min(self.default_limit, request.max_facts)
-            )
+            items = self.store.list(limit=min(self.default_limit, request.max_facts))
         else:
             found = []
             for work_id in target_ids:
@@ -653,9 +641,7 @@ class CapabilityStateSource:
                         state.updated_at,
                         request.now_epoch,
                     ),
-                    evidence_references=(
-                        f"capability-registry:{state.capability_id}",
-                    ),
+                    evidence_references=(f"capability-registry:{state.capability_id}",),
                     source_adapter_key=self.source_key,
                     source_adapter_version=self.source_version,
                 )
@@ -732,9 +718,7 @@ class ModelProviderStateSource:
                 "health_state": (
                     "unknown"
                     if health is None
-                    else health.effective_state(
-                        now_epoch=request.now_epoch
-                    ).value
+                    else health.effective_state(now_epoch=request.now_epoch).value
                 ),
                 "consecutive_failures": (
                     0 if health is None else health.consecutive_failures
@@ -759,13 +743,9 @@ class ModelProviderStateSource:
                     target_identity=target.target_id,
                     value_json=payload,
                     observed_at_epoch=(
-                        request.now_epoch
-                        if health is None
-                        else health.updated_at_epoch
+                        request.now_epoch if health is None else health.updated_at_epoch
                     ),
-                    evidence_references=(
-                        f"model-target:{target.target_id}",
-                    ),
+                    evidence_references=(f"model-target:{target.target_id}",),
                     source_adapter_key=self.source_key,
                     source_adapter_version=self.source_version,
                 )
