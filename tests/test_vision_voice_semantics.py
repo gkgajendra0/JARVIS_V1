@@ -73,7 +73,9 @@ def test_voice_report_hides_detector_candidate_count() -> None:
 def test_realtime_voice_surface_exposes_camera_switch_not_manual_follow() -> None:
     tools = VisionAgentTools(_FakeService())  # type: ignore[arg-type]
 
-    assert len(tools.tools) == 2
-    assert tools.inspect_vision in tools.tools
-    assert tools.switch_vision_camera in tools.tools
-    assert tools.control_vision_follow not in tools.tools
+    exposed = tools.tools
+    assert len(exposed) == 2
+    assert {tool.__name__ for tool in exposed} == {
+        "inspect_vision",
+        "switch_vision_camera",
+    }
