@@ -214,8 +214,7 @@ def test_aggregator_preserves_missing_stale_and_error_semantics() -> None:
     )
     assert snapshot.incomplete_namespaces == ("beta", "delta", "gamma")
     reasons = {
-        (item.source_namespace, item.reason_code)
-        for item in snapshot.source_errors
+        (item.source_namespace, item.reason_code) for item in snapshot.source_errors
     }
     assert ("beta", "stale_fact") in reasons
     assert ("gamma", "source_not_registered") in reasons
@@ -264,7 +263,9 @@ def test_self_model_health_source_is_read_only_and_marks_unknown_health() -> Non
     assert health_fact.value_json["state"] == "unknown"
 
 
-def test_self_model_health_source_reads_fresh_canonical_health_without_mutation() -> None:
+def test_self_model_health_source_reads_fresh_canonical_health_without_mutation() -> (
+    None
+):
     model = SelfModelRegistry(
         components=(
             ComponentDescriptor(
