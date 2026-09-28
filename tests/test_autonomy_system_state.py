@@ -313,6 +313,73 @@ def test_self_model_health_source_reads_fresh_canonical_health_without_mutation(
     assert health_fact.fresh_until_epoch == NOW + 60.0
 
 
+def test_bounded_reads_report_truncation_instead_of_claiming_complete(
+    tmp_path: Path,
+) -> None:
+    work_store = SQLiteWorkStore(tmp_path / "bounded-work.sqlite3")
+    for index in range(2):
+        work_store.create(
+            WorkItem(
+                request=f"bounded work {index}",
+                work_type=WorkType.RESEARCH,
+                source_session_id="phase10a-bounded",
+                source_turn_id=f"work-{index}",
+            )
+        )
+
+    result = WorkPortfolioSource(work_store, default_limit=1).read(
+        SystemStateReadRequestV1(
+            requested_namespaces=("work",),
+            targets=(),
+            now_epoch=NOW,
+        )
+    )
+
+    assert len(result.facts) == 1
+    assert result.status is SystemStateSourceStatus.INCOMPLETE
+    assert result.incomplete_namespaces == ("work",)
+    assert {item.reason_code for item in result.errors} == {"source_read_truncated"}
+
+
+def test_malformed_canonical_timestamp_is_explicitly_incomplete(
+    tmp_path: Path,
+) -> None:
+    work_store = SQLiteWorkStore(tmp_path / "malformed-change.sqlite3")
+    changes = ChangeStore(work_store)
+    change = changes.create(
+        request="timestamp integrity test",
+        process_key=ChangeStore.DEFAULT_PROCESS.key,
+        process_version=ChangeStore.DEFAULT_PROCESS.version,
+        source_session_id="phase10a-malformed",
+        source_turn_id="change-1",
+    )
+    with work_store.extension_transaction() as db:
+        db.execute(
+            "UPDATE engineering_changes SET updated_at=? WHERE change_id=?",
+            ("not-a-timestamp", change.change_id),
+        )
+
+    result = EngineeringChangeSource(changes).read(
+        SystemStateReadRequestV1(
+            requested_namespaces=("engineering_change",),
+            targets=(
+                SystemStateTargetV1(
+                    target_namespace="engineering_change",
+                    target_identity=change.change_id,
+                ),
+            ),
+            now_epoch=NOW,
+        )
+    )
+
+    assert result.facts == ()
+    assert result.status is SystemStateSourceStatus.INCOMPLETE
+    assert result.incomplete_namespaces == ("engineering_change",)
+    assert {item.reason_code for item in result.errors} == {
+        "source_timestamp_invalid"
+    }
+
+
 def test_work_change_and_incident_sources_do_not_copy_sensitive_requests(
     tmp_path: Path,
 ) -> None:
