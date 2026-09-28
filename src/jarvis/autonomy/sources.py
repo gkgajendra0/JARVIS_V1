@@ -158,13 +158,28 @@ class SelfModelHealthSource:
                 if (descriptor := self.model.component(target_id)) is not None
             )
         )
-        descriptors = descriptors[: self.max_components]
         facts: list[SystemStateFactV1] = []
         errors: list[SystemStateSourceErrorV1] = []
         incomplete: set[str] = set()
+        all_descriptors = descriptors
+        if len(all_descriptors) > self.max_components:
+            for namespace in request.requested_namespaces:
+                incomplete.add(namespace)
+                errors.append(
+                    _source_error(
+                        namespace=namespace,
+                        source_key=self.source_key,
+                        source_version=self.source_version,
+                        reason_code="source_read_truncated",
+                        summary=(
+                            "Self Model read exceeded the bounded component limit."
+                        ),
+                    )
+                )
+            descriptors = all_descriptors[: self.max_components]
 
         if target_ids is not None:
-            known = {item.component_id for item in descriptors}
+            known = {item.component_id for item in all_descriptors}
             for target_id in target_ids:
                 normalized = str(target_id).strip().casefold()
                 if normalized in known:
