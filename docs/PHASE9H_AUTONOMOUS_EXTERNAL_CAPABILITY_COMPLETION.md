@@ -82,6 +82,38 @@ manifest/package and lifecycle controls succeed.
 
 ## 4. 9H.2 — Governed dependency acquisition and runtime materialization
 
+### Verified reusable-SDK bridge
+
+Web research remains untrusted metadata. A model-authored SDK candidate is never made
+selectable merely because research found a package name or project page.
+
+For Python SDK candidates, Phase-9 RESEARCH now provides
+`acq_verify_pypi_sdk`. It accepts only a previously recorded unverified
+`sdk_library` candidate with an exact version, then:
+
+1. resolves that exact distribution through the registered
+   `pypi.public.v1` source;
+2. permits wheel-only artifacts and no source build;
+3. seals the canonical `pylock.toml` plus wheel SHA-256 identities in
+   ArtifactStore;
+4. queries PyPI's official Integrity API and verifies available PEP-740
+   attestations through the existing Phase-5 provenance service;
+5. assigns `VERIFIED_SIGNED_EXTERNAL` only when the resolved artifacts have
+   verified attestations, otherwise `VERIFIED_OFFICIAL_REMOTE` when the exact
+   official PyPI artifact/hash path is verified but attestations are unavailable;
+6. emits a trusted SDK candidate without importing or executing the package;
+7. carries the research-proposed secret/network/device/discovery/external-acceptance
+   requirements forward for owner architecture review;
+8. binds the candidate dependency reference to the exact verified lock digest.
+
+The deterministic resolver is rerun after this evidence. A verified `ADAPT_SDK`
+candidate therefore outranks the last-resort `BUILD_CUSTOM` route when it covers
+the owner goal.
+
+Fresh research, local discovery, candidate recording or SDK verification now
+invalidates the previous source resolution. The stage must
+`re-resolve -> re-finalize` before it can complete.
+
 ### DEVELOPMENT bridge
 
 Phase-9 DEVELOPMENT can now use typed JARVIS actions to:
@@ -205,15 +237,21 @@ The deterministic/CI baseline must prove:
 6. new local-discovery evidence invalidates stale Phase-9 finalization;
 7. a sensitive pairing value is never stored in the normal WorkStep response;
 8. a sensitive pairing value is one-time consumed;
-9. external acceptance cannot complete after a successful invocation without durable
-   real-world evidence;
-10. explicit owner decline is represented truthfully rather than converted to a
+9. a research-discovered SDK remains blocked until trusted source verification;
+10. a verified exact-version PyPI SDK can outrank the custom-build fallback;
+11. a verified SDK's exact lock digest is carried into owner-reviewed architecture
+    and enforced again during DEVELOPMENT;
+12. fresh research/source-verification evidence requires re-resolution before
+    re-finalization;
+13. external acceptance cannot complete after a successful invocation without
+    durable real-world evidence;
+14. explicit owner decline is represented truthfully rather than converted to a
     false failure/success;
-11. runtime dependency overlays fail closed after tampering;
-12. runtime dependency overlays reject executable `.pth` startup logic;
-13. promotion prepares required runtime dependencies before switching the active
+15. runtime dependency overlays fail closed after tampering;
+16. runtime dependency overlays reject executable `.pth` startup logic;
+17. promotion prepares required runtime dependencies before switching the active
     runtime;
-14. protected main and the shared JARVIS environment remain unchanged.
+18. protected main and the shared JARVIS environment remain unchanged.
 
 ## 7. Final paid real-world test
 
