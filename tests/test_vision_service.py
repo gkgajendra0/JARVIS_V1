@@ -33,6 +33,14 @@ def _snapshot(frame_id: int, observed_at: float) -> VisionSnapshot:
     )
 
 
+class _ResettableObserver:
+    def __init__(self) -> None:
+        self.camera_switch_resets = 0
+
+    def reset_for_camera_switch(self) -> None:
+        self.camera_switch_resets += 1
+
+
 class _FakeRuntime:
     def __init__(self, tracks: list[Track], eligible_ids: set[int]) -> None:
         self.latest_tracks = tuple(tracks)
@@ -161,6 +169,25 @@ def test_frame_pair_tap_accepts_only_fresh_perception_context() -> None:
     assert service._fresh_snapshot_for_frame(fresh_frame) is service._latest_snapshot
     assert service._fresh_snapshot_for_frame(stale_frame) is None
     assert service._fresh_snapshot_for_frame(earlier_frame) is None
+
+
+def test_service_camera_switch_invalidates_evidence_observer() -> None:
+    runtime = _FakeRuntime([_track(7)], {7})
+    observer = _ResettableObserver()
+    service = VisionService(
+        runtime,  # type: ignore[arg-type]
+        evidence_observer=observer,  # type: ignore[arg-type]
+        camera_profiles={
+            "lenovo": OpenCVCameraConfig(device_index=0),
+            "pocket3": OpenCVCameraConfig(device_index=3),
+        },
+        active_camera_profile="lenovo",
+    )
+
+    result = service.switch_camera("pocket3")
+
+    assert result["ok"] is True
+    assert observer.camera_switch_resets == 1
 
 
 def test_service_switches_only_to_configured_camera_profile() -> None:
