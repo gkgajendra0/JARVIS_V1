@@ -113,9 +113,7 @@ ENGINEERING_COMPATIBILITY_V1_SCHEMA: dict[str, JSONValue] = {
     },
 }
 
-ENGINEERING_OUTCOME_V1_SCHEMA_DIGEST = canonical_sha256(
-    ENGINEERING_OUTCOME_V1_SCHEMA
-)
+ENGINEERING_OUTCOME_V1_SCHEMA_DIGEST = canonical_sha256(ENGINEERING_OUTCOME_V1_SCHEMA)
 ENGINEERING_REGRESSION_V1_SCHEMA_DIGEST = canonical_sha256(
     ENGINEERING_REGRESSION_V1_SCHEMA
 )
@@ -202,9 +200,7 @@ def _nullable_release_sha(value: JSONValue, field: str) -> str | None:
     if len(normalized) not in {40, 64} or any(
         char not in "0123456789abcdef" for char in normalized
     ):
-        raise FacetValidationError(
-            f"{field} must be a hexadecimal Git/release SHA"
-        )
+        raise FacetValidationError(f"{field} must be a hexadecimal Git/release SHA")
     return normalized
 
 
@@ -321,9 +317,7 @@ def _revalidation(
         casefold=True,
     )
     if strategy != "source_outcome":
-        raise FacetValidationError(
-            "revalidation.strategy must be 'source_outcome'"
-        )
+        raise FacetValidationError("revalidation.strategy must be 'source_outcome'")
     if (
         _string(
             item["source_kind"],
@@ -333,9 +327,7 @@ def _revalidation(
         )
         != source_kind
     ):
-        raise FacetValidationError(
-            "revalidation.source_kind must match source_kind"
-        )
+        raise FacetValidationError("revalidation.source_kind must match source_kind")
     if (
         _string(
             item["source_identity"],
@@ -486,9 +478,7 @@ class EngineeringOutcomeV1Handler:
             max_length=100,
             casefold=True,
         )
-        if attribution not in {
-            item.value for item in EngineeringOutcomeAttribution
-        }:
+        if attribution not in {item.value for item in EngineeringOutcomeAttribution}:
             raise FacetValidationError("attribution is unsupported")
         _positive_number(payload["observed_at_epoch"], "observed_at_epoch")
         _string(payload["producer"], "producer", max_length=240)
@@ -613,9 +603,7 @@ class EngineeringRegressionV1Handler:
             casefold=True,
         )
         if attribution != EngineeringOutcomeAttribution.CANDIDATE.value:
-            raise FacetValidationError(
-                "regression attribution must be candidate"
-            )
+            raise FacetValidationError("regression attribution must be candidate")
         return payload
 
     def duplicate_key(self, payload: dict[str, JSONValue]) -> str:
