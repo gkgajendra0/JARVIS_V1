@@ -173,6 +173,7 @@ def test_reconciler_recovers_accepted_successor_before_prior_supersession(
             result=EngineeringOutcomeResult.ROLLED_BACK,
             attribution=EngineeringOutcomeAttribution.CANDIDATE,
             reason_codes=("candidate_runtime_regression",),
+            observed_at_epoch=101.0,
         )
         projector = EngineeringLearningProjector()
         projection = projector.project(
@@ -232,6 +233,7 @@ def test_new_verified_contradiction_supersedes_prior_and_retrieval_excludes_old(
             result=EngineeringOutcomeResult.ROLLED_BACK,
             attribution=EngineeringOutcomeAttribution.CANDIDATE,
             reason_codes=("candidate_runtime_regression",),
+            observed_at_epoch=101.0,
         )
         second = reconciler.reconcile(
             (regression,),
