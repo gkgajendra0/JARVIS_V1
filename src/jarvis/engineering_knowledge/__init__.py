@@ -33,7 +33,6 @@ from jarvis.engineering_knowledge.canonical import (
     canonicalize_json_object_text,
     parse_json_object,
 )
-from jarvis.engineering_knowledge.defaults import build_default_facet_registry
 from jarvis.engineering_knowledge.evaluation import (
     EngineeringKnowledgeEvaluationCase,
     EngineeringKnowledgeEvaluationCorpus,
@@ -136,6 +135,15 @@ from jarvis.engineering_knowledge.security import (
     EvidenceAdmissionRequest,
     EvidenceTrustClass,
 )
+
+def build_default_facet_registry():
+    """Build the reviewed default facet registry without eager cross-package imports."""
+    from jarvis.engineering_knowledge.defaults import (
+        build_default_facet_registry as _build_default_facet_registry,
+    )
+
+    return _build_default_facet_registry()
+
 
 __all__ = [
     "BASELINE_RETRIEVAL_VARIANT",
