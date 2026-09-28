@@ -151,6 +151,45 @@ def test_reconcile_learns_accepts_and_indexes_verified_outcome(
         store.close()
 
 
+def test_reconciler_orders_stage_before_accept_by_timestamp(
+    tmp_path: Path,
+) -> None:
+    store = SqliteIncidentStore(tmp_path / "engineering.sqlite3")
+    reconciler = EngineeringLearningReconciler(store)
+    try:
+        report = reconciler.reconcile(
+            (_outcome(),),
+            limit=10,
+            now_epoch=110.0,
+        )
+        revision_id = report.items[0].revision_id
+        assert revision_id is not None
+        assert (
+            store.get_engineering_knowledge_lifecycle_state(revision_id)
+            is KnowledgeLifecycleState.ACCEPTED
+        )
+
+        with store._lock:
+            rows = store._connection.execute(
+                """
+                SELECT from_state, to_state, occurred_at_epoch
+                FROM engineering_knowledge_lifecycle_event
+                WHERE revision_id = ? AND from_state IS NOT NULL
+                ORDER BY occurred_at_epoch, event_id
+                """,
+                (revision_id,),
+            ).fetchall()
+
+        assert tuple((str(row[0]), str(row[1])) for row in rows) == (
+            ("candidate", "staged"),
+            ("staged", "accepted"),
+        )
+        assert float(rows[0][2]) < float(rows[1][2])
+    finally:
+        reconciler.close()
+        store.close()
+
+
 def test_reconcile_replay_and_restart_create_no_duplicate_revision(
     tmp_path: Path,
 ) -> None:

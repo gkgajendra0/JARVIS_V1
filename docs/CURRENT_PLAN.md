@@ -45,7 +45,7 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 The active cross-cutting engineering boundary is now:
 
-**Phase 10 — Closed-Loop Engineering Learning — RESEARCH + ARCHITECTURE NEXT**
+**Phase 10 — Closed-Loop Engineering Learning — IMPLEMENTATION COMPLETE / OWNER-MACHINE ACCEPTANCE PENDING**
 
 Phase 5 Secure Autonomous Engineering Substrate is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Its final evidence is recorded in `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`. PR #133 merged to protected main at `78f25fb192b926ee30a028cfc02c829e1197cc9e`.
 
@@ -89,6 +89,8 @@ The accepted Phase-7 path adds exact candidate/PR/CI binding, digest-bound owner
 
 **Phase 9 is DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28.** PR #180 completed the target-aware live-routing correction and squash-merged to protected `main` as `15974c4089aeea014dc68f4a6fb385072278b379`. The owner-machine run proved canonical target-aware admission, durable EngineeringChange/WorkItem persistence, restart/provider-pressure survival and bounded Gemini -> OpenAI fallback. The full external TV lifecycle did not complete because Gemini was rate-limited and OpenAI fallback was quota-exhausted. By explicit owner decision, that end-to-end external lifecycle is deferred to final whole-system acceptance and must not be represented as already proven. Canonical status is `PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_ACCEPTANCE_2026-09-27.md`.
 
+Phase-10 implementation now includes deterministic EngineeringOutcome normalization, learning eligibility, immutable EngineeringKnowledge projection, revision-bound attestations, verified lifecycle/supersession, bounded restart-safe reconciliation, accepted-learning integrity verification in the existing retrieval path, and a locked 15-case final replay/owner-acceptance harness. Automated CI is green on the implementation head; final owner-machine evidence is still required before Phase 10 can be marked DONE.
+
 Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. Its final evidence is recorded in `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The live run proved canonical idempotency, owner-input resume, Exa research, PostgreSQL DBOS identity and full Windows cold-boot recovery. Persistent Gemini HTTP 429 provider pressure prevented the same run from naturally reaching downstream architecture/Windows-Hello/development gates; the owner accepted that external limitation without weakening any gate.
 
 Phase 1H is **DONE / OWNER-MACHINE ACCEPTED 2026-09-24**. Its final contract and evidence are recorded in `SELF_REPAIR_PHASE1H_HARDENING.md`.
@@ -131,7 +133,7 @@ Phase 6  Unknown-incident investigation + source repair — DONE / OWNER-MACHINE
 Phase 7  Governed promotion / production verification / rollback — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 8  Capability package + registry lifecycle — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 9  Owner-requested capability acquisition — DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28; FINAL E2E EXTERNAL VALIDATION DEFERRED
-Phase 10 Closed-loop engineering learning — NEXT / RESEARCH + ARCHITECTURE REQUIRED
+Phase 10 Closed-loop engineering learning — IMPLEMENTATION COMPLETE / OWNER-MACHINE ACCEPTANCE PENDING
 Phase 10A Autonomous Operations Control Plane — approved future integration point; not active yet
 Phase 11 Autonomous capability-gap / weakness detection
 Phase 12 Shadow improvement + baseline benchmarking
@@ -201,4 +203,4 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Begin Phase 10 — Closed-Loop Engineering Learning with repository inspection, research and architecture. Preserve the deferred Phase-9 full external lifecycle as a mandatory final whole-system validation item; do not claim the real device effect, downstream promotion/package lifecycle or disable/rollback path were proven by the bounded Phase-9 acceptance.**
+**Run the final non-destructive Phase-10 owner-machine acceptance harness against the exact Phase-10.7 implementation/acceptance head. If it passes, record the digest-bound evidence, mark Phase 10 DONE, merge the accepted PR to protected main, then begin Phase 10A research/architecture. Preserve the deferred Phase-9 full external lifecycle as a mandatory final whole-system validation item.**

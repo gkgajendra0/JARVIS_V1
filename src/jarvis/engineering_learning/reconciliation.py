@@ -267,6 +267,7 @@ class EngineeringLearningReconciler:
         parent = prior or latest
         revision_number = (latest.revision_number + 1) if latest is not None else 1
 
+        stage_epoch, accept_epoch, supersede_epoch = self._transition_epochs(now_epoch)
         try:
             projection = self._projector.project(
                 self._store,
@@ -277,14 +278,14 @@ class EngineeringLearningReconciler:
             )
             self._lifecycle.promote(
                 projection.revision_id,
-                staged_at_epoch=now_epoch,
-                accepted_at_epoch=now_epoch,
+                staged_at_epoch=stage_epoch,
+                accepted_at_epoch=accept_epoch,
             )
             if prior is not None:
                 self._lifecycle.supersede_prior(
                     projection.revision_id,
                     prior_revision_id=prior.revision_id,
-                    now_epoch=now_epoch,
+                    now_epoch=supersede_epoch,
                 )
         except (
             EngineeringLearningProjectionError,
@@ -366,12 +367,13 @@ class EngineeringLearningReconciler:
             KnowledgeLifecycleState.CANDIDATE,
             KnowledgeLifecycleState.STAGED,
         }
+        stage_epoch, accept_epoch, supersede_epoch = self._transition_epochs(now_epoch)
         if resumed:
             try:
                 self._lifecycle.promote(
                     revision.revision_id,
-                    staged_at_epoch=now_epoch,
-                    accepted_at_epoch=now_epoch,
+                    staged_at_epoch=stage_epoch,
+                    accepted_at_epoch=accept_epoch,
                 )
             except (
                 KnowledgeLifecycleError,
@@ -395,7 +397,7 @@ class EngineeringLearningReconciler:
                     self._lifecycle.supersede_prior(
                         revision.revision_id,
                         prior_revision_id=revision.supersedes_revision_id,
-                        now_epoch=now_epoch,
+                        now_epoch=supersede_epoch,
                     )
                     resumed = True
                 except (
@@ -494,6 +496,15 @@ class EngineeringLearningReconciler:
             disposition=disposition,
             created_revision=False,
         )
+
+    @staticmethod
+    def _transition_epochs(now_epoch: float) -> tuple[float, float, float]:
+        stage_epoch = EngineeringLearningReconciler._epoch(now_epoch)
+        accept_epoch = math.nextafter(stage_epoch, math.inf)
+        supersede_epoch = math.nextafter(accept_epoch, math.inf)
+        if not math.isfinite(accept_epoch) or not math.isfinite(supersede_epoch):
+            raise ValueError("now_epoch is too large to order lifecycle transitions")
+        return stage_epoch, accept_epoch, supersede_epoch
 
     @staticmethod
     def _epoch(value: float) -> float:
