@@ -84,6 +84,11 @@ class OpenCVCameraConfig:
         object.__setattr__(self, "fourcc", fourcc)
 
 
+def _decode_fourcc(value: float) -> str:
+    encoded = int(value)
+    return "".join(chr((encoded >> (8 * offset)) & 0xFF) for offset in range(4))
+
+
 class OpenCVCameraSource:
     """Capture continuously into a single overwrite slot.
 
@@ -199,6 +204,24 @@ class OpenCVCameraSource:
         if not capture.isOpened():
             capture.release()
             raise RuntimeError("camera failed to open")
+
+        get_property = getattr(capture, "get", None)
+        if callable(get_property):
+            negotiated_width = int(get_property(cv2.CAP_PROP_FRAME_WIDTH))
+            negotiated_height = int(get_property(cv2.CAP_PROP_FRAME_HEIGHT))
+            negotiated_fourcc = _decode_fourcc(get_property(cv2.CAP_PROP_FOURCC))
+            if (
+                negotiated_width != config.width
+                or negotiated_height != config.height
+                or negotiated_fourcc != config.fourcc
+            ):
+                capture.release()
+                raise RuntimeError(
+                    "camera capture negotiation mismatch: "
+                    f"requested={config.width}x{config.height}/{config.fourcc}, "
+                    f"negotiated={negotiated_width}x{negotiated_height}/"
+                    f"{negotiated_fourcc!r}"
+                )
 
         ok, image = capture.read()
         if not ok or image is None:
