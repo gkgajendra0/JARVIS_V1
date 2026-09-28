@@ -253,8 +253,8 @@ def build_production_voice_runtime(
             config.active_speaker_model_path
         )
         LOGGER.info(
-            "Step-3 active-speaker diagnostics use one Pocket3 microphone owner: "
-            "canonical LiveKit user PCM + timestamped Vision track/head frames"
+            "Step-3 active-speaker diagnostics use the selected conversation microphone: "
+            "canonical LiveKit user PCM + timestamped selected-camera Vision track/head frames"
         )
 
     speech_region_detector = (
