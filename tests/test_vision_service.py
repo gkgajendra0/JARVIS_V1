@@ -65,7 +65,6 @@ class _FakeRuntime:
         self.armed = False
         self.target = None
 
-
     def switch_camera_source(self, source_name: str) -> str:
         if source_name not in self.available_camera_sources:
             raise ValueError("unknown camera")
