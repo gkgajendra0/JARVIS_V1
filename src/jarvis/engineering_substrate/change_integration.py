@@ -199,6 +199,8 @@ class EngineeringSubstrateChangeService:
         self,
         change_id: str,
         resolution: DependencyResolution,
+        *,
+        lock_artifact_id: str | None = None,
     ) -> ChangeArtifact:
         self._require_bind_state(change_id)
         architecture = self._approved_architecture(change_id)
@@ -207,6 +209,13 @@ class EngineeringSubstrateChangeService:
         if resolution.change_id is not None and resolution.change_id != change_id:
             raise ChangeConflict("dependency resolution belongs to another change")
         resolution_digest = canonical_digest(resolution)
+        lock_artifact = (
+            None if lock_artifact_id is None else str(lock_artifact_id).strip().casefold()
+        )
+        if lock_artifact is not None and lock_artifact != resolution.lock_digest:
+            raise ChangeConflict(
+                "canonical lock artifact digest must equal dependency lock digest"
+            )
         artifact = self.store.add_artifact(
             change_id,
             kind=DEPENDENCY_RESOLUTION_KIND,
@@ -217,7 +226,9 @@ class EngineeringSubstrateChangeService:
                 "resolution_digest": resolution_digest,
                 "requirement_id": resolution.requirement_id,
                 "artifact_ids": list(resolution.artifact_ids),
+                "resolved_packages": list(resolution.resolved_packages),
                 "lock_digest": resolution.lock_digest,
+                "lock_artifact_id": lock_artifact,
             },
         )
         self._operational_event(
