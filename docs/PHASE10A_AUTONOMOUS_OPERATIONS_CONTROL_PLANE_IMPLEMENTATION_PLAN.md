@@ -26,7 +26,8 @@ Every slice must preserve:
 - EngineeringKnowledge / Phase-10 advisory-learning boundary;
 - exact evidence/provenance;
 - fail-closed behavior for unknown schemas/rules/evidence;
-- production SHADOW default.
+- production SHADOW default;
+- the Phase-9 full external physical-device lifecycle remains a separate deferred whole-system validation item and is not claimed or absorbed by Phase 10A.
 
 No slice may introduce a new runtime framework or database.
 
