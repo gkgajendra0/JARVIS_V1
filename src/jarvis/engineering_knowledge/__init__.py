@@ -136,6 +136,7 @@ from jarvis.engineering_knowledge.security import (
     EvidenceTrustClass,
 )
 
+
 def build_default_facet_registry():
     """Build the reviewed default facet registry without eager cross-package imports."""
     from jarvis.engineering_knowledge.defaults import (
