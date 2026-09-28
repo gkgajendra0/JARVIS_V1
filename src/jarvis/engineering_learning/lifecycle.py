@@ -598,6 +598,14 @@ class EngineeringLearningLifecycleService:
             raise KnowledgeLifecycleError(
                 "successor revision number must advance the prior revision"
             )
+        if (
+            successor.valid_from_epoch is None
+            or prior.valid_from_epoch is None
+            or successor.valid_from_epoch <= prior.valid_from_epoch
+        ):
+            raise KnowledgeLifecycleError(
+                "successor evidence must be newer than the prior revision"
+            )
 
         assessment = self._policy.evaluate(self._store, successor_revision_id)
         if not assessment.decision.eligible:
