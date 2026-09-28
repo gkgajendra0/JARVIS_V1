@@ -30,6 +30,13 @@ class _FakeService:
             ],
         }
 
+    def switch_camera(self, profile: str) -> dict[str, object]:
+        return {
+            "ok": True,
+            "active_camera": profile,
+            "changed": True,
+        }
+
 
 def test_voice_report_hides_detector_candidate_count() -> None:
     tools = VisionAgentTools(_FakeService())  # type: ignore[arg-type]
@@ -53,7 +60,9 @@ def test_voice_report_hides_detector_candidate_count() -> None:
     assert "current visible_people=1" in str(events)
 
 
-def test_realtime_voice_surface_does_not_expose_manual_follow_control() -> None:
+def test_realtime_voice_surface_exposes_camera_switch_not_manual_follow() -> None:
     tools = VisionAgentTools(_FakeService())  # type: ignore[arg-type]
 
-    assert len(tools.tools) == 1
+    assert len(tools.tools) == 2
+    names = {tool.__name__ for tool in tools.tools}
+    assert names == {"inspect_vision", "switch_vision_camera"}
