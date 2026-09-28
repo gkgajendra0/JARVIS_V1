@@ -1009,69 +1009,6 @@ class AutonomyDispatchLinkV1:
 
 
 @dataclass(frozen=True, slots=True)
-class AutonomyDispatchLinkV1:
-    dispatch_link_id: str
-    candidate_id: str
-    dispatch_role: str
-    downstream_kind: str
-    downstream_id: str
-    source_identity: str
-    created_at_epoch: float
-    schema_version: str = AUTONOMY_CONTRACT_SCHEMA_VERSION
-
-    def __post_init__(self) -> None:
-        for field_name in ("dispatch_link_id", "candidate_id"):
-            object.__setattr__(
-                self,
-                field_name,
-                _text(getattr(self, field_name), field_name, max_length=240),
-            )
-        object.__setattr__(
-            self,
-            "dispatch_role",
-            _token(self.dispatch_role, "dispatch_role"),
-        )
-        object.__setattr__(
-            self,
-            "downstream_kind",
-            _token(self.downstream_kind, "downstream_kind"),
-        )
-        object.__setattr__(
-            self,
-            "downstream_id",
-            _text(self.downstream_id, "downstream_id", max_length=500),
-        )
-        object.__setattr__(
-            self,
-            "source_identity",
-            _text(self.source_identity, "source_identity", max_length=500),
-        )
-        object.__setattr__(
-            self,
-            "created_at_epoch",
-            _epoch(self.created_at_epoch, "created_at_epoch"),
-        )
-        if self.schema_version != AUTONOMY_CONTRACT_SCHEMA_VERSION:
-            raise ValueError("unsupported dispatch-link schema_version")
-
-    def to_payload(self) -> dict[str, JSONValue]:
-        return {
-            "dispatch_link_id": self.dispatch_link_id,
-            "candidate_id": self.candidate_id,
-            "dispatch_role": self.dispatch_role,
-            "downstream_kind": self.downstream_kind,
-            "downstream_id": self.downstream_id,
-            "source_identity": self.source_identity,
-            "created_at_epoch": self.created_at_epoch,
-            "schema_version": self.schema_version,
-        }
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> Self:
-        return cls(**payload)
-
-
-@dataclass(frozen=True, slots=True)
 class OwnerAttentionItemV1:
     attention_id: str
     fingerprint: str
