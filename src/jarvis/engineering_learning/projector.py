@@ -117,6 +117,85 @@ def _reference_digest(reference: str) -> str | None:
     return match.group(1) if match is not None else None
 
 
+def engineering_learning_evidence_id(
+    *,
+    outcome_id: str,
+    ordinal: int,
+    reference: str,
+) -> str:
+    return _stable_id(
+        "evidence",
+        {
+            "outcome_id": outcome_id,
+            "ordinal": ordinal,
+            "reference": reference,
+        },
+    )
+
+
+def engineering_learning_revision_digest(
+    *,
+    policy_id: str,
+    knowledge_id: str,
+    revision_number: int,
+    parent_revision_id: str | None,
+    supersedes_revision_id: str | None,
+    normalized_summary: str,
+    outcome: EngineeringOutcomeV1,
+    facets: tuple[EngineeringKnowledgeFacet, ...],
+    applicability: tuple[EngineeringApplicability, ...],
+    evidence_ids: tuple[str, ...],
+) -> str:
+    facet_digests = [
+        item.payload_digest
+        for item in sorted(
+            facets,
+            key=lambda value: (
+                value.facet_type,
+                value.schema_id,
+                value.schema_version,
+                value.facet_id,
+            ),
+        )
+    ]
+    applicability_payload = sorted(
+        (
+            {
+                "target_namespace": item.target_namespace,
+                "target_identity": item.target_identity,
+                "matcher_type": item.matcher_type,
+                "constraint_json": item.constraint_json,
+                "required": item.required,
+            }
+            for item in applicability
+        ),
+        key=lambda value: (
+            str(value["target_namespace"]),
+            str(value["target_identity"]),
+            str(value["matcher_type"]),
+            str(value["constraint_json"]),
+            str(value["required"]),
+        ),
+    )
+    return canonical_sha256(
+        {
+            "projector": ENGINEERING_LEARNING_PROJECTOR_ID,
+            "policy_id": policy_id,
+            "knowledge_id": knowledge_id,
+            "revision_number": revision_number,
+            "parent_revision_id": parent_revision_id,
+            "supersedes_revision_id": supersedes_revision_id,
+            "kind_namespace": ENGINEERING_LEARNING_KIND_NAMESPACE,
+            "normalized_summary": normalized_summary,
+            "outcome_id": outcome.outcome_id,
+            "outcome_digest": outcome.digest,
+            "facet_digests": facet_digests,
+            "applicability": applicability_payload,
+            "evidence_ids": sorted(evidence_ids),
+        }
+    )
+
+
 class EngineeringLearningProjector:
     """Build immutable candidate knowledge from one deterministic eligibility decision."""
 
@@ -204,31 +283,17 @@ class EngineeringLearningProjector:
             created_at=created_at,
         )
         summary = self._summary(outcome, decision)
-        revision_digest = canonical_sha256(
-            {
-                "projector": ENGINEERING_LEARNING_PROJECTOR_ID,
-                "policy_id": decision.policy_id,
-                "knowledge_id": knowledge_id,
-                "revision_number": revision_number,
-                "parent_revision_id": parent_revision_id,
-                "supersedes_revision_id": supersedes_revision_id,
-                "kind_namespace": ENGINEERING_LEARNING_KIND_NAMESPACE,
-                "normalized_summary": summary,
-                "outcome_id": outcome.outcome_id,
-                "outcome_digest": outcome.digest,
-                "facet_digests": [facet.payload_digest for facet in facets],
-                "applicability": [
-                    {
-                        "target_namespace": item.target_namespace,
-                        "target_identity": item.target_identity,
-                        "matcher_type": item.matcher_type,
-                        "constraint_json": item.constraint_json,
-                        "required": item.required,
-                    }
-                    for item in applicability
-                ],
-                "evidence_ids": list(evidence_ids),
-            }
+        revision_digest = engineering_learning_revision_digest(
+            policy_id=decision.policy_id,
+            knowledge_id=knowledge_id,
+            revision_number=revision_number,
+            parent_revision_id=parent_revision_id,
+            supersedes_revision_id=supersedes_revision_id,
+            normalized_summary=summary,
+            outcome=outcome,
+            facets=facets,
+            applicability=applicability,
+            evidence_ids=evidence_ids,
         )
 
         identity = EngineeringKnowledgeIdentity(
@@ -376,13 +441,10 @@ class EngineeringLearningProjector:
             digest = _reference_digest(reference)
             evidence.append(
                 EngineeringEvidence(
-                    evidence_id=_stable_id(
-                        "evidence",
-                        {
-                            "outcome_id": outcome.outcome_id,
-                            "ordinal": ordinal,
-                            "reference": reference,
-                        },
+                    evidence_id=engineering_learning_evidence_id(
+                        outcome_id=outcome.outcome_id,
+                        ordinal=ordinal,
+                        reference=reference,
                     ),
                     evidence_type="engineering_outcome_source",
                     source_class="authoritative_engineering_record",
