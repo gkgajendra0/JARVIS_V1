@@ -285,7 +285,10 @@ class FindingLifecycle:
             and current.violation_count == violation_count
             and current.reason_codes == evaluation.reason_codes
             and current.supporting_fact_digests == evaluation.supporting_fact_digests
-            and current.root_finding_id == root_finding_id
+            and (
+                target_status is FindingStatus.SUPPRESSED
+                or current.root_finding_id == root_finding_id
+            )
         ):
             return FindingObservationResultV1(
                 finding=current,
