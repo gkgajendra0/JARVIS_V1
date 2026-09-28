@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from jarvis.engineering_learning.evaluation import PHASE10_REPLAY_CASE_IDS
 from jarvis.engineering_learning.phase10_acceptance import (
     Phase10AcceptanceError,
     _repo_snapshot,
@@ -24,10 +25,11 @@ def _payload(commit: str) -> dict[str, object]:
         "recorded_at": "2026-09-28T06:00:00+00:00",
         "suite_status": "PASS",
         "suite_digest": "b" * 64,
-        "case_count": 15,
-        "case_ids": [f"{index:02d}_case" for index in range(1, 16)],
+        "case_count": len(PHASE10_REPLAY_CASE_IDS),
+        "case_ids": list(PHASE10_REPLAY_CASE_IDS),
         "authority_granted": False,
         "production_mutated": False,
+        "repo_unchanged": True,
     }
     return {**body, "evidence_digest": canonical_digest(body)}
 
@@ -79,6 +81,29 @@ def test_phase10_acceptance_evidence_rejects_wrong_commit() -> None:
 
     with pytest.raises(Phase10AcceptanceError, match="tested commit mismatch"):
         validate_acceptance_evidence(payload, tested_commit="d" * 40)
+
+
+def test_phase10_acceptance_evidence_rejects_incomplete_matrix() -> None:
+    commit = "c" * 40
+    payload = _payload(commit)
+    body = {key: value for key, value in payload.items() if key != "evidence_digest"}
+    body["case_ids"] = list(PHASE10_REPLAY_CASE_IDS[:-1])
+    body["case_count"] = len(PHASE10_REPLAY_CASE_IDS) - 1
+    payload = {**body, "evidence_digest": canonical_digest(body)}
+
+    with pytest.raises(Phase10AcceptanceError, match="exact Phase-10 replay matrix"):
+        validate_acceptance_evidence(payload, tested_commit=commit)
+
+
+def test_phase10_acceptance_evidence_requires_checkout_immutability() -> None:
+    commit = "c" * 40
+    payload = _payload(commit)
+    body = {key: value for key, value in payload.items() if key != "evidence_digest"}
+    body["repo_unchanged"] = False
+    payload = {**body, "evidence_digest": canonical_digest(body)}
+
+    with pytest.raises(Phase10AcceptanceError, match="checkout immutability"):
+        validate_acceptance_evidence(payload, tested_commit=commit)
 
 
 def test_phase10_acceptance_evidence_rejects_authority_claim() -> None:
