@@ -12,12 +12,12 @@ from jarvis.work.store import SQLiteWorkStore
 
 from .models import (
     ActionCandidateV1,
-    CandidateDispositionRecordV1,
-    DispatchIntentV1,
     AutonomyFindingEventV1,
     AutonomyFindingV1,
     AutonomyOutcomeRecordV1,
+    CandidateDispositionRecordV1,
     DesiredStateV1,
+    DispatchIntentV1,
     ObjectiveV1,
     OwnerAttentionEventV1,
     OwnerAttentionItemV1,
