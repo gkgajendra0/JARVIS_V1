@@ -9,6 +9,7 @@ from jarvis.engineering_learning.evaluation import PHASE10_REPLAY_CASE_IDS
 from jarvis.engineering_learning.phase10_acceptance import (
     Phase10AcceptanceError,
     _repo_snapshot,
+    _require_output_outside_repo,
     _require_windows,
     _tested_commit,
     validate_acceptance_evidence,
@@ -56,6 +57,17 @@ def test_phase10_acceptance_snapshot_is_digest_bound() -> None:
 def test_phase10_owner_machine_acceptance_requires_windows() -> None:
     with pytest.raises(Phase10AcceptanceError, match="must run on Windows"):
         _require_windows()
+
+
+def test_phase10_acceptance_output_must_be_outside_repo(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    with pytest.raises(Phase10AcceptanceError, match="outside the tested repository"):
+        _require_output_outside_repo(repo / "acceptance.json", repo=repo)
+
+    outside = tmp_path / "acceptance.json"
+    assert _require_output_outside_repo(outside, repo=repo) == outside.resolve()
 
 
 def test_phase10_acceptance_evidence_validates_exact_commit() -> None:
