@@ -280,6 +280,30 @@ def test_stable_recovery_resolves_existing_finding_and_logs_transition(
     ] == ["activated", "resolved"]
 
 
+def _canonical_root_finding(
+    store: AutonomyStore,
+    objective: ObjectiveV1,
+    manager: FindingLifecycleManager,
+):
+    root_desired = replace(
+        _desired(
+            objective,
+            target_identity="runtime.root",
+        ),
+        desired_state_id="desired_component_health_root",
+    )
+    store.create_desired_state(root_desired)
+    root = manager.apply(
+        root_desired,
+        _evaluation(
+            root_desired,
+            status=DesiredStateEvaluationStatus.VIOLATED,
+        ),
+    ).finding
+    assert root is not None
+    return root
+
+
 def test_suppression_and_root_relationships_are_durable(tmp_path: Path) -> None:
     store = _store(tmp_path)
     objective = _objective()
@@ -287,23 +311,83 @@ def test_suppression_and_root_relationships_are_durable(tmp_path: Path) -> None:
     store.create_objective(objective)
     store.create_desired_state(desired)
     manager = FindingLifecycleManager(store)
+    root = _canonical_root_finding(store, objective, manager)
 
+    evaluation = _evaluation(
+        desired,
+        status=DesiredStateEvaluationStatus.VIOLATED,
+    )
     result = manager.apply(
         desired,
-        _evaluation(
-            desired,
-            status=DesiredStateEvaluationStatus.VIOLATED,
-        ),
-        root_finding_id="finding_root",
-        suppression_finding_id="finding_root",
+        evaluation,
+        root_finding_id=root.finding_id,
+        suppression_finding_id=root.finding_id,
     )
+    replay = manager.apply(desired, evaluation)
 
     assert result.finding is not None
     assert result.finding.status is FindingStatus.SUPPRESSED
-    assert result.finding.root_finding_id == "finding_root"
-    assert result.finding.suppression_finding_id == "finding_root"
+    assert result.finding.root_finding_id == root.finding_id
+    assert result.finding.suppression_finding_id == root.finding_id
     assert result.event is not None
     assert result.event.kind == "suppressed"
+    assert replay.finding == result.finding
+    assert replay.changed is False
+
+
+def test_suppression_requires_canonical_related_finding(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    objective = _objective()
+    desired = _desired(objective)
+    store.create_objective(objective)
+    store.create_desired_state(desired)
+    manager = FindingLifecycleManager(store)
+
+    with pytest.raises(ValueError, match="canonical Finding"):
+        manager.apply(
+            desired,
+            _evaluation(
+                desired,
+                status=DesiredStateEvaluationStatus.VIOLATED,
+            ),
+            suppression_finding_id="finding_missing",
+        )
+
+
+def test_suppression_release_is_explicit(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    objective = _objective()
+    desired = _desired(objective)
+    store.create_objective(objective)
+    store.create_desired_state(desired)
+    manager = FindingLifecycleManager(store)
+    root = _canonical_root_finding(store, objective, manager)
+    evaluation = _evaluation(
+        desired,
+        status=DesiredStateEvaluationStatus.VIOLATED,
+    )
+    suppressed = manager.apply(
+        desired,
+        evaluation,
+        root_finding_id=root.finding_id,
+        suppression_finding_id=root.finding_id,
+    )
+    assert suppressed.finding is not None
+
+    released = manager.apply(
+        desired,
+        replace(
+            evaluation,
+            snapshot_digest=DIGEST_C,
+            evaluated_at_epoch=NOW + 1,
+            last_violation_at_epoch=NOW + 1,
+        ),
+        release_suppression=True,
+    )
+
+    assert released.finding is not None
+    assert released.finding.status is FindingStatus.ACTIVE
+    assert released.finding.suppression_finding_id is None
 
 
 def test_non_active_desired_state_supersedes_existing_finding(tmp_path: Path) -> None:
