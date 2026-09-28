@@ -38,6 +38,9 @@ from jarvis.capability_acquisition.source import (
 from jarvis.capability_acquisition.standard_sources import (
     CustomBuildCapabilitySourceAdapter,
 )
+from jarvis.capability_acquisition.substrate_workflow import (
+    build_capability_substrate_executors,
+)
 from jarvis.capability_acquisition.verification import (
     CapabilityAcquisitionDevelopmentCompletionHandler,
 )
@@ -51,6 +54,12 @@ from jarvis.capability_registry.lifecycle import CapabilityLifecycleService
 from jarvis.capability_registry.reconciliation import CapabilityLifecycleReconciler
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_substrate.discovery import default_discovery_broker
+from jarvis.engineering_substrate.dependency.runtime import (
+    build_runtime_dependency_broker,
+)
+from jarvis.engineering_substrate.change_integration import (
+    EngineeringSubstrateChangeService,
+)
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.incident_repair.architecture import (
     IncidentRepairDevelopmentRevisionResolver,
@@ -417,6 +426,12 @@ def build_work_runtime(
             diagnostic_workspace_manager,
             diagnostic_static_runner,
         ),
+        *build_capability_substrate_executors(
+            change_store,
+            broker_factory=lambda: build_runtime_dependency_broker(
+                protected_main_root=workspace_manager.repository_root,
+            ),
+        ),
         *build_development_executors(
             workspace_manager,
             test_runner=build_development_test_runner(development_test_image),
@@ -448,10 +463,36 @@ def build_work_runtime(
         if (
             change.process_key == OWNER_CAPABILITY_ACQUISITION_PROCESS.key
             and change.process_version == OWNER_CAPABILITY_ACQUISITION_PROCESS.version
-            and stage.stage_key
-            == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
         ):
-            return acquisition_completion_guard(steps)
+            if (
+                stage.stage_key
+                == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
+            ):
+                return acquisition_completion_guard(steps)
+            if (
+                stage.stage_key
+                == OWNER_CAPABILITY_ACQUISITION_PROCESS.development_stage.stage_key
+            ):
+                architecture = change_store.latest_artifact(
+                    change.change_id,
+                    "architecture",
+                )
+                if architecture is not None and any(
+                    tuple(architecture.payload.get(field, ()))
+                    for field in (
+                        "dependency_refs",
+                        "secret_scopes",
+                        "discovery_scopes",
+                    )
+                ):
+                    if not EngineeringSubstrateChangeService(
+                        change_store
+                    ).verification_current(change.change_id):
+                        return (
+                            False,
+                            "capability development requires current Phase-5 "
+                            "substrate verification",
+                        )
         return None
 
     engine = WorkEngine(
