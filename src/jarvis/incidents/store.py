@@ -882,6 +882,74 @@ class SqliteIncidentStore:
             created_by=str(payload["created_by"]),
         )
 
+    def list_engineering_knowledge_revisions(
+        self,
+        knowledge_id: str,
+    ) -> tuple[EngineeringKnowledgeRevision, ...]:
+        normalized = str(knowledge_id).strip()
+        if not normalized:
+            return ()
+        with self._lock:
+            cursor = self._connection.execute(
+                """
+                SELECT *
+                FROM engineering_knowledge_revision
+                WHERE knowledge_id = ?
+                ORDER BY revision_number, created_at_epoch, revision_id
+                """,
+                (normalized,),
+            )
+            columns = [item[0] for item in cursor.description or ()]
+            rows = cursor.fetchall()
+        result: list[EngineeringKnowledgeRevision] = []
+        for row in rows:
+            payload = dict(zip(columns, row, strict=True))
+            result.append(
+                EngineeringKnowledgeRevision(
+                    revision_id=str(payload["revision_id"]),
+                    knowledge_id=str(payload["knowledge_id"]),
+                    revision_number=int(payload["revision_number"]),
+                    parent_revision_id=(
+                        str(payload["parent_revision_id"])
+                        if payload["parent_revision_id"] is not None
+                        else None
+                    ),
+                    supersedes_revision_id=(
+                        str(payload["supersedes_revision_id"])
+                        if payload["supersedes_revision_id"] is not None
+                        else None
+                    ),
+                    kind_namespace=str(payload["kind_namespace"]),
+                    normalized_summary=str(payload["normalized_summary"]),
+                    valid_from_epoch=(
+                        float(payload["valid_from_epoch"])
+                        if payload["valid_from_epoch"] is not None
+                        else None
+                    ),
+                    valid_to_epoch=(
+                        float(payload["valid_to_epoch"])
+                        if payload["valid_to_epoch"] is not None
+                        else None
+                    ),
+                    system_from_epoch=float(payload["system_from_epoch"]),
+                    system_to_epoch=(
+                        float(payload["system_to_epoch"])
+                        if payload["system_to_epoch"] is not None
+                        else None
+                    ),
+                    sensitivity=KnowledgeSensitivity(str(payload["sensitivity"])),
+                    freshness_state=KnowledgeFreshnessState(
+                        str(payload["freshness_state"])
+                    ),
+                    canonicalization=str(payload["canonicalization"]),
+                    digest_algorithm=str(payload["digest_algorithm"]),
+                    canonical_digest=str(payload["canonical_digest"]),
+                    created_at_epoch=float(payload["created_at_epoch"]),
+                    created_by=str(payload["created_by"]),
+                )
+            )
+        return tuple(result)
+
     def get_engineering_knowledge_lifecycle_state(
         self,
         revision_id: str,
