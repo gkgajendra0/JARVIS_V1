@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from jarvis.ai_provider import configured_ai_provider, normalize_ai_provider
-from jarvis.autonomy.models import AutonomyMode
+from jarvis.autonomy.mode import AutonomyMode
 from jarvis.machine_config import configured_text, load_machine_settings
 
 VALID_LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})
