@@ -147,6 +147,5 @@ def test_native_tracking_wrapper_can_deactivate_without_closing() -> None:
     assert delegate.closed is False
     assert awareness.observations[-1]["state"] is HealthState.DISABLED
     assert (
-        awareness.observations[-1]["reason_code"]
-        == "native_tracking_inactive_camera"
+        awareness.observations[-1]["reason_code"] == "native_tracking_inactive_camera"
     )
