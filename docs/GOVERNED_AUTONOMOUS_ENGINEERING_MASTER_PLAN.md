@@ -573,7 +573,13 @@ Original full exit criterion: the owner can acquire one real new capability with
 
 ### Phase 10 — closed-loop engineering learning
 
+**STATUS: DONE / OWNER-MACHINE ACCEPTED 2026-09-28**
+
 Production outcomes update/supersede EngineeringKnowledge, regressions and compatibility knowledge. Failed candidates remain useful negative evidence.
+
+Accepted result: deterministic canonical outcome adapters, model-free learning eligibility, immutable EngineeringKnowledge projection, revision-bound attestations, verified lifecycle/supersession, bounded restart-safe reconciliation, accepted-learning integrity verification and Phase-6 advisory retrieval. Exact owner-tested head `4c48f435ba7478ee6a076c8510d64d957ba14b58` passed the clean-process import probe and all 15 locked replay cases with suite digest `f9c66d9ecd7955db57e3d7024728c93ef93f3c35765f540c2d14051c62c533f0` and evidence digest `e90fb3ea53c54a6def8eca834ea8f7d6a0b132d98302dea2bf0ed997b5bcd0f6`. PR #201 squash-merged to protected `main` as `0cd4bb650b3a0230d13416863432083f60b6a4e7`.
+
+EngineeringKnowledge remains the canonical store for verified engineering experience. It is not the future cross-domain Universal Knowledge Fabric, although its provenance and immutable-learning contracts should remain compatible with that future architecture.
 
 ### Phase 10A — Autonomous Operations Control Plane integration point
 
@@ -724,10 +730,11 @@ Rules:
 7. Phase 7 Governed Promotion / Production Verification / Rollback is complete and owner-machine accepted on 2026-09-27; preserve exact evidence binding, owner/Authority separation, release identity and rollback-safety boundaries.
 8. Phase 8 Capability Package + Registry Lifecycle is complete and owner-machine accepted on 2026-09-27; preserve its exact package/release identity, registry generation, reconciliation, Authority and rollback boundaries.
 9. Phase 9 Owner-Requested Capability Acquisition is DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28 on the target-aware protected-main baseline `15974c4089aeea014dc68f4a6fb385072278b379`. Preserve the incomplete real external lifecycle as a mandatory final whole-system validation item; do not claim the physical device effect or downstream disable/rollback path was proven.
-10. Begin Phase 10 Closed-Loop Engineering Learning with repository inspection, research and architecture, then insert Phase 10A Autonomous Operations Control Plane before Phase 11 as defined by `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
-11. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6 or Phase 7 without new concrete evidence.
-12. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
-13. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.
+10. Phase 10 Closed-Loop Engineering Learning is complete and owner-machine accepted on 2026-09-28; preserve its deterministic truth/advisory-knowledge boundary.
+11. Begin Phase 10A Autonomous Operations Control Plane with repository inspection, thorough research and architecture as defined by `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`; do not implement until explicit owner approval.
+12. Do **not** reopen or rewrite accepted Phase 1/R2, Phase 1H, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 7, Phase 8 or Phase 10 without new concrete evidence.
+13. Preserve current sandbox and Authority restrictions; add brokers rather than broad permissions.
+14. Continue through the phases in Section 8 unless new evidence justifies an owner-approved sequencing change.
 
 The program is considered aligned only while each active slice can answer:
 
