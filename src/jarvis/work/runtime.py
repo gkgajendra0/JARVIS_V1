@@ -36,6 +36,9 @@ from jarvis.capability_acquisition.runtime_context import (
     AcquisitionContextProvider,
     StaticAcquisitionContextProvider,
 )
+from jarvis.capability_acquisition.sdk_verification import (
+    build_acquisition_sdk_verification_executors,
+)
 from jarvis.capability_acquisition.source import (
     AcquisitionContextV1,
     CapabilitySourceRegistry,
@@ -418,6 +421,12 @@ def build_work_runtime(
         *build_acquisition_discovery_executors(
             acquisition_work_context,
             broker=acquisition_discovery,
+        ),
+        *build_acquisition_sdk_verification_executors(
+            acquisition_work_context,
+            broker_factory=lambda: build_runtime_dependency_broker(
+                protected_main_root=workspace_manager.repository_root,
+            ),
         ),
         *build_acquisition_protocol_executors(
             acquisition_work_context,
