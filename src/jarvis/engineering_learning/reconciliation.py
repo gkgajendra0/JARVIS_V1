@@ -267,9 +267,7 @@ class EngineeringLearningReconciler:
         parent = prior or latest
         revision_number = (latest.revision_number + 1) if latest is not None else 1
 
-        stage_epoch, accept_epoch, supersede_epoch = self._transition_epochs(
-            now_epoch
-        )
+        stage_epoch, accept_epoch, supersede_epoch = self._transition_epochs(now_epoch)
         try:
             projection = self._projector.project(
                 self._store,
