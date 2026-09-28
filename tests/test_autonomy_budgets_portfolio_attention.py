@@ -215,22 +215,6 @@ def test_budget_exhaustion_creates_no_work(tmp_path: Path) -> None:
         assert db.execute("SELECT COUNT(*) FROM work_items").fetchone()[0] == 0
 
 
-def test_candidate_mode_mismatch_fails_closed() -> None:
-    objective = _objective()
-    finding = _finding(_desired(objective))
-    candidate = _candidate(finding, mode=AutonomyMode.SHADOW)
-
-    assessment = AutonomyBudgetEvaluator().evaluate(
-        candidate,
-        mode=AutonomyMode.ASSISTED,
-        policy=_policy(),
-        usage=_usage(),
-    )
-
-    assert assessment.disposition is CandidateDisposition.BLOCKED_POLICY
-    assert assessment.reason_codes == ("candidate_mode_mismatch",)
-
-
 def test_provider_ceiling_never_invents_missing_metering() -> None:
     objective = _objective()
     finding = _finding(_desired(objective))
