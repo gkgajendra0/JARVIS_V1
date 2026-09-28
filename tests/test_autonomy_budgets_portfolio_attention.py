@@ -270,11 +270,14 @@ def test_budget_window_accounting_is_durable_and_integrity_checked(
     assert first.version == 1
     assert second.used_value == 2
     assert second.version == 2
-    assert ledger.read(
-        policy,
-        BUDGET_DIMENSION_NEW_WORK,
-        now_epoch=NOW + 30,
-    ) == second
+    assert (
+        ledger.read(
+            policy,
+            BUDGET_DIMENSION_NEW_WORK,
+            now_epoch=NOW + 30,
+        )
+        == second
+    )
 
     with store.work.extension_transaction() as db:
         db.execute(
@@ -397,9 +400,7 @@ def test_portfolio_ordering_is_deterministic_and_owner_priority_is_preserved() -
     )
     assert first[0].work_priority is WorkPriority.HIGH
     assert first[1].work_priority is WorkPriority.NORMAL
-    assert first[0].priority_factor_payload["owner_priority"] == int(
-        WorkPriority.HIGH
-    )
+    assert first[0].priority_factor_payload["owner_priority"] == int(WorkPriority.HIGH)
 
 
 def test_portfolio_rejects_priority_factor_that_rewrites_owner_priority() -> None:
@@ -443,9 +444,7 @@ def test_repeated_same_attention_is_deduplicated(tmp_path: Path) -> None:
     assert first.item.attention_id == second.item.attention_id
     assert second.deduplicated is True
     assert second.item.version == first.item.version + 1
-    assert len(
-        store.list_owner_attention(statuses=(AttentionStatus.OPEN.value,))
-    ) == 1
+    assert len(store.list_owner_attention(statuses=(AttentionStatus.OPEN.value,))) == 1
 
 
 def test_attention_fingerprint_is_semantic_and_deterministic() -> None:
@@ -496,12 +495,9 @@ def test_root_attention_inhibits_derivative_spam(tmp_path: Path) -> None:
 
     assert derivative.inhibited is True
     assert derivative.item.attention_id == root.item.attention_id
-    assert len(
-        store.list_owner_attention(statuses=(AttentionStatus.OPEN.value,))
-    ) == 1
+    assert len(store.list_owner_attention(statuses=(AttentionStatus.OPEN.value,))) == 1
     assert "derivative_inhibited" in {
-        event.kind
-        for event in store.list_attention_events(root.item.attention_id)
+        event.kind for event in store.list_attention_events(root.item.attention_id)
     }
 
 
@@ -580,8 +576,7 @@ def test_notification_failure_keeps_canonical_attention_truth(
     assert persisted.status is AttentionStatus.OPEN
     assert persisted.next_renotify_epoch == NOW + 600
     assert "notification_failed" in {
-        event.kind
-        for event in store.list_attention_events(persisted.attention_id)
+        event.kind for event in store.list_attention_events(persisted.attention_id)
     }
 
 
