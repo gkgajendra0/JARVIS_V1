@@ -63,6 +63,19 @@ def build_default_self_model() -> SelfModelRegistry:
             ),
         ),
         C(
+            "engineering.learning",
+            "Closed-loop verified engineering outcome learning and negative-evidence "
+            "projection into EngineeringKnowledge.",
+            ("src/jarvis/engineering_learning",),
+            parent_component_id="engineering.knowledge",
+            tests=("tests/test_engineering_learning_contracts.py",),
+            logger_prefixes=("jarvis.engineering_learning",),
+            docs=(
+                "docs/PHASE10_CLOSED_LOOP_ENGINEERING_LEARNING_ARCHITECTURE.md",
+                "docs/PHASE10_CLOSED_LOOP_ENGINEERING_LEARNING_IMPLEMENTATION_PLAN.md",
+            ),
+        ),
+        C(
             "engineering.substrate",
             "Governed dependency, secret, sandbox, discovery, manifest, provenance "
             "and hardware-acceptance substrate for autonomous engineering.",
