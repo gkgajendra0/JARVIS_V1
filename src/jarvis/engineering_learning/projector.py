@@ -60,6 +60,11 @@ class EngineeringLearningProjectionError(ValueError):
 
 
 class EngineeringLearningProjectionStore(Protocol):
+    def get_engineering_knowledge_identity(
+        self,
+        knowledge_id: str,
+    ) -> EngineeringKnowledgeIdentity | None: ...
+
     def persist_engineering_knowledge_candidate(
         self,
         candidate: EngineeringKnowledgeCandidateBundle,
@@ -139,11 +144,14 @@ class EngineeringLearningProjector:
         parent_revision_id: str | None = None,
         supersedes_revision_id: str | None = None,
     ) -> EngineeringLearningProjectionResult:
+        knowledge_id = self.knowledge_id_for(outcome)
+        identity = store.get_engineering_knowledge_identity(knowledge_id)
         candidate, decision = self.build_candidate(
             outcome,
             revision_number=revision_number,
             parent_revision_id=parent_revision_id,
             supersedes_revision_id=supersedes_revision_id,
+            identity=identity,
         )
         write = store.persist_engineering_knowledge_candidate(candidate)
         return EngineeringLearningProjectionResult(
@@ -161,6 +169,7 @@ class EngineeringLearningProjector:
         revision_number: int = 1,
         parent_revision_id: str | None = None,
         supersedes_revision_id: str | None = None,
+        identity: EngineeringKnowledgeIdentity | None = None,
     ) -> tuple[EngineeringKnowledgeCandidateBundle, LearningEligibilityDecision]:
         if not isinstance(outcome, EngineeringOutcomeV1):
             raise TypeError("outcome must be an EngineeringOutcomeV1")
@@ -259,12 +268,31 @@ class EngineeringLearningProjector:
             }
         )
 
-        identity = EngineeringKnowledgeIdentity(
-            knowledge_id=knowledge_id,
-            stable_label=self._stable_label(outcome),
-            created_at_epoch=created_at,
-            created_by=ENGINEERING_LEARNING_PROJECTOR_ID,
-        )
+        expected_label = self._stable_label(outcome)
+        if identity is None:
+            identity = EngineeringKnowledgeIdentity(
+                knowledge_id=knowledge_id,
+                stable_label=expected_label,
+                created_at_epoch=created_at,
+                created_by=ENGINEERING_LEARNING_PROJECTOR_ID,
+            )
+        else:
+            if not isinstance(identity, EngineeringKnowledgeIdentity):
+                raise TypeError(
+                    "identity must be an EngineeringKnowledgeIdentity or None"
+                )
+            if identity.knowledge_id != knowledge_id:
+                raise EngineeringLearningProjectionError(
+                    "existing knowledge identity does not match projected proposition"
+                )
+            if identity.stable_label != expected_label:
+                raise EngineeringLearningProjectionError(
+                    "existing knowledge identity stable label does not match proposition"
+                )
+            if identity.created_by != ENGINEERING_LEARNING_PROJECTOR_ID:
+                raise EngineeringLearningProjectionError(
+                    "existing knowledge identity has an unexpected producer"
+                )
         revision = EngineeringKnowledgeRevision(
             revision_id=revision_id,
             knowledge_id=knowledge_id,

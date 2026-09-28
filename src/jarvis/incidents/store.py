@@ -13,6 +13,7 @@ from jarvis.engineering_knowledge.models import (
     EngineeringAttestation,
     EngineeringEvidence,
     EngineeringKnowledgeFacet,
+    EngineeringKnowledgeIdentity,
     EngineeringKnowledgeRevision,
     KnowledgeEvidenceLink,
     KnowledgeFreshnessState,
@@ -493,6 +494,31 @@ class SqliteIncidentStore:
             verdict=(
                 RepairVerdict(str(verdict_value)) if verdict_value is not None else None
             ),
+        )
+
+    def get_engineering_knowledge_identity(
+        self,
+        knowledge_id: str,
+    ) -> EngineeringKnowledgeIdentity | None:
+        normalized = str(knowledge_id).strip()
+        if not normalized:
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT knowledge_id, stable_label, created_at_epoch, created_by
+                FROM engineering_knowledge_identity
+                WHERE knowledge_id = ?
+                """,
+                (normalized,),
+            ).fetchone()
+        if row is None:
+            return None
+        return EngineeringKnowledgeIdentity(
+            knowledge_id=str(row[0]),
+            stable_label=(str(row[1]) if row[1] is not None else None),
+            created_at_epoch=float(row[2]),
+            created_by=str(row[3]),
         )
 
     def persist_engineering_knowledge_candidate(
