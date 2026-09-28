@@ -30,7 +30,6 @@ from jarvis.engineering_change import ChangeArtifact, ChangeStore
 from jarvis.work.brain import BrainAction
 from jarvis.work.models import WorkItem, WorkStep, WorkType
 
-
 PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT = "phase9.real-external-effect.v1"
 
 
