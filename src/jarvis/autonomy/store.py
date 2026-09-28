@@ -909,6 +909,114 @@ class AutonomyStore:
             raise KeyError(candidate_id)
         return ActionCandidateV1.from_payload(self._decoded_payload(row))
 
+    def list_action_candidates(
+        self,
+        finding_id: str,
+    ) -> tuple[ActionCandidateV1, ...]:
+        with self.work.extension_transaction() as db:
+            rows = db.execute(
+                """
+                SELECT * FROM autonomy_action_candidates
+                WHERE finding_id=? ORDER BY rowid
+                """,
+                (finding_id,),
+            ).fetchall()
+        return tuple(
+            ActionCandidateV1.from_payload(self._decoded_payload(row))
+            for row in rows
+        )
+
+    def record_candidate_decision(
+        self,
+        decision: CandidateDispositionRecordV1,
+    ) -> CandidateDispositionRecordV1:
+        return self._immutable_create(
+            table="autonomy_candidate_decisions",
+            identity_column="decision_id",
+            identity=decision.decision_id,
+            value=decision,
+            insert_sql="""
+                INSERT INTO autonomy_candidate_decisions(
+                    decision_id, candidate_id, disposition, source_identity,
+                    created_at_epoch, payload_digest, payload
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            params=(
+                decision.decision_id,
+                decision.candidate_id,
+                decision.disposition.value,
+                decision.source_identity,
+                decision.created_at_epoch,
+            ),
+            decoder=CandidateDispositionRecordV1.from_payload,
+        )
+
+    def list_candidate_decisions(
+        self,
+        candidate_id: str,
+    ) -> tuple[CandidateDispositionRecordV1, ...]:
+        with self.work.extension_transaction() as db:
+            rows = db.execute(
+                """
+                SELECT * FROM autonomy_candidate_decisions
+                WHERE candidate_id=? ORDER BY rowid
+                """,
+                (candidate_id,),
+            ).fetchall()
+        return tuple(
+            CandidateDispositionRecordV1.from_payload(self._decoded_payload(row))
+            for row in rows
+        )
+
+    def latest_candidate_decision(
+        self,
+        candidate_id: str,
+    ) -> CandidateDispositionRecordV1 | None:
+        decisions = self.list_candidate_decisions(candidate_id)
+        return decisions[-1] if decisions else None
+
+    def record_dispatch_intent(
+        self,
+        intent: DispatchIntentV1,
+    ) -> DispatchIntentV1:
+        return self._immutable_create(
+            table="autonomy_dispatch_intents",
+            identity_column="intent_id",
+            identity=intent.intent_id,
+            value=intent,
+            insert_sql="""
+                INSERT INTO autonomy_dispatch_intents(
+                    intent_id, candidate_id, action_kind, dispatch_role,
+                    source_identity, created_at_epoch, payload_digest, payload
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            params=(
+                intent.intent_id,
+                intent.candidate_id,
+                intent.action_kind.value,
+                intent.dispatch_role,
+                intent.source_identity,
+                intent.created_at_epoch,
+            ),
+            decoder=DispatchIntentV1.from_payload,
+        )
+
+    def require_dispatch_intent(
+        self,
+        intent_id: str,
+    ) -> DispatchIntentV1:
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT * FROM autonomy_dispatch_intents
+                WHERE intent_id=?
+                """,
+                (intent_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(intent_id)
+        return DispatchIntentV1.from_payload(self._decoded_payload(row))
+
     def create_owner_attention(
         self,
         item: OwnerAttentionItemV1,
