@@ -120,6 +120,21 @@ def test_python_package_name_uses_pep503_normalization() -> None:
     assert normalize_python_package_name("Demo_Package.Name") == "demo-package-name"
 
 
+@pytest.mark.parametrize(
+    "value",
+    (
+        "https://example.invalid/package",
+        "../package",
+        "package@version",
+        "package/name",
+        "package:name",
+    ),
+)
+def test_python_package_name_rejects_url_and_path_syntax(value: str) -> None:
+    with pytest.raises(DependencyPolicyError, match="distribution name"):
+        normalize_python_package_name(value)
+
+
 def test_public_source_policy_requires_https_and_known_artifact_host() -> None:
     assert PYPI_PUBLIC_V1.permits_artifact_url(
         "https://files.pythonhosted.org/packages/a/demo.whl"
