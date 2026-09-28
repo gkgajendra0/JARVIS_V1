@@ -576,16 +576,15 @@ class WorkOrchestratorDispatchBridge:
             source_turn_id=turn_id,
             work_type=work_type,
         )
-        if existing is not None:
-            if (
-                existing.request != request
-                or existing.priority is not priority
-                or existing.delivery_policy is not DeliveryPolicy.SILENT
-                or existing.dependencies != candidate.dependencies
-            ):
-                raise ValueError(
-                    "candidate source identity already owns different WorkItem semantics"
-                )
+        if existing is not None and (
+            existing.request != request
+            or existing.priority is not priority
+            or existing.delivery_policy is not DeliveryPolicy.SILENT
+            or existing.dependencies != candidate.dependencies
+        ):
+            raise ValueError(
+                "candidate source identity already owns different WorkItem semantics"
+            )
         submission = self.orchestrator.start(
             request=request,
             work_type=work_type,
