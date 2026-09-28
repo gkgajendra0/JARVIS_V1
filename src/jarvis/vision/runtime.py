@@ -230,7 +230,9 @@ class VisionRuntime:
         """Switch the active OpenCV source and reset camera-relative tracking state."""
         switcher = getattr(self._camera, "switch", None)
         if not callable(switcher):
-            raise RuntimeError(\n                "active camera source does not support runtime switching"\n            )
+            raise RuntimeError(
+                "active camera source does not support runtime switching"
+            )
 
         switcher(config)
 
