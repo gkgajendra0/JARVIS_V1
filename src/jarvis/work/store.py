@@ -211,6 +211,15 @@ class SQLiteWorkStore:
                     ON work_steps(work_id, created_at ASC);
                 CREATE INDEX IF NOT EXISTS idx_work_deliveries_pending
                     ON work_deliveries(state, created_at ASC);
+
+                CREATE TABLE IF NOT EXISTS work_sensitive_inputs (
+                    work_id TEXT NOT NULL,
+                    input_key TEXT NOT NULL,
+                    protected_value TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY(work_id, input_key),
+                    FOREIGN KEY(work_id) REFERENCES work_items(work_id)
+                );
                 """
             )
             columns = {
@@ -736,6 +745,84 @@ class SQLiteWorkStore:
                 (work_id,),
             ).fetchall()
         return tuple(self._step_from_row(row) for row in rows)
+
+    def put_sensitive_input(
+        self,
+        work_id: str,
+        input_key: str,
+        value: str,
+    ) -> None:
+        """Store one model-hidden owner value using the canonical payload codec."""
+
+        normalized_work = str(work_id).strip()
+        normalized_key = str(input_key).strip().casefold()
+        normalized_value = str(value).strip()
+        if not normalized_work or not normalized_key or not normalized_value:
+            raise ValueError("sensitive work input requires work_id, key and value")
+        with self._lock, self._connect() as connection:
+            if (
+                connection.execute(
+                    "SELECT 1 FROM work_items WHERE work_id=?",
+                    (normalized_work,),
+                ).fetchone()
+                is None
+            ):
+                raise WorkStoreError(f"unknown work item: {normalized_work}")
+            encoded = self._encode_text(normalized_value)
+            with connection:
+                connection.execute(
+                    """INSERT INTO work_sensitive_inputs
+                    (work_id, input_key, protected_value, created_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(work_id, input_key) DO UPDATE SET
+                    protected_value=excluded.protected_value,
+                    created_at=excluded.created_at""",
+                    (
+                        normalized_work,
+                        normalized_key,
+                        encoded,
+                        _dt(datetime.now(UTC)),
+                    ),
+                )
+
+    def pop_sensitive_input(
+        self,
+        work_id: str,
+        input_key: str,
+    ) -> str | None:
+        """Atomically consume one model-hidden owner value."""
+
+        normalized_work = str(work_id).strip()
+        normalized_key = str(input_key).strip().casefold()
+        if not normalized_work or not normalized_key:
+            raise ValueError("sensitive input lookup requires work_id and key")
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                """SELECT protected_value FROM work_sensitive_inputs
+                WHERE work_id=? AND input_key=?""",
+                (normalized_work, normalized_key),
+            ).fetchone()
+            if row is None:
+                return None
+            value = self._decode_text(row["protected_value"])
+            with connection:
+                connection.execute(
+                    """DELETE FROM work_sensitive_inputs
+                    WHERE work_id=? AND input_key=?""",
+                    (normalized_work, normalized_key),
+                )
+        return value
+
+    def clear_sensitive_inputs(self, work_id: str) -> None:
+        normalized = str(work_id).strip()
+        if not normalized:
+            return
+        with self._lock, self._connect() as connection:
+            with connection:
+                connection.execute(
+                    "DELETE FROM work_sensitive_inputs WHERE work_id=?",
+                    (normalized,),
+                )
 
     def list(
         self,
