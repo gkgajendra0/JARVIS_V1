@@ -332,7 +332,9 @@ class ObjectiveV1:
 
     def __post_init__(self) -> None:
         object.__setattr__(
-            self, "objective_id", _text(self.objective_id, "objective_id", max_length=240)
+            self,
+            "objective_id",
+            _text(self.objective_id, "objective_id", max_length=240),
         )
         if not isinstance(self.origin, ObjectiveOrigin):
             raise TypeError("origin must be an ObjectiveOrigin")
@@ -423,7 +425,9 @@ class DesiredStateV1:
             _text(self.desired_state_id, "desired_state_id", max_length=240),
         )
         object.__setattr__(
-            self, "objective_id", _text(self.objective_id, "objective_id", max_length=240)
+            self,
+            "objective_id",
+            _text(self.objective_id, "objective_id", max_length=240),
         )
         object.__setattr__(
             self,
