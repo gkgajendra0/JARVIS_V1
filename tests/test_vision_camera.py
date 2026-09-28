@@ -177,9 +177,7 @@ def test_camera_rejects_yuy2_fallback_for_mjpeg_profile() -> None:
         height=1080,
         fourcc="YUY2",
     )
-    source = OpenCVCameraSource(
-        capture_factory=lambda index, backend, params: fake
-    )
+    source = OpenCVCameraSource(capture_factory=lambda index, backend, params: fake)
 
     with pytest.raises(RuntimeError, match="negotiation mismatch"):
         source.start()
