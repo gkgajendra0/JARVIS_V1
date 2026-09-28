@@ -7,6 +7,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from jarvis.capability_acquisition.architecture import (
+    ensure_capability_acquisition_architecture_current,
+)
+from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change.models import ChangeArtifact
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.canonical import canonical_digest
@@ -35,10 +39,6 @@ from jarvis.engineering_substrate.manifest import (
     TrustedExecutorRegistration,
 )
 from jarvis.engineering_substrate.sandbox import default_sandbox_registry
-from jarvis.capability_acquisition.architecture import (
-    ensure_capability_acquisition_architecture_current,
-)
-from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.work.brain import BrainAction
 from jarvis.work.models import WorkItem, WorkType
 
