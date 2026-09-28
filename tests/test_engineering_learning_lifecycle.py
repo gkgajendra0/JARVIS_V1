@@ -69,6 +69,42 @@ def _outcome(
     )
 
 
+def _successor_outcome(
+    *,
+    observed_at_epoch: float = 101.0,
+    reason: str = "candidate_runtime_regression",
+) -> EngineeringOutcomeV1:
+    return EngineeringOutcomeV1.create(
+        source_kind=EngineeringOutcomeSourceKind.PROMOTION,
+        source_identity="promotion-2",
+        subject_type="promotion_candidate",
+        subject_id="candidate-1",
+        subject_digest=SHA_A,
+        result=EngineeringOutcomeResult.ROLLED_BACK,
+        attribution=EngineeringOutcomeAttribution.CANDIDATE,
+        reason_codes=(reason,),
+        evidence_references=(
+            "promotion-attempt:promotion-2",
+            f"change-artifact:observation-2:sha256:{EVIDENCE_SHA}",
+        ),
+        applicability=(
+            OutcomeApplicability(
+                target_namespace="jarvis.revision",
+                target_identity=RELEASE,
+                matcher_type="exact",
+                constraint={},
+                required=True,
+            ),
+        ),
+        observed_at_epoch=observed_at_epoch,
+        producer="phase10-lifecycle-test",
+        change_id="change-2",
+        candidate_id="candidate-1",
+        candidate_digest=SHA_A,
+        release_sha=RELEASE,
+    )
+
+
 def _persist(
     store: SqliteIncidentStore,
     outcome: EngineeringOutcomeV1,
@@ -214,13 +250,7 @@ def test_successor_must_be_accepted_before_prior_is_superseded(
             accepted_at_epoch=111.0,
         )
 
-        successor_outcome = replace(
-            _outcome(),
-            result=EngineeringOutcomeResult.ROLLED_BACK,
-            attribution=EngineeringOutcomeAttribution.CANDIDATE,
-            reason_codes=("candidate_runtime_regression",),
-            observed_at_epoch=101.0,
-        )
+        successor_outcome = _successor_outcome()
         _, successor_revision_id = _persist(
             store,
             successor_outcome,
@@ -272,13 +302,7 @@ def test_supersession_replay_is_idempotent(tmp_path: Path) -> None:
             staged_at_epoch=110.0,
             accepted_at_epoch=111.0,
         )
-        successor_outcome = replace(
-            _outcome(),
-            result=EngineeringOutcomeResult.ROLLED_BACK,
-            attribution=EngineeringOutcomeAttribution.CANDIDATE,
-            reason_codes=("candidate_runtime_regression",),
-            observed_at_epoch=101.0,
-        )
+        successor_outcome = _successor_outcome()
         _, successor_revision_id = _persist(
             store,
             successor_outcome,
@@ -399,12 +423,9 @@ def test_older_or_same_time_evidence_cannot_be_promoted_as_successor(
             accepted_at_epoch=111.0,
         )
 
-        delayed = replace(
-            _outcome(),
-            result=EngineeringOutcomeResult.ROLLED_BACK,
-            attribution=EngineeringOutcomeAttribution.CANDIDATE,
-            reason_codes=("delayed_candidate_regression",),
+        delayed = _successor_outcome(
             observed_at_epoch=100.0,
+            reason="delayed_candidate_regression",
         )
         _, delayed_revision_id = _persist(
             store,
