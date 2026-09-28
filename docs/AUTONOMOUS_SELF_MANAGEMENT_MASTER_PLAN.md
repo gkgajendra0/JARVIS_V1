@@ -334,15 +334,17 @@ ACCEPTED
   Phase 6   Unknown-Incident Investigation + Source Repair
   Phase 7   Governed Promotion / Production Verification / Rollback
   Phase 8   Capability Package + Registry Lifecycle — owner-machine accepted 2026-09-27
+  Phase 10  Closed-Loop Engineering Learning — owner-machine accepted 2026-09-28
 
 ACCEPTED / DEFERRED VALIDATION
   Phase 9   Owner-Requested Capability Acquisition — DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28
             - final end-to-end external lifecycle validation deferred to whole-system acceptance
 
 CURRENT / NEXT
-  Phase 10  Closed-Loop Engineering Learning — research + architecture required
+  Phase 10A Autonomous Operations Control Plane — research + architecture required
+            - implementation requires explicit owner approval
 
-INSERT
+INSERTED SEQUENCE
   Phase 10A Autonomous Operations Control Plane
             - Objective / DesiredState contracts
             - SystemState aggregation
@@ -366,7 +368,7 @@ and learn through the governed engineering lifecycle. The top-level controller
 should not receive broad responsibility before its effectors and verification
 substrate are mature.
 
-Phase 10A is a planning commitment, not permission to implement it before its approved future integration point.
+Phase 10A has now reached its approved sequencing point because Phase 10 is accepted. This authorizes repository inspection, research and architecture work only; implementation still requires explicit owner approval under the permanent engineering sequence.
 
 ## 10. Autonomy evaluation
 
