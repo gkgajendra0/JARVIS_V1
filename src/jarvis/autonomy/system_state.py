@@ -604,7 +604,14 @@ class SystemStateSnapshotV1:
         ended_at_epoch: float,
         producer_version: str = SYSTEM_STATE_PRODUCER_VERSION,
     ) -> SystemStateSnapshotV1:
-        normalized_namespaces = tuple(sorted(evaluated_source_namespaces))
+        normalized_namespaces = tuple(
+            sorted(
+                _unique_tokens(
+                    evaluated_source_namespaces,
+                    "evaluated_source_namespaces",
+                )
+            )
+        )
         normalized_facts = tuple(
             sorted(
                 facts,
@@ -628,15 +635,32 @@ class SystemStateSnapshotV1:
                 ),
             )
         )
-        normalized_incomplete = tuple(sorted(set(incomplete_namespaces)))
+        normalized_incomplete = tuple(
+            sorted(
+                _unique_tokens(
+                    incomplete_namespaces,
+                    "incomplete_namespaces",
+                    allow_empty=True,
+                )
+            )
+        )
+        normalized_producer = _text(
+            producer_version,
+            "producer_version",
+            max_length=200,
+        )
+        started = _epoch(started_at_epoch, "started_at_epoch")
+        ended = _epoch(ended_at_epoch, "ended_at_epoch")
+        if ended < started:
+            raise ValueError("ended_at_epoch cannot precede started_at_epoch")
         payload = {
             "evaluated_source_namespaces": list(normalized_namespaces),
             "facts": [item.to_payload() for item in normalized_facts],
             "source_errors": [item.to_payload() for item in normalized_errors],
             "incomplete_namespaces": list(normalized_incomplete),
-            "started_at_epoch": float(started_at_epoch),
-            "ended_at_epoch": float(ended_at_epoch),
-            "producer_version": producer_version,
+            "started_at_epoch": started,
+            "ended_at_epoch": ended,
+            "producer_version": normalized_producer,
             "schema_version": SYSTEM_STATE_SCHEMA_VERSION,
         }
         digest = canonical_digest(payload)
@@ -647,9 +671,9 @@ class SystemStateSnapshotV1:
             facts=normalized_facts,
             source_errors=normalized_errors,
             incomplete_namespaces=normalized_incomplete,
-            started_at_epoch=started_at_epoch,
-            ended_at_epoch=ended_at_epoch,
-            producer_version=producer_version,
+            started_at_epoch=started,
+            ended_at_epoch=ended,
+            producer_version=normalized_producer,
         )
 
     def to_payload(self) -> dict[str, JSONValue]:
