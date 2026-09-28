@@ -411,6 +411,7 @@ def build_production_voice_runtime(
             development_test_image=config.development_test_docker_image,
             dbos_database_url=config.work_dbos_database_url,
             event_loop=asyncio.get_running_loop(),
+            capability_runtime=capability_runtime,
             acquisition_context_provider=(
                 CapabilityRuntimeAcquisitionContextProvider(
                     capability_runtime,
