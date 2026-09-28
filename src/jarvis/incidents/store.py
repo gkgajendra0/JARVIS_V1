@@ -882,6 +882,30 @@ class SqliteIncidentStore:
             created_by=str(payload["created_by"]),
         )
 
+    def list_engineering_knowledge_revisions(
+        self,
+        knowledge_id: str,
+    ) -> tuple[EngineeringKnowledgeRevision, ...]:
+        normalized = str(knowledge_id).strip()
+        if not normalized:
+            raise ValueError("knowledge_id must not be empty")
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT revision_id
+                FROM engineering_knowledge_revision
+                WHERE knowledge_id = ?
+                ORDER BY revision_number, revision_id
+                """,
+                (normalized,),
+            ).fetchall()
+        revisions: list[EngineeringKnowledgeRevision] = []
+        for (revision_id,) in rows:
+            revision = self.get_engineering_knowledge_revision(str(revision_id))
+            if revision is not None:
+                revisions.append(revision)
+        return tuple(revisions)
+
     def get_engineering_knowledge_lifecycle_state(
         self,
         revision_id: str,
