@@ -180,7 +180,7 @@ PHASE10A_REPLAY_CORPUS_V1: tuple[Phase10AReplayCaseV1, ...] = (
     Phase10AReplayCaseV1(
         "30-protected-state",
         "Owner acceptance leaves protected main and production state unchanged.",
-        ("tools/acceptance/phase10a_owner_acceptance.ps1",),
+        ("src/jarvis/autonomy/phase10a_acceptance.py",),
     ),
 )
 
