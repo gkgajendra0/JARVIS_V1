@@ -906,6 +906,109 @@ class DispatchIntentV1:
 
 
 @dataclass(frozen=True, slots=True)
+class AutonomyDispatchLinkV1:
+    dispatch_link_id: str
+    candidate_id: str
+    dispatch_role: str
+    downstream_kind: str
+    downstream_id: str
+    source_identity: str
+    mode: AutonomyMode
+    disposition: CandidateDisposition
+    bridge_contract_digest: str
+    reason_codes: tuple[str, ...]
+    created_at_epoch: float
+    downstream_version: str | None = None
+    schema_version: str = AUTONOMY_CONTRACT_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        for field_name in ("dispatch_link_id", "candidate_id"):
+            object.__setattr__(
+                self,
+                field_name,
+                _text(getattr(self, field_name), field_name, max_length=240),
+            )
+        object.__setattr__(
+            self,
+            "dispatch_role",
+            _token(self.dispatch_role, "dispatch_role"),
+        )
+        object.__setattr__(
+            self,
+            "downstream_kind",
+            _token(self.downstream_kind, "downstream_kind"),
+        )
+        object.__setattr__(
+            self,
+            "downstream_id",
+            _text(self.downstream_id, "downstream_id", max_length=500),
+        )
+        object.__setattr__(
+            self,
+            "source_identity",
+            _text(self.source_identity, "source_identity", max_length=1000),
+        )
+        if not isinstance(self.mode, AutonomyMode):
+            raise TypeError("mode must be an AutonomyMode")
+        if not isinstance(self.disposition, CandidateDisposition):
+            raise TypeError("disposition must be a CandidateDisposition")
+        object.__setattr__(
+            self,
+            "bridge_contract_digest",
+            _sha256(
+                self.bridge_contract_digest,
+                "bridge_contract_digest",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "reason_codes",
+            _unique_tokens(self.reason_codes, "reason_codes"),
+        )
+        object.__setattr__(
+            self,
+            "created_at_epoch",
+            _epoch(self.created_at_epoch, "created_at_epoch"),
+        )
+        object.__setattr__(
+            self,
+            "downstream_version",
+            _optional_text(
+                self.downstream_version,
+                "downstream_version",
+                max_length=500,
+            ),
+        )
+        if self.schema_version != AUTONOMY_CONTRACT_SCHEMA_VERSION:
+            raise ValueError("unsupported dispatch-link schema_version")
+
+    def to_payload(self) -> dict[str, JSONValue]:
+        return {
+            "dispatch_link_id": self.dispatch_link_id,
+            "candidate_id": self.candidate_id,
+            "dispatch_role": self.dispatch_role,
+            "downstream_kind": self.downstream_kind,
+            "downstream_id": self.downstream_id,
+            "source_identity": self.source_identity,
+            "mode": self.mode.value,
+            "disposition": self.disposition.value,
+            "bridge_contract_digest": self.bridge_contract_digest,
+            "reason_codes": list(self.reason_codes),
+            "created_at_epoch": self.created_at_epoch,
+            "downstream_version": self.downstream_version,
+            "schema_version": self.schema_version,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> Self:
+        data = dict(payload)
+        data["mode"] = AutonomyMode(data["mode"])
+        data["disposition"] = CandidateDisposition(data["disposition"])
+        data["reason_codes"] = tuple(data["reason_codes"])
+        return cls(**data)
+
+
+@dataclass(frozen=True, slots=True)
 class OwnerAttentionItemV1:
     attention_id: str
     fingerprint: str
