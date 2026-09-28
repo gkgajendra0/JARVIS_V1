@@ -192,9 +192,7 @@ Phase 10 does not:
 Slices 10.1–10.7 are implemented. The final Phase-10.7 replay matrix is automated and
 the owner-machine harness is implemented.
 
-Do not mark Phase 10 DONE until the final documentation head has exact-head CI green,
-required owner-machine acceptance has passed against that exact commit, and the final
-acceptance evidence is recorded.
+Do not mark Phase 10 DONE until the exact Phase-10.7 implementation/acceptance head has CI green, required owner-machine acceptance has passed against that tested commit, and a later documentation-only acceptance record has captured the evidence before merge.
 
 The Phase-9 deferred full external capability lifecycle remains a separate mandatory
 final whole-system validation item.
