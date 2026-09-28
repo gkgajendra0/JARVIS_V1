@@ -2,7 +2,7 @@
 
 ## Status
 
-**IMPLEMENTATION COMPLETE — AUTOMATED VALIDATION GREEN — OWNER-MACHINE ACCEPTANCE PENDING — 2026-09-28**
+**DONE / OWNER-MACHINE ACCEPTED 2026-09-28**
 
 Permanent engineering sequence remains:
 
@@ -189,10 +189,20 @@ Phase 10 does not:
 
 ## 5. Completion rule
 
-Slices 10.1–10.7 are implemented. The final Phase-10.7 replay matrix is automated and
-the owner-machine harness is implemented.
+Slices 10.1–10.7 are complete. Exact-head CI passed on
+`4c48f435ba7478ee6a076c8510d64d957ba14b58`, and the isolated Windows
+owner-machine acceptance passed all 15 locked replay cases on 2026-09-28.
 
-Do not mark Phase 10 DONE until the exact Phase-10.7 implementation/acceptance head has CI green, required owner-machine acceptance has passed against that tested commit, and a later documentation-only acceptance record has captured the evidence before merge.
+Accepted evidence:
+
+- suite digest: `f9c66d9ecd7955db57e3d7024728c93ef93f3c35765f540c2d14051c62c533f0`;
+- evidence digest: `e90fb3ea53c54a6def8eca834ea8f7d6a0b132d98302dea2bf0ed997b5bcd0f6`;
+- protected-main implementation merge: `0cd4bb650b3a0230d13416863432083f60b6a4e7`;
+- repository unchanged, Authority not granted, production not mutated.
+
+Canonical acceptance evidence is recorded in
+`PHASE10_CLOSED_LOOP_ENGINEERING_LEARNING_ACCEPTANCE.md`.
 
 The Phase-9 deferred full external capability lifecycle remains a separate mandatory
-final whole-system validation item.
+final whole-system validation item. The next phase is Phase 10A, which must begin with
+research and architecture before any implementation.
