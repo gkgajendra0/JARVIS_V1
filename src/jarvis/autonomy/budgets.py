@@ -197,7 +197,10 @@ class AutonomyBudgetEvaluator:
         ):
             exceeded.append("repeat_dispatch_budget_exhausted")
 
-        if candidate.action_kind is ActionKind.WORK_ITEM:
+        if candidate.action_kind in {
+            ActionKind.WORK_ITEM,
+            ActionKind.ENGINEERING_CHANGE,
+        }:
             if (
                 usage.active_autonomous_work_items
                 >= policy.max_concurrent_autonomous_work_items
