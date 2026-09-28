@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from livekit.agents import RunContext, function_tool
 
 from jarvis.vision.service import VisionService
@@ -101,7 +103,7 @@ class VisionAgentTools:
     async def switch_vision_camera(
         self,
         context: RunContext,
-        camera: str,
+        camera: Literal["lenovo", "pocket3"],
     ) -> dict[str, object]:
         """Switch JARVIS eyes only when the owner explicitly asks.
 
