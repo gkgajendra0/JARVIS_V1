@@ -142,9 +142,7 @@ def test_camera_switch_rolls_back_when_new_camera_cannot_open() -> None:
 
 def test_camera_open_failure_releases_handle() -> None:
     fake = FakeCapture(opened=False)
-    source = OpenCVCameraSource(
-        capture_factory=lambda index, backend, params: fake
-    )
+    source = OpenCVCameraSource(capture_factory=lambda index, backend, params: fake)
 
     with pytest.raises(RuntimeError, match="failed to open"):
         source.start()
@@ -154,9 +152,7 @@ def test_camera_open_failure_releases_handle() -> None:
 
 def test_camera_initial_read_failure_releases_handle() -> None:
     fake = FakeCapture(fail_first_read=True)
-    source = OpenCVCameraSource(
-        capture_factory=lambda index, backend, params: fake
-    )
+    source = OpenCVCameraSource(capture_factory=lambda index, backend, params: fake)
 
     with pytest.raises(RuntimeError, match="did not provide a frame"):
         source.start()
