@@ -144,9 +144,10 @@ def test_promotion_completed_requires_and_preserves_healthy_observation(
     assert outcome.attribution is EngineeringOutcomeAttribution.NOT_APPLICABLE
     assert outcome.release_sha == MERGE
     assert "runtime_healthy" in outcome.reason_codes
-    assert sum(
-        ref.startswith("change-artifact:") for ref in outcome.evidence_references
-    ) == 2
+    assert (
+        sum(ref.startswith("change-artifact:") for ref in outcome.evidence_references)
+        == 2
+    )
 
 
 def test_candidate_local_rollback_becomes_candidate_negative_outcome(
