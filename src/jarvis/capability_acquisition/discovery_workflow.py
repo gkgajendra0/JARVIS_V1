@@ -71,7 +71,7 @@ class AcquisitionLocalDiscoveryExecutor:
         parameters: dict[str, Any],
     ) -> tuple[str, ...]:
         del work, parameters
-        return ("network", "local_discovery")
+        return ("network", "discovery")
 
     async def execute(
         self,
