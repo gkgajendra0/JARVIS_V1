@@ -15,8 +15,10 @@ from jarvis.autonomy.dispatch import (
 from jarvis.autonomy.findings import FindingLifecycleManager
 from jarvis.autonomy.models import (
     AutonomyMode,
+    CandidateDisposition,
     DesiredStateStatus,
     DesiredStateV1,
+    FindingStatus,
     ObjectiveOrigin,
     ObjectiveStatus,
     ObjectiveV1,
