@@ -203,4 +203,4 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Run the final non-destructive Phase-10 owner-machine acceptance harness against the exact Phase-10.7 documentation head. If it passes, record the digest-bound evidence, mark Phase 10 DONE, merge the accepted PR to protected main, then begin Phase 10A research/architecture. Preserve the deferred Phase-9 full external lifecycle as a mandatory final whole-system validation item.**
+**Run the final non-destructive Phase-10 owner-machine acceptance harness against the exact Phase-10.7 implementation/acceptance head. If it passes, record the digest-bound evidence, mark Phase 10 DONE, merge the accepted PR to protected main, then begin Phase 10A research/architecture. Preserve the deferred Phase-9 full external lifecycle as a mandatory final whole-system validation item.**
