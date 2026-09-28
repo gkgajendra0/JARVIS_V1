@@ -71,7 +71,9 @@ def _tree_digest(root: pathlib.Path) -> str:
     entries: list[dict[str, object]] = []
     for path in sorted(root.rglob("*")):
         if path.is_symlink():
-            raise ReleaseDependencyError("runtime dependency overlay contains a symlink")
+            raise ReleaseDependencyError(
+                "runtime dependency overlay contains a symlink"
+            )
         if not path.is_file():
             continue
         relative = path.relative_to(root).as_posix()
@@ -90,7 +92,9 @@ def _validate_overlay_names(overlay: pathlib.Path) -> None:
     blocked.add("jarvis")
     for child in overlay.iterdir():
         if child.is_symlink():
-            raise ReleaseDependencyError("runtime dependency overlay contains a symlink")
+            raise ReleaseDependencyError(
+                "runtime dependency overlay contains a symlink"
+            )
         name = child.name
         lowered = name.casefold()
         if lowered.endswith(".pth"):
@@ -131,11 +135,17 @@ def _existing_overlay(
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ReleaseDependencyError("runtime dependency manifest is invalid") from exc
-    if not isinstance(payload, dict) or payload.get("schema") != "release_dependency_overlay.v1":
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != "release_dependency_overlay.v1"
+    ):
         raise ReleaseDependencyError("runtime dependency manifest schema mismatch")
     if payload.get("release_sha") != release_sha:
         raise ReleaseDependencyError("runtime dependency overlay release mismatch")
-    if expected_change_id is not None and payload.get("change_id") != expected_change_id:
+    if (
+        expected_change_id is not None
+        and payload.get("change_id") != expected_change_id
+    ):
         raise ReleaseDependencyError("runtime dependency overlay change mismatch")
     if (
         expected_binding_digest is not None
@@ -240,9 +250,7 @@ class ReleaseDependencyMaterializer:
                 by_id[resolution_id] = artifact
 
         base = default_runtime_dependency_root()
-        staging = pathlib.Path(
-            tempfile.mkdtemp(prefix=f".{sha}-", dir=base)
-        ).resolve()
+        staging = pathlib.Path(tempfile.mkdtemp(prefix=f".{sha}-", dir=base)).resolve()
         wheelhouse = staging / "wheels"
         overlay = staging / _SITE_PACKAGES
         wheelhouse.mkdir()
@@ -265,12 +273,14 @@ class ReleaseDependencyMaterializer:
                     raise ReleaseDependencyError(
                         f"runtime dependency resolution is stale: {resolution_id}"
                     )
-                lock_digest = str(
-                    artifact.payload.get("lock_digest") or ""
-                ).strip().casefold()
-                lock_artifact_id = str(
-                    artifact.payload.get("lock_artifact_id") or ""
-                ).strip().casefold()
+                lock_digest = (
+                    str(artifact.payload.get("lock_digest") or "").strip().casefold()
+                )
+                lock_artifact_id = (
+                    str(artifact.payload.get("lock_artifact_id") or "")
+                    .strip()
+                    .casefold()
+                )
                 if not lock_artifact_id or lock_artifact_id != lock_digest:
                     raise ReleaseDependencyError(
                         "runtime dependency resolution has no canonical lock artifact"
@@ -280,7 +290,9 @@ class ReleaseDependencyMaterializer:
                 shutil.copyfile(lock_source, lock_path)
                 parsed = inspect_pylock(lock_path, source=PYPI_PUBLIC_V1)
                 if parsed.lock_sha256 != lock_digest:
-                    raise ReleaseDependencyError("runtime dependency lock digest changed")
+                    raise ReleaseDependencyError(
+                        "runtime dependency lock digest changed"
+                    )
                 expected_artifacts = tuple(
                     str(item).strip().casefold()
                     for item in artifact.payload.get("artifact_ids", ())
@@ -339,7 +351,9 @@ class ReleaseDependencyMaterializer:
                 )
                 lines.append(f"{name}=={version} {suffix}".rstrip())
             if not lines:
-                raise ReleaseDependencyError("runtime dependency requirements are empty")
+                raise ReleaseDependencyError(
+                    "runtime dependency requirements are empty"
+                )
             requirements.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
             try:
@@ -384,7 +398,11 @@ class ReleaseDependencyMaterializer:
                 )
             return verified
         finally:
-            if staging.exists() and staging.parent == base and staging.name.startswith("."):
+            if (
+                staging.exists()
+                and staging.parent == base
+                and staging.name.startswith(".")
+            ):
                 shutil.rmtree(staging, ignore_errors=True)
 
 
