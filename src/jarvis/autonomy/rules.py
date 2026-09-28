@@ -217,6 +217,7 @@ class DesiredStateRule(Protocol):
     rule_version: int
     required_namespaces: tuple[str, ...]
     resolver_key: str
+    default_stabilization_policy: StabilizationPolicyV1
 
     def validate_expected(self, desired: DesiredStateV1) -> None: ...
 
@@ -251,6 +252,7 @@ class DesiredStateRuleRegistry:
             for item in getattr(rule, "required_namespaces", ())
         )
         resolver_key = str(getattr(rule, "resolver_key", "")).strip().casefold()
+        default_policy = getattr(rule, "default_stabilization_policy", None)
         if not key or isinstance(version, bool) or not isinstance(version, int) or version <= 0:
             raise ValueError("rule requires normalized key and positive version")
         if not namespaces or any(not item for item in namespaces):
@@ -259,6 +261,12 @@ class DesiredStateRuleRegistry:
             raise ValueError("rule source namespaces must be unique")
         if not resolver_key:
             raise ValueError("rule resolver_key must not be empty")
+        if not isinstance(default_policy, StabilizationPolicyV1):
+            raise TypeError("rule default_stabilization_policy must be StabilizationPolicyV1")
+        if not callable(getattr(rule, "validate_expected", None)):
+            raise TypeError("rule must provide validate_expected(desired)")
+        if not callable(getattr(rule, "evaluate", None)):
+            raise TypeError("rule must provide evaluate(desired, snapshot)")
         identity = (key, version)
         if identity in self._rules:
             raise DuplicateDesiredStateRuleError(
@@ -337,6 +345,7 @@ class ComponentHealthRuleV1:
     rule_version = 1
     required_namespaces = ("health_registry", "self_model")
     resolver_key = "component_health"
+    default_stabilization_policy = StabilizationPolicyV1()
 
     def validate_expected(self, desired: DesiredStateV1) -> None:
         if desired.target_namespace != "component":
@@ -399,6 +408,7 @@ class CapabilityEffectiveStateRuleV1:
     rule_version = 1
     required_namespaces = ("capability_registry",)
     resolver_key = "capability_effective_state"
+    default_stabilization_policy = StabilizationPolicyV1()
 
     def validate_expected(self, desired: DesiredStateV1) -> None:
         if desired.target_namespace != "capability":
@@ -492,6 +502,7 @@ class DurableWorkRuleV1:
     rule_version = 1
     required_namespaces = ("work",)
     resolver_key = "durable_work"
+    default_stabilization_policy = StabilizationPolicyV1()
 
     def validate_expected(self, desired: DesiredStateV1) -> None:
         if desired.target_namespace != "work":
