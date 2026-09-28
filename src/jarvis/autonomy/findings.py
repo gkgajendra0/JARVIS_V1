@@ -46,6 +46,22 @@ class FindingLifecycle:
         except KeyError:
             return None
 
+    def _require_related_finding(
+        self,
+        related_finding_id: str,
+        *,
+        current_finding_id: str,
+        field_name: str,
+    ) -> AutonomyFindingV1:
+        if related_finding_id == current_finding_id:
+            raise ValueError(f"{field_name} cannot self-reference")
+        try:
+            return self.store.require_finding(related_finding_id)
+        except KeyError as exc:
+            raise ValueError(
+                f"{field_name} must reference a canonical Finding"
+            ) from exc
+
     @staticmethod
     def _event(
         finding: AutonomyFindingV1,
@@ -169,6 +185,12 @@ class FindingLifecycle:
             finding_kind=self.finding_kind,
         )
         current = self._current(finding_id)
+        if root_finding_id is not None:
+            self._require_related_finding(
+                root_finding_id,
+                current_finding_id=finding_id,
+                field_name="root_finding_id",
+            )
 
         if (
             evaluation.desired_state_id != desired.desired_state_id
@@ -313,8 +335,17 @@ class FindingLifecycle:
         at_epoch: float,
     ) -> FindingObservationResultV1:
         current = self.store.require_finding(finding_id)
-        if current.finding_id == suppression_finding_id:
-            raise ValueError("finding cannot suppress itself")
+        self._require_related_finding(
+            suppression_finding_id,
+            current_finding_id=current.finding_id,
+            field_name="suppression_finding_id",
+        )
+        if root_finding_id is not None:
+            self._require_related_finding(
+                root_finding_id,
+                current_finding_id=current.finding_id,
+                field_name="root_finding_id",
+            )
         if (
             current.status is FindingStatus.SUPPRESSED
             and current.suppression_finding_id == suppression_finding_id
