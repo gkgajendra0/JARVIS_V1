@@ -13,6 +13,7 @@ from jarvis.autonomy.models import (
     CandidateDisposition,
     DesiredStateStatus,
     DesiredStateV1,
+    DispatchIntentV1,
     FindingStatus,
     ObjectiveOrigin,
     ObjectiveStatus,
@@ -31,7 +32,7 @@ from jarvis.autonomy.rules import (
     DesiredStateEvaluationStatus,
     DesiredStateEvaluationV1,
 )
-from jarvis.autonomy.store import AutonomyStore
+from jarvis.autonomy.store import AutonomyConflictError, AutonomyStore
 from jarvis.work.models import WorkPriority
 from jarvis.work.store import SQLiteWorkStore
 
@@ -379,6 +380,11 @@ def test_same_finding_policy_generation_reuses_one_immutable_candidate(
         resolver_version=1,
     )
     assert first.candidate is not None
+    assert len(first.dispatch_intents) == 1
+    assert first.dispatch_intents[0].disposition is CandidateDisposition.SHADOW_ONLY
+    assert store.require_dispatch_intent(
+        first.candidate.candidate_id
+    ) == first.dispatch_intents[0]
 
     updated = manager.apply(
         desired,
@@ -402,6 +408,7 @@ def test_same_finding_policy_generation_reuses_one_immutable_candidate(
     assert replay.candidate == first.candidate
     assert replay.reason_codes == ("candidate_replay_reused",)
     assert replay.candidate.snapshot_digest == DIGEST_A
+    assert replay.dispatch_intents == first.dispatch_intents
 
 
 def test_resolved_finding_makes_existing_candidate_obsolete(tmp_path: Path) -> None:
@@ -445,6 +452,12 @@ def test_resolved_finding_makes_existing_candidate_obsolete(tmp_path: Path) -> N
 
     assert obsolete.candidate is None
     assert obsolete.disposition is CandidateDisposition.OBSOLETE
+    assert len(obsolete.dispatch_intents) == 1
+    assert obsolete.dispatch_intents[0].disposition is CandidateDisposition.OBSOLETE
+    assert store.require_dispatch_intent(
+        candidate_result.candidate.candidate_id,
+        dispatch_role="terminal",
+    ) == obsolete.dispatch_intents[0]
     assert store.require_action_candidate(
         candidate_result.candidate.candidate_id
     ) == candidate_result.candidate
@@ -546,10 +559,49 @@ def test_observe_and_assisted_modes_cannot_record_phase10a4_candidate(
         assert result.reason_codes == ("phase10a4_is_shadow_only",)
 
     with sqlite3.connect(store.path) as db:
-        count = db.execute(
+        candidate_count = db.execute(
             "SELECT COUNT(*) FROM autonomy_action_candidates"
         ).fetchone()[0]
-    assert count == 0
+        intent_count = db.execute(
+            "SELECT COUNT(*) FROM autonomy_dispatch_links"
+        ).fetchone()[0]
+    assert candidate_count == 0
+    assert intent_count == 0
+
+
+def test_dispatch_intent_replay_conflict_fails_closed(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    objective = _objective()
+    desired = _desired(objective)
+    store.create_objective(objective)
+    store.create_desired_state(desired)
+    _, finding = _active_finding(store, desired)
+    service = ActionResolutionService(
+        store,
+        build_default_action_resolver_registry(),
+    )
+    result = service.resolve_and_record(
+        desired,
+        finding,
+        resolver_key="component_health",
+        resolver_version=1,
+    )
+    assert result.candidate is not None
+    assert len(result.dispatch_intents) == 1
+    intent = result.dispatch_intents[0]
+
+    conflicting = DispatchIntentV1(
+        dispatch_intent_id=intent.dispatch_intent_id,
+        candidate_id=intent.candidate_id,
+        dispatch_role=intent.dispatch_role,
+        action_kind=intent.action_kind,
+        disposition=CandidateDisposition.BLOCKED_POLICY,
+        source_identity=intent.source_identity,
+        reason_codes=("conflicting_replay",),
+        created_at_epoch=intent.created_at_epoch,
+    )
+    with pytest.raises(AutonomyConflictError):
+        store.record_dispatch_intent(conflicting)
 
 
 def test_resolver_registry_rejects_duplicate_exact_version() -> None:
