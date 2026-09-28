@@ -103,7 +103,7 @@ def _validate_overlay_names(overlay: pathlib.Path) -> None:
             )
         if lowered.endswith((".dist-info", ".data")):
             continue
-        module_name = lowered[:-3] if lowered.endswith(".py") else lowered
+        module_name = lowered.removesuffix(".py")
         if module_name in blocked:
             raise ReleaseDependencyError(
                 "runtime dependency overlay would shadow protected module: "
