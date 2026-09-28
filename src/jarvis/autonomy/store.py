@@ -21,6 +21,7 @@ from .models import (
     OwnerAttentionItemV1,
     ReconcileRunV1,
 )
+from .system_state import SystemStateSnapshotV1
 
 AUTONOMY_SCHEMA_VERSION = 1
 
@@ -1101,3 +1102,81 @@ class AutonomyStore:
         if row is None:
             raise KeyError(request_token)
         return ReconcileRunV1.from_payload(self._decoded_payload(row))
+
+
+    def record_system_snapshot(
+        self,
+        snapshot: SystemStateSnapshotV1,
+    ) -> SystemStateSnapshotV1:
+        if not isinstance(snapshot, SystemStateSnapshotV1):
+            raise TypeError("snapshot must be a SystemStateSnapshotV1")
+        encoded = self.work.encode_extension_json(snapshot.to_payload())
+        with self.work.extension_transaction() as db:
+            existing = db.execute(
+                """
+                SELECT * FROM autonomy_system_snapshots
+                WHERE snapshot_id=?
+                """,
+                (snapshot.snapshot_id,),
+            ).fetchone()
+            if existing is not None:
+                payload = self.work.decode_extension_json(str(existing["payload"]))
+                if not isinstance(payload, dict):
+                    raise AutonomyIntegrityError(
+                        "stored SystemState snapshot payload is not an object"
+                    )
+                persisted = SystemStateSnapshotV1.from_payload(payload)
+                if persisted != snapshot:
+                    raise AutonomyConflictError(
+                        "SystemState snapshot identity already exists with different payload"
+                    )
+                if str(existing["snapshot_digest"]) != snapshot.snapshot_digest:
+                    raise AutonomyIntegrityError(
+                        "stored SystemState snapshot digest column mismatch"
+                    )
+                return persisted
+            try:
+                db.execute(
+                    """
+                    INSERT INTO autonomy_system_snapshots(
+                        snapshot_id, snapshot_digest, payload, created_at_epoch
+                    ) VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        snapshot.snapshot_id,
+                        snapshot.snapshot_digest,
+                        encoded,
+                        snapshot.ended_at_epoch,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise AutonomyConflictError(
+                    "SystemState snapshot identity conflict"
+                ) from exc
+        return snapshot
+
+    def require_system_snapshot(
+        self,
+        snapshot_id: str,
+    ) -> SystemStateSnapshotV1:
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT * FROM autonomy_system_snapshots
+                WHERE snapshot_id=?
+                """,
+                (snapshot_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(snapshot_id)
+        payload = self.work.decode_extension_json(str(row["payload"]))
+        if not isinstance(payload, dict):
+            raise AutonomyIntegrityError(
+                "stored SystemState snapshot payload is not an object"
+            )
+        snapshot = SystemStateSnapshotV1.from_payload(payload)
+        if str(row["snapshot_digest"]) != snapshot.snapshot_digest:
+            raise AutonomyIntegrityError(
+                "stored SystemState snapshot digest column mismatch"
+            )
+        return snapshot
