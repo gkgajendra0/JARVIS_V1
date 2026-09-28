@@ -33,6 +33,7 @@ from jarvis.work.models import WorkItem, WorkStep, WorkType
 
 PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT = "phase9.real-external-effect.v1"
 
+
 class AcquisitionProtocolError(RuntimeError):
     """Phase-9 acquisition evidence/finalization failed deterministic validation."""
 
