@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from livekit.agents import RunContext, function_tool
 
 from jarvis.vision.service import VisionService
@@ -18,7 +20,7 @@ class VisionAgentTools:
         # Manual software-follow controls are intentionally not exposed to the
         # realtime agent. Native Pocket 3 OWNER lock already owns continuous
         # camera tracking in production.
-        return [self.inspect_vision]
+        return [self.inspect_vision, self.switch_vision_camera]
 
     def _voice_report(self, *, event_limit: int) -> dict[str, object]:
         """Expose tracker truth without detector-candidate telemetry to the LLM."""
@@ -48,8 +50,10 @@ class VisionAgentTools:
                     )
                 safe_events.append(event)
 
+        camera = report.get("camera")
         return {
             "status": status,
+            "camera": camera if isinstance(camera, dict) else None,
             "recent_events": safe_events,
             "count_semantics": (
                 "visible_people is the only canonical visible-person count. "
@@ -82,6 +86,7 @@ class VisionAgentTools:
                 "framing_source",
                 "adaptive_target_zoom",
                 "recent_tracking_transitions",
+                "active_camera_profile",
             ],
             "not_available": [
                 "raw_image_pixels",
@@ -92,6 +97,36 @@ class VisionAgentTools:
                 "facial_appearance_or_identity",
             ],
             **self._voice_report(event_limit=16),
+        }
+
+    @function_tool()
+    async def switch_vision_camera(
+        self,
+        context: RunContext,
+        camera: Literal["lenovo", "pocket3"],
+    ) -> dict[str, object]:
+        """Switch JARVIS eyes only when the owner explicitly asks.
+
+        Supported camera profiles are configured by the local runtime. Production
+        defaults to the Lenovo 510 RGB camera. Map owner wording such as Lenovo,
+        webcam, or Lenovo eyes to `lenovo`; map Pocket, Pocket Osmo, Osmo Pocket 3,
+        or Pocket eyes to `pocket3`. The optional Pocket 3 profile is lazy: if it
+        is unavailable, the switch fails and the previous camera is restored.
+        This tool changes only the visual source; it does not arm pan, tilt, zoom,
+        native tracking, or any other camera movement.
+        """
+        del context
+        try:
+            result = self._service.switch_camera(camera)
+        except (RuntimeError, TypeError, ValueError) as exc:
+            return {
+                "ok": False,
+                "reason": str(exc),
+                "vision": self._voice_report(event_limit=8),
+            }
+        return {
+            **result,
+            "vision": self._voice_report(event_limit=8),
         }
 
     @function_tool()

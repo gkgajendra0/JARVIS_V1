@@ -38,6 +38,21 @@ class PtzController(Protocol):
     def close(self) -> None: ...
 
 
+class NullPtzController:
+    """Static-camera PTZ boundary.
+
+    Lenovo 510 is the default JARVIS eye and has no motorized pan/tilt path.
+    Keeping a no-op controller preserves the runtime contract without opening a
+    duvc device or pretending that a static camera can move.
+    """
+
+    def move(self, command: FollowCommand) -> None:
+        del command
+
+    def close(self) -> None:
+        return None
+
+
 class _DuvcBackend(Protocol):
     def get_axis_range(self, axis: str) -> PtzAxisRange: ...
 

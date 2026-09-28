@@ -11,7 +11,7 @@ from typing import Protocol
 import cv2
 import numpy as np
 
-CaptureFactory = Callable[[int, int], object]
+CaptureFactory = Callable[[int, int, list[int]], object]
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,24 +52,49 @@ class CameraSource(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class OpenCVCameraConfig:
+    """OpenCV capture profile.
+
+    The production defaults match the owner-machine accepted Lenovo 510 RGB path:
+    DirectShow + MJPEG + 1920x1080 @ 30 FPS. Passing these values at open time is
+    intentional; the Lenovo driver can otherwise negotiate YUY2 and collapse to
+    single-digit FPS at 1080p.
+    """
+
     device_index: int = 0
-    width: int = 1280
-    height: int = 720
+    width: int = 1920
+    height: int = 1080
+    fps: float = 30.0
+    fourcc: str = "MJPG"
     backend: str = "dshow"
 
     def __post_init__(self) -> None:
         backend = self.backend.strip().lower()
+        fourcc = self.fourcc.strip().upper()
         if self.device_index < 0:
             raise ValueError("device_index must be non-negative")
         if self.width <= 0 or self.height <= 0:
             raise ValueError("camera dimensions must be positive")
+        if self.fps <= 0:
+            raise ValueError("camera fps must be positive")
+        if len(fourcc) != 4:
+            raise ValueError("camera fourcc must contain exactly four characters")
         if backend not in {"dshow", "msmf"}:
             raise ValueError(f"unsupported camera backend: {self.backend!r}")
         object.__setattr__(self, "backend", backend)
+        object.__setattr__(self, "fourcc", fourcc)
+
+
+def _decode_fourcc(value: float) -> str:
+    encoded = int(value)
+    return "".join(chr((encoded >> (8 * offset)) & 0xFF) for offset in range(4))
 
 
 class OpenCVCameraSource:
-    """Capture continuously into a single overwrite slot."""
+    """Capture continuously into a single overwrite slot.
+
+    Frame IDs remain monotonic across an explicit camera switch so downstream
+    consumers never confuse a new device's first frame with an old frame.
+    """
 
     def __init__(
         self,
@@ -82,6 +107,7 @@ class OpenCVCameraSource:
         self._capture_factory = capture_factory
         self._clock = clock
         self._condition = threading.Condition()
+        self._lifecycle_lock = threading.RLock()
         self._stop = threading.Event()
         self._capture: object | None = None
         self._thread: threading.Thread | None = None
@@ -95,32 +121,36 @@ class OpenCVCameraSource:
         return thread is not None and thread.is_alive()
 
     def start(self) -> None:
-        if self._capture is not None:
-            raise RuntimeError("camera source is already started")
+        with self._lifecycle_lock:
+            if self._capture is not None:
+                raise RuntimeError("camera source is already started")
+            self._activate(self.config)
 
-        backend = cv2.CAP_DSHOW if self.config.backend == "dshow" else cv2.CAP_MSMF
-        capture = self._capture_factory(self.config.device_index, backend)
-        if not capture.isOpened():
-            capture.release()
-            raise RuntimeError("camera failed to open")
+    def switch(self, config: OpenCVCameraConfig) -> None:
+        """Switch to another OpenCV camera profile with rollback on open failure."""
+        with self._lifecycle_lock:
+            if config == self.config:
+                return
+            if self._capture is None:
+                self.config = config
+                return
 
-        capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.config.width)
-        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config.height)
-        ok, image = capture.read()
-        if not ok or image is None:
-            capture.release()
-            raise RuntimeError("camera opened but did not provide a frame")
+            previous = self.config
+            self._deactivate()
 
-        self._stop.clear()
-        self._read_error = None
-        self._capture = capture
-        self._publish(image)
-        self._thread = threading.Thread(
-            target=self._capture_loop,
-            name="jarvis-vision-camera",
-            daemon=True,
-        )
-        self._thread.start()
+            try:
+                self._activate(config)
+            except Exception as switch_error:
+                try:
+                    self._activate(previous)
+                except Exception as rollback_error:
+                    raise RuntimeError(
+                        "camera switch failed and previous camera could not be restored"
+                    ) from rollback_error
+                raise RuntimeError(
+                    f"camera switch to device index {config.device_index} failed; "
+                    "previous camera restored"
+                ) from switch_error
 
     def latest(
         self,
@@ -155,17 +185,75 @@ class OpenCVCameraSource:
             return frame
 
     def close(self) -> None:
+        with self._lifecycle_lock:
+            self._deactivate()
+
+    def _activate(self, config: OpenCVCameraConfig) -> None:
+        backend = cv2.CAP_DSHOW if config.backend == "dshow" else cv2.CAP_MSMF
+        params = [
+            cv2.CAP_PROP_FOURCC,
+            cv2.VideoWriter_fourcc(*config.fourcc),
+            cv2.CAP_PROP_FRAME_WIDTH,
+            int(config.width),
+            cv2.CAP_PROP_FRAME_HEIGHT,
+            int(config.height),
+            cv2.CAP_PROP_FPS,
+            int(config.fps),
+        ]
+        capture = self._capture_factory(config.device_index, backend, params)
+        if not capture.isOpened():
+            capture.release()
+            raise RuntimeError("camera failed to open")
+
+        get_property = getattr(capture, "get", None)
+        if callable(get_property):
+            negotiated_width = int(get_property(cv2.CAP_PROP_FRAME_WIDTH))
+            negotiated_height = int(get_property(cv2.CAP_PROP_FRAME_HEIGHT))
+            negotiated_fourcc = _decode_fourcc(get_property(cv2.CAP_PROP_FOURCC))
+            if (
+                negotiated_width != config.width
+                or negotiated_height != config.height
+                or negotiated_fourcc != config.fourcc
+            ):
+                capture.release()
+                raise RuntimeError(
+                    "camera capture negotiation mismatch: "
+                    f"requested={config.width}x{config.height}/{config.fourcc}, "
+                    f"negotiated={negotiated_width}x{negotiated_height}/"
+                    f"{negotiated_fourcc!r}"
+                )
+
+        ok, image = capture.read()
+        if not ok or image is None:
+            capture.release()
+            raise RuntimeError("camera opened but did not provide a frame")
+
+        self._stop.clear()
+        self._read_error = None
+        self.config = config
+        self._capture = capture
+        self._publish(image)
+        self._thread = threading.Thread(
+            target=self._capture_loop,
+            name="jarvis-vision-camera",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def _deactivate(self) -> None:
         self._stop.set()
         with self._condition:
             self._condition.notify_all()
 
-        thread = self._thread
-        if thread is not None:
-            thread.join(timeout=1.0)
-
         capture = self._capture
         if capture is not None:
             capture.release()
+
+        thread = self._thread
+        if thread is not None:
+            thread.join(timeout=1.0)
+            if thread.is_alive():
+                raise RuntimeError("camera capture thread did not stop")
 
         self._thread = None
         self._capture = None
@@ -178,6 +266,8 @@ class OpenCVCameraSource:
         while not self._stop.is_set():
             ok, image = capture.read()
             if not ok or image is None:
+                if self._stop.is_set():
+                    return
                 with self._condition:
                     self._read_error = RuntimeError("camera frame capture failed")
                     self._condition.notify_all()

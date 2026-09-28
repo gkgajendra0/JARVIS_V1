@@ -39,6 +39,8 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("JARVIS_MEMORY_CANDIDATE_EXTRACTION_MODEL", " extractor-x ")
     monkeypatch.setenv("JARVIS_VISION_ENABLED", "true")
     monkeypatch.setenv("JARVIS_BLAZEFACE_MODEL_PATH", " C:\\models\\blazeface.tflite ")
+    monkeypatch.setenv("JARVIS_VISION_CAMERA_INDEX", "2")
+    monkeypatch.setenv("JARVIS_POCKET3_CAMERA_INDEX", "4")
     monkeypatch.setenv("JARVIS_SPEAKER_SHADOW_ENABLED", "true")
 
     config = JarvisConfig.from_environment()
@@ -61,6 +63,8 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.memory_candidate_extraction_model == "extractor-x"
     assert config.vision_enabled is True
     assert config.vision_head_model_path == "C:\\models\\blazeface.tflite"
+    assert config.vision_camera_index == 2
+    assert config.pocket3_camera_index == 4
     assert config.speaker_shadow_enabled is True
 
 
@@ -201,3 +205,15 @@ def test_invalid_github_promotion_identifiers_fail_closed() -> None:
         )
     with pytest.raises(ValueError, match="github_expected_ci_app_id"):
         JarvisConfig(github_expected_ci_app_id=0)
+
+
+def test_camera_indexes_default_and_validate() -> None:
+    config = JarvisConfig()
+
+    assert config.vision_camera_index == 0
+    assert config.pocket3_camera_index is None
+
+    with pytest.raises(ValueError, match="vision_camera_index"):
+        JarvisConfig(vision_camera_index=-1)
+    with pytest.raises(ValueError, match="pocket3_camera_index"):
+        JarvisConfig(pocket3_camera_index=-1)

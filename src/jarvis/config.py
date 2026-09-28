@@ -61,6 +61,19 @@ def _configured_int(
         raise ValueError(f"Unsupported {name}: {value!r}") from exc
 
 
+def _configured_optional_int(
+    name: str,
+    machine_settings: Mapping[str, str],
+) -> int | None:
+    value = configured_text(name, machine_settings)
+    if value is None or not value.strip():
+        return None
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise ValueError(f"Unsupported {name}: {value!r}") from exc
+
+
 def _configured_optional_text(
     name: str,
     machine_settings: Mapping[str, str],
@@ -128,11 +141,13 @@ class JarvisConfig:
     memory_semantic_recall_model: str | None = None
     vision_enabled: bool = False
     vision_head_model_path: str | None = None
+    vision_camera_index: int = 0
     speaker_shadow_enabled: bool = False
     active_speaker_shadow_enabled: bool = False
     active_speaker_model_path: str | None = None
     pocket3_native_tracking_enabled: bool = False
     pocket3_ble_name: str = "OsmoPocket3-C36F"
+    pocket3_camera_index: int | None = None
     pocket3_owner_evidence_max_age_seconds: float = 2.0
     pocket3_subject_push_stale_seconds: float = 1.25
     pocket3_lock_pending_timeout_seconds: float = 2.5
@@ -253,6 +268,19 @@ class JarvisConfig:
             raise ValueError(
                 "JARVIS_POCKET3_NATIVE_TRACKING_ENABLED requires JARVIS_VISION_ENABLED"
             )
+
+        if (
+            isinstance(self.vision_camera_index, bool)
+            or not isinstance(self.vision_camera_index, int)
+            or self.vision_camera_index < 0
+        ):
+            raise ValueError("vision_camera_index must be a non-negative integer")
+        if self.pocket3_camera_index is not None and (
+            isinstance(self.pocket3_camera_index, bool)
+            or not isinstance(self.pocket3_camera_index, int)
+            or self.pocket3_camera_index < 0
+        ):
+            raise ValueError("pocket3_camera_index must be a non-negative integer")
 
         for name in (
             "audio_input_device",
@@ -438,6 +466,9 @@ class JarvisConfig:
             vision_head_model_path=_configured_optional_text(
                 "JARVIS_BLAZEFACE_MODEL_PATH", machine
             ),
+            vision_camera_index=_configured_int(
+                "JARVIS_VISION_CAMERA_INDEX", 0, machine
+            ),
             speaker_shadow_enabled=_configured_bool(
                 "JARVIS_SPEAKER_SHADOW_ENABLED", False, machine
             ),
@@ -452,6 +483,9 @@ class JarvisConfig:
             ),
             pocket3_ble_name=_configured_required_text(
                 "JARVIS_POCKET3_BLE_NAME", "OsmoPocket3-C36F", machine
+            ),
+            pocket3_camera_index=_configured_optional_int(
+                "JARVIS_POCKET3_CAMERA_INDEX", machine
             ),
             pocket3_owner_evidence_max_age_seconds=_configured_float(
                 "JARVIS_POCKET3_OWNER_EVIDENCE_MAX_AGE_SECONDS", 2.0, machine

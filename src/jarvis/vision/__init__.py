@@ -30,6 +30,7 @@ from jarvis.vision.models import (
 from jarvis.vision.ptz import (
     DuvcPtzConfig,
     DuvcPtzController,
+    NullPtzController,
     PtzAxisRange,
     PtzController,
 )
@@ -59,6 +60,7 @@ __all__ = [
     "MediaPipeBlazeFaceConfig",
     "MediaPipeBlazeFaceDetector",
     "NormalizedPoint",
+    "NullPtzController",
     "ObjectDetector",
     "OpenCVCameraConfig",
     "OpenCVCameraSource",
