@@ -17,7 +17,6 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "AutonomyDispatchLinkV1",
             "AutonomyFindingEventV1",
             "AutonomyFindingV1",
-            "AutonomyMode",
             "AutonomyOutcomeRecordV1",
             "CandidateDisposition",
             "DesiredStateStatus",
@@ -37,6 +36,12 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "contract_digest",
             "deterministic_id",
             "finding_id_for",
+        ),
+    ),
+    (
+        "jarvis.autonomy.mode",
+        (
+            "AutonomyMode",
         ),
     ),
     (
