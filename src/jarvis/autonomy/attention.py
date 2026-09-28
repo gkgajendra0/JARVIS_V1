@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import math
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -50,8 +51,8 @@ def _epoch(value: object, field: str) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise TypeError(f"{field} must be numeric")
     normalized = float(value)
-    if normalized < 0:
-        raise ValueError(f"{field} must not be negative")
+    if not math.isfinite(normalized) or normalized < 0:
+        raise ValueError(f"{field} must be finite and non-negative")
     return normalized
 
 
