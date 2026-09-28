@@ -166,10 +166,23 @@ class ExistingCapabilitySourceAdapter:
         )
         if not required:
             return True
+
         declared = cls._declared_target_hints(descriptor)
-        if not declared:
-            return False
-        return set(required).issubset(set(declared))
+        if declared:
+            return set(required).issubset(set(declared))
+
+        # Legacy/core descriptors predate explicit acquisition target metadata.
+        # Preserve reuse only when the owner-interpreted capability identity itself
+        # matches the descriptor's declared identity. This keeps a generic
+        # "TV control" goal reusable while preventing a target-specific external
+        # request from collapsing into an unrelated local operation merely because
+        # both happen to expose similarly named verbs such as mute/unmute.
+        requested_capability = " ".join(goal.requested_capability.split()).casefold()
+        descriptor_identities = {
+            " ".join(descriptor.name.split()).casefold(),
+            " ".join(descriptor.capability_id.replace(".", " ").split()).casefold(),
+        }
+        return requested_capability in descriptor_identities
 
     def discover(
         self,
