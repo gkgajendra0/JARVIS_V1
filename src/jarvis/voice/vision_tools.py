@@ -116,7 +116,7 @@ class VisionAgentTools:
         del context
         try:
             result = self._service.switch_camera(camera)
-        except (RuntimeError, ValueError) as exc:
+        except (RuntimeError, TypeError, ValueError) as exc:
             return {
                 "ok": False,
                 "reason": str(exc),
