@@ -13,6 +13,7 @@ from jarvis.work.store import SQLiteWorkStore
 from .models import (
     ActionCandidateV1,
     AutonomyFindingEventV1,
+    AutonomyDispatchLinkV1,
     AutonomyFindingV1,
     AutonomyOutcomeRecordV1,
     DesiredStateV1,
@@ -932,6 +933,115 @@ class AutonomyStore:
                 "dispatch role is bound to a downstream object, not an intent"
             )
         return DispatchIntentV1.from_payload(self._decoded_payload(row))
+
+    def record_dispatch_link(
+        self,
+        link: AutonomyDispatchLinkV1,
+    ) -> AutonomyDispatchLinkV1:
+        if not isinstance(link, AutonomyDispatchLinkV1):
+            raise TypeError("link must be an AutonomyDispatchLinkV1")
+        digest, encoded = self._encoded_payload(link)
+        with self.work.extension_transaction() as db:
+            existing = db.execute(
+                """
+                SELECT * FROM autonomy_dispatch_links
+                WHERE candidate_id=? AND dispatch_role=?
+                """,
+                (link.candidate_id, link.dispatch_role),
+            ).fetchone()
+            if existing is not None:
+                if str(existing["downstream_kind"]) == "dispatch_intent":
+                    raise AutonomyConflictError(
+                        "dispatch role is already reserved by an intent"
+                    )
+                payload = self._decoded_payload(existing)
+                if str(existing["payload_digest"]) != digest:
+                    raise AutonomyConflictError(
+                        "dispatch role reused with different downstream semantics"
+                    )
+                persisted = AutonomyDispatchLinkV1.from_payload(payload)
+                if (
+                    str(existing["dispatch_link_id"]) != persisted.dispatch_link_id
+                    or str(existing["downstream_kind"]) != persisted.downstream_kind
+                    or str(existing["downstream_id"]) != persisted.downstream_id
+                    or str(existing["source_identity"]) != persisted.source_identity
+                ):
+                    raise AutonomyIntegrityError(
+                        "dispatch-link columns disagree with protected payload"
+                    )
+                return persisted
+            try:
+                db.execute(
+                    """
+                    INSERT INTO autonomy_dispatch_links(
+                        dispatch_link_id, candidate_id, dispatch_role,
+                        downstream_kind, downstream_id, source_identity,
+                        created_at_epoch, payload_digest, payload
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        link.dispatch_link_id,
+                        link.candidate_id,
+                        link.dispatch_role,
+                        link.downstream_kind,
+                        link.downstream_id,
+                        link.source_identity,
+                        link.created_at_epoch,
+                        digest,
+                        encoded,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise AutonomyConflictError(
+                    "downstream dispatch-link identity conflict"
+                ) from exc
+        return link
+
+    def get_dispatch_link(
+        self,
+        candidate_id: str,
+        *,
+        dispatch_role: str = "dispatch",
+    ) -> AutonomyDispatchLinkV1 | None:
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT * FROM autonomy_dispatch_links
+                WHERE candidate_id=? AND dispatch_role=?
+                """,
+                (candidate_id, dispatch_role),
+            ).fetchone()
+        if row is None:
+            return None
+        if str(row["downstream_kind"]) == "dispatch_intent":
+            raise AutonomyIntegrityError(
+                "requested downstream dispatch role contains only an intent"
+            )
+        link = AutonomyDispatchLinkV1.from_payload(self._decoded_payload(row))
+        if (
+            str(row["dispatch_link_id"]) != link.dispatch_link_id
+            or str(row["downstream_kind"]) != link.downstream_kind
+            or str(row["downstream_id"]) != link.downstream_id
+            or str(row["source_identity"]) != link.source_identity
+        ):
+            raise AutonomyIntegrityError(
+                "dispatch-link columns disagree with protected payload"
+            )
+        return link
+
+    def require_dispatch_link(
+        self,
+        candidate_id: str,
+        *,
+        dispatch_role: str = "dispatch",
+    ) -> AutonomyDispatchLinkV1:
+        link = self.get_dispatch_link(
+            candidate_id,
+            dispatch_role=dispatch_role,
+        )
+        if link is None:
+            raise KeyError((candidate_id, dispatch_role))
+        return link
 
     def create_owner_attention(
         self,
