@@ -70,7 +70,8 @@ class DeploymentCoordinator:
         stager: GitReleaseStager,
         metadata: DeploymentMetadataStore,
         runtime: RuntimeDeploymentDriver | None = None,
-        prepare_release: Callable[[PromotionAttempt, ReleaseRecord], object] | None = None,
+        prepare_release: Callable[[PromotionAttempt, ReleaseRecord], object]
+        | None = None,
         shutdown_timeout_seconds: float = 15.0,
         startup_timeout_seconds: float = 60.0,
     ) -> None:
