@@ -732,6 +732,9 @@ _CASES: tuple[
 )
 
 
+PHASE10_REPLAY_CASE_IDS = tuple(case_id for case_id, _operation in _CASES)
+
+
 def run_replay_suite(root: str | pathlib.Path) -> Phase10ReplayReport:
     resolved = pathlib.Path(root).expanduser().resolve()
     resolved.mkdir(parents=True, exist_ok=True)
