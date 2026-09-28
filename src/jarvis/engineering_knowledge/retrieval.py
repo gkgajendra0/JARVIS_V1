@@ -634,11 +634,24 @@ class EngineeringKnowledgeRetrievalIndex:
             ).fetchall()
 
         applicability_service = EngineeringKnowledgeApplicabilityService(self)
-        integrity_verifier = EngineeringKnowledgeIntegrityVerifier()
+        repair_integrity_verifier = EngineeringKnowledgeIntegrityVerifier()
         eligible: dict[str, ApplicabilityDecision] = {}
         for row in rows:
             revision_id = str(row[0])
-            integrity = integrity_verifier.verify(self, revision_id)
+            revision = self.get_engineering_knowledge_revision(revision_id)
+            if revision is None:
+                continue
+            if revision.kind_namespace == "engineering.learning":
+                from jarvis.engineering_learning.integrity import (
+                    EngineeringLearningIntegrityVerifier,
+                )
+
+                integrity = EngineeringLearningIntegrityVerifier().verify(
+                    self,
+                    revision_id,
+                )
+            else:
+                integrity = repair_integrity_verifier.verify(self, revision_id)
             if not integrity.valid:
                 continue
             if not self._derived_document_matches_canonical(revision_id):
