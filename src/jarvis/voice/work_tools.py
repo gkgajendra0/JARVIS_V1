@@ -187,6 +187,18 @@ class WorkAgentTools:
             source_turn_id=turn.turn_id,
         )
         self._runtime.refresh_capability_catalog()
+        acceptance = self._runtime.capability_external_acceptance
+        acceptance_work = (
+            None
+            if acceptance is None
+            else await asyncio.to_thread(
+                acceptance.start,
+                change_id,
+                activation_artifact_id=result.artifact.artifact_id,
+                authority_session_id=self._conversation.session_id,
+                source_turn_id=turn.turn_id,
+            )
+        )
         return {
             "ok": True,
             "status": "enabled",
@@ -197,6 +209,12 @@ class WorkAgentTools:
             "package_digest": result.package_digest,
             "lifecycle_artifact_id": result.artifact.artifact_id,
             "lifecycle_artifact_digest": result.artifact.digest,
+            "external_acceptance_work_id": (
+                None if acceptance_work is None else acceptance_work.work_id
+            ),
+            "external_acceptance_state": (
+                None if acceptance_work is None else acceptance_work.state.value
+            ),
             "canonical_user_turn_id": turn.turn_id,
         }
 
