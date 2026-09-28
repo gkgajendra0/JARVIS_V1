@@ -54,7 +54,7 @@ _EXPORTS = {
     name: module_name for module_name, names in _EXPORT_GROUPS for name in names
 }
 
-__all__ = sorted(_EXPORTS)
+__all__ = list(_EXPORTS)
 
 
 def __getattr__(name: str) -> Any:
