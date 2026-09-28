@@ -45,7 +45,9 @@ class SsdpServiceRecord:
         if not target or not usn:
             raise ValueError("SSDP record requires search target and USN")
         if not (address.is_private or address.is_link_local or address.is_loopback):
-            raise ValueError("SSDP response must originate from a local/private address")
+            raise ValueError(
+                "SSDP response must originate from a local/private address"
+            )
         if self.max_age_seconds <= 0:
             raise ValueError("SSDP max-age must be positive")
         location = None if self.location is None else str(self.location).strip()
@@ -149,7 +151,9 @@ class SocketSsdpBackend:
             else:
                 sock.bind(("", 0))
         except OSError as exc:
-            raise DiscoveryResourceUnavailable("SSDP socket/interface is unavailable") from exc
+            raise DiscoveryResourceUnavailable(
+                "SSDP socket/interface is unavailable"
+            ) from exc
 
         deadline = time.monotonic() + timeout_seconds
         records: dict[tuple[str, str], SsdpServiceRecord] = {}
