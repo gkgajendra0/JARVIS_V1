@@ -102,13 +102,19 @@ Fixed lifecycle/system speech now uses cloud scripted TTS as primary with bounde
 
 ---
 
-## Vision and Pocket 3 native OWNER tracking
+## Vision, Lenovo primary eyes and optional Pocket 3
 
 Base vision remains OpenCV capture -> RF-DETR person detection -> OC-SORT tracking -> head/face association -> OWNER identity/liveness.
 
-Native tracking adds BLE/Wi-Fi/DUML transport, A6 OWNER target selection and A5/0x89 native tracking evidence. JARVIS marks native `LOCKED` only from fresh trusted OWNER evidence plus observed native tracking evidence; physical camera motion alone is insufficient.
+The normal production camera profile is now the static Lenovo Performance RGB Camera. The owner-machine capture profile is DirectShow + MJPG + 1920x1080 @ 30 FPS. Camera negotiation is supplied when OpenCV opens the device because post-open format changes can leave this webcam in YUY2 and reduce real capture throughput sharply. The capture boundary continues to publish only the latest frame, so slow perception cannot accumulate a stale-frame queue.
 
-Accepted behavior:
+Static Lenovo vision uses a no-op PTZ boundary. Normal JARVIS vision therefore does not open a DUVC pan/tilt/zoom device and never pretends the Lenovo camera can move.
+
+Pocket 3 remains preserved as an optional secondary eye rather than a startup dependency. When a separately owner-verified `JARVIS_POCKET3_CAMERA_INDEX` is configured, the realtime agent may switch explicitly between `lenovo` and `pocket3`. A failed Pocket open restores the previous camera. Camera switching changes only the visual source: it does not automatically arm pan, tilt, zoom, BLE/Wi-Fi native tracking, or any other physical-camera behavior.
+
+The previously accepted Pocket native-tracking subsystem remains available as a separate optional capability. Native tracking adds BLE/Wi-Fi/DUML transport, A6 OWNER target selection and A5/0x89 native tracking evidence. JARVIS marks native `LOCKED` only from fresh trusted OWNER evidence plus observed native tracking evidence; physical camera motion alone is insufficient.
+
+Accepted Pocket-native behavior:
 
 - 10 FPS while searching/reacquiring, 1 FPS while healthy native OWNER lock is maintained;
 - confirmed OWNER loss clears target then recenters;
