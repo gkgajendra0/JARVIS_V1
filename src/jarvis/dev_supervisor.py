@@ -33,9 +33,6 @@ from jarvis.incidents import IncidentService, SqliteIncidentStore
 from jarvis.promotion.deployment import DeploymentCoordinator, DeploymentError
 from jarvis.promotion.models import PromotionAttemptState, PromotionEvidenceV1
 from jarvis.promotion.observation import ObservationController, ObservationDisposition
-from jarvis.promotion.runtime_dependencies import (
-    prepare_phase9_release_dependencies,
-)
 from jarvis.promotion.release import (
     DeploymentMetadataStore,
     GitReleaseStager,
@@ -43,6 +40,9 @@ from jarvis.promotion.release import (
     default_deployment_root,
     default_releases_root,
     load_active_release_for_startup,
+)
+from jarvis.promotion.runtime_dependencies import (
+    prepare_phase9_release_dependencies,
 )
 from jarvis.promotion.store import PromotionStore
 from jarvis.self_awareness import default_incident_store_path
