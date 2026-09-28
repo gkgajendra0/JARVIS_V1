@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from jarvis.vision.camera import CameraSource, CapturedFrame
@@ -73,6 +74,7 @@ class VisionRuntime:
         framing_policy: HeadFirstFramingPolicy | None = None,
         head_confirmation_gate: HeadConfirmationGate | None = None,
         zoom_controller: ZoomController | None = None,
+        tracker_factory: Callable[[], Tracker] | None = None,
     ) -> None:
         self.config = config or VisionRuntimeConfig()
         if self.config.require_head_for_lock and head_detector is None:
@@ -80,6 +82,7 @@ class VisionRuntime:
         self._camera = camera
         self._detector = detector
         self._tracker = tracker
+        self._tracker_factory = tracker_factory
         self._target_manager = target_manager
         self._follow_controller = follow_controller
         self._zoom_controller = zoom_controller
@@ -152,6 +155,43 @@ class VisionRuntime:
     @property
     def armed(self) -> bool:
         return self._armed
+
+    @property
+    def active_camera_source_name(self) -> str | None:
+        value = getattr(self._camera, "active_source_name", None)
+        return str(value) if value is not None else None
+
+    @property
+    def available_camera_sources(self) -> tuple[str, ...]:
+        value = getattr(self._camera, "available_sources", ())
+        return tuple(str(item) for item in value)
+
+    def switch_camera_source(self, source_name: str) -> str:
+        switch = getattr(self._camera, "switch", None)
+        if not callable(switch):
+            raise RuntimeError("active vision camera does not support source switching")
+
+        normalized = str(source_name).strip().lower()
+        if not normalized:
+            raise ValueError("camera source name must not be empty")
+
+        previous = self.active_camera_source_name
+        if previous == normalized:
+            return normalized
+
+        self.clear_target()
+        selected = str(switch(normalized))
+        self._last_frame_id = None
+        self._latest_frame = None
+        self._latest_tracks = []
+        self._latest_heads = []
+        self._latest_framing_target = None
+        self._clear_trusted_head()
+        if self._head_confirmation_gate is not None:
+            self._head_confirmation_gate.reset()
+        if self._tracker_factory is not None:
+            self._tracker = self._tracker_factory()
+        return selected
 
     def head_confirmation_frames(self, track_id: int) -> int:
         if self._head_confirmation_gate is None:
