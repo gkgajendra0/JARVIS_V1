@@ -752,7 +752,10 @@ def acquisition_completion_guard(
         default=-1,
     )
     if resolve_index <= latest_source_evidence:
-        return False, "capability acquisition must re-resolve after latest source evidence"
+        return (
+            False,
+            "capability acquisition must re-resolve after latest source evidence",
+        )
 
     finalize_index, _ = finalized[-1]
     latest_resolution_evidence = max(resolve_index, latest_source_evidence)
