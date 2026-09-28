@@ -841,6 +841,24 @@ class AutonomyStore:
             raise KeyError(candidate_id)
         return ActionCandidateV1.from_payload(self._decoded_payload(row))
 
+    def list_action_candidates_for_finding(
+        self,
+        finding_id: str,
+    ) -> tuple[ActionCandidateV1, ...]:
+        with self.work.extension_transaction() as db:
+            rows = db.execute(
+                """
+                SELECT * FROM autonomy_action_candidates
+                WHERE finding_id=?
+                ORDER BY created_at_epoch, candidate_id
+                """,
+                (finding_id,),
+            ).fetchall()
+        return tuple(
+            ActionCandidateV1.from_payload(self._decoded_payload(row))
+            for row in rows
+        )
+
     def record_dispatch_intent(
         self,
         intent: DispatchIntentV1,
