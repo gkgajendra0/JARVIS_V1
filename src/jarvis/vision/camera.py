@@ -450,7 +450,7 @@ class SwitchableCameraSource:
                     after_frame_id=source_frame_id,
                     timeout_seconds=0.05,
                 )
-            except Exception as exc:
+            except RuntimeError as exc:
                 with self._switch_lock:
                     still_current = (
                         generation == self._generation
@@ -459,7 +459,7 @@ class SwitchableCameraSource:
                 if still_current and not self._stop.is_set():
                     with self._condition:
                         self._read_error = RuntimeError(
-                            f"active camera {source_name!r} failed"
+                            f"active camera {source_name!r} failed: {exc}"
                         )
                         self._condition.notify_all()
                     return
