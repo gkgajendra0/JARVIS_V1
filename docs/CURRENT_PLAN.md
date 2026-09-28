@@ -45,7 +45,7 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 The active cross-cutting engineering boundary is now:
 
-**Phase 10A — Autonomous Operations Control Plane — OWNER-MACHINE ACCEPTED; PR #219 FINAL MERGE PENDING**
+**Phase 11 — Autonomous capability-gap / weakness detection — RESEARCH / ARCHITECTURE NEXT; IMPLEMENTATION NOT AUTHORIZED**
 
 Phase 5 Secure Autonomous Engineering Substrate is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Its final evidence is recorded in `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`. PR #133 merged to protected main at `78f25fb192b926ee30a028cfc02c829e1197cc9e`.
 
@@ -136,7 +136,7 @@ Phase 7  Governed promotion / production verification / rollback — DONE / OWNE
 Phase 8  Capability package + registry lifecycle — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 9  Owner-requested capability acquisition — DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28; FINAL E2E EXTERNAL VALIDATION DEFERRED
 Phase 10 Closed-loop engineering learning — DONE / OWNER-MACHINE ACCEPTED 2026-09-28
-Phase 10A Autonomous Operations Control Plane — OWNER-MACHINE ACCEPTED 2026-09-28; FINAL PR #219 MERGE PENDING
+Phase 10A Autonomous Operations Control Plane — DONE / OWNER-MACHINE ACCEPTED 2026-09-28
 Phase 11 Autonomous capability-gap / weakness detection
 Phase 12 Shadow improvement + baseline benchmarking
 Phase 13 Engineering curriculum + specialist model evaluation
@@ -145,7 +145,7 @@ Phase 14 Governed self-evolution
 
 Owner-requested capability acquisition intentionally precedes autonomous gap detection: an explicit owner request to acquire a capability must not wait for repeated failures or repeated requests.
 
-The owner-approved 2026-09-26 sequencing clarification inserts Phase 10A before Phase 11. Phase-10A research is complete and the owner approved its architecture on 2026-09-28. Slices 10A.1–10A.6 are merged. Slice 10A.7 contains the bounded reconciliation runtime, clean trigger lifecycle, locked 30-case replay corpus and exact-commit Windows owner-machine acceptance harness. The real owner-machine run passed on exact head `4d1cb077cf3b0c5d9271edf05b47a5012ca14695` with all 30 locked cases represented, replay digest `2a8205a1a84165effd813aee088d298c5c25ba290585d20753f17e750be77258` and evidence digest `fa85ee31a0d63609167be4556f8cab587c980d20311de88396bbf70e16b9bae3`. Production autonomy remains SHADOW and Authority is unchanged. The only remaining Phase-10A repository action is final PR #219 merge and closure-document reconciliation.
+The owner-approved 2026-09-26 sequencing clarification inserted Phase 10A before Phase 11. Phase 10A is now DONE / OWNER-MACHINE ACCEPTED 2026-09-28. The real owner-machine run passed on exact head `4d1cb077cf3b0c5d9271edf05b47a5012ca14695` with all 30 locked cases represented, replay digest `2a8205a1a84165effd813aee088d298c5c25ba290585d20753f17e750be77258` and evidence digest `fa85ee31a0d63609167be4556f8cab587c980d20311de88396bbf70e16b9bae3`. PR #219 squash-merged the accepted implementation and evidence record to protected `main` as `3d9289aafd371484fe22023bf57279d6101d6b16`. Production autonomy remains SHADOW and Authority is unchanged. The next cross-cutting boundary is Phase 11 research/architecture; Phase 11 implementation is not authorized by Phase-10A acceptance.
 
 ## Next numbered product slice
 
@@ -207,4 +207,4 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Phase 10A owner-machine acceptance has passed. Finish the final exact-head documentation/state CI, merge PR #219, then reconcile the closure documents with the protected-main merge SHA. Preserve production SHADOW, existing Authority, and the deferred Phase-9 full external lifecycle.**
+**Phase 10A is DONE / OWNER-MACHINE ACCEPTED. The next cross-cutting action is Phase 11 repository inspection and thorough research, followed by architecture for explicit owner approval before any Phase-11 implementation. Preserve production SHADOW, existing Authority, and the deferred Phase-9 full external lifecycle.**

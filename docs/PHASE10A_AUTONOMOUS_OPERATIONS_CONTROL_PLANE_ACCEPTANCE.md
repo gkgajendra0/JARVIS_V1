@@ -1,12 +1,13 @@
 # Phase 10A — Autonomous Operations Control Plane Acceptance Record
 
-Status: **OWNER-MACHINE ACCEPTED / FINAL MERGE PENDING — 2026-09-28**
+Status: **DONE / OWNER-MACHINE ACCEPTED — 2026-09-28**
 
 Phase 10A implements the owner-approved thin whole-JARVIS operations control plane
 without making JARVIS its own source of Authority.
 
-The implementation is being finalized in PR #219,
-`Phase 10A.7: reconciliation runtime and final replay acceptance`.
+PR #219, `Phase 10A.7: reconciliation runtime and final replay acceptance`,
+squash-merged the accepted implementation to protected `main` as
+`3d9289aafd371484fe22023bf57279d6101d6b16`.
 
 ## Implemented scope
 
@@ -116,7 +117,7 @@ matches the recorded digest exactly.
 
 ## Owner-machine acceptance gate
 
-Phase 10A is **not DONE** until all of the following are true:
+Phase 10A is **DONE** because all of the following acceptance conditions are true:
 
 1. PR #219 exact-head CI is green.
 2. The owner runs the Windows acceptance harness against that exact head.
@@ -136,7 +137,7 @@ The command is intentionally exact-commit bound:
 ```powershell
 $repo = "C:\Users\gkgaj\Desktop\jarvis_v1"
 $python = "$repo\.venv\Scripts\python.exe"
-$expectedCommit = "<EXACT_GREEN_PR_219_HEAD_SHA>"
+$expectedCommit = "4d1cb077cf3b0c5d9271edf05b47a5012ca14695"
 $acceptanceRepo = Join-Path $env:TEMP "jarvis-phase10a-owner-acceptance-$($expectedCommit.Substring(0,8))"
 $output = Join-Path $env:TEMP "jarvis-phase10a-owner-acceptance.json"
 
@@ -167,18 +168,23 @@ finally {
 }
 ```
 
-Do not substitute a different SHA. The final exact SHA will be supplied only after the
-PR CI matrix is green.
+This command records the exact owner-tested implementation SHA. The accepted run used
+`4d1cb077cf3b0c5d9271edf05b47a5012ca14695`; PR #219 later merged the evidence-recording head to protected
+`main` as `3d9289aafd371484fe22023bf57279d6101d6b16`.
 
 ## Current result
 
 The owner-machine acceptance gate has passed for exact head
 `4d1cb077cf3b0c5d9271edf05b47a5012ca14695`.
 
-Phase 10A is owner-machine accepted. The remaining repository action is the final
-exact-head documentation/state CI and merge of PR #219, followed by a documentation-only
-closure reconciliation that records the protected-main merge SHA. Production autonomy
-remains SHADOW and Authority is unchanged.
+Phase 10A is DONE / OWNER-MACHINE ACCEPTED. PR #219 merged the accepted implementation
+and evidence record to protected `main` as `3d9289aafd371484fe22023bf57279d6101d6b16`.
+
+The owner-tested implementation head remains `4d1cb077cf3b0c5d9271edf05b47a5012ca14695`, with replay digest
+`2a8205a1a84165effd813aee088d298c5c25ba290585d20753f17e750be77258` and evidence digest `fa85ee31a0d63609167be4556f8cab587c980d20311de88396bbf70e16b9bae3`.
+
+Production autonomy remains SHADOW, Authority is unchanged, and the Phase-9 full external
+physical-device lifecycle remains separately deferred.
 
 The permanent rule remains:
 

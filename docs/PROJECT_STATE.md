@@ -49,7 +49,7 @@ Snapshot baseline verified from protected `main` at
 | Persistent concurrent work | DONE foundation | durable WorkItems/steps/deliveries, restart recovery, background research/development, priority/resource control |
 | Deterministic Self-Repair | PARTIAL foundation for Step 19 | R1/R2 typed framework plus Phase-1H-hardened R2 production recovery: sustained rolling budgets, shared target/action circuit breaker, typed verification/preconditions/provenance, versioned persistence, Windows Job Object runtime ownership and bounded production guardian |
 | EngineeringKnowledge | DONE foundation | Phase 2 owner-machine accepted 2026-09-25: immutable engineering knowledge, deterministic REPAIR projection, lifecycle/provenance/applicability, grounded local hybrid retrieval, integrity/security gates and open-ended facet extensibility |
-| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H and 2–10 are accepted; Phase 9 final external lifecycle validation is deferred; Phase 10A research/architecture is next |
+| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H, 2–10 and 10A are accepted; Phase 9 final external lifecycle validation is deferred; Phase 11 research/architecture is next |
 | Step 8 notes/tasks/reminders | PLANNED | still the next numbered product slice when numbered roadmap work resumes |
 
 Phase 3 EngineeringChange is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The canonical record is `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The owner-machine run proved durable same-identity recovery across a full Windows shutdown/reboot and live Exa research; persistent Gemini HTTP 429 pressure was accepted as an external limitation and did not weaken governance.
@@ -331,10 +331,12 @@ capability**. It does not reopen accepted phases or interrupt the active Phase-9
 The existing governed autonomous-engineering program becomes the engineering
 subsystem beneath this whole-JARVIS north star.
 
-The approved future sequence inserts **Phase 10A — Autonomous Operations Control
-Plane** after Phase 10 and before Phase 11. Phase 10A will own objectives/desired
-state, system-state reconciliation, evidence-backed autonomous work creation,
-portfolio prioritization, owner-attention handling and autonomy evaluation.
+The approved sequence inserts **Phase 10A — Autonomous Operations Control Plane**
+after Phase 10 and before Phase 11. Phase 10A is now DONE / OWNER-MACHINE ACCEPTED
+2026-09-28 and provides objectives/desired state, whole-JARVIS system-state
+reconciliation, evidence-backed autonomous work creation, portfolio prioritization,
+owner-attention handling and bounded autonomy evaluation while preserving owner
+Authority.
 
 ## Current active work
 
@@ -350,9 +352,9 @@ Phase 8 Capability Package + Registry Lifecycle is **DONE / OWNER-MACHINE ACCEPT
 
 The active cross-cutting slice is:
 
-**Phase 10A — Autonomous Operations Control Plane — RESEARCH / ARCHITECTURE NEXT; IMPLEMENTATION NOT YET AUTHORIZED**
+**Phase 11 — Autonomous capability-gap / weakness detection — RESEARCH / ARCHITECTURE NEXT; IMPLEMENTATION NOT YET AUTHORIZED**
 
-Phase 10 is DONE / OWNER-MACHINE ACCEPTED 2026-09-28. The next action is Phase 10A repository inspection and thorough research, followed by architecture for explicit owner approval. Phase 9 remains DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28; its complete real external capability lifecycle remains deferred to final whole-system acceptance because Gemini was rate-limited and OpenAI fallback was quota-exhausted during the live run.
+Phase 10A is DONE / OWNER-MACHINE ACCEPTED 2026-09-28. Exact owner-tested implementation head `4d1cb077cf3b0c5d9271edf05b47a5012ca14695` passed the locked 30-case acceptance corpus with replay digest `2a8205a1a84165effd813aee088d298c5c25ba290585d20753f17e750be77258` and evidence digest `fa85ee31a0d63609167be4556f8cab587c980d20311de88396bbf70e16b9bae3`; PR #219 squash-merged to protected `main` as `3d9289aafd371484fe22023bf57279d6101d6b16`. The next action is Phase 11 repository inspection and thorough research, followed by architecture for explicit owner approval. Phase 9 remains DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28; its complete real external capability lifecycle remains deferred to final whole-system acceptance because Gemini was rate-limited and OpenAI fallback was quota-exhausted during the live run.
 
 The Phase-9 bounded acceptance does not broaden runtime authority, waive any protected gate, or claim that the deferred physical/external lifecycle has already been proven.
 
