@@ -9,6 +9,9 @@ from urllib.parse import urlparse
 from jarvis.engineering_substrate.canonical import canonical_digest
 
 _PEP503_NORMALIZE = re.compile(r"[-_.]+")
+_PYTHON_DISTRIBUTION_NAME = re.compile(
+    r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$"
+)
 _SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -24,6 +27,10 @@ def normalize_python_package_name(value: str) -> str:
     text = str(value).strip()
     if not text:
         raise DependencyPolicyError("package name must not be empty")
+    if _PYTHON_DISTRIBUTION_NAME.fullmatch(text) is None:
+        raise DependencyPolicyError(
+            "package name must be a Python distribution name, not a URL/path"
+        )
     normalized = _PEP503_NORMALIZE.sub("-", text).casefold()
     if not normalized or normalized.startswith("-") or normalized.endswith("-"):
         raise DependencyPolicyError("package name cannot be normalized safely")
