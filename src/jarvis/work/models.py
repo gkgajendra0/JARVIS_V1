@@ -77,6 +77,7 @@ class WorkType(str, Enum):
     MONITORING = "monitoring"
     REMINDER = "reminder"
     GENERIC = "generic"
+    EXTERNAL_ACCEPTANCE = "external_acceptance"
 
 
 _ALLOWED_TRANSITIONS: dict[WorkState, frozenset[WorkState]] = {
