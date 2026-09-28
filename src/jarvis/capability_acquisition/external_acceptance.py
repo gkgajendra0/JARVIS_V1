@@ -427,9 +427,7 @@ class ExternalAcceptanceCoordinator:
                 "requested_operations": list(
                     architecture.payload.get("requested_operations", ())
                 ),
-                "acceptance_contract_id": (
-                    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
-                ),
+                "acceptance_contract_id": (PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT),
                 "device_identity": device_identity,
                 "target_hints": list(target_hints),
                 "authority_session_id": _bounded_text(
@@ -471,7 +469,9 @@ class ExternalAcceptanceInspectExecutor:
     def __init__(self, resolver: ExternalAcceptanceContextResolver) -> None:
         self._resolver = resolver
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ()
 
@@ -494,9 +494,7 @@ class ExternalAcceptanceInspectExecutor:
             "target_hints": list(context.binding.payload.get("target_hints", ())),
             "device_identity": context.binding.payload.get("device_identity"),
             "owner_goal": goal.request,
-            "acceptance_contract_id": (
-                PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
-            ),
+            "acceptance_contract_id": (PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT),
         }
 
 
@@ -530,7 +528,9 @@ class ExternalAcceptancePrepareExecutor:
     def __init__(self, resolver: ExternalAcceptanceContextResolver) -> None:
         self._resolver = resolver
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("device_acceptance",)
 
@@ -570,12 +570,15 @@ class ExternalAcceptancePrepareExecutor:
             field="manifest_digest",
             limit=64,
         ).casefold()
-        request_id = "hwreq_phase9_" + canonical_digest(
-            {
-                "binding_digest": context.binding.digest,
-                "operation": operation,
-            }
-        )[:20]
+        request_id = (
+            "hwreq_phase9_"
+            + canonical_digest(
+                {
+                    "binding_digest": context.binding.digest,
+                    "operation": operation,
+                }
+            )[:20]
+        )
         request = HardwareAcceptanceService(
             self._resolver.store
         ).create_post_activation_request(
@@ -669,7 +672,9 @@ class ExternalAcceptanceInvokeExecutor:
         self._resolver = resolver
         self._runtime = runtime
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("device_acceptance", "network")
 
@@ -741,13 +746,13 @@ class ExternalAcceptanceInvokeExecutor:
         resume = _waiting_resume_step(steps, request_id=request_id)
         if resume is not None:
             resume_context = dict(resume.observation.get("resume_context") or {})
-            input_key = str(resume.observation.get("input_key") or "").strip().casefold()
+            input_key = (
+                str(resume.observation.get("input_key") or "").strip().casefold()
+            )
             kind = str(resume_context.get("kind") or "").strip().casefold()
             parameter = str(resume_context.get("parameter") or "").strip().casefold()
             if parameter and _PARAMETER.fullmatch(parameter) is None:
-                raise ExternalAcceptanceError(
-                    "pairing resume parameter is invalid"
-                )
+                raise ExternalAcceptanceError("pairing resume parameter is invalid")
             if resume.observation.get("sensitive") is True:
                 owner_value = self._resolver.store.work.pop_sensitive_input(
                     work.work_id,
@@ -755,7 +760,10 @@ class ExternalAcceptanceInvokeExecutor:
                 )
                 if owner_value is None:
                     raise WorkOwnerInputRequired(
-                        str(resume.observation.get("question") or "Pairing input required."),
+                        str(
+                            resume.observation.get("question")
+                            or "Pairing input required."
+                        ),
                         sensitive=True,
                         input_key=input_key,
                         resume_context=resume_context,
@@ -764,7 +772,10 @@ class ExternalAcceptanceInvokeExecutor:
                 response = _owner_reply(steps, input_key=input_key)
                 if response is None:
                     raise WorkOwnerInputRequired(
-                        str(resume.observation.get("question") or "Owner input required."),
+                        str(
+                            resume.observation.get("question")
+                            or "Owner input required."
+                        ),
                         input_key=input_key,
                         resume_context=resume_context,
                     )
@@ -803,9 +814,8 @@ class ExternalAcceptanceInvokeExecutor:
             origin=ActionOrigin.DIRECT_USER,
         )
         owner_request = result.data.get(_OWNER_INPUT_REQUEST_KEY)
-        if (
-            result.status is CapabilityStatus.PARTIAL
-            and isinstance(owner_request, dict)
+        if result.status is CapabilityStatus.PARTIAL and isinstance(
+            owner_request, dict
         ):
             kind = str(owner_request.get("kind") or "").strip().casefold()
             if kind not in {"pin", "confirmation"}:
@@ -822,16 +832,19 @@ class ExternalAcceptanceInvokeExecutor:
                 raise ExternalAcceptanceError(
                     "capability owner-input parameter is invalid"
                 )
-            input_key = "external_capability_input:" + canonical_digest(
-                {
-                    "work_id": work.work_id,
-                    "request_id": request_id,
-                    "operation": operation,
-                    "kind": kind,
-                    "parameter": parameter,
-                    "prompt": prompt,
-                }
-            )[:24]
+            input_key = (
+                "external_capability_input:"
+                + canonical_digest(
+                    {
+                        "work_id": work.work_id,
+                        "request_id": request_id,
+                        "operation": operation,
+                        "kind": kind,
+                        "parameter": parameter,
+                        "prompt": prompt,
+                    }
+                )[:24]
+            )
             sensitive = kind == "pin"
             raise WorkOwnerInputRequired(
                 "The activated capability needs owner input to continue: " + prompt,
@@ -863,9 +876,7 @@ class ExternalAcceptanceInvokeExecutor:
                     "method": method,
                     "summary": summary[:1000],
                     "evidence_refs": [
-                        str(item)[:1000]
-                        for item in refs
-                        if str(item).strip()
+                        str(item)[:1000] for item in refs if str(item).strip()
                     ][:20],
                 }
 
@@ -898,7 +909,9 @@ class ExternalAcceptanceRecordExecutor:
     def __init__(self, resolver: ExternalAcceptanceContextResolver) -> None:
         self._resolver = resolver
 
-    def resource_keys(self, work: WorkItem, parameters: dict[str, Any]) -> tuple[str, ...]:
+    def resource_keys(
+        self, work: WorkItem, parameters: dict[str, Any]
+    ) -> tuple[str, ...]:
         del work, parameters
         return ("device_acceptance",)
 
