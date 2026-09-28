@@ -31,6 +31,7 @@ from jarvis.engineering_knowledge.models import (
     EngineeringEvidence,
     EngineeringKnowledgeFacet,
     EngineeringKnowledgeRevision,
+    KnowledgeEvidenceLink,
     KnowledgeFreshnessState,
     KnowledgeSensitivity,
 )
@@ -245,6 +246,31 @@ class EngineeringKnowledgeRetrievalIndex:
                 constraint_json=str(row[5]),
                 required=bool(row[6]),
                 created_at_epoch=float(row[7]),
+            )
+            for row in rows
+        )
+
+    def list_engineering_knowledge_evidence_links(
+        self,
+        revision_id: str,
+    ) -> tuple[KnowledgeEvidenceLink, ...]:
+        normalized = _required_text(revision_id, "revision_id")
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT revision_id, evidence_id, relation_type, created_at_epoch
+                FROM engineering_knowledge_evidence_link
+                WHERE revision_id = ?
+                ORDER BY relation_type, evidence_id
+                """,
+                (normalized,),
+            ).fetchall()
+        return tuple(
+            KnowledgeEvidenceLink(
+                revision_id=str(row[0]),
+                evidence_id=str(row[1]),
+                relation_type=str(row[2]),
+                created_at_epoch=float(row[3]),
             )
             for row in rows
         )
