@@ -215,6 +215,22 @@ def test_budget_exhaustion_creates_no_work(tmp_path: Path) -> None:
         assert db.execute("SELECT COUNT(*) FROM work_items").fetchone()[0] == 0
 
 
+def test_candidate_mode_mismatch_fails_closed() -> None:
+    objective = _objective()
+    finding = _finding(_desired(objective))
+    candidate = _candidate(finding, mode=AutonomyMode.SHADOW)
+
+    assessment = AutonomyBudgetEvaluator().evaluate(
+        candidate,
+        mode=AutonomyMode.ASSISTED,
+        policy=_policy(),
+        usage=_usage(),
+    )
+
+    assert assessment.disposition is CandidateDisposition.BLOCKED_POLICY
+    assert assessment.reason_codes == ("candidate_mode_mismatch",)
+
+
 def test_provider_ceiling_never_invents_missing_metering() -> None:
     objective = _objective()
     finding = _finding(_desired(objective))
@@ -280,6 +296,28 @@ def test_budget_window_accounting_is_durable_and_integrity_checked(
             policy,
             BUDGET_DIMENSION_NEW_WORK,
             now_epoch=NOW + 30,
+        )
+
+
+def test_budget_policy_window_drift_fails_closed(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    ledger = AutonomyBudgetLedger(store)
+    policy = _policy()
+    ledger.increment(
+        policy,
+        BUDGET_DIMENSION_NEW_WORK,
+        now_epoch=NOW,
+    )
+    changed = replace(policy, window_seconds=1800)
+
+    with pytest.raises(
+        AutonomyIntegrityError,
+        match="window changed without policy identity change",
+    ):
+        ledger.read(
+            changed,
+            BUDGET_DIMENSION_NEW_WORK,
+            now_epoch=NOW,
         )
 
 
@@ -564,6 +602,18 @@ def test_delivery_adapter_does_not_create_fake_work_item(tmp_path: Path) -> None
     with sqlite3.connect(store.path) as db:
         assert db.execute("SELECT COUNT(*) FROM work_items").fetchone()[0] == 0
         assert db.execute("SELECT COUNT(*) FROM work_deliveries").fetchone()[0] == 0
+
+
+def test_attention_time_rejects_nonfinite_values(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    objective, _, finding = _seed_attention_chain(store)
+    manager = OwnerAttentionManager(store)
+
+    with pytest.raises(ValueError, match="finite"):
+        manager.open_or_update(
+            **_attention_kwargs(objective, finding),
+            now_epoch=float("nan"),
+        )
 
 
 def test_terminal_attention_is_not_implicitly_reopened(tmp_path: Path) -> None:
