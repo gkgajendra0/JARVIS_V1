@@ -165,9 +165,7 @@ def _outcome_from_payload(payload: dict[str, JSONValue]) -> EngineeringOutcomeV1
         result=EngineeringOutcomeResult(str(payload["result"])),
         attribution=EngineeringOutcomeAttribution(str(payload["attribution"])),
         reason_codes=tuple(str(item) for item in payload["reason_codes"]),
-        evidence_references=tuple(
-            str(item) for item in payload["evidence_references"]
-        ),
+        evidence_references=tuple(str(item) for item in payload["evidence_references"]),
         applicability=_applicability_from_payload(payload),
         observed_at_epoch=float(payload["observed_at_epoch"]),
         producer=str(payload["producer"]),
@@ -289,9 +287,7 @@ class EngineeringLearningPromotionPolicy:
         evidence_ids.extend(linked_ids)
 
         if outcome is not None:
-            persisted_refs = sorted(
-                item.canonical_reference for item in evidence
-            )
+            persisted_refs = sorted(item.canonical_reference for item in evidence)
             if persisted_refs != sorted(outcome.evidence_references):
                 reasons.append("outcome_evidence_reference_mismatch")
 
@@ -358,9 +354,10 @@ class EngineeringLearningPromotionPolicy:
                     reasons.append("attestation_policy_mismatch")
                 if expected.get("eligible") is not True:
                     reasons.append("attestation_not_eligible")
-                if disposition is not None and expected.get(
-                    "disposition"
-                ) != disposition.value:
+                if (
+                    disposition is not None
+                    and expected.get("disposition") != disposition.value
+                ):
                     reasons.append("attestation_disposition_mismatch")
                 attested_outcome_id = str(expected.get("outcome_id") or "")
                 outcome_digest = str(expected.get("outcome_digest") or "")
