@@ -214,6 +214,14 @@ class VisionService:
             self._active_camera_profile = normalized
             with self._snapshot_lock:
                 self._latest_snapshot = None
+            self._clear_evidence_queue()
+            reset_evidence = getattr(
+                self._evidence_observer,
+                "reset_for_camera_switch",
+                None,
+            )
+            if callable(reset_evidence):
+                reset_evidence()
 
         self.diagnostics.record_action(
             code="camera_profile_switched",
