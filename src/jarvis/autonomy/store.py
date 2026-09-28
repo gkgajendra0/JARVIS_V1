@@ -420,13 +420,9 @@ class AutonomyStore:
                     )
                 row = ledger_rows[0]
                 if int(row["version"]) != AUTONOMY_SCHEMA_VERSION:
-                    raise AutonomyIntegrityError(
-                        "unsupported autonomy schema version"
-                    )
+                    raise AutonomyIntegrityError("unsupported autonomy schema version")
                 if str(row["checksum"]) != AUTONOMY_SCHEMA_CHECKSUM:
-                    raise AutonomyIntegrityError(
-                        "autonomy schema checksum mismatch"
-                    )
+                    raise AutonomyIntegrityError("autonomy schema checksum mismatch")
                 expected_tables = set(_EXPECTED_COLUMNS)
                 if existing_tables != expected_tables:
                     missing = sorted(expected_tables - existing_tables)
@@ -443,9 +439,7 @@ class AutonomyStore:
                     for row in db.execute(f"PRAGMA table_info({table})").fetchall()
                 )
                 if actual_columns != expected_columns:
-                    raise AutonomyIntegrityError(
-                        f"{table} column contract mismatch"
-                    )
+                    raise AutonomyIntegrityError(f"{table} column contract mismatch")
 
             if not ledger_exists:
                 db.execute(
@@ -710,9 +704,7 @@ class AutonomyStore:
         expected_version: int,
     ) -> AutonomyFindingV1:
         if finding.version != expected_version + 1:
-            raise AutonomyConflictError(
-                "finding version must increment exactly once"
-            )
+            raise AutonomyConflictError("finding version must increment exactly once")
         digest, encoded = self._encoded_payload(finding)
         with self.work.extension_transaction() as db:
             current = db.execute(
@@ -722,9 +714,7 @@ class AutonomyStore:
             if current is None:
                 raise KeyError(finding.finding_id)
             if str(current["payload_digest"]) == digest:
-                return AutonomyFindingV1.from_payload(
-                    self._decoded_payload(current)
-                )
+                return AutonomyFindingV1.from_payload(self._decoded_payload(current))
             if int(current["version"]) != expected_version:
                 raise AutonomyConflictError("stale finding version")
             cursor = db.execute(
@@ -788,9 +778,7 @@ class AutonomyStore:
                     ),
                 )
             except sqlite3.IntegrityError as exc:
-                raise AutonomyConflictError(
-                    "finding event identity conflict"
-                ) from exc
+                raise AutonomyConflictError("finding event identity conflict") from exc
         return event
 
     def list_finding_events(
@@ -923,9 +911,7 @@ class AutonomyStore:
             if current is None:
                 raise KeyError(item.attention_id)
             if str(current["payload_digest"]) == digest:
-                return OwnerAttentionItemV1.from_payload(
-                    self._decoded_payload(current)
-                )
+                return OwnerAttentionItemV1.from_payload(self._decoded_payload(current))
             if int(current["version"]) != expected_version:
                 raise AutonomyConflictError("stale owner-attention version")
             cursor = db.execute(
@@ -948,9 +934,7 @@ class AutonomyStore:
                 ),
             )
             if cursor.rowcount != 1:
-                raise AutonomyConflictError(
-                    "owner-attention compare-and-swap failed"
-                )
+                raise AutonomyConflictError("owner-attention compare-and-swap failed")
         return item
 
     def append_attention_event(
@@ -1099,9 +1083,7 @@ class AutonomyStore:
                     ),
                 )
             except sqlite3.IntegrityError as exc:
-                raise AutonomyConflictError(
-                    "reconcile-run identity conflict"
-                ) from exc
+                raise AutonomyConflictError("reconcile-run identity conflict") from exc
         return run
 
     def require_reconcile_run_by_token(
