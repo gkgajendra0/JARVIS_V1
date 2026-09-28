@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
@@ -167,6 +167,7 @@ def _build(
     *,
     clock: _Clock | None = None,
     priority_factor_provider=None,
+    recovery_age_seconds: float = 0.0,
 ) -> tuple[
     AutonomyReconciler,
     AutonomyStore,
@@ -178,6 +179,14 @@ def _build(
     store = AutonomyStore(work)
     objective = _objective()
     desired = _desired(objective)
+    if recovery_age_seconds:
+        desired = replace(
+            desired,
+            stabilization_policy=replace(
+                desired.stabilization_policy,
+                minimum_recovery_age_seconds=recovery_age_seconds,
+            ),
+        )
     store.create_objective(objective)
     store.create_desired_state(desired)
     source = _ComponentSource(resolved_clock)
@@ -404,6 +413,68 @@ def test_restart_reconstructs_stabilization_without_duplicate_candidate(
             db.execute("SELECT COUNT(*) FROM autonomy_action_candidates").fetchone()[0]
             == 1
         )
+
+
+def test_restart_preserves_original_recovery_stabilization_clock(
+    tmp_path: Path,
+) -> None:
+    clock = _Clock()
+    reconciler, store, source, _ = _build(
+        tmp_path,
+        clock=clock,
+        recovery_age_seconds=10.0,
+    )
+    source.state = "degraded"
+    reconciler.reconcile("recovery-restart-1", trigger=ReconcileTrigger.MANUAL_TEST)
+    clock.advance()
+    active = reconciler.reconcile(
+        "recovery-restart-2",
+        trigger=ReconcileTrigger.MANUAL_TEST,
+    )
+    assert active.desired_results[0].finding_status is FindingStatus.ACTIVE
+
+    source.state = "healthy"
+    clock.advance()
+    recovering = reconciler.reconcile(
+        "recovery-restart-3",
+        trigger=ReconcileTrigger.STATE_CHANGE_HINT,
+    )
+    assert recovering.desired_results[0].evaluation_status is (
+        DesiredStateEvaluationStatus.STABILIZING
+    )
+
+    clock.advance(4)
+    still_recovering = reconciler.reconcile(
+        "recovery-restart-4",
+        trigger=ReconcileTrigger.PERIODIC,
+    )
+    assert still_recovering.desired_results[0].evaluation_status is (
+        DesiredStateEvaluationStatus.STABILIZING
+    )
+
+    restarted = AutonomyReconciler(
+        store=store,
+        aggregator=reconciler.aggregator,
+        evaluator=reconciler.evaluator,
+        stabilizer=DesiredStateStabilizer(),
+        findings=FindingLifecycleManager(store),
+        resolution=ActionResolutionService(
+            store,
+            build_default_action_resolver_registry(),
+        ),
+        portfolio=PortfolioPrioritizer(),
+        dispatch=reconciler.dispatch,
+        clock=clock,
+    )
+    clock.advance(6)
+    recovered = restarted.reconcile(
+        "recovery-restart-5",
+        trigger=ReconcileTrigger.STARTUP,
+    )
+    assert recovered.desired_results[0].evaluation_status is (
+        DesiredStateEvaluationStatus.SATISFIED
+    )
+    assert recovered.desired_results[0].finding_status is FindingStatus.RESOLVED
 
 
 def test_periodic_wrapper_starts_sweeps_and_stops_cleanly(tmp_path: Path) -> None:
