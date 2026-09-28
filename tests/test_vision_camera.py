@@ -7,6 +7,37 @@ import pytest
 from jarvis.vision.camera import OpenCVCameraConfig, OpenCVCameraSource
 
 
+class FakeNegotiatingCapture:
+    def __init__(
+        self,
+        *,
+        width: int,
+        height: int,
+        fourcc: str,
+    ) -> None:
+        self.opened = True
+        self.released = False
+        self.read_count = 0
+        self.properties = {
+            cv2.CAP_PROP_FRAME_WIDTH: float(width),
+            cv2.CAP_PROP_FRAME_HEIGHT: float(height),
+            cv2.CAP_PROP_FOURCC: float(cv2.VideoWriter_fourcc(*fourcc)),
+        }
+
+    def isOpened(self) -> bool:
+        return self.opened
+
+    def get(self, key: int) -> float:
+        return self.properties.get(key, 0.0)
+
+    def read(self):
+        self.read_count += 1
+        return True, np.zeros((4, 6, 3), dtype=np.uint8)
+
+    def release(self) -> None:
+        self.released = True
+
+
 class FakeCapture:
     def __init__(self, opened: bool = True, *, fail_first_read: bool = False) -> None:
         self.opened = opened
@@ -138,6 +169,22 @@ def test_camera_switch_rolls_back_when_new_camera_cannot_open() -> None:
 
     assert created == [0, 1, 0]
     assert all(capture.released for capture in captures)
+
+
+def test_camera_rejects_yuy2_fallback_for_mjpeg_profile() -> None:
+    fake = FakeNegotiatingCapture(
+        width=1920,
+        height=1080,
+        fourcc="YUY2",
+    )
+    source = OpenCVCameraSource(
+        capture_factory=lambda index, backend, params: fake
+    )
+
+    with pytest.raises(RuntimeError, match="negotiation mismatch"):
+        source.start()
+
+    assert fake.released
 
 
 def test_camera_open_failure_releases_handle() -> None:
