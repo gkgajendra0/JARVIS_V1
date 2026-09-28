@@ -855,8 +855,7 @@ class AutonomyStore:
                 (finding_id,),
             ).fetchall()
         return tuple(
-            ActionCandidateV1.from_payload(self._decoded_payload(row))
-            for row in rows
+            ActionCandidateV1.from_payload(self._decoded_payload(row)) for row in rows
         )
 
     def record_dispatch_intent(
