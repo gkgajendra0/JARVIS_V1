@@ -220,6 +220,74 @@ class UvAdapter:
             environment.python_platform,
         )
 
+    def sync_target(
+        self,
+        *,
+        workspace: pathlib.Path,
+        requirements_file: pathlib.Path | str,
+        wheelhouse: pathlib.Path | str,
+        target: pathlib.Path | str,
+        timeout_seconds: float = 300.0,
+    ) -> pathlib.Path:
+        """Install an exact hash-checked wheel set into an isolated target directory."""
+
+        self.verify_trust()
+        root = pathlib.Path(workspace).resolve()
+        requirements = self._trusted_path(
+            root,
+            requirements_file,
+            field="requirements_file",
+        )
+        wheels = self._trusted_path(root, wheelhouse, field="wheelhouse")
+        destination = self._trusted_path(root, target, field="target")
+        if not requirements.is_file() or wheels.is_symlink() or not wheels.is_dir():
+            raise DependencyResourceUnavailable(
+                "runtime dependency requirements/wheelhouse are unavailable"
+            )
+        destination.mkdir(parents=True, exist_ok=True)
+        command = (
+            str(self.binary_registration.executable_path),
+            "pip",
+            "sync",
+            str(requirements),
+            "--target",
+            str(destination),
+            "--offline",
+            "--no-index",
+            "--find-links",
+            str(wheels),
+            "--require-hashes",
+            "--only-binary",
+            ":all:",
+            "--no-config",
+            "--no-python-downloads",
+            "--no-progress",
+            "--strict",
+        )
+        try:
+            completed = self._runner(
+                list(command),
+                cwd=root,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=min(float(timeout_seconds), 300.0),
+                check=False,
+                shell=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise DependencyResourceUnavailable(
+                "offline runtime dependency materialization failed"
+            ) from exc
+        if completed.returncode != 0:
+            diagnostic = (completed.stdout + "\n" + completed.stderr).strip()
+            raise DependencyResourceUnavailable(
+                "offline runtime dependency materialization failed: "
+                + diagnostic[-2000:]
+            )
+        return destination
+
     def compile_lock(
         self,
         *,
