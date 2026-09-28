@@ -140,7 +140,8 @@ class AcquisitionVerifyPyPiSdkExecutor:
         )
 
         workspace = dependency_work_root(context.work_id) / (
-            "research-sdk-" + canonical_digest({"candidate_id": candidate.candidate_id})[:16]
+            "research-sdk-"
+            + canonical_digest({"candidate_id": candidate.candidate_id})[:16]
         )
         workspace.mkdir(parents=True, exist_ok=True)
         broker = self._broker_factory()
@@ -227,10 +228,7 @@ class AcquisitionVerifyPyPiSdkExecutor:
                 *candidate.evidence_refs,
                 "pypi-source:https://pypi.org/simple",
                 f"pypi-lock-sha256:{lock.artifact_sha256}",
-                *(
-                    f"pypi-wheel-sha256:{artifact.sha256}"
-                    for artifact in artifacts
-                ),
+                *(f"pypi-wheel-sha256:{artifact.sha256}" for artifact in artifacts),
             ),
             provenance_refs=provenance_refs,
             license_id=candidate.license_id,
