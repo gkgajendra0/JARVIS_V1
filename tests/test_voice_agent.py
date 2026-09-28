@@ -76,7 +76,9 @@ def test_voice_instructions_define_lenovo_primary_camera_semantics() -> None:
     normalized = " ".join(INSTRUCTIONS.split())
     assert "Lenovo is the normal fixed primary camera" in normalized
     assert "Pocket 3 is an alternate camera" in normalized
-    assert "only when the user explicitly asks JARVIS to switch cameras/eyes" in normalized
+    assert (
+        "only when the user explicitly asks JARVIS to switch cameras/eyes" in normalized
+    )
     assert "Never switch cameras merely because Pocket 3 is connected" in normalized
     assert "Lenovo has no pan, tilt, or zoom control" in normalized
     assert "only while Pocket 3 is the selected camera" in normalized
