@@ -35,10 +35,7 @@ def _text(value: object, field: str, *, max_length: int = 2000) -> str:
 def _reason_codes(values: tuple[str, ...]) -> tuple[str, ...]:
     normalized = tuple(
         sorted(
-            {
-                _text(value, "reason_code", max_length=240).casefold()
-                for value in values
-            }
+            {_text(value, "reason_code", max_length=240).casefold() for value in values}
         )
     )
     if not normalized:
@@ -176,11 +173,10 @@ class OwnerAttentionManager:
 
         if root_attention_id is not None:
             root = self.store.require_owner_attention(root_attention_id)
-            if (
-                root.group_key == group
-                and root.status
-                in {AttentionStatus.OPEN, AttentionStatus.ACKNOWLEDGED}
-            ):
+            if root.group_key == group and root.status in {
+                AttentionStatus.OPEN,
+                AttentionStatus.ACKNOWLEDGED,
+            }:
                 event = _attention_event(
                     root,
                     kind="derivative_inhibited",
@@ -203,10 +199,7 @@ class OwnerAttentionManager:
 
         existing = self.store.find_owner_attention_by_fingerprint(fingerprint)
         if existing is not None:
-            if (
-                existing.last_occurrence_epoch == now
-                and existing.priority is priority
-            ):
+            if existing.last_occurrence_epoch == now and existing.priority is priority:
                 return OwnerAttentionAdmissionV1(
                     item=existing,
                     changed=False,
