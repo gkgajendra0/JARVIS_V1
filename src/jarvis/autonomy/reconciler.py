@@ -6,8 +6,8 @@ import logging
 import math
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 from uuid import uuid4
 
 from jarvis.autonomy.budgets import BudgetUsageV1
@@ -39,7 +39,6 @@ from jarvis.autonomy.resolution import (
 )
 from jarvis.autonomy.rules import (
     DesiredStateEvaluationStatus,
-    DesiredStateEvaluationV1,
     DesiredStateEvaluator,
     DesiredStateStabilizer,
     StabilizationStateV1,
@@ -51,7 +50,6 @@ from jarvis.autonomy.system_state import (
     SystemStateTargetV1,
 )
 from jarvis.engineering_substrate.canonical import canonical_digest
-from jarvis.work.models import WorkPriority
 
 LOGGER = logging.getLogger(__name__)
 
