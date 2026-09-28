@@ -96,11 +96,7 @@ def _applicability_payload(item: OutcomeApplicability) -> dict[str, JSONValue]:
 def _required_applicability_key(
     applicability: tuple[OutcomeApplicability, ...],
 ) -> list[JSONValue]:
-    required = [
-        _applicability_payload(item)
-        for item in applicability
-        if item.required
-    ]
+    required = [_applicability_payload(item) for item in applicability if item.required]
     return sorted(
         required,
         key=lambda item: (
