@@ -223,18 +223,43 @@ class EngineeringLearningProjector:
                 "normalized_summary": summary,
                 "outcome_id": outcome.outcome_id,
                 "outcome_digest": outcome.digest,
-                "facet_digests": [facet.payload_digest for facet in facets],
-                "applicability": [
-                    {
-                        "target_namespace": item.target_namespace,
-                        "target_identity": item.target_identity,
-                        "matcher_type": item.matcher_type,
-                        "constraint_json": item.constraint_json,
-                        "required": item.required,
-                    }
-                    for item in applicability
-                ],
-                "evidence_ids": list(evidence_ids),
+                "facets": sorted(
+                    (
+                        {
+                            "facet_type": facet.facet_type,
+                            "schema_id": facet.schema_id,
+                            "schema_version": facet.schema_version,
+                            "payload_digest": facet.payload_digest,
+                        }
+                        for facet in facets
+                    ),
+                    key=lambda item: (
+                        str(item["facet_type"]),
+                        str(item["schema_id"]),
+                        str(item["schema_version"]),
+                        str(item["payload_digest"]),
+                    ),
+                ),
+                "applicability": sorted(
+                    (
+                        {
+                            "target_namespace": item.target_namespace,
+                            "target_identity": item.target_identity,
+                            "matcher_type": item.matcher_type,
+                            "constraint_json": item.constraint_json,
+                            "required": item.required,
+                        }
+                        for item in applicability
+                    ),
+                    key=lambda item: (
+                        str(item["target_namespace"]),
+                        str(item["target_identity"]),
+                        str(item["matcher_type"]),
+                        str(item["constraint_json"]),
+                        bool(item["required"]),
+                    ),
+                ),
+                "evidence_ids": sorted(evidence_ids),
             }
         )
 
