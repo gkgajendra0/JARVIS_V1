@@ -114,6 +114,15 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "jarvis.autonomy.replay",
+        (
+            "PHASE10A_REPLAY_CORPUS_V1",
+            "Phase10AReplayCaseV1",
+            "phase10a_replay_corpus_digest",
+            "validate_phase10a_replay_corpus",
+        ),
+    ),
+    (
         "jarvis.autonomy.resolution",
         (
             "ActionResolutionResultV1",
