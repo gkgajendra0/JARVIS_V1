@@ -836,6 +836,7 @@ class CandidateDispositionRecordV1:
     disposition: CandidateDisposition
     reason_codes: tuple[str, ...]
     source_identity: str
+    basis_identity: str
     created_at_epoch: float
     schema_version: str = AUTONOMY_CONTRACT_SCHEMA_VERSION
 
@@ -868,6 +869,11 @@ class CandidateDispositionRecordV1:
         )
         object.__setattr__(
             self,
+            "basis_identity",
+            _text(self.basis_identity, "basis_identity", max_length=500),
+        )
+        object.__setattr__(
+            self,
             "created_at_epoch",
             _epoch(self.created_at_epoch, "created_at_epoch"),
         )
@@ -881,6 +887,7 @@ class CandidateDispositionRecordV1:
             "disposition": self.disposition.value,
             "reason_codes": list(self.reason_codes),
             "source_identity": self.source_identity,
+            "basis_identity": self.basis_identity,
             "created_at_epoch": self.created_at_epoch,
             "schema_version": self.schema_version,
         }
@@ -1408,6 +1415,7 @@ def candidate_decision_id_for(
     *,
     disposition: CandidateDisposition,
     source_identity: str,
+    basis_identity: str,
     reason_codes: tuple[str, ...] = (),
 ) -> str:
     return deterministic_id(
@@ -1418,6 +1426,11 @@ def candidate_decision_id_for(
             "source_identity": _text(
                 source_identity,
                 "source_identity",
+                max_length=500,
+            ),
+            "basis_identity": _text(
+                basis_identity,
+                "basis_identity",
                 max_length=500,
             ),
             "reason_codes": list(
