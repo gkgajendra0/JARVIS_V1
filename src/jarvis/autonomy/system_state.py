@@ -177,7 +177,9 @@ class SystemStateReadRequestV1:
             "now_epoch",
             _epoch(self.now_epoch, "now_epoch"),
         )
-        object.__setattr__(self, "max_facts", _positive_int(self.max_facts, "max_facts"))
+        object.__setattr__(
+            self, "max_facts", _positive_int(self.max_facts, "max_facts")
+        )
         if self.max_facts > 5000:
             raise ValueError("max_facts exceeds bounded SystemState limit")
         if self.schema_version != SYSTEM_STATE_SCHEMA_VERSION:
@@ -534,7 +536,9 @@ class SystemStateSnapshotV1:
             not isinstance(item, SystemStateSourceErrorV1)
             for item in self.source_errors
         ):
-            raise TypeError("source_errors must contain SystemStateSourceErrorV1 values")
+            raise TypeError(
+                "source_errors must contain SystemStateSourceErrorV1 values"
+            )
         source_errors = tuple(
             sorted(
                 self.source_errors,
@@ -697,8 +701,7 @@ class SystemStateSnapshotV1:
         rebuilt = cls.create(
             evaluated_source_namespaces=tuple(payload["evaluated_source_namespaces"]),
             facts=tuple(
-                SystemStateFactV1.from_payload(dict(item))
-                for item in payload["facts"]
+                SystemStateFactV1.from_payload(dict(item)) for item in payload["facts"]
             ),
             source_errors=tuple(
                 SystemStateSourceErrorV1.from_payload(dict(item))
@@ -811,9 +814,7 @@ class SystemStateAggregator:
                 continue
 
             out_of_scope = tuple(
-                fact
-                for fact in result.facts
-                if fact.fact_namespace not in namespaces
+                fact for fact in result.facts if fact.fact_namespace not in namespaces
             )
             if out_of_scope:
                 for namespace in source_namespaces:
