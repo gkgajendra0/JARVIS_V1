@@ -40,9 +40,7 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     (
         "jarvis.autonomy.mode",
-        (
-            "AutonomyMode",
-        ),
+        ("AutonomyMode",),
     ),
     (
         "jarvis.autonomy.attention",
