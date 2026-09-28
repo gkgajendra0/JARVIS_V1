@@ -59,14 +59,14 @@ from jarvis.capability_registry.admission import CapabilityPackageAdmissionServi
 from jarvis.capability_registry.lifecycle import CapabilityLifecycleService
 from jarvis.capability_registry.reconciliation import CapabilityLifecycleReconciler
 from jarvis.engineering_change.coordinator import ChangeCoordinator
-from jarvis.engineering_substrate.discovery import default_discovery_broker
-from jarvis.engineering_substrate.dependency.runtime import (
-    build_runtime_dependency_broker,
-)
+from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.change_integration import (
     EngineeringSubstrateChangeService,
 )
-from jarvis.engineering_change.store import ChangeStore
+from jarvis.engineering_substrate.dependency.runtime import (
+    build_runtime_dependency_broker,
+)
+from jarvis.engineering_substrate.discovery import default_discovery_broker
 from jarvis.incident_repair.architecture import (
     IncidentRepairDevelopmentRevisionResolver,
     IncidentRepairSourceCompletionHandler,
@@ -495,22 +495,27 @@ def build_work_runtime(
                     change.change_id,
                     "architecture",
                 )
-                if architecture is not None and any(
-                    tuple(architecture.payload.get(field, ()))
-                    for field in (
-                        "dependency_refs",
-                        "secret_scopes",
-                        "discovery_scopes",
-                    )
-                ):
-                    if not EngineeringSubstrateChangeService(
-                        change_store
-                    ).verification_current(change.change_id):
-                        return (
-                            False,
-                            "capability development requires current Phase-5 "
-                            "substrate verification",
+                if (
+                    architecture is not None
+                    and any(
+                        tuple(architecture.payload.get(field, ()))
+                        for field in (
+                            "dependency_refs",
+                            "secret_scopes",
+                            "discovery_scopes",
                         )
+                    )
+                    and not EngineeringSubstrateChangeService(
+                        change_store
+                    ).verification_current(change.change_id)
+                ):
+                    return (
+                        False,
+                        (
+                            "capability development requires current Phase-5 "
+                            "substrate verification"
+                        ),
+                    )
         return None
 
     engine = WorkEngine(
