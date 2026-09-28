@@ -9,7 +9,10 @@ import tempfile
 import urllib.request
 from dataclasses import dataclass, replace
 
-from jarvis.engineering_substrate.artifacts import ArtifactAdmissionResult, ArtifactStore
+from jarvis.engineering_substrate.artifacts import (
+    ArtifactAdmissionResult,
+    ArtifactStore,
+)
 from jarvis.engineering_substrate.contracts import (
     DependencyArtifact,
     DependencyEcosystem,
@@ -284,7 +287,8 @@ class DependencyBroker:
         return self._artifacts.admit_file(
             resolved.lock_path,
             expected_sha256=parsed.lock_sha256,
-            source_id="dependency-lock:" + resolved.requirement.registered_source_ids[0],
+            source_id="dependency-lock:"
+            + resolved.requirement.registered_source_ids[0],
         )
 
     def inspect_lock(
