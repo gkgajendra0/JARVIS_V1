@@ -578,6 +578,34 @@ class AutonomyStore:
                 raise AutonomyConflictError("objective compare-and-swap failed")
         return objective
 
+    def list_objectives(
+        self,
+        *,
+        statuses: tuple[str, ...] = ("active",),
+        limit: int = 100,
+    ) -> tuple[ObjectiveV1, ...]:
+        if limit <= 0:
+            raise ValueError("objective limit must be positive")
+        normalized = tuple(
+            dict.fromkeys(str(value).strip().casefold() for value in statuses)
+        )
+        if not normalized or any(not value for value in normalized):
+            raise ValueError("objective statuses must not be empty")
+        marks = ",".join("?" for _ in normalized)
+        with self.work.extension_transaction() as db:
+            rows = db.execute(
+                f"""
+                SELECT * FROM autonomy_objectives
+                WHERE status IN ({marks})
+                ORDER BY priority DESC, updated_at_epoch, objective_id
+                LIMIT ?
+                """,
+                (*normalized, limit),
+            ).fetchall()
+        return tuple(
+            ObjectiveV1.from_payload(self._decoded_payload(row)) for row in rows
+        )
+
     def create_desired_state(self, desired: DesiredStateV1) -> DesiredStateV1:
         return self._immutable_create(
             table="autonomy_desired_states",
@@ -664,6 +692,44 @@ class AutonomyStore:
             if cursor.rowcount != 1:
                 raise AutonomyConflictError("desired-state compare-and-swap failed")
         return desired
+
+    def list_desired_states(
+        self,
+        *,
+        statuses: tuple[str, ...] = ("active",),
+        objective_id: str | None = None,
+        limit: int = 500,
+    ) -> tuple[DesiredStateV1, ...]:
+        if limit <= 0:
+            raise ValueError("DesiredState limit must be positive")
+        normalized = tuple(
+            dict.fromkeys(str(value).strip().casefold() for value in statuses)
+        )
+        if not normalized or any(not value for value in normalized):
+            raise ValueError("DesiredState statuses must not be empty")
+        marks = ",".join("?" for _ in normalized)
+        clauses = [f"status IN ({marks})"]
+        parameters: list[object] = [*normalized]
+        if objective_id is not None:
+            normalized_objective = str(objective_id).strip()
+            if not normalized_objective:
+                raise ValueError("objective_id must not be empty")
+            clauses.append("objective_id=?")
+            parameters.append(normalized_objective)
+        parameters.append(limit)
+        with self.work.extension_transaction() as db:
+            rows = db.execute(
+                f"""
+                SELECT * FROM autonomy_desired_states
+                WHERE {" AND ".join(clauses)}
+                ORDER BY objective_id, updated_at_epoch, desired_state_id
+                LIMIT ?
+                """,
+                parameters,
+            ).fetchall()
+        return tuple(
+            DesiredStateV1.from_payload(self._decoded_payload(row)) for row in rows
+        )
 
     def create_finding(self, finding: AutonomyFindingV1) -> AutonomyFindingV1:
         return self._immutable_create(
@@ -1378,6 +1444,64 @@ class AutonomyStore:
         if row is None:
             raise KeyError(request_token)
         return ReconcileRunV1.from_payload(self._decoded_payload(row))
+
+    def finalize_reconcile_run(
+        self,
+        run: ReconcileRunV1,
+    ) -> ReconcileRunV1:
+        if run.status.value not in {"completed", "failed"}:
+            raise ValueError("final reconcile run must be COMPLETED or FAILED")
+        if run.ended_at_epoch is None:
+            raise ValueError("final reconcile run requires ended_at_epoch")
+        digest, encoded = self._encoded_payload(run)
+        with self.work.extension_transaction() as db:
+            current = db.execute(
+                """
+                SELECT * FROM autonomy_reconcile_runs
+                WHERE request_token=?
+                """,
+                (run.request_token,),
+            ).fetchone()
+            if current is None:
+                raise KeyError(run.request_token)
+            existing = ReconcileRunV1.from_payload(self._decoded_payload(current))
+            if (
+                existing.reconcile_run_id != run.reconcile_run_id
+                or existing.trigger is not run.trigger
+                or existing.started_at_epoch != run.started_at_epoch
+                or existing.desired_generation_digest != run.desired_generation_digest
+            ):
+                raise AutonomyConflictError(
+                    "reconcile finalization identity does not match started run"
+                )
+            if existing.status.value == "completed":
+                if str(current["payload_digest"]) != digest:
+                    raise AutonomyConflictError(
+                        "completed reconcile run cannot be rewritten"
+                    )
+                return existing
+            cursor = db.execute(
+                """
+                UPDATE autonomy_reconcile_runs
+                SET status=?, snapshot_digest=?, handled_token=?,
+                    ended_at_epoch=?, payload_digest=?, payload=?
+                WHERE request_token=? AND status IN ('started', 'failed')
+                """,
+                (
+                    run.status.value,
+                    run.snapshot_digest,
+                    run.handled_token,
+                    run.ended_at_epoch,
+                    digest,
+                    encoded,
+                    run.request_token,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise AutonomyConflictError(
+                    "reconcile finalization compare-and-swap failed"
+                )
+        return run
 
     def record_system_snapshot(
         self,
