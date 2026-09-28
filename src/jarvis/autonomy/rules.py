@@ -392,7 +392,10 @@ class ComponentHealthRuleV1:
                 facts=supporting,
             )
         state = str(health_facts[0].value_json.get("state", "")).strip().casefold()
-        if state not in {item.value for item in HealthState} or state == HealthState.UNKNOWN.value:
+        if (
+            state not in {item.value for item in HealthState}
+            or state == HealthState.UNKNOWN.value
+        ):
             return _raw(
                 desired,
                 snapshot,
