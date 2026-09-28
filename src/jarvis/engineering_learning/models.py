@@ -330,7 +330,7 @@ class EngineeringOutcomeV1:
         package_id: str | None = None,
         package_version: str | None = None,
         package_digest: str | None = None,
-    ) -> "EngineeringOutcomeV1":
+    ) -> EngineeringOutcomeV1:
         identity_payload: dict[str, JSONValue] = {
             "schema_version": ENGINEERING_OUTCOME_SCHEMA_VERSION,
             "source_kind": source_kind.value,
