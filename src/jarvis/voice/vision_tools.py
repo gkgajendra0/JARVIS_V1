@@ -108,10 +108,12 @@ class VisionAgentTools:
         """Switch JARVIS eyes only when the owner explicitly asks.
 
         Supported camera profiles are configured by the local runtime. Production
-        defaults to the Lenovo 510 RGB camera. The optional Pocket 3 profile is
-        lazy: if it is unavailable, the switch fails and the previous camera is
-        restored. This tool changes only the visual source; it does not arm pan,
-        tilt, zoom, native tracking, or any other camera movement.
+        defaults to the Lenovo 510 RGB camera. Map owner wording such as Lenovo,
+        webcam, or Lenovo eyes to `lenovo`; map Pocket, Pocket Osmo, Osmo Pocket 3,
+        or Pocket eyes to `pocket3`. The optional Pocket 3 profile is lazy: if it
+        is unavailable, the switch fails and the previous camera is restored.
+        This tool changes only the visual source; it does not arm pan, tilt, zoom,
+        native tracking, or any other camera movement.
         """
         del context
         try:
