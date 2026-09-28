@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Protocol, Self
+from typing import Protocol
 
 from jarvis.autonomy.attention import (
     AttentionDeliveryAttemptV1,
@@ -13,7 +13,6 @@ from jarvis.autonomy.attention import (
 )
 from jarvis.autonomy.budgets import (
     AutonomyBudgetEvaluator,
-    BudgetAssessmentV1,
     BudgetUsageV1,
 )
 from jarvis.autonomy.models import (
@@ -23,7 +22,9 @@ from jarvis.autonomy.models import (
     AutonomyDispatchLinkV1,
     AutonomyMode,
     CandidateDisposition,
+    DesiredStateStatus,
     FindingStatus,
+    ObjectiveStatus,
     ObjectiveV1,
     deterministic_id,
 )
@@ -130,6 +131,7 @@ class DispatchBridgeRegistrationV1:
     process_version: int | None = None
     controller_key: str | None = None
     controller_version: int | None = None
+    controller_contract_digest: str | None = None
     attention_group_key: str | None = None
     attention_reason_codes: tuple[str, ...] = ()
     attention_question: str | None = None
@@ -174,6 +176,7 @@ class DispatchBridgeRegistrationV1:
                 "work_type",
                 "controller_key",
                 "controller_version",
+                "controller_contract_digest",
                 "attention_group_key",
                 "attention_question",
                 "attention_option_metadata_json",
@@ -195,6 +198,16 @@ class DispatchBridgeRegistrationV1:
             )
             object.__setattr__(self, "controller_key", controller_key)
             object.__setattr__(self, "controller_version", controller_version)
+            digest = _text(
+                self.controller_contract_digest,
+                "controller_contract_digest",
+                max_length=64,
+            ).casefold()
+            if len(digest) != 64 or any(
+                char not in "0123456789abcdef" for char in digest
+            ):
+                raise ValueError("controller_contract_digest must be SHA-256")
+            object.__setattr__(self, "controller_contract_digest", digest)
             self._reject_fields(
                 "work_type",
                 "process_key",
@@ -254,6 +267,7 @@ class DispatchBridgeRegistrationV1:
                 "process_version",
                 "controller_key",
                 "controller_version",
+                "controller_contract_digest",
             )
         else:  # pragma: no cover - enum exhaustiveness guard
             raise ValueError("unsupported action kind")
@@ -264,6 +278,7 @@ class DispatchBridgeRegistrationV1:
             "process_version",
             "controller_key",
             "controller_version",
+            "controller_contract_digest",
             "attention_group_key",
             "attention_question",
             "attention_option_metadata_json",
@@ -294,6 +309,7 @@ class DispatchBridgeRegistrationV1:
             "process_version": self.process_version,
             "controller_key": self.controller_key,
             "controller_version": self.controller_version,
+            "controller_contract_digest": self.controller_contract_digest,
             "attention_group_key": self.attention_group_key,
             "attention_reason_codes": list(self.attention_reason_codes),
             "attention_question": self.attention_question,
@@ -656,6 +672,7 @@ class AutonomyDispatchService:
             candidate,
             finding=finding,
             desired_generation=desired.generation,
+            desired_status=desired.status,
             objective=objective,
             priority=priority,
         )
@@ -666,6 +683,30 @@ class AutonomyDispatchService:
                 disposition=CandidateDisposition.OBSOLETE,
                 reason_codes=(identity_problem,),
             )
+
+        registration = self.registrations.get(candidate)
+
+        if mode is AutonomyMode.ASSISTED and registration is not None:
+            existing = self.store.get_dispatch_link(candidate.candidate_id)
+            if existing is not None:
+                if existing.bridge_contract_digest != registration.digest:
+                    return AutonomyDispatchResultV1(
+                        candidate_id=candidate.candidate_id,
+                        mode=mode,
+                        disposition=CandidateDisposition.BLOCKED_POLICY,
+                        reason_codes=(
+                            "dispatch_bridge_semantics_changed_without_version",
+                        ),
+                        link=existing,
+                    )
+                return AutonomyDispatchResultV1(
+                    candidate_id=candidate.candidate_id,
+                    mode=mode,
+                    disposition=CandidateDisposition.ADMITTED,
+                    reason_codes=("downstream_dispatch_replay_reused",),
+                    link=existing,
+                    replayed=True,
+                )
 
         assessment = self.budget_evaluator.evaluate(
             candidate,
@@ -681,32 +722,12 @@ class AutonomyDispatchService:
                 reason_codes=assessment.reason_codes,
             )
 
-        registration = self.registrations.get(candidate)
         if registration is None:
             return AutonomyDispatchResultV1(
                 candidate_id=candidate.candidate_id,
                 mode=mode,
                 disposition=CandidateDisposition.BLOCKED_POLICY,
                 reason_codes=("dispatch_bridge_not_registered",),
-            )
-
-        existing = self.store.get_dispatch_link(candidate.candidate_id)
-        if existing is not None:
-            if existing.bridge_contract_digest != registration.digest:
-                return AutonomyDispatchResultV1(
-                    candidate_id=candidate.candidate_id,
-                    mode=mode,
-                    disposition=CandidateDisposition.BLOCKED_POLICY,
-                    reason_codes=("dispatch_bridge_semantics_changed_without_version",),
-                    link=existing,
-                )
-            return AutonomyDispatchResultV1(
-                candidate_id=candidate.candidate_id,
-                mode=mode,
-                disposition=CandidateDisposition.ADMITTED,
-                reason_codes=("downstream_dispatch_replay_reused",),
-                link=existing,
-                replayed=True,
             )
 
         if mode is not AutonomyMode.ASSISTED:
@@ -748,9 +769,14 @@ class AutonomyDispatchService:
         *,
         finding,
         desired_generation: int,
+        desired_status: DesiredStateStatus,
         objective: ObjectiveV1,
         priority: PrioritizedCandidateV1 | None,
     ) -> str | None:
+        if objective.status is not ObjectiveStatus.ACTIVE:
+            return "objective_not_active"
+        if desired_status is not DesiredStateStatus.ACTIVE:
+            return "desired_state_not_active"
         if finding.status is not FindingStatus.ACTIVE:
             return "finding_not_active"
         if (
@@ -851,7 +877,11 @@ class AutonomyDispatchService:
         *,
         now_epoch: float,
     ) -> AutonomyDispatchResultV1:
-        if registration.controller_key is None or registration.controller_version is None:
+        if (
+            registration.controller_key is None
+            or registration.controller_version is None
+            or registration.controller_contract_digest is None
+        ):
             return self._blocked(
                 candidate,
                 AutonomyMode.ASSISTED,
@@ -867,18 +897,12 @@ class AutonomyDispatchService:
                 AutonomyMode.ASSISTED,
                 "registered_controller_unavailable",
             )
-        if controller.contract_digest != registration.digest:
-            # The dispatch registration, not an arbitrary callable, is the authority
-            # to bind this candidate to a controller contract.
-            controller_binding_digest = canonical_digest(
-                {
-                    "controller_key": registration.controller_key,
-                    "controller_version": registration.controller_version,
-                    "registration_digest": registration.digest,
-                }
+        if controller.contract_digest != registration.controller_contract_digest:
+            return self._blocked(
+                candidate,
+                AutonomyMode.ASSISTED,
+                "registered_controller_contract_mismatch",
             )
-        else:
-            controller_binding_digest = registration.digest
         _, _, source_identity = _candidate_source_identity(candidate)
         try:
             receipt = controller.invoke(
@@ -900,7 +924,6 @@ class AutonomyDispatchService:
             source_identity=source_identity,
             now_epoch=now_epoch,
             reason_codes=("assisted_registered_controller_invoked",),
-            bridge_contract_digest=controller_binding_digest,
         )
 
     def _dispatch_attention(
@@ -971,7 +994,6 @@ class AutonomyDispatchService:
         source_identity: str,
         now_epoch: float,
         reason_codes: tuple[str, ...],
-        bridge_contract_digest: str | None = None,
     ) -> AutonomyDispatchResultV1:
         link = AutonomyDispatchLinkV1(
             dispatch_link_id=deterministic_id(
@@ -989,11 +1011,7 @@ class AutonomyDispatchService:
             source_identity=source_identity,
             mode=AutonomyMode.ASSISTED,
             disposition=CandidateDisposition.ADMITTED,
-            bridge_contract_digest=(
-                registration.digest
-                if bridge_contract_digest is None
-                else bridge_contract_digest
-            ),
+            bridge_contract_digest=registration.digest,
             reason_codes=reason_codes,
             created_at_epoch=now_epoch,
         )
