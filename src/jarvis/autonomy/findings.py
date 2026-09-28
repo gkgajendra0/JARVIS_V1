@@ -140,12 +140,14 @@ class FindingLifecycle:
                     candidate,
                     disposition=CandidateDisposition.OBSOLETE,
                     source_identity="finding_lifecycle:obsolete",
+                    basis_identity=f"finding_version:{finding.version}",
                     reason_codes=(reason_code,),
                 ),
                 candidate_id=candidate.candidate_id,
                 disposition=CandidateDisposition.OBSOLETE,
                 reason_codes=(reason_code,),
                 source_identity="finding_lifecycle:obsolete",
+                basis_identity=f"finding_version:{finding.version}",
                 created_at_epoch=at_epoch,
             )
             self.store.record_candidate_decision(decision)
