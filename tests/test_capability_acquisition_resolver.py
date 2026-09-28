@@ -334,3 +334,79 @@ def test_reuse_beats_verified_wrap_deterministically() -> None:
         is AcquisitionSourceKind.EXISTING_CAPABILITY
     )
     assert result.selected_candidate.strategy is AcquisitionStrategy.REUSE
+
+
+def test_target_specific_goal_does_not_reuse_unscoped_operation_match() -> None:
+    descriptor = CapabilityDescriptor.create(
+        capability_id="audio",
+        source_id="system",
+        kind=CapabilityKind.NATIVE_API,
+        name="Windows master audio",
+        description="Control the local Windows master audio endpoint.",
+        operations=("mute_master_volume", "unmute_master_volume"),
+        execution_enabled=True,
+    )
+    context = AcquisitionContextV1(
+        catalog=CapabilityCatalog(sources=(), capabilities=(descriptor,)),
+        inventory=(
+            CapabilityInventoryEntry(
+                capability_id=descriptor.capability_id,
+                capability_key=descriptor.key,
+                management_mode=CapabilityManagementMode.CORE_PINNED,
+            ),
+        ),
+    )
+    goal = OwnerCapabilityGoalV1.create(
+        request="Acquire network mute control for my television",
+        requested_capability="television network audio control",
+        required_operations=("mute_master_volume", "unmute_master_volume"),
+        target_hints=("Hisense TV", "local network"),
+        source_session_id="session-target",
+        source_turn_id="turn-target",
+        now_epoch=100.0,
+    )
+
+    result = _resolver().resolve(goal, context)
+
+    assert result.candidates == ()
+    assert result.selected_candidate is None
+
+
+def test_target_specific_goal_reuses_only_explicitly_scoped_capability() -> None:
+    descriptor = CapabilityDescriptor.create(
+        capability_id="tv.control",
+        source_id="local",
+        kind=CapabilityKind.NATIVE_API,
+        name="Hisense TV control",
+        description="Control the explicitly configured television over the local network.",
+        operations=("mute", "unmute"),
+        metadata={
+            "acquisition_target_hints": ["Hisense TV", "local network"],
+        },
+        execution_enabled=True,
+    )
+    context = AcquisitionContextV1(
+        catalog=CapabilityCatalog(sources=(), capabilities=(descriptor,)),
+        inventory=(
+            CapabilityInventoryEntry(
+                capability_id=descriptor.capability_id,
+                capability_key=descriptor.key,
+                management_mode=CapabilityManagementMode.CORE_PINNED,
+            ),
+        ),
+    )
+    goal = OwnerCapabilityGoalV1.create(
+        request="Acquire mute control for my Hisense TV over the local network",
+        requested_capability="Hisense TV control",
+        required_operations=("mute", "unmute"),
+        target_hints=("Hisense TV", "local network"),
+        source_session_id="session-target",
+        source_turn_id="turn-target",
+        now_epoch=100.0,
+    )
+
+    result = _resolver().resolve(goal, context)
+
+    assert result.selected_candidate is not None
+    assert result.selected_candidate.source_identity == descriptor.key
+    assert result.selected_candidate.strategy is AcquisitionStrategy.REUSE

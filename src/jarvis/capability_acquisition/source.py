@@ -135,6 +135,55 @@ class ExistingCapabilitySourceAdapter:
             )
         )
 
+    @staticmethod
+    def _declared_target_hints(
+        descriptor: CapabilityDescriptor,
+    ) -> tuple[str, ...]:
+        raw = descriptor.metadata().get("acquisition_target_hints", ())
+        values = (raw,) if isinstance(raw, str) else raw
+        if not isinstance(values, (list, tuple)):
+            return ()
+        return tuple(
+            sorted(
+                {
+                    " ".join(str(item).split()).casefold()
+                    for item in values
+                    if str(item).strip()
+                }
+            )
+        )
+
+    @classmethod
+    def _target_hints_compatible(
+        cls,
+        goal: OwnerCapabilityGoalV1,
+        descriptor: CapabilityDescriptor,
+    ) -> bool:
+        required = tuple(
+            " ".join(str(item).split()).casefold()
+            for item in goal.target_hints
+            if str(item).strip()
+        )
+        if not required:
+            return True
+
+        declared = cls._declared_target_hints(descriptor)
+        if declared:
+            return set(required).issubset(set(declared))
+
+        # Legacy/core descriptors predate explicit acquisition target metadata.
+        # Preserve reuse only when the owner-interpreted capability identity itself
+        # matches the descriptor's declared identity. This keeps a generic
+        # "TV control" goal reusable while preventing a target-specific external
+        # request from collapsing into an unrelated local operation merely because
+        # both happen to expose similarly named verbs such as mute/unmute.
+        requested_capability = " ".join(goal.requested_capability.split()).casefold()
+        descriptor_identities = {
+            " ".join(descriptor.name.split()).casefold(),
+            " ".join(descriptor.capability_id.replace(".", " ").split()).casefold(),
+        }
+        return requested_capability in descriptor_identities
+
     def discover(
         self,
         goal: OwnerCapabilityGoalV1,
@@ -153,6 +202,8 @@ class ExistingCapabilitySourceAdapter:
         ):
             operations = self._operations(descriptor)
             if not required.issubset(operations):
+                continue
+            if not self._target_hints_compatible(goal, descriptor):
                 continue
             inventory = context.inventory_entry(descriptor.key)
             if inventory is None:  # pragma: no cover - context validation owns this

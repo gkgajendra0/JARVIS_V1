@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from jarvis.voice.agent import INSTRUCTIONS
 from jarvis.voice.work_tools import WorkAgentTools
 from jarvis.work.development import DevelopmentWorkspaceManager
 from jarvis.work.runtime import WorkRuntime
@@ -86,3 +87,12 @@ def test_phase9_owner_voice_tools_are_exposed() -> None:
     assert hasattr(WorkAgentTools, "disable_acquired_capability")
     assert hasattr(WorkAgentTools, "prepare_change_promotion")
     assert hasattr(WorkAgentTools, "execute_change_promotion")
+
+
+def test_phase9_voice_instructions_route_explicit_acquisition_to_governed_tool() -> (
+    None
+):
+    assert "start_capability_acquisition" in INSTRUCTIONS
+    assert "target_hints" in INSTRUCTIONS
+    assert "superficially similar local operation" in INSTRUCTIONS
+    assert "use_computer" in INSTRUCTIONS
