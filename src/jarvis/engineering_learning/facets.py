@@ -533,6 +533,7 @@ class EngineeringOutcomeV1Handler:
                         max_length=100,
                     ),
                     *common[5],
+                    *(item.target_identity for item in common[7]),
                 )
             )
         )
@@ -625,6 +626,7 @@ class EngineeringRegressionV1Handler:
                     common[4],
                     _string(payload["result"], "result", max_length=80),
                     *common[5],
+                    *(item.target_identity for item in common[7]),
                 )
             )
         )
@@ -707,6 +709,7 @@ class EngineeringCompatibilityV1Handler:
                     common[4],
                     _string(payload["verdict"], "verdict", max_length=80),
                     *common[5],
+                    *(item.target_identity for item in common[7]),
                 )
             )
         )
