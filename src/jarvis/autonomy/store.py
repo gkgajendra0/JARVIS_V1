@@ -12,8 +12,8 @@ from jarvis.work.store import SQLiteWorkStore
 
 from .models import (
     ActionCandidateV1,
-    AutonomyFindingEventV1,
     AutonomyDispatchLinkV1,
+    AutonomyFindingEventV1,
     AutonomyFindingV1,
     AutonomyOutcomeRecordV1,
     DesiredStateV1,
