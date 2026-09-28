@@ -39,6 +39,40 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "jarvis.autonomy.attention",
+        (
+            "AttentionDeliveryAttemptV1",
+            "OwnerAttentionAdmissionV1",
+            "OwnerAttentionDeliveryAdapter",
+            "OwnerAttentionManager",
+            "OwnerAttentionTransport",
+            "attention_fingerprint_for",
+        ),
+    ),
+    (
+        "jarvis.autonomy.budgets",
+        (
+            "BUDGET_DIMENSION_NEW_WORK",
+            "BUDGET_DIMENSION_OWNER_NOTIFICATION",
+            "BUDGET_DIMENSION_PROVIDER_MODEL_WORK",
+            "BUDGET_DIMENSION_REPEAT_DISPATCH",
+            "AutonomyBudgetEvaluator",
+            "AutonomyBudgetLedger",
+            "AutonomyBudgetWindowV1",
+            "BudgetAssessmentV1",
+            "BudgetUsageV1",
+        ),
+    ),
+    (
+        "jarvis.autonomy.portfolio",
+        (
+            "PortfolioInputV1",
+            "PortfolioPrioritizer",
+            "PrioritizedCandidateV1",
+            "PriorityFactorsV1",
+        ),
+    ),
+    (
         "jarvis.autonomy.findings",
         (
             "FindingLifecycleManager",
