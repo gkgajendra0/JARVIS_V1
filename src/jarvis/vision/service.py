@@ -61,7 +61,7 @@ class VisionService:
             if active_camera_profile is not None
             else None
         )
-        if normalized_active is not None and normalized_active not in normalized_profiles:
+        if (\n            normalized_active is not None\n            and normalized_active not in normalized_profiles\n        ):
             raise ValueError(
                 f"active camera profile {active_camera_profile!r} is not configured"
             )
