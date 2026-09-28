@@ -328,6 +328,47 @@ class ChangeStore:
             ).fetchone()
             return None if row is None else self._from_row(row)
 
+    def list_by_states(
+        self,
+        states: tuple[ChangeState, ...],
+        *,
+        process_key: str | None = None,
+        process_version: int | None = None,
+        limit: int = 20,
+    ) -> tuple[EngineeringChange, ...]:
+        if not states or any(not isinstance(state, ChangeState) for state in states):
+            raise ValueError("change state filter must be non-empty and typed")
+        if type(limit) is not int or limit <= 0:
+            raise ValueError("change list limit must be positive")
+        normalized_process = None if process_key is None else str(process_key).strip()
+        if process_key is not None and not normalized_process:
+            raise ValueError("process_key must not be empty")
+        if process_version is not None and (
+            type(process_version) is not int or process_version <= 0
+        ):
+            raise ValueError("process_version must be positive")
+        if normalized_process is None and process_version is not None:
+            raise ValueError("process_version requires process_key")
+
+        placeholders = ",".join("?" for _ in states)
+        query = (
+            "SELECT * FROM engineering_changes "
+            f"WHERE state IN ({placeholders})"
+        )
+        parameters: list[object] = [state.value for state in states]
+        if normalized_process is not None:
+            query += " AND process_key=?"
+            parameters.append(normalized_process)
+        if process_version is not None:
+            query += " AND process_version=?"
+            parameters.append(process_version)
+        query += " ORDER BY created_at, change_id LIMIT ?"
+        parameters.append(limit)
+
+        with self.work._lock, self.work._connect() as db:
+            rows = db.execute(query, tuple(parameters)).fetchall()
+        return tuple(self._from_row(row) for row in rows)
+
     def active_ids(self) -> tuple[str, ...]:
         terminal = ("closed", "rejected", "failed", "superseded", "rolled_back")
         with self.work._lock, self.work._connect() as db:
