@@ -152,6 +152,12 @@ class DependencyBroker:
             else pathlib.Path(protected_main_root).resolve()
         )
 
+    @property
+    def artifact_store(self) -> ArtifactStore:
+        """Expose the same content-addressed store to provenance verifiers."""
+
+        return self._artifacts
+
     def _workspace(self, value: pathlib.Path | str) -> pathlib.Path:
         path = pathlib.Path(value)
         if path.is_symlink() or not path.is_dir():
