@@ -667,6 +667,20 @@ class CapabilityStateSource:
 
         effective_snapshot = self.projection.snapshot
         for state in selected:
+            try:
+                observed_at_epoch = _iso_epoch(state.updated_at)
+            except (TypeError, ValueError):
+                incomplete.add("capability_registry")
+                errors.append(
+                    _source_error(
+                        namespace="capability_registry",
+                        source_key=self.source_key,
+                        source_version=self.source_version,
+                        reason_code="source_timestamp_invalid",
+                        summary="Capability Registry updated_at is malformed.",
+                    )
+                )
+                continue
             effective = (
                 None
                 if effective_snapshot is None
@@ -708,7 +722,7 @@ class CapabilityStateSource:
                     target_namespace="capability",
                     target_identity=state.capability_id,
                     value_json=payload,
-                    observed_at_epoch=_iso_epoch(state.updated_at),
+                    observed_at_epoch=observed_at_epoch,
                     evidence_references=(f"capability-registry:{state.capability_id}",),
                     source_adapter_key=self.source_key,
                     source_adapter_version=self.source_version,
