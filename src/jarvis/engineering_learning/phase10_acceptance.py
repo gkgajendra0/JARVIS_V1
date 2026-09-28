@@ -15,7 +15,10 @@ import subprocess
 import tempfile
 from datetime import UTC, datetime
 
-from jarvis.engineering_learning.evaluation import run_replay_suite
+from jarvis.engineering_learning.evaluation import (
+    PHASE10_REPLAY_CASE_IDS,
+    run_replay_suite,
+)
 from jarvis.engineering_substrate.canonical import canonical_digest
 
 
@@ -85,10 +88,16 @@ def run_acceptance(*, repo_root: pathlib.Path) -> dict[str, object]:
     if repo.is_symlink() or not repo.is_dir():
         raise Phase10AcceptanceError("acceptance repo_root must be a regular directory")
     repo = repo.resolve()
-    snapshot = _repo_snapshot(repo)
+    before = _repo_snapshot(repo)
 
     with tempfile.TemporaryDirectory(prefix="jarvis-phase10-acceptance-") as temp:
         report = run_replay_suite(pathlib.Path(temp) / "replay")
+
+    after = _repo_snapshot(repo)
+    if after != before:
+        raise Phase10AcceptanceError(
+            "owner-machine acceptance changed the tested repository checkout"
+        )
 
     if report.status != "PASS":
         failures = {
@@ -102,8 +111,9 @@ def run_acceptance(*, repo_root: pathlib.Path) -> dict[str, object]:
     evidence: dict[str, object] = {
         "schema_version": 1,
         "status": "PASS",
-        "tested_commit": snapshot["head"],
-        "repo_status_sha256": snapshot["status_sha256"],
+        "tested_commit": before["head"],
+        "repo_status_sha256": before["status_sha256"],
+        "repo_unchanged": True,
         "recorded_at": datetime.now(UTC).isoformat(),
         "suite_status": report.status,
         "suite_digest": report.suite_digest,
@@ -145,6 +155,8 @@ def validate_acceptance_evidence(
         raise Phase10AcceptanceError("acceptance unexpectedly granted Authority")
     if evidence.get("production_mutated") is not False:
         raise Phase10AcceptanceError("acceptance unexpectedly mutated production")
+    if evidence.get("repo_unchanged") is not True:
+        raise Phase10AcceptanceError("acceptance did not prove checkout immutability")
 
     case_ids = evidence.get("case_ids")
     if not isinstance(case_ids, list) or not all(
@@ -153,8 +165,10 @@ def validate_acceptance_evidence(
         raise Phase10AcceptanceError("acceptance case_ids are malformed")
     if evidence.get("case_count") != len(case_ids):
         raise Phase10AcceptanceError("acceptance case_count mismatch")
-    if len(case_ids) != 15:
-        raise Phase10AcceptanceError("acceptance evidence does not cover 15 cases")
+    if tuple(case_ids) != PHASE10_REPLAY_CASE_IDS:
+        raise Phase10AcceptanceError(
+            "acceptance evidence does not match the exact Phase-10 replay matrix"
+        )
     suite_digest = str(evidence.get("suite_digest") or "").strip().casefold()
     if len(suite_digest) != 64 or any(
         char not in "0123456789abcdef" for char in suite_digest
