@@ -28,6 +28,10 @@ class _FakeService:
                     ),
                 }
             ],
+            "camera": {
+                "active": "lenovo",
+                "available": ["lenovo", "pocket3"],
+            },
         }
 
     def switch_camera(self, profile: str) -> dict[str, object]:
@@ -50,6 +54,10 @@ def test_voice_report_hides_detector_candidate_count() -> None:
     assert "armed" not in status
     assert "target_id" not in status
     assert "target_visible" not in status
+    assert report["camera"] == {
+        "active": "lenovo",
+        "available": ["lenovo", "pocket3"],
+    }
     assert "visible_people is the only canonical visible-person count" in str(
         report["count_semantics"]
     )
