@@ -209,7 +209,7 @@ class OpenCVCameraSource:
                 ]
             )
             if fps is not None:
-                params.extend([cv2.CAP_PROP_FPS, int(round(fps))])
+                params.extend([cv2.CAP_PROP_FPS, round(fps)])
 
             try:
                 return self._capture_factory(
