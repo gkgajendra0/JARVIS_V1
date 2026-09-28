@@ -43,6 +43,7 @@ from jarvis.sensors.gstreamer_av import (
     GStreamerPairedAVSource,
 )
 from jarvis.sensors.windows_discovery import discover_windows_av_sources
+from jarvis.vision.camera import OpenCVCameraConfig, OpenCVCameraSource
 from jarvis.vision.service import VisionService, build_default_vision_service
 from jarvis.voice.agent import JarvisVoiceAgent
 from jarvis.voice.audio import LocalAudioRuntime, SessionAudioInput
@@ -1091,6 +1092,32 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
             ring_buffer_seconds=config.audio_ring_buffer_seconds,
         )
 
+    camera_profiles: dict[str, OpenCVCameraConfig] = {}
+    vision_camera_source = active_speaker_av_source
+    active_camera_profile: str | None = None
+
+    if config.vision_enabled and active_speaker_av_source is None:
+        lenovo_camera = OpenCVCameraConfig(
+            device_index=config.vision_camera_index,
+            width=1920,
+            height=1080,
+            fps=30.0,
+            fourcc="MJPG",
+            backend="dshow",
+        )
+        camera_profiles["lenovo"] = lenovo_camera
+        if config.pocket3_camera_index is not None:
+            camera_profiles["pocket3"] = OpenCVCameraConfig(
+                device_index=config.pocket3_camera_index,
+                width=1280,
+                height=720,
+                fps=30.0,
+                fourcc="MJPG",
+                backend="dshow",
+            )
+        vision_camera_source = OpenCVCameraSource(lenovo_camera)
+        active_camera_profile = "lenovo"
+
     vision_service = (
         build_default_vision_service(
             head_model_path=config.vision_head_model_path,
@@ -1100,7 +1127,9 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
                 if active_speaker_visual_buffer is not None
                 else None
             ),
-            camera_source=active_speaker_av_source,
+            camera_source=vision_camera_source,
+            camera_profiles=camera_profiles,
+            active_camera_profile=active_camera_profile,
         )
         if config.vision_enabled
         else None
