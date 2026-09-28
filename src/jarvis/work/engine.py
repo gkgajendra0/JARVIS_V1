@@ -32,12 +32,23 @@ _PROVIDER_BACKOFF_SECONDS = (5.0, 10.0, 20.0, 40.0, 60.0)
 class WorkOwnerInputRequired(RuntimeError):
     """An executor cannot continue safely without a new owner decision/input."""
 
-    def __init__(self, question: str) -> None:
+    def __init__(
+        self,
+        question: str,
+        *,
+        sensitive: bool = False,
+        input_key: str | None = None,
+    ) -> None:
         normalized = question.strip()
         if not normalized:
             raise ValueError("owner-input question must not be empty")
+        key = None if input_key is None else str(input_key).strip().casefold()
+        if sensitive and not key:
+            raise ValueError("sensitive owner input requires an input_key")
         super().__init__(normalized)
         self.question = normalized
+        self.sensitive = bool(sensitive)
+        self.input_key = key
 
 
 class WorkActionExecutor(Protocol):
@@ -880,6 +891,7 @@ class WorkEngine:
                 result=result_payload,
             )
             self._store.save(completed, expected_version=work.version)
+            self._store.clear_sensitive_inputs(work.work_id)
             self._store.enqueue_delivery(
                 work=completed,
                 kind=WorkDeliveryKind.COMPLETION,
@@ -1036,9 +1048,14 @@ class WorkEngine:
                 parameters=dict(decision_parameters),
             )
         except WorkOwnerInputRequired as exc:
-            waiting_step = running_step.complete(
-                {"needs_owner": True, "question": exc.question}
-            )
+            waiting_observation: dict[str, Any] = {
+                "needs_owner": True,
+                "question": exc.question,
+                "sensitive": exc.sensitive,
+            }
+            if exc.input_key is not None:
+                waiting_observation["input_key"] = exc.input_key
+            waiting_step = running_step.complete(waiting_observation)
             self._store.save_step(waiting_step)
             latest = self._store.require(work.work_id)
             if latest.state.terminal or latest.state is WorkState.PAUSED:
@@ -1133,6 +1150,39 @@ class WorkEngine:
             if already_applied:
                 return work
             raise ValueError("work is not waiting for owner input")
+        waiting_step = next(
+            (
+                step
+                for step in reversed(self._store.list_steps(work_id))
+                if step.state.value == "completed"
+                and step.observation.get("needs_owner") is True
+            ),
+            None,
+        )
+        sensitive = bool(
+            waiting_step is not None
+            and waiting_step.observation.get("sensitive") is True
+        )
+        input_key = (
+            None
+            if waiting_step is None
+            else str(waiting_step.observation.get("input_key") or "").strip().casefold()
+            or None
+        )
+        if sensitive:
+            if input_key is None:
+                raise ValueError("sensitive owner input request has no key")
+            self._store.put_sensitive_input(work_id, input_key, normalized)
+            owner_observation = {
+                "sensitive": True,
+                "input_key": input_key,
+                "response_redacted": True,
+            }
+        else:
+            owner_observation = {"response": normalized}
+            if input_key is not None:
+                owner_observation["input_key"] = input_key
+
         step = WorkStep(
             work_id=work.work_id,
             kind="owner_input",
@@ -1140,7 +1190,7 @@ class WorkEngine:
             input_data={},
         )
         self._store.add_step(step)
-        completed = step.start().complete({"response": normalized})
+        completed = step.start().complete(owner_observation)
         self._store.save_step(completed)
         resumed = work.transition(
             WorkState.RUNNING,
