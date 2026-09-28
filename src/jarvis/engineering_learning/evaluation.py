@@ -138,6 +138,38 @@ def _promotion_outcome(
     )
 
 
+def _successor_promotion_outcome() -> EngineeringOutcomeV1:
+    return EngineeringOutcomeV1.create(
+        source_kind=EngineeringOutcomeSourceKind.PROMOTION,
+        source_identity="promotion-phase10-eval-2",
+        subject_type="promotion_candidate",
+        subject_id="candidate-phase10",
+        subject_digest=_CANDIDATE_DIGEST,
+        result=EngineeringOutcomeResult.ROLLED_BACK,
+        attribution=EngineeringOutcomeAttribution.CANDIDATE,
+        reason_codes=("candidate_runtime_regression",),
+        evidence_references=(
+            "promotion-attempt:phase10-eval-2",
+            f"change-artifact:phase10-observation-2:sha256:{_EVIDENCE_DIGEST}",
+        ),
+        applicability=(
+            OutcomeApplicability(
+                target_namespace="jarvis.revision",
+                target_identity=_RELEASE,
+                matcher_type="exact",
+                constraint={},
+                required=True,
+            ),
+        ),
+        observed_at_epoch=101.0,
+        producer="phase10.evaluation:v1",
+        change_id="change-phase10-eval-2",
+        candidate_id="candidate-phase10",
+        candidate_digest=_CANDIDATE_DIGEST,
+        release_sha=_RELEASE,
+    )
+
+
 def _repair_outcome(
     *,
     result: EngineeringOutcomeResult = EngineeringOutcomeResult.SUCCESS,
@@ -381,12 +413,7 @@ def _08_contradiction_supersedes(root: pathlib.Path) -> dict[str, object]:
         old_id = first.items[0].revision_id
         if old_id is None:
             raise Phase10ReplayError("initial learning missing revision")
-        regression = _promotion_outcome(
-            result=EngineeringOutcomeResult.ROLLED_BACK,
-            attribution=EngineeringOutcomeAttribution.CANDIDATE,
-            reason="candidate_runtime_regression",
-            observed_at_epoch=101.0,
-        )
+        regression = _successor_promotion_outcome()
         second = _learn(store, regression, now_epoch=120.0)
         new_id = second.items[0].revision_id
         if new_id is None or new_id == old_id:
@@ -467,12 +494,7 @@ def _10_crash_gap_recovery(root: pathlib.Path) -> dict[str, object]:
         if prior_id is None:
             raise Phase10ReplayError("initial revision missing")
 
-        successor = _promotion_outcome(
-            result=EngineeringOutcomeResult.ROLLED_BACK,
-            attribution=EngineeringOutcomeAttribution.CANDIDATE,
-            reason="candidate_runtime_regression",
-            observed_at_epoch=101.0,
-        )
+        successor = _successor_promotion_outcome()
         projected = EngineeringLearningProjector().project(
             store,
             successor,
