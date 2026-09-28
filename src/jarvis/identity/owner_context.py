@@ -247,6 +247,10 @@ class OwnerContextObserver:
             self._invalidate("owner_context_inference_failed")
             LOGGER.exception("Live OWNER context inference failed closed")
 
+    def reset_for_camera_switch(self) -> None:
+        """Invalidate all biometric continuity before accepting another camera."""
+        self._invalidate("owner_context_camera_switched")
+
     def close(self) -> None:
         self._invalidate("owner_context_observer_closed")
 
