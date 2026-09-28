@@ -12,7 +12,7 @@ import threading
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol\n\nif TYPE_CHECKING:\n    from jarvis.engineering_substrate.discovery_ssdp import SsdpBackend
 
 from jarvis.capabilities.discovery import (
     CapabilityDiscoveryError,
@@ -623,15 +623,26 @@ DEFAULT_MDNS_POLICY = DiscoveryAdapterPolicy(
 def default_discovery_broker(
     *,
     backend: MdnsBackend | None = None,
+    ssdp_backend: SsdpBackend | None = None,
     clock=time.time,
 ) -> DiscoveryBroker:
-    adapter = MdnsDnsSdAdapter(
+    from jarvis.engineering_substrate.discovery_ssdp import (
+        DEFAULT_SSDP_POLICY,
+        SsdpUpnpAdapter,
+    )
+
+    mdns_adapter = MdnsDnsSdAdapter(
         backend=backend,
         clock=clock,
         max_freshness_seconds=DEFAULT_MDNS_POLICY.max_freshness_seconds,
     )
+    ssdp_adapter = SsdpUpnpAdapter(
+        backend=ssdp_backend,
+        clock=clock,
+        max_freshness_seconds=DEFAULT_SSDP_POLICY.max_freshness_seconds,
+    )
     return DiscoveryBroker(
-        policies=(DEFAULT_MDNS_POLICY,),
-        adapters=(adapter,),
+        policies=(DEFAULT_MDNS_POLICY, DEFAULT_SSDP_POLICY),
+        adapters=(mdns_adapter, ssdp_adapter),
         clock=clock,
     )
