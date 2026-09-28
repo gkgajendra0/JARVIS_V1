@@ -412,6 +412,47 @@ def test_reopened_finding_can_record_new_decision_after_obsolete(
     ]
 
 
+def test_suppression_survives_repeated_violating_observation(
+    tmp_path: Path,
+) -> None:
+    store, desired = _store(tmp_path)
+    lifecycle = FindingLifecycle(store)
+    active = lifecycle.observe(
+        desired,
+        _evaluation(
+            desired,
+            status=DesiredStateEvaluationStatus.VIOLATED,
+            now=NOW,
+            consecutive=1,
+        ),
+    ).finding
+    assert active is not None
+
+    suppressed = lifecycle.suppress(
+        active.finding_id,
+        suppression_finding_id="finding_root_cause",
+        root_finding_id="finding_root_cause",
+        at_epoch=NOW + 1,
+    ).finding
+    assert suppressed is not None
+
+    observed = lifecycle.observe(
+        desired,
+        _evaluation(
+            desired,
+            status=DesiredStateEvaluationStatus.VIOLATED,
+            now=NOW + 2,
+            consecutive=2,
+            snapshot_digest="f" * 64,
+        ),
+    ).finding
+
+    assert observed is not None
+    assert observed.status is FindingStatus.SUPPRESSED
+    assert observed.suppression_finding_id == "finding_root_cause"
+    assert observed.root_finding_id == "finding_root_cause"
+
+
 def test_suppression_links_root_and_obsoletes_candidate(tmp_path: Path) -> None:
     store, desired = _store(tmp_path)
     lifecycle = FindingLifecycle(store)
