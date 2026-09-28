@@ -117,7 +117,10 @@ def test_verified_promotion_success_requires_candidate_and_release_lineage() -> 
 
     assert blocked.eligible is False
     assert blocked.disposition is LearningDisposition.INCONCLUSIVE
-    assert set(blocked.reason_codes) == {"missing_candidate_digest", "missing_release_sha"}
+    assert set(blocked.reason_codes) == {
+        "missing_candidate_digest",
+        "missing_release_sha",
+    }
     assert accepted.eligible is True
     assert accepted.disposition is LearningDisposition.POSITIVE
 
@@ -295,6 +298,7 @@ def test_outcome_identity_change_does_not_change_policy_classification() -> None
     replay_variant = replace(original, producer="another-deterministic-adapter")
     policy = EngineeringLearningEligibilityPolicy()
 
-    assert policy.evaluate(original).disposition is policy.evaluate(
-        replay_variant
-    ).disposition
+    assert (
+        policy.evaluate(original).disposition
+        is policy.evaluate(replay_variant).disposition
+    )
