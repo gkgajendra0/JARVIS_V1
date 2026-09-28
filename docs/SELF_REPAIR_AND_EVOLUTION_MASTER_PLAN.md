@@ -76,8 +76,8 @@ Phase 5   Secure Autonomous Engineering Substrate — DONE / OWNER-MACHINE ACCEP
 Phase 6   Unknown-Incident Investigation + Source Repair — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 7   Governed Promotion / Production Verification / Rollback — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 8   Capability Package + Registry Lifecycle — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
-Phase 9   Owner-Requested Capability Acquisition — NEXT / RESEARCH + ARCHITECTURE REQUIRED
-Phase 10  Closed-Loop Engineering Learning
+Phase 9   Owner-Requested Capability Acquisition — DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28; FINAL E2E EXTERNAL VALIDATION DEFERRED
+Phase 10  Closed-Loop Engineering Learning — NEXT / RESEARCH + ARCHITECTURE REQUIRED
 Phase 10A Autonomous Operations Control Plane — whole-JARVIS integration point
 Phase 11  Autonomous Capability-Gap / Weakness Detection
 Phase 12  Shadow Improvement + Baseline Benchmarking
