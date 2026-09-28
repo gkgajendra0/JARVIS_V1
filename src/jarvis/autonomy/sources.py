@@ -85,12 +85,28 @@ def _target_not_found(
     )
 
 
-def _iso_epoch(value: str, fallback: float) -> float:
-    try:
-        parsed = datetime.fromisoformat(str(value))
-        return parsed.timestamp()
-    except (TypeError, ValueError):
-        return fallback
+def _iso_epoch(value: str) -> float:
+    parsed = datetime.fromisoformat(str(value))
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("canonical timestamp must be timezone-aware")
+    return parsed.timestamp()
+
+
+def _source_error(
+    *,
+    namespace: str,
+    source_key: str,
+    source_version: int,
+    reason_code: str,
+    summary: str,
+) -> SystemStateSourceErrorV1:
+    return SystemStateSourceErrorV1(
+        source_namespace=namespace,
+        source_adapter_key=source_key,
+        source_adapter_version=source_version,
+        reason_code=reason_code,
+        summary=summary,
+    )
 
 
 class SelfModelHealthSource:
@@ -278,7 +294,20 @@ class WorkPortfolioSource:
         incomplete: set[str] = set()
 
         if target_ids is None:
-            items = self.store.list(limit=min(self.default_limit, request.max_facts))
+            limit = min(self.default_limit, request.max_facts)
+            observed = self.store.list(limit=limit + 1)
+            if len(observed) > limit:
+                incomplete.add("work")
+                errors.append(
+                    _source_error(
+                        namespace="work",
+                        source_key=self.source_key,
+                        source_version=self.source_version,
+                        reason_code="source_read_truncated",
+                        summary="WorkStore read exceeded the bounded SystemState limit.",
+                    )
+                )
+            items = observed[:limit]
         else:
             found = []
             for work_id in target_ids:
@@ -389,7 +418,23 @@ class EngineeringChangeSource:
         incomplete: set[str] = set()
 
         if target_ids is None:
-            ids = self.store.active_ids()[: self.default_limit]
+            limit = min(self.default_limit, request.max_facts)
+            active_ids = self.store.active_ids()
+            if len(active_ids) > limit:
+                incomplete.add("engineering_change")
+                errors.append(
+                    _source_error(
+                        namespace="engineering_change",
+                        source_key=self.source_key,
+                        source_version=self.source_version,
+                        reason_code="source_read_truncated",
+                        summary=(
+                            "EngineeringChange read exceeded the bounded "
+                            "SystemState limit."
+                        ),
+                    )
+                )
+            ids = active_ids[:limit]
             changes = tuple(
                 change
                 for change_id in ids
@@ -416,7 +461,20 @@ class EngineeringChangeSource:
 
         for change in changes:
             stages = self.store.list_stages(change.change_id)
-            updated = _iso_epoch(change.updated_at, request.now_epoch)
+            try:
+                updated = _iso_epoch(change.updated_at)
+            except (TypeError, ValueError):
+                incomplete.add("engineering_change")
+                errors.append(
+                    _source_error(
+                        namespace="engineering_change",
+                        source_key=self.source_key,
+                        source_version=self.source_version,
+                        reason_code="source_timestamp_invalid",
+                        summary="EngineeringChange updated_at is malformed.",
+                    )
+                )
+                continue
             payload = {
                 "state": change.state.value,
                 "process_key": change.process_key,
@@ -484,7 +542,20 @@ class IncidentSource:
         incomplete: set[str] = set()
 
         if target_ids is None:
-            incidents = self.store.list_recent(limit=self.default_limit)
+            limit = min(self.default_limit, request.max_facts)
+            observed = self.store.list_recent(limit=limit + 1)
+            if len(observed) > limit:
+                incomplete.add("incident")
+                errors.append(
+                    _source_error(
+                        namespace="incident",
+                        source_key=self.source_key,
+                        source_version=self.source_version,
+                        reason_code="source_read_truncated",
+                        summary="Incident read exceeded the bounded SystemState limit.",
+                    )
+                )
+            incidents = observed[:limit]
         else:
             found = []
             for incident_id in target_ids:
@@ -637,10 +708,7 @@ class CapabilityStateSource:
                     target_namespace="capability",
                     target_identity=state.capability_id,
                     value_json=payload,
-                    observed_at_epoch=_iso_epoch(
-                        state.updated_at,
-                        request.now_epoch,
-                    ),
+                    observed_at_epoch=_iso_epoch(state.updated_at),
                     evidence_references=(f"capability-registry:{state.capability_id}",),
                     source_adapter_key=self.source_key,
                     source_adapter_version=self.source_version,
