@@ -112,18 +112,34 @@ The command is intentionally exact-commit bound:
 $repo = "C:\Users\gkgaj\Desktop\jarvis_v1"
 $python = "$repo\.venv\Scripts\python.exe"
 $expectedCommit = "<EXACT_GREEN_PR_219_HEAD_SHA>"
+$acceptanceRepo = Join-Path $env:TEMP "jarvis-phase10a-owner-acceptance-$($expectedCommit.Substring(0,8))"
 $output = Join-Path $env:TEMP "jarvis-phase10a-owner-acceptance.json"
 
 Set-Location $repo
 git fetch origin
-git checkout $expectedCommit
 
-& $python -m jarvis.autonomy.phase10a_acceptance `
-    --repo-root $repo `
-    --expected-commit $expectedCommit `
-    --output $output
+if (Test-Path $acceptanceRepo) {
+    git worktree remove --force $acceptanceRepo
+}
+git worktree add --detach $acceptanceRepo $expectedCommit
 
-Get-Content $output
+$previousPythonPath = $env:PYTHONPATH
+try {
+    $env:PYTHONPATH = "$acceptanceRepo\src"
+    Set-Location $acceptanceRepo
+
+    & $python -m jarvis.autonomy.phase10a_acceptance `
+        --repo-root $acceptanceRepo `
+        --expected-commit $expectedCommit `
+        --output $output
+
+    Get-Content $output
+}
+finally {
+    Set-Location $repo
+    $env:PYTHONPATH = $previousPythonPath
+    git worktree remove --force $acceptanceRepo
+}
 ```
 
 Do not substitute a different SHA. The final exact SHA will be supplied only after the
