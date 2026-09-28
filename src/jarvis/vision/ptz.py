@@ -38,6 +38,16 @@ class PtzController(Protocol):
     def close(self) -> None: ...
 
 
+class NoopPtzController:
+    """PTZ boundary for fixed cameras or camera-selection-only operation."""
+
+    def move(self, command: FollowCommand) -> None:
+        del command
+
+    def close(self) -> None:
+        return None
+
+
 class _DuvcBackend(Protocol):
     def get_axis_range(self, axis: str) -> PtzAxisRange: ...
 
