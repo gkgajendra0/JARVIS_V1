@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -412,6 +413,31 @@ def test_reopened_finding_can_record_new_decision_after_obsolete(
     ]
 
 
+def _create_root_finding(
+    store: AutonomyStore,
+    lifecycle: FindingLifecycle,
+    desired: DesiredStateV1,
+):
+    root_desired = replace(
+        desired,
+        desired_state_id="desired_component_health_root",
+        target_identity="runtime.root",
+        updated_at_epoch=desired.updated_at_epoch + 1,
+    )
+    store.create_desired_state(root_desired)
+    root = lifecycle.observe(
+        root_desired,
+        _evaluation(
+            root_desired,
+            status=DesiredStateEvaluationStatus.VIOLATED,
+            now=NOW,
+            consecutive=1,
+        ),
+    ).finding
+    assert root is not None
+    return root
+
+
 def test_suppression_survives_repeated_violating_observation(
     tmp_path: Path,
 ) -> None:
@@ -428,10 +454,11 @@ def test_suppression_survives_repeated_violating_observation(
     ).finding
     assert active is not None
 
+    root = _create_root_finding(store, lifecycle, desired)
     suppressed = lifecycle.suppress(
         active.finding_id,
-        suppression_finding_id="finding_root_cause",
-        root_finding_id="finding_root_cause",
+        suppression_finding_id=root.finding_id,
+        root_finding_id=root.finding_id,
         at_epoch=NOW + 1,
     ).finding
     assert suppressed is not None
@@ -449,8 +476,8 @@ def test_suppression_survives_repeated_violating_observation(
 
     assert observed is not None
     assert observed.status is FindingStatus.SUPPRESSED
-    assert observed.suppression_finding_id == "finding_root_cause"
-    assert observed.root_finding_id == "finding_root_cause"
+    assert observed.suppression_finding_id == root.finding_id
+    assert observed.root_finding_id == root.finding_id
 
 
 def test_suppression_links_root_and_obsoletes_candidate(tmp_path: Path) -> None:
@@ -475,15 +502,16 @@ def test_suppression_links_root_and_obsoletes_candidate(tmp_path: Path) -> None:
         .candidate
     )
 
+    root = _create_root_finding(store, lifecycle, desired)
     suppressed = lifecycle.suppress(
         active.finding_id,
-        suppression_finding_id="finding_root_cause",
-        root_finding_id="finding_root_cause",
+        suppression_finding_id=root.finding_id,
+        root_finding_id=root.finding_id,
         at_epoch=NOW + 1,
     )
 
     assert suppressed.finding is not None
     assert suppressed.finding.status is FindingStatus.SUPPRESSED
-    assert suppressed.finding.root_finding_id == "finding_root_cause"
-    assert suppressed.finding.suppression_finding_id == "finding_root_cause"
+    assert suppressed.finding.root_finding_id == root.finding_id
+    assert suppressed.finding.suppression_finding_id == root.finding_id
     assert suppressed.obsoleted_candidate_ids == (candidate.candidate_id,)
