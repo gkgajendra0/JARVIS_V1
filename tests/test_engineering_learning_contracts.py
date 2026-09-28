@@ -202,7 +202,9 @@ def test_default_registry_validates_engineering_outcome_v1() -> None:
     }
 
 
-def test_regression_facet_accepts_candidate_failure_and_rejects_external_failure() -> None:
+def test_regression_facet_accepts_candidate_failure_and_rejects_external_failure() -> (
+    None
+):
     outcome = _outcome(
         result=EngineeringOutcomeResult.FAILURE,
         attribution=EngineeringOutcomeAttribution.CANDIDATE,
