@@ -182,16 +182,12 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     (
         "jarvis.engineering_knowledge.defaults",
-        (
-            "build_default_facet_registry",
-        ),
+        ("build_default_facet_registry",),
     ),
 )
 
 _EXPORTS = {
-    name: module_name
-    for module_name, names in _EXPORT_GROUPS
-    for name in names
+    name: module_name for module_name, names in _EXPORT_GROUPS for name in names
 }
 
 __all__ = [
