@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from jarvis.vision.camera import CapturedFrame
+from jarvis.vision.camera import CapturedFrame, OpenCVCameraConfig
 from jarvis.vision.models import BoundingBox, FollowCommand, TargetState, Track
 from jarvis.vision.runtime import VisionSnapshot
 from jarvis.vision.service import VisionService
@@ -39,6 +39,7 @@ class _FakeRuntime:
         self._eligible_ids = eligible_ids
         self.target: TargetState | None = None
         self.armed = False
+        self.switched_config: OpenCVCameraConfig | None = None
 
     def head_lock_eligible(self, track_id: int) -> bool:
         return track_id in self._eligible_ids
@@ -62,6 +63,11 @@ class _FakeRuntime:
     def clear_target(self) -> None:
         self.armed = False
         self.target = None
+
+    def switch_camera(self, config: OpenCVCameraConfig) -> None:
+        self.switched_config = config
+        self.target = None
+        self.armed = False
 
 
 def test_service_locks_only_one_head_confirmed_visible_person() -> None:
@@ -155,3 +161,42 @@ def test_frame_pair_tap_accepts_only_fresh_perception_context() -> None:
     assert service._fresh_snapshot_for_frame(fresh_frame) is service._latest_snapshot
     assert service._fresh_snapshot_for_frame(stale_frame) is None
     assert service._fresh_snapshot_for_frame(earlier_frame) is None
+
+
+def test_service_switches_only_to_configured_camera_profile() -> None:
+    runtime = _FakeRuntime([_track(7)], {7})
+    lenovo = OpenCVCameraConfig(device_index=0)
+    pocket = OpenCVCameraConfig(device_index=3, width=1280, height=720)
+    service = VisionService(
+        runtime,  # type: ignore[arg-type]
+        camera_profiles={"lenovo": lenovo, "pocket3": pocket},
+        active_camera_profile="lenovo",
+    )
+
+    result = service.switch_camera("pocket3")
+
+    assert result == {
+        "ok": True,
+        "active_camera": "pocket3",
+        "changed": True,
+    }
+    assert runtime.switched_config == pocket
+    assert service.report()["camera"] == {
+        "active": "pocket3",
+        "available": ["lenovo", "pocket3"],
+    }
+
+
+def test_service_rejects_unconfigured_camera_without_changing_active_source() -> None:
+    runtime = _FakeRuntime([_track(7)], {7})
+    service = VisionService(
+        runtime,  # type: ignore[arg-type]
+        camera_profiles={"lenovo": OpenCVCameraConfig(device_index=0)},
+        active_camera_profile="lenovo",
+    )
+
+    result = service.switch_camera("pocket3")
+
+    assert result["ok"] is False
+    assert result["active_camera"] == "lenovo"
+    assert runtime.switched_config is None
