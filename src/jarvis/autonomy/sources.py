@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Iterable
+from collections.abc import Iterable
 
 from jarvis.capability_registry.projection import CapabilityRegistryProjection
 from jarvis.capability_registry.store import CapabilityRegistryStore
@@ -87,7 +87,7 @@ def _target_not_found(
 
 def _iso_epoch(value: str, fallback: float) -> float:
     try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(str(value))
         return parsed.timestamp()
     except (TypeError, ValueError):
         return fallback
