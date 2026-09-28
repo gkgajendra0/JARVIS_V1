@@ -67,7 +67,9 @@ def _unique_tokens(
 ) -> tuple[str, ...]:
     if not values and not allow_empty:
         raise ValueError(f"{field} must not be empty")
-    normalized = tuple(_token(value, f"{field}[{index}]") for index, value in enumerate(values))
+    normalized = tuple(
+        _token(value, f"{field}[{index}]") for index, value in enumerate(values)
+    )
     if len(set(normalized)) != len(normalized):
         raise ValueError(f"{field} must not contain duplicates")
     return normalized
@@ -84,7 +86,9 @@ def _sha256_tuple(
     normalized = []
     for index, value in enumerate(values):
         text = _text(value, f"{field}[{index}]", max_length=64).casefold()
-        if len(text) != 64 or any(character not in "0123456789abcdef" for character in text):
+        if len(text) != 64 or any(
+            character not in "0123456789abcdef" for character in text
+        ):
             raise ValueError(f"{field}[{index}] must be a lowercase SHA-256 digest")
         normalized.append(text)
     result = tuple(normalized)
@@ -137,7 +141,9 @@ class DesiredStateEvaluationV1:
         )
         if not isinstance(self.status, DesiredStateEvaluationStatus):
             raise TypeError("status must be a DesiredStateEvaluationStatus")
-        digest = _text(self.snapshot_digest, "snapshot_digest", max_length=64).casefold()
+        digest = _text(
+            self.snapshot_digest, "snapshot_digest", max_length=64
+        ).casefold()
         if len(digest) != 64 or any(
             character not in "0123456789abcdef" for character in digest
         ):
@@ -818,7 +824,9 @@ class DesiredStateRuleRegistry:
         if not callable(getattr(rule, "validate_expected", None)) or not callable(
             getattr(rule, "evaluate", None)
         ):
-            raise TypeError("DesiredState rule must implement validation and evaluation")
+            raise TypeError(
+                "DesiredState rule must implement validation and evaluation"
+            )
         identity = (key, version)
         if identity in self._rules:
             raise DuplicateDesiredStateRuleError(
@@ -965,7 +973,9 @@ class DesiredStateStabilizer:
                 first_violation_at_epoch=None,
                 last_violation_at_epoch=None,
                 first_recovery_at_epoch=None,
-                violation_active=False if previous is None else previous.violation_active,
+                violation_active=False
+                if previous is None
+                else previous.violation_active,
             )
             result = replace(
                 raw,
@@ -980,9 +990,7 @@ class DesiredStateStabilizer:
                 and previous.last_observation_status
                 is DesiredStateEvaluationStatus.VIOLATED
             )
-            consecutive = (
-                previous.consecutive_violations + 1 if continues else 1
-            )
+            consecutive = previous.consecutive_violations + 1 if continues else 1
             first_violation = (
                 previous.first_violation_at_epoch
                 if continues and previous.first_violation_at_epoch is not None
@@ -1139,7 +1147,10 @@ class ObjectiveCompletionV1:
         object.__setattr__(
             self,
             "desired_state_ids",
-            tuple(_text(value, "desired_state_id", max_length=240) for value in self.desired_state_ids),
+            tuple(
+                _text(value, "desired_state_id", max_length=240)
+                for value in self.desired_state_ids
+            ),
         )
         object.__setattr__(
             self,
