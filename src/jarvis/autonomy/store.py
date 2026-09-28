@@ -1103,7 +1103,6 @@ class AutonomyStore:
             raise KeyError(request_token)
         return ReconcileRunV1.from_payload(self._decoded_payload(row))
 
-
     def record_system_snapshot(
         self,
         snapshot: SystemStateSnapshotV1,
