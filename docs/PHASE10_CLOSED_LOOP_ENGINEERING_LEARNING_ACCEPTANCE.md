@@ -1,100 +1,127 @@
-# Phase 10 — Closed-Loop Engineering Learning Acceptance Runbook
+# Phase 10 — Closed-Loop Engineering Learning Acceptance Record
 
-Status: **IMPLEMENTATION COMPLETE — OWNER-MACHINE ACCEPTANCE PENDING**
+Status: **DONE / OWNER-MACHINE ACCEPTED 2026-09-28**
 
-Phase 10 closes the engineering learning loop without granting JARVIS new
-Authority. Verified engineering outcomes can be normalized, admitted by a
-deterministic policy, projected into immutable EngineeringKnowledge, promoted,
-superseded by newer verified evidence, replayed after restart, and retrieved as
-advisory evidence by existing engineering workflows.
+Phase 10 closes the governed engineering learning loop without granting JARVIS new
+Authority. Verified engineering outcomes can be normalized, admitted by deterministic
+policy, projected into immutable EngineeringKnowledge, promoted, superseded by newer
+verified evidence, replayed after restart, and retrieved as advisory evidence by
+existing engineering workflows.
 
-## What automated CI already proves
+## Accepted implementation identity
 
-The Phase-10.7 replay matrix contains exactly 15 locked cases:
+- Owner-tested implementation head: `4c48f435ba7478ee6a076c8510d64d957ba14b58`
+- PR: #201 — `Phase 10.7: final replay evaluation and owner acceptance`
+- Protected-main squash merge: `0cd4bb650b3a0230d13416863432083f60b6a4e7`
+- Owner-machine acceptance date: 2026-09-28
+- Replay case count: 15 / 15 PASS
+- Suite digest: `f9c66d9ecd7955db57e3d7024728c93ef93f3c35765f540c2d14051c62c533f0`
+- Evidence digest: `e90fb3ea53c54a6def8eca834ea8f7d6a0b132d98302dea2bf0ed997b5bcd0f6`
+- Repository-status digest: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+- Repository unchanged: true
+- Authority granted: false
+- Production mutated: false
 
-1. verified production success becomes accepted learning;
-2. candidate-local regression becomes negative evidence;
-3. external-provider failure does not become candidate causal truth;
-4. external-hardware failure does not become candidate causal truth;
-5. unknown-attribution failure remains inconclusive;
-6. compatibility READY becomes scoped compatibility learning;
-7. compatibility BLOCKED becomes scoped compatibility learning;
-8. contradictory newer evidence creates a successor and supersedes the prior revision;
-9. restart replay creates no duplicate knowledge;
-10. accepted-successor / not-yet-superseded crash gap is recovered;
-11. missing learning attestation blocks promotion;
-12. unknown future facet schema blocks promotion;
-13. rejected learning is never resurrected;
-14. Phase-6 can retrieve learned repair knowledge only as advisory evidence;
-15. malformed claimed integrity evidence fails closed.
+The owner-machine run also passed the clean-process import probe that originally exposed
+an import-order defect during the first acceptance attempt. The final accepted head
+contains cycle-safe lazy package facades plus a clean-interpreter regression, and the
+full CI suite passed on that exact head before the final owner-machine run.
 
-The repository CI additionally reruns the existing Ruff, full pytest, Windows
-Hello, Windows DPAPI/security, Phase-6, Phase-7, Phase-8, Phase-9 and promotion
-policy gates.
+## Locked replay matrix
 
-## Owner-machine acceptance boundary
+The final replay suite passed all 15 required cases:
 
-The final acceptance harness is intentionally non-destructive.
+1. `01_verified_success_accepted`
+2. `02_candidate_regression_negative_evidence`
+3. `03_external_provider_not_candidate_truth`
+4. `04_external_hardware_not_candidate_truth`
+5. `05_unknown_cause_inconclusive`
+6. `06_compatibility_ready_learned`
+7. `07_compatibility_blocked_learned`
+8. `08_contradiction_supersedes_prior`
+9. `09_restart_replay_idempotent`
+10. `10_crash_gap_recovery`
+11. `11_missing_attestation_blocks`
+12. `12_unknown_schema_blocks`
+13. `13_rejected_not_resurrected`
+14. `14_phase6_advisory_retrieval`
+15. `15_malformed_integrity_reference_blocks`
 
-It:
+## Automated validation on the accepted head
 
-- runs only on Windows;
-- creates its replay databases beneath an isolated temporary directory;
-- binds evidence to the exact Git commit being tested;
-- records the pre-run repository status digest;
-- proves the repository checkout is unchanged after the replay matrix;
-- refuses to write its JSON evidence inside the tested repository;
-- grants no Authority;
-- mutates no production state.
+Exact-head CI run #5191 completed successfully before owner acceptance.
 
-It does **not** deploy code, create engineering projects, alter protected main,
-change capability/runtime state, or perform the deferred Phase-9 physical-device
-end-to-end validation.
+It passed:
 
-## Required owner-machine command
+- Ruff formatting and lint;
+- full Linux pytest, including the clean-interpreter import regression;
+- Playwright Chromium provisioning/smoke;
+- Windows Hello helper build and contract checks;
+- Windows DPAPI/security coverage;
+- Windows multilingual Hands and sandbox-path regressions;
+- Phase-6 replay regressions;
+- Phase-5E disposable-secret acceptance;
+- Windows Self-Repair Job Object smoke;
+- Phase-7 promotion/release regressions and non-destructive acceptance;
+- Phase-8 capability-registry regressions and non-destructive acceptance;
+- Phase-9 capability-acquisition replay regressions;
+- promotion-policy gate.
 
-Run from PowerShell in the local repository after checking out the exact
-Phase-10.7 implementation/acceptance-harness head supplied during acceptance:
+## Accepted behavior
 
-~~~powershell
-$repo = "C:\Users\gkgaj\Desktop\jarvis_v1"
-$python = "$repo\.venv\Scripts\python.exe"
-$output = Join-Path $env:TEMP "jarvis-phase10-owner-acceptance.json"
+Phase 10 now provides:
 
-Set-Location $repo
-& $python -m jarvis.engineering_learning.phase10_acceptance --repo-root $repo --output $output
+- deterministic canonical outcome adapters over accepted engineering evidence;
+- explicit positive, negative, compatibility, inconclusive and ignored learning
+  dispositions;
+- protection against candidate blame from external-provider or external-hardware
+  failures;
+- immutable EngineeringKnowledge projection with exact evidence lineage and
+  revision-bound attestations;
+- deterministic promotion, contradiction handling and successor supersession;
+- bounded restart-safe reconciliation without a second cursor/truth database;
+- accepted-learning integrity re-verification in the existing retrieval path;
+- replay idempotency and crash-gap recovery;
+- Phase-6 consumption of learned evidence only as advisory engineering knowledge;
+- fail-closed behavior for unknown schemas, missing attestations and malformed
+  integrity references.
 
-if ($LASTEXITCODE -ne 0) {
-    throw "Phase 10 owner-machine acceptance failed."
-}
+EngineeringKnowledge remains the canonical store for verified engineering experience.
+It is **not** the future Universal Knowledge Fabric described by the advanced
+Universal Knowledge + Discovery north star. Phase-10 contracts should remain
+compatible with that future broader fabric without conflating the two systems.
 
-Get-Content $output
-~~~
+## Governance boundary preserved
 
-The evidence must report:
+Acceptance proves no expansion of owner Authority.
 
-- status = PASS;
-- suite_status = PASS;
-- the exact tested commit;
-- exactly the locked 15 case IDs;
-- authority_granted = false;
-- production_mutated = false;
-- repo_unchanged = true;
-- a valid suite_digest;
-- a valid evidence_digest.
+Phase 10:
 
-## Completion rule
+- does not create autonomous objectives or DesiredState;
+- does not autonomously create general engineering projects;
+- does not bypass architecture approval, protected-main governance or promotion gates;
+- does not mutate production as part of learning;
+- does not make an LLM the source of causal truth;
+- does not replace EngineeringKnowledge, WorkItems, EngineeringChange or capability
+  lifecycle truth;
+- does not implement Phase 10A, Phase 11 or later autonomy.
 
-Phase 10 may be marked **DONE** only after:
+The permanent rule remains:
 
-1. PR #201 automated CI is green on the exact Phase-10.7 implementation/acceptance head;
-2. the owner-machine harness passes against that exact implementation head;
-3. returned evidence validates against that exact tested commit;
-4. a documentation-only acceptance record/status update records the tested commit and evidence digests;
-5. the accepted documentation/code PR is revalidated and merged to protected main.
+> **JARVIS may manage JARVIS, but JARVIS must never become its own source of authority.**
 
-The implementation head remains the owner-tested runtime identity even though the final
-merge may contain a later documentation-only acceptance-record commit.
+## Deferred Phase-9 validation remains open
 
-The deferred Phase-9 full physical-device lifecycle validation remains a separate
-whole-system acceptance item and is not silently claimed by Phase 10.
+Phase-10 acceptance does not prove the previously deferred Phase-9 full external
+capability lifecycle. The unproven research -> implementation -> promotion -> package
+activation -> observed physical device effect -> disable/rollback path remains a
+mandatory final whole-system acceptance item.
+
+## Completion result
+
+Phase 10 is **DONE / OWNER-MACHINE ACCEPTED 2026-09-28**.
+
+The next cross-cutting phase is **Phase 10A — Autonomous Operations Control Plane**.
+Its implementation is not authorized by this acceptance record. Work must begin with
+repository inspection and thorough research, followed by architecture and explicit
+owner approval under the permanent engineering sequence.

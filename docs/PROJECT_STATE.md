@@ -49,7 +49,7 @@ Snapshot baseline verified from protected `main` at
 | Persistent concurrent work | DONE foundation | durable WorkItems/steps/deliveries, restart recovery, background research/development, priority/resource control |
 | Deterministic Self-Repair | PARTIAL foundation for Step 19 | R1/R2 typed framework plus Phase-1H-hardened R2 production recovery: sustained rolling budgets, shared target/action circuit breaker, typed verification/preconditions/provenance, versioned persistence, Windows Job Object runtime ownership and bounded production guardian |
 | EngineeringKnowledge | DONE foundation | Phase 2 owner-machine accepted 2026-09-25: immutable engineering knowledge, deterministic REPAIR projection, lifecycle/provenance/applicability, grounded local hybrid retrieval, integrity/security gates and open-ended facet extensibility |
-| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H and 2–9 are accepted; Phase 9 final external lifecycle validation is deferred; Phase 10 implementation is complete and owner-machine acceptance is pending |
+| Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H and 2–10 are accepted; Phase 9 final external lifecycle validation is deferred; Phase 10A research/architecture is next |
 | Step 8 notes/tasks/reminders | PLANNED | still the next numbered product slice when numbered roadmap work resumes |
 
 Phase 3 EngineeringChange is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The canonical record is `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The owner-machine run proved durable same-identity recovery across a full Windows shutdown/reboot and live Exa research; persistent Gemini HTTP 429 pressure was accepted as an external limitation and did not weaken governance.
@@ -66,7 +66,7 @@ Phase 8 Capability Package + Registry Lifecycle is **DONE / OWNER-MACHINE ACCEPT
 
 ---
 
-Phase 10 Closed-Loop Engineering Learning is **IMPLEMENTATION COMPLETE / OWNER-MACHINE ACCEPTANCE PENDING 2026-09-28**. Slices 10.1–10.7 are implemented. Exact-head CI has passed the locked 15-case replay matrix plus Ruff, full pytest, Windows Hello, Windows DPAPI/security, Phase-6/7/8/9 regressions and promotion policy. Final acceptance still requires the isolated Windows owner-machine harness against the final documentation commit before Phase 10 can be marked DONE.
+Phase 10 Closed-Loop Engineering Learning is **DONE / OWNER-MACHINE ACCEPTED 2026-09-28**. Exact owner-tested head `4c48f435ba7478ee6a076c8510d64d957ba14b58` passed the clean-process import probe, all 15 locked replay cases, Ruff, full pytest, Windows Hello, Windows DPAPI/security, Phase-6/7/8/9 regressions and promotion policy. Suite digest: `f9c66d9ecd7955db57e3d7024728c93ef93f3c35765f540c2d14051c62c533f0`. Evidence digest: `e90fb3ea53c54a6def8eca834ea8f7d6a0b132d98302dea2bf0ed997b5bcd0f6`. PR #201 squash-merged the accepted implementation to protected `main` as `0cd4bb650b3a0230d13416863432083f60b6a4e7`. Canonical record: `PHASE10_CLOSED_LOOP_ENGINEERING_LEARNING_ACCEPTANCE.md`.
 
 Phase 9 Owner-Requested Capability Acquisition is **DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28**. Target-aware routing hardening from PR #180 is on protected main at `15974c4089aeea014dc68f4a6fb385072278b379`. The live owner-machine run proved canonical owner-capability admission, durable EngineeringChange/WorkItem persistence, provider-pressure survival and bounded Gemini -> OpenAI fallback. It did **not** complete the full external TV lifecycle: Gemini was `rate_limited` and OpenAI fallback was `quota_exhausted`. By explicit owner decision, the unproven research-to-device-effect/disable-rollback lifecycle is deferred to final whole-system acceptance and must remain visible as deferred validation. Canonical record: `PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_ACCEPTANCE_2026-09-27.md`.
 
@@ -249,7 +249,7 @@ These are intentionally not represented as completed.
 | full local/offline conversation | DEFERRED | current provider resilience is truthful survival, not a second full local conversation stack |
 | proactive/event-driven monitoring | PLANNED | later Step 15 |
 | full Steps 9/10/12 | PLANNED with partial foundations | Hands supplies foundations only |
-| Later autonomous-engineering phases | ACTIVE / PLANNED | Phases 2–9 are accepted; Phase 9 final external lifecycle validation is deferred to final whole-system acceptance; Phase 10 implementation is complete with owner-machine acceptance pending; later phases remain planned in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` |
+| Later autonomous-engineering phases | ACTIVE / PLANNED | Phases 2–10 are accepted; Phase 9 final external lifecycle validation is deferred to final whole-system acceptance; Phase 10A research/architecture is next; later phases remain planned in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` |
 
 ---
 
@@ -350,9 +350,9 @@ Phase 8 Capability Package + Registry Lifecycle is **DONE / OWNER-MACHINE ACCEPT
 
 The active cross-cutting slice is:
 
-**Phase 10 — Closed-Loop Engineering Learning — IMPLEMENTATION COMPLETE / OWNER-MACHINE ACCEPTANCE PENDING**
+**Phase 10A — Autonomous Operations Control Plane — RESEARCH / ARCHITECTURE NEXT; IMPLEMENTATION NOT YET AUTHORIZED**
 
-The next action is the final non-destructive Phase-10 owner-machine acceptance run against the exact final documentation head. Phase 9 is DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28; its complete real external capability lifecycle remains deferred to final whole-system acceptance because Gemini was rate-limited and OpenAI fallback was quota-exhausted during the live run.
+Phase 10 is DONE / OWNER-MACHINE ACCEPTED 2026-09-28. The next action is Phase 10A repository inspection and thorough research, followed by architecture for explicit owner approval. Phase 9 remains DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28; its complete real external capability lifecycle remains deferred to final whole-system acceptance because Gemini was rate-limited and OpenAI fallback was quota-exhausted during the live run.
 
 The Phase-9 bounded acceptance does not broaden runtime authority, waive any protected gate, or claim that the deferred physical/external lifecycle has already been proven.
 
