@@ -48,8 +48,17 @@ def test_phase10_acceptance_module_imports_in_clean_interpreter() -> None:
         else source_root + os.pathsep + existing_pythonpath
     )
 
+    import_probe = "\n".join(
+        (
+            "from jarvis.engineering_learning import EngineeringOutcomeV1",
+            "from jarvis.engineering_learning import EngineeringOutcomeV1Handler",
+            "from jarvis.engineering_knowledge import EngineeringKnowledgeRetrievalIndex",
+            "from jarvis.engineering_knowledge import build_default_facet_registry",
+            "import jarvis.engineering_learning.phase10_acceptance",
+        )
+    )
     completed = subprocess.run(
-        [sys.executable, "-c", "import jarvis.engineering_learning.phase10_acceptance"],
+        [sys.executable, "-c", import_probe],
         cwd=repo,
         env=env,
         capture_output=True,
