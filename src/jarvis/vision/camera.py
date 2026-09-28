@@ -192,7 +192,7 @@ class OpenCVCameraSource:
         fps = self.config.fps
 
         if codec is not None or fps is not None:
-            params: list[int | float] = [
+            params: list[int] = [
                 cv2.CAP_PROP_FRAME_WIDTH,
                 self.config.width,
                 cv2.CAP_PROP_FRAME_HEIGHT,
@@ -206,7 +206,7 @@ class OpenCVCameraSource:
                     ]
                 )
             if fps is not None:
-                params.extend([cv2.CAP_PROP_FPS, fps])
+                params.extend([cv2.CAP_PROP_FPS, int(round(fps))])
 
             try:
                 return self._capture_factory(
