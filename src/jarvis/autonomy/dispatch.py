@@ -104,6 +104,21 @@ def _candidate_request(candidate: ActionCandidateV1) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class AutonomyDispatchConfigV1:
+    """Runtime mode boundary. Production construction defaults to SHADOW."""
+
+    mode: AutonomyMode = AutonomyMode.SHADOW
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.mode, AutonomyMode):
+            raise TypeError("mode must be AutonomyMode")
+        if self.mode is AutonomyMode.ACTIVE_BOUNDED:
+            raise ValueError(
+                "ACTIVE_BOUNDED requires later explicit owner-approved policy"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class DispatchBridgeRegistrationV1:
     """Exact resolver/action -> accepted downstream bridge contract."""
 
@@ -594,6 +609,7 @@ class AutonomyDispatchService:
         *,
         store: AutonomyStore,
         registrations: DispatchBridgeRegistry,
+        config: AutonomyDispatchConfigV1 | None = None,
         budget_evaluator: AutonomyBudgetEvaluator | None = None,
         work_bridge: WorkOrchestratorDispatchBridge | None = None,
         change_bridge: ChangeCoordinatorDispatchBridge | None = None,
@@ -607,6 +623,9 @@ class AutonomyDispatchService:
             raise TypeError("registrations must be a DispatchBridgeRegistry")
         self.store = store
         self.registrations = registrations
+        self.config = config or AutonomyDispatchConfigV1()
+        if not isinstance(self.config, AutonomyDispatchConfigV1):
+            raise TypeError("config must be AutonomyDispatchConfigV1")
         self.budget_evaluator = budget_evaluator or AutonomyBudgetEvaluator()
         self.work_bridge = work_bridge
         self.change_bridge = change_bridge
@@ -618,15 +637,13 @@ class AutonomyDispatchService:
         self,
         candidate_id: str,
         *,
-        mode: AutonomyMode,
         budget_policy: AutonomyBudgetPolicyV1 | None,
         budget_usage: BudgetUsageV1,
         priority: PrioritizedCandidateV1 | None,
         now_epoch: float,
         renotify_interval_seconds: float = 3600.0,
     ) -> AutonomyDispatchResultV1:
-        if not isinstance(mode, AutonomyMode):
-            raise TypeError("mode must be AutonomyMode")
+        mode = self.config.mode
         if not isinstance(budget_usage, BudgetUsageV1):
             raise TypeError("budget_usage must be BudgetUsageV1")
         now = _epoch(now_epoch, "now_epoch")
