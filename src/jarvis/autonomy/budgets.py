@@ -158,13 +158,6 @@ class AutonomyBudgetEvaluator:
             raise TypeError("mode must be an AutonomyMode")
         if not isinstance(usage, BudgetUsageV1):
             raise TypeError("usage must be a BudgetUsageV1")
-        if candidate.mode is not mode:
-            return BudgetAssessmentV1(
-                disposition=CandidateDisposition.BLOCKED_POLICY,
-                reason_codes=("candidate_mode_mismatch",),
-                policy_id=None if policy is None else policy.policy_id,
-            )
-
         if mode is AutonomyMode.SHADOW:
             return BudgetAssessmentV1(
                 disposition=CandidateDisposition.SHADOW_ONLY,
