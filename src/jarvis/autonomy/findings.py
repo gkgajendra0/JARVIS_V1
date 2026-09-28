@@ -83,9 +83,7 @@ class FindingLifecycle:
                 "snapshot_digest": finding.latest_snapshot_digest,
                 "violation_count": finding.violation_count,
                 "reason_codes": list(finding.reason_codes),
-                "supporting_fact_digests": list(
-                    finding.supporting_fact_digests
-                ),
+                "supporting_fact_digests": list(finding.supporting_fact_digests),
                 "root_finding_id": finding.root_finding_id,
                 "suppression_finding_id": finding.suppression_finding_id,
             },
@@ -262,8 +260,7 @@ class FindingLifecycle:
             and current.last_seen_epoch == evaluation.evaluated_at_epoch
             and current.violation_count == violation_count
             and current.reason_codes == evaluation.reason_codes
-            and current.supporting_fact_digests
-            == evaluation.supporting_fact_digests
+            and current.supporting_fact_digests == evaluation.supporting_fact_digests
             and current.root_finding_id == root_finding_id
         ):
             return FindingObservationResultV1(
@@ -288,7 +285,9 @@ class FindingLifecycle:
         return self._persist_transition(
             updated,
             previous=current,
-            kind="activated" if target_status is FindingStatus.ACTIVE else "stabilizing",
+            kind="activated"
+            if target_status is FindingStatus.ACTIVE
+            else "stabilizing",
         )
 
     def suppress(
