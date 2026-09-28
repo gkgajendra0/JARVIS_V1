@@ -31,6 +31,7 @@ from jarvis.engineering_knowledge.models import (
     EngineeringEvidence,
     EngineeringKnowledgeFacet,
     EngineeringKnowledgeRevision,
+    KnowledgeEvidenceLink,
     KnowledgeFreshnessState,
     KnowledgeSensitivity,
 )
@@ -39,6 +40,8 @@ from jarvis.engineering_knowledge.security import (
     EngineeringKnowledgeIntegrityVerifier,
     EvidenceAdmissionRequest,
 )
+from jarvis.engineering_learning.integrity import EngineeringLearningIntegrityVerifier
+from jarvis.engineering_learning.projector import ENGINEERING_LEARNING_KIND_NAMESPACE
 from jarvis.incidents.migration_runner import EngineeringMigrationRunner
 from jarvis.memory.embeddings import (
     QWEN3_EMBEDDING_CONTRACT,
@@ -243,6 +246,31 @@ class EngineeringKnowledgeRetrievalIndex:
                 constraint_json=str(row[5]),
                 required=bool(row[6]),
                 created_at_epoch=float(row[7]),
+            )
+            for row in rows
+        )
+
+    def list_engineering_knowledge_evidence_links(
+        self,
+        revision_id: str,
+    ) -> tuple[KnowledgeEvidenceLink, ...]:
+        normalized = _required_text(revision_id, "revision_id")
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT revision_id, evidence_id, relation_type, created_at_epoch
+                FROM engineering_knowledge_evidence_link
+                WHERE revision_id = ?
+                ORDER BY relation_type, evidence_id
+                """,
+                (normalized,),
+            ).fetchall()
+        return tuple(
+            KnowledgeEvidenceLink(
+                revision_id=str(row[0]),
+                evidence_id=str(row[1]),
+                relation_type=str(row[2]),
+                created_at_epoch=float(row[3]),
             )
             for row in rows
         )
@@ -634,11 +662,20 @@ class EngineeringKnowledgeRetrievalIndex:
             ).fetchall()
 
         applicability_service = EngineeringKnowledgeApplicabilityService(self)
-        integrity_verifier = EngineeringKnowledgeIntegrityVerifier()
+        repair_integrity_verifier = EngineeringKnowledgeIntegrityVerifier()
         eligible: dict[str, ApplicabilityDecision] = {}
         for row in rows:
             revision_id = str(row[0])
-            integrity = integrity_verifier.verify(self, revision_id)
+            revision = self.get_engineering_knowledge_revision(revision_id)
+            if revision is None:
+                continue
+            if revision.kind_namespace == ENGINEERING_LEARNING_KIND_NAMESPACE:
+                integrity = EngineeringLearningIntegrityVerifier().verify(
+                    self,
+                    revision_id,
+                )
+            else:
+                integrity = repair_integrity_verifier.verify(self, revision_id)
             if not integrity.valid:
                 continue
             if not self._derived_document_matches_canonical(revision_id):
