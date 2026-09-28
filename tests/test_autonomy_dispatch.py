@@ -14,12 +14,12 @@ from jarvis.autonomy.dispatch import (
     AutonomyDispatchConfigV1,
     AutonomyDispatchService,
     CapabilityReconciliationControllerV1,
+    ChangeCoordinatorDispatchBridge,
     ControllerDispatchReceiptV1,
     DispatchBridgeRegistrationV1,
     DispatchBridgeRegistry,
     ExistingControllerRegistry,
     WorkOrchestratorDispatchBridge,
-    ChangeCoordinatorDispatchBridge,
 )
 from jarvis.autonomy.models import (
     ActionCandidateV1,
