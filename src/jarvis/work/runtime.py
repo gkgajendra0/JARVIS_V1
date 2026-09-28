@@ -9,12 +9,18 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from jarvis.capabilities.models import CapabilityCatalog
+from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capability_acquisition.activation import (
     CapabilityAcquisitionLifecycleCoordinator,
 )
 from jarvis.capability_acquisition.admission import CapabilityAcquisitionCoordinator
 from jarvis.capability_acquisition.discovery_workflow import (
     build_acquisition_discovery_executors,
+)
+from jarvis.capability_acquisition.external_acceptance import (
+    ExternalAcceptanceCoordinator,
+    build_external_acceptance_executors,
+    external_acceptance_completion_guard,
 )
 from jarvis.capability_acquisition.architecture import (
     CapabilityAcquisitionDevelopmentRevisionResolver,
@@ -174,6 +180,7 @@ class WorkRuntime:
         model_router: ModelRouter | None = None,
         capability_acquisition: CapabilityAcquisitionCoordinator | None = None,
         capability_lifecycle: CapabilityAcquisitionLifecycleCoordinator | None = None,
+        capability_external_acceptance: ExternalAcceptanceCoordinator | None = None,
         promotion_runtime: PromotionRuntime | None = None,
         release_bridge_task: asyncio.Task[None] | None = None,
         capability_catalog_refresher: Callable[[], object] | None = None,
@@ -191,6 +198,7 @@ class WorkRuntime:
         self.model_router = model_router
         self.capability_acquisition = capability_acquisition
         self.capability_lifecycle = capability_lifecycle
+        self.capability_external_acceptance = capability_external_acceptance
         self.promotion_runtime = promotion_runtime
         self._release_bridge_task = release_bridge_task
         self._capability_catalog_refresher = capability_catalog_refresher
@@ -316,6 +324,7 @@ def build_work_runtime(
     dbos_database_url: str | None = None,
     event_loop: asyncio.AbstractEventLoop | None = None,
     acquisition_context_provider: AcquisitionContextProvider | None = None,
+    capability_runtime: CapabilityRuntime | None = None,
     capability_lifecycle_service: CapabilityLifecycleService | None = None,
     capability_deployment_metadata: DeploymentMetadataStore | None = None,
     capability_package_admission: CapabilityPackageAdmissionService | None = None,
@@ -432,6 +441,14 @@ def build_work_runtime(
                 protected_main_root=workspace_manager.repository_root,
             ),
         ),
+        *(
+            ()
+            if capability_runtime is None
+            else build_external_acceptance_executors(
+                change_store,
+                capability_runtime=capability_runtime,
+            )
+        ),
         *build_development_executors(
             workspace_manager,
             test_runner=build_development_test_runner(development_test_image),
@@ -443,7 +460,6 @@ def build_work_runtime(
         "cpu": max(1, min(2, global_concurrency)),
         "git": 1,
         "network": max(1, global_concurrency),
-        "local_discovery": 1,
         "gpu": 1,
         "browser": 1,
         "desktop": 1,
@@ -456,6 +472,8 @@ def build_work_runtime(
     )
 
     def _completion_guard(work: WorkItem, steps):
+        if work.work_type is WorkType.EXTERNAL_ACCEPTANCE:
+            return external_acceptance_completion_guard(steps)
         stage = change_store.stage_for_work(work.work_id)
         if stage is None:
             return None
@@ -536,6 +554,11 @@ def build_work_runtime(
     capability_acquisition = CapabilityAcquisitionCoordinator(
         changes=changes,
         context_provider=acquisition_context,
+    )
+    capability_external_acceptance = (
+        None
+        if capability_runtime is None
+        else ExternalAcceptanceCoordinator(change_store, backend)
     )
     if (
         capability_lifecycle_service is not None
@@ -643,6 +666,7 @@ def build_work_runtime(
         model_router=model_router,
         capability_acquisition=capability_acquisition,
         capability_lifecycle=capability_lifecycle,
+        capability_external_acceptance=capability_external_acceptance,
         promotion_runtime=promotion_runtime,
         release_bridge_task=release_bridge_task,
         capability_catalog_refresher=capability_catalog_refresher,
