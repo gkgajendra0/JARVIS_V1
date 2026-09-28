@@ -21,8 +21,8 @@ class FakeSsdpBackend:
             SsdpServiceRecord(
                 search_target="upnp:rootdevice",
                 usn="uuid:device-1::upnp:rootdevice",
-                sender_address="192.168.1.7",
-                location="http://192.168.1.7:8008/description.xml",
+                sender_address="10.55.0.20",
+                location="http://10.55.0.20:8008/description.xml",
                 server="test-device/1.0 upnp/1.1",
                 max_age_seconds=120,
             ),
@@ -53,7 +53,7 @@ def test_ssdp_adapter_projects_bounded_local_observation() -> None:
     assert len(observations) == 1
     observed = observations[0]
     assert observed.adapter_id == "ssdp_upnp.v1"
-    assert "http://192.168.1.7:8008/description.xml" in observed.endpoints
+    assert "http://10.55.0.20:8008/description.xml" in observed.endpoints
     assert observed.expires_at_epoch == 1120.0
     assert backend.calls[0]["search_targets"] == ("upnp:rootdevice",)
 
@@ -82,7 +82,7 @@ def test_ssdp_record_drops_public_location_metadata() -> None:
     record = SsdpServiceRecord(
         search_target="upnp:rootdevice",
         usn="uuid:device-2::upnp:rootdevice",
-        sender_address="192.168.1.8",
+        sender_address="10.55.0.21",
         location="https://8.8.8.8/device.xml",
         server=None,
         max_age_seconds=60,
