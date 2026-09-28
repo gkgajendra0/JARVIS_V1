@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Iterable
 
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
+from jarvis.capability_registry.compatibility import CapabilityCompatibilityReportV1
 from jarvis.capability_registry.compatibility import (
-    CapabilityCompatibilityReportV1,
     CompatibilityVerdict as CapabilityCompatibilityVerdict,
 )
 from jarvis.engineering_change.models import (
@@ -39,7 +39,7 @@ def _epoch_from_iso(value: str, *, field: str) -> float:
     if not text:
         raise EngineeringOutcomeAdapterError(f"{field} must not be empty")
     try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(text)
     except ValueError as exc:
         raise EngineeringOutcomeAdapterError(
             f"{field} is not an ISO-8601 timestamp"
