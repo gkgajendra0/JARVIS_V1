@@ -45,7 +45,7 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 The active cross-cutting engineering boundary is now:
 
-**Phase 10A — Autonomous Operations Control Plane — RESEARCH / ARCHITECTURE NEXT; IMPLEMENTATION NOT YET AUTHORIZED**
+**Phase 10A — Autonomous Operations Control Plane — RESEARCH COMPLETE / ARCHITECTURE PROPOSED; OWNER APPROVAL REQUIRED BEFORE IMPLEMENTATION**
 
 Phase 5 Secure Autonomous Engineering Substrate is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Its final evidence is recorded in `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`. PR #133 merged to protected main at `78f25fb192b926ee30a028cfc02c829e1197cc9e`.
 
@@ -136,7 +136,7 @@ Phase 7  Governed promotion / production verification / rollback — DONE / OWNE
 Phase 8  Capability package + registry lifecycle — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 9  Owner-requested capability acquisition — DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28; FINAL E2E EXTERNAL VALIDATION DEFERRED
 Phase 10 Closed-loop engineering learning — DONE / OWNER-MACHINE ACCEPTED 2026-09-28
-Phase 10A Autonomous Operations Control Plane — CURRENT NEXT: RESEARCH + ARCHITECTURE REQUIRED; IMPLEMENTATION NOT YET AUTHORIZED
+Phase 10A Autonomous Operations Control Plane — RESEARCH COMPLETE / ARCHITECTURE PROPOSED; OWNER APPROVAL REQUIRED BEFORE IMPLEMENTATION
 Phase 11 Autonomous capability-gap / weakness detection
 Phase 12 Shadow improvement + baseline benchmarking
 Phase 13 Engineering curriculum + specialist model evaluation
@@ -145,7 +145,13 @@ Phase 14 Governed self-evolution
 
 Owner-requested capability acquisition intentionally precedes autonomous gap detection: an explicit owner request to acquire a capability must not wait for repeated failures or repeated requests.
 
-The owner-approved 2026-09-26 sequencing clarification inserts Phase 10A before Phase 11. With Phase 10 now accepted, Phase 10A is the next cross-cutting research/architecture boundary. It will add the Objective/DesiredState model, whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, owner-attention handling and autonomy evaluation. This status does not authorize implementation or broaden Authority.
+The owner-approved 2026-09-26 sequencing clarification inserts Phase 10A before Phase 11. With Phase 10 accepted, Phase-10A repository inspection and technology research are now complete and an exact architecture is proposed for owner review. The proposal adds Objective/DesiredState contracts, derived whole-JARVIS SystemState snapshots, deterministic reconciliation, evidence-backed autonomous work creation, portfolio prioritization, durable owner-attention handling, anti-thrash/activity budgets and shadow-first autonomy evaluation while reusing existing WorkItem/DBOS, EngineeringChange, Self Model/Health Registry, Capability Registry and Authority boundaries. No Phase-10A implementation is authorized until the owner approves the proposed architecture.
+
+Proposed Phase-10A design documents:
+
+- `PHASE10A_AUTONOMOUS_OPERATIONS_CONTROL_PLANE_RESEARCH.md`;
+- `PHASE10A_AUTONOMOUS_OPERATIONS_CONTROL_PLANE_ARCHITECTURE.md`;
+- `PHASE10A_AUTONOMOUS_OPERATIONS_CONTROL_PLANE_IMPLEMENTATION_PLAN.md`.
 
 ## Next numbered product slice
 
@@ -173,6 +179,9 @@ They remain separate unless evidence shows that one directly blocks the current 
 - `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` — autonomous-engineering subsystem under that north star.
 - `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — specialized repair/evolution program under the engineering subsystem.
 - `SELF_REPAIR_PHASE1H_HARDENING.md` — current hardening gate.
+- `PHASE10A_AUTONOMOUS_OPERATIONS_CONTROL_PLANE_RESEARCH.md` — Phase-10A repository/technology research basis; no implementation Authority.
+- `PHASE10A_AUTONOMOUS_OPERATIONS_CONTROL_PLANE_ARCHITECTURE.md` — proposed Phase-10A architecture awaiting explicit owner approval.
+- `PHASE10A_AUTONOMOUS_OPERATIONS_CONTROL_PLANE_IMPLEMENTATION_PLAN.md` — proposed slice plan blocked on architecture approval.
 - `PHASE2_ENGINEERING_KNOWLEDGE_RESEARCH.md` — consolidated Phase-2 research findings and technology dispositions.
 - `PHASE2_ENGINEERING_KNOWLEDGE_ARCHITECTURE.md` — owner-approved Phase-2 architecture and invariants.
 - `PHASE2_ENGINEERING_KNOWLEDGE_IMPLEMENTATION_PLAN.md` — completed Phase-2 implementation sequence, gates and acceptance matrix.
@@ -206,4 +215,4 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Begin Phase 10A with repository inspection and thorough research, then produce the architecture for explicit owner approval before implementation. Preserve all accepted Phase-10 learning/governance boundaries and the deferred Phase-9 full external lifecycle as a mandatory final whole-system validation item.**
+**Review and explicitly approve or reject the proposed Phase-10A architecture before any implementation begins.**
