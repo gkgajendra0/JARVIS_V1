@@ -236,16 +236,18 @@ def _stabilization_from_finding(
     if finding.status in {FindingStatus.RESOLVED, FindingStatus.SUPERSEDED}:
         return None
     recovery = "recovery_stabilizing" in finding.reason_codes
-    stable = finding.status in {
-        FindingStatus.ACTIVE,
-        FindingStatus.SUPPRESSED,
-    } or recovery
+    stable = (
+        finding.status
+        in {
+            FindingStatus.ACTIVE,
+            FindingStatus.SUPPRESSED,
+        }
+        or recovery
+    )
     return StabilizationStateV1(
         desired_state_id=desired.desired_state_id,
         desired_generation=desired.generation,
-        consecutive_violations=(
-            0 if recovery else max(1, finding.violation_count)
-        ),
+        consecutive_violations=(0 if recovery else max(1, finding.violation_count)),
         first_violation_at_epoch=finding.first_seen_epoch,
         last_violation_at_epoch=finding.last_seen_epoch,
         recovery_started_at_epoch=(finding.last_seen_epoch if recovery else None),
@@ -622,9 +624,7 @@ class AutonomyReconciler:
             )
 
         prioritized = self._prioritize(tuple(pending))
-        priority_by_candidate = {
-            item.candidate_id: item for item in prioritized
-        }
+        priority_by_candidate = {item.candidate_id: item for item in prioritized}
         for item in pending:
             candidate = item.resolution.candidate
             assert candidate is not None
