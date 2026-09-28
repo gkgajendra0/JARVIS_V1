@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Iterable
 
+from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_registry.compatibility import (
     CapabilityCompatibilityReportV1,
     CompatibilityVerdict as CapabilityCompatibilityVerdict,
@@ -420,6 +421,13 @@ class CapabilityAcquisitionOutcomeAdapter:
             if isinstance(change_or_id, EngineeringChange)
             else self._changes.require(str(change_or_id).strip())
         )
+        if (
+            change.process_key != OWNER_CAPABILITY_ACQUISITION_PROCESS.key
+            or change.process_version != OWNER_CAPABILITY_ACQUISITION_PROCESS.version
+        ):
+            raise EngineeringOutcomeAdapterError(
+                "change is not owner capability acquisition"
+            )
         if change.state not in self._TERMINAL:
             raise EngineeringOutcomeAdapterError(
                 "capability acquisition change is not terminal"
@@ -453,28 +461,38 @@ class CapabilityAcquisitionOutcomeAdapter:
             change.change_id,
             "capability_lifecycle_activation",
         )
+        healthy_observations = tuple(
+            artifact
+            for artifact in self._changes.list_artifacts(
+                change.change_id,
+                kind="production_observation",
+            )
+            if artifact.payload.get("healthy") is True
+        )
 
         evidence: list[str] = [_artifact_ref(candidate)]
         if admission is not None:
             evidence.append(_artifact_ref(admission))
         if activation is not None:
             evidence.append(_artifact_ref(activation))
+        evidence.extend(_artifact_ref(item) for item in healthy_observations)
 
         if change.state is ChangeState.CLOSED:
             if (
                 admission is None
                 or activation is None
                 or activation.payload.get("effective_enabled") is not True
+                or not healthy_observations
             ):
                 raise EngineeringOutcomeAdapterError(
-                    "closed capability acquisition lacks activation evidence"
+                    "closed capability acquisition lacks activation/observation evidence"
                 )
             result = EngineeringOutcomeResult.SUCCESS
             attribution = EngineeringOutcomeAttribution.NOT_APPLICABLE
             reasons = ("capability_acquisition_closed",)
         elif change.state is ChangeState.BLOCKED_EXTERNAL:
             result = EngineeringOutcomeResult.BLOCKED
-            attribution = EngineeringOutcomeAttribution.EXTERNAL_PROVIDER
+            attribution = EngineeringOutcomeAttribution.UNKNOWN
             reasons = ("capability_acquisition_blocked_external",)
         elif change.state is ChangeState.ROLLED_BACK:
             result = EngineeringOutcomeResult.ROLLED_BACK
