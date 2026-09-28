@@ -12,7 +12,10 @@ import threading
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol\n\nif TYPE_CHECKING:\n    from jarvis.engineering_substrate.discovery_ssdp import SsdpBackend
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from jarvis.engineering_substrate.discovery_ssdp import SsdpBackend
 
 from jarvis.capabilities.discovery import (
     CapabilityDiscoveryError,
