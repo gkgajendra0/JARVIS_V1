@@ -195,3 +195,14 @@ def validate_phase10a_replay_corpus() -> None:
     identities = tuple(item.case_id for item in PHASE10A_REPLAY_CORPUS_V1)
     if len(set(identities)) != len(identities):
         raise ValueError("Phase-10A replay case IDs must be unique")
+
+
+def phase10a_pytest_node_ids() -> tuple[str, ...]:
+    return tuple(
+        dict.fromkeys(
+            evidence
+            for case in PHASE10A_REPLAY_CORPUS_V1
+            for evidence in case.evidence_tests
+            if evidence.startswith("tests/") and "::" in evidence
+        )
+    )
