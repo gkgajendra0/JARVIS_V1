@@ -78,11 +78,15 @@ def _persist(
     supersedes_revision_id: str | None = None,
 ):
     projector = EngineeringLearningProjector()
+    identity = store.get_engineering_knowledge_identity(
+        projector.knowledge_id_for(outcome)
+    )
     candidate, _ = projector.build_candidate(
         outcome,
         revision_number=revision_number,
         parent_revision_id=parent_revision_id,
         supersedes_revision_id=supersedes_revision_id,
+        identity=identity,
     )
     write = store.persist_engineering_knowledge_candidate(candidate)
     assert write.created is True
