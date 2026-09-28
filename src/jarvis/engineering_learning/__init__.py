@@ -43,9 +43,7 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 _EXPORTS = {
-    name: module_name
-    for module_name, names in _EXPORT_GROUPS
-    for name in names
+    name: module_name for module_name, names in _EXPORT_GROUPS for name in names
 }
 
 __all__ = [
