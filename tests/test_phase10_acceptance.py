@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -34,6 +36,29 @@ def _payload(commit: str) -> dict[str, object]:
     }
     return {**body, "evidence_digest": canonical_digest(body)}
 
+
+
+def test_phase10_acceptance_module_imports_in_clean_interpreter() -> None:
+    repo = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    source_root = str(repo / "src")
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        source_root
+        if not existing_pythonpath
+        else source_root + os.pathsep + existing_pythonpath
+    )
+
+    completed = subprocess.run(
+        [sys.executable, "-c", "import jarvis.engineering_learning.phase10_acceptance"],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
 
 def test_phase10_acceptance_records_exact_git_revision() -> None:
     repo = Path(__file__).resolve().parents[1]
