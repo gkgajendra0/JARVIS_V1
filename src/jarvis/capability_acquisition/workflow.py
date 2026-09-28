@@ -169,8 +169,11 @@ class AcquisitionRecordCandidateExecutor:
     descriptor = BrainAction(
         name="acq_record_candidate",
         description=(
-            "Record one research-discovered capability source candidate. This action "
-            "always stores the source as UNVERIFIED; model text cannot grant trust."
+            "Record one research-discovered capability source candidate and its "
+            "proposed dependency/network/device/acceptance requirements. This action "
+            "always stores the source as UNVERIFIED; model text cannot grant trust. "
+            "For a Python sdk_library intended for PyPI verification, source_identity "
+            "must be the distribution name and source_version should be exact."
         ),
         parameter_schema={
             "type": "object",
@@ -209,6 +212,35 @@ class AcquisitionRecordCandidateExecutor:
                     "items": {"type": "string", "minLength": 1, "maxLength": 500},
                     "minItems": 1,
                     "maxItems": 30,
+                },
+                "secret_scopes": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 240},
+                    "maxItems": 30,
+                },
+                "network_scopes": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
+                    "maxItems": 30,
+                },
+                "device_scopes": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
+                    "maxItems": 30,
+                },
+                "discovery_scopes": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
+                    "maxItems": 30,
+                },
+                "external_acceptance_requirements": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
+                    "maxItems": 30,
+                },
+                "license_id": {
+                    "type": ["string", "null"],
+                    "maxLength": 240,
                 },
             },
             "required": [
@@ -262,8 +294,16 @@ class AcquisitionRecordCandidateExecutor:
             supported_operations=tuple(parameters.get("supported_operations") or ()),
             strategy=strategy,
             evidence_refs=tuple(parameters.get("evidence_refs") or ()),
+            secret_scopes=tuple(parameters.get("secret_scopes") or ()),
+            network_scopes=tuple(parameters.get("network_scopes") or ()),
+            device_scopes=tuple(parameters.get("device_scopes") or ()),
+            discovery_scopes=tuple(parameters.get("discovery_scopes") or ()),
+            license_id=parameters.get("license_id"),
             verification_requirements=tuple(
                 parameters.get("verification_requirements") or ()
+            ),
+            external_acceptance_requirements=tuple(
+                parameters.get("external_acceptance_requirements") or ()
             ),
             reason_codes=("research_discovered_unverified",),
         )
