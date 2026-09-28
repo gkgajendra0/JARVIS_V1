@@ -660,7 +660,7 @@ class CapabilityEffectiveStateRuleV1(_BaseDesiredStateRule):
     def validate_expected(self, expected: dict[str, JSONValue]) -> None:
         value = expected.get("effective_enabled")
         if not isinstance(value, bool):
-            raise ValueError("effective_enabled must be boolean")
+            raise TypeError("effective_enabled must be boolean")
 
     def evaluate(
         self,
@@ -739,7 +739,7 @@ class DurableWorkRuleV1(_BaseDesiredStateRule):
             raise ValueError("acceptable_states contains invalid WorkState")
         terminal = expected.get("require_terminal", False)
         if not isinstance(terminal, bool):
-            raise ValueError("require_terminal must be boolean")
+            raise TypeError("require_terminal must be boolean")
 
     def evaluate(
         self,
@@ -832,11 +832,11 @@ class DesiredStateRuleRegistry:
             raise DuplicateDesiredStateRuleError(
                 f"DesiredState rule already registered: {key}.v{version}"
             )
-        if target_namespace != getattr(rule, "target_namespace"):
+        if target_namespace != rule.target_namespace:
             raise DesiredStateRuleContractError(
                 "rule target_namespace must be normalized"
             )
-        if required != tuple(getattr(rule, "required_source_namespaces")):
+        if required != tuple(rule.required_source_namespaces):
             raise DesiredStateRuleContractError(
                 "rule required_source_namespaces must be normalized and unique"
             )
