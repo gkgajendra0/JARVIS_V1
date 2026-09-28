@@ -1141,11 +1141,15 @@ class WorkEngine:
             raise ValueError("owner response must not be empty")
         work = self._store.require(work_id)
         if work.state is not WorkState.WAITING_FOR_OWNER:
+            recent_steps = tuple(reversed(self._store.list_steps(work_id)))
             already_applied = any(
                 step.kind == "owner_input"
                 and step.state.value == "completed"
-                and step.observation.get("response") == normalized
-                for step in reversed(self._store.list_steps(work_id))
+                and (
+                    step.observation.get("response") == normalized
+                    or step.observation.get("response_redacted") is True
+                )
+                for step in recent_steps
             )
             if already_applied:
                 return work
