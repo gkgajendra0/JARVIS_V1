@@ -741,6 +741,7 @@ def acquisition_completion_guard(
         "research_web",
         "acq_discover_local",
         "acq_record_candidate",
+        "acq_verify_pypi_sdk",
         "acq_resolve",
     }
     latest_relevant = max(
