@@ -45,7 +45,7 @@ These loops must reuse canonical WorkItems, Authority, research, development, ve
 
 The active cross-cutting engineering boundary is now:
 
-**Phase 10A — Autonomous Operations Control Plane — ARCHITECTURE OWNER APPROVED 2026-09-28; IMPLEMENTATION ACTIVE**
+**Phase 10A — Autonomous Operations Control Plane — 10A.1–10A.6 MERGED; 10A.7 FINAL CI + OWNER-MACHINE ACCEPTANCE PENDING**
 
 Phase 5 Secure Autonomous Engineering Substrate is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Its final evidence is recorded in `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`. PR #133 merged to protected main at `78f25fb192b926ee30a028cfc02c829e1197cc9e`.
 
@@ -136,7 +136,7 @@ Phase 7  Governed promotion / production verification / rollback — DONE / OWNE
 Phase 8  Capability package + registry lifecycle — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 9  Owner-requested capability acquisition — DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28; FINAL E2E EXTERNAL VALIDATION DEFERRED
 Phase 10 Closed-loop engineering learning — DONE / OWNER-MACHINE ACCEPTED 2026-09-28
-Phase 10A Autonomous Operations Control Plane — ARCHITECTURE OWNER APPROVED 2026-09-28; IMPLEMENTATION ACTIVE (10A.1 -> 10A.7)
+Phase 10A Autonomous Operations Control Plane — 10A.1–10A.6 MERGED; 10A.7 FINAL CI + OWNER-MACHINE ACCEPTANCE PENDING
 Phase 11 Autonomous capability-gap / weakness detection
 Phase 12 Shadow improvement + baseline benchmarking
 Phase 13 Engineering curriculum + specialist model evaluation
@@ -145,7 +145,7 @@ Phase 14 Governed self-evolution
 
 Owner-requested capability acquisition intentionally precedes autonomous gap detection: an explicit owner request to acquire a capability must not wait for repeated failures or repeated requests.
 
-The owner-approved 2026-09-26 sequencing clarification inserts Phase 10A before Phase 11. Phase-10A research is complete and the owner approved its architecture on 2026-09-28. Implementation is active across slices 10A.1–10A.7: Objective/DesiredState contracts, derived whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, durable owner-attention handling, budgets and shadow-first autonomy evaluation. This authorization does not broaden Authority.
+The owner-approved 2026-09-26 sequencing clarification inserts Phase 10A before Phase 11. Phase-10A research is complete and the owner approved its architecture on 2026-09-28. Slices 10A.1–10A.6 are merged. Slice 10A.7 now contains the bounded reconciliation runtime, clean trigger lifecycle, locked 30-case replay corpus and exact-commit Windows owner-machine acceptance harness. Phase 10A remains open until exact-head CI and the required owner-machine run pass. Production autonomy remains SHADOW and Authority is unchanged.
 
 ## Next numbered product slice
 
@@ -206,4 +206,4 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Implement Phase 10A according to the owner-approved 10A.1–10A.7 plan, beginning with contracts + durable autonomy store. Preserve all accepted Phase-10 learning/governance boundaries, production SHADOW default, and the deferred Phase-9 full external lifecycle as a mandatory final whole-system validation item.**
+**Finish Phase 10A.7 exact-head CI, then run the exact-commit Windows owner-machine acceptance harness. Do not mark Phase 10A DONE or merge the final acceptance slice until that evidence passes. Preserve production SHADOW, existing Authority, and the deferred Phase-9 full external lifecycle.**
