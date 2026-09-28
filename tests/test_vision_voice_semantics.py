@@ -17,6 +17,10 @@ class _FakeService:
                 "armed": False,
                 "framing_source": "head",
             },
+            "camera": {
+                "active_source": "lenovo",
+                "available_sources": ["lenovo", "pocket3"],
+            },
             "recent_events": [
                 {
                     "sequence": 1,
@@ -28,6 +32,15 @@ class _FakeService:
                     ),
                 }
             ],
+        }
+
+    def switch_camera_source(self, source_name: str) -> dict[str, object]:
+        return {
+            "ok": True,
+            "changed": source_name != "lenovo",
+            "previous_source": "lenovo",
+            "active_source": source_name,
+            "available_sources": ["lenovo", "pocket3"],
         }
 
 
@@ -43,6 +56,10 @@ def test_voice_report_hides_detector_candidate_count() -> None:
     assert "armed" not in status
     assert "target_id" not in status
     assert "target_visible" not in status
+    assert report["camera"] == {
+        "active_source": "lenovo",
+        "available_sources": ["lenovo", "pocket3"],
+    }
     assert "visible_people is the only canonical visible-person count" in str(
         report["count_semantics"]
     )
@@ -53,7 +70,12 @@ def test_voice_report_hides_detector_candidate_count() -> None:
     assert "current visible_people=1" in str(events)
 
 
-def test_realtime_voice_surface_does_not_expose_manual_follow_control() -> None:
+def test_realtime_voice_surface_exposes_camera_switch_not_manual_follow() -> None:
     tools = VisionAgentTools(_FakeService())  # type: ignore[arg-type]
 
-    assert len(tools.tools) == 1
+    exposed = tools.tools
+    assert len(exposed) == 2
+    assert {tool.__name__ for tool in exposed} == {
+        "inspect_vision",
+        "switch_vision_camera",
+    }

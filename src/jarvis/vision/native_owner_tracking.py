@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -320,8 +321,8 @@ class NativeOwnerTrackingObserver:
             self._target_attempts_without_native_lock += 1
             LOGGER.exception("Pocket 3 A6 owner target failed")
 
-    def close(self) -> None:
-        self._closing.set()
+    def deactivate(self) -> None:
+        """Release Pocket 3 native tracking without permanently closing the observer."""
         self.client.close()
         recovery_thread = self._recovery_thread
         if recovery_thread is not None and recovery_thread.is_alive():
@@ -330,6 +331,10 @@ class NativeOwnerTrackingObserver:
                 LOGGER.warning("Pocket 3 recovery thread is still winding down")
             self.client.close()
         self._recovery_thread = None
+        self._recovery_succeeded = None
+        self._last_poll_at = None
+        self._last_connect_attempt_at = None
+        self._last_session_recovery_at = None
         self.controller.reset()
         self._owner_observed_in_latest_snapshot = False
         self._pending_owner_track_id = None
@@ -337,6 +342,10 @@ class NativeOwnerTrackingObserver:
         self._continuity_gap_active = False
         self._target_attempts_without_native_lock = 0
         self._startup_lock_event.clear()
+
+    def close(self) -> None:
+        self._closing.set()
+        self.deactivate()
 
     def _reconnect_due(self, now: float) -> bool:
         attempted = self._last_connect_attempt_at
@@ -439,6 +448,57 @@ class NativeOwnerTrackingObserver:
                 "Pocket 3 native tracking session recovery did not restore transport; "
                 "normal reconnect backoff remains active"
             )
+
+
+class SourceGatedNativeTrackingObserver:
+    """Run Pocket 3 native tracking only while Pocket 3 is the selected camera."""
+
+    def __init__(
+        self,
+        delegate,
+        *,
+        active_source_provider: Callable[[], str | None],
+        required_source: str = "pocket3",
+        inactive_perception_fps: float = 10.0,
+    ) -> None:
+        if inactive_perception_fps <= 0:
+            raise ValueError("inactive_perception_fps must be positive")
+        self._delegate = delegate
+        self._active_source_provider = active_source_provider
+        self._required_source = required_source.strip().lower()
+        self._inactive_perception_fps = inactive_perception_fps
+        self._was_active = False
+
+    @property
+    def active(self) -> bool:
+        value = self._active_source_provider()
+        return value is not None and str(value).strip().lower() == self._required_source
+
+    def wait_for_startup_lock(self, timeout_seconds: float) -> bool:
+        if not self.active:
+            return True
+        return bool(self._delegate.wait_for_startup_lock(timeout_seconds))
+
+    def perception_fps_hint(self) -> float:
+        if not self.active:
+            return self._inactive_perception_fps
+        return float(self._delegate.perception_fps_hint())
+
+    def observe(self, frame: CapturedFrame, snapshot: VisionSnapshot) -> None:
+        if not self.active:
+            if self._was_active:
+                deactivate = getattr(self._delegate, "deactivate", None)
+                if callable(deactivate):
+                    deactivate()
+            self._was_active = False
+            return
+
+        self._was_active = True
+        self._delegate.observe(frame, snapshot)
+
+    def close(self) -> None:
+        self._delegate.close()
+        self._was_active = False
 
 
 def build_default_native_owner_tracking_observer(

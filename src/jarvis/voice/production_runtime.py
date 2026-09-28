@@ -64,12 +64,18 @@ from jarvis.promotion.release import (
 from jarvis.promotion.runtime_composition import PromotionRuntimeConfig
 from jarvis.provider_resilience import ProviderResilienceState
 from jarvis.self_awareness import SelfAwarenessRuntime
+from jarvis.vision.camera import (
+    OpenCVCameraConfig,
+    OpenCVCameraSource,
+    SwitchableCameraSource,
+)
 from jarvis.vision.health_observers import (
     NativeTrackingHealthObserver,
     VisionFrameHealthTap,
     compose_frame_pair_taps,
 )
 from jarvis.vision.native_owner_tracking import (
+    SourceGatedNativeTrackingObserver,
     build_default_native_owner_tracking_observer,
 )
 from jarvis.vision.service import build_default_vision_service
@@ -90,6 +96,33 @@ from jarvis.work.runtime import build_work_runtime
 LOGGER = logging.getLogger(__name__)
 _NATIVE_TRACKING_EVIDENCE_MAX_GAP_SECONDS = 2.0
 _POCKET3_STARTUP_LOCK_WAIT_SECONDS = 30.0
+
+
+def _build_production_camera_source(config: JarvisConfig) -> SwitchableCameraSource:
+    """Build named physical eyes with Lenovo fixed RGB as the default profile."""
+    return SwitchableCameraSource(
+        {
+            "lenovo": OpenCVCameraSource(
+                OpenCVCameraConfig(
+                    device_index=config.vision_lenovo_device_index,
+                    width=1920,
+                    height=1080,
+                    backend="dshow",
+                    fps=30.0,
+                    codec="MJPG",
+                )
+            ),
+            "pocket3": OpenCVCameraSource(
+                OpenCVCameraConfig(
+                    device_index=config.vision_pocket3_device_index,
+                    width=1280,
+                    height=720,
+                    backend="dshow",
+                )
+            ),
+        },
+        default_source=config.vision_default_camera,
+    )
 
 
 def build_production_voice_runtime(
@@ -126,6 +159,18 @@ def build_production_voice_runtime(
         pre_roll_seconds=config.audio_pre_roll_seconds,
         ring_buffer_seconds=config.audio_ring_buffer_seconds,
     )
+
+    camera_source = (
+        _build_production_camera_source(config) if config.vision_enabled else None
+    )
+    if camera_source is not None:
+        LOGGER.info(
+            "Physical vision cameras configured: default=%s Lenovo(index=%s, "
+            "1920x1080 MJPG 30 FPS) Pocket3(index=%s, on-demand)",
+            camera_source.active_source_name,
+            config.vision_lenovo_device_index,
+            config.vision_pocket3_device_index,
+        )
 
     speaker_shadow_observer: EnrolledSpeakerShadowObserver | None = None
     if config.speaker_shadow_enabled:
@@ -179,15 +224,21 @@ def build_production_voice_runtime(
             resend_cooldown_seconds=config.pocket3_resend_cooldown_seconds,
             locked_perception_fps=1.0,
         )
-        tracking_observer = (
+        observed_native_tracking = (
             NativeTrackingHealthObserver(native_tracking_observer, self_awareness)
             if self_awareness is not None
             else native_tracking_observer
         )
+        assert camera_source is not None
+        tracking_observer = SourceGatedNativeTrackingObserver(
+            observed_native_tracking,
+            active_source_provider=lambda: camera_source.active_source_name,
+            required_source="pocket3",
+            inactive_perception_fps=10.0,
+        )
         LOGGER.info(
-            "Pocket 3 native OWNER tracking is enabled: USB remains canonical "
-            "vision input; DJI ActiveTrack owns continuous gimbal motion; "
-            "JARVIS reacquires only a fresh live OWNER candidate"
+            "Pocket 3 native OWNER tracking is retained but dormant unless Pocket3 "
+            "is the selected vision camera; Lenovo remains the normal fixed-camera path"
         )
 
     active_speaker_visual_buffer: ActiveSpeakerVisualBuffer | None = None
@@ -202,8 +253,8 @@ def build_production_voice_runtime(
             config.active_speaker_model_path
         )
         LOGGER.info(
-            "Step-3 active-speaker diagnostics use one Pocket3 microphone owner: "
-            "canonical LiveKit user PCM + timestamped Vision track/head frames"
+            "Step-3 active-speaker diagnostics use the selected conversation microphone: "
+            "canonical LiveKit user PCM + timestamped selected-camera Vision track/head frames"
         )
 
     speech_region_detector = (
@@ -227,6 +278,7 @@ def build_production_voice_runtime(
                 active_speaker_tap,
                 vision_health_tap,
             ),
+            camera_source=camera_source,
             perception_fps_provider=(
                 tracking_observer.perception_fps_hint
                 if tracking_observer is not None

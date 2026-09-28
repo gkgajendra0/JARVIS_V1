@@ -160,7 +160,33 @@ class VisionService:
             self._clear_evidence_queue()
 
     def report(self, *, event_limit: int = 12) -> dict[str, object]:
-        return self.diagnostics.report(event_limit=event_limit)
+        report = self.diagnostics.report(event_limit=event_limit)
+        report["camera"] = {
+            "active_source": self.runtime.active_camera_source_name,
+            "available_sources": list(self.runtime.available_camera_sources),
+        }
+        return report
+
+    def switch_camera_source(self, source_name: str) -> dict[str, object]:
+        with self._runtime_lock:
+            previous = self.runtime.active_camera_source_name
+            selected = self.runtime.switch_camera_source(source_name)
+        changed = previous != selected
+        if changed:
+            with self._snapshot_lock:
+                self._latest_snapshot = None
+            self._clear_evidence_queue()
+            self.diagnostics.record_action(
+                code="camera_source_changed",
+                message=f"Vision camera source changed from {previous!r} to {selected!r}.",
+            )
+        return {
+            "ok": True,
+            "changed": changed,
+            "previous_source": previous,
+            "active_source": selected,
+            "available_sources": list(self.runtime.available_camera_sources),
+        }
 
     def lock_only_confirmed_person(self) -> dict[str, object]:
         """Lock only when exactly one currently visible track has confirmed head evidence."""
@@ -420,7 +446,7 @@ def build_default_vision_service(
 
     import cv2
 
-    from jarvis.vision.camera import OpenCVCameraSource
+    from jarvis.vision.camera import OpenCVCameraSource, SwitchableCameraSource
     from jarvis.vision.composite_observer import CompositeVisionObserver
     from jarvis.vision.detector import RFDetrNanoDetector
     from jarvis.vision.follow import (
@@ -434,7 +460,7 @@ def build_default_vision_service(
         MediaPipeBlazeFaceDetector,
     )
     from jarvis.vision.observer import OpenCVVisionObserver
-    from jarvis.vision.ptz import DuvcPtzConfig, DuvcPtzController
+    from jarvis.vision.ptz import DuvcPtzConfig, DuvcPtzController, NoopPtzController
     from jarvis.vision.runtime import VisionRuntimeConfig
     from jarvis.vision.targeting import TargetManager
     from jarvis.vision.tracker import OCSORTAdapter, OCSORTConfig
@@ -457,10 +483,10 @@ def build_default_vision_service(
     )
 
     model_path = resolve_blazeface_model_path(head_model_path)
-    runtime = VisionRuntime(
-        camera=camera_source or OpenCVCameraSource(),
-        detector=RFDetrNanoDetector(),
-        tracker=OCSORTAdapter(
+    resolved_camera = camera_source or OpenCVCameraSource()
+
+    def build_tracker() -> OCSORTAdapter:
+        return OCSORTAdapter(
             OCSORTConfig(
                 frame_rate=perception_fps,
                 lost_track_buffer=lost_track_buffer,
@@ -470,7 +496,27 @@ def build_default_vision_service(
                 high_conf_det_threshold=0.40,
                 delta_t=2,
             )
-        ),
+        )
+
+    if isinstance(resolved_camera, SwitchableCameraSource):
+        ptz = NoopPtzController()
+    else:
+        ptz = DuvcPtzController(
+            DuvcPtzConfig(
+                pan_step_fraction=0.025,
+                tilt_step_fraction=0.025,
+                zoom_step_fraction=0.025,
+                zoom_max_fraction=0.50,
+                pan_negative_scale=1.25,
+                pan_positive_scale=1.75,
+            )
+        )
+
+    runtime = VisionRuntime(
+        camera=resolved_camera,
+        detector=RFDetrNanoDetector(),
+        tracker=build_tracker(),
+        tracker_factory=build_tracker,
         target_manager=TargetManager(lost_timeout_seconds=1.25),
         follow_controller=FollowController(
             FollowConfig(
@@ -492,16 +538,7 @@ def build_default_vision_service(
                 minimum_confidence=0.5,
             )
         ),
-        ptz=DuvcPtzController(
-            DuvcPtzConfig(
-                pan_step_fraction=0.025,
-                tilt_step_fraction=0.025,
-                zoom_step_fraction=0.025,
-                zoom_max_fraction=0.50,
-                pan_negative_scale=1.25,
-                pan_positive_scale=1.75,
-            )
-        ),
+        ptz=ptz,
         head_detector=MediaPipeBlazeFaceDetector(
             MediaPipeBlazeFaceConfig(model_path=model_path)
         ),

@@ -39,6 +39,8 @@ class _FakeRuntime:
         self._eligible_ids = eligible_ids
         self.target: TargetState | None = None
         self.armed = False
+        self.active_camera_source_name = "lenovo"
+        self.available_camera_sources = ("lenovo", "pocket3")
 
     def head_lock_eligible(self, track_id: int) -> bool:
         return track_id in self._eligible_ids
@@ -62,6 +64,12 @@ class _FakeRuntime:
     def clear_target(self) -> None:
         self.armed = False
         self.target = None
+
+    def switch_camera_source(self, source_name: str) -> str:
+        if source_name not in self.available_camera_sources:
+            raise ValueError("unknown camera")
+        self.active_camera_source_name = source_name
+        return source_name
 
 
 def test_service_locks_only_one_head_confirmed_visible_person() -> None:
@@ -155,3 +163,28 @@ def test_frame_pair_tap_accepts_only_fresh_perception_context() -> None:
     assert service._fresh_snapshot_for_frame(fresh_frame) is service._latest_snapshot
     assert service._fresh_snapshot_for_frame(stale_frame) is None
     assert service._fresh_snapshot_for_frame(earlier_frame) is None
+
+
+def test_service_switches_named_camera_source() -> None:
+    runtime = _FakeRuntime([_track(7)], {7})
+    service = VisionService(runtime)  # type: ignore[arg-type]
+
+    result = service.switch_camera_source("pocket3")
+
+    assert result["ok"] is True
+    assert result["changed"] is True
+    assert result["previous_source"] == "lenovo"
+    assert result["active_source"] == "pocket3"
+    assert runtime.active_camera_source_name == "pocket3"
+
+
+def test_service_report_includes_camera_source() -> None:
+    runtime = _FakeRuntime([_track(7)], {7})
+    service = VisionService(runtime)  # type: ignore[arg-type]
+
+    report = service.report()
+
+    assert report["camera"] == {
+        "active_source": "lenovo",
+        "available_sources": ["lenovo", "pocket3"],
+    }

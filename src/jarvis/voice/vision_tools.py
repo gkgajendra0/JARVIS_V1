@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from livekit.agents import RunContext, function_tool
 
 from jarvis.vision.service import VisionService
@@ -15,10 +17,9 @@ class VisionAgentTools:
 
     @property
     def tools(self) -> list:
-        # Manual software-follow controls are intentionally not exposed to the
-        # realtime agent. Native Pocket 3 OWNER lock already owns continuous
-        # camera tracking in production.
-        return [self.inspect_vision]
+        # Manual software-follow controls remain engineering-only. Camera
+        # selection is safe to expose because it only chooses the physical input.
+        return [self.inspect_vision, self.switch_vision_camera]
 
     def _voice_report(self, *, event_limit: int) -> dict[str, object]:
         """Expose tracker truth without detector-candidate telemetry to the LLM."""
@@ -48,8 +49,12 @@ class VisionAgentTools:
                     )
                 safe_events.append(event)
 
+        camera = report.get("camera", {})
+        safe_camera = dict(camera) if isinstance(camera, dict) else {}
+
         return {
             "status": status,
+            "camera": safe_camera,
             "recent_events": safe_events,
             "count_semantics": (
                 "visible_people is the only canonical visible-person count. "
@@ -92,6 +97,53 @@ class VisionAgentTools:
                 "facial_appearance_or_identity",
             ],
             **self._voice_report(event_limit=16),
+        }
+
+    @function_tool()
+    async def switch_vision_camera(
+        self,
+        context: RunContext,
+        camera: str,
+    ) -> dict[str, object]:
+        """Switch JARVIS physical eyes between Lenovo and Pocket 3.
+
+        Use this only when the user explicitly asks to switch camera/eyes. Lenovo
+        is the normal fixed primary camera. Pocket 3 selects the retained DJI
+        camera path. Camera selection does not itself enable a follow or lock mode.
+        """
+        del context
+        normalized = camera.strip().lower().replace(" ", "")
+        aliases = {
+            "lenovo": "lenovo",
+            "lenovo510": "lenovo",
+            "510": "lenovo",
+            "webcam": "lenovo",
+            "pocket": "pocket3",
+            "pocket3": "pocket3",
+            "osmopocket3": "pocket3",
+            "dji": "pocket3",
+        }
+        selected = aliases.get(normalized)
+        if selected is None:
+            return {
+                "ok": False,
+                "reason": "unsupported camera; use Lenovo or Pocket 3",
+                "vision": self._voice_report(event_limit=8),
+            }
+        try:
+            result = await asyncio.to_thread(
+                self._service.switch_camera_source,
+                selected,
+            )
+        except (RuntimeError, TypeError, ValueError) as exc:
+            return {
+                "ok": False,
+                "reason": str(exc),
+                "vision": self._voice_report(event_limit=8),
+            }
+        return {
+            **result,
+            "vision": self._voice_report(event_limit=8),
         }
 
     @function_tool()

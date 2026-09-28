@@ -15,6 +15,7 @@ from jarvis.vision.models import BoundingBox, FollowCommand, Track
 from jarvis.vision.native_owner_tracking import (
     NativeOwnerTrackingConfig,
     NativeOwnerTrackingObserver,
+    SourceGatedNativeTrackingObserver,
 )
 from jarvis.vision.owner_reacquisition import NativeTrackingStatus, ReacquisitionState
 from jarvis.vision.runtime import VisionSnapshot
@@ -465,3 +466,55 @@ def test_stale_native_active_does_not_prevent_bounded_session_recovery(
     assert client.recoveries == 1
     assert len(client.targets) == 3
     observer.close()
+
+
+class _GateDelegate:
+    def __init__(self) -> None:
+        self.observations = 0
+        self.deactivations = 0
+        self.closed = False
+
+    def wait_for_startup_lock(self, timeout_seconds: float) -> bool:
+        return timeout_seconds > 0
+
+    def perception_fps_hint(self) -> float:
+        return 1.0
+
+    def observe(self, frame_value, snapshot_value) -> None:
+        del frame_value, snapshot_value
+        self.observations += 1
+
+    def deactivate(self) -> None:
+        self.deactivations += 1
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_source_gate_keeps_pocket_tracking_dormant_on_lenovo() -> None:
+    active = ["lenovo"]
+    delegate = _GateDelegate()
+    gate = SourceGatedNativeTrackingObserver(
+        delegate,
+        active_source_provider=lambda: active[0],
+        required_source="pocket3",
+        inactive_perception_fps=10.0,
+    )
+
+    assert gate.wait_for_startup_lock(0.1) is True
+    assert gate.perception_fps_hint() == 10.0
+    gate.observe(object(), object())  # type: ignore[arg-type]
+    assert delegate.observations == 0
+
+    active[0] = "pocket3"
+    assert gate.perception_fps_hint() == 1.0
+    gate.observe(object(), object())  # type: ignore[arg-type]
+    assert delegate.observations == 1
+
+    active[0] = "lenovo"
+    gate.observe(object(), object())  # type: ignore[arg-type]
+    assert delegate.deactivations == 1
+    assert delegate.observations == 1
+
+    gate.close()
+    assert delegate.closed is True

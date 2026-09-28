@@ -39,6 +39,9 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("JARVIS_MEMORY_CANDIDATE_EXTRACTION_MODEL", " extractor-x ")
     monkeypatch.setenv("JARVIS_VISION_ENABLED", "true")
     monkeypatch.setenv("JARVIS_BLAZEFACE_MODEL_PATH", " C:\\models\\blazeface.tflite ")
+    monkeypatch.setenv("JARVIS_VISION_DEFAULT_CAMERA", " POCKET3 ")
+    monkeypatch.setenv("JARVIS_VISION_LENOVO_DEVICE_INDEX", "2")
+    monkeypatch.setenv("JARVIS_VISION_POCKET3_DEVICE_INDEX", "4")
     monkeypatch.setenv("JARVIS_SPEAKER_SHADOW_ENABLED", "true")
 
     config = JarvisConfig.from_environment()
@@ -61,6 +64,9 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.memory_candidate_extraction_model == "extractor-x"
     assert config.vision_enabled is True
     assert config.vision_head_model_path == "C:\\models\\blazeface.tflite"
+    assert config.vision_default_camera == "pocket3"
+    assert config.vision_lenovo_device_index == 2
+    assert config.vision_pocket3_device_index == 4
     assert config.speaker_shadow_enabled is True
 
 
@@ -201,3 +207,20 @@ def test_invalid_github_promotion_identifiers_fail_closed() -> None:
         )
     with pytest.raises(ValueError, match="github_expected_ci_app_id"):
         JarvisConfig(github_expected_ci_app_id=0)
+
+
+def test_vision_camera_defaults_to_lenovo_primary() -> None:
+    config = JarvisConfig()
+
+    assert config.vision_default_camera == "lenovo"
+    assert config.vision_lenovo_device_index == 0
+    assert config.vision_pocket3_device_index == 1
+
+
+def test_invalid_vision_camera_configuration_fails_truthfully() -> None:
+    with pytest.raises(ValueError, match="vision_default_camera"):
+        JarvisConfig(vision_default_camera="unknown")
+    with pytest.raises(ValueError, match="vision_lenovo_device_index"):
+        JarvisConfig(vision_lenovo_device_index=-1)
+    with pytest.raises(TypeError, match="vision_pocket3_device_index"):
+        JarvisConfig(vision_pocket3_device_index=True)

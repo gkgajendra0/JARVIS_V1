@@ -928,7 +928,7 @@ class VoiceRuntimeController:
                 if paired_turn_capture is None:
                     LOGGER.info(
                         "LR-ASD active-speaker shadow is active: canonical LiveKit user PCM + "
-                        "timestamped Pocket3 Vision owner/head frames are reused; scores remain "
+                        "timestamped selected-camera Vision owner/head frames are reused; scores remain "
                         "diagnostic only; active-speaker confirmation and prototype admission "
                         "remain disabled"
                     )
