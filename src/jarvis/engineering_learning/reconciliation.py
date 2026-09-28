@@ -106,9 +106,7 @@ class EngineeringLearningReconciler:
         self._promotion_policy = (
             promotion_policy or EngineeringLearningPromotionPolicy()
         )
-        self._eligibility = (
-            eligibility_policy or EngineeringLearningEligibilityPolicy()
-        )
+        self._eligibility = eligibility_policy or EngineeringLearningEligibilityPolicy()
         self._lifecycle = lifecycle or EngineeringLearningLifecycleService(
             store,
             promotion_policy=self._promotion_policy,
@@ -187,8 +185,7 @@ class EngineeringLearningReconciler:
             for item in items
         )
         replayed = sum(
-            item.status is LearningReconciliationStatus.REPLAYED
-            for item in items
+            item.status is LearningReconciliationStatus.REPLAYED for item in items
         )
         return EngineeringLearningReconciliationReport(
             items=items,
@@ -265,9 +262,7 @@ class EngineeringLearningReconciler:
 
         prior = current_accepted[0] if current_accepted else None
         latest = (
-            max(revisions, key=lambda item: item.revision_number)
-            if revisions
-            else None
+            max(revisions, key=lambda item: item.revision_number) if revisions else None
         )
         parent = prior or latest
         revision_number = (latest.revision_number + 1) if latest is not None else 1
@@ -277,12 +272,8 @@ class EngineeringLearningReconciler:
                 self._store,
                 outcome,
                 revision_number=revision_number,
-                parent_revision_id=(
-                    None if parent is None else parent.revision_id
-                ),
-                supersedes_revision_id=(
-                    None if prior is None else prior.revision_id
-                ),
+                parent_revision_id=(None if parent is None else parent.revision_id),
+                supersedes_revision_id=(None if prior is None else prior.revision_id),
             )
             self._lifecycle.promote(
                 projection.revision_id,
@@ -382,7 +373,11 @@ class EngineeringLearningReconciler:
                     staged_at_epoch=now_epoch,
                     accepted_at_epoch=now_epoch,
                 )
-            except (KnowledgeLifecycleError, KnowledgePromotionError, ValueError) as exc:
+            except (
+                KnowledgeLifecycleError,
+                KnowledgePromotionError,
+                ValueError,
+            ) as exc:
                 return self._blocked(
                     outcome,
                     knowledge_id=revision.knowledge_id,
