@@ -108,7 +108,10 @@ class StaticActionResolverV1:
         desired: DesiredStateV1,
         finding: AutonomyFindingV1,
     ) -> ActionResolutionSpecV1:
-        if desired.rule_key != self.rule_key or desired.rule_version != self.rule_version:
+        if (
+            desired.rule_key != self.rule_key
+            or desired.rule_version != self.rule_version
+        ):
             raise ValueError("resolver DesiredState contract mismatch")
         if finding.finding_kind != self.finding_kind:
             raise ValueError("resolver finding-kind mismatch")
