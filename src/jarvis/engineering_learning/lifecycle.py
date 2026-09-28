@@ -119,17 +119,17 @@ def _applicability_from_payload(
 ) -> tuple[OutcomeApplicability, ...]:
     raw = payload.get("applicability")
     if not isinstance(raw, list):
-        raise ValueError("outcome applicability must be a list")
+        raise TypeError("outcome applicability must be a list")
     result: list[OutcomeApplicability] = []
     for item in raw:
         if not isinstance(item, dict):
-            raise ValueError("outcome applicability item must be an object")
+            raise TypeError("outcome applicability item must be an object")
         constraint = item.get("constraint")
         if not isinstance(constraint, dict):
-            raise ValueError("outcome applicability constraint must be an object")
+            raise TypeError("outcome applicability constraint must be an object")
         required = item.get("required")
         if not isinstance(required, bool):
-            raise ValueError("outcome applicability required must be a bool")
+            raise TypeError("outcome applicability required must be a bool")
         result.append(
             OutcomeApplicability(
                 target_namespace=str(item["target_namespace"]),
@@ -145,7 +145,7 @@ def _applicability_from_payload(
 def _lineage(payload: dict[str, JSONValue]) -> dict[str, JSONValue]:
     value = payload.get("lineage")
     if not isinstance(value, dict):
-        raise ValueError("outcome lineage must be an object")
+        raise TypeError("outcome lineage must be an object")
     return value
 
 
@@ -165,9 +165,7 @@ def _outcome_from_payload(payload: dict[str, JSONValue]) -> EngineeringOutcomeV1
         result=EngineeringOutcomeResult(str(payload["result"])),
         attribution=EngineeringOutcomeAttribution(str(payload["attribution"])),
         reason_codes=tuple(str(item) for item in payload["reason_codes"]),
-        evidence_references=tuple(
-            str(item) for item in payload["evidence_references"]
-        ),
+        evidence_references=tuple(str(item) for item in payload["evidence_references"]),
         applicability=_applicability_from_payload(payload),
         observed_at_epoch=float(payload["observed_at_epoch"]),
         producer=str(payload["producer"]),
@@ -224,6 +222,26 @@ class EngineeringLearningPromotionPolicy:
             reasons.append("unexpected_revision_producer")
         if revision.freshness_state is not KnowledgeFreshnessState.CURRENT:
             reasons.append("knowledge_not_current")
+
+        if revision.supersedes_revision_id is not None:
+            prior = store.get_engineering_knowledge_revision(
+                revision.supersedes_revision_id
+            )
+            if prior is None:
+                reasons.append("superseded_revision_missing")
+            else:
+                if prior.knowledge_id != revision.knowledge_id:
+                    reasons.append("supersession_knowledge_identity_mismatch")
+                if revision.parent_revision_id != prior.revision_id:
+                    reasons.append("supersession_parent_mismatch")
+                if revision.revision_number <= prior.revision_number:
+                    reasons.append("supersession_revision_number_not_newer")
+                if (
+                    revision.valid_from_epoch is None
+                    or prior.valid_from_epoch is None
+                    or revision.valid_from_epoch <= prior.valid_from_epoch
+                ):
+                    reasons.append("supersession_evidence_not_newer")
 
         facets = store.list_engineering_knowledge_facets(revision_id)
         registry = build_default_facet_registry()
@@ -289,9 +307,7 @@ class EngineeringLearningPromotionPolicy:
         evidence_ids.extend(linked_ids)
 
         if outcome is not None:
-            persisted_refs = sorted(
-                item.canonical_reference for item in evidence
-            )
+            persisted_refs = sorted(item.canonical_reference for item in evidence)
             if persisted_refs != sorted(outcome.evidence_references):
                 reasons.append("outcome_evidence_reference_mismatch")
 
@@ -358,9 +374,10 @@ class EngineeringLearningPromotionPolicy:
                     reasons.append("attestation_policy_mismatch")
                 if expected.get("eligible") is not True:
                     reasons.append("attestation_not_eligible")
-                if disposition is not None and expected.get(
-                    "disposition"
-                ) != disposition.value:
+                if (
+                    disposition is not None
+                    and expected.get("disposition") != disposition.value
+                ):
                     reasons.append("attestation_disposition_mismatch")
                 attested_outcome_id = str(expected.get("outcome_id") or "")
                 outcome_digest = str(expected.get("outcome_digest") or "")
@@ -600,6 +617,14 @@ class EngineeringLearningLifecycleService:
         if successor.revision_number <= prior.revision_number:
             raise KnowledgeLifecycleError(
                 "successor revision number must advance the prior revision"
+            )
+        if (
+            successor.valid_from_epoch is None
+            or prior.valid_from_epoch is None
+            or successor.valid_from_epoch <= prior.valid_from_epoch
+        ):
+            raise KnowledgeLifecycleError(
+                "successor evidence must be newer than the prior revision"
             )
 
         assessment = self._policy.evaluate(self._store, successor_revision_id)
