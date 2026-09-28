@@ -269,6 +269,11 @@ def build_package_managed_runtime_stack(
     if not isinstance(release, ReleaseRecord):
         raise TypeError("release must be ReleaseRecord")
     if definitions is None:
+        from jarvis.promotion.runtime_dependencies import (
+            activate_runtime_dependency_overlay,
+        )
+
+        activate_runtime_dependency_overlay(release.release_sha)
         from jarvis.acquired_capabilities.registry import (
             build_acquired_capability_definitions,
         )
