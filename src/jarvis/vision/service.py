@@ -7,11 +7,11 @@ import math
 import os
 import queue
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from threading import Event, RLock, Thread
 
-from jarvis.vision.camera import CameraSource, CapturedFrame
+from jarvis.vision.camera import CameraSource, CapturedFrame, OpenCVCameraConfig
 from jarvis.vision.diagnostics import VisionDiagnostics
 from jarvis.vision.observer import VisionObserver
 from jarvis.vision.runtime import VisionRuntime, VisionSnapshot
@@ -42,6 +42,8 @@ class VisionService:
         process_timeout_seconds: float = 0.20,
         perception_fps: float = _DEFAULT_PERCEPTION_FPS,
         perception_fps_provider: PerceptionFpsProvider | None = None,
+        camera_profiles: Mapping[str, OpenCVCameraConfig] | None = None,
+        active_camera_profile: str | None = None,
     ) -> None:
         if process_timeout_seconds <= 0:
             raise ValueError("process_timeout_seconds must be positive")
@@ -49,6 +51,20 @@ class VisionService:
             raise ValueError("frame-pair tap snapshot age must be positive")
         if perception_fps <= 0:
             raise ValueError("perception_fps must be positive")
+        normalized_profiles = {
+            str(name).strip().lower(): profile
+            for name, profile in (camera_profiles or {}).items()
+            if str(name).strip()
+        }
+        normalized_active = (
+            active_camera_profile.strip().lower()
+            if active_camera_profile is not None
+            else None
+        )
+        if normalized_active is not None and normalized_active not in normalized_profiles:
+            raise ValueError(
+                f"active camera profile {active_camera_profile!r} is not configured"
+            )
         self.runtime = runtime
         self.diagnostics = diagnostics or VisionDiagnostics()
         self._observer = observer
@@ -61,6 +77,8 @@ class VisionService:
         self._maximum_perception_fps = perception_fps
         self._perception_fps_provider = perception_fps_provider
         self._minimum_process_interval_seconds = 1.0 / perception_fps
+        self._camera_profiles = normalized_profiles
+        self._active_camera_profile = normalized_active
         self._runtime_lock = RLock()
         self._snapshot_lock = RLock()
         self._lifecycle_lock = RLock()
@@ -160,7 +178,49 @@ class VisionService:
             self._clear_evidence_queue()
 
     def report(self, *, event_limit: int = 12) -> dict[str, object]:
-        return self.diagnostics.report(event_limit=event_limit)
+        report = self.diagnostics.report(event_limit=event_limit)
+        if self._camera_profiles:
+            report["camera"] = {
+                "active": self._active_camera_profile,
+                "available": sorted(self._camera_profiles),
+            }
+        return report
+
+    def switch_camera(self, profile: str) -> dict[str, object]:
+        """Switch only to an explicitly configured local camera profile."""
+        normalized = profile.strip().lower()
+        config = self._camera_profiles.get(normalized)
+        if config is None:
+            return {
+                "ok": False,
+                "reason": (
+                    f"camera profile {profile!r} is not configured; "
+                    f"available={sorted(self._camera_profiles)}"
+                ),
+                "active_camera": self._active_camera_profile,
+            }
+
+        with self._runtime_lock:
+            if normalized == self._active_camera_profile:
+                return {
+                    "ok": True,
+                    "active_camera": normalized,
+                    "changed": False,
+                }
+            self.runtime.switch_camera(config)
+            self._active_camera_profile = normalized
+            with self._snapshot_lock:
+                self._latest_snapshot = None
+
+        self.diagnostics.record_action(
+            code="camera_profile_switched",
+            message=f"Explicitly switched JARVIS vision camera to {normalized}.",
+        )
+        return {
+            "ok": True,
+            "active_camera": normalized,
+            "changed": True,
+        }
 
     def lock_only_confirmed_person(self) -> dict[str, object]:
         """Lock only when exactly one currently visible track has confirmed head evidence."""
@@ -408,6 +468,8 @@ def build_default_vision_service(
     tracking_observer: VisionObserver | None = None,
     frame_pair_tap: FramePairTap | None = None,
     camera_source: CameraSource | None = None,
+    camera_profiles: Mapping[str, OpenCVCameraConfig] | None = None,
+    active_camera_profile: str | None = None,
     perception_fps: float = _DEFAULT_PERCEPTION_FPS,
     perception_fps_provider: PerceptionFpsProvider | None = None,
     opencv_threads: int = _DEFAULT_OPENCV_THREADS,
@@ -434,7 +496,7 @@ def build_default_vision_service(
         MediaPipeBlazeFaceDetector,
     )
     from jarvis.vision.observer import OpenCVVisionObserver
-    from jarvis.vision.ptz import DuvcPtzConfig, DuvcPtzController
+    from jarvis.vision.ptz import NullPtzController
     from jarvis.vision.runtime import VisionRuntimeConfig
     from jarvis.vision.targeting import TargetManager
     from jarvis.vision.tracker import OCSORTAdapter, OCSORTConfig
@@ -457,10 +519,9 @@ def build_default_vision_service(
     )
 
     model_path = resolve_blazeface_model_path(head_model_path)
-    runtime = VisionRuntime(
-        camera=camera_source or OpenCVCameraSource(),
-        detector=RFDetrNanoDetector(),
-        tracker=OCSORTAdapter(
+
+    def make_tracker() -> OCSORTAdapter:
+        return OCSORTAdapter(
             OCSORTConfig(
                 frame_rate=perception_fps,
                 lost_track_buffer=lost_track_buffer,
@@ -470,7 +531,13 @@ def build_default_vision_service(
                 high_conf_det_threshold=0.40,
                 delta_t=2,
             )
-        ),
+        )
+
+    runtime = VisionRuntime(
+        camera=camera_source or OpenCVCameraSource(),
+        detector=RFDetrNanoDetector(),
+        tracker=make_tracker(),
+        tracker_factory=make_tracker,
         target_manager=TargetManager(lost_timeout_seconds=1.25),
         follow_controller=FollowController(
             FollowConfig(
@@ -492,16 +559,7 @@ def build_default_vision_service(
                 minimum_confidence=0.5,
             )
         ),
-        ptz=DuvcPtzController(
-            DuvcPtzConfig(
-                pan_step_fraction=0.025,
-                tilt_step_fraction=0.025,
-                zoom_step_fraction=0.025,
-                zoom_max_fraction=0.50,
-                pan_negative_scale=1.25,
-                pan_positive_scale=1.75,
-            )
-        ),
+        ptz=NullPtzController(),
         head_detector=MediaPipeBlazeFaceDetector(
             MediaPipeBlazeFaceConfig(model_path=model_path)
         ),
@@ -539,4 +597,6 @@ def build_default_vision_service(
         frame_pair_tap=frame_pair_tap,
         perception_fps=perception_fps,
         perception_fps_provider=perception_fps_provider,
+        camera_profiles=camera_profiles,
+        active_camera_profile=active_camera_profile,
     )
