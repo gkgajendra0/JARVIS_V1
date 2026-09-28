@@ -1,6 +1,6 @@
 # Phase 10A — Autonomous Operations Control Plane Acceptance Record
 
-Status: **IMPLEMENTATION CANDIDATE / OWNER-MACHINE ACCEPTANCE PENDING — 2026-09-28**
+Status: **OWNER-MACHINE ACCEPTED / FINAL MERGE PENDING — 2026-09-28**
 
 Phase 10A implements the owner-approved thin whole-JARVIS operations control plane
 without making JARVIS its own source of Authority.
@@ -86,8 +86,33 @@ The corpus covers:
 29. no self-approval / production-mode escalation;
 30. protected checkout/main and production immutability in owner-machine acceptance.
 
-The exact replay-corpus digest and owner-tested implementation SHA will be recorded here
-only after the real owner-machine run.
+## Accepted owner-machine evidence
+
+The real Windows owner-machine acceptance passed against exact implementation head
+`4d1cb077cf3b0c5d9271edf05b47a5012ca14695`.
+
+Accepted evidence:
+
+- status: `PASS`;
+- tested implementation head: `4d1cb077cf3b0c5d9271edf05b47a5012ca14695`;
+- locked replay cases: `30`;
+- pytest evidence nodes executed: `18`;
+- replay-corpus digest: `2a8205a1a84165effd813aee088d298c5c25ba290585d20753f17e750be77258`;
+- acceptance evidence digest: `fa85ee31a0d63609167be4556f8cab587c980d20311de88396bbf70e16b9bae3`;
+- pytest stdout digest: `341d5dca33250b815baddbafb6001e174c20bf1716bb74f3d612e77777db8938`;
+- pytest stderr digest: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`;
+- tested repository status digest: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`;
+- owner-machine local protected-main ref observed during the isolated worktree run:
+  `369178c2a8b2d59d3593e3260528708e6f6cac23`;
+- recorded at: `2026-09-28T17:24:48.389499+00:00`;
+- repository unchanged: `true`;
+- local protected-main ref unchanged: `true`;
+- Authority granted: `false`;
+- production mutated: `false`;
+- production autonomy mode enabled: `false`.
+
+The evidence digest was independently recomputed from the canonical evidence body and
+matches the recorded digest exactly.
 
 ## Owner-machine acceptance gate
 
@@ -147,9 +172,13 @@ PR CI matrix is green.
 
 ## Current result
 
-Implementation is at the final validation boundary.
+The owner-machine acceptance gate has passed for exact head
+`4d1cb077cf3b0c5d9271edf05b47a5012ca14695`.
 
-No claim of owner-machine acceptance or Phase-10A completion is made yet.
+Phase 10A is owner-machine accepted. The remaining repository action is the final
+exact-head documentation/state CI and merge of PR #219, followed by a documentation-only
+closure reconciliation that records the protected-main merge SHA. Production autonomy
+remains SHADOW and Authority is unchanged.
 
 The permanent rule remains:
 
