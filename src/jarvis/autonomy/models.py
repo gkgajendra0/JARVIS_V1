@@ -12,6 +12,8 @@ from jarvis.engineering_knowledge.canonical import JSONValue
 from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.work.models import WorkPriority
 
+from .mode import AutonomyMode
+
 AUTONOMY_CONTRACT_SCHEMA_VERSION = "1"
 
 
@@ -67,14 +69,6 @@ class AttentionStatus(StrEnum):
     RESOLVED = "resolved"
     EXPIRED = "expired"
     SUPERSEDED = "superseded"
-
-
-class AutonomyMode(StrEnum):
-    OFF = "off"
-    OBSERVE = "observe"
-    SHADOW = "shadow"
-    ASSISTED = "assisted"
-    ACTIVE_BOUNDED = "active_bounded"
 
 
 class ReconcileTrigger(StrEnum):
