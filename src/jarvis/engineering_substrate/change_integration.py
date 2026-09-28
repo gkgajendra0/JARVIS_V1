@@ -210,7 +210,9 @@ class EngineeringSubstrateChangeService:
             raise ChangeConflict("dependency resolution belongs to another change")
         resolution_digest = canonical_digest(resolution)
         lock_artifact = (
-            None if lock_artifact_id is None else str(lock_artifact_id).strip().casefold()
+            None
+            if lock_artifact_id is None
+            else str(lock_artifact_id).strip().casefold()
         )
         if lock_artifact is not None and lock_artifact != resolution.lock_digest:
             raise ChangeConflict(
