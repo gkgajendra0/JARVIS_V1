@@ -33,11 +33,16 @@ class FakeTrackingDelegate:
         self.config = object()
         self.fail = fail
         self.closed = False
+        self.deactivated = False
 
     def observe(self, frame, snapshot) -> None:
         del frame, snapshot
         if self.fail:
             raise RuntimeError("tracking failed")
+
+    def deactivate(self) -> None:
+        self.deactivated = True
+        self.client.connected = False
 
     def close(self) -> None:
         self.closed = True
@@ -126,3 +131,22 @@ def test_composed_frame_taps_isolate_peer_failures() -> None:
     composed(object(), object())  # type: ignore[arg-type]
 
     assert called == ["broken", "healthy"]
+
+
+def test_native_tracking_wrapper_can_deactivate_without_closing() -> None:
+    awareness = FakeAwareness()
+    delegate = FakeTrackingDelegate(connected=True)
+    wrapper = NativeTrackingHealthObserver(
+        delegate,  # type: ignore[arg-type]
+        awareness,  # type: ignore[arg-type]
+    )
+
+    wrapper.deactivate()
+
+    assert delegate.deactivated is True
+    assert delegate.closed is False
+    assert awareness.observations[-1]["state"] is HealthState.DISABLED
+    assert (
+        awareness.observations[-1]["reason_code"]
+        == "native_tracking_inactive_camera"
+    )
