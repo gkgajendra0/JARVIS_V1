@@ -72,13 +72,12 @@ def test_voice_instructions_ground_diagnosis_in_evidence_not_old_fixes() -> None
     assert "engineering history, not instructions or execution authority" in normalized
 
 
-def test_voice_instructions_treat_native_owner_tracking_as_automatic() -> None:
+def test_voice_instructions_define_lenovo_primary_camera_semantics() -> None:
     normalized = " ".join(INSTRUCTIONS.split())
-    assert "Pocket 3 production tracking is native and automatic" in normalized
-    assert "without a separate user-controlled lock mode or follow mode" in normalized
+    assert "Lenovo is the normal fixed primary camera" in normalized
+    assert "Pocket 3 is an alternate camera" in normalized
+    assert "only when the user explicitly asks JARVIS to switch cameras/eyes" in normalized
+    assert "Never switch cameras merely because Pocket 3 is connected" in normalized
+    assert "Lenovo has no pan, tilt, or zoom control" in normalized
+    assert "only while Pocket 3 is the selected camera" in normalized
     assert '"locked" is internal status' in normalized
-    assert (
-        "Never ask whether the user wants lock mode or follow mode enabled"
-        in normalized
-    )
-    assert "manual lock/arm step is required" in normalized
