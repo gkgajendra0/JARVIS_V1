@@ -165,6 +165,7 @@ class WorkRuntime:
         release_bridge_task: asyncio.Task[None] | None = None,
         capability_catalog_refresher: Callable[[], object] | None = None,
         source_revision_provider: Callable[[], str] | None = None,
+        autonomy_periodic_reconciler: object | None = None,
     ) -> None:
         self.store = store
         self.engine = engine
@@ -181,7 +182,30 @@ class WorkRuntime:
         self._release_bridge_task = release_bridge_task
         self._capability_catalog_refresher = capability_catalog_refresher
         self._source_revision_provider = source_revision_provider
+        if autonomy_periodic_reconciler is not None and (
+            not callable(getattr(autonomy_periodic_reconciler, "start", None))
+            or not callable(getattr(autonomy_periodic_reconciler, "stop", None))
+        ):
+            raise TypeError(
+                "autonomy_periodic_reconciler must provide start() and stop()"
+            )
+        self._autonomy_periodic_reconciler = autonomy_periodic_reconciler
         self._closed = False
+
+    @property
+    def autonomy_reconciliation_attached(self) -> bool:
+        return self._autonomy_periodic_reconciler is not None
+
+    def start_autonomy_reconciliation(self) -> None:
+        service = self._autonomy_periodic_reconciler
+        if service is None:
+            raise RuntimeError("autonomy reconciler is not attached")
+        service.start()
+
+    def stop_autonomy_reconciliation(self) -> None:
+        service = self._autonomy_periodic_reconciler
+        if service is not None:
+            service.stop()
 
     def refresh_capability_catalog(self) -> None:
         refresher = getattr(self, "_capability_catalog_refresher", None)
@@ -256,6 +280,9 @@ class WorkRuntime:
         # reasoning first, then give already-running DBOS workflow code a bounded
         # window to checkpoint before database connections are closed.
         self._interactive_brain_gate.set_interactive_active(True)
+        autonomy = getattr(self, "_autonomy_periodic_reconciler", None)
+        if autonomy is not None:
+            autonomy.stop()
         task = getattr(self, "_release_bridge_task", None)
         if task is not None and not task.done():
             task.cancel()
@@ -282,6 +309,7 @@ def build_work_runtime(
     capability_package_reconciler: CapabilityLifecycleReconciler | None = None,
     promotion_runtime_config: PromotionRuntimeConfig | None = None,
     capability_catalog_refresher: Callable[[], object] | None = None,
+    autonomy_periodic_reconciler: object | None = None,
 ) -> WorkRuntime:
     """Build one durable work runtime around the configured JARVIS brain provider."""
 
@@ -568,4 +596,5 @@ def build_work_runtime(
         release_bridge_task=release_bridge_task,
         capability_catalog_refresher=capability_catalog_refresher,
         source_revision_provider=workspace_manager.current_revision,
+        autonomy_periodic_reconciler=autonomy_periodic_reconciler,
     )
