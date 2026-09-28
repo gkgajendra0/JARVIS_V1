@@ -371,8 +371,7 @@ class SwitchableCameraSource:
 
                 self._generation += 1
                 raise RuntimeError(
-                    f"camera switch to {normalized!r} failed; "
-                    f"restored {previous!r}"
+                    f"camera switch to {normalized!r} failed; restored {previous!r}"
                 ) from exc
 
             self._active_source_name = normalized
