@@ -112,13 +112,17 @@ def _evaluation(
         reason_codes=(f"test_{status.value}",),
         supporting_fact_digests=(DIGEST_B,),
         evaluated_at_epoch=now,
-        consecutive_violations=count if status in {
+        consecutive_violations=count
+        if status
+        in {
             DesiredStateEvaluationStatus.STABILIZING,
             DesiredStateEvaluationStatus.VIOLATED,
-        } else 0,
+        }
+        else 0,
         first_violation_at_epoch=(
             now - count + 1
-            if status in {
+            if status
+            in {
                 DesiredStateEvaluationStatus.STABILIZING,
                 DesiredStateEvaluationStatus.VIOLATED,
             }
@@ -126,7 +130,8 @@ def _evaluation(
         ),
         last_violation_at_epoch=(
             now
-            if status in {
+            if status
+            in {
                 DesiredStateEvaluationStatus.STABILIZING,
                 DesiredStateEvaluationStatus.VIOLATED,
             }
@@ -270,9 +275,9 @@ def test_stable_recovery_resolves_existing_finding_and_logs_transition(
     assert resolved.finding.finding_id == active.finding.finding_id
     assert resolved.finding.version == active.finding.version + 1
     assert resolved.finding.status is FindingStatus.RESOLVED
-    assert [event.kind for event in store.list_finding_events(
-        active.finding.finding_id
-    )] == ["activated", "resolved"]
+    assert [
+        event.kind for event in store.list_finding_events(active.finding.finding_id)
+    ] == ["activated", "resolved"]
 
 
 def test_suppression_and_root_relationships_are_durable(tmp_path: Path) -> None:
@@ -382,9 +387,10 @@ def test_same_finding_policy_generation_reuses_one_immutable_candidate(
     assert first.candidate is not None
     assert len(first.dispatch_intents) == 1
     assert first.dispatch_intents[0].disposition is CandidateDisposition.SHADOW_ONLY
-    assert store.require_dispatch_intent(
-        first.candidate.candidate_id
-    ) == first.dispatch_intents[0]
+    assert (
+        store.require_dispatch_intent(first.candidate.candidate_id)
+        == first.dispatch_intents[0]
+    )
 
     updated = manager.apply(
         desired,
@@ -454,13 +460,17 @@ def test_resolved_finding_makes_existing_candidate_obsolete(tmp_path: Path) -> N
     assert obsolete.disposition is CandidateDisposition.OBSOLETE
     assert len(obsolete.dispatch_intents) == 1
     assert obsolete.dispatch_intents[0].disposition is CandidateDisposition.OBSOLETE
-    assert store.require_dispatch_intent(
-        candidate_result.candidate.candidate_id,
-        dispatch_role="terminal",
-    ) == obsolete.dispatch_intents[0]
-    assert store.require_action_candidate(
-        candidate_result.candidate.candidate_id
-    ) == candidate_result.candidate
+    assert (
+        store.require_dispatch_intent(
+            candidate_result.candidate.candidate_id,
+            dispatch_role="terminal",
+        )
+        == obsolete.dispatch_intents[0]
+    )
+    assert (
+        store.require_action_candidate(candidate_result.candidate.candidate_id)
+        == candidate_result.candidate
+    )
 
 
 def test_existing_controller_wins_over_new_agentic_work(tmp_path: Path) -> None:
