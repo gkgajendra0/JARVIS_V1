@@ -146,7 +146,9 @@ def test_positive_outcome_projects_complete_candidate_bundle() -> None:
         bundle.attestations[0].predicate_type
         == ENGINEERING_LEARNING_ATTESTATION_PREDICATE
     )
-    assert bundle.attestations[0].subject_digest == _promotion().digest
+    assert bundle.attestations[0].subject_type == "knowledge_revision"
+    assert bundle.attestations[0].subject_id == bundle.revision.revision_id
+    assert bundle.attestations[0].subject_digest == bundle.revision.canonical_digest
 
     digest_evidence = next(
         item for item in bundle.evidence if item.integrity_digest is not None
