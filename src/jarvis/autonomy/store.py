@@ -983,6 +983,80 @@ class AutonomyStore:
             raise KeyError(attention_id)
         return OwnerAttentionItemV1.from_payload(self._decoded_payload(row))
 
+    def find_owner_attention_by_fingerprint(
+        self,
+        fingerprint: str,
+        *,
+        statuses: tuple[str, ...] = ("open", "acknowledged"),
+    ) -> OwnerAttentionItemV1 | None:
+        normalized = str(fingerprint).strip()
+        if not normalized:
+            raise ValueError("fingerprint must not be empty")
+        status_values = tuple(
+            dict.fromkeys(str(value).strip().casefold() for value in statuses)
+        )
+        if not status_values or any(not value for value in status_values):
+            raise ValueError("statuses must not be empty")
+        marks = ",".join("?" for _ in status_values)
+        with self.work.extension_transaction() as db:
+            rows = db.execute(
+                f"""
+                SELECT * FROM autonomy_owner_attention
+                WHERE fingerprint=? AND status IN ({marks})
+                ORDER BY last_occurrence_epoch DESC, attention_id
+                LIMIT 2
+                """,
+                (normalized, *status_values),
+            ).fetchall()
+        if len(rows) > 1:
+            raise AutonomyIntegrityError(
+                "multiple active owner-attention rows share one fingerprint"
+            )
+        if not rows:
+            return None
+        return OwnerAttentionItemV1.from_payload(self._decoded_payload(rows[0]))
+
+    def list_owner_attention(
+        self,
+        *,
+        statuses: tuple[str, ...] | None = None,
+        group_key: str | None = None,
+        limit: int = 100,
+    ) -> tuple[OwnerAttentionItemV1, ...]:
+        if limit <= 0:
+            raise ValueError("attention limit must be positive")
+        clauses: list[str] = []
+        parameters: list[object] = []
+        if statuses is not None:
+            status_values = tuple(
+                dict.fromkeys(str(value).strip().casefold() for value in statuses)
+            )
+            if not status_values or any(not value for value in status_values):
+                raise ValueError("statuses must not be empty")
+            marks = ",".join("?" for _ in status_values)
+            clauses.append(f"status IN ({marks})")
+            parameters.extend(status_values)
+        if group_key is not None:
+            normalized_group = str(group_key).strip()
+            if not normalized_group:
+                raise ValueError("group_key must not be empty")
+            clauses.append("group_key=?")
+            parameters.append(normalized_group)
+        query = "SELECT * FROM autonomy_owner_attention"
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += (
+            " ORDER BY priority DESC, last_occurrence_epoch DESC, attention_id"
+            " LIMIT ?"
+        )
+        parameters.append(limit)
+        with self.work.extension_transaction() as db:
+            rows = db.execute(query, parameters).fetchall()
+        return tuple(
+            OwnerAttentionItemV1.from_payload(self._decoded_payload(row))
+            for row in rows
+        )
+
     def update_owner_attention(
         self,
         item: OwnerAttentionItemV1,
