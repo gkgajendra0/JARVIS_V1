@@ -1,150 +1,198 @@
-"""EngineeringKnowledge domain, registry and reviewed facet contracts."""
+"""EngineeringKnowledge domain facade with cycle-safe lazy exports."""
 
-from jarvis.engineering_knowledge.applicability import (
-    ApplicabilityConstraintResult,
-    ApplicabilityContext,
-    ApplicabilityDecision,
-    ApplicabilityEvaluationError,
-    ApplicabilityFact,
-    ApplicabilityMatchStatus,
-    EngineeringApplicabilityRegistry,
-    EngineeringKnowledgeApplicabilityService,
-    ExactIdentityMatcher,
-    ExactVersionMatcher,
-    NumericVersionRangeMatcher,
-    build_default_applicability_registry,
-)
-from jarvis.engineering_knowledge.benchmarking import (
-    BASELINE_RETRIEVAL_VARIANT,
-    PHASE2I_RETRIEVAL_VARIANTS,
-    RetrievalBenchmarkAdoptionPolicy,
-    RetrievalBenchmarkComparison,
-    RetrievalBenchmarkDecision,
-    RetrievalExperimentReadiness,
-    RetrievalExperimentVariant,
-    build_qwen3_experiment_contract,
-    compare_retrieval_benchmark,
-)
-from jarvis.engineering_knowledge.canonical import (
-    EngineeringKnowledgeCanonicalizationError,
-    EngineeringKnowledgeDuplicateKeyError,
-    canonical_sha256,
-    canonicalize_json,
-    canonicalize_json_object_text,
-    parse_json_object,
-)
-from jarvis.engineering_knowledge.evaluation import (
-    EngineeringKnowledgeEvaluationCase,
-    EngineeringKnowledgeEvaluationCorpus,
-    EngineeringKnowledgeEvaluationError,
-    EngineeringKnowledgeEvaluationHarness,
-    EngineeringKnowledgeEvaluationHit,
-    EngineeringKnowledgeEvaluationMetrics,
-    EngineeringKnowledgeEvaluationObservation,
-    EngineeringKnowledgeEvaluationReport,
-    EngineeringKnowledgeEvaluationRetriever,
-    EvaluationContextFact,
-    EvaluationResourceProbe,
-    EvaluationResourceSample,
-    GradedRelevance,
-    NullEvaluationResourceProbe,
-    load_engineering_knowledge_qrels,
-    score_engineering_knowledge_evaluation,
-)
-from jarvis.engineering_knowledge.lifecycle import (
-    REPAIR_PROMOTION_POLICY_ID,
-    KnowledgeLifecycleError,
-    KnowledgeLifecycleService,
-    KnowledgePromotionDecision,
-    KnowledgePromotionError,
-    KnowledgeTransitionResult,
-    RepairKnowledgePromotionPolicy,
-)
-from jarvis.engineering_knowledge.models import (
-    CANONICALIZATION_RFC8785,
-    DIGEST_ALGORITHM_SHA256,
-    AttestationVerdict,
-    EngineeringApplicability,
-    EngineeringAttestation,
-    EngineeringEvidence,
-    EngineeringKnowledgeFacet,
-    EngineeringKnowledgeIdentity,
-    EngineeringKnowledgeRevision,
-    KnowledgeEvidenceLink,
-    KnowledgeFreshnessState,
-    KnowledgeLifecycleEvent,
-    KnowledgeLifecycleState,
-    KnowledgeSensitivity,
-    lifecycle_evidence_json,
-)
-from jarvis.engineering_knowledge.persistence import (
-    EngineeringKnowledgeCandidateBundle,
-    EngineeringKnowledgeCandidateWriteResult,
-    EngineeringKnowledgePersistenceConflictError,
-)
-from jarvis.engineering_knowledge.projector import (
-    RepairKnowledgeProjectionError,
-    RepairKnowledgeProjectionResult,
-    RepairKnowledgeProjector,
-)
-from jarvis.engineering_knowledge.registry import (
-    ApplicabilityMatcherRegistry,
-    EngineeringKnowledgeFacetRegistry,
-    FacetApplicabilityConstraint,
-    FacetDecisionAssessment,
-    FacetIntegrityError,
-    FacetPayloadUnavailableError,
-    FacetRegistrationError,
-    FacetSchemaKey,
-    FacetValidationError,
-    UnsupportedApplicabilityMatcherError,
-    UnsupportedFacetSchemaError,
-    ValidatedFacet,
-)
-from jarvis.engineering_knowledge.repair_contracts import (
-    PROJECTION_POLICY_ID,
-    PROJECTOR_ID,
-    REPAIR_KIND_NAMESPACE,
-    REPAIR_VERIFICATION_PREDICATE,
-)
-from jarvis.engineering_knowledge.repair_facets import (
-    REPAIR_FINDING_FACET_TYPE,
-    REPAIR_FINDING_V1_SCHEMA_DIGEST,
-    REPAIR_FINDING_V1_SCHEMA_ID,
-    REPAIR_FINDING_V1_SCHEMA_VERSION,
-    RepairFindingV1Handler,
-)
-from jarvis.engineering_knowledge.retrieval import (
-    JARVIS_ENGINEERING_RETRIEVAL_INSTRUCTION,
-    EngineeringKnowledgeEvidenceSummary,
-    EngineeringKnowledgeIndexResult,
-    EngineeringKnowledgeRetrievalCandidate,
-    EngineeringKnowledgeRetrievalError,
-    EngineeringKnowledgeRetrievalIndex,
-    EngineeringKnowledgeRetrievalPolicy,
-    EngineeringKnowledgeRetrievalQueryError,
-    build_engineering_qwen_encoder,
-)
-from jarvis.engineering_knowledge.security import (
-    EngineeringEvidenceAdmissionGate,
-    EngineeringKnowledgeIntegrityDecision,
-    EngineeringKnowledgeIntegrityVerifier,
-    EngineeringKnowledgeSecurityError,
-    EvidenceAdmissionDecision,
-    EvidenceAdmissionOutcome,
-    EvidenceAdmissionRequest,
-    EvidenceTrustClass,
+from __future__ import annotations
+
+from importlib import import_module
+from typing import Any
+
+_EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "jarvis.engineering_knowledge.benchmarking",
+        (
+            "BASELINE_RETRIEVAL_VARIANT",
+            "PHASE2I_RETRIEVAL_VARIANTS",
+            "RetrievalBenchmarkAdoptionPolicy",
+            "RetrievalBenchmarkComparison",
+            "RetrievalBenchmarkDecision",
+            "RetrievalExperimentReadiness",
+            "RetrievalExperimentVariant",
+            "build_qwen3_experiment_contract",
+            "compare_retrieval_benchmark",
+        ),
+    ),
+    (
+        "jarvis.engineering_knowledge.models",
+        (
+            "CANONICALIZATION_RFC8785",
+            "DIGEST_ALGORITHM_SHA256",
+            "AttestationVerdict",
+            "EngineeringApplicability",
+            "EngineeringAttestation",
+            "EngineeringEvidence",
+            "EngineeringKnowledgeFacet",
+            "EngineeringKnowledgeIdentity",
+            "EngineeringKnowledgeRevision",
+            "KnowledgeEvidenceLink",
+            "KnowledgeFreshnessState",
+            "KnowledgeLifecycleEvent",
+            "KnowledgeLifecycleState",
+            "KnowledgeSensitivity",
+            "lifecycle_evidence_json",
+        ),
+    ),
+    (
+        "jarvis.engineering_knowledge.retrieval",
+        (
+            "JARVIS_ENGINEERING_RETRIEVAL_INSTRUCTION",
+            "EngineeringKnowledgeEvidenceSummary",
+            "EngineeringKnowledgeIndexResult",
+            "EngineeringKnowledgeRetrievalCandidate",
+            "EngineeringKnowledgeRetrievalError",
+            "EngineeringKnowledgeRetrievalIndex",
+            "EngineeringKnowledgeRetrievalPolicy",
+            "EngineeringKnowledgeRetrievalQueryError",
+            "build_engineering_qwen_encoder",
+        ),
+    ),
+    (
+        "jarvis.engineering_knowledge.repair_contracts",
+        (
+            "PROJECTION_POLICY_ID",
+            "PROJECTOR_ID",
+            "REPAIR_KIND_NAMESPACE",
+            "REPAIR_VERIFICATION_PREDICATE",
+        ),
+    ),
+    (
+        "jarvis.engineering_knowledge.repair_facets",
+        (
+            "REPAIR_FINDING_FACET_TYPE",
+            "REPAIR_FINDING_V1_SCHEMA_DIGEST",
+            "REPAIR_FINDING_V1_SCHEMA_ID",
+            "REPAIR_FINDING_V1_SCHEMA_VERSION",
+            "RepairFindingV1Handler",
+        ),
+    ),
+    (
+        "jarvis.engineering_knowledge.lifecycle",
+        (
+            "REPAIR_PROMOTION_POLICY_ID",
+            "KnowledgeLifecycleError",
+            "KnowledgeLifecycleService",
+            "KnowledgePromotionDecision",
+            "KnowledgePromotionError",
+            "KnowledgeTransitionResult",
+            "RepairKnowledgePromotionPolicy",
+        ),
+    ),
+    (
+        "jarvis.engineering_knowledge.applicability",
+        (
+            "ApplicabilityConstraintResult",
+            "ApplicabilityContext",
+            "ApplicabilityDecision",
+            "ApplicabilityEvaluationError",
+            "ApplicabilityFact",
+            "ApplicabilityMatchStatus",
+            "EngineeringApplicabilityRegistry",
+            "EngineeringKnowledgeApplicabilityService",
+            "ExactIdentityMatcher",
+            "ExactVersionMatcher",
+            "NumericVersionRangeMatcher",
+            "build_default_applicability_registry",
+        ),
+    ),
+    (
+        "jarvis.engineering_knowledge.registry",
+        (
+            "ApplicabilityMatcherRegistry",
+            "EngineeringKnowledgeFacetRegistry",
+            "FacetApplicabilityConstraint",
+            "FacetDecisionAssessment",
+            "FacetIntegrityError",
+            "FacetPayloadUnavailableError",
+            "FacetRegistrationError",
+            "FacetSchemaKey",
+            "FacetValidationError",
+            "UnsupportedApplicabilityMatcherError",
+            "UnsupportedFacetSchemaError",
+            "ValidatedFacet",
+        ),
+    ),
+    (
+        "jarvis.engineering_knowledge.security",
+        (
+            "EngineeringEvidenceAdmissionGate",
+            "EngineeringKnowledgeIntegrityDecision",
+            "EngineeringKnowledgeIntegrityVerifier",
+            "EngineeringKnowledgeSecurityError",
+            "EvidenceAdmissionDecision",
+            "EvidenceAdmissionOutcome",
+            "EvidenceAdmissionRequest",
+            "EvidenceTrustClass",
+        ),
+    ),
+    (
+        "jarvis.engineering_knowledge.persistence",
+        (
+            "EngineeringKnowledgeCandidateBundle",
+            "EngineeringKnowledgeCandidateWriteResult",
+            "EngineeringKnowledgePersistenceConflictError",
+        ),
+    ),
+    (
+        "jarvis.engineering_knowledge.canonical",
+        (
+            "EngineeringKnowledgeCanonicalizationError",
+            "EngineeringKnowledgeDuplicateKeyError",
+            "canonical_sha256",
+            "canonicalize_json",
+            "canonicalize_json_object_text",
+            "parse_json_object",
+        ),
+    ),
+    (
+        "jarvis.engineering_knowledge.evaluation",
+        (
+            "EngineeringKnowledgeEvaluationCase",
+            "EngineeringKnowledgeEvaluationCorpus",
+            "EngineeringKnowledgeEvaluationError",
+            "EngineeringKnowledgeEvaluationHarness",
+            "EngineeringKnowledgeEvaluationHit",
+            "EngineeringKnowledgeEvaluationMetrics",
+            "EngineeringKnowledgeEvaluationObservation",
+            "EngineeringKnowledgeEvaluationReport",
+            "EngineeringKnowledgeEvaluationRetriever",
+            "EvaluationContextFact",
+            "EvaluationResourceProbe",
+            "EvaluationResourceSample",
+            "GradedRelevance",
+            "NullEvaluationResourceProbe",
+            "load_engineering_knowledge_qrels",
+            "score_engineering_knowledge_evaluation",
+        ),
+    ),
+    (
+        "jarvis.engineering_knowledge.projector",
+        (
+            "RepairKnowledgeProjectionError",
+            "RepairKnowledgeProjectionResult",
+            "RepairKnowledgeProjector",
+        ),
+    ),
+    (
+        "jarvis.engineering_knowledge.defaults",
+        (
+            "build_default_facet_registry",
+        ),
+    ),
 )
 
-
-def build_default_facet_registry():
-    """Build the reviewed default facet registry without eager cross-package imports."""
-    from jarvis.engineering_knowledge.defaults import (
-        build_default_facet_registry as _build_default_facet_registry,
-    )
-
-    return _build_default_facet_registry()
-
+_EXPORTS = {
+    name: module_name
+    for module_name, names in _EXPORT_GROUPS
+    for name in names
+}
 
 __all__ = [
     "BASELINE_RETRIEVAL_VARIANT",
@@ -258,3 +306,16 @@ __all__ = [
     "parse_json_object",
     "score_engineering_knowledge_evaluation",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    module_name = _EXPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(module_name), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))
