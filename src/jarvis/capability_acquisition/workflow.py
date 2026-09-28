@@ -736,24 +736,28 @@ def acquisition_completion_guard(
     if not finalized:
         return False, "capability acquisition requires a canonical acq_finalize plan"
 
-    finalize_index, _ = finalized[-1]
-    relevant = {
+    resolve_index, _ = resolved[-1]
+    source_evidence = {
         "research_web",
         "acq_discover_local",
         "acq_record_candidate",
         "acq_verify_pypi_sdk",
-        "acq_resolve",
     }
-    latest_relevant = max(
+    latest_source_evidence = max(
         (
             index
             for index, step in enumerate(steps)
-            if step.state.value == "completed" and step.kind in relevant
+            if step.state.value == "completed" and step.kind in source_evidence
         ),
         default=-1,
     )
-    if finalize_index <= latest_relevant:
-        return False, "capability acquisition must re-finalize after latest evidence"
+    if resolve_index <= latest_source_evidence:
+        return False, "capability acquisition must re-resolve after latest source evidence"
+
+    finalize_index, _ = finalized[-1]
+    latest_resolution_evidence = max(resolve_index, latest_source_evidence)
+    if finalize_index <= latest_resolution_evidence:
+        return False, "capability acquisition must re-finalize after latest resolution"
     return True, None
 
 
