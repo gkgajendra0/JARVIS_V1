@@ -215,21 +215,22 @@ class SelfModelHealthSource:
                 )
 
             if "health_registry" in request.requested_namespaces:
-                snapshot = self.model.snapshot(
+                component_snapshot = self.model.snapshot(
                     descriptor.component_id,
                     self.health,
                     now_epoch=request.now_epoch,
                 )
+                health_snapshot = component_snapshot.health
                 health_payload = {
-                    "state": snapshot.state.value,
-                    "reason_codes": list(snapshot.reason_codes),
-                    "sources": list(snapshot.sources),
+                    "state": health_snapshot.state.value,
+                    "reason_codes": list(health_snapshot.reason_codes),
+                    "sources": list(health_snapshot.sources),
                     "dependency_states": [
                         [component_id, state.value]
-                        for component_id, state in snapshot.dependency_states
+                        for component_id, state in health_snapshot.dependency_states
                     ],
                 }
-                if snapshot.state is HealthState.UNKNOWN:
+                if health_snapshot.state is HealthState.UNKNOWN:
                     incomplete.add("health_registry")
                 facts.append(
                     SystemStateFactV1(
@@ -239,7 +240,7 @@ class SelfModelHealthSource:
                         target_namespace="component",
                         target_identity=descriptor.component_id,
                         value_json=health_payload,
-                        observed_at_epoch=snapshot.evaluated_at_epoch,
+                        observed_at_epoch=health_snapshot.evaluated_at_epoch,
                         fresh_until_epoch=self._fresh_until(
                             descriptor.component_id,
                             now_epoch=request.now_epoch,
@@ -248,7 +249,7 @@ class SelfModelHealthSource:
                             sorted(
                                 {
                                     f"health-source:{source}"
-                                    for source in snapshot.sources
+                                    for source in health_snapshot.sources
                                 }
                             )
                         ),
