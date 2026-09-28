@@ -258,9 +258,7 @@ def _stabilization_from_finding(
         }
         or recovery
     )
-    recovery_started = (
-        _recovery_started_from_events(events) if recovery else None
-    )
+    recovery_started = _recovery_started_from_events(events) if recovery else None
     if recovery and recovery_started is None:
         recovery_started = finding.last_seen_epoch
     return StabilizationStateV1(
