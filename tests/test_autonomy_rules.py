@@ -158,9 +158,7 @@ def _component_desired(
 def test_default_rule_registry_is_exact_and_unknown_version_fails_closed() -> None:
     registry = build_default_desired_state_rule_registry()
 
-    assert tuple(
-        (rule.rule_key, rule.rule_version) for rule in registry.all()
-    ) == (
+    assert tuple((rule.rule_key, rule.rule_version) for rule in registry.all()) == (
         ("capability_effective_state", 1),
         ("component_health", 1),
         ("durable_work", 1),
@@ -351,9 +349,7 @@ def test_durable_work_rule_handles_terminal_requirement_deterministically() -> N
 
 
 def test_unsupported_numeric_tolerance_fails_to_unknown() -> None:
-    desired = _component_desired(
-        policy=StabilizationPolicyV1(numeric_tolerance=0.5)
-    )
+    desired = _component_desired(policy=StabilizationPolicyV1(numeric_tolerance=0.5))
 
     result = ComponentHealthRuleV1().evaluate(
         desired,
