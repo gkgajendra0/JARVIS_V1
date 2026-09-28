@@ -35,7 +35,6 @@ from jarvis.promotion.models import PromotionAttemptState, PromotionEvidenceV1
 from jarvis.promotion.observation import ObservationController, ObservationDisposition
 from jarvis.promotion.runtime_dependencies import (
     prepare_phase9_release_dependencies,
-    runtime_dependency_overlay,
 )
 from jarvis.promotion.release import (
     DeploymentMetadataStore,
@@ -545,13 +544,11 @@ def _start_jarvis(
         child_env.update(release_identity.environment())
         source_root = str((root / "src").resolve())
         existing_pythonpath = child_env.get("PYTHONPATH", "").strip()
-        python_paths = [source_root]
-        dependency_overlay = runtime_dependency_overlay(release_identity.release_sha)
-        if dependency_overlay is not None:
-            python_paths.append(str(dependency_overlay))
-        if existing_pythonpath:
-            python_paths.append(existing_pythonpath)
-        child_env["PYTHONPATH"] = os.pathsep.join(python_paths)
+        child_env["PYTHONPATH"] = (
+            source_root
+            if not existing_pythonpath
+            else os.pathsep.join((source_root, existing_pythonpath))
+        )
         child_env["PYTHONDONTWRITEBYTECODE"] = "1"
     kwargs: dict[str, object] = {"cwd": root, "env": child_env}
     if os.name == "nt":
