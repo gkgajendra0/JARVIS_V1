@@ -480,7 +480,9 @@ class AutonomyStore:
                 checksum = str(row["checksum"])
                 if version == 1:
                     if checksum != _AUTONOMY_SCHEMA_V1_CHECKSUM:
-                        raise AutonomyIntegrityError("autonomy schema checksum mismatch")
+                        raise AutonomyIntegrityError(
+                            "autonomy schema checksum mismatch"
+                        )
                     legacy_expected_tables = set(_EXPECTED_COLUMNS) - {
                         "autonomy_candidate_decisions",
                         "autonomy_dispatch_intents",
@@ -500,7 +502,9 @@ class AutonomyStore:
                     existing_tables = set(_EXPECTED_COLUMNS)
                 elif version == AUTONOMY_SCHEMA_VERSION:
                     if checksum != AUTONOMY_SCHEMA_CHECKSUM:
-                        raise AutonomyIntegrityError("autonomy schema checksum mismatch")
+                        raise AutonomyIntegrityError(
+                            "autonomy schema checksum mismatch"
+                        )
                     expected_tables = set(_EXPECTED_COLUMNS)
                     if existing_tables != expected_tables:
                         missing = sorted(expected_tables - existing_tables)
@@ -933,8 +937,7 @@ class AutonomyStore:
                 (finding_id,),
             ).fetchall()
         return tuple(
-            ActionCandidateV1.from_payload(self._decoded_payload(row))
-            for row in rows
+            ActionCandidateV1.from_payload(self._decoded_payload(row)) for row in rows
         )
 
     def record_candidate_decision(
