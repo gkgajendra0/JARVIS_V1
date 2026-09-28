@@ -1,0 +1,31 @@
+name: Phase 10.6 Diagnostic
+
+on:
+  push:
+    branches:
+      - diag/phase10-6-pytest-hang
+
+jobs:
+  targeted-learning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Preinstall LiveKit BlingFire wheel
+        run: >-
+          python -m pip install
+          "https://files.pythonhosted.org/packages/8f/27/408c435cbed31fa3601ff32ef0499ff594cd898b483c9b4017e9df906de6/livekit_blingfire-1.1.0-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl"
+      - name: Install JARVIS test dependencies
+        run: python -m pip install -e ".[dev,phase45d-acceptance,hands]"
+      - name: Run Phase-10 learning tests verbosely
+        run: >-
+          timeout 300
+          python -m pytest -vv -s
+          tests/test_engineering_learning_adapters.py
+          tests/test_engineering_learning_policy.py
+          tests/test_engineering_learning_projector.py
+          tests/test_engineering_learning_lifecycle.py
+          tests/test_engineering_learning_reconciliation.py
