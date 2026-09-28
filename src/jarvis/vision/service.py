@@ -173,6 +173,9 @@ class VisionService:
             selected = self.runtime.switch_camera_source(source_name)
         changed = previous != selected
         if changed:
+            with self._snapshot_lock:
+                self._latest_snapshot = None
+            self._clear_evidence_queue()
             self.diagnostics.record_action(
                 code="camera_source_changed",
                 message=f"Vision camera source changed from {previous!r} to {selected!r}.",
