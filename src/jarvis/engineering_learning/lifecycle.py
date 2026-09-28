@@ -223,6 +223,26 @@ class EngineeringLearningPromotionPolicy:
         if revision.freshness_state is not KnowledgeFreshnessState.CURRENT:
             reasons.append("knowledge_not_current")
 
+        if revision.supersedes_revision_id is not None:
+            prior = store.get_engineering_knowledge_revision(
+                revision.supersedes_revision_id
+            )
+            if prior is None:
+                reasons.append("superseded_revision_missing")
+            else:
+                if prior.knowledge_id != revision.knowledge_id:
+                    reasons.append("supersession_knowledge_identity_mismatch")
+                if revision.parent_revision_id != prior.revision_id:
+                    reasons.append("supersession_parent_mismatch")
+                if revision.revision_number <= prior.revision_number:
+                    reasons.append("supersession_revision_number_not_newer")
+                if (
+                    revision.valid_from_epoch is None
+                    or prior.valid_from_epoch is None
+                    or revision.valid_from_epoch <= prior.valid_from_epoch
+                ):
+                    reasons.append("supersession_evidence_not_newer")
+
         facets = store.list_engineering_knowledge_facets(revision_id)
         registry = build_default_facet_registry()
         validated_payloads: dict[str, dict[str, JSONValue]] = {}
