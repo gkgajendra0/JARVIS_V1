@@ -505,45 +505,88 @@ class SystemStateSnapshotV1:
             "snapshot_digest",
             _sha256(self.snapshot_digest, "snapshot_digest"),
         )
-        object.__setattr__(
-            self,
-            "evaluated_source_namespaces",
-            _unique_tokens(
-                self.evaluated_source_namespaces,
-                "evaluated_source_namespaces",
-            ),
+        namespaces = tuple(
+            sorted(
+                _unique_tokens(
+                    self.evaluated_source_namespaces,
+                    "evaluated_source_namespaces",
+                )
+            )
         )
+        object.__setattr__(self, "evaluated_source_namespaces", namespaces)
         if any(not isinstance(item, SystemStateFactV1) for item in self.facts):
             raise TypeError("facts must contain SystemStateFactV1 values")
         if len({item.digest for item in self.facts}) != len(self.facts):
             raise ValueError("snapshot facts must be unique")
+        facts = tuple(
+            sorted(
+                self.facts,
+                key=lambda item: (
+                    item.fact_namespace,
+                    item.target_namespace,
+                    item.target_identity,
+                    item.digest,
+                ),
+            )
+        )
+        object.__setattr__(self, "facts", facts)
         if any(
             not isinstance(item, SystemStateSourceErrorV1)
             for item in self.source_errors
         ):
             raise TypeError("source_errors must contain SystemStateSourceErrorV1 values")
-        object.__setattr__(
-            self,
-            "incomplete_namespaces",
-            _unique_tokens(
-                self.incomplete_namespaces,
-                "incomplete_namespaces",
-                allow_empty=True,
-            ),
+        source_errors = tuple(
+            sorted(
+                self.source_errors,
+                key=lambda item: (
+                    item.source_namespace,
+                    item.source_adapter_key,
+                    item.source_adapter_version,
+                    item.reason_code,
+                    item.summary,
+                ),
+            )
         )
+        object.__setattr__(self, "source_errors", source_errors)
+        incomplete = tuple(
+            sorted(
+                _unique_tokens(
+                    self.incomplete_namespaces,
+                    "incomplete_namespaces",
+                    allow_empty=True,
+                )
+            )
+        )
+        object.__setattr__(self, "incomplete_namespaces", incomplete)
         started = _epoch(self.started_at_epoch, "started_at_epoch")
         ended = _epoch(self.ended_at_epoch, "ended_at_epoch")
         if ended < started:
             raise ValueError("ended_at_epoch cannot precede started_at_epoch")
         object.__setattr__(self, "started_at_epoch", started)
         object.__setattr__(self, "ended_at_epoch", ended)
-        object.__setattr__(
-            self,
+        producer_version = _text(
+            self.producer_version,
             "producer_version",
-            _text(self.producer_version, "producer_version", max_length=200),
+            max_length=200,
         )
+        object.__setattr__(self, "producer_version", producer_version)
         if self.schema_version != SYSTEM_STATE_SCHEMA_VERSION:
             raise ValueError("unsupported SystemState snapshot schema_version")
+        identity_payload = {
+            "evaluated_source_namespaces": list(namespaces),
+            "facts": [item.to_payload() for item in facts],
+            "source_errors": [item.to_payload() for item in source_errors],
+            "incomplete_namespaces": list(incomplete),
+            "started_at_epoch": started,
+            "ended_at_epoch": ended,
+            "producer_version": producer_version,
+            "schema_version": self.schema_version,
+        }
+        expected_digest = canonical_digest(identity_payload)
+        if self.snapshot_digest != expected_digest:
+            raise ValueError("SystemState snapshot digest does not match payload")
+        if self.snapshot_id != f"system_snapshot_{expected_digest[:24]}":
+            raise ValueError("SystemState snapshot identity does not match digest")
 
     @property
     def fact_digests(self) -> tuple[str, ...]:
