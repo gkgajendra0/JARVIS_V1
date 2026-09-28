@@ -369,6 +369,31 @@ class SqliteIncidentStore:
         )
         return tuple(reversed(attempts))
 
+    def list_terminal_repair_attempts(
+        self,
+        *,
+        limit: int = 100,
+    ) -> tuple[RepairAttempt, ...]:
+        if type(limit) is not int or limit <= 0:
+            raise ValueError("repair attempt list limit must be positive")
+        with self._lock:
+            cursor = self._connection.execute(
+                """
+                SELECT * FROM engineering_repair_attempt
+                WHERE finished_at_epoch IS NOT NULL
+                  AND verdict IS NOT NULL
+                ORDER BY finished_at_epoch, attempt_id
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            columns = [item[0] for item in cursor.description or ()]
+            rows = cursor.fetchall()
+        return tuple(
+            self._repair_attempt_from_payload(dict(zip(columns, row, strict=True)))
+            for row in rows
+        )
+
     def list_repair_attempts_for_component(
         self,
         component_id: str,
