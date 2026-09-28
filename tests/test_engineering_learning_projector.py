@@ -114,10 +114,10 @@ def _compatibility(
         subject_digest=SHA_B,
         result=result,
         attribution=EngineeringOutcomeAttribution.COMPATIBILITY,
-        reason_codes=("ready" if result is EngineeringOutcomeResult.SUCCESS else "blocked",),
-        evidence_references=(
-            f"capability-compatibility-report:sha256:{EVIDENCE_SHA}",
+        reason_codes=(
+            "ready" if result is EngineeringOutcomeResult.SUCCESS else "blocked",
         ),
+        evidence_references=(f"capability-compatibility-report:sha256:{EVIDENCE_SHA}",),
         applicability=_applicability(package=True),
         observed_at_epoch=100.0,
         producer="phase10-projector-test",
@@ -284,4 +284,6 @@ def test_revision_identity_binds_outcome_digest() -> None:
 
     assert original.identity.knowledge_id == changed_bundle.identity.knowledge_id
     assert original.revision.revision_id != changed_bundle.revision.revision_id
-    assert original.revision.canonical_digest != changed_bundle.revision.canonical_digest
+    assert (
+        original.revision.canonical_digest != changed_bundle.revision.canonical_digest
+    )
