@@ -31,7 +31,6 @@ from jarvis.work.models import (
     WorkStep,
     WorkType,
 )
-from jarvis.work.store import SQLiteWorkStore, WorkStoreError
 
 EXTERNAL_ACCEPTANCE_BINDING_KIND = "capability_external_acceptance_binding"
 EXTERNAL_ACCEPTANCE_RESULT_KIND = "capability_external_acceptance"
