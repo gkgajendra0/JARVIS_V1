@@ -14,6 +14,10 @@ from jarvis.capability_acquisition.activation import (
     CapabilityAcquisitionLifecycleCoordinator,
 )
 from jarvis.capability_acquisition.admission import CapabilityAcquisitionCoordinator
+from jarvis.capability_acquisition.architecture import (
+    CapabilityAcquisitionDevelopmentRevisionResolver,
+    CapabilityAcquisitionSourceCompletionHandler,
+)
 from jarvis.capability_acquisition.discovery_workflow import (
     build_acquisition_discovery_executors,
 )
@@ -21,10 +25,6 @@ from jarvis.capability_acquisition.external_acceptance import (
     ExternalAcceptanceCoordinator,
     build_external_acceptance_executors,
     external_acceptance_completion_guard,
-)
-from jarvis.capability_acquisition.architecture import (
-    CapabilityAcquisitionDevelopmentRevisionResolver,
-    CapabilityAcquisitionSourceCompletionHandler,
 )
 from jarvis.capability_acquisition.owner_sources import registered_source_adapters
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
