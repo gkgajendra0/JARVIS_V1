@@ -351,10 +351,7 @@ class ChangeStore:
             raise ValueError("process_version requires process_key")
 
         placeholders = ",".join("?" for _ in states)
-        query = (
-            "SELECT * FROM engineering_changes "
-            f"WHERE state IN ({placeholders})"
-        )
+        query = f"SELECT * FROM engineering_changes WHERE state IN ({placeholders})"
         parameters: list[object] = [state.value for state in states]
         if normalized_process is not None:
             query += " AND process_key=?"
