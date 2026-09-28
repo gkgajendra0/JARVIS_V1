@@ -135,7 +135,7 @@ class VisionAgentTools:
                 self._service.switch_camera_source,
                 selected,
             )
-        except (RuntimeError, ValueError) as exc:
+        except (RuntimeError, TypeError, ValueError) as exc:
             return {
                 "ok": False,
                 "reason": str(exc),
