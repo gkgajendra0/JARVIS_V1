@@ -247,6 +247,19 @@ class ExternalAcceptanceContextResolver:
             raise ExternalAcceptanceError(
                 "external acceptance requires an effectively enabled capability"
             )
+        disabled = self._store.latest_artifact(
+            change_id,
+            "capability_lifecycle_disable",
+        )
+        if (
+            disabled is not None
+            and disabled.payload.get("candidate_artifact_id") == candidate.artifact_id
+            and disabled.created_at >= activation.created_at
+            and disabled.payload.get("effective_enabled") is False
+        ):
+            raise ExternalAcceptanceError(
+                "external acceptance stopped because the capability was disabled"
+            )
         contracts = {
             str(item).strip().casefold()
             for item in architecture.payload.get("owner_acceptance_contract_ids", ())
