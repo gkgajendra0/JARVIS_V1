@@ -31,6 +31,8 @@ from jarvis.work.brain import BrainAction
 from jarvis.work.models import WorkItem, WorkStep, WorkType
 
 
+PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT = "phase9.real-external-effect.v1"
+
 class AcquisitionProtocolError(RuntimeError):
     """Phase-9 acquisition evidence/finalization failed deterministic validation."""
 
@@ -566,6 +568,12 @@ class AcquisitionFinalizeExecutor:
                 {
                     *candidate.discovery_scopes,
                     *(parameters.get("discovery_scopes") or ()),
+                    *(
+                        str(step.observation.get("scope_id")).strip().casefold()
+                        for step in self._resolver.completed_steps(work.work_id)
+                        if step.kind == "acq_discover_local"
+                        and str(step.observation.get("scope_id") or "").strip()
+                    ),
                 }
             ),
             network_scopes=tuple(
@@ -593,6 +601,16 @@ class AcquisitionFinalizeExecutor:
                 {
                     *candidate.external_acceptance_requirements,
                     *(parameters.get("owner_acceptance_contract_ids") or ()),
+                    *(
+                        (PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,)
+                        if (
+                            candidate.network_scopes
+                            or candidate.device_scopes
+                            or parameters.get("network_scopes")
+                            or parameters.get("device_scopes")
+                        )
+                        else ()
+                    ),
                 }
             ),
             evidence_refs=tuple(
