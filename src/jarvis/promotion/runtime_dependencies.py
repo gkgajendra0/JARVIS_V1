@@ -8,6 +8,7 @@ JARVIS virtual environment, and the detached release worktree are never mutated.
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import json
 import os
 import pathlib
@@ -16,7 +17,7 @@ import sys
 import tempfile
 
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
-from jarvis.engineering_change.models import ChangeConflict
+from jarvis.engineering_change.models import ChangeArtifact, ChangeConflict
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.artifacts import ArtifactStore
 from jarvis.engineering_substrate.canonical import canonical_digest
@@ -92,7 +93,11 @@ def _validate_overlay_names(overlay: pathlib.Path) -> None:
             raise ReleaseDependencyError("runtime dependency overlay contains a symlink")
         name = child.name
         lowered = name.casefold()
-        if lowered.endswith((".dist-info", ".data", ".pth")):
+        if lowered.endswith(".pth"):
+            raise ReleaseDependencyError(
+                "runtime dependency overlay contains executable .pth startup logic"
+            )
+        if lowered.endswith((".dist-info", ".data")):
             continue
         module_name = lowered[:-3] if lowered.endswith(".py") else lowered
         if module_name in blocked:
@@ -144,9 +149,21 @@ def _existing_overlay(
 
 
 def runtime_dependency_overlay(release_sha: str) -> pathlib.Path | None:
-    """Return a verified optional release overlay for supervisor PYTHONPATH."""
+    """Return a verified optional release overlay."""
 
     return _existing_overlay(release_sha=_safe_sha(release_sha))
+
+
+def activate_runtime_dependency_overlay(release_sha: str) -> pathlib.Path | None:
+    """Append a verified overlay after the normal interpreter/site-packages paths."""
+
+    overlay = runtime_dependency_overlay(release_sha)
+    if overlay is None:
+        return None
+    value = str(overlay)
+    if value not in sys.path:
+        sys.path.append(value)
+    return overlay
 
 
 class ReleaseDependencyMaterializer:
@@ -216,7 +233,7 @@ class ReleaseDependencyMaterializer:
             change.change_id,
             kind=DEPENDENCY_RESOLUTION_KIND,
         )
-        by_id: dict[str, object] = {}
+        by_id: dict[str, ChangeArtifact] = {}
         for artifact in all_resolution_artifacts:
             resolution_id = str(artifact.payload.get("resolution_id") or "").strip()
             if resolution_id:
@@ -307,6 +324,16 @@ class ReleaseDependencyMaterializer:
             requirements = staging / "requirements.txt"
             lines: list[str] = []
             for (name, version), hashes in sorted(package_hashes.items()):
+                try:
+                    installed_version = importlib.metadata.version(name)
+                except importlib.metadata.PackageNotFoundError:
+                    installed_version = None
+                if installed_version is not None and installed_version != version:
+                    raise ReleaseDependencyError(
+                        "runtime dependency conflicts with an existing JARVIS "
+                        f"distribution: {name} installed={installed_version} "
+                        f"requested={version}"
+                    )
                 suffix = " ".join(
                     f"--hash=sha256:{digest}" for digest in sorted(hashes)
                 )
