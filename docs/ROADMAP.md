@@ -24,7 +24,7 @@ This roadmap owns **numbered product sequence only**. It does not select technol
 | 16 | Extensibility and Plugin/Skill Lifecycle | CAP-033 | PLANNED |
 | 17 | Daily Assistant and Multi-Capability Workflows | CAP-042 | PLANNED |
 | 18 | Learning, Gap Detection, Governed Skill Creation | CAP-043–045 | PLANNED |
-| 19 | Governed Self-Diagnostics and Repair | CAP-046 | PARTIAL — deterministic R1/R2 + Phases 1H–10 accepted; Phase 9 bounded final external validation deferred; Phase 10A research/architecture next |
+| 19 | Governed Self-Diagnostics and Repair | CAP-046 | PARTIAL — deterministic R1/R2 + Phases 1H–10A accepted; Phase 9 bounded final external validation deferred; Phase 11 research/architecture next |
 | 20 | Governed Self-Improvement and Advanced Autonomy | CAP-047 | PLANNED |
 
 ## Accepted interludes that do not renumber the roadmap
@@ -59,7 +59,7 @@ The authoritative product-level architecture is `docs/AUTONOMOUS_SELF_MANAGEMENT
 
 This clarification does **not** invalidate or interrupt the existing autonomous-engineering program. That program becomes the governed engineering subsystem JARVIS uses whenever self-management requires research, source change, repair, capability acquisition or improvement.
 
-**Phase 10A — Autonomous Operations Control Plane** is inserted after accepted closed-loop engineering learning and before autonomous gap/weakness detection. It will add the Objective/DesiredState model, whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, owner-attention handling and autonomy evaluation. With Phase 10 accepted, Phase 10A is now the next cross-cutting research/architecture boundary; implementation still requires explicit owner approval.
+**Phase 10A — Autonomous Operations Control Plane** was inserted after accepted closed-loop engineering learning and before autonomous gap/weakness detection. It is now DONE / OWNER-MACHINE ACCEPTED 2026-09-28 and adds the Objective/DesiredState model, whole-JARVIS SystemState reconciliation, evidence-backed autonomous work creation, portfolio prioritization, owner-attention handling and bounded autonomy evaluation. Production autonomy remains SHADOW and owner Authority remains separate. Phase 11 is now the next cross-cutting research/architecture boundary; its implementation still requires explicit owner approval.
 
 ### Advanced intelligence north star — Universal Knowledge + Discovery
 
@@ -113,7 +113,7 @@ Phase 7   Governed promotion / production verification / rollback — DONE / OWN
 Phase 8   Capability package + registry lifecycle — DONE / OWNER-MACHINE ACCEPTED 2026-09-27
 Phase 9   Owner-requested capability acquisition — DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28; FINAL E2E EXTERNAL VALIDATION DEFERRED
 Phase 10  Closed-loop engineering learning — DONE / OWNER-MACHINE ACCEPTED 2026-09-28
-Phase 10A Autonomous Operations Control Plane — CURRENT NEXT: RESEARCH + ARCHITECTURE
+Phase 10A Autonomous Operations Control Plane — DONE / OWNER-MACHINE ACCEPTED 2026-09-28
 Phase 11  Autonomous capability-gap / weakness detection
 Phase 12  Shadow improvement + baseline benchmarking
 Phase 13  Engineering curriculum + specialist model evaluation
@@ -122,7 +122,7 @@ Phase 14  Governed self-evolution
 
 Phase 2 generalized the earlier RepairKnowledge design into shared `EngineeringKnowledge`, with `REPAIR` as the first implemented vertical. Owner-machine acceptance passed on 2026-09-25, including R2-independence, real repair projection/promotion/retrieval, poisoning/secret gates, future-facet extensibility, and lexical/hybrid qrel safety.
 
-Phases 3–10 are accepted at their defined boundaries. Phase 6 final acceptance passed 15/15 deterministic replay cases on the real Windows owner machine. Phase 7 final acceptance passed 14/14 deterministic promotion/deployment/rollback replay cases. Phase 8 final acceptance passed 45/45 deterministic capability-package/registry lifecycle replay cases on the real Windows owner machine. Phase 9 is DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28 after target-aware routing hardening and live durable-work/provider-fallback validation; its complete external device lifecycle remains deferred because provider quota prevented end-to-end execution. Phase 10 is DONE / OWNER-MACHINE ACCEPTED 2026-09-28: exact head `4c48f435ba7478ee6a076c8510d64d957ba14b58` passed the clean-process import probe and 15/15 replay matrix, then PR #201 squash-merged to protected `main` as `0cd4bb650b3a0230d13416863432083f60b6a4e7`.
+Phases 3–10A are accepted at their defined boundaries. Phase 6 final acceptance passed 15/15 deterministic replay cases on the real Windows owner machine. Phase 7 final acceptance passed 14/14 deterministic promotion/deployment/rollback replay cases. Phase 8 final acceptance passed 45/45 deterministic capability-package/registry lifecycle replay cases on the real Windows owner machine. Phase 9 is DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28 after target-aware routing hardening and live durable-work/provider-fallback validation; its complete external device lifecycle remains deferred because provider quota prevented end-to-end execution. Phase 10 is DONE / OWNER-MACHINE ACCEPTED 2026-09-28: exact head `4c48f435ba7478ee6a076c8510d64d957ba14b58` passed the clean-process import probe and 15/15 replay matrix, then PR #201 squash-merged to protected `main` as `0cd4bb650b3a0230d13416863432083f60b6a4e7`. Phase 10A is DONE / OWNER-MACHINE ACCEPTED 2026-09-28: exact owner-tested head `4d1cb077cf3b0c5d9271edf05b47a5012ca14695` passed the locked 30-case acceptance corpus with replay digest `2a8205a1a84165effd813aee088d298c5c25ba290585d20753f17e750be77258` and evidence digest `fa85ee31a0d63609167be4556f8cab587c980d20311de88396bbf70e16b9bae3`; PR #219 squash-merged to protected `main` as `3d9289aafd371484fe22023bf57279d6101d6b16`.
 
 Owner-requested capability acquisition intentionally comes before autonomous gap detection. If the owner explicitly says "get this capability", JARVIS should not need repeated failures or repeated requests before it can run the governed acquisition lifecycle.
 
@@ -226,9 +226,9 @@ The same lifecycle applies to JARVIS-generated engineering candidates; autonomy 
 
 Persistent Concurrent Work Orchestration and the deterministic repair/R2 foundation are owner accepted.
 
-**Current next cross-cutting work is Phase 10A repository inspection, research and architecture.**
+**Current next cross-cutting work is Phase 11 repository inspection, research and architecture.**
 
-Phases 5, 6, 7 and 8 are DONE / OWNER-MACHINE ACCEPTED 2026-09-27. Phase 9 Owner-Requested Capability Acquisition is DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28, with the complete real external lifecycle explicitly deferred to final whole-system acceptance because provider quota prevented end-to-end execution. Phase 10 Closed-Loop Engineering Learning is DONE / OWNER-MACHINE ACCEPTED 2026-09-28. Phase 10A is next for research/architecture; implementation is not yet authorized.
+Phases 5, 6, 7 and 8 are DONE / OWNER-MACHINE ACCEPTED 2026-09-27. Phase 9 Owner-Requested Capability Acquisition is DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28, with the complete real external lifecycle explicitly deferred to final whole-system acceptance because provider quota prevented end-to-end execution. Phase 10 Closed-Loop Engineering Learning and Phase 10A Autonomous Operations Control Plane are DONE / OWNER-MACHINE ACCEPTED 2026-09-28. Phase 11 is next for repository inspection, research and architecture; implementation is not yet authorized.
 
 Step 8 remains the next numbered product slice when numbered roadmap work resumes.
 
