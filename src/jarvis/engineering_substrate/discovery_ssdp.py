@@ -177,7 +177,7 @@ class SocketSsdpBackend:
                 sock.settimeout(min(0.25, remaining))
                 try:
                     payload, sender = sock.recvfrom(_MAX_DATAGRAM_BYTES)
-                except socket.timeout:
+                except TimeoutError:
                     continue
                 except OSError as exc:
                     raise DiscoveryResourceUnavailable("SSDP receive failed") from exc
