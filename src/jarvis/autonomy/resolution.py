@@ -352,11 +352,11 @@ class ActionResolutionService:
                 disposition=CandidateDisposition.BLOCKED_POLICY,
                 reason_codes=("unsupported_finding_status",),
             )
-        if mode not in {AutonomyMode.OBSERVE, AutonomyMode.SHADOW}:
+        if mode is not AutonomyMode.SHADOW:
             return ActionResolutionResultV1(
                 candidate=None,
                 disposition=CandidateDisposition.BLOCKED_POLICY,
-                reason_codes=("live_dispatch_not_implemented_in_phase10a4",),
+                reason_codes=("phase10a4_is_shadow_only",),
             )
         try:
             resolver = self.registry.require(resolver_key, resolver_version)
@@ -401,11 +401,44 @@ class ActionResolutionService:
             ),
             created_at_epoch=finding.last_seen_epoch,
         )
-        persisted = self.store.create_action_candidate(candidate)
+        try:
+            existing = self.store.require_action_candidate(candidate_id)
+        except KeyError:
+            persisted = self.store.create_action_candidate(candidate)
+            reason = "candidate_recorded_shadow_only"
+        else:
+            stable_fields_match = (
+                existing.finding_id == candidate.finding_id
+                and existing.desired_state_id == candidate.desired_state_id
+                and existing.desired_generation == candidate.desired_generation
+                and existing.action_kind is candidate.action_kind
+                and existing.resolver_key == candidate.resolver_key
+                and existing.resolver_version == candidate.resolver_version
+                and existing.expected_effect == candidate.expected_effect
+                and existing.target_namespace == candidate.target_namespace
+                and existing.target_identity == candidate.target_identity
+                and existing.reversibility_class == candidate.reversibility_class
+                and existing.resource_class == candidate.resource_class
+                and existing.cost_class == candidate.cost_class
+                and existing.risk_json == candidate.risk_json
+                and existing.dependencies == candidate.dependencies
+                and existing.mode is AutonomyMode.SHADOW
+            )
+            if not stable_fields_match:
+                return ActionResolutionResultV1(
+                    candidate=None,
+                    disposition=CandidateDisposition.BLOCKED_POLICY,
+                    reason_codes=("resolver_semantics_changed_without_version",),
+                    resolver_key=resolver.resolver_key,
+                    resolver_version=resolver.resolver_version,
+                )
+            persisted = existing
+            reason = "candidate_replay_reused"
+
         return ActionResolutionResultV1(
             candidate=persisted,
             disposition=CandidateDisposition.SHADOW_ONLY,
-            reason_codes=("candidate_recorded_shadow_only",),
+            reason_codes=(reason,),
             resolver_key=resolver.resolver_key,
             resolver_version=resolver.resolver_version,
         )
