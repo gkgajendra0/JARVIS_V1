@@ -299,9 +299,9 @@ class EngineeringLearningProjector:
                     "disposition": decision.disposition.value,
                 },
             ),
-            subject_type="engineering_outcome",
-            subject_id=outcome.outcome_id,
-            subject_digest=outcome.digest,
+            subject_type="knowledge_revision",
+            subject_id=revision_id,
+            subject_digest=revision_digest,
             predicate_type=ENGINEERING_LEARNING_ATTESTATION_PREDICATE,
             producer=ENGINEERING_LEARNING_PROJECTOR_ID,
             expected_contract_json=_canonical_text(
@@ -309,10 +309,14 @@ class EngineeringLearningProjector:
                     "policy_id": decision.policy_id,
                     "eligible": True,
                     "disposition": decision.disposition.value,
+                    "outcome_id": outcome.outcome_id,
+                    "outcome_digest": outcome.digest,
                 }
             ),
             observed_result_json=_canonical_text(
                 {
+                    "outcome_id": outcome.outcome_id,
+                    "outcome_digest": outcome.digest,
                     "result": outcome.result.value,
                     "attribution": outcome.attribution.value,
                     "reason_codes": list(outcome.reason_codes),
