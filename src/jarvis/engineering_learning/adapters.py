@@ -122,9 +122,7 @@ class PromotionOutcomeAdapter:
         if not isinstance(attempt, PromotionAttempt):
             raise TypeError("attempt must be a PromotionAttempt")
         if attempt.state not in self._TERMINAL:
-            raise EngineeringOutcomeAdapterError(
-                "promotion attempt is not terminal"
-            )
+            raise EngineeringOutcomeAdapterError("promotion attempt is not terminal")
 
         candidate = self._changes.get_artifact(attempt.candidate_artifact_id)
         if candidate is None:
@@ -173,9 +171,7 @@ class PromotionOutcomeAdapter:
                 )
             result = EngineeringOutcomeResult.SUCCESS
             attribution = EngineeringOutcomeAttribution.NOT_APPLICABLE
-            reasons = _observation_reason_codes(healthy) or (
-                "promotion_completed",
-            )
+            reasons = _observation_reason_codes(healthy) or ("promotion_completed",)
         elif attempt.state is PromotionAttemptState.ROLLED_BACK:
             if attempt.merge_sha is None or not candidate_failures:
                 raise EngineeringOutcomeAdapterError(
@@ -209,18 +205,14 @@ class PromotionOutcomeAdapter:
         elif attempt.state is PromotionAttemptState.STALE:
             result = EngineeringOutcomeResult.BLOCKED
             attribution = EngineeringOutcomeAttribution.ENVIRONMENT
-            reasons = _unique(
-                (attempt.last_reason or "", "promotion_candidate_stale")
-            )
+            reasons = _unique((attempt.last_reason or "", "promotion_candidate_stale"))
         else:
             result = EngineeringOutcomeResult.BLOCKED
             attribution = EngineeringOutcomeAttribution.UNKNOWN
             reasons = _unique((attempt.last_reason or "", "promotion_blocked"))
 
         if not reasons:
-            raise EngineeringOutcomeAdapterError(
-                "promotion outcome has no reason code"
-            )
+            raise EngineeringOutcomeAdapterError("promotion outcome has no reason code")
 
         revision = attempt.merge_sha or attempt.head_sha
         evidence = _unique(
@@ -442,12 +434,10 @@ class CapabilityAcquisitionOutcomeAdapter:
                 "capability acquisition has no verified candidate"
             )
         package_id = str(candidate.payload.get("package_id") or "").strip().casefold()
-        package_version = str(
-            candidate.payload.get("package_version") or ""
-        ).strip()
-        package_digest = str(
-            candidate.payload.get("package_digest") or ""
-        ).strip().casefold()
+        package_version = str(candidate.payload.get("package_version") or "").strip()
+        package_digest = (
+            str(candidate.payload.get("package_digest") or "").strip().casefold()
+        )
         if not package_id or not package_version or len(package_digest) != 64:
             raise EngineeringOutcomeAdapterError(
                 "capability candidate package identity is incomplete"
@@ -518,9 +508,11 @@ class CapabilityAcquisitionOutcomeAdapter:
         ]
         release_sha: str | None = None
         if admission is not None:
-            raw_release = str(
-                admission.payload.get("active_release_sha") or ""
-            ).strip().casefold()
+            raw_release = (
+                str(admission.payload.get("active_release_sha") or "")
+                .strip()
+                .casefold()
+            )
             if raw_release:
                 release_sha = raw_release
                 applicability.append(
