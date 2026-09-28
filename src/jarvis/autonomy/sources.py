@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from collections.abc import Iterable
+from datetime import datetime
 
 from jarvis.capability_registry.projection import CapabilityRegistryProjection
 from jarvis.capability_registry.store import CapabilityRegistryStore
