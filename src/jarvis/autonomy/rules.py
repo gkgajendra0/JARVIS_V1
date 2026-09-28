@@ -432,7 +432,7 @@ class CapabilityEffectiveStateRuleV1:
             raise ValueError("capability rule requires capability target")
         expected_enabled = desired.expected_json.get("effective_enabled")
         if not isinstance(expected_enabled, bool):
-            raise ValueError("expected_json.effective_enabled must be boolean")
+            raise TypeError("expected_json.effective_enabled must be boolean")
         raw_health = desired.expected_json.get("acceptable_health_states")
         if raw_health is not None:
             _expected_strings(
