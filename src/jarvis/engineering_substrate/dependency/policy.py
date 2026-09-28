@@ -9,9 +9,7 @@ from urllib.parse import urlparse
 from jarvis.engineering_substrate.canonical import canonical_digest
 
 _PEP503_NORMALIZE = re.compile(r"[-_.]+")
-_PYTHON_DISTRIBUTION_NAME = re.compile(
-    r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$"
-)
+_PYTHON_DISTRIBUTION_NAME = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$")
 _SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 
 
