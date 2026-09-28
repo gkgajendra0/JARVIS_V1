@@ -370,6 +370,31 @@ class SqliteIncidentStore:
         )
         return tuple(reversed(attempts))
 
+    def list_terminal_repair_attempts(
+        self,
+        *,
+        limit: int = 100,
+    ) -> tuple[RepairAttempt, ...]:
+        if type(limit) is not int or limit <= 0:
+            raise ValueError("repair attempt list limit must be positive")
+        with self._lock:
+            cursor = self._connection.execute(
+                """
+                SELECT * FROM engineering_repair_attempt
+                WHERE finished_at_epoch IS NOT NULL
+                  AND verdict IS NOT NULL
+                ORDER BY finished_at_epoch, attempt_id
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            columns = [item[0] for item in cursor.description or ()]
+            rows = cursor.fetchall()
+        return tuple(
+            self._repair_attempt_from_payload(dict(zip(columns, row, strict=True)))
+            for row in rows
+        )
+
     def list_repair_attempts_for_component(
         self,
         component_id: str,
@@ -494,31 +519,6 @@ class SqliteIncidentStore:
             verdict=(
                 RepairVerdict(str(verdict_value)) if verdict_value is not None else None
             ),
-        )
-
-    def get_engineering_knowledge_identity(
-        self,
-        knowledge_id: str,
-    ) -> EngineeringKnowledgeIdentity | None:
-        normalized = str(knowledge_id).strip()
-        if not normalized:
-            return None
-        with self._lock:
-            row = self._connection.execute(
-                """
-                SELECT knowledge_id, stable_label, created_at_epoch, created_by
-                FROM engineering_knowledge_identity
-                WHERE knowledge_id = ?
-                """,
-                (normalized,),
-            ).fetchone()
-        if row is None:
-            return None
-        return EngineeringKnowledgeIdentity(
-            knowledge_id=str(row[0]),
-            stable_label=(str(row[1]) if row[1] is not None else None),
-            created_at_epoch=float(row[2]),
-            created_by=str(row[3]),
         )
 
     def persist_engineering_knowledge_candidate(
@@ -849,6 +849,31 @@ class SqliteIncidentStore:
             ) from exc
         return True
 
+    def get_engineering_knowledge_identity(
+        self,
+        knowledge_id: str,
+    ) -> EngineeringKnowledgeIdentity | None:
+        normalized = str(knowledge_id).strip()
+        if not normalized:
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT knowledge_id, stable_label, created_at_epoch, created_by
+                FROM engineering_knowledge_identity
+                WHERE knowledge_id = ?
+                """,
+                (normalized,),
+            ).fetchone()
+        if row is None:
+            return None
+        return EngineeringKnowledgeIdentity(
+            knowledge_id=str(row[0]),
+            stable_label=(str(row[1]) if row[1] is not None else None),
+            created_at_epoch=float(row[2]),
+            created_by=str(row[3]),
+        )
+
     def get_engineering_knowledge_revision(
         self,
         revision_id: str,
@@ -907,6 +932,74 @@ class SqliteIncidentStore:
             created_at_epoch=float(payload["created_at_epoch"]),
             created_by=str(payload["created_by"]),
         )
+
+    def list_engineering_knowledge_revisions(
+        self,
+        knowledge_id: str,
+    ) -> tuple[EngineeringKnowledgeRevision, ...]:
+        normalized = str(knowledge_id).strip()
+        if not normalized:
+            return ()
+        with self._lock:
+            cursor = self._connection.execute(
+                """
+                SELECT *
+                FROM engineering_knowledge_revision
+                WHERE knowledge_id = ?
+                ORDER BY revision_number, created_at_epoch, revision_id
+                """,
+                (normalized,),
+            )
+            columns = [item[0] for item in cursor.description or ()]
+            rows = cursor.fetchall()
+        result: list[EngineeringKnowledgeRevision] = []
+        for row in rows:
+            payload = dict(zip(columns, row, strict=True))
+            result.append(
+                EngineeringKnowledgeRevision(
+                    revision_id=str(payload["revision_id"]),
+                    knowledge_id=str(payload["knowledge_id"]),
+                    revision_number=int(payload["revision_number"]),
+                    parent_revision_id=(
+                        str(payload["parent_revision_id"])
+                        if payload["parent_revision_id"] is not None
+                        else None
+                    ),
+                    supersedes_revision_id=(
+                        str(payload["supersedes_revision_id"])
+                        if payload["supersedes_revision_id"] is not None
+                        else None
+                    ),
+                    kind_namespace=str(payload["kind_namespace"]),
+                    normalized_summary=str(payload["normalized_summary"]),
+                    valid_from_epoch=(
+                        float(payload["valid_from_epoch"])
+                        if payload["valid_from_epoch"] is not None
+                        else None
+                    ),
+                    valid_to_epoch=(
+                        float(payload["valid_to_epoch"])
+                        if payload["valid_to_epoch"] is not None
+                        else None
+                    ),
+                    system_from_epoch=float(payload["system_from_epoch"]),
+                    system_to_epoch=(
+                        float(payload["system_to_epoch"])
+                        if payload["system_to_epoch"] is not None
+                        else None
+                    ),
+                    sensitivity=KnowledgeSensitivity(str(payload["sensitivity"])),
+                    freshness_state=KnowledgeFreshnessState(
+                        str(payload["freshness_state"])
+                    ),
+                    canonicalization=str(payload["canonicalization"]),
+                    digest_algorithm=str(payload["digest_algorithm"]),
+                    canonical_digest=str(payload["canonical_digest"]),
+                    created_at_epoch=float(payload["created_at_epoch"]),
+                    created_by=str(payload["created_by"]),
+                )
+            )
+        return tuple(result)
 
     def get_engineering_knowledge_lifecycle_state(
         self,
