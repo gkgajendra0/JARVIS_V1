@@ -1046,8 +1046,7 @@ class AutonomyStore:
         if clauses:
             query += " WHERE " + " AND ".join(clauses)
         query += (
-            " ORDER BY priority DESC, last_occurrence_epoch DESC, attention_id"
-            " LIMIT ?"
+            " ORDER BY priority DESC, last_occurrence_epoch DESC, attention_id LIMIT ?"
         )
         parameters.append(limit)
         with self.work.extension_transaction() as db:
