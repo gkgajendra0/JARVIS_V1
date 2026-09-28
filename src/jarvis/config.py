@@ -128,6 +128,9 @@ class JarvisConfig:
     memory_semantic_recall_model: str | None = None
     vision_enabled: bool = False
     vision_head_model_path: str | None = None
+    vision_default_camera: str = "lenovo"
+    vision_lenovo_device_index: int = 0
+    vision_pocket3_device_index: int = 1
     speaker_shadow_enabled: bool = False
     active_speaker_shadow_enabled: bool = False
     active_speaker_model_path: str | None = None
@@ -145,6 +148,20 @@ class JarvisConfig:
         object.__setattr__(self, "log_level", normalized)
 
         object.__setattr__(self, "ai_provider", normalize_ai_provider(self.ai_provider))
+
+        camera_source = str(self.vision_default_camera).strip().lower()
+        if camera_source not in {"lenovo", "pocket3"}:
+            raise ValueError(
+                "vision_default_camera must be either 'lenovo' or 'pocket3'"
+            )
+        object.__setattr__(self, "vision_default_camera", camera_source)
+
+        for name in ("vision_lenovo_device_index", "vision_pocket3_device_index"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise TypeError(f"{name} must be an integer")
+            if value < 0:
+                raise ValueError(f"{name} must be non-negative")
 
         for name in (
             "realtime_model",
@@ -437,6 +454,15 @@ class JarvisConfig:
             vision_enabled=_configured_bool("JARVIS_VISION_ENABLED", False, machine),
             vision_head_model_path=_configured_optional_text(
                 "JARVIS_BLAZEFACE_MODEL_PATH", machine
+            ),
+            vision_default_camera=_configured_required_text(
+                "JARVIS_VISION_DEFAULT_CAMERA", "lenovo", machine
+            ),
+            vision_lenovo_device_index=_configured_int(
+                "JARVIS_VISION_LENOVO_DEVICE_INDEX", 0, machine
+            ),
+            vision_pocket3_device_index=_configured_int(
+                "JARVIS_VISION_POCKET3_DEVICE_INDEX", 1, machine
             ),
             speaker_shadow_enabled=_configured_bool(
                 "JARVIS_SPEAKER_SHADOW_ENABLED", False, machine
