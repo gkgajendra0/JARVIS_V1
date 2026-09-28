@@ -75,47 +75,47 @@ PHASE10A_REPLAY_CORPUS_V1: tuple[Phase10AReplayCaseV1, ...] = (
     Phase10AReplayCaseV1(
         "09-deterministic-controller",
         "Registered deterministic controller is preferred over new agentic work.",
-        ("tests/test_autonomy_findings_resolution.py::test_existing_controller_is_least_powerful_registered_response",),
+        ("tests/test_autonomy_findings_resolution.py::test_existing_controller_wins_over_new_agentic_work",),
     ),
     Phase10AReplayCaseV1(
         "10-diagnostics-path",
         "Unknown repair path creates only one bounded diagnostics/research proposal.",
-        ("tests/test_autonomy_dispatch.py::test_assisted_work_dispatch_is_exactly_once",),
+        ("tests/test_autonomy_dispatch.py::test_assisted_work_dispatch_is_exactly_once_and_preserves_dependencies",),
     ),
     Phase10AReplayCaseV1(
         "11-governed-change",
         "Novel engineering work creates one governed EngineeringChange.",
-        ("tests/test_autonomy_dispatch.py::test_engineering_change_bridge_preserves_owner_gates",),
+        ("tests/test_autonomy_dispatch.py::test_assisted_engineering_change_uses_governed_change_lifecycle",),
     ),
     Phase10AReplayCaseV1(
         "12-shadow-zero-dispatch",
         "SHADOW persists evidence/candidates and performs zero downstream dispatch.",
-        ("tests/test_autonomy_dispatch.py::test_shadow_mode_has_zero_downstream_side_effects",),
+        ("tests/test_autonomy_dispatch.py::test_shadow_dispatch_has_zero_downstream_side_effects",),
     ),
     Phase10AReplayCaseV1(
         "13-assisted-one-work",
         "ASSISTED bounded work creates exactly one canonical WorkItem.",
-        ("tests/test_autonomy_dispatch.py::test_assisted_work_dispatch_is_exactly_once",),
+        ("tests/test_autonomy_dispatch.py::test_assisted_work_dispatch_is_exactly_once_and_preserves_dependencies",),
     ),
     Phase10AReplayCaseV1(
         "14-authority-preserved",
         "Downstream executor actions remain under existing Authority.",
-        ("tests/test_autonomy_dispatch.py::test_engineering_change_bridge_preserves_owner_gates",),
+        ("tests/test_autonomy_dispatch.py::test_assisted_engineering_change_uses_governed_change_lifecycle",),
     ),
     Phase10AReplayCaseV1(
         "15-attention-dedupe",
         "Repeated equivalent owner attention deduplicates.",
-        ("tests/test_autonomy_budgets_portfolio_attention.py::test_owner_attention_deduplicates_repeated_occurrence",),
+        ("tests/test_autonomy_budgets_portfolio_attention.py::test_repeated_same_attention_is_deduplicated",),
     ),
     Phase10AReplayCaseV1(
         "16-attention-inhibition",
         "Root owner attention inhibits derivative notification spam.",
-        ("tests/test_autonomy_budgets_portfolio_attention.py::test_root_attention_inhibits_derivative",),
+        ("tests/test_autonomy_budgets_portfolio_attention.py::test_root_attention_inhibits_derivative_spam",),
     ),
     Phase10AReplayCaseV1(
         "17-attention-renotify",
         "Owner-attention re-notify interval prevents notification spam.",
-        ("tests/test_autonomy_budgets_portfolio_attention.py::test_owner_attention_renotify_interval",),
+        ("tests/test_autonomy_budgets_portfolio_attention.py::test_renotify_interval_is_respected",),
     ),
     Phase10AReplayCaseV1(
         "18-budget-exhausted",
@@ -130,17 +130,17 @@ PHASE10A_REPLAY_CORPUS_V1: tuple[Phase10AReplayCaseV1, ...] = (
     Phase10AReplayCaseV1(
         "20-portfolio-order",
         "Two active objectives receive deterministic portfolio ordering.",
-        ("tests/test_autonomy_budgets_portfolio_attention.py::test_portfolio_ordering_is_deterministic",),
+        ("tests/test_autonomy_budgets_portfolio_attention.py::test_portfolio_ordering_is_deterministic_and_owner_priority_is_preserved",),
     ),
     Phase10AReplayCaseV1(
         "21-owner-priority",
         "Owner Objective priority is preserved and interactive work is not demoted.",
-        ("tests/test_autonomy_budgets_portfolio_attention.py::test_portfolio_preserves_owner_priority",),
+        ("tests/test_autonomy_budgets_portfolio_attention.py::test_portfolio_ordering_is_deterministic_and_owner_priority_is_preserved",),
     ),
     Phase10AReplayCaseV1(
         "22-dependency-tiebreak",
         "Dependency-unblocking tie break remains deterministic and auditable.",
-        ("tests/test_autonomy_budgets_portfolio_attention.py::test_portfolio_ordering_is_deterministic",),
+        ("tests/test_autonomy_budgets_portfolio_attention.py::test_portfolio_ordering_is_deterministic_and_owner_priority_is_preserved",),
     ),
     Phase10AReplayCaseV1(
         "23-malformed-evidence",
@@ -170,12 +170,12 @@ PHASE10A_REPLAY_CORPUS_V1: tuple[Phase10AReplayCaseV1, ...] = (
     Phase10AReplayCaseV1(
         "28-change-owner-gate",
         "Autonomous EngineeringChange still reaches existing owner architecture gate.",
-        ("tests/test_autonomy_dispatch.py::test_engineering_change_bridge_preserves_owner_gates",),
+        ("tests/test_autonomy_dispatch.py::test_assisted_engineering_change_uses_governed_change_lifecycle",),
     ),
     Phase10AReplayCaseV1(
         "29-no-self-approval",
         "Autonomy mode/budget never self-grants Authority or owner approval.",
-        ("tests/test_autonomy_dispatch.py::test_active_bounded_cannot_be_enabled",),
+        ("tests/test_autonomy_dispatch.py::test_production_autonomy_mode_defaults_to_shadow",),
     ),
     Phase10AReplayCaseV1(
         "30-protected-state",
