@@ -1469,8 +1469,7 @@ class AutonomyStore:
                 existing.reconcile_run_id != run.reconcile_run_id
                 or existing.trigger is not run.trigger
                 or existing.started_at_epoch != run.started_at_epoch
-                or existing.desired_generation_digest
-                != run.desired_generation_digest
+                or existing.desired_generation_digest != run.desired_generation_digest
             ):
                 raise AutonomyConflictError(
                     "reconcile finalization identity does not match started run"
