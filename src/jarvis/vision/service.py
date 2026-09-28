@@ -84,6 +84,7 @@ class VisionService:
         self._active_camera_profile = normalized_active
         self._runtime_lock = RLock()
         self._snapshot_lock = RLock()
+        self._evidence_observer_lock = RLock()
         self._lifecycle_lock = RLock()
         self._stop_requested = Event()
         self._thread: Thread | None = None
@@ -215,13 +216,14 @@ class VisionService:
             with self._snapshot_lock:
                 self._latest_snapshot = None
             self._clear_evidence_queue()
-            reset_evidence = getattr(
-                self._evidence_observer,
-                "reset_for_camera_switch",
-                None,
-            )
-            if callable(reset_evidence):
-                reset_evidence()
+            with self._evidence_observer_lock:
+                reset_evidence = getattr(
+                    self._evidence_observer,
+                    "reset_for_camera_switch",
+                    None,
+                )
+                if callable(reset_evidence):
+                    reset_evidence()
 
         self.diagnostics.record_action(
             code="camera_profile_switched",
@@ -444,14 +446,16 @@ class VisionService:
                     frame, snapshot = self._evidence_queue.get(timeout=0.05)
                 except queue.Empty:
                     continue
-                self._evidence_observer.observe(frame, snapshot)
+                with self._evidence_observer_lock:
+                    self._evidence_observer.observe(frame, snapshot)
         except Exception as exc:
             if not self._stop_requested.is_set():
                 self.diagnostics.record_error(exc)
                 LOGGER.exception("Integrated vision evidence observer failed closed")
         finally:
             try:
-                self._evidence_observer.close()
+                with self._evidence_observer_lock:
+                    self._evidence_observer.close()
             except Exception as exc:
                 self.diagnostics.record_error(exc)
                 LOGGER.exception("Integrated vision evidence observer shutdown failed")
