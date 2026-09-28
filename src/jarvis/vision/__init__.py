@@ -30,6 +30,7 @@ from jarvis.vision.models import (
 from jarvis.vision.ptz import (
     DuvcPtzConfig,
     DuvcPtzController,
+    NullPtzController,
     PtzAxisRange,
     PtzController,
 )
@@ -46,6 +47,7 @@ __all__ = [
     "Detection",
     "DuvcPtzConfig",
     "DuvcPtzController",
+    "NullPtzController",
     "FollowCommand",
     "FollowConfig",
     "FollowController",
