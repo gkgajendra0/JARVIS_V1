@@ -315,8 +315,7 @@ class HardwareAcceptanceService:
             field="acceptance_contract_id",
         )
         operations = {
-            _token(item, field="declared_operation")
-            for item in declared_operations
+            _token(item, field="declared_operation") for item in declared_operations
         }
         operation_token = _token(operation, field="operation")
         if operation_token not in operations:
