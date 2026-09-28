@@ -7,7 +7,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
-from jarvis.autonomy.models import DesiredStateStatus, DesiredStateV1, StabilizationPolicyV1
+from jarvis.autonomy.models import (
+    DesiredStateStatus,
+    DesiredStateV1,
+    StabilizationPolicyV1,
+)
 from jarvis.autonomy.system_state import SystemStateFactV1, SystemStateSnapshotV1
 from jarvis.self_model.health import HealthState
 from jarvis.work.models import WorkState
@@ -112,7 +116,10 @@ class StabilizationStateV1:
                 field_name,
                 _positive_epoch(getattr(self, field_name), field_name),
             )
-        if self.first_violation_at_epoch is None and self.last_violation_at_epoch is not None:
+        if (
+            self.first_violation_at_epoch is None
+            and self.last_violation_at_epoch is not None
+        ):
             raise ValueError("last violation requires first violation evidence")
         if (
             self.first_violation_at_epoch is not None
@@ -253,7 +260,12 @@ class DesiredStateRuleRegistry:
         )
         resolver_key = str(getattr(rule, "resolver_key", "")).strip().casefold()
         default_policy = getattr(rule, "default_stabilization_policy", None)
-        if not key or isinstance(version, bool) or not isinstance(version, int) or version <= 0:
+        if (
+            not key
+            or isinstance(version, bool)
+            or not isinstance(version, int)
+            or version <= 0
+        ):
             raise ValueError("rule requires normalized key and positive version")
         if not namespaces or any(not item for item in namespaces):
             raise ValueError("rule requires source namespaces")
@@ -262,7 +274,9 @@ class DesiredStateRuleRegistry:
         if not resolver_key:
             raise ValueError("rule resolver_key must not be empty")
         if not isinstance(default_policy, StabilizationPolicyV1):
-            raise TypeError("rule default_stabilization_policy must be StabilizationPolicyV1")
+            raise TypeError(
+                "rule default_stabilization_policy must be StabilizationPolicyV1"
+            )
         if not callable(getattr(rule, "validate_expected", None)):
             raise TypeError("rule must provide validate_expected(desired)")
         if not callable(getattr(rule, "evaluate", None)):
@@ -834,7 +848,9 @@ class DesiredStateStabilizer:
         return StabilizationResultV1(
             evaluation=evaluation,
             state=next_state,
-            dispatch_cooldown_active=(cooldown_until is not None and now < cooldown_until),
+            dispatch_cooldown_active=(
+                cooldown_until is not None and now < cooldown_until
+            ),
             dispatch_cooldown_until_epoch=cooldown_until,
         )
 
