@@ -237,8 +237,7 @@ class FindingLifecycleManager:
                 status=desired_status,
                 latest_snapshot_digest=evaluation.snapshot_digest,
                 first_seen_epoch=(
-                    evaluation.first_violation_at_epoch
-                    or evaluation.evaluated_at_epoch
+                    evaluation.first_violation_at_epoch or evaluation.evaluated_at_epoch
                 ),
                 last_seen_epoch=evaluation.evaluated_at_epoch,
                 violation_count=count,
