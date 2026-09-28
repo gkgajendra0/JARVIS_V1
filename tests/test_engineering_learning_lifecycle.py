@@ -378,3 +378,53 @@ def test_lifecycle_events_use_phase10_promotion_policy_id(tmp_path: Path) -> Non
         assert row[0] == ENGINEERING_LEARNING_PROMOTION_POLICY_ID
     finally:
         store.close()
+
+
+def test_older_or_same_time_evidence_cannot_supersede_newer_accepted_revision(
+    tmp_path: Path,
+) -> None:
+    store = SqliteIncidentStore(tmp_path / "engineering.sqlite3")
+    try:
+        first, first_revision_id = _persist(store, _outcome())
+        lifecycle = EngineeringLearningLifecycleService(store)
+        lifecycle.promote(
+            first_revision_id,
+            staged_at_epoch=110.0,
+            accepted_at_epoch=111.0,
+        )
+
+        delayed = replace(
+            _outcome(),
+            result=EngineeringOutcomeResult.ROLLED_BACK,
+            attribution=EngineeringOutcomeAttribution.CANDIDATE,
+            reason_codes=("delayed_candidate_regression",),
+            observed_at_epoch=100.0,
+        )
+        _, delayed_revision_id = _persist(
+            store,
+            delayed,
+            revision_number=2,
+            parent_revision_id=first.revision.revision_id,
+            supersedes_revision_id=first.revision.revision_id,
+        )
+        lifecycle.promote(
+            delayed_revision_id,
+            staged_at_epoch=120.0,
+            accepted_at_epoch=121.0,
+        )
+
+        with pytest.raises(
+            KnowledgeLifecycleError,
+            match="must be newer",
+        ):
+            lifecycle.supersede_prior(
+                delayed_revision_id,
+                prior_revision_id=first_revision_id,
+                now_epoch=122.0,
+            )
+        assert (
+            store.get_engineering_knowledge_lifecycle_state(first_revision_id)
+            is KnowledgeLifecycleState.ACCEPTED
+        )
+    finally:
+        store.close()
