@@ -37,7 +37,6 @@ def _payload(commit: str) -> dict[str, object]:
     return {**body, "evidence_digest": canonical_digest(body)}
 
 
-
 def test_phase10_acceptance_module_imports_in_clean_interpreter() -> None:
     repo = Path(__file__).resolve().parents[1]
     env = os.environ.copy()
@@ -59,6 +58,7 @@ def test_phase10_acceptance_module_imports_in_clean_interpreter() -> None:
     )
 
     assert completed.returncode == 0, completed.stderr
+
 
 def test_phase10_acceptance_records_exact_git_revision() -> None:
     repo = Path(__file__).resolve().parents[1]
