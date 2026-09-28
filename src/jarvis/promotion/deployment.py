@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Protocol
+from collections.abc import Callable\nfrom typing import Protocol
 
 from jarvis.dev_control import RuntimeReleaseIdentity
 from jarvis.engineering_change.models import ChangeConflict, ChangeState
@@ -69,6 +69,7 @@ class DeploymentCoordinator:
         stager: GitReleaseStager,
         metadata: DeploymentMetadataStore,
         runtime: RuntimeDeploymentDriver | None = None,
+        prepare_release: Callable[[PromotionAttempt, ReleaseRecord], object] | None = None,
         shutdown_timeout_seconds: float = 15.0,
         startup_timeout_seconds: float = 60.0,
     ) -> None:
@@ -81,6 +82,7 @@ class DeploymentCoordinator:
         self._stager = stager
         self._metadata = metadata
         self._runtime = runtime
+        self._prepare_release = prepare_release
         self._shutdown_timeout = float(shutdown_timeout_seconds)
         self._startup_timeout = float(startup_timeout_seconds)
 
@@ -204,6 +206,15 @@ class DeploymentCoordinator:
             raise DeploymentError("promotion attempt is not deployment-recoverable")
 
         if recovery.phase is RecoveryPhase.STAGED:
+            if self._prepare_release is not None:
+                try:
+                    self._prepare_release(current, recovery.candidate)
+                except DeploymentError:
+                    raise
+                except Exception as exc:
+                    raise DeploymentError(
+                        "candidate release preparation failed before runtime switch"
+                    ) from exc
             runtime.stop_active(timeout_seconds=self._shutdown_timeout)
             recovery = RecoveryRecord(
                 recovery.deployment_id,
