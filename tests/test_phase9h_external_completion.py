@@ -123,8 +123,6 @@ def test_sensitive_owner_input_is_redacted_and_consumed_once(tmp_path) -> None:
     assert store.pop_sensitive_input(item.work_id, "pairing_pin") is None
 
 
-
-
 def test_sensitive_owner_input_is_cleared_on_failure(tmp_path) -> None:
     path = tmp_path / "failure.sqlite3"
     codec = build_protected_work_payload_codec(
