@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -11,10 +10,14 @@ from jarvis.authority.types import ActionOrigin
 from jarvis.capabilities.models import CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capability_acquisition.artifacts import goal_from_payload
-from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
-from jarvis.capability_acquisition.workflow import (
+from jarvis.capability_acquisition.external_contract import (
+    ACCEPTANCE_OBSERVATION_KEY,
+    OWNER_INPUT_REQUEST_KEY,
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+    ExternalAcceptanceObservationV1,
+    ExternalOwnerInputRequestV1,
 )
+from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change.models import ChangeArtifact, ChangeConflict
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.canonical import canonical_digest
@@ -34,9 +37,6 @@ from jarvis.work.models import (
 
 EXTERNAL_ACCEPTANCE_BINDING_KIND = "capability_external_acceptance_binding"
 EXTERNAL_ACCEPTANCE_RESULT_KIND = "capability_external_acceptance"
-_OWNER_INPUT_REQUEST_KEY = "owner_input_request"
-_ACCEPTANCE_OBSERVATION_KEY = "acceptance_observation"
-_PARAMETER = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _AFFIRMATIVE = frozenset(
     {
         "yes",
@@ -813,25 +813,17 @@ class ExternalAcceptanceInvokeExecutor:
             parameters=invoke_parameters,
             origin=ActionOrigin.DIRECT_USER,
         )
-        owner_request = result.data.get(_OWNER_INPUT_REQUEST_KEY)
-        if result.status is CapabilityStatus.PARTIAL and isinstance(
-            owner_request, dict
-        ):
-            kind = str(owner_request.get("kind") or "").strip().casefold()
-            if kind not in {"pin", "confirmation"}:
+        owner_request = result.data.get(OWNER_INPUT_REQUEST_KEY)
+        if result.status is CapabilityStatus.PARTIAL and owner_request is not None:
+            try:
+                interaction = ExternalOwnerInputRequestV1.from_payload(owner_request)
+            except ValueError as exc:
                 raise ExternalAcceptanceError(
-                    "capability requested an unsupported owner-input kind"
-                )
-            prompt = _bounded_text(
-                owner_request.get("prompt"),
-                field="owner_input_request.prompt",
-                limit=500,
-            )
-            parameter = str(owner_request.get("parameter") or "").strip().casefold()
-            if parameter and _PARAMETER.fullmatch(parameter) is None:
-                raise ExternalAcceptanceError(
-                    "capability owner-input parameter is invalid"
-                )
+                    "capability owner-input request violates the Phase-9 contract"
+                ) from exc
+            kind = interaction.kind
+            prompt = interaction.prompt
+            parameter = interaction.parameter or ""
             input_key = (
                 "external_capability_input:"
                 + canonical_digest(
@@ -858,26 +850,21 @@ class ExternalAcceptanceInvokeExecutor:
                 },
             )
 
-        observation = result.data.get(_ACCEPTANCE_OBSERVATION_KEY)
+        observation = result.data.get(ACCEPTANCE_OBSERVATION_KEY)
         accepted_observation: dict[str, object] | None = None
-        if isinstance(observation, dict):
-            method = str(observation.get("method") or "").strip().casefold()
-            observed = observation.get("observed") is True
-            summary = str(observation.get("summary") or "").strip()
-            refs = observation.get("evidence_refs") or ()
-            if (
-                observed
-                and method in {"device_state_readback", "external_system_readback"}
-                and summary
-                and isinstance(refs, (list, tuple))
-            ):
+        if observation is not None:
+            try:
+                readback = ExternalAcceptanceObservationV1.from_payload(observation)
+            except ValueError as exc:
+                raise ExternalAcceptanceError(
+                    "capability acceptance observation violates the Phase-9 contract"
+                ) from exc
+            if readback.observed:
                 accepted_observation = {
                     "observed": True,
-                    "method": method,
-                    "summary": summary[:1000],
-                    "evidence_refs": [
-                        str(item)[:1000] for item in refs if str(item).strip()
-                    ][:20],
+                    "method": readback.method,
+                    "summary": readback.summary,
+                    "evidence_refs": list(readback.evidence_refs),
                 }
 
         succeeded = result.status is CapabilityStatus.SUCCEEDED
