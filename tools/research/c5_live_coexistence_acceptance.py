@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -26,7 +27,6 @@ from jarvis.model_routing.ollama import (
 )
 from jarvis.performance.runtime_profile import (
     NvidiaSmiProbe,
-    find_jarvis_process,
     metric_summary,
     sample_process,
 )
@@ -57,6 +57,68 @@ def _stop_model(model: str) -> int:
     )
     time.sleep(1.0)
     return int(result.returncode)
+
+
+def _jarvis_process_candidates() -> tuple[psutil.Process, ...]:
+    """Return matching JARVIS voice launcher/runtime processes on Windows."""
+
+    current_pid = os.getpid()
+    matches: list[psutil.Process] = []
+    for process in psutil.process_iter(
+        ["pid", "name", "cmdline", "create_time"]
+    ):
+        if process.pid == current_pid:
+            continue
+        try:
+            command = " ".join(process.info.get("cmdline") or []).casefold()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+        if (
+            "jarvis-voice" not in command
+            and "jarvis.voice.production_runtime" not in command
+        ):
+            continue
+        matches.append(process)
+    return tuple(matches)
+
+
+def _select_jarvis_runtime_process() -> tuple[psutil.Process, tuple[dict[str, object], ...]]:
+    """Choose the newest Python runtime when Windows exposes launcher/shim peers."""
+
+    candidates = _jarvis_process_candidates()
+    if not candidates:
+        raise RuntimeError(
+            "Could not find jarvis-voice. Start production JARVIS first."
+        )
+
+    snapshots: list[dict[str, object]] = []
+    ranked: list[tuple[int, float, int, psutil.Process]] = []
+    for process in candidates:
+        try:
+            name = str(process.name() or "")
+            command = " ".join(process.cmdline())
+            created = float(process.create_time())
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+
+        is_python = 1 if name.casefold().startswith("python") else 0
+        ranked.append((is_python, created, process.pid, process))
+        snapshots.append(
+            {
+                "pid": process.pid,
+                "name": name,
+                "cmdline": command,
+                "create_time_epoch": created,
+                "python_runtime_candidate": bool(is_python),
+            }
+        )
+
+    if not ranked:
+        raise RuntimeError("Matching jarvis-voice processes disappeared")
+
+    ranked.sort(key=lambda item: (item[0], item[1], item[2]), reverse=True)
+    selected = ranked[0][3]
+    return selected, tuple(sorted(snapshots, key=lambda item: int(item["pid"])))
 
 
 def _process_alive(process: psutil.Process) -> bool:
@@ -151,9 +213,12 @@ async def _invoke_local(
 
 
 async def _run(args: argparse.Namespace) -> dict[str, object]:
-    process = (
-        psutil.Process(args.pid) if args.pid is not None else find_jarvis_process()
-    )
+    if args.pid is not None:
+        process = psutil.Process(args.pid)
+        process_candidates: tuple[dict[str, object], ...] = ()
+    else:
+        process, process_candidates = _select_jarvis_runtime_process()
+
     if not _process_alive(process):
         raise RuntimeError("jarvis-voice process is not running")
 
@@ -233,6 +298,7 @@ async def _run(args: argparse.Namespace) -> dict[str, object]:
         "jarvis": {
             "pid": process.pid,
             "alive_after_conversation": alive_after_conversation,
+            "process_candidates": list(process_candidates),
         },
         "local_target": {
             "target_id": target.target_id,
