@@ -23,6 +23,7 @@ class ProviderFailureKind(str, Enum):
     SERVICE_UNAVAILABLE = "service_unavailable"
     TIMEOUT = "timeout"
     CONNECTION_LOST = "connection_lost"
+    RESPONSE_CONTRACT_INVALID = "response_contract_invalid"
     UNKNOWN = "unknown"
 
 
@@ -90,6 +91,10 @@ class ProviderFailure:
             ProviderFailureKind.CONNECTION_LOST: (
                 f"Sir, I cannot currently reach {name}. The network or provider "
                 "connection is unavailable. I am returning to wake mode."
+            ),
+            ProviderFailureKind.RESPONSE_CONTRACT_INVALID: (
+                f"Sir, {name} returned a response that did not satisfy the required "
+                "contract. I am using an approved fallback where available."
             ),
             ProviderFailureKind.UNKNOWN: (
                 f"Sir, {name} became unavailable because of an unclassified provider "
@@ -228,7 +233,13 @@ def classify_provider_failure(error: object, *, provider: str) -> ProviderFailur
     # and messages are therefore first-class diagnostic evidence, especially for token
     # rate limits such as ``response failed: [tokens] rate_limit_exceeded`` and billing
     # exhaustion codes such as ``credit_balance_exhausted``.
-    if any(marker in evidence for marker in quota_markers):
+    response_contract_invalid = any(
+        getattr(item, "response_contract_invalid", False) is True for item in chain
+    )
+
+    if response_contract_invalid:
+        kind = ProviderFailureKind.RESPONSE_CONTRACT_INVALID
+    elif any(marker in evidence for marker in quota_markers):
         kind = ProviderFailureKind.QUOTA_EXHAUSTED
     elif status == 429 or any(marker in evidence for marker in rate_markers):
         kind = ProviderFailureKind.RATE_LIMITED
