@@ -43,9 +43,6 @@ C5_LOCAL_CAPABILITIES = (
 )
 
 
-
-
-
 def build_c5_local_target() -> ModelTarget:
     """Return the owner-machine-admitted C5 local target contract."""
 
