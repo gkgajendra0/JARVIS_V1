@@ -148,7 +148,6 @@ def test_response_contract_failure_cools_target_and_allows_fallback() -> None:
     assert mutation.reason_code == "response_contract_invalid_cooldown"
 
 
-
 def test_local_resource_pressure_immediately_allows_fallback() -> None:
     mutation = apply_provider_failure(
         TargetHealthRecord(target_id="local-qwen"),
