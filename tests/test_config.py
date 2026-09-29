@@ -198,7 +198,10 @@ def test_invalid_live_context_environment_value_fails_truthfully(
 
 def test_global_brain_router_defaults_to_shadow_and_validates_mode() -> None:
     assert JarvisConfig().global_brain_router_mode == "shadow"
-    assert JarvisConfig(global_brain_router_mode=" APPLY ").global_brain_router_mode == "apply"
+    assert (
+        JarvisConfig(global_brain_router_mode=" APPLY ").global_brain_router_mode
+        == "apply"
+    )
 
     with pytest.raises(ValueError, match="global_brain_router_mode"):
         JarvisConfig(global_brain_router_mode="automatic")
