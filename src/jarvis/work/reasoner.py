@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import time
 from collections.abc import Callable
@@ -35,6 +36,9 @@ from jarvis.model_routing.router import (
 from jarvis.model_routing.store import RoutingStoreError
 from jarvis.provider_resilience import classify_provider_failure
 from jarvis.work.brain import BrainDecision, BrainRequest, ProviderPressure
+from jarvis.work.context import WorkContextMode, build_context_shadow_report
+
+LOGGER = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """You are the reasoning function inside JARVIS's Work Orchestrator.
 
@@ -154,7 +158,7 @@ class _WorkDecisionModel(BaseModel):
 
 
 def _work_input_payload(request: BrainRequest) -> dict[str, Any]:
-    return {
+    legacy = {
         "work": {
             "work_id": request.work.work_id,
             "type": request.work.work_type.value,
@@ -185,6 +189,42 @@ def _work_input_payload(request: BrainRequest) -> dict[str, Any]:
         ],
         "evidence": list(request.evidence),
     }
+
+    pack = request.context_pack
+    if pack is None or request.context_mode is WorkContextMode.OFF:
+        return legacy
+
+    optimized = {
+        **legacy,
+        "recent_steps": pack.recent_steps_payload(),
+        "evidence": list(pack.evidence),
+        "history_manifest": pack.history_manifest_payload(),
+    }
+    report = build_context_shadow_report(
+        legacy_payload=legacy,
+        optimized_payload=optimized,
+        pack=pack,
+    )
+    LOGGER.info(
+        (
+            "c6_work_context mode=%s work_id=%s legacy_chars=%d "
+            "optimized_chars=%d legacy_estimated_tokens=%d "
+            "optimized_estimated_tokens=%d reduction_percent=%.2f "
+            "selected_steps=%d omitted_steps=%d"
+        ),
+        request.context_mode.value,
+        request.work.work_id,
+        report.legacy_chars,
+        report.optimized_chars,
+        report.legacy_estimated_tokens,
+        report.optimized_estimated_tokens,
+        report.reduction_percent,
+        report.selected_step_count,
+        report.omitted_step_count,
+    )
+    if request.context_mode is WorkContextMode.APPLY:
+        return optimized
+    return legacy
 
 
 def _brain_decision(

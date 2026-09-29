@@ -1,6 +1,6 @@
 # JARVIS Cost Optimization Master Plan
 
-Status: **C0-C3 LIVE ACCEPTED / C4+C5 RESEARCH + BENCHMARK HARNESS COMPLETE / NEXT: OWNER-MACHINE LOCAL BENCHMARKS**
+Status: **C0-C3 LIVE ACCEPTED / C4 RESEARCH COMPLETE + JEV DEFERRED / C5 FULLY COMPLETE + OWNER-MACHINE ACCEPTED / C6 SHADOW IMPLEMENTATION ACTIVE**
 
 Date: 2026-09-29
 
@@ -15,18 +15,44 @@ Research sources re-verified 2026-09-29:
 - LiveKit Gemini TTS adapter guidance: https://docs.livekit.io/agents/models/tts/gemini/
 - Exa endpoint pricing: https://exa.ai/pricing
 
-## C3 live acceptance + C4/C5 checkpoint — 2026-09-29
+## C3-C6 implementation checkpoint — 2026-09-29
 
-- C3 zero-cloud owner acceptance passed with zero model calls and one deterministic
-  model call avoided.
-- The owner machine persists and resolves `JARVIS_GLOBAL_BRAIN_ROUTER_MODE=apply`.
-- Fresh production startup proved `brain_router_mode=apply` with Work orchestration
-  active.
-- C4/C5 deep research is complete in
-  `JARVIS_C4_C5_BOUNDED_LOCAL_BRAIN_RESEARCH.md`.
-- The frozen C4/C5 corpus, shared scorer, Ollama/Jev runners and non-destructive local
-  runtime probe are implemented.
-- No Jev/API credit or local model download has been required yet.
+- C3 zero-cloud owner acceptance passed and the owner machine runs
+  `JARVIS_GLOBAL_BRAIN_ROUTER_MODE=apply`.
+- C4 research is complete. Jev is **deferred**, not required: current local-brain
+  evidence does not justify adding another paid/external decision dependency.
+- C5 is **FULLY COMPLETE / OWNER-MACHINE ACCEPTED**.
+- The selected first production local target is `qwen3.5:4b` through Ollama with
+  `think=false`.
+- Qwen is admitted only for:
+  - `bounded_planning`;
+  - `classification_extraction`;
+  - `summarization`.
+- Qwen is not admitted for engineering code generation, debugging, architecture,
+  deep research or unknown/unclassified work until new benchmark evidence proves
+  otherwise.
+- Final C5 semantic admission was approximately 76.92% for Qwen versus 70.77% for
+  Phi-4-mini on the frozen 18-case corpus, both with 100% coverage and zero structured
+  failures in the final comparison.
+- Production integration, live JARVIS coexistence and resource-aware residency were
+  completed through PRs #229, #230, #231 and #232.
+- Warm local invocations on the owner machine were approximately 279-302 ms after
+  load; Qwen residency adds approximately 3.8-3.9 GB VRAM.
+- Production cold-load eligibility requires at least 5600 MiB free VRAM and GPU
+  utilization at or below 45%. Sustained pressure at 1800 MiB free or 80% utilization
+  evicts after two 2-second samples; 1200 MiB free triggers emergency first-sample
+  eviction. Recovery requires 5600 MiB free and utilization at or below 35% for three
+  calm samples.
+- Current accepted C5 main before C6 work:
+  `562d7dcc08d33db0626c7c305a9cf40fe14b3f08`.
+- C6 Retrieval / Context Optimization is now the active slice. It is implemented
+  shadow-first: optimized ContextPacks are assembled and measured while the provider
+  still receives the legacy payload.
+- No ₹400-₹500 paid-brain experiment credits should be purchased until C9 pre-credit
+  acceptance is complete.
+
+C6 research and architecture:
+`JARVIS_C6_CONTEXT_OPTIMIZATION_RESEARCH.md`.
 
 ## 1. Goal
 

@@ -1,6 +1,6 @@
 # JARVIS Cost Optimization Implementation Plan
 
-Status: **C0-C3 LIVE ACCEPTED / C4+C5 RESEARCH + BENCHMARK HARNESS COMPLETE / NEXT: OWNER-MACHINE LOCAL BENCHMARKS**
+Status: **C0-C3 LIVE ACCEPTED / C4 RESEARCH COMPLETE + JEV DEFERRED / C5 FULLY COMPLETE + OWNER-MACHINE ACCEPTED / C6 SHADOW IMPLEMENTATION ACTIVE**
 
 Date: 2026-09-29
 
@@ -210,98 +210,152 @@ Exit:
 
 ## Slice C4 — Jev decision-layer evaluation
 
-Status: **RESEARCH COMPLETE / SHARED BENCHMARK HARNESS IMPLEMENTED / LIVE BENCHMARK PENDING**.
+Status: **RESEARCH COMPLETE / JEV DEFERRED**.
 
 Research source: `JARVIS_C4_C5_BOUNDED_LOCAL_BRAIN_RESEARCH.md`.
 
-Implemented benchmark foundation:
+Decision:
 
-- frozen 18-case JARVIS bounded-decision corpus;
-- one scorer for deterministic-abstain, Ollama-local and Jev runners;
-- asymmetric unsafe-downgrade vs conservative-over-escalation metrics;
-- Jev Choice-question runner using the official System One endpoint shape;
-- raw confidence/probability/usage retention for post-run threshold calibration;
-- Jev price is supplied at benchmark time rather than embedded as permanent policy.
+- the frozen 18-case bounded-decision corpus and shared scorer remain available;
+- Jev is not required for the current cost-optimization architecture;
+- C5 proved that a task-scoped local tier is already useful without adding Jev;
+- deterministic policy remains first and model routing remains the fallback;
+- revisit Jev only if later measured mission economics show a real gap in routing
+  accuracy/cost that the deterministic/local layers do not solve.
 
-Goal: determine whether Jev reduces total cost without becoming a fragile dependency.
+Jev must never grant Authority or bypass owner/safety gates if revisited.
 
-Build a JARVIS-specific decision benchmark covering:
-
-- route selection;
-- task classification;
-- tool/capability choice among approved options;
-- retry/escalate;
-- web-research-needed;
-- local-vs-cloud;
-- cheap-vs-strong cloud.
-
-Compare:
-
-- deterministic-only baseline;
-- Jev;
-- small local classifier/model;
-- existing general LLM where appropriate.
-
-Measure:
-
-- decision accuracy;
-- calibration/confidence usefulness;
-- latency;
-- cost;
-- outage/fallback behavior;
-- downstream expensive calls avoided.
-
-Rules:
-
-- Jev never grants Authority;
-- deterministic policy outranks Jev;
-- local/deterministic fallback is mandatory;
-- re-verify Jev service/pricing/terms before integration.
-
-Exit:
-- adopt only if it saves expected mission cost and meets accuracy/latency thresholds;
-- otherwise defer without blocking the rest of the program.
+Exit: **met by evidence-based deferral**. C4 does not block C6-C10.
 
 ## Slice C5 — Local Brain benchmark and admission
 
-Status: **RESEARCH COMPLETE / BENCHMARK + OWNER PREFLIGHT TOOLING IMPLEMENTED / OWNER-MACHINE RUN PENDING**.
+Status: **FULLY COMPLETE / OWNER-MACHINE ACCEPTED**.
 
 Research source: `JARVIS_C4_C5_BOUNDED_LOCAL_BRAIN_RESEARCH.md`.
 
-Implemented benchmark foundation:
+Final implementation and acceptance:
 
-- Ollama local structured-output runner using the same frozen C4 corpus;
-- non-destructive owner-machine probe for Ollama, NVIDIA VRAM, installed/loaded models
-  and live JARVIS coexistence;
-- initial Tier-A candidates selected for measurement: `phi4-mini` and
-  `qwen3.5:4b`;
-- 8B/9B-class models explicitly deferred until coexistence evidence justifies them.
+- runtime: Ollama;
+- selected model: `qwen3.5:4b` with `think=false`;
+- final frozen-corpus semantic score approximately 76.92%, versus approximately
+  70.77% for Phi-4-mini;
+- selected local admission is task-scoped, not universal;
+- admitted task classes:
+  - `bounded_planning`;
+  - `classification_extraction`;
+  - `summarization`;
+- explicitly not admitted:
+  - engineering code generation;
+  - debugging;
+  - architecture;
+  - deep research;
+  - unknown/unclassified work;
+- production ModelInvoker/Ollama integration uses structured JSON/Pydantic validation,
+  provider-neutral telemetry, zero local token API cost and safe fallback;
+- malformed structured local output is classified as `response_contract_invalid`
+  so approved fallback can continue;
+- local GPU pressure is classified as `local_resource_pressure` so the router does
+  not retry the same GPU model while the owner is gaming;
+- replay compatibility is preserved with an isolated C5 local target registry rather
+  than mutating old durable Work target-registry digests;
+- live JARVIS voice/vision coexistence passed;
+- warm owner-machine invocations were approximately 279-302 ms after load;
+- Qwen residency adds approximately 3.8-3.9 GB VRAM;
+- Qwen is not kept permanently resident.
 
-Goal: create a useful zero-API reasoning tier.
+Production residency policy:
 
-Research current local runtimes/models fresh at implementation time.
+- cold load only when free VRAM >= 5600 MiB and GPU utilization <= 45%;
+- if resident, evict after two consecutive 2-second samples when free VRAM <= 1800 MiB
+  or GPU utilization >= 80%;
+- emergency evict on the first sample when free VRAM <= 1200 MiB;
+- recover only after free VRAM >= 5600 MiB and GPU utilization <= 35% for three calm
+  samples;
+- active local inference is protected from self-eviction;
+- stale residency assumptions expire before Ollama's keep-alive can silently invalidate
+  them.
 
-Benchmark on the owner's machine against the JARVIS task corpus.
+Merged PRs:
 
-Model admission is task-specific. A model can be accepted for summarization and classification while rejected for architecture or hard debugging.
+- #229 — semantic admission;
+- #230 — production Ollama integration;
+- #231 — live JARVIS/Qwen coexistence;
+- #232 — resource-aware residency.
 
-Exit:
-- at least one local target is registered with measured capabilities;
-- router sends only accepted task classes to it;
-- low-confidence/failed local work escalates cleanly.
+Accepted C5 main:
+`562d7dcc08d33db0626c7c305a9cf40fe14b3f08`.
+
+Exit: **met**. Do not reopen C5 or benchmark 9B merely because larger models exist.
 
 ## Slice C6 — Retrieval/context optimization
 
-Goal: make local and cloud reasoning cheaper and more reliable.
+Status: **SHADOW IMPLEMENTATION ACTIVE / PRODUCTION PROVIDER PAYLOAD STILL LEGACY**.
 
-- reuse EngineeringKnowledge and existing local retrieval;
-- retrieve relevant repo/docs/log/memory evidence instead of copying broad histories;
-- bound context per task;
-- cache/reuse verified stable evidence when freshness permits;
-- retain provenance and freshness metadata.
+Research source: `JARVIS_C6_CONTEXT_OPTIMIZATION_RESEARCH.md`.
+
+Repository finding:
+
+- `WorkEngine` currently reads the full canonical Work history and passes
+  `steps[-12:]` into `BrainRequest`;
+- `_work_input_payload()` serializes each supplied step's input, observation and error
+  plus all supplied evidence;
+- this makes large file reads, diffs, test logs and repeated observations an immediate
+  context-cost target.
+
+C6 architecture:
+
+- keep `SQLiteWorkStore` as complete durable truth;
+- introduce a bounded deterministic `ContextPack` projection for model context only;
+- preserve routing/replay identity from canonical Work progress;
+- retain task/stage-critical milestones rather than blindly selecting the last N full
+  objects;
+- bound large strings/lists and retain hashes/provenance so omission is explicit;
+- expose an omitted-step manifest rather than treating omitted history as nonexistent;
+- optionally adapt existing EngineeringKnowledge retrieval only when a trustworthy
+  applicability context exists;
+- EngineeringKnowledge remains advisory and cannot mint Authority;
+- do not add a vector database or second retrieval framework.
+
+Implemented shadow foundation:
+
+- `src/jarvis/work/context.py` — deterministic bounded step selection, compaction,
+  provenance manifest and context-size telemetry;
+- `src/jarvis/work/context_knowledge.py` — optional conservative
+  EngineeringKnowledge adapter;
+- `src/jarvis/work/context_evaluation.py` — strict decision-equivalence scorer for
+  action, parameters, completion and owner-escalation fields;
+- WorkEngine now assembles a ContextPack in shadow by default;
+- WorkReasoner measures legacy versus optimized payloads but sends the exact legacy
+  payload while mode is `shadow`;
+- routing context-size estimates change only in `apply`; replay/progress signals remain
+  based on canonical recent WorkSteps;
+- deterministic C6 unit coverage and a zero-cloud real Work-history owner acceptance
+  harness are included.
+
+Rollout modes:
+
+- `off` — legacy only;
+- `shadow` — build/measure optimized context, send legacy context;
+- `apply` — optimized model context.
+
+Current production intent: **shadow only**. Do not enable `apply` until benchmark and
+owner-machine evidence show meaningful context reduction without unsafe decision
+degradation.
+
+Acceptance path:
+
+1. CI/unit equivalence and context-bound tests;
+2. owner-machine zero-cloud history probe using
+   `tools/research/c6_context_owner_acceptance.py`;
+3. real shadow observation;
+4. paired legacy/optimized decision-equivalence benchmark;
+5. only then consider C6 apply.
 
 Exit:
-- benchmark demonstrates reduced context size without unacceptable answer/decision degradation.
+- benchmark demonstrates material context reduction;
+- action/parameters/`goal_complete`/`needs_owner`/owner-question equivalence meets
+  the acceptance bar;
+- no Authority, replay or completion-guard regression.
 
 ## Slice C7 — Cheap/strong cloud tier correction
 
