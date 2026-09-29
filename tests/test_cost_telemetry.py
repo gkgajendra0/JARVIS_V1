@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -8,6 +9,9 @@ from jarvis.hands.provider_adapters import (
     OpenAIStructuredOutputClient,
 )
 from jarvis.model_routing.cost import (
+    CostTelemetryReader,
+    ProviderCostEvent,
+    ProviderCostEventStore,
     estimate_profile_usage_cost_usd,
     summarize_cost_attempts,
 )
@@ -17,6 +21,9 @@ from jarvis.model_routing.models import (
     RoutingAttempt,
     RoutingAttemptKind,
 )
+from jarvis.model_routing.store import ModelRoutingStore
+from jarvis.work.models import WorkItem, WorkType
+from jarvis.work.store import SQLiteWorkStore
 
 
 class DummyOutput(BaseModel):
@@ -163,6 +170,49 @@ def _attempt(
         estimated_cost_usd=cost,
         response_contract_result=ResponseContractResult.VALID,
     )
+
+
+def test_provider_cost_event_store_rolls_non_token_cost_into_work_total(
+    tmp_path: Path,
+) -> None:
+    work_store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    work = WorkItem(
+        request="research current API behavior",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-cost",
+        source_turn_id="turn-cost",
+    )
+    work_store.create(work)
+    routing_store = ModelRoutingStore(work_store)
+    provider_store = ProviderCostEventStore(work_store)
+    provider_store.record(
+        ProviderCostEvent(
+            event_id="exa-search-1",
+            work_id=work.work_id,
+            provider_id="exa",
+            service_key="search",
+            cost_kind="search_request",
+            quantity=1.0,
+            unit_cost_usd=0.007,
+            estimated_cost_usd=0.007,
+            pricing_basis="Exa public endpoint pricing verified 2026-09-29",
+            occurred_at_epoch=100.0,
+            stage_key="research",
+        )
+    )
+
+    report = CostTelemetryReader(
+        routing_store,
+        provider_cost_store=provider_store,
+    ).for_work(work.work_id)
+
+    assert report.attempt_count == 0
+    assert report.provider_cost_event_count == 1
+    assert report.known_model_cost_usd == 0
+    assert report.known_provider_cost_usd == pytest.approx(0.007)
+    assert report.known_estimated_cost_usd == pytest.approx(0.007)
+    assert report.estimated_total_cost_usd == pytest.approx(0.007)
+    assert report.provider_cost_breakdown[0].cost_kind == "search_request"
 
 
 def test_cost_report_aggregates_and_never_treats_unknown_as_zero() -> None:
