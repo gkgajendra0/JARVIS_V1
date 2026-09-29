@@ -129,6 +129,7 @@ class WorkOrchestrator:
     def cancel(self, work_id: str) -> WorkItem:
         item = self._store.require(work_id)
         if item.state.terminal:
+            self._store.clear_sensitive_inputs(item.work_id)
             return item
 
         # First make the durable cancellation request. If that fails, canonical
@@ -144,6 +145,7 @@ class WorkOrchestrator:
         for _ in range(8):
             latest = self._store.require(work_id)
             if latest.state.terminal:
+                self._store.clear_sensitive_inputs(latest.work_id)
                 return latest
             cancelled = latest.transition(
                 WorkState.CANCELLED,
@@ -151,10 +153,12 @@ class WorkOrchestrator:
                 current_step_id=latest.current_step_id,
             )
             try:
-                return self._store.save(
+                saved = self._store.save(
                     cancelled,
                     expected_version=latest.version,
                 )
+                self._store.clear_sensitive_inputs(saved.work_id)
+                return saved
             except WorkStoreError as exc:
                 if "stale work update rejected" not in str(exc):
                     raise
