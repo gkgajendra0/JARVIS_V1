@@ -47,7 +47,7 @@ Pricing itself remains separately versioned and effective-dated through `CostPro
 | Memory candidate extraction | `src/jarvis/memory/extractors.py` | Gemini Interactions / OpenAI Responses | local-candidate | Direct provider adapter; inventoried, not yet routed/persisted | C5/C8 |
 | Memory query interpretation | `src/jarvis/memory/query_interpreters.py` | Gemini Interactions / OpenAI Responses | local-candidate / cheap-cloud-candidate | Direct provider adapter; inventoried, not yet routed/persisted | C5/C8 |
 | Memory release verification | `src/jarvis/memory/release_guard.py` | Gemini Interactions / OpenAI Responses | local-candidate / cheap-cloud-candidate | Direct provider adapter; inventoried, not yet routed/persisted | C5/C8 |
-| Live web research retrieval | `src/jarvis/knowledge/research_providers.py::ExaWebResearchProvider` | Exa search | research-provider cost | Source retrieval is provider-decoupled but not token-priced through ModelRouting | C6/C8 |
+| Live web research retrieval | `src/jarvis/knowledge/research_providers.py::ExaWebResearchProvider` | Exa search + contents | research-provider cost | **Background Work now records dated search/content provider-cost events into the same mission report; voice research adoption remains later** | C6/C8 |
 | Visual desktop computer use | `src/jarvis/computer/providers.py` and `latency_provider.py` | Gemini Interactions computer-use / OpenAI Responses computer tool | strong-cloud-candidate; multi-round screenshot risk | Direct provider loop; inventoried, not yet routed/persisted | C5/C8 |
 | Deterministic capability execution | capability runtime, native Hands, Git/Docker/tests/local operations | local execution | deterministic-avoidable | No model cost by design | C3 prefers this before model invocation |
 | Local retrieval / EngineeringKnowledge | existing local retrieval paths | local execution | deterministic/local | No cloud-model cost by design | C6 expands reuse |
@@ -72,4 +72,4 @@ C1 deliberately establishes the reusable foundation without prematurely rewritin
 - `CostTelemetryReader` aggregates all attempts for a WorkItem or EngineeringChange without the old 20-decision status-view limit;
 - reports expose known cost separately from complete estimated total and count missing-usage/unpriced attempts.
 
-This is sufficient for the planned capability-acquisition experiment path. C8 will adopt the same telemetry/routing substrate for Hands, memory, research, and finally broader voice rather than creating parallel accounting systems.
+This is sufficient for the planned capability-acquisition experiment path. Background research is now included through generic non-token provider-cost events. C8 will adopt the same accounting/routing substrate for Hands, memory, voice research and finally broader voice rather than creating parallel systems.
