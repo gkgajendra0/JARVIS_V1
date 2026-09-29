@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -16,7 +17,6 @@ from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
     ExternalAcceptanceObservationV1,
     ExternalOwnerInputRequestV1,
-    normalize_owner_input_parameter,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change.models import ChangeArtifact, ChangeConflict
@@ -38,6 +38,7 @@ from jarvis.work.models import (
 
 EXTERNAL_ACCEPTANCE_BINDING_KIND = "capability_external_acceptance_binding"
 EXTERNAL_ACCEPTANCE_RESULT_KIND = "capability_external_acceptance"
+_PARAMETER = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _AFFIRMATIVE = frozenset(
     {
         "yes",
@@ -751,15 +752,9 @@ class ExternalAcceptanceInvokeExecutor:
                 str(resume.observation.get("input_key") or "").strip().casefold()
             )
             kind = str(resume_context.get("kind") or "").strip().casefold()
-            try:
-                parameter = (
-                    normalize_owner_input_parameter(resume_context.get("parameter"))
-                    or ""
-                )
-            except ValueError as exc:
-                raise ExternalAcceptanceError(
-                    "pairing resume parameter is invalid"
-                ) from exc
+            parameter = str(resume_context.get("parameter") or "").strip().casefold()
+            if parameter and _PARAMETER.fullmatch(parameter) is None:
+                raise ExternalAcceptanceError("pairing resume parameter is invalid")
             if resume.observation.get("sensitive") is True:
                 owner_value = self._resolver.store.work.pop_sensitive_input(
                     work.work_id,
