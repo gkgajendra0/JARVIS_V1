@@ -194,6 +194,13 @@ explicit owner activation
 
 ### Generic interaction contract
 
+The public helper module
+`jarvis.capability_acquisition.external_contract` is the single source of truth for
+the Phase-9 external-result contract. When real external acceptance is required, the
+approved architecture payload includes this helper module, supported owner-input
+kinds, supported readback methods and result-data keys so DEVELOPMENT sees the
+contract before writing capability code.
+
 An acquired capability may return a bounded `owner_input_request` when execution
 requires owner participation.
 
@@ -254,7 +261,11 @@ The deterministic/CI baseline must prove:
 18. protected main and the shared JARVIS environment remain unchanged;
 19. sensitive owner input is encrypted/protected at rest and absent from model-visible
     WorkStep evidence;
-20. sensitive owner input is purged on success, failure and cancellation.
+20. sensitive owner input is purged on success, failure and cancellation;
+21. the external result helper round-trips PIN/confirmation and trusted readback
+    payloads and rejects unsupported owner-input kinds/parameters;
+22. any architecture requiring real external acceptance exposes the typed runtime
+    interaction contract directly to DEVELOPMENT.
 
 ## 7. Final paid real-world test
 
