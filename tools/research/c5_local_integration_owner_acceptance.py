@@ -134,7 +134,7 @@ async def _run(provider: str) -> dict[str, object]:
         if invocation.usage_observed
         else None
     )
-    if api_cost not in {0, 0.0}:
+    if api_cost != 0.0:
         raise RuntimeError("C5 local target API cost is not known zero")
 
     gpu_loaded = _gpu_snapshot()
