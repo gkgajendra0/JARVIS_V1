@@ -54,6 +54,15 @@ def normalize_ai_provider(value: str) -> str:
     return normalized
 
 
+def normalize_tts_provider(value: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError("TTS provider must be a string")
+    normalized = value.strip().casefold()
+    if normalized not in VALID_AI_PROVIDERS:
+        raise ValueError(f"Unsupported {TTS_PROVIDER_SETTING}: {value!r}")
+    return normalized
+
+
 def configured_ai_provider(
     machine_settings: Mapping[str, str],
     *,
@@ -118,8 +127,8 @@ def configured_tts_provider(
 
     for value in candidates:
         if value is not None and value.strip():
-            return normalize_ai_provider(value)
-    return normalize_ai_provider(default)
+            return normalize_tts_provider(value)
+    return normalize_tts_provider(default)
 
 
 def credential_environment_name(provider: str) -> str:
