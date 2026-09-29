@@ -254,6 +254,32 @@ async def test_off_mode_is_clean_rollback_to_model_reasoner(tmp_path: Path) -> N
     assert record.reason_codes == ("global_router_off",)
 
 
+class _ExplodingResolver:
+    resolver_id = "test.exploding"
+    resolver_version = 1
+
+    def resolve(self, *, facts, request, all_steps):
+        del facts, request, all_steps
+        raise AssertionError("resolver must not run while global router is off")
+
+
+@pytest.mark.asyncio
+async def test_off_mode_does_not_execute_deterministic_resolvers(
+    tmp_path: Path,
+) -> None:
+    registry = DeterministicResolverRegistry((_ExplodingResolver(),))
+    _, work, _, _, model, router = _router(
+        tmp_path,
+        mode="off",
+        resolvers=registry,
+    )
+
+    decision = await router.decide(_request(work, "dev_list_files"))
+
+    assert decision.action == "dev_list_files"
+    assert model.calls == 1
+
+
 @pytest.mark.asyncio
 async def test_deterministic_route_replays_without_duplicate_provenance(
     tmp_path: Path,
