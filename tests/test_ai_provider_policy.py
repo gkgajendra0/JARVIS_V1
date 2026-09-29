@@ -16,7 +16,7 @@ from jarvis.ai_provider import (
     require_provider_api_key,
     require_tts_api_key,
     resolve_ai_role_model,
-    tts_billing_is_separated,
+    tts_credential_is_separated,
     tts_credential_environment_name,
 )
 from jarvis.config import JarvisConfig
@@ -48,12 +48,12 @@ def test_tts_credentials_prefer_dedicated_lane_and_keep_legacy_fallback(
 
     assert tts_credential_environment_name("gemini") == "JARVIS_TTS_GOOGLE_API_KEY"
     assert require_tts_api_key("gemini") == "shared-google"
-    assert tts_billing_is_separated("gemini") is False
+    assert tts_credential_is_separated("gemini") is False
 
     monkeypatch.setenv("JARVIS_TTS_GOOGLE_API_KEY", "tts-only-google")
 
     assert require_tts_api_key("gemini") == "tts-only-google"
-    assert tts_billing_is_separated("gemini") is True
+    assert tts_credential_is_separated("gemini") is True
 
 
 def test_tts_provider_is_independent_from_brain_provider(
