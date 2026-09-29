@@ -27,12 +27,16 @@ def _completed_step(
     observation: dict | None = None,
     input_data: dict | None = None,
 ) -> WorkStep:
-    return WorkStep(
-        work_id=work.work_id,
-        kind=kind,
-        summary=f"{kind} summary",
-        input_data={} if input_data is None else input_data,
-    ).start().complete({} if observation is None else observation)
+    return (
+        WorkStep(
+            work_id=work.work_id,
+            kind=kind,
+            summary=f"{kind} summary",
+            input_data={} if input_data is None else input_data,
+        )
+        .start()
+        .complete({} if observation is None else observation)
+    )
 
 
 def _action() -> BrainAction:
