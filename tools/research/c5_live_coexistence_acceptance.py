@@ -64,9 +64,7 @@ def _jarvis_process_candidates() -> tuple[psutil.Process, ...]:
 
     current_pid = os.getpid()
     matches: list[psutil.Process] = []
-    for process in psutil.process_iter(
-        ["pid", "name", "cmdline", "create_time"]
-    ):
+    for process in psutil.process_iter(["pid", "name", "cmdline", "create_time"]):
         if process.pid == current_pid:
             continue
         try:
@@ -82,7 +80,9 @@ def _jarvis_process_candidates() -> tuple[psutil.Process, ...]:
     return tuple(matches)
 
 
-def _select_jarvis_runtime_process() -> tuple[psutil.Process, tuple[dict[str, object], ...]]:
+def _select_jarvis_runtime_process() -> tuple[
+    psutil.Process, tuple[dict[str, object], ...]
+]:
     """Choose the newest Python runtime when Windows exposes launcher/shim peers."""
 
     candidates = _jarvis_process_candidates()
