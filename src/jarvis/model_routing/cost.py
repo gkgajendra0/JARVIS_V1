@@ -122,6 +122,55 @@ class _MutableBucket:
         )
 
 
+def summarize_cost_attempts(
+    *,
+    scope_kind: str,
+    scope_id: str,
+    attempts: tuple[RoutingAttempt, ...],
+) -> CostTelemetryReport:
+    normalized_kind = str(scope_kind).strip().casefold()
+    normalized_id = str(scope_id).strip()
+    if not normalized_kind:
+        raise ValueError("scope_kind must not be empty")
+    if not normalized_id:
+        raise ValueError("scope_id must not be empty")
+
+    overall = _MutableBucket()
+    groups: dict[tuple[str, str, str], _MutableBucket] = {}
+    for attempt in attempts:
+        overall.add(attempt)
+        key = (
+            attempt.stage_key or "unknown",
+            attempt.provider_id or "unknown",
+            attempt.model_id or "unknown",
+        )
+        groups.setdefault(key, _MutableBucket()).add(attempt)
+
+    breakdown = tuple(
+        groups[key].freeze(
+            stage_key=key[0],
+            provider_id=key[1],
+            model_id=key[2],
+        )
+        for key in sorted(groups)
+    )
+    return CostTelemetryReport(
+        scope_kind=normalized_kind,
+        scope_id=normalized_id,
+        attempt_count=overall.attempts,
+        fallback_attempts=overall.fallbacks,
+        failed_attempts=overall.failures,
+        missing_usage_attempts=overall.missing_usage,
+        unpriced_attempts=overall.unpriced,
+        aggregate_usage=dict(sorted(overall.usage.items())),
+        known_estimated_cost_usd=overall.known_cost,
+        estimated_total_cost_usd=(
+            overall.known_cost if overall.unpriced == 0 else None
+        ),
+        breakdown=breakdown,
+    )
+
+
 class CostTelemetryReader:
     """Aggregate durable routing attempts without exposing prompts or credentials."""
 
@@ -131,61 +180,15 @@ class CostTelemetryReader:
         self._store = store
 
     def for_work(self, work_id: str) -> CostTelemetryReport:
-        return self._report(
+        return summarize_cost_attempts(
             scope_kind="work",
             scope_id=work_id,
             attempts=self._store.list_attempts_for_work(work_id),
         )
 
     def for_change(self, change_id: str) -> CostTelemetryReport:
-        return self._report(
+        return summarize_cost_attempts(
             scope_kind="engineering_change",
             scope_id=change_id,
             attempts=self._store.list_attempts_for_change(change_id),
-        )
-
-    @staticmethod
-    def _report(
-        *,
-        scope_kind: str,
-        scope_id: str,
-        attempts: tuple[RoutingAttempt, ...],
-    ) -> CostTelemetryReport:
-        normalized_id = str(scope_id).strip()
-        if not normalized_id:
-            raise ValueError("scope_id must not be empty")
-
-        overall = _MutableBucket()
-        groups: dict[tuple[str, str, str], _MutableBucket] = {}
-        for attempt in attempts:
-            overall.add(attempt)
-            key = (
-                attempt.stage_key or "unknown",
-                attempt.provider_id or "unknown",
-                attempt.model_id or "unknown",
-            )
-            groups.setdefault(key, _MutableBucket()).add(attempt)
-
-        breakdown = tuple(
-            groups[key].freeze(
-                stage_key=key[0],
-                provider_id=key[1],
-                model_id=key[2],
-            )
-            for key in sorted(groups)
-        )
-        return CostTelemetryReport(
-            scope_kind=scope_kind,
-            scope_id=normalized_id,
-            attempt_count=overall.attempts,
-            fallback_attempts=overall.fallbacks,
-            failed_attempts=overall.failures,
-            missing_usage_attempts=overall.missing_usage,
-            unpriced_attempts=overall.unpriced,
-            aggregate_usage=dict(sorted(overall.usage.items())),
-            known_estimated_cost_usd=overall.known_cost,
-            estimated_total_cost_usd=(
-                overall.known_cost if overall.unpriced == 0 else None
-            ),
-            breakdown=breakdown,
         )
