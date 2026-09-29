@@ -11,6 +11,7 @@ from jarvis.ai_provider import (
     credential_environment_name,
     provider_api_key,
     tts_credential_environment_name,
+    tts_credential_is_separated,
     tts_credential_source,
 )
 from jarvis.authority.tooling import authority_tool_readiness
@@ -79,7 +80,9 @@ def _tts_lane_check(config: JarvisConfig) -> PreflightCheck:
             "Scripted TTS lane",
             True,
             f"provider={provider}; {dedicated_name} is available; "
-            "billing credential is separated from brain reasoning",
+            "credential is separated from brain reasoning; "
+            f"project_billing_isolation_verified="
+            f"{config.tts_project_billing_isolation_verified}",
         )
     if source == "shared_compatibility":
         return PreflightCheck(
@@ -93,6 +96,30 @@ def _tts_lane_check(config: JarvisConfig) -> PreflightCheck:
         True,
         f"provider={provider}; cloud TTS credential unavailable; "
         "Windows-local lifecycle speech remains the fallback",
+    )
+
+
+def paid_brain_tts_isolation_check(config: JarvisConfig) -> PreflightCheck:
+    """Fail closed for paid-brain experiments until TTS project billing is verified."""
+
+    provider = config.tts_provider
+    if not tts_credential_is_separated(provider):
+        return PreflightCheck(
+            "Paid experiment TTS isolation",
+            False,
+            "scripted TTS does not use a dedicated credential",
+        )
+    if not config.tts_project_billing_isolation_verified:
+        return PreflightCheck(
+            "Paid experiment TTS isolation",
+            False,
+            "dedicated TTS credential exists but project-level billing isolation "
+            "has not been owner-verified in AI Studio/Cloud Billing",
+        )
+    return PreflightCheck(
+        "Paid experiment TTS isolation",
+        True,
+        "dedicated TTS credential and owner-verified project billing isolation",
     )
 
 
