@@ -20,6 +20,7 @@ def _isolate_machine_config(
 
 def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("JARVIS_AI_PROVIDER", " GEMINI ")
+    monkeypatch.setenv("JARVIS_TTS_PROVIDER", " OPENAI ")
     monkeypatch.setenv("JARVIS_REALTIME_MODEL", " model-x ")
     monkeypatch.setenv("JARVIS_REALTIME_VOICE", " voice-y ")
     monkeypatch.setenv("JARVIS_GEMINI_REALTIME_MODEL", " gemini-x ")
@@ -47,6 +48,7 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     config = JarvisConfig.from_environment()
 
     assert config.ai_provider == "gemini"
+    assert config.tts_provider == "openai"
     assert config.realtime_provider == "gemini"
     assert config.realtime_model == "model-x"
     assert config.realtime_voice == "voice-y"
@@ -68,6 +70,16 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.vision_lenovo_device_index == 2
     assert config.vision_pocket3_device_index == 4
     assert config.speaker_shadow_enabled is True
+
+
+def test_tts_provider_defaults_to_gemini_independent_of_brain() -> None:
+    assert JarvisConfig(ai_provider="openai").tts_provider == "gemini"
+    assert JarvisConfig(ai_provider="gemini").tts_provider == "gemini"
+
+
+def test_invalid_tts_provider_fails_truthfully() -> None:
+    with pytest.raises(ValueError, match="JARVIS_AI_PROVIDER"):
+        JarvisConfig(tts_provider="unknown")
 
 
 def test_memory_candidate_extraction_is_default_off() -> None:
