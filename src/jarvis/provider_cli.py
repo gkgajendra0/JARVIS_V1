@@ -62,15 +62,11 @@ def show_provider() -> int:
     print(f"TTS credential available: {'yes' if tts_credential_available else 'no'}")
     print(f"TTS credential separated: {'yes' if tts_separated else 'no'}")
     settings = load_machine_settings()
-    project_verified = (
-        settings.get("JARVIS_TTS_PROJECT_BILLING_ISOLATION_VERIFIED", "")
-        .strip()
-        .casefold()
-        in {"1", "true", "yes", "on"}
-    )
+    project_verified = settings.get(
+        "JARVIS_TTS_PROJECT_BILLING_ISOLATION_VERIFIED", ""
+    ).strip().casefold() in {"1", "true", "yes", "on"}
     print(
-        "TTS project billing isolation verified: "
-        f"{'yes' if project_verified else 'no'}"
+        f"TTS project billing isolation verified: {'yes' if project_verified else 'no'}"
     )
     print(f"Machine configuration: {default_machine_config_path()}")
     return 0 if credential_available else 2
