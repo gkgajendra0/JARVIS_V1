@@ -9,6 +9,7 @@ from dataclasses import replace
 
 from jarvis.brain_routing.deterministic import (
     DeterministicResolution,
+    DeterministicResolutionStatus,
     DeterministicResolverRegistry,
 )
 from jarvis.brain_routing.models import (
@@ -178,14 +179,11 @@ class GlobalBrainRouterReasoner:
     ) -> tuple[GlobalBrainRouteFacts, DeterministicResolution]:
         base = build_work_global_route_facts(request, all_steps=all_steps)
         if self._mode is BrainRoutingMode.OFF:
-            resolution = self._resolvers.resolve(
-                facts=base,
-                request=request,
-                all_steps=all_steps,
-            )
-            return base, replace(
-                resolution,
-                decision=None,
+            return base, DeterministicResolution(
+                status=DeterministicResolutionStatus.ABSTAIN,
+                resolver_id="global_router_off",
+                resolver_version=self._resolvers.policy_version,
+                reason_codes=("global_router_off",),
             )
         count = self._resolvers.candidate_count(
             facts=base,
