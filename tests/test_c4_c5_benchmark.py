@@ -354,11 +354,7 @@ def test_ollama_runner_can_disable_thinking_and_cap_output(
         assert payload["options"]["num_predict"] == 256
         answers = {question.name: question.expected for question in case.questions}
         return (
-            {
-                "message": {
-                    "content": __import__("json").dumps({"answers": answers})
-                }
-            },
+            {"message": {"content": __import__("json").dumps({"answers": answers})}},
             8.0,
         )
 
