@@ -18,7 +18,11 @@ from jarvis.hands.provider_adapters import (
     StructuredOutputError,
     StructuredOutputTelemetry,
 )
-from jarvis.model_routing.local_residency import LocalModelResidencyManager
+from jarvis.model_routing.local_residency import (
+    GpuResidencyProbe,
+    LocalModelResidencyManager,
+    LocalResidencyPolicy,
+)
 from jarvis.model_routing.models import (
     BenchmarkStatus,
     CostProfile,
@@ -104,10 +108,18 @@ def _stop_ollama_model(model: str) -> bool:
     return result.returncode == 0
 
 
-def build_c5_local_residency_manager() -> LocalModelResidencyManager:
+def build_c5_local_residency_manager(
+    *,
+    policy: LocalResidencyPolicy | None = None,
+    probe: GpuResidencyProbe | None = None,
+) -> LocalModelResidencyManager:
     """Build the accepted owner-machine C5 GPU residency controller."""
 
-    return LocalModelResidencyManager(unload_model=_stop_ollama_model)
+    return LocalModelResidencyManager(
+        policy=policy,
+        probe=probe,
+        unload_model=_stop_ollama_model,
+    )
 
 
 class OllamaStructuredOutputError(StructuredOutputError):
