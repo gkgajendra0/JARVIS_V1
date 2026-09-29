@@ -38,6 +38,19 @@ Phase 4 intentionally scoped this to bounded background engineering work. It is 
 
 The current voice runtime still creates realtime cloud sessions directly, and scripted lifecycle speech currently prefers cloud TTS with a local Windows fallback.
 
+
+### 2.1 Implementation research checkpoint — 2026-09-29
+
+Fresh inspection of the current repository confirms that cost optimization should evolve existing contracts instead of adding parallel infrastructure:
+
+- `src/jarvis/model_routing/models.py` already models target cost profiles, per-attempt usage/estimated cost and aggregate outcome usage/estimated cost.
+- `src/jarvis/model_routing/store.py` already persists routing decisions and attempts durably in the canonical WorkStore database.
+- `src/jarvis/hands/provider_adapters.py` currently validates structured provider output but does not propagate provider usage metadata back to routing. This is the main C1 instrumentation seam.
+- `src/jarvis/voice/livekit_session.py` creates realtime cloud sessions directly from the active provider credential, confirming that voice/TTS and paid-reasoning credential boundaries need explicit separation.
+- `src/jarvis/model_routing/router.py` is still scoped to bounded background work and currently builds Gemini/OpenAI cloud targets. It should be generalized rather than replaced.
+
+Therefore the first implementation objective is **observability, not model replacement**. JARVIS should know exactly which subsystem invoked which intelligence path, how often, with what context/usage, latency, retry behavior and estimated cost before optimization decisions are trusted.
+
 ## 3. Cost domains
 
 For planning purposes, separate costs into:
