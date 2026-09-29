@@ -110,6 +110,8 @@ def test_ollama_runner_validates_structured_answers(
         assert headers is None
         assert timeout == 15.0
         assert payload["model"] == "test-local"
+        assert "think" not in payload
+        assert "num_predict" not in payload["options"]
         answers = {question.name: question.expected for question in case.questions}
         return (
             {
@@ -338,3 +340,43 @@ def test_ollama_runner_reports_missing_message_as_structured_output_failure(
         match="missing message object",
     ):
         runner.run(case)
+
+
+def test_ollama_runner_can_disable_thinking_and_cap_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    _, cases = module._load_cases(_CASES)
+    case = cases[0]
+
+    def fake_json_request(url, payload, *, headers=None, timeout):
+        assert payload["think"] is False
+        assert payload["options"]["num_predict"] == 256
+        answers = {question.name: question.expected for question in case.questions}
+        return (
+            {
+                "message": {
+                    "content": __import__("json").dumps({"answers": answers})
+                }
+            },
+            8.0,
+        )
+
+    monkeypatch.setattr(module, "_json_request", fake_json_request)
+    runner = module.OllamaRunner(
+        host="http://127.0.0.1:11434",
+        model="qwen3.5:4b",
+        num_ctx=4096,
+        timeout=15.0,
+        think=False,
+        num_predict=256,
+    )
+
+    result = runner.run(case)
+
+    assert all(
+        result.predictions[question.name].value == question.expected
+        for question in case.questions
+    )
+    assert result.raw_metadata["ollama_think"] is False
+    assert result.raw_metadata["ollama_num_predict"] == 256
