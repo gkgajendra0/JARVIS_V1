@@ -251,7 +251,10 @@ The deterministic/CI baseline must prove:
 16. runtime dependency overlays reject executable `.pth` startup logic;
 17. promotion prepares required runtime dependencies before switching the active
     runtime;
-18. protected main and the shared JARVIS environment remain unchanged.
+18. protected main and the shared JARVIS environment remain unchanged;
+19. sensitive owner input is encrypted/protected at rest and absent from model-visible
+    WorkStep evidence;
+20. sensitive owner input is purged on success, failure and cancellation.
 
 ## 7. Final paid real-world test
 
