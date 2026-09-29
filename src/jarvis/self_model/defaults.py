@@ -676,6 +676,7 @@ def build_default_self_model() -> SelfModelRegistry:
             logger_prefixes=("jarvis.brain_routing",),
             docs=(
                 "docs/JARVIS_C3_GLOBAL_BRAIN_ROUTER_RESEARCH.md",
+                "docs/JARVIS_C3_GLOBAL_BRAIN_ROUTER_IMPLEMENTATION.md",
                 "docs/JARVIS_COST_OPTIMIZATION_IMPLEMENTATION_PLAN.md",
             ),
         ),
