@@ -55,9 +55,7 @@ def test_clean_task_classes_require_full_exact_safe_coverage() -> None:
         },
     }
 
-    assert module._clean_task_classes(summaries) == [
-        "classification_extraction"
-    ]
+    assert module._clean_task_classes(summaries) == ["classification_extraction"]
 
 
 def test_task_class_for_case_uses_expected_task_class() -> None:
