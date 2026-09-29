@@ -121,9 +121,8 @@ class CapabilityAcquisitionArchitecturePlan:
             "build_permitted": self.build_permitted,
             "protected_surface_review_required": self.protected_surface_review_required,
         }
-        if (
-            PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
-            in set(self.owner_acceptance_contract_ids)
+        if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT in set(
+            self.owner_acceptance_contract_ids
         ):
             payload["external_runtime_contract"] = (
                 external_interaction_contract_descriptor()
