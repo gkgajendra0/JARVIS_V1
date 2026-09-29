@@ -14,6 +14,7 @@ from jarvis.hands.provider_adapters import (
     StructuredOutputTelemetry,
     build_structured_output_client,
 )
+from jarvis.model_routing.local_residency import LocalModelResidencyManager
 from jarvis.model_routing.models import ModelTarget
 from jarvis.model_routing.ollama import OllamaStructuredOutputAdapter
 from jarvis.model_routing.registry import ModelAdapterRegistry
@@ -214,7 +215,10 @@ class ModelInvoker:
         )
 
 
-def build_default_model_adapter_registry() -> ModelAdapterRegistry:
+def build_default_model_adapter_registry(
+    *,
+    ollama_residency_manager: LocalModelResidencyManager | None = None,
+) -> ModelAdapterRegistry:
     """Register only the provider families already approved by JARVIS."""
 
     return ModelAdapterRegistry(
@@ -227,6 +231,8 @@ def build_default_model_adapter_registry() -> ModelAdapterRegistry:
                 adapter_id="openai",
                 provider_id="openai",
             ),
-            OllamaStructuredOutputAdapter(),
+            OllamaStructuredOutputAdapter(
+                residency_manager=ollama_residency_manager,
+            ),
         )
     )
