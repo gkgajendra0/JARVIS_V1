@@ -111,11 +111,7 @@ def _post_streaming_json(
             ):
                 first_any_ms = now_ms
 
-            if (
-                first_content_ms is None
-                and isinstance(content, str)
-                and content
-            ):
+            if first_content_ms is None and isinstance(content, str) and content:
                 first_content_ms = now_ms
 
     wall_ms = (time.perf_counter() - started) * 1000.0
