@@ -62,7 +62,10 @@ jobs:
           PY
 
       - name: Run unit tests
-        run: python -m pytest -q
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=30s 300s \
+            python -m pytest -vv -x --showlocals
 
   windows-hello-helper:
     runs-on: windows-latest
