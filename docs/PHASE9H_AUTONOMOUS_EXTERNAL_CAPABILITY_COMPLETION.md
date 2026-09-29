@@ -306,3 +306,74 @@ Draft review:
 
 The PR must remain unmerged until CI, regression review and owner approval are
 complete.
+
+
+## 10. External research basis
+
+Phase 9H deliberately reuses patterns and primitives that are already mature outside
+JARVIS instead of recreating them.
+
+### Durable owner pause/resume
+
+DBOS documents durable workflows that recover from the last completed step after
+interruption, plus persisted workflow messaging through `send` / `recv`. This
+matches the existing JARVIS WorkItem design for pairing/confirmation pauses, so a
+second orchestration engine was rejected.
+
+References:
+
+- https://docs.dbos.dev/python/tutorials/workflow-tutorial
+- https://docs.dbos.dev/python/tutorials/workflow-communication
+
+### Local discovery
+
+Home Assistant's developer architecture uses mDNS/Zeroconf and SSDP as first-class
+local-network discovery mechanisms. JARVIS already had python-zeroconf-backed mDNS,
+so Phase 9H adds the missing SSDP policy adapter rather than a general subnet scanner.
+
+The production/stable `async-upnp-client` project was also reviewed. It provides
+mature SSDP/UPnP discovery and was originally written for Home Assistant. It was not
+added as a JARVIS-core dependency in this phase because doing so would create a
+bootstrap dependency on the dependency-acquisition mechanism that 9H itself is
+completing. The bounded SSDP M-SEARCH transport is therefore implemented behind the
+existing DiscoveryBroker using the standard protocol and standard-library sockets.
+
+References:
+
+- https://developers.home-assistant.io/docs/network_discovery/
+- https://pypi.org/project/async-upnp-client/
+
+### Python dependency resolution/materialization
+
+The existing Phase-5 pinned `uv` adapter remains the package-management boundary.
+Current uv supports offline operation, hash-required installs, wheel-only policy and
+installation into an explicit target directory. These primitives map directly to a
+release-local dependency overlay without mutating protected main or the shared JARVIS
+environment.
+
+Reference:
+
+- https://docs.astral.sh/uv/reference/cli/
+
+### Package provenance
+
+PyPI's Integrity API exposes PyPI's PEP-740 provenance objects for individual release
+files. Phase 9H reuses the existing Phase-5 provenance service to consume that
+evidence when verifying a research-discovered SDK candidate rather than trusting a
+model-authored package name or project page.
+
+References:
+
+- https://docs.pypi.org/api/integrity/
+- https://docs.pypi.org/attestations/
+
+### Rejected alternatives
+
+The research did not justify introducing Temporal, LangGraph or another workflow
+engine because DBOS already owns durable execution and owner message resume.
+
+A broad ARP/subnet scanner was also rejected for the first implementation because
+mDNS + SSDP cover the intended discovery class while preserving the Phase-5
+non-reconnaissance boundary. If a future capability genuinely requires another
+discovery protocol, it should be added as another reviewed DiscoveryBroker adapter
+with an explicit scope rather than granting generic scan authority.
