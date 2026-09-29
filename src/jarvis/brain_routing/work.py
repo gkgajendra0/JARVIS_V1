@@ -28,11 +28,40 @@ from jarvis.model_routing.router import reasoning_cycle_key
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.model_routing.strategy import derive_work_step_signals
 from jarvis.work.brain import BrainDecision, BrainReasoner, BrainRequest
+from jarvis.work.context import WorkContextMode
 from jarvis.work.models import WorkStep
 from jarvis.work.store import SQLiteWorkStore
 
 
+def _use_context_pack(request: BrainRequest) -> bool:
+    return (
+        request.context_mode is WorkContextMode.APPLY
+        and request.context_pack is not None
+    )
+
+
 def _estimated_context_tokens(request: BrainRequest) -> int:
+    pack = request.context_pack
+    use_pack = _use_context_pack(request)
+    steps = (
+        pack.recent_steps_payload()
+        if use_pack and pack is not None
+        else [
+            {
+                "kind": step.kind,
+                "summary": step.summary,
+                "input": step.input_data,
+                "observation": step.observation,
+                "error": step.error,
+            }
+            for step in request.recent_steps
+        ]
+    )
+    evidence = (
+        list(pack.evidence)
+        if use_pack and pack is not None
+        else list(request.evidence)
+    )
     payload = {
         "request": request.work.request,
         "purpose": request.purpose,
@@ -44,18 +73,11 @@ def _estimated_context_tokens(request: BrainRequest) -> int:
             }
             for action in request.allowed_actions
         ],
-        "steps": [
-            {
-                "kind": step.kind,
-                "summary": step.summary,
-                "input": step.input_data,
-                "observation": step.observation,
-                "error": step.error,
-            }
-            for step in request.recent_steps
-        ],
-        "evidence": list(request.evidence),
+        "steps": steps,
+        "evidence": evidence,
     }
+    if use_pack and pack is not None:
+        payload["history_manifest"] = pack.history_manifest_payload()
     encoded = json.dumps(
         payload,
         ensure_ascii=False,
@@ -67,7 +89,13 @@ def _estimated_context_tokens(request: BrainRequest) -> int:
 
 
 def _evidence_size_class(request: BrainRequest) -> EvidenceSizeClass:
-    if len(request.evidence) >= 6:
+    pack = request.context_pack
+    evidence_count = (
+        len(pack.evidence)
+        if _use_context_pack(request) and pack is not None
+        else len(request.evidence)
+    )
+    if evidence_count >= 6:
         return EvidenceSizeClass.HETEROGENEOUS
     estimated = _estimated_context_tokens(request)
     if estimated >= 16_000:
@@ -107,7 +135,18 @@ def build_work_global_route_facts(
         cost_preference="balanced",
         output_contract="brain_decision.v1",
         quality_class="balanced",
-        knowledge_state=("evidence_present" if request.evidence else "no_evidence"),
+        knowledge_state=(
+            "evidence_present"
+            if (
+                (
+                    request.context_pack is not None
+                    and _use_context_pack(request)
+                    and request.context_pack.evidence
+                )
+                or request.evidence
+            )
+            else "no_evidence"
+        ),
         recent_progress_signals=signals.progress_signals,
         recent_failure_signals=signals.failure_signals,
         affinity_key=f"work:{request.work.work_id}",
