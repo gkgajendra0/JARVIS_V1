@@ -9,8 +9,6 @@ from jarvis.brain_routing.deterministic import (
     DeterministicResolutionStatus,
     DeterministicResolverRegistry,
     InitialDevelopmentWorkspaceResolver,
-    InitialDiagnosticIncidentResolver,
-    PostTestDevelopmentDiffResolver,
     default_work_deterministic_resolvers,
 )
 from jarvis.brain_routing.models import (
@@ -121,7 +119,7 @@ def _router(
 async def test_apply_mode_bypasses_model_for_initial_workspace(
     tmp_path: Path,
 ) -> None:
-    store, work, route_store, model_store, model, router = _router(tmp_path)
+    _store, work, route_store, model_store, model, router = _router(tmp_path)
 
     decision = await router.decide(_request(work, "dev_prepare_workspace"))
 
