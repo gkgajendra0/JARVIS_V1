@@ -1,11 +1,34 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from jarvis.capability_acquisition.external_acceptance import (
     external_acceptance_completion_guard,
 )
 from jarvis.work.engine import WorkActionRegistry, WorkEngine
 from jarvis.work.models import WorkItem, WorkState, WorkStep, WorkType
+from jarvis.work.privacy import build_protected_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore
+
+
+class FakeKeyProtector:
+    protector_id = "phase9h-test-protector"
+
+    def seal(self, plaintext: bytes, *, purpose: str) -> bytes:
+        return purpose.encode("utf-8") + b"|" + plaintext
+
+    def unseal(self, sealed: bytes, *, purpose: str) -> bytes:
+        prefix = purpose.encode("utf-8") + b"|"
+        assert sealed.startswith(prefix)
+        return sealed[len(prefix) :]
+
+
+def _raw_storage(path: Path) -> bytes:
+    chunks = []
+    for candidate in (path, Path(f"{path}-wal"), Path(f"{path}-shm")):
+        if candidate.exists():
+            chunks.append(candidate.read_bytes())
+    return b"".join(chunks)
 
 
 def _completed_step(
@@ -16,7 +39,13 @@ def _completed_step(
 
 
 def test_sensitive_owner_input_is_redacted_and_consumed_once(tmp_path) -> None:
-    store = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    path = tmp_path / "work.sqlite3"
+    codec = build_protected_work_payload_codec(
+        path,
+        key_protector=FakeKeyProtector(),
+        random_bytes=lambda size: b"p" * size,
+    )
+    store = SQLiteWorkStore(path, payload_codec=codec)
     item = WorkItem(
         request="validate a real external capability",
         work_type=WorkType.EXTERNAL_ACCEPTANCE,
@@ -64,7 +93,8 @@ def test_sensitive_owner_input_is_redacted_and_consumed_once(tmp_path) -> None:
         brain=None,  # type: ignore[arg-type]
         actions=WorkActionRegistry(()),
     )
-    resumed = engine.apply_owner_input(waiting.work_id, "1234")
+    secret = "PAIRING_SECRET_8VJ2Q9"
+    resumed = engine.apply_owner_input(waiting.work_id, secret)
 
     assert resumed.state is WorkState.RUNNING
     owner_step = store.list_steps(item.work_id)[-1]
@@ -72,7 +102,8 @@ def test_sensitive_owner_input_is_redacted_and_consumed_once(tmp_path) -> None:
     assert owner_step.observation["response_redacted"] is True
     assert owner_step.observation["input_key"] == "pairing_pin"
     assert "response" not in owner_step.observation
-    assert store.pop_sensitive_input(item.work_id, "pairing_pin") == "1234"
+    assert secret.encode("utf-8") not in _raw_storage(path)
+    assert store.pop_sensitive_input(item.work_id, "pairing_pin") == secret
     assert store.pop_sensitive_input(item.work_id, "pairing_pin") is None
 
 
