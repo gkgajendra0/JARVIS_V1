@@ -12,6 +12,7 @@ from jarvis.ai_provider import (
     configured_tts_provider,
     credential_environment_name,
     normalize_ai_provider,
+    normalize_tts_provider,
     provider_api_key,
     tts_billing_is_separated,
     tts_credential_environment_name,
@@ -100,7 +101,7 @@ def switch_provider(provider: str) -> int:
 
 
 def switch_tts_provider(provider: str) -> int:
-    selected = normalize_ai_provider(provider)
+    selected = normalize_tts_provider(provider)
     credential_name = tts_credential_environment_name(selected)
     if tts_provider_api_key(selected) is None:
         print(
