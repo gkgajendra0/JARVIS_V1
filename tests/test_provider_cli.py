@@ -79,7 +79,7 @@ def test_switch_tts_provider_is_independent_from_brain_provider(
     output = capsys.readouterr().out
     assert "tts-only-openai" not in output
     assert "gemini -> openai" in output
-    assert "Billing separation: dedicated" in output
+    assert "Credential separation: dedicated" in output
 
 
 def test_switching_brain_provider_does_not_change_tts_provider(
@@ -122,6 +122,7 @@ def test_show_provider_reports_key_presence_without_printing_value(
     assert "Credential variable: OPENAI_API_KEY" in output
     assert "Credential available: yes" in output
     assert "JARVIS scripted TTS provider: gemini" in output
-    assert "TTS billing separated: yes" in output
+    assert "TTS credential separated: yes" in output
+    assert "TTS project billing isolation verified: no" in output
     assert "do-not-print-me" not in output
     assert "do-not-print-tts" not in output
