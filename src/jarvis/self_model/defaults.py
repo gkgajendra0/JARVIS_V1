@@ -666,6 +666,20 @@ def build_default_self_model() -> SelfModelRegistry:
             logger_prefixes=("jarvis.work", "jarvis.voice.work_tools"),
         ),
         C(
+            "work.brain_routing",
+            "Global intelligence-path policy that can deterministically bypass model "
+            "reasoning while preserving governed Work execution and Phase-4 target routing.",
+            ("src/jarvis/brain_routing",),
+            parent_component_id="work",
+            tests=("tests/test_global_brain_router.py",),
+            config_keys=("JARVIS_GLOBAL_BRAIN_ROUTER_MODE",),
+            logger_prefixes=("jarvis.brain_routing",),
+            docs=(
+                "docs/JARVIS_C3_GLOBAL_BRAIN_ROUTER_RESEARCH.md",
+                "docs/JARVIS_COST_OPTIMIZATION_IMPLEMENTATION_PLAN.md",
+            ),
+        ),
+        C(
             "work.model_routing",
             "Provider/model-neutral target selection contracts for background "
             "engineering reasoning.",
@@ -907,6 +921,11 @@ def build_default_self_model() -> SelfModelRegistry:
         DependencyDescriptor(
             "hands.orchestrator",
             "provider.planner",
+            criticality=DependencyCriticality.DEGRADING,
+        ),
+        DependencyDescriptor(
+            "work.brain_routing",
+            "work.model_routing",
             criticality=DependencyCriticality.DEGRADING,
         ),
         DependencyDescriptor(
