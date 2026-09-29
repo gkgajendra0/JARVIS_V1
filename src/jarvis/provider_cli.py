@@ -14,7 +14,7 @@ from jarvis.ai_provider import (
     normalize_ai_provider,
     normalize_tts_provider,
     provider_api_key,
-    tts_billing_is_separated,
+    tts_credential_is_separated,
     tts_credential_environment_name,
     tts_provider_api_key,
 )
@@ -42,7 +42,7 @@ def _tts_status() -> tuple[str, str, bool, bool]:
         provider,
         credential_name,
         credential_available,
-        tts_billing_is_separated(provider),
+        tts_credential_is_separated(provider),
     )
 
 
@@ -60,7 +60,18 @@ def show_provider() -> int:
     print(f"JARVIS scripted TTS provider: {tts_provider}")
     print(f"TTS credential variable: {tts_credential_name}")
     print(f"TTS credential available: {'yes' if tts_credential_available else 'no'}")
-    print(f"TTS billing separated: {'yes' if tts_separated else 'no'}")
+    print(f"TTS credential separated: {'yes' if tts_separated else 'no'}")
+    settings = load_machine_settings()
+    project_verified = (
+        settings.get("JARVIS_TTS_PROJECT_BILLING_ISOLATION_VERIFIED", "")
+        .strip()
+        .casefold()
+        in {"1", "true", "yes", "on"}
+    )
+    print(
+        "TTS project billing isolation verified: "
+        f"{'yes' if project_verified else 'no'}"
+    )
     print(f"Machine configuration: {default_machine_config_path()}")
     return 0 if credential_available else 2
 
@@ -122,8 +133,8 @@ def switch_tts_provider(provider: str) -> int:
     print(f"JARVIS scripted TTS provider: {previous} -> {selected}")
     print(f"Dedicated TTS credential variable: {credential_name}")
     print(
-        "Billing separation: "
-        f"{'dedicated' if tts_billing_is_separated(selected) else 'compatibility/shared'}"
+        "Credential separation: "
+        f"{'dedicated' if tts_credential_is_separated(selected) else 'compatibility/shared'}"
     )
     print("API key value was not read back or printed.")
     return 0
