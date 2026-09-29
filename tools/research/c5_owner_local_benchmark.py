@@ -47,6 +47,22 @@ def _run(
     )
 
 
+def _run_streaming(
+    command: list[str],
+    *,
+    timeout: float,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command,
+        check=False,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        shell=False,
+    )
+
+
 def _get_json(url: str, *, timeout: float = 5.0) -> dict[str, Any] | None:
     request = urllib.request.Request(url, method="GET")
     try:
@@ -172,17 +188,19 @@ def _require_ollama(host: str) -> str:
 
 
 def _pull_model(executable: str, model: str) -> dict[str, Any]:
+    print(f"[C5] Pulling {model}...", flush=True)
     started = time.perf_counter()
-    result = _run([executable, "pull", model], timeout=3600.0)
+    result = _run_streaming([executable, "pull", model], timeout=3600.0)
     elapsed = time.perf_counter() - started
     if result.returncode != 0:
         raise RuntimeError(
-            f"ollama pull {model} failed: {(result.stderr or result.stdout)[-4000:]}"
+            f"ollama pull {model} failed with return code {result.returncode}"
         )
+    print(f"[C5] Pull complete: {model}", flush=True)
     return {
         "elapsed_seconds": elapsed,
-        "stdout_tail": result.stdout[-2000:],
-        "stderr_tail": result.stderr[-2000:],
+        "stdout_tail": "",
+        "stderr_tail": "",
     }
 
 
@@ -221,15 +239,21 @@ def _run_benchmark(
         str(timeout),
         "--output",
         str(output),
+        "--quiet",
     ]
+    print(f"[C5] Benchmarking {model}...", flush=True)
     started = time.perf_counter()
-    result = _run(command, timeout=max(3600.0, timeout * repeat * 20))
+    result = _run_streaming(
+        command,
+        timeout=max(3600.0, timeout * repeat * 20),
+    )
     elapsed = time.perf_counter() - started
     if result.returncode != 0:
         raise RuntimeError(
-            f"C4/C5 benchmark failed for {model}: "
-            f"{(result.stderr or result.stdout)[-8000:]}"
+            f"C4/C5 benchmark failed for {model} with return code "
+            f"{result.returncode}; see streamed benchmark output above"
         )
+    print(f"[C5] Benchmark complete: {model}", flush=True)
     report = json.loads(output.read_text(encoding="utf-8"))
     if not isinstance(report, dict):
         raise TypeError(f"benchmark report for {model} is not an object")
@@ -266,6 +290,7 @@ def _comparison_row(
         "model": model,
         "accuracy_over_covered": summary.get("accuracy_over_covered"),
         "coverage": summary.get("coverage"),
+        "structured_output_failures": summary.get("structured_output_failures"),
         "unsafe_downgrades": summary.get("unsafe_downgrades"),
         "conservative_escalations": summary.get("conservative_escalations"),
         "latency_ms_p50": summary.get("latency_ms_p50"),
@@ -356,6 +381,10 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     for index, model in enumerate(models, start=1):
+        print(
+            f"[C5] Model {index}/{len(models)}: {model}",
+            flush=True,
+        )
         model_entry: dict[str, Any] = {
             "model": model,
             "ordinal": index,
@@ -392,6 +421,7 @@ def main(argv: list[str] | None = None) -> int:
                 _comparison_row(model, benchmark, loaded, gpu_after)
             )
         finally:
+            print(f"[C5] Unloading {model}...", flush=True)
             model_entry["unload"] = _stop_model(executable, model)
             time.sleep(1.0)
             model_entry["gpu_after_unload"] = _nvidia_snapshot()
