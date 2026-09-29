@@ -1,6 +1,6 @@
 # JARVIS Cost Optimization Implementation Plan
 
-Status: **C0 + C1 + C2 IMPLEMENTED / NEXT SLICE: C3**
+Status: **C0 + C1 + C2 IMPLEMENTED AND RESEARCH-CORRECTED / NEXT SLICE: C3**
 
 Date: 2026-09-29
 
@@ -59,11 +59,13 @@ Status: **IMPLEMENTED / ACCEPTANCE TESTED**.
 Implemented foundation:
 
 - provider-neutral normalized usage telemetry for routed Gemini/OpenAI structured calls;
+- durable non-token provider cost events for request/page/audio/tool-style charges;
 - durable provider/model/stage/usage/retry/cost provenance on routing attempts;
 - explicit missing-usage and unpriced states rather than false zero cost;
 - WorkItem and EngineeringChange mission-level aggregation;
 - deterministic provider-usage, cost-estimation and aggregation tests;
-- routed dry-run Work mission coverage proving a mission cost report can be produced.
+- routed dry-run Work mission coverage proving a mission cost report can be produced;
+- background Exa research accounting that rolls dated search/content request estimates into the same Work mission total.
 
 Goal: measure before spending.
 
@@ -86,13 +88,16 @@ Implemented foundation:
 - `JARVIS_AI_PROVIDER` remains the brain/realtime reasoning selector;
 - `JARVIS_TTS_PROVIDER` independently selects scripted lifecycle TTS and defaults to the preferred Gemini path;
 - dedicated `JARVIS_TTS_GOOGLE_API_KEY` / `JARVIS_TTS_OPENAI_API_KEY` credentials take precedence over legacy shared provider keys;
+- dedicated credentials are treated only as **credential isolation**, never proof of billing isolation;
+- `JARVIS_TTS_PROJECT_BILLING_ISOLATION_VERIFIED` is the explicit owner attestation required by the paid-experiment gate after verifying the TTS project in AI Studio/Cloud Billing;
 - legacy shared-key fallback is retained only for migration/compatibility so the current voice does not break immediately;
 - preflight reports whether the TTS lane is dedicated, compatibility/shared, or local-fallback-only;
 - provider CLI can inspect both lanes and switch scripted TTS without changing the brain provider;
 - missing cloud TTS credentials remain non-fatal because the existing Windows-local lifecycle speech fallback is preserved;
+- scripted Gemini TTS defaults to current `gemini-3.8-flash-tts` while preserving Charon; `gemini-3.8-flash-lite-tts` can be selected through `JARVIS_GEMINI_TTS_MODEL` for later A/B evaluation;
 - deterministic tests prove that changing the brain provider cannot redirect scripted TTS.
 
-Pre-paid experiment requirement: configure a **dedicated** TTS credential before using paid-brain credits. Compatibility/shared mode is not considered billing-separated.
+Pre-paid experiment requirement: configure a **dedicated** TTS credential **and verify that its project is billing-isolated at the Google project level** before using paid-brain credits. A different API key alone is not sufficient.
 
 Goal: protect the paid-brain experiment from routine voice-output consumption without changing preferred voice UX.
 
