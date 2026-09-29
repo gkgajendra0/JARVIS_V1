@@ -223,3 +223,118 @@ def test_confidence_threshold_turns_uncertain_jev_choice_into_abstain() -> None:
     assert low["accuracy_over_covered"] == 1.0
     assert high["coverage"] == 0.0
     assert high["complete_api_cost_usd"] is None
+
+
+def test_ollama_runner_reports_invalid_json_as_structured_output_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    _, cases = module._load_cases(_CASES)
+    case = cases[0]
+
+    def fake_json_request(url, payload, *, headers=None, timeout):
+        return (
+            {
+                "message": {"content": '{"answers": {"reasoning_tier": bad}}'},
+                "prompt_eval_count": 10,
+                "eval_count": 5,
+            },
+            10.0,
+        )
+
+    monkeypatch.setattr(module, "_json_request", fake_json_request)
+    runner = module.OllamaRunner(
+        host="http://127.0.0.1:11434",
+        model="test-local",
+        num_ctx=4096,
+        timeout=15.0,
+    )
+
+    with pytest.raises(module.StructuredOutputError):
+        runner.run(case)
+
+
+def test_scorer_counts_structured_output_failure_as_abstention() -> None:
+    module = _load_module()
+    _, cases = module._load_cases(_CASES)
+    case = cases[0]
+    result = {
+        "case_id": case.case_id,
+        "latency_ms": 50.0,
+        "usage": {},
+        "api_cost_usd": 0.0,
+        "predictions": {
+            question.name: {
+                "value": "abstain",
+                "confidence": None,
+                "probabilities": None,
+            }
+            for question in case.questions
+        },
+        "raw_metadata": {"structured_output_failure": True},
+    }
+
+    summary = module._score((case,), [result], confidence_threshold=0.0)
+
+    assert summary["structured_output_failures"] == 1
+    assert summary["coverage"] == 0.0
+    assert summary["abstained"] == len(case.questions)
+
+
+def test_ollama_runner_reports_empty_content_as_structured_output_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    _, cases = module._load_cases(_CASES)
+    case = cases[0]
+
+    def fake_json_request(url, payload, *, headers=None, timeout):
+        return (
+            {
+                "message": {
+                    "content": "",
+                    "thinking": "internal reasoning only",
+                },
+                "done_reason": "stop",
+            },
+            10.0,
+        )
+
+    monkeypatch.setattr(module, "_json_request", fake_json_request)
+    runner = module.OllamaRunner(
+        host="http://127.0.0.1:11434",
+        model="test-local",
+        num_ctx=4096,
+        timeout=15.0,
+    )
+
+    with pytest.raises(
+        module.StructuredOutputError,
+        match=r"thinking_chars=23",
+    ):
+        runner.run(case)
+
+
+def test_ollama_runner_reports_missing_message_as_structured_output_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    _, cases = module._load_cases(_CASES)
+    case = cases[0]
+
+    def fake_json_request(url, payload, *, headers=None, timeout):
+        return ({"done": True}, 10.0)
+
+    monkeypatch.setattr(module, "_json_request", fake_json_request)
+    runner = module.OllamaRunner(
+        host="http://127.0.0.1:11434",
+        model="test-local",
+        num_ctx=4096,
+        timeout=15.0,
+    )
+
+    with pytest.raises(
+        module.StructuredOutputError,
+        match="missing message object",
+    ):
+        runner.run(case)
