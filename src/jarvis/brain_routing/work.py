@@ -204,9 +204,7 @@ class GlobalBrainRouterReasoner:
         self,
         route_request_id: str,
     ) -> tuple[str | None, str | None]:
-        persisted = self._model_routing_store.find_decision_by_request(
-            route_request_id
-        )
+        persisted = self._model_routing_store.find_decision_by_request(route_request_id)
         if persisted is None:
             return None, None
         return (
@@ -240,9 +238,7 @@ class GlobalBrainRouterReasoner:
                 reason_codes=reason_codes,
                 created_at_epoch=float(self._clock()),
                 selected_action=selected_action,
-                resolver_id=(
-                    None if resolution is None else resolution.resolver_id
-                ),
+                resolver_id=(None if resolution is None else resolution.resolver_id),
                 resolver_version=(
                     None if resolution is None else resolution.resolver_version
                 ),
@@ -318,9 +314,7 @@ class GlobalBrainRouterReasoner:
                 )
             raise
 
-        model_decision_id, model_target_id = self._model_lineage(
-            facts.route_request_id
-        )
+        model_decision_id, model_target_id = self._model_lineage(facts.route_request_id)
         if existing is None:
             shadow_match = (
                 _decision_matches(resolution.decision, actual)
