@@ -6,6 +6,37 @@ Date: 2026-09-29
 
 Architecture source: `JARVIS_COST_OPTIMIZATION_MASTER_PLAN.md`
 
+
+## Research validation checkpoint — 2026-09-29
+
+Fresh repository inspection and current-tooling research refine the execution order without changing the architecture.
+
+Confirmed current-state facts:
+
+- Phase 4 already provides `CostProfile`, `RoutingAttempt.usage`, `RoutingAttempt.estimated_cost_usd`, `RoutingOutcome.aggregate_usage`, `RoutingOutcome.estimated_total_cost_usd` and durable routing storage. C1 should extend these contracts rather than create a separate cost database.
+- Current Gemini/OpenAI structured-output adapters return only the validated model result; provider usage metadata is not yet propagated into the routing attempt. C1 should introduce one provider-neutral invocation result/envelope carrying parsed output plus usage/latency metadata.
+- Current realtime voice creates the cloud realtime model directly and resolves the same provider credential family used elsewhere. This confirms that C2 credential/billing separation is necessary before paid-brain testing.
+- The current Phase-4 work router is already the correct substrate to evolve. It presently creates cloud Gemini/OpenAI work targets; C3 should generalize this registry/router to deterministic, local and tiered-cloud paths rather than introduce a second router.
+- Background autonomous work should be the first subsystem to adopt cost-aware routing. Realtime voice should move later because latency and conversational UX make it the highest-risk place to optimize first.
+- Local-model admission must remain benchmark-driven on the owner's RTX 5060 Ti 8 GB / 16 GB RAM machine. Start with a small efficient Qwen 3.5-class model and test a larger quantized tier only if hardware measurements justify it; no model is globally trusted merely because it fits.
+- Jev remains an optional bounded decision-layer candidate. Benchmark it against deterministic logic and a small local decision model; adoption is not a prerequisite for the rest of the program if evidence does not justify it.
+- Current cloud model pricing changes quickly. C7 must populate dated cost profiles from provider pricing at implementation time rather than hard-code today's prices into permanent routing logic.
+
+### Refined execution sequence
+
+Implement in this order:
+
+1. **C0 + C1 together — inventory and observability.**
+2. **C2 — TTS/paid-brain credential separation.**
+3. **C3 — Global Brain Router v1 using the existing Phase-4 substrate.**
+4. **C4 + C5 — benchmark bounded decision and local-brain tiers.**
+5. **C6 + C7 — context reduction and genuinely distinct cloud tiers.**
+6. **C8 + C9 — gradual subsystem adoption and pre-credit acceptance.**
+7. **C10 — instrumented ₹400–₹500 blind TV capability experiment.**
+8. **C11 — Cost Governor only after real mission economics exist.**
+
+Do not begin by changing the preferred voice, buying additional development subscriptions, or searching indefinitely for a perfect local model. First make every relevant intelligence call visible and attributable.
+
 ## Slice C0 — Baseline and call inventory
 
 Goal: establish current truth before changing routing.
