@@ -28,6 +28,7 @@ PERSISTABLE_SETTINGS = frozenset(
     {
         "JARVIS_LOG_LEVEL",
         "JARVIS_AI_PROVIDER",
+        "JARVIS_TTS_PROVIDER",
         # Legacy migration alias accepted so existing machine profiles keep working.
         "JARVIS_REALTIME_PROVIDER",
         "JARVIS_REALTIME_MODEL",
