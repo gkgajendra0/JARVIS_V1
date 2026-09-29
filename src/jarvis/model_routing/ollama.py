@@ -211,7 +211,9 @@ class OllamaStructuredOutputAdapter:
         del request_context
         if not isinstance(target, ModelTarget):
             raise TypeError("target must be a ModelTarget")
-        if not isinstance(response_model, type) or not issubclass(response_model, BaseModel):
+        if not isinstance(response_model, type) or not issubclass(
+            response_model, BaseModel
+        ):
             raise TypeError("response_model must be a Pydantic BaseModel type")
 
         endpoint = self._endpoint_for(target)
@@ -254,14 +256,10 @@ class OllamaStructuredOutputAdapter:
 
         message = response.get("message")
         if not isinstance(message, dict):
-            raise StructuredOutputError(
-                "Ollama returned no structured message object"
-            )
+            raise StructuredOutputError("Ollama returned no structured message object")
         content = message.get("content")
         if not isinstance(content, str) or not content.strip():
-            raise StructuredOutputError(
-                "Ollama returned no structured output content"
-            )
+            raise StructuredOutputError("Ollama returned no structured output content")
         try:
             parsed = response_model.model_validate_json(content)
         except ValidationError as exc:
