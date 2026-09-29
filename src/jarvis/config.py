@@ -112,6 +112,8 @@ class JarvisConfig:
     realtime_voice: str = "marin"
     gemini_realtime_model: str = "gemini-3.1-flash-live-preview"
     gemini_realtime_voice: str = "Charon"
+    gemini_tts_model: str = "gemini-3.8-flash-tts"
+    tts_project_billing_isolation_verified: bool = False
     hands_planner_model: str | None = None
     autonomy_mode: AutonomyMode = AutonomyMode.SHADOW
     work_orchestration_enabled: bool = False
@@ -199,6 +201,7 @@ class JarvisConfig:
             "realtime_voice",
             "gemini_realtime_model",
             "gemini_realtime_voice",
+            "gemini_tts_model",
             "pocket3_ble_name",
         ):
             value = str(getattr(self, name)).strip()
@@ -377,6 +380,16 @@ class JarvisConfig:
             ),
             gemini_realtime_voice=_configured_required_text(
                 "JARVIS_GEMINI_REALTIME_VOICE", "Charon", machine
+            ),
+            gemini_tts_model=_configured_required_text(
+                "JARVIS_GEMINI_TTS_MODEL",
+                "gemini-3.8-flash-tts",
+                machine,
+            ),
+            tts_project_billing_isolation_verified=_configured_bool(
+                "JARVIS_TTS_PROJECT_BILLING_ISOLATION_VERIFIED",
+                False,
+                machine,
             ),
             hands_planner_model=_configured_optional_text(
                 "JARVIS_HANDS_PLANNER_MODEL", machine
