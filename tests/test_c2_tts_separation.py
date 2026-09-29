@@ -38,7 +38,31 @@ def test_scripted_speech_uses_tts_provider_not_brain_provider(
     assert isinstance(speech, scripted_speech.LiveKitScriptedSpeech)
     assert captured["api_key"] == "free-tier-tts-google"
     assert captured["voice_name"] == "Charon"
-    assert captured["model"] == "gemini-3.1-flash-tts-preview"
+    assert captured["model"] == "gemini-3.8-flash-tts"
+
+
+def test_scripted_speech_can_use_flash_lite_without_changing_voice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_gemini_tts(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setenv("JARVIS_TTS_GOOGLE_API_KEY", "tts-key")
+    monkeypatch.setattr(scripted_speech.google.beta, "GeminiTTS", fake_gemini_tts)
+
+    scripted_speech.build_scripted_speech(
+        JarvisConfig(
+            tts_provider="gemini",
+            gemini_tts_model="gemini-3.8-flash-lite-tts",
+            gemini_realtime_voice="Charon",
+        )
+    )
+
+    assert captured["model"] == "gemini-3.8-flash-lite-tts"
+    assert captured["voice_name"] == "Charon"
 
 
 def test_scripted_speech_can_select_openai_independently(
