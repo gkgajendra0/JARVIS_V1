@@ -22,11 +22,13 @@ from jarvis.brain_routing.work import GlobalBrainRouterReasoner
 from jarvis.model_routing.eligibility import EligibilityPolicy
 from jarvis.model_routing.models import (
     BenchmarkStatus,
+    EligibilitySnapshot,
     EvidenceSizeClass,
     LocalityRequirement,
     ModelLocality,
     ModelTarget,
     PrivacyClass,
+    RoutingDecision,
     RoutingStrategyResult,
 )
 from jarvis.model_routing.registry import (
@@ -34,7 +36,7 @@ from jarvis.model_routing.registry import (
     ModelTargetRegistry,
     RoutingStrategyRegistry,
 )
-from jarvis.model_routing.router import ModelRouter
+from jarvis.model_routing.router import ModelRouter, build_work_routing_request
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.work.brain import BrainAction, BrainCoordinator, BrainDecision, BrainRequest
 from jarvis.work.engine import WorkActionRegistry, WorkEngine
@@ -252,6 +254,59 @@ async def test_off_mode_is_clean_rollback_to_model_reasoner(tmp_path: Path) -> N
     assert record.mode is BrainRoutingMode.OFF
     assert record.route_kind is BrainRouteKind.MODEL
     assert record.reason_codes == ("global_router_off",)
+
+
+@pytest.mark.asyncio
+async def test_preexisting_phase4_route_pins_retry_to_model_path(
+    tmp_path: Path,
+) -> None:
+    _, work, route_store, model_store, model, router = _router(tmp_path)
+    request = _request(work, "dev_prepare_workspace", "dev_list_files")
+    model_request = build_work_routing_request(
+        request,
+        primary_target_id="legacy-model",
+    )
+    eligibility = EligibilitySnapshot(
+        snapshot_id="eligibility-preexisting",
+        routing_request_id=model_request.routing_request_id,
+        considered_target_ids=("legacy-model",),
+        eligible_target_ids=("legacy-model",),
+        exclusions=(),
+        target_health_versions={},
+        credential_availability={"legacy-model": True},
+        required_capabilities=model_request.required_capabilities,
+        privacy_class=model_request.privacy_class,
+        locality_requirement=model_request.locality_requirement,
+        policy_version=1,
+        policy_digest="a" * 64,
+    )
+    model_store.record_decision(
+        request=model_request,
+        eligibility=eligibility,
+        decision=RoutingDecision(
+            decision_id="decision-preexisting",
+            routing_request_id=model_request.routing_request_id,
+            strategy_key=model_request.strategy_key,
+            strategy_version=model_request.strategy_version,
+            strategy_digest="b" * 64,
+            ordered_target_ids=("legacy-model",),
+            selected_target_id="legacy-model",
+            reason_codes=("preexisting_model_route",),
+            selected_role="efficient",
+            fallback_budget=0,
+            created_at_epoch=99.0,
+        ),
+        registry_digest="c" * 64,
+    )
+
+    decision = await router.decide(request)
+
+    assert decision.action == "dev_list_files"
+    assert model.calls == 1
+    record = route_store.list_for_work(work.work_id)[0]
+    assert record.route_kind is BrainRouteKind.MODEL
+    assert record.model_decision_id == "decision-preexisting"
+    assert record.model_target_id == "legacy-model"
 
 
 class _ExplodingResolver:
