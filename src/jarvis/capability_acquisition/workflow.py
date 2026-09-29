@@ -14,6 +14,9 @@ from jarvis.capability_acquisition.artifacts import (
     resolution_payload,
     typed_resolution_from_payload,
 )
+from jarvis.capability_acquisition.external_contract import (
+    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+)
 from jarvis.capability_acquisition.models import (
     AcquisitionCandidateV1,
     AcquisitionSourceKind,
@@ -30,7 +33,6 @@ from jarvis.engineering_change import ChangeArtifact, ChangeStore
 from jarvis.work.brain import BrainAction
 from jarvis.work.models import WorkItem, WorkStep, WorkType
 
-PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT = "phase9.real-external-effect.v1"
 
 
 class AcquisitionProtocolError(RuntimeError):
