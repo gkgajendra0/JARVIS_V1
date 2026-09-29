@@ -99,17 +99,11 @@ class LocalResidencyPolicy:
                 raise ValueError(f"{name} must be between 0 and 100")
 
         if self.hard_pressure_free_mib > self.pressure_free_mib:
-            raise ValueError(
-                "hard_pressure_free_mib must not exceed pressure_free_mib"
-            )
+            raise ValueError("hard_pressure_free_mib must not exceed pressure_free_mib")
         if self.pressure_free_mib >= self.min_free_to_load_mib:
-            raise ValueError(
-                "pressure_free_mib must be below min_free_to_load_mib"
-            )
+            raise ValueError("pressure_free_mib must be below min_free_to_load_mib")
         if self.recovery_free_mib < self.min_free_to_load_mib:
-            raise ValueError(
-                "recovery_free_mib must be at least min_free_to_load_mib"
-            )
+            raise ValueError("recovery_free_mib must be at least min_free_to_load_mib")
         if self.recovery_util_percent > self.max_util_to_load_percent:
             raise ValueError(
                 "recovery_util_percent must not exceed max_util_to_load_percent"
@@ -383,9 +377,7 @@ class LocalModelResidencyManager:
                     self._state = GpuResidencyState.AVAILABLE
                     self._last_reason = "gpu_snapshot_recovered"
             elif self._resident_model is not None and not self._active_requests:
-                hard_pressure = (
-                    snapshot.free_mib <= self.policy.hard_pressure_free_mib
-                )
+                hard_pressure = snapshot.free_mib <= self.policy.hard_pressure_free_mib
                 pressure = self._pressure(snapshot)
                 if hard_pressure:
                     self._pressure_count = self.policy.pressure_samples
@@ -430,22 +422,19 @@ class LocalModelResidencyManager:
     def _load_safe(self, snapshot: GpuResidencySnapshot) -> bool:
         return (
             snapshot.free_mib >= self.policy.min_free_to_load_mib
-            and snapshot.utilization_percent
-            <= self.policy.max_util_to_load_percent
+            and snapshot.utilization_percent <= self.policy.max_util_to_load_percent
         )
 
     def _pressure(self, snapshot: GpuResidencySnapshot) -> bool:
         return (
             snapshot.free_mib <= self.policy.pressure_free_mib
-            or snapshot.utilization_percent
-            >= self.policy.pressure_util_percent
+            or snapshot.utilization_percent >= self.policy.pressure_util_percent
         )
 
     def _recovery_safe(self, snapshot: GpuResidencySnapshot) -> bool:
         return (
             snapshot.free_mib >= self.policy.recovery_free_mib
-            and snapshot.utilization_percent
-            <= self.policy.recovery_util_percent
+            and snapshot.utilization_percent <= self.policy.recovery_util_percent
         )
 
     def _observe_recovery_locked(self, snapshot: GpuResidencySnapshot) -> None:
