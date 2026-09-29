@@ -1,6 +1,6 @@
 # JARVIS Cost Optimization Master Plan
 
-Status: **C0-C2 IMPLEMENTED / RESEARCH-CORRECTED / NEXT IMPLEMENTATION SLICE C3**
+Status: **C0-C2 IMPLEMENTED / RESEARCH-CORRECTED / C3 DEEP RESEARCH COMPLETE / C3 IMPLEMENTATION NEXT**
 
 Date: 2026-09-29
 
@@ -138,6 +138,15 @@ As of 2026-09-29, scripted Gemini TTS should default to
 for owner A/B evaluation. Do not change voice identity merely to reduce spend.
 
 ## 5. Global Brain Router
+
+C3 deep research is documented in `JARVIS_C3_GLOBAL_BRAIN_ROUTER_RESEARCH.md`.
+
+The research decision is to preserve the existing Phase-4 ModelRouter as the
+model-target selector and add only a thin global intelligence-path policy around
+it. Exact deterministic decisions may bypass model invocation; ambiguous work
+must abstain back to the model path. External routers are references or possible
+later transport/benchmark components, not the C3 authority/routing core.
+
 
 The existing Phase-4 Model Router should evolve into the common whole-JARVIS intelligence-routing substrate.
 
