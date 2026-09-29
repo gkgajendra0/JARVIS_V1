@@ -212,15 +212,21 @@ class OllamaRunner(BenchmarkRunner):
         model: str,
         num_ctx: int,
         timeout: float,
+        think: bool | None = None,
+        num_predict: int | None = None,
     ) -> None:
         self.host = host.rstrip("/")
         self.model = model.strip()
         self.num_ctx = int(num_ctx)
         self.timeout = float(timeout)
+        self.think = think
+        self.num_predict = None if num_predict is None else int(num_predict)
         if not self.model:
             raise ValueError("Ollama model must not be empty")
         if self.num_ctx <= 0:
             raise ValueError("Ollama num_ctx must be positive")
+        if self.num_predict is not None and self.num_predict <= 0:
+            raise ValueError("Ollama num_predict must be positive")
 
     @staticmethod
     def _response_schema(case: CaseSpec) -> dict[str, Any]:
@@ -263,37 +269,43 @@ class OllamaRunner(BenchmarkRunner):
 
     def run(self, case: CaseSpec) -> RunnerResult:
         schema = self._response_schema(case)
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "stream": False,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a bounded routing classifier inside JARVIS. "
+                        "Hard policy, Authority, privacy and deterministic rules have "
+                        "already run. Choose only among each question's supplied "
+                        "choices or abstain. Do not execute actions, invent options, "
+                        "or add prose."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        self._prompt_payload(case),
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    ),
+                },
+            ],
+            "format": schema,
+            "options": {
+                "temperature": 0,
+                "num_ctx": self.num_ctx,
+            },
+        }
+        if self.think is not None:
+            payload["think"] = self.think
+        if self.num_predict is not None:
+            payload["options"]["num_predict"] = self.num_predict
+
         response, latency_ms = _json_request(
             f"{self.host}/api/chat",
-            {
-                "model": self.model,
-                "stream": False,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a bounded routing classifier inside JARVIS. "
-                            "Hard policy, Authority, privacy and deterministic rules have "
-                            "already run. Choose only among each question's supplied "
-                            "choices or abstain. Do not execute actions, invent options, "
-                            "or add prose."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": json.dumps(
-                            self._prompt_payload(case),
-                            ensure_ascii=False,
-                            sort_keys=True,
-                        ),
-                    },
-                ],
-                "format": schema,
-                "options": {
-                    "temperature": 0,
-                    "num_ctx": self.num_ctx,
-                },
-            },
+            payload,
             timeout=self.timeout,
         )
         message = response.get("message")
@@ -344,7 +356,10 @@ class OllamaRunner(BenchmarkRunner):
                 "output_tokens", 0
             )
 
-        metadata: dict[str, Any] = {}
+        metadata: dict[str, Any] = {
+            "ollama_think": self.think,
+            "ollama_num_predict": self.num_predict,
+        }
         for key in (
             "done_reason",
             "total_duration",
@@ -616,11 +631,14 @@ def _build_runner(args: argparse.Namespace) -> BenchmarkRunner:
     if args.runner == "abstain":
         return AbstainRunner()
     if args.runner == "ollama":
+        think = None if args.ollama_think == "default" else args.ollama_think == "on"
         return OllamaRunner(
             host=args.ollama_host,
             model=args.model,
             num_ctx=args.num_ctx,
             timeout=args.timeout,
+            think=think,
+            num_predict=args.num_predict,
         )
     if args.runner == "jev":
         api_key = os.getenv(args.jev_api_key_env, "")
@@ -668,6 +686,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--ollama-host", default=DEFAULT_OLLAMA_HOST)
     parser.add_argument("--num-ctx", type=int, default=4096)
+    parser.add_argument(
+        "--ollama-think",
+        choices=("default", "on", "off"),
+        default="default",
+        help="Ollama thinking mode; default leaves runtime/model behavior unchanged",
+    )
+    parser.add_argument(
+        "--num-predict",
+        type=int,
+        default=None,
+        help="optional Ollama maximum generated-token cap",
+    )
     parser.add_argument("--jev-endpoint", default=DEFAULT_JEV_ENDPOINT)
     parser.add_argument("--jev-api-key-env", default="JEV_API_KEY")
     parser.add_argument(
@@ -700,6 +730,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--repeat must be positive")
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
+    if args.num_predict is not None and args.num_predict <= 0:
+        parser.error("--num-predict must be positive")
     if args.runner in {"ollama", "jev"} and not args.model.strip():
         parser.error("--model is required for ollama/jev")
     for threshold in args.confidence_threshold:
@@ -781,6 +813,8 @@ def main(argv: list[str] | None = None) -> int:
         "suite": suite,
         "runner": runner.name,
         "requested_model": args.model or None,
+        "ollama_think": (args.ollama_think if args.runner == "ollama" else None),
+        "num_predict": args.num_predict if args.runner == "ollama" else None,
         "case_count": len(cases),
         "repeat": args.repeat,
         "summaries": [
