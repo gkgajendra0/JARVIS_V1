@@ -42,6 +42,7 @@ from jarvis.model_routing.store import (
 )
 from jarvis.model_routing.strategy import derive_work_step_signals
 from jarvis.work.brain import BrainRequest
+from jarvis.work.context import WorkContextMode
 
 _WORK_ROUTING_PROVIDERS = ("gemini", "openai")
 _WORK_CONTEXT_BUDGET_TOKENS = 32_000
@@ -86,6 +87,26 @@ def reasoning_cycle_key(request: BrainRequest) -> str:
 
 
 def _estimated_context_tokens(request: BrainRequest) -> int:
+    pack = request.context_pack
+    use_pack = (
+        request.context_mode is WorkContextMode.APPLY
+        and pack is not None
+    )
+    steps = (
+        pack.recent_steps_payload()
+        if use_pack
+        else [
+            {
+                "kind": step.kind,
+                "summary": step.summary,
+                "input": step.input_data,
+                "observation": step.observation,
+                "error": step.error,
+            }
+            for step in request.recent_steps
+        ]
+    )
+    evidence = list(pack.evidence) if use_pack else list(request.evidence)
     payload = {
         "request": request.work.request,
         "purpose": request.purpose,
@@ -97,18 +118,11 @@ def _estimated_context_tokens(request: BrainRequest) -> int:
             }
             for action in request.allowed_actions
         ],
-        "steps": [
-            {
-                "kind": step.kind,
-                "summary": step.summary,
-                "input": step.input_data,
-                "observation": step.observation,
-                "error": step.error,
-            }
-            for step in request.recent_steps
-        ],
-        "evidence": list(request.evidence),
+        "steps": steps,
+        "evidence": evidence,
     }
+    if use_pack:
+        payload["history_manifest"] = pack.history_manifest_payload()
     encoded = json.dumps(
         payload,
         ensure_ascii=False,
@@ -120,7 +134,12 @@ def _estimated_context_tokens(request: BrainRequest) -> int:
 
 
 def _evidence_size_class(request: BrainRequest) -> EvidenceSizeClass:
-    evidence_count = len(request.evidence)
+    evidence_count = (
+        len(request.context_pack.evidence)
+        if request.context_mode is WorkContextMode.APPLY
+        and request.context_pack is not None
+        else len(request.evidence)
+    )
     if evidence_count >= 6:
         return EvidenceSizeClass.HETEROGENEOUS
     estimated = _estimated_context_tokens(request)
