@@ -7,7 +7,9 @@ from pathlib import Path
 from jarvis.model_routing.local_residency import LocalResidencyPolicy
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_SCRIPT = _REPO_ROOT / "tools" / "research" / "c5_resource_residency_owner_acceptance.py"
+_SCRIPT = (
+    _REPO_ROOT / "tools" / "research" / "c5_resource_residency_owner_acceptance.py"
+)
 
 
 def _load_module():
