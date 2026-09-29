@@ -363,34 +363,26 @@ class LocalModelResidencyManager:
         )
         self._thread.start()
 
-    def _monitor_loop(self) -> None:
-        while not self._stop.wait(self.policy.sample_interval_seconds):
-            snapshot = self._probe.sample()
-            model_to_unload: str | None = None
-            with self._lock:
-                self._last_snapshot = snapshot
-                self._expire_residency_locked(now=float(self._clock()))
+    def poll_once(self) -> LocalResidencyStatus:
+        """Sample GPU state once and apply eviction/recovery policy."""
 
-                if snapshot is None:
-                    if self._resident_model is None:
-                        self._state = GpuResidencyState.UNAVAILABLE
-                        self._last_reason = "gpu_snapshot_unavailable"
-                    continue
+        snapshot = self._probe.sample()
+        model_to_unload: str | None = None
+        with self._lock:
+            self._last_snapshot = snapshot
+            self._expire_residency_locked(now=float(self._clock()))
 
-                if self._state is GpuResidencyState.PRESSURE_BLOCKED:
-                    self._observe_recovery_locked(snapshot)
-                    continue
-                if self._state is GpuResidencyState.UNAVAILABLE:
-                    if self._load_safe(snapshot):
-                        self._state = GpuResidencyState.AVAILABLE
-                        self._last_reason = "gpu_snapshot_recovered"
-                    continue
+            if snapshot is None:
                 if self._resident_model is None:
-                    continue
-                if self._active_requests:
-                    self._pressure_count = 0
-                    continue
-
+                    self._state = GpuResidencyState.UNAVAILABLE
+                    self._last_reason = "gpu_snapshot_unavailable"
+            elif self._state is GpuResidencyState.PRESSURE_BLOCKED:
+                self._observe_recovery_locked(snapshot)
+            elif self._state is GpuResidencyState.UNAVAILABLE:
+                if self._load_safe(snapshot):
+                    self._state = GpuResidencyState.AVAILABLE
+                    self._last_reason = "gpu_snapshot_recovered"
+            elif self._resident_model is not None and not self._active_requests:
                 hard_pressure = (
                     snapshot.free_mib <= self.policy.hard_pressure_free_mib
                 )
@@ -410,12 +402,17 @@ class LocalModelResidencyManager:
                     self._recovery_count = 0
                     self._last_reason = self._pressure_reason(snapshot)
 
-            if model_to_unload is not None:
-                ok = bool(self._unload_model(model_to_unload))
-                if not ok:
-                    with self._lock:
-                        self._state = GpuResidencyState.UNAVAILABLE
-                        self._last_reason = "local_model_unload_failed"
+        if model_to_unload is not None:
+            ok = bool(self._unload_model(model_to_unload))
+            if not ok:
+                with self._lock:
+                    self._state = GpuResidencyState.UNAVAILABLE
+                    self._last_reason = "local_model_unload_failed"
+        return self.status()
+
+    def _monitor_loop(self) -> None:
+        while not self._stop.wait(self.policy.sample_interval_seconds):
+            self.poll_once()
 
     def _expire_residency_locked(self, *, now: float) -> None:
         if self._resident_model is None or self._resident_last_used_at is None:
