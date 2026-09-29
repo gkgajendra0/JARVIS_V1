@@ -192,7 +192,9 @@ class ModelInvoker:
                 request_context=request_context,
             )
             if not isinstance(result, StructuredOutputTelemetry):
-                raise TypeError("model adapter telemetry method returned unexpected type")
+                raise TypeError(
+                    "model adapter telemetry method returned unexpected type"
+                )
             return result
 
         started = time.perf_counter()
