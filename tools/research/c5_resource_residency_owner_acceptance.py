@@ -155,7 +155,7 @@ async def _run() -> dict[str, object]:
         recovery_trace: list[dict[str, object]] = []
         recovered = False
         for attempt in range(1, 13):
-            time.sleep(1.0)
+            await asyncio.sleep(1.0)
             status = manager.poll_once()
             snapshot = status.snapshot
             recovery_trace.append(
