@@ -318,3 +318,20 @@ def test_explicit_response_contract_failure_is_classified_for_fallback() -> None
     assert failure.kind is ProviderFailureKind.RESPONSE_CONTRACT_INVALID
     assert failure.retryable is False
     assert "required contract" in failure.spoken_message
+
+
+
+def test_local_resource_pressure_is_classified_for_immediate_fallback() -> None:
+    class ResourcePressureError(RuntimeError):
+        local_resource_pressure = True
+        status_code = 503
+        retryable = True
+
+    failure = classify_provider_failure(
+        ResourcePressureError("gpu busy"),
+        provider="ollama",
+    )
+
+    assert failure.kind is ProviderFailureKind.LOCAL_RESOURCE_PRESSURE
+    assert failure.retryable is True
+    assert "local gpu resources" in failure.spoken_message.casefold()
