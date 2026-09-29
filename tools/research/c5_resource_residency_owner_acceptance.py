@@ -104,6 +104,7 @@ async def _run() -> dict[str, object]:
     if not probe.available:
         raise RuntimeError("nvidia-smi is unavailable")
 
+    _stop_model("qwen3.5:4b")
     baseline = probe.sample()
     if baseline is None:
         raise RuntimeError("could not sample NVIDIA GPU state")
@@ -115,8 +116,6 @@ async def _run() -> dict[str, object]:
         raise RuntimeError(
             "owner GPU is currently too busy for production-safe cold loading"
         )
-
-    _stop_model("qwen3.5:4b")
 
     manager = build_c5_local_residency_manager(
         policy=acceptance_policy,
