@@ -10,6 +10,7 @@ from jarvis.ai_provider import (
     configured_ai_provider,
     configured_tts_provider,
     normalize_ai_provider,
+    normalize_tts_provider,
 )
 from jarvis.autonomy.mode import AutonomyMode
 from jarvis.machine_config import configured_text, load_machine_settings
@@ -173,7 +174,7 @@ class JarvisConfig:
         object.__setattr__(
             self,
             "tts_provider",
-            normalize_ai_provider(self.tts_provider),
+            normalize_tts_provider(self.tts_provider),
         )
 
         if not isinstance(self.autonomy_mode, AutonomyMode):
