@@ -144,6 +144,23 @@ def apply_provider_failure(
     count = record.consecutive_failures + 1
     kind = failure.kind
 
+    if kind is ProviderFailureKind.LOCAL_RESOURCE_PRESSURE:
+        seconds = min(cap, base * (2 ** max(0, count - 1)))
+        next_record = replace(
+            record,
+            state=TargetHealthEligibility.COOLDOWN,
+            consecutive_failures=count,
+            cooldown_until_epoch=now + seconds,
+            last_failure_kind=kind.value,
+            updated_at_epoch=now,
+            version=record.version + 1,
+        )
+        return HealthMutation(
+            record=next_record,
+            action=HealthAction.FALLBACK_ALLOWED,
+            reason_code="local_resource_pressure_cooldown",
+        )
+
     if kind is ProviderFailureKind.RESPONSE_CONTRACT_INVALID:
         seconds = min(cap, base * (2 ** max(0, count - 1)))
         next_record = replace(

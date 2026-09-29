@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
+import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -15,6 +17,11 @@ from pydantic import BaseModel, ValidationError
 from jarvis.hands.provider_adapters import (
     StructuredOutputError,
     StructuredOutputTelemetry,
+)
+from jarvis.model_routing.local_residency import (
+    GpuResidencyProbe,
+    LocalModelResidencyManager,
+    LocalResidencyPolicy,
 )
 from jarvis.model_routing.models import (
     BenchmarkStatus,
@@ -82,6 +89,37 @@ def build_c5_local_target_registry(
     if not isinstance(adapter_registry, ModelAdapterRegistry):
         raise TypeError("adapter_registry must be a ModelAdapterRegistry")
     return ModelTargetRegistry(adapter_registry, (build_c5_local_target(),))
+
+
+def _stop_ollama_model(model: str) -> bool:
+    executable = shutil.which("ollama")
+    if executable is None:
+        return False
+    try:
+        result = subprocess.run(
+            [executable, "stop", str(model).strip()],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30.0,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+
+def build_c5_local_residency_manager(
+    *,
+    policy: LocalResidencyPolicy | None = None,
+    probe: GpuResidencyProbe | None = None,
+) -> LocalModelResidencyManager:
+    """Build the accepted owner-machine C5 GPU residency controller."""
+
+    return LocalModelResidencyManager(
+        policy=policy,
+        probe=probe,
+        unload_model=_stop_ollama_model,
+    )
 
 
 class OllamaStructuredOutputError(StructuredOutputError):
@@ -208,6 +246,7 @@ class OllamaStructuredOutputAdapter:
         num_predict: int = DEFAULT_OLLAMA_NUM_PREDICT,
         keep_alive: str = DEFAULT_OLLAMA_KEEP_ALIVE,
         timeout_seconds: float = DEFAULT_OLLAMA_TIMEOUT_SECONDS,
+        residency_manager: LocalModelResidencyManager | None = None,
     ) -> None:
         self._endpoint = _normalize_loopback_endpoint(endpoint)
         if not isinstance(think, bool):
@@ -232,6 +271,11 @@ class OllamaStructuredOutputAdapter:
         self._num_predict = num_predict
         self._keep_alive = normalized_keep_alive
         self._timeout_seconds = timeout_value
+        if residency_manager is not None and not isinstance(
+            residency_manager, LocalModelResidencyManager
+        ):
+            raise TypeError("residency_manager must be a LocalModelResidencyManager")
+        self._residency_manager = residency_manager
 
     def _endpoint_for(self, target: ModelTarget) -> str:
         if target.adapter_id != self.adapter_id:
@@ -308,13 +352,26 @@ class OllamaStructuredOutputAdapter:
             },
         }
 
+        residency = self._residency_manager
+        if residency is not None:
+            residency.before_invocation(target.model_id)
+
         started = time.perf_counter()
-        response = await asyncio.to_thread(
-            _post_json,
-            f"{endpoint}/api/chat",
-            payload,
-            timeout=self._timeout_seconds,
-        )
+        response_received = False
+        try:
+            response = await asyncio.to_thread(
+                _post_json,
+                f"{endpoint}/api/chat",
+                payload,
+                timeout=self._timeout_seconds,
+            )
+            response_received = True
+        finally:
+            if residency is not None:
+                residency.after_invocation(
+                    target.model_id,
+                    success=response_received,
+                )
         elapsed_ms = (time.perf_counter() - started) * 1000.0
 
         message = response.get("message")

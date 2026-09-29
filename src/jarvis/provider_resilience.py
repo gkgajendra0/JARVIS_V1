@@ -24,6 +24,7 @@ class ProviderFailureKind(str, Enum):
     TIMEOUT = "timeout"
     CONNECTION_LOST = "connection_lost"
     RESPONSE_CONTRACT_INVALID = "response_contract_invalid"
+    LOCAL_RESOURCE_PRESSURE = "local_resource_pressure"
     UNKNOWN = "unknown"
 
 
@@ -95,6 +96,10 @@ class ProviderFailure:
             ProviderFailureKind.RESPONSE_CONTRACT_INVALID: (
                 f"Sir, {name} returned a response that did not satisfy the required "
                 "contract. I am using an approved fallback where available."
+            ),
+            ProviderFailureKind.LOCAL_RESOURCE_PRESSURE: (
+                "Sir, local GPU resources are currently busy. I am using an approved "
+                "fallback where available."
             ),
             ProviderFailureKind.UNKNOWN: (
                 f"Sir, {name} became unavailable because of an unclassified provider "
@@ -236,8 +241,13 @@ def classify_provider_failure(error: object, *, provider: str) -> ProviderFailur
     response_contract_invalid = any(
         getattr(item, "response_contract_invalid", False) is True for item in chain
     )
+    local_resource_pressure = any(
+        getattr(item, "local_resource_pressure", False) is True for item in chain
+    )
 
-    if response_contract_invalid:
+    if local_resource_pressure:
+        kind = ProviderFailureKind.LOCAL_RESOURCE_PRESSURE
+    elif response_contract_invalid:
         kind = ProviderFailureKind.RESPONSE_CONTRACT_INVALID
     elif any(marker in evidence for marker in quota_markers):
         kind = ProviderFailureKind.QUOTA_EXHAUSTED
