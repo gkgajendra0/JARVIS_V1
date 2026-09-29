@@ -16,9 +16,7 @@ OWNER_INPUT_REQUEST_KEY = "owner_input_request"
 ACCEPTANCE_OBSERVATION_KEY = "acceptance_observation"
 
 _OWNER_INPUT_KINDS = frozenset({"pin", "confirmation"})
-_OBSERVATION_METHODS = frozenset(
-    {"device_state_readback", "external_system_readback"}
-)
+_OBSERVATION_METHODS = frozenset({"device_state_readback", "external_system_readback"})
 _PARAMETER = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 
