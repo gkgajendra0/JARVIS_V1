@@ -290,6 +290,12 @@ class ModelRoutingStore:
     def path(self):
         return self._work_store.path
 
+    @property
+    def work_store(self) -> SQLiteWorkStore:
+        """Expose the canonical WorkStore for adjacent durable telemetry extensions."""
+
+        return self._work_store
+
     def _initialize(self) -> None:
         with self._work_store.extension_transaction() as connection:
             connection.executescript(
