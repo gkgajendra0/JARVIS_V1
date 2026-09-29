@@ -151,7 +151,9 @@ async def _invoke_local(
 
 
 async def _run(args: argparse.Namespace) -> dict[str, object]:
-    process = psutil.Process(args.pid) if args.pid is not None else find_jarvis_process()
+    process = (
+        psutil.Process(args.pid) if args.pid is not None else find_jarvis_process()
+    )
     if not _process_alive(process):
         raise RuntimeError("jarvis-voice process is not running")
 
