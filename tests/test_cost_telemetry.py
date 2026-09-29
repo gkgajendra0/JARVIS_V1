@@ -124,10 +124,13 @@ def test_cost_estimator_requires_real_usage_and_price_profile() -> None:
         profile,
         {"input_tokens": 1_000, "output_tokens": 200},
     ) == pytest.approx(0.004)
-    assert estimate_profile_usage_cost_usd(
-        profile,
-        {"input_tokens": 1_000},
-    ) is None
+    assert (
+        estimate_profile_usage_cost_usd(
+            profile,
+            {"input_tokens": 1_000},
+        )
+        is None
+    )
 
 
 def _attempt(
