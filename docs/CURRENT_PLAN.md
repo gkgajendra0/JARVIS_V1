@@ -41,6 +41,22 @@ It remains the mechanism JARVIS uses when self-management requires research, dia
 
 These loops must reuse canonical WorkItems, Authority, research, development, verification, knowledge, acceptance and promotion boundaries rather than create parallel autonomous systems.
 
+## Active cost-optimization interlude
+
+Before purchasing paid-brain credits for the deferred blind external-capability validation, the owner has directed a bounded cost-optimization interlude.
+
+Authoritative documents:
+
+- `JARVIS_COST_OPTIMIZATION_DECISIONS.md`;
+- `JARVIS_COST_OPTIMIZATION_MASTER_PLAN.md`;
+- `JARVIS_COST_OPTIMIZATION_IMPLEMENTATION_PLAN.md`.
+
+The interlude preserves all accepted Phase-4 routing, Authority, WorkItem, EngineeringChange, verification and promotion boundaries. It generalizes the existing model-routing substrate rather than creating a competing router.
+
+The implementation order begins with cost-call inventory and telemetry, then TTS/paid-brain separation, Global Brain Router v1, Jev decision-layer evaluation, local-brain benchmarking/admission, retrieval/context optimization and genuinely distinct cloud cost tiers. Only after the documented pre-credit acceptance gate should approximately ₹400–₹500 of paid-brain capacity be purchased for the blind real-world capability experiment.
+
+Phase 11 remains the next autonomous-engineering phase in the master sequence, but this cost-optimization interlude is the owner's immediate implementation priority before paid capability-acquisition testing.
+
 ## Active cross-cutting program
 
 The active cross-cutting engineering boundary is now:
@@ -207,4 +223,4 @@ Historical experiments, old acceptance transcripts and superseded research remai
 
 ## Immediate next action
 
-**Phase 10A is DONE / OWNER-MACHINE ACCEPTED. The next cross-cutting action is Phase 11 repository inspection and thorough research, followed by architecture for explicit owner approval before any Phase-11 implementation. Preserve production SHADOW, existing Authority, and the deferred Phase-9 full external lifecycle.**
+**Start the JARVIS Cost Optimization interlude from Slice C0 in `JARVIS_COST_OPTIMIZATION_IMPLEMENTATION_PLAN.md`. Do not purchase the ₹400–₹500 paid-brain experiment balance until the documented pre-credit gate passes. Preserve production SHADOW, existing Authority, accepted Phase-4 routing contracts and the deferred Phase-9 blind external lifecycle. Phase 11 remains next in the autonomous-engineering sequence after this bounded interlude unless the owner changes priority.**
