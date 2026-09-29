@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
+from pydantic import BaseModel, ConfigDict
 
+from jarvis.model_routing.invoker import ModelInvocationContext
 from jarvis.model_routing.local_residency import (
     GpuResidencySnapshot,
     GpuResidencyState,
@@ -11,6 +13,10 @@ from jarvis.model_routing.local_residency import (
     LocalModelResourcePressure,
     LocalResidencyPolicy,
     NvidiaSmiResidencyProbe,
+)
+from jarvis.model_routing.ollama import (
+    OllamaStructuredOutputAdapter,
+    build_c5_local_target,
 )
 
 
@@ -220,3 +226,106 @@ def test_nvidia_smi_probe_parses_free_memory_and_utilization(
         utilization_percent=12.0,
         captured_at_monotonic=123.0,
     )
+
+
+
+class _Decision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision: str
+
+
+@pytest.mark.asyncio
+async def test_ollama_adapter_marks_model_resident_after_guarded_invocation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probe = MutableProbe(_snapshot())
+    unloaded: list[str] = []
+    manager = LocalModelResidencyManager(
+        policy=_policy(),
+        probe=probe,
+        unload_model=lambda model: unloaded.append(model) is None,
+    )
+
+    def fake_post(url, payload, *, timeout):
+        del url, payload, timeout
+        return {
+            "message": {"content": '{"decision":"local"}'},
+            "prompt_eval_count": 10,
+            "eval_count": 2,
+        }
+
+    monkeypatch.setattr(
+        "jarvis.model_routing.ollama._post_json",
+        fake_post,
+    )
+    adapter = OllamaStructuredOutputAdapter(residency_manager=manager)
+
+    try:
+        result = await adapter.invoke_structured_with_telemetry(
+            target=build_c5_local_target(),
+            system_prompt="bounded local decision",
+            input_payload={"task": "summarize"},
+            response_model=_Decision,
+            request_context=ModelInvocationContext(
+                work_id="work-residency",
+                routing_request_id="route-residency",
+                decision_id="decision-residency",
+                attempt_id="attempt-residency",
+                correlation_key="corr-residency",
+            ),
+        )
+
+        assert result.parsed == _Decision(decision="local")
+        status = manager.status()
+        assert status.state is GpuResidencyState.RESIDENT
+        assert status.resident_model == "qwen3.5:4b"
+        assert status.active_requests == 0
+        assert unloaded == []
+    finally:
+        manager.close()
+
+
+@pytest.mark.asyncio
+async def test_ollama_adapter_blocks_cold_load_before_http_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probe = MutableProbe(_snapshot(free_mib=3500, utilization=15.0))
+    manager = LocalModelResidencyManager(
+        policy=_policy(),
+        probe=probe,
+        unload_model=lambda _model: True,
+    )
+    called = False
+
+    def fake_post(url, payload, *, timeout):
+        nonlocal called
+        del url, payload, timeout
+        called = True
+        return {"message": {"content": '{"decision":"local"}'}}
+
+    monkeypatch.setattr(
+        "jarvis.model_routing.ollama._post_json",
+        fake_post,
+    )
+    adapter = OllamaStructuredOutputAdapter(residency_manager=manager)
+
+    try:
+        with pytest.raises(LocalModelResourcePressure):
+            await adapter.invoke_structured(
+                target=build_c5_local_target(),
+                system_prompt="bounded local decision",
+                input_payload={"task": "summarize"},
+                response_model=_Decision,
+                request_context=ModelInvocationContext(
+                    work_id="work-blocked",
+                    routing_request_id="route-blocked",
+                    decision_id="decision-blocked",
+                    attempt_id="attempt-blocked",
+                    correlation_key="corr-blocked",
+                ),
+            )
+
+        assert called is False
+    finally:
+        manager.close()
