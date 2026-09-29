@@ -11,6 +11,12 @@ from importlib import import_module
 from typing import Any
 
 _EXPORTS = {
+    "CostTelemetryBucket": "jarvis.model_routing.cost",
+    "CostTelemetryReader": "jarvis.model_routing.cost",
+    "CostTelemetryReport": "jarvis.model_routing.cost",
+    "estimate_profile_usage_cost_usd": "jarvis.model_routing.cost",
+    "estimate_usage_cost_usd": "jarvis.model_routing.cost",
+    "summarize_cost_attempts": "jarvis.model_routing.cost",
     "EligibilityPolicy": "jarvis.model_routing.eligibility",
     "EligibilityReason": "jarvis.model_routing.eligibility",
     "EligibilityResult": "jarvis.model_routing.eligibility",
