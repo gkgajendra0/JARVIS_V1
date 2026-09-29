@@ -118,6 +118,7 @@ class JarvisConfig:
     autonomy_mode: AutonomyMode = AutonomyMode.SHADOW
     work_orchestration_enabled: bool = False
     work_orchestration_model: str | None = None
+    global_brain_router_mode: str = "shadow"
     work_dbos_database_url: str | None = field(default=None, repr=False)
     work_global_concurrency: int = 4
     development_test_docker_image: str | None = None
@@ -184,6 +185,17 @@ class JarvisConfig:
 
         if not isinstance(self.autonomy_mode, AutonomyMode):
             raise TypeError("autonomy_mode must be an AutonomyMode")
+
+        brain_router_mode = str(self.global_brain_router_mode).strip().casefold()
+        if brain_router_mode not in {"off", "shadow", "apply"}:
+            raise ValueError(
+                "global_brain_router_mode must be one of: off, shadow, apply"
+            )
+        object.__setattr__(
+            self,
+            "global_brain_router_mode",
+            brain_router_mode,
+        )
 
         camera_source = str(self.vision_default_camera).strip().lower()
         if camera_source not in {"lenovo", "pocket3"}:
@@ -403,6 +415,11 @@ class JarvisConfig:
             ),
             work_orchestration_model=_configured_optional_text(
                 "JARVIS_WORK_ORCHESTRATION_MODEL", machine
+            ),
+            global_brain_router_mode=_configured_required_text(
+                "JARVIS_GLOBAL_BRAIN_ROUTER_MODE",
+                "shadow",
+                machine,
             ),
             work_dbos_database_url=_configured_optional_text(
                 "JARVIS_WORK_DBOS_DATABASE_URL", machine
