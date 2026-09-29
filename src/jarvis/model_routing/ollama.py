@@ -274,9 +274,7 @@ class OllamaStructuredOutputAdapter:
         if residency_manager is not None and not isinstance(
             residency_manager, LocalModelResidencyManager
         ):
-            raise TypeError(
-                "residency_manager must be a LocalModelResidencyManager"
-            )
+            raise TypeError("residency_manager must be a LocalModelResidencyManager")
         self._residency_manager = residency_manager
 
     def _endpoint_for(self, target: ModelTarget) -> str:
