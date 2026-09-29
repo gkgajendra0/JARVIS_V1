@@ -201,9 +201,7 @@ def test_exa_provider_normalizes_realistic_sdk_results() -> None:
     }
     costs = provider.estimate_costs(evidence.usage)
     assert len(costs) == 2
-    assert sum(item.estimated_cost_usd or 0.0 for item in costs) == pytest.approx(
-        0.008
-    )
+    assert sum(item.estimated_cost_usd or 0.0 for item in costs) == pytest.approx(0.008)
 
 
 def test_research_builder_is_independent_of_active_ai_provider(
