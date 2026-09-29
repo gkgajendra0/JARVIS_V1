@@ -34,7 +34,6 @@ from jarvis.work.brain import BrainAction
 from jarvis.work.models import WorkItem, WorkStep, WorkType
 
 
-
 class AcquisitionProtocolError(RuntimeError):
     """Phase-9 acquisition evidence/finalization failed deterministic validation."""
 
