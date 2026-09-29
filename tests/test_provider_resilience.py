@@ -320,7 +320,6 @@ def test_explicit_response_contract_failure_is_classified_for_fallback() -> None
     assert "required contract" in failure.spoken_message
 
 
-
 def test_local_resource_pressure_is_classified_for_immediate_fallback() -> None:
     class ResourcePressureError(RuntimeError):
         local_resource_pressure = True
