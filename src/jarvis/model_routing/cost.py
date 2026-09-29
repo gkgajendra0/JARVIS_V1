@@ -106,7 +106,9 @@ class _MutableBucket:
         else:
             self.known_cost += float(attempt.estimated_cost_usd)
 
-    def freeze(self, *, stage_key: str, provider_id: str, model_id: str) -> CostTelemetryBucket:
+    def freeze(
+        self, *, stage_key: str, provider_id: str, model_id: str
+    ) -> CostTelemetryBucket:
         return CostTelemetryBucket(
             stage_key=stage_key,
             provider_id=provider_id,
