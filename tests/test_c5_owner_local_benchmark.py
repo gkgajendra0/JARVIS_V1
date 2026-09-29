@@ -42,6 +42,7 @@ def test_comparison_row_projects_benchmark_and_gpu_metrics() -> None:
                 {
                     "accuracy_over_covered": 0.9,
                     "coverage": 1.0,
+                    "structured_output_failures": 1,
                     "unsafe_downgrades": 1,
                     "conservative_escalations": 2,
                     "latency_ms_p50": 500.0,
@@ -72,6 +73,7 @@ def test_comparison_row_projects_benchmark_and_gpu_metrics() -> None:
 
     assert row["model"] == "phi4-mini"
     assert row["accuracy_over_covered"] == 0.9
+    assert row["structured_output_failures"] == 1
     assert row["unsafe_downgrades"] == 1
     assert row["api_cost_usd"] == 0.0
     assert row["ollama_processor"] == "100% GPU"
