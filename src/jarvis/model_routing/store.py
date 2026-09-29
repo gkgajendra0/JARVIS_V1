@@ -647,6 +647,22 @@ class ModelRoutingStore:
             for row in rows
         )
 
+    def list_work_ids_for_change(self, change_id: str) -> tuple[str, ...]:
+        normalized = change_id.strip()
+        if not normalized:
+            raise ValueError("change_id must not be empty")
+        with self._work_store.extension_transaction() as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT work_id
+                FROM model_routing_decisions
+                WHERE change_id = ?
+                ORDER BY work_id
+                """,
+                (normalized,),
+            ).fetchall()
+        return tuple(str(row["work_id"]) for row in rows)
+
     def list_attempts_for_change(self, change_id: str) -> tuple[RoutingAttempt, ...]:
         normalized = change_id.strip()
         if not normalized:
