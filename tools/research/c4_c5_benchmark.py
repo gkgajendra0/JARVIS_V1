@@ -312,9 +312,7 @@ class OllamaRunner(BenchmarkRunner):
 
         answers = decoded.get("answers") if isinstance(decoded, dict) else None
         if not isinstance(answers, dict):
-            raise StructuredOutputError(
-                "Ollama structured response is missing answers"
-            )
+            raise StructuredOutputError("Ollama structured response is missing answers")
 
         predictions: dict[str, Prediction] = {}
         for question in case.questions:
