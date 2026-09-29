@@ -59,10 +59,7 @@ def show_provider() -> int:
     print(f"Credential available: {'yes' if credential_available else 'no'}")
     print(f"JARVIS scripted TTS provider: {tts_provider}")
     print(f"TTS credential variable: {tts_credential_name}")
-    print(
-        "TTS credential available: "
-        f"{'yes' if tts_credential_available else 'no'}"
-    )
+    print(f"TTS credential available: {'yes' if tts_credential_available else 'no'}")
     print(f"TTS billing separated: {'yes' if tts_separated else 'no'}")
     print(f"Machine configuration: {default_machine_config_path()}")
     return 0 if credential_available else 2
