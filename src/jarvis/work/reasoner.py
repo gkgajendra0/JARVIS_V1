@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from jarvis.ai_provider import normalize_ai_provider, resolve_ai_role_model
 from jarvis.hands.provider_adapters import build_structured_output_client
+from jarvis.model_routing.cost import estimate_usage_cost_usd
 from jarvis.model_routing.health import (
     HealthAction,
     TargetHealthRecord,
@@ -460,13 +461,14 @@ class RoutedWorkReasoner:
             started = float(self._clock())
             new_attempts += 1
             try:
-                parsed = await self._invoker.invoke_structured(
+                invocation = await self._invoker.invoke_structured_with_telemetry(
                     target=target,
                     system_prompt=_SYSTEM_PROMPT,
                     input_payload=_work_input_payload(request),
                     response_model=_WorkDecisionModel,
                     request_context=context,
                 )
+                parsed = invocation.parsed
             except Exception as exc:
                 ended = float(self._clock())
                 failure = classify_provider_failure(
@@ -488,6 +490,10 @@ class RoutedWorkReasoner:
                         else RoutingAttemptKind.FALLBACK
                     ),
                     failure_class=failure.kind.value,
+                    provider_id=target.provider_id,
+                    model_id=target.model_id,
+                    stage_key=routing_request.stage_key,
+                    usage_observed=False,
                     response_contract_result=ResponseContractResult.UNKNOWN,
                     correlation_key=correlation_key,
                 )
@@ -518,6 +524,16 @@ class RoutedWorkReasoner:
                     RoutingAttemptKind.PRIMARY
                     if target.target_id == selection.decision.selected_target_id
                     else RoutingAttemptKind.FALLBACK
+                ),
+                provider_id=target.provider_id,
+                model_id=target.model_id,
+                stage_key=routing_request.stage_key,
+                usage=dict(invocation.usage),
+                usage_observed=invocation.usage_observed,
+                estimated_cost_usd=(
+                    estimate_usage_cost_usd(target, invocation.usage)
+                    if invocation.usage_observed
+                    else None
                 ),
                 response_contract_result=ResponseContractResult.VALID,
                 correlation_key=correlation_key,
