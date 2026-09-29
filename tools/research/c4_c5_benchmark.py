@@ -631,11 +631,7 @@ def _build_runner(args: argparse.Namespace) -> BenchmarkRunner:
     if args.runner == "abstain":
         return AbstainRunner()
     if args.runner == "ollama":
-        think = (
-            None
-            if args.ollama_think == "default"
-            else args.ollama_think == "on"
-        )
+        think = None if args.ollama_think == "default" else args.ollama_think == "on"
         return OllamaRunner(
             host=args.ollama_host,
             model=args.model,
@@ -817,9 +813,7 @@ def main(argv: list[str] | None = None) -> int:
         "suite": suite,
         "runner": runner.name,
         "requested_model": args.model or None,
-        "ollama_think": (
-            args.ollama_think if args.runner == "ollama" else None
-        ),
+        "ollama_think": (args.ollama_think if args.runner == "ollama" else None),
         "num_predict": args.num_predict if args.runner == "ollama" else None,
         "case_count": len(cases),
         "repeat": args.repeat,
