@@ -90,11 +90,7 @@ def main() -> int:
         )
     )
     evaluated = rows[:50]
-    failures = [
-        row
-        for row in evaluated
-        if not bool(row["latest_step_retained"])
-    ]
+    failures = [row for row in evaluated if not bool(row["latest_step_retained"])]
     reductions = [
         float(row["reduction_percent"])
         for row in evaluated
