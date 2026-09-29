@@ -298,10 +298,16 @@ class OllamaRunner(BenchmarkRunner):
         )
         message = response.get("message")
         if not isinstance(message, dict):
-            raise TypeError("Ollama response is missing message object")
+            raise StructuredOutputError("Ollama response is missing message object")
         content = message.get("content")
         if not isinstance(content, str) or not content.strip():
-            raise ValueError("Ollama response contains no structured content")
+            thinking = message.get("thinking")
+            thinking_chars = len(thinking) if isinstance(thinking, str) else 0
+            done_reason = response.get("done_reason")
+            raise StructuredOutputError(
+                "Ollama response contains no structured content "
+                f"(thinking_chars={thinking_chars}, done_reason={done_reason!r})"
+            )
         try:
             decoded = json.loads(content)
         except json.JSONDecodeError as exc:
