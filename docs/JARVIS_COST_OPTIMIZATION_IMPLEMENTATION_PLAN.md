@@ -1,6 +1,6 @@
 # JARVIS Cost Optimization Implementation Plan
 
-Status: **C0 + C1 + C2 IMPLEMENTED AND RESEARCH-CORRECTED / NEXT SLICE: C3**
+Status: **C0 + C1 + C2 IMPLEMENTED AND RESEARCH-CORRECTED / C3 RESEARCH COMPLETE / C3 IMPLEMENTATION NEXT**
 
 Date: 2026-09-29
 
@@ -113,6 +113,27 @@ Exit:
 - no paid-brain credential is required for routine configured free-tier TTS.
 
 ## Slice C3 — Global Brain Router v1
+
+Status: **DEEP RESEARCH COMPLETE / IMPLEMENTATION NEXT**.
+
+Research source: `JARVIS_C3_GLOBAL_BRAIN_ROUTER_RESEARCH.md`.
+
+Architecture decision:
+
+- one logical routing pipeline with a thin intelligence-path policy in front of the existing Phase-4 ModelRouter;
+- deterministic path selects only an already-approved `BrainDecision`; execution remains in the governed Work/Hands/capability runtime;
+- deterministic resolvers are versioned, explicit and must abstain on ambiguity;
+- bounded-decision slot is reserved for C4 but disabled in C3;
+- local/cloud target selection continues through the existing ModelTarget registry, eligibility, health, strategy and fallback substrate;
+- add durable route provenance for deterministic bypasses so avoided model calls are measurable;
+- start with shadow evaluation, then apply only replay-accepted deterministic rules;
+- do not adopt LiteLLM, vLLM Semantic Router, Not Diamond or another gateway as the C3 core.
+
+Initial deterministic Work candidates:
+
+- development initial workspace preparation;
+- diagnostics initial canonical incident inspection;
+- post-test development diff inspection when canonical state proves it is required.
 
 Goal: generalize the existing Phase-4 router rather than create another router.
 
