@@ -226,9 +226,7 @@ class ProviderCostEventStore:
     def record(self, event: ProviderCostEvent) -> ProviderCostEvent:
         if not isinstance(event, ProviderCostEvent):
             raise TypeError("event must be a ProviderCostEvent")
-        payload = self._work_store.encode_extension_json(
-            _provider_event_payload(event)
-        )
+        payload = self._work_store.encode_extension_json(_provider_event_payload(event))
         try:
             with self._work_store.extension_transaction() as connection:
                 connection.execute(
@@ -424,9 +422,7 @@ class _MutableProviderBucket:
             unpriced_events=self.unpriced,
             quantity=self.quantity,
             known_estimated_cost_usd=self.known_cost,
-            estimated_total_cost_usd=(
-                self.known_cost if self.unpriced == 0 else None
-            ),
+            estimated_total_cost_usd=(self.known_cost if self.unpriced == 0 else None),
         )
 
 
@@ -456,9 +452,7 @@ def summarize_cost_attempts(
         groups.setdefault(key, _MutableBucket()).add(attempt)
 
     provider_overall = _MutableProviderBucket()
-    provider_groups: dict[
-        tuple[str, str, str, str], _MutableProviderBucket
-    ] = {}
+    provider_groups: dict[tuple[str, str, str, str], _MutableProviderBucket] = {}
     for event in provider_events:
         if event.work_id not in {attempt.work_id for attempt in attempts} and (
             normalized_kind == "work" and event.work_id != normalized_id
@@ -524,8 +518,8 @@ class CostTelemetryReader:
         if not isinstance(store, ModelRoutingStore):
             raise TypeError("store must be a ModelRoutingStore")
         self._store = store
-        self._provider_cost_store = (
-            provider_cost_store or ProviderCostEventStore(store.work_store)
+        self._provider_cost_store = provider_cost_store or ProviderCostEventStore(
+            store.work_store
         )
 
     def for_work(self, work_id: str) -> CostTelemetryReport:
