@@ -100,3 +100,61 @@ The experiment should answer both:
 - what did the successful or failed attempt actually cost, by stage and model path?
 
 A later Cost Governor should enforce hard budgets after these real measurements exist.
+
+
+## Decision 4 — Local Brain is a first-class cost-control tier
+
+The Global Brain Router should not choose only between Gemini and OpenAI.
+
+The target intelligence ladder is:
+
+1. deterministic/known capability;
+2. bounded decision layer;
+3. local efficient brain;
+4. local stronger brain where hardware permits;
+5. cheap cloud;
+6. standard cloud;
+7. strong/frontier cloud only when justified.
+
+The local brain is selected by JARVIS-specific benchmark results on the owner's hardware, not by generic model popularity.
+
+Local reasoning must not change the preferred JARVIS voice. Reasoning and TTS remain separate layers.
+
+## Decision 5 — Jev is the preferred candidate for bounded AI decisions
+
+Jev should be evaluated as a specialized low-cost decision engine inside the Global Brain Router.
+
+Appropriate decisions include route selection, retry/escalate, task classification, whether research is needed, approved tool/capability choice and local-vs-cloud/cheap-vs-strong selection.
+
+Permanent boundaries:
+
+- deterministic policy runs before Jev;
+- Jev cannot grant Authority, bypass owner gates or determine verification truth;
+- Jev must be benchmarked against JARVIS-specific decisions;
+- a deterministic/local fallback is required if Jev is unavailable;
+- current pricing, service maturity and terms must be re-verified before implementation.
+
+## Decision 6 — Retrieval/context optimization is part of local-brain economics
+
+Prefer retrieving relevant repo, EngineeringKnowledge, memory, log and prior-solution evidence before reasoning.
+
+Do not compensate for poor retrieval by continuously sending the full repository, large histories or broad WorkStep evidence to expensive models.
+
+A smaller grounded local model is preferred over a larger cloud model when the smaller model meets the task's correctness and latency requirements.
+
+## Decision 7 — Claude is optional development acceleration, not the runtime brain
+
+Claude Pro/Claude Code may be evaluated for software-development work because subscription-backed coding usage may reduce development cost.
+
+It must remain optional and adapter-bounded.
+
+Do not assume a Claude subscription provides general Claude API credits or permanent Agent SDK entitlement. Re-verify Anthropic's current terms immediately before any integration.
+
+## Decision 8 — Cost optimization implementation order
+
+The authoritative architecture and implementation sequence are now:
+
+- `JARVIS_COST_OPTIMIZATION_MASTER_PLAN.md`
+- `JARVIS_COST_OPTIMIZATION_IMPLEMENTATION_PLAN.md`
+
+The next chat should begin from Slice C0 (baseline/call inventory) and continue through the documented pre-credit gate before purchasing the ₹400–₹500 paid-brain experiment balance.
