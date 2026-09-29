@@ -36,7 +36,8 @@ from jarvis.model_routing.registry import (
 )
 from jarvis.model_routing.router import ModelRouter
 from jarvis.model_routing.store import ModelRoutingStore
-from jarvis.work.brain import BrainAction, BrainDecision, BrainRequest
+from jarvis.work.brain import BrainAction, BrainCoordinator, BrainDecision, BrainRequest
+from jarvis.work.engine import WorkActionRegistry, WorkEngine
 from jarvis.work.models import WorkItem, WorkStep, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
@@ -140,6 +141,48 @@ async def test_apply_mode_bypasses_model_for_initial_workspace(
     assert record.route_kind is BrainRouteKind.DETERMINISTIC
     assert record.resolver_id == "work.development.initial_workspace"
     assert record.outcome_code == "model_bypassed"
+
+
+class _PrepareWorkspaceExecutor:
+    descriptor = BrainAction(
+        name="dev_prepare_workspace",
+        description="Prepare the isolated workspace",
+        parameter_schema={"type": "object", "additionalProperties": False},
+    )
+    work_types = frozenset({WorkType.DEVELOPMENT})
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def execute(self, *, work: WorkItem, parameters: dict) -> dict:
+        del work
+        assert parameters == {}
+        self.calls += 1
+        return {"prepared": True, "verified": True}
+
+
+@pytest.mark.asyncio
+async def test_work_engine_apply_cycle_executes_deterministically_without_model(
+    tmp_path: Path,
+) -> None:
+    store, work, route_store, _, model, router = _router(tmp_path)
+    executor = _PrepareWorkspaceExecutor()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(router),
+        actions=WorkActionRegistry((executor,)),
+    )
+
+    result = await engine.advance(work.work_id)
+
+    assert result.progressed is True
+    assert executor.calls == 1
+    assert model.calls == 0
+    steps = store.list_steps(work.work_id)
+    assert len(steps) == 1
+    assert steps[0].kind == "dev_prepare_workspace"
+    assert steps[0].observation["prepared"] is True
+    assert route_store.summary_for_work(work.work_id)["model_calls_avoided"] == 1
 
 
 @pytest.mark.asyncio
