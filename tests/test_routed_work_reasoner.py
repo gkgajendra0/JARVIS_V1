@@ -5,6 +5,7 @@ import pytest
 from pydantic import BaseModel
 
 from jarvis.hands.provider_adapters import StructuredOutputTelemetry
+from jarvis.model_routing.cost import CostTelemetryReader
 from jarvis.model_routing.eligibility import EligibilityPolicy
 from jarvis.model_routing.invoker import (
     ModelInvocationContext,
@@ -364,7 +365,12 @@ async def test_routed_work_persists_usage_and_cost_telemetry(
     assert attempt.usage_observed is True
     assert attempt.usage["input_tokens"] == 1_000
     assert attempt.usage["output_tokens"] == 200
-    assert attempt.estimated_cost_usd == pytest.approx(0.004)
+    report = CostTelemetryReader(routing_store).for_work(work.work_id)
+    assert report.attempt_count == 1
+    assert report.missing_usage_attempts == 0
+    assert report.unpriced_attempts == 0
+    assert report.estimated_total_cost_usd == pytest.approx(0.004)
+    assert report.breakdown[0].stage_key == "development"
 
 
 @pytest.mark.asyncio
