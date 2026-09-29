@@ -51,8 +51,10 @@ def _nvidia_snapshot() -> list[dict[str, Any]]:
     result = _run(
         [
             executable,
-            "--query-gpu=index,name,driver_version,memory.total,memory.used,"
-            "memory.free,utilization.gpu",
+            (
+                "--query-gpu=index,name,driver_version,memory.total,memory.used,"
+                "memory.free,utilization.gpu"
+            ),
             "--format=csv,noheader,nounits",
         ]
     )
