@@ -21,8 +21,10 @@ from jarvis.model_routing.models import (
     RoutingRequest,
 )
 from jarvis.model_routing.ollama import (
+    C5_LOCAL_TARGET_ID,
     OllamaStructuredOutputAdapter,
     _normalize_loopback_endpoint,
+    build_c5_local_target_registry,
 )
 from jarvis.model_routing.registry import RoutingStrategyRegistry
 from jarvis.model_routing.router import ModelRouter, build_default_work_targets
@@ -170,17 +172,12 @@ def test_default_adapter_registry_contains_ollama_without_cloud_credentials() ->
     assert isinstance(registry.require("ollama"), OllamaStructuredOutputAdapter)
 
 
-def test_default_target_pool_registers_only_admitted_qwen_capabilities() -> None:
+def test_c5_local_target_registry_exposes_only_admitted_capabilities() -> None:
     adapters = build_default_model_adapter_registry()
-    targets = build_default_work_targets(
-        configured_provider="gemini",
-        configured_model=None,
-        adapter_registry=adapters,
-    )
+    targets = build_c5_local_target_registry(adapters)
 
-    local = targets.registry.require("local.ollama.qwen3_5_4b.c5")
+    local = targets.require(C5_LOCAL_TARGET_ID)
 
-    assert targets.primary_target_id == "work.gemini.default"
     assert local.locality is ModelLocality.LOCAL
     assert local.model_id == "qwen3.5:4b"
     assert local.benchmark_status is BenchmarkStatus.ACCEPTED
@@ -197,13 +194,21 @@ def test_default_target_pool_registers_only_admitted_qwen_capabilities() -> None
     assert local.cost_profile.output_usd_per_million_tokens == 0.0
 
 
-def test_existing_engineering_route_excludes_qwen_local_target(tmp_path: Path) -> None:
+def test_existing_work_target_registry_stays_unchanged_by_c5_local_target(
+    tmp_path: Path,
+) -> None:
     adapters = build_default_model_adapter_registry()
     targets = build_default_work_targets(
         configured_provider="gemini",
         configured_model=None,
         adapter_registry=adapters,
     )
+
+    assert {target.target_id for target in targets.registry.all()} == {
+        "work.gemini.default",
+        "work.openai.default",
+    }
+
     store = SQLiteWorkStore(tmp_path / "work.sqlite")
     router = ModelRouter(
         target_registry=targets.registry,
@@ -238,13 +243,10 @@ def test_existing_engineering_route_excludes_qwen_local_target(tmp_path: Path) -
     selection = router.route(request)
 
     assert selection.target.target_id == "work.gemini.default"
-    assert "local.ollama.qwen3_5_4b.c5" not in selection.decision.ordered_target_ids
-    exclusion = next(
-        item
-        for item in selection.eligibility.exclusions
-        if item.target_id == "local.ollama.qwen3_5_4b.c5"
+    assert selection.decision.ordered_target_ids == (
+        "work.gemini.default",
+        "work.openai.default",
     )
-    assert "capability_missing" in exclusion.reason_codes
 
 
 @pytest.mark.asyncio
