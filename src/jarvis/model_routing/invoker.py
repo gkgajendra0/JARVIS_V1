@@ -15,6 +15,7 @@ from jarvis.hands.provider_adapters import (
     build_structured_output_client,
 )
 from jarvis.model_routing.models import ModelTarget
+from jarvis.model_routing.ollama import OllamaStructuredOutputAdapter
 from jarvis.model_routing.registry import ModelAdapterRegistry
 
 
@@ -226,5 +227,6 @@ def build_default_model_adapter_registry() -> ModelAdapterRegistry:
                 adapter_id="openai",
                 provider_id="openai",
             ),
+            OllamaStructuredOutputAdapter(),
         )
     )

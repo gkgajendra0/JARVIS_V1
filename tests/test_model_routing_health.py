@@ -131,3 +131,18 @@ def test_cooldown_backoff_is_capped() -> None:
     )
 
     assert mutation.record.cooldown_until_epoch == 500.0
+
+
+def test_response_contract_failure_cools_target_and_allows_fallback() -> None:
+    mutation = apply_provider_failure(
+        TargetHealthRecord(target_id="local-qwen"),
+        _failure(ProviderFailureKind.RESPONSE_CONTRACT_INVALID),
+        now_epoch=100.0,
+        base_cooldown_seconds=30.0,
+    )
+
+    assert mutation.record.state is TargetHealthEligibility.COOLDOWN
+    assert mutation.record.cooldown_until_epoch == 130.0
+    assert mutation.record.last_failure_kind == "response_contract_invalid"
+    assert mutation.action is HealthAction.FALLBACK_ALLOWED
+    assert mutation.reason_code == "response_contract_invalid_cooldown"

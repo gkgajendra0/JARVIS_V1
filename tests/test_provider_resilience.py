@@ -303,3 +303,18 @@ def test_next_live_agent_state_marks_provider_recovered() -> None:
 
     assert state.health is ProviderHealth.HEALTHY
     assert state.last_failure is None
+
+
+def test_explicit_response_contract_failure_is_classified_for_fallback() -> None:
+    class ContractError(ValueError):
+        response_contract_invalid = True
+        retryable = False
+
+    failure = classify_provider_failure(
+        ContractError("schema invalid"),
+        provider="ollama",
+    )
+
+    assert failure.kind is ProviderFailureKind.RESPONSE_CONTRACT_INVALID
+    assert failure.retryable is False
+    assert "required contract" in failure.spoken_message
