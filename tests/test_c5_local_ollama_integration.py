@@ -30,6 +30,7 @@ from jarvis.model_routing.registry import RoutingStrategyRegistry
 from jarvis.model_routing.router import ModelRouter, build_default_work_targets
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.model_routing.strategy import EngineeringStageStrategy
+from jarvis.work.models import WorkItem, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -210,6 +211,15 @@ def test_existing_work_target_registry_stays_unchanged_by_c5_local_target(
     }
 
     store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    work = WorkItem(
+        work_id="work-engineering",
+        request="Verify the existing engineering route remains unchanged",
+        work_type=WorkType.DEVELOPMENT,
+        source_session_id="session-c5-local-registry",
+        source_turn_id="turn-c5-local-registry",
+    )
+    store.create(work)
+
     router = ModelRouter(
         target_registry=targets.registry,
         adapter_registry=adapters,
