@@ -1,6 +1,6 @@
 # JARVIS Cost Optimization Implementation Plan
 
-Status: **C0 + C1 + C2 + C3 IMPLEMENTED AND ACCEPTANCE TESTED / NEXT: C4 + C5 RESEARCH & BENCHMARKS**
+Status: **C0-C3 LIVE ACCEPTED / C4+C5 RESEARCH + BENCHMARK HARNESS COMPLETE / NEXT: OWNER-MACHINE LOCAL BENCHMARKS**
 
 Date: 2026-09-29
 
@@ -114,7 +114,7 @@ Exit:
 
 ## Slice C3 — Global Brain Router v1
 
-Status: **IMPLEMENTED / CI ACCEPTED**.
+Status: **IMPLEMENTED / OWNER-MACHINE ACCEPTED / LIVE APPLY**.
 
 Research source: `JARVIS_C3_GLOBAL_BRAIN_ROUTER_RESEARCH.md`.
 
@@ -138,8 +138,9 @@ Implemented foundation:
   ModelRouter without redesigning the routing substrate;
 - JARVIS Self Model now explicitly maps `work.brain_routing`.
 
-Production default remains **shadow**. Apply mode exists and is acceptance-tested but
-must be enabled explicitly while shadow evidence accumulates.
+Repository default remains **shadow** for new/unaccepted machines. The owner's accepted
+production machine is explicitly configured to **apply**, and live startup has proven
+`brain_router_mode=apply` with Work orchestration active.
 
 Architecture decision:
 
@@ -209,6 +210,19 @@ Exit:
 
 ## Slice C4 — Jev decision-layer evaluation
 
+Status: **RESEARCH COMPLETE / SHARED BENCHMARK HARNESS IMPLEMENTED / LIVE BENCHMARK PENDING**.
+
+Research source: `JARVIS_C4_C5_BOUNDED_LOCAL_BRAIN_RESEARCH.md`.
+
+Implemented benchmark foundation:
+
+- frozen 18-case JARVIS bounded-decision corpus;
+- one scorer for deterministic-abstain, Ollama-local and Jev runners;
+- asymmetric unsafe-downgrade vs conservative-over-escalation metrics;
+- Jev Choice-question runner using the official System One endpoint shape;
+- raw confidence/probability/usage retention for post-run threshold calibration;
+- Jev price is supplied at benchmark time rather than embedded as permanent policy.
+
 Goal: determine whether Jev reduces total cost without becoming a fragile dependency.
 
 Build a JARVIS-specific decision benchmark covering:
@@ -249,6 +263,19 @@ Exit:
 - otherwise defer without blocking the rest of the program.
 
 ## Slice C5 — Local Brain benchmark and admission
+
+Status: **RESEARCH COMPLETE / BENCHMARK + OWNER PREFLIGHT TOOLING IMPLEMENTED / OWNER-MACHINE RUN PENDING**.
+
+Research source: `JARVIS_C4_C5_BOUNDED_LOCAL_BRAIN_RESEARCH.md`.
+
+Implemented benchmark foundation:
+
+- Ollama local structured-output runner using the same frozen C4 corpus;
+- non-destructive owner-machine probe for Ollama, NVIDIA VRAM, installed/loaded models
+  and live JARVIS coexistence;
+- initial Tier-A candidates selected for measurement: `phi4-mini` and
+  `qwen3.5:4b`;
+- 8B/9B-class models explicitly deferred until coexistence evidence justifies them.
 
 Goal: create a useful zero-API reasoning tier.
 
