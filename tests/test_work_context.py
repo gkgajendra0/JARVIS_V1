@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from jarvis.brain_routing.work import build_work_global_route_facts
 from jarvis.work.brain import BrainAction, BrainDecision, BrainRequest
 from jarvis.work.context import (
     WorkContextAssembler,
@@ -191,3 +192,42 @@ def test_context_decision_equivalence_requires_all_safety_fields_to_match() -> N
     assert result.equivalent is False
     assert result.action_equal is False
     assert result.needs_owner_equal is False
+
+
+def test_global_route_facts_use_context_pack_only_in_apply() -> None:
+    work = _work()
+    steps = tuple(
+        _completed_step(
+            work,
+            "dev_read_file",
+            observation={"path": f"src/{index}.py", "text": "x" * 5000},
+        )
+        for index in range(14)
+    )
+    legacy_steps = steps[-12:]
+    pack = WorkContextAssembler(max_string_chars=1200).build(
+        work=work,
+        steps=steps,
+    )
+    shadow = BrainRequest(
+        work=work,
+        recent_steps=legacy_steps,
+        purpose="choose the next bounded step",
+        allowed_actions=(_action(),),
+        context_pack=pack,
+        context_mode=WorkContextMode.SHADOW,
+    )
+    apply_request = BrainRequest(
+        work=work,
+        recent_steps=legacy_steps,
+        purpose="choose the next bounded step",
+        allowed_actions=(_action(),),
+        context_pack=pack,
+        context_mode=WorkContextMode.APPLY,
+    )
+
+    shadow_facts = build_work_global_route_facts(shadow, all_steps=steps)
+    apply_facts = build_work_global_route_facts(apply_request, all_steps=steps)
+
+    assert apply_facts.route_request_id == shadow_facts.route_request_id
+    assert apply_facts.estimated_context_tokens < shadow_facts.estimated_context_tokens
