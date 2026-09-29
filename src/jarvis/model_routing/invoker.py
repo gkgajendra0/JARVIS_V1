@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -10,6 +11,7 @@ from pydantic import BaseModel
 
 from jarvis.hands.provider_adapters import (
     StructuredOutputClient,
+    StructuredOutputTelemetry,
     build_structured_output_client,
 )
 from jarvis.model_routing.models import ModelTarget
@@ -96,15 +98,51 @@ class StructuredOutputModelAdapter:
         response_model: type[BaseModel],
         request_context: ModelInvocationContext,
     ) -> BaseModel:
+        result = await self.invoke_structured_with_telemetry(
+            target=target,
+            system_prompt=system_prompt,
+            input_payload=input_payload,
+            response_model=response_model,
+            request_context=request_context,
+        )
+        return result.parsed
+
+    async def invoke_structured_with_telemetry(
+        self,
+        *,
+        target: ModelTarget,
+        system_prompt: str,
+        input_payload: dict[str, Any],
+        response_model: type[BaseModel],
+        request_context: ModelInvocationContext,
+    ) -> StructuredOutputTelemetry:
         if not isinstance(target, ModelTarget):
             raise TypeError("target must be a ModelTarget")
         if not isinstance(request_context, ModelInvocationContext):
             raise TypeError("request_context must be a ModelInvocationContext")
         client = self._client_for(target)
-        return await client.parse(
+        telemetry = getattr(client, "parse_with_telemetry", None)
+        if callable(telemetry):
+            result = await telemetry(
+                system_prompt=system_prompt,
+                input_payload=input_payload,
+                response_model=response_model,
+            )
+            if not isinstance(result, StructuredOutputTelemetry):
+                raise TypeError("provider telemetry method returned unexpected type")
+            return result
+
+        started = time.perf_counter()
+        parsed = await client.parse(
             system_prompt=system_prompt,
             input_payload=input_payload,
             response_model=response_model,
+        )
+        return StructuredOutputTelemetry(
+            parsed=parsed,
+            usage={},
+            usage_observed=False,
+            latency_ms=(time.perf_counter() - started) * 1000.0,
         )
 
 
@@ -125,13 +163,51 @@ class ModelInvoker:
         response_model: type[BaseModel],
         request_context: ModelInvocationContext,
     ) -> BaseModel:
-        adapter = self._adapters.require(target.adapter_id)
-        return await adapter.invoke_structured(
+        result = await self.invoke_structured_with_telemetry(
             target=target,
             system_prompt=system_prompt,
             input_payload=input_payload,
             response_model=response_model,
             request_context=request_context,
+        )
+        return result.parsed
+
+    async def invoke_structured_with_telemetry(
+        self,
+        *,
+        target: ModelTarget,
+        system_prompt: str,
+        input_payload: dict[str, Any],
+        response_model: type[BaseModel],
+        request_context: ModelInvocationContext,
+    ) -> StructuredOutputTelemetry:
+        adapter = self._adapters.require(target.adapter_id)
+        telemetry = getattr(adapter, "invoke_structured_with_telemetry", None)
+        if callable(telemetry):
+            result = await telemetry(
+                target=target,
+                system_prompt=system_prompt,
+                input_payload=input_payload,
+                response_model=response_model,
+                request_context=request_context,
+            )
+            if not isinstance(result, StructuredOutputTelemetry):
+                raise TypeError("model adapter telemetry method returned unexpected type")
+            return result
+
+        started = time.perf_counter()
+        parsed = await adapter.invoke_structured(
+            target=target,
+            system_prompt=system_prompt,
+            input_payload=input_payload,
+            response_model=response_model,
+            request_context=request_context,
+        )
+        return StructuredOutputTelemetry(
+            parsed=parsed,
+            usage={},
+            usage_observed=False,
+            latency_ms=(time.perf_counter() - started) * 1000.0,
         )
 
 
