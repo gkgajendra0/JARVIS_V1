@@ -8,7 +8,13 @@ import itertools
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from jarvis.work.context import (\n    WorkContextMode,\n    WorkContextPack,\n    normalize_work_context_mode,\n)\nfrom jarvis.work.models import WorkItem, WorkStep\n
+from jarvis.work.context import (
+    WorkContextMode,
+    WorkContextPack,
+    normalize_work_context_mode,
+)
+from jarvis.work.models import WorkItem, WorkStep
+
 
 @dataclass(frozen=True, slots=True)
 class BrainAction:
