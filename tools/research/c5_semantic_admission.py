@@ -269,9 +269,7 @@ def main(argv: list[str] | None = None) -> int:
                 "task_classes": task_classes,
             }
             final["profiles"].append(entry)
-            final["comparison"].append(
-                _comparison_row(profile, run, task_classes)
-            )
+            final["comparison"].append(_comparison_row(profile, run, task_classes))
         finally:
             print(f"[semantic] Unloading {profile.model}...", flush=True)
             _stop_model(profile.model)
