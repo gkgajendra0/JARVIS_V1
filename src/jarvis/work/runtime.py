@@ -8,6 +8,9 @@ from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
+from jarvis.brain_routing.deterministic import default_work_deterministic_resolvers
+from jarvis.brain_routing.store import BrainRouteStore
+from jarvis.brain_routing.work import GlobalBrainRouterReasoner
 from jarvis.capabilities.models import CapabilityCatalog
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capability_acquisition.activation import (
@@ -182,6 +185,7 @@ class WorkRuntime:
         changes: ChangeCoordinator | None = None,
         routing_store: ModelRoutingStore | None = None,
         model_router: ModelRouter | None = None,
+        brain_route_store: BrainRouteStore | None = None,
         capability_acquisition: CapabilityAcquisitionCoordinator | None = None,
         capability_lifecycle: CapabilityAcquisitionLifecycleCoordinator | None = None,
         capability_external_acceptance: ExternalAcceptanceCoordinator | None = None,
@@ -200,6 +204,7 @@ class WorkRuntime:
         self.changes = changes
         self.routing_store = routing_store
         self.model_router = model_router
+        self.brain_route_store = brain_route_store
         self.capability_acquisition = capability_acquisition
         self.capability_lifecycle = capability_lifecycle
         self.capability_external_acceptance = capability_external_acceptance
@@ -319,6 +324,7 @@ def build_work_runtime(
     provider: str,
     research_service: CurrentResearchService,
     model: str | None = None,
+    global_brain_router_mode: str = "shadow",
     global_concurrency: int = 4,
     max_reasoning_cycles: int = 64,
     min_available_memory_mb: int = 768,
@@ -380,6 +386,7 @@ def build_work_runtime(
         adapter_registry=adapter_registry,
     )
     routing_store = ModelRoutingStore(store)
+    brain_route_store = BrainRouteStore(store)
     provider_cost_store = ProviderCostEventStore(store)
     strategy_registry = RoutingStrategyRegistry((EngineeringStageStrategy(),))
     model_router = ModelRouter(
@@ -389,10 +396,18 @@ def build_work_runtime(
         routing_store=routing_store,
         eligibility_policy=EligibilityPolicy(),
     )
-    reasoner = RoutedWorkReasoner(
+    model_reasoner = RoutedWorkReasoner(
         router=model_router,
         invoker=ModelInvoker(adapter_registry),
         primary_target_id=work_targets.primary_target_id,
+    )
+    reasoner = GlobalBrainRouterReasoner(
+        model_reasoner,
+        work_store=store,
+        route_store=brain_route_store,
+        model_routing_store=routing_store,
+        resolvers=default_work_deterministic_resolvers(),
+        mode=global_brain_router_mode,
     )
     interactive_brain_gate = InteractiveBrainGate()
     brain = BrainCoordinator(
@@ -683,6 +698,7 @@ def build_work_runtime(
         changes=changes,
         routing_store=routing_store,
         model_router=model_router,
+        brain_route_store=brain_route_store,
         capability_acquisition=capability_acquisition,
         capability_lifecycle=capability_lifecycle,
         capability_external_acceptance=capability_external_acceptance,
