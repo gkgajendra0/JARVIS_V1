@@ -91,6 +91,14 @@ Use separate project/credential boundaries for:
 - free-tier voice/TTS output;
 - paid brain/reasoning experiments.
 
+**Correction from provider billing research (2026-09-29):** a separate Gemini
+API key is only credential isolation. Gemini API keys inherit the billing status
+and usage tier of their Google Cloud project. Therefore the paid-experiment gate
+must require owner-verified **project-level billing isolation**, not merely a
+different key. For the free TTS lane, the dedicated TTS key must belong to a
+separate project that is verified as remaining on the intended Free Tier /
+unlinked from paid Cloud Billing.
+
 Do not rotate accounts/projects to evade provider limits.
 
 ### 4.2 UX invariant
@@ -114,6 +122,11 @@ Local reasoning must **not** imply robotic local speech.
 Free-tier availability is not a permanent architectural assumption.
 
 Retain a local TTS fallback so JARVIS remains usable if free-tier quota, model availability, terms or pricing change.
+
+As of 2026-09-29, scripted Gemini TTS should default to
+`gemini-3.8-flash-tts` while preserving the existing Charon voice.
+`gemini-3.8-flash-lite-tts` remains a compatible low-latency/cost candidate
+for owner A/B evaluation. Do not change voice identity merely to reduce spend.
 
 ## 5. Global Brain Router
 
@@ -323,6 +336,13 @@ Total          ₹T
 
 No raw secrets should enter telemetry.
 
+Mission accounting must also support **non-token provider costs**. Search,
+content-fetch, audio and other request-priced services are represented as
+provider cost events rather than being forced into model-token usage. The first
+adopted path is background Exa research: one search request plus observed
+content-page retrieval is estimated using an explicitly dated pricing basis and
+rolled into the same Work mission total.
+
 ## 11. Cost Governor — later protection
 
 Do not lead with a hard governor before routing economics are known.
@@ -343,7 +363,7 @@ Optimization reduces spend. The Cost Governor limits damage if optimization fail
 
 Do not buy/use the approximately ₹400–₹500 paid-brain experiment budget until all of the following are true:
 
-1. TTS/voice-output credentials are separated from paid-brain credentials.
+1. TTS/voice-output credentials are separated from paid-brain credentials **and project-level billing isolation is owner-verified**.
 2. The existing router has a first global-routing slice rather than engineering-only target selection.
 3. Deterministic/known capability routing exists before model invocation.
 4. At least one local model has been benchmarked on JARVIS-specific tasks and admitted only for tasks it passes.
