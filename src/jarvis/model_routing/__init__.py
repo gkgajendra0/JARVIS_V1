@@ -11,6 +11,9 @@ from importlib import import_module
 from typing import Any
 
 _EXPORTS = {
+    "ProviderCostEvent": "jarvis.model_routing.cost",
+    "ProviderCostEventStore": "jarvis.model_routing.cost",
+    "ProviderCostTelemetryBucket": "jarvis.model_routing.cost",
     "CostTelemetryBucket": "jarvis.model_routing.cost",
     "CostTelemetryReader": "jarvis.model_routing.cost",
     "CostTelemetryReport": "jarvis.model_routing.cost",
