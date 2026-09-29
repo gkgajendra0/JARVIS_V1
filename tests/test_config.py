@@ -78,7 +78,7 @@ def test_tts_provider_defaults_to_gemini_independent_of_brain() -> None:
 
 
 def test_invalid_tts_provider_fails_truthfully() -> None:
-    with pytest.raises(ValueError, match="JARVIS_AI_PROVIDER"):
+    with pytest.raises(ValueError, match="JARVIS_TTS_PROVIDER"):
         JarvisConfig(tts_provider="unknown")
 
 
