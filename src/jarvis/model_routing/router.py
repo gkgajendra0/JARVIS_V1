@@ -243,35 +243,37 @@ def build_default_work_targets(
     # for bounded planning, classification/extraction and summarization. It is
     # intentionally registered without engineering_reasoning so existing Work
     # routing excludes it until a later subsystem explicitly asks for one of the
-    # admitted capabilities.
-    targets.append(
-        ModelTarget(
-            target_id=_C5_LOCAL_TARGET_ID,
-            adapter_id="ollama",
-            provider_id="ollama",
-            model_id=_C5_LOCAL_MODEL_ID,
-            locality=ModelLocality.LOCAL,
-            capabilities=_C5_LOCAL_CAPABILITIES,
-            roles=("efficient", "bounded_decision"),
-            max_context_tokens=_C5_LOCAL_CONTEXT_BUDGET_TOKENS,
-            supports_structured_output=True,
-            supports_tools=False,
-            supports_streaming=False,
-            latency_class="fast",
-            benchmark_status=BenchmarkStatus.ACCEPTED,
-            registry_version=1,
-            endpoint_ref=_C5_LOCAL_ENDPOINT,
-            credential_ref=None,
-            cost_profile=CostProfile(
-                profile_id="ollama-local-api-zero-c5",
-                version=1,
-                effective_from_epoch=0.0,
-                input_usd_per_million_tokens=0.0,
-                output_usd_per_million_tokens=0.0,
-            ),
-            enabled=True,
+    # admitted capabilities. Custom/minimal registries remain compatible by
+    # simply omitting the local target when the Ollama adapter is not installed.
+    if adapter_registry.contains("ollama"):
+        targets.append(
+            ModelTarget(
+                target_id=_C5_LOCAL_TARGET_ID,
+                adapter_id="ollama",
+                provider_id="ollama",
+                model_id=_C5_LOCAL_MODEL_ID,
+                locality=ModelLocality.LOCAL,
+                capabilities=_C5_LOCAL_CAPABILITIES,
+                roles=("efficient", "bounded_decision"),
+                max_context_tokens=_C5_LOCAL_CONTEXT_BUDGET_TOKENS,
+                supports_structured_output=True,
+                supports_tools=False,
+                supports_streaming=False,
+                latency_class="fast",
+                benchmark_status=BenchmarkStatus.ACCEPTED,
+                registry_version=1,
+                endpoint_ref=_C5_LOCAL_ENDPOINT,
+                credential_ref=None,
+                cost_profile=CostProfile(
+                    profile_id="ollama-local-api-zero-c5",
+                    version=1,
+                    effective_from_epoch=0.0,
+                    input_usd_per_million_tokens=0.0,
+                    output_usd_per_million_tokens=0.0,
+                ),
+                enabled=True,
+            )
         )
-    )
     return DefaultWorkTargets(
         registry=ModelTargetRegistry(adapter_registry, tuple(targets)),
         primary_target_id=primary_target_id,
