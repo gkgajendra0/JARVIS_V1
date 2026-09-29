@@ -7,7 +7,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from jarvis.ai_provider import credential_environment_name, provider_api_key
+from jarvis.ai_provider import (
+    credential_environment_name,
+    provider_api_key,
+    tts_billing_is_separated,
+    tts_credential_environment_name,
+    tts_credential_source,
+)
 from jarvis.authority.tooling import authority_tool_readiness
 from jarvis.config import JarvisConfig
 from jarvis.voice.audio import DEVICE_CHANNELS, DEVICE_SAMPLE_RATE, LocalAudioRuntime
@@ -62,6 +68,32 @@ def _credential_check(config: JarvisConfig) -> PreflightCheck:
         False,
         f"active provider={config.ai_provider}; {name} is missing from the "
         "process/Windows user environment",
+    )
+
+
+def _tts_lane_check(config: JarvisConfig) -> PreflightCheck:
+    provider = config.tts_provider
+    dedicated_name = tts_credential_environment_name(provider)
+    source = tts_credential_source(provider)
+    if source == "dedicated":
+        return PreflightCheck(
+            "Scripted TTS lane",
+            True,
+            f"provider={provider}; {dedicated_name} is available; "
+            "billing credential is separated from brain reasoning",
+        )
+    if source == "shared_compatibility":
+        return PreflightCheck(
+            "Scripted TTS lane",
+            True,
+            f"provider={provider}; compatibility credential is available; "
+            f"set {dedicated_name} before paid-brain experiments",
+        )
+    return PreflightCheck(
+        "Scripted TTS lane",
+        True,
+        f"provider={provider}; cloud TTS credential unavailable; "
+        "Windows-local lifecycle speech remains the fallback",
     )
 
 
@@ -173,6 +205,7 @@ def run_startup_preflight(config: JarvisConfig) -> list[PreflightCheck]:
     checks = [
         _check_file("Wake model", config.wake_model_path),
         _credential_check(config),
+        _tts_lane_check(config),
         *_audio_checks(config),
         *_authority_checks(),
     ]
