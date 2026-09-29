@@ -82,7 +82,9 @@ def _collect_samples(
     psutil.cpu_percent(interval=None)
     started = time.monotonic()
     while time.monotonic() - started < duration_seconds:
-        time.sleep(min(interval_seconds, duration_seconds - (time.monotonic() - started)))
+        time.sleep(
+            min(interval_seconds, duration_seconds - (time.monotonic() - started))
+        )
         if not _process_alive(process):
             raise RuntimeError("jarvis-voice exited during coexistence acceptance")
         samples.append(
@@ -149,11 +151,7 @@ async def _invoke_local(
 
 
 async def _run(args: argparse.Namespace) -> dict[str, object]:
-    process = (
-        psutil.Process(args.pid)
-        if args.pid is not None
-        else find_jarvis_process()
-    )
+    process = psutil.Process(args.pid) if args.pid is not None else find_jarvis_process()
     if not _process_alive(process):
         raise RuntimeError("jarvis-voice process is not running")
 
