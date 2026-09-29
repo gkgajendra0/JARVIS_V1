@@ -256,8 +256,17 @@ class GlobalBrainRouterReasoner:
         all_steps = self._work_store.list_steps(request.work.work_id)
         facts, resolution = self._facts_and_resolution(request, all_steps)
         existing = self._route_store.get(facts.route_request_id)
+        preexisting_model_decision = (
+            self._model_routing_store.find_decision_by_request(
+                facts.route_request_id
+            )
+        )
 
         if existing is not None and existing.route_kind is BrainRouteKind.DETERMINISTIC:
+            if preexisting_model_decision is not None:
+                raise RuntimeError(
+                    "global deterministic provenance conflicts with a persisted model route"
+                )
             current = self._resolvers.resolve(
                 facts=facts,
                 request=request,
@@ -271,7 +280,8 @@ class GlobalBrainRouterReasoner:
             return decision
 
         preserve_model_route = (
-            existing is not None and existing.route_kind is BrainRouteKind.MODEL
+            (existing is not None and existing.route_kind is BrainRouteKind.MODEL)
+            or (existing is None and preexisting_model_decision is not None)
         )
         if (
             not preserve_model_route
