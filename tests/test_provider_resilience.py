@@ -305,7 +305,6 @@ def test_next_live_agent_state_marks_provider_recovered() -> None:
     assert state.last_failure is None
 
 
-
 def test_explicit_response_contract_failure_is_classified_for_fallback() -> None:
     class ContractError(ValueError):
         response_contract_invalid = True
