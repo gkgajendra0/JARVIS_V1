@@ -169,9 +169,7 @@ class ExaWebResearchProvider:
                     cost_kind="search_request",
                     quantity=search_requests,
                     unit_cost_usd=_EXA_SEARCH_USD_PER_REQUEST,
-                    estimated_cost_usd=(
-                        search_requests * _EXA_SEARCH_USD_PER_REQUEST
-                    ),
+                    estimated_cost_usd=(search_requests * _EXA_SEARCH_USD_PER_REQUEST),
                     pricing_basis=_EXA_PRICING_BASIS,
                 )
             )
@@ -182,9 +180,7 @@ class ExaWebResearchProvider:
                     cost_kind="content_page",
                     quantity=content_pages,
                     unit_cost_usd=_EXA_CONTENT_USD_PER_PAGE,
-                    estimated_cost_usd=(
-                        content_pages * _EXA_CONTENT_USD_PER_PAGE
-                    ),
+                    estimated_cost_usd=(content_pages * _EXA_CONTENT_USD_PER_PAGE),
                     pricing_basis=_EXA_PRICING_BASIS,
                 )
             )
