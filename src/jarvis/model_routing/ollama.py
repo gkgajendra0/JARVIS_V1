@@ -319,10 +319,14 @@ class OllamaStructuredOutputAdapter:
 
         message = response.get("message")
         if not isinstance(message, dict):
-            raise OllamaStructuredOutputError("Ollama returned no structured message object")
+            raise OllamaStructuredOutputError(
+                "Ollama returned no structured message object"
+            )
         content = message.get("content")
         if not isinstance(content, str) or not content.strip():
-            raise OllamaStructuredOutputError("Ollama returned no structured output content")
+            raise OllamaStructuredOutputError(
+                "Ollama returned no structured output content"
+            )
         try:
             parsed = response_model.model_validate_json(content)
         except ValidationError as exc:
