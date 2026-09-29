@@ -58,9 +58,7 @@ def _estimated_context_tokens(request: BrainRequest) -> int:
         ]
     )
     evidence = (
-        list(pack.evidence)
-        if use_pack and pack is not None
-        else list(request.evidence)
+        list(pack.evidence) if use_pack and pack is not None else list(request.evidence)
     )
     payload = {
         "request": request.work.request,
