@@ -84,6 +84,13 @@ def build_c5_local_target_registry(
     return ModelTargetRegistry(adapter_registry, (build_c5_local_target(),))
 
 
+class OllamaStructuredOutputError(StructuredOutputError):
+    """Local model violated the required structured response contract."""
+
+    response_contract_invalid = True
+    retryable = False
+
+
 class OllamaRequestError(RuntimeError):
     """Base local-runtime transport error with provider-resilience metadata."""
 
@@ -176,11 +183,11 @@ def _post_json(
     try:
         decoded = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise StructuredOutputError(
+        raise OllamaStructuredOutputError(
             "Ollama local runtime returned invalid response JSON"
         ) from exc
     if not isinstance(decoded, dict):
-        raise StructuredOutputError(
+        raise OllamaStructuredOutputError(
             "Ollama local runtime returned a non-object response"
         )
     return decoded
@@ -312,14 +319,14 @@ class OllamaStructuredOutputAdapter:
 
         message = response.get("message")
         if not isinstance(message, dict):
-            raise StructuredOutputError("Ollama returned no structured message object")
+            raise OllamaStructuredOutputError("Ollama returned no structured message object")
         content = message.get("content")
         if not isinstance(content, str) or not content.strip():
-            raise StructuredOutputError("Ollama returned no structured output content")
+            raise OllamaStructuredOutputError("Ollama returned no structured output content")
         try:
             parsed = response_model.model_validate_json(content)
         except ValidationError as exc:
-            raise StructuredOutputError(
+            raise OllamaStructuredOutputError(
                 "Ollama returned invalid structured output"
             ) from exc
 
