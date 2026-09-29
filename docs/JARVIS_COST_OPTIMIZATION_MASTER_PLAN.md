@@ -1,6 +1,6 @@
 # JARVIS Cost Optimization Master Plan
 
-Status: **C0-C3 IMPLEMENTED / ACCEPTANCE TESTED / NEXT: C4 + C5 RESEARCH & BENCHMARKS**
+Status: **C0-C3 LIVE ACCEPTED / C4+C5 RESEARCH + BENCHMARK HARNESS COMPLETE / NEXT: OWNER-MACHINE LOCAL BENCHMARKS**
 
 Date: 2026-09-29
 
@@ -14,6 +14,19 @@ Research sources re-verified 2026-09-29:
 - Gemini 3.8 Flash TTS model guidance: https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash-tts
 - LiveKit Gemini TTS adapter guidance: https://docs.livekit.io/agents/models/tts/gemini/
 - Exa endpoint pricing: https://exa.ai/pricing
+
+## C3 live acceptance + C4/C5 checkpoint — 2026-09-29
+
+- C3 zero-cloud owner acceptance passed with zero model calls and one deterministic
+  model call avoided.
+- The owner machine persists and resolves `JARVIS_GLOBAL_BRAIN_ROUTER_MODE=apply`.
+- Fresh production startup proved `brain_router_mode=apply` with Work orchestration
+  active.
+- C4/C5 deep research is complete in
+  `JARVIS_C4_C5_BOUNDED_LOCAL_BRAIN_RESEARCH.md`.
+- The frozen C4/C5 corpus, shared scorer, Ollama/Jev runners and non-destructive local
+  runtime probe are implemented.
+- No Jev/API credit or local model download has been required yet.
 
 ## 1. Goal
 
