@@ -1,6 +1,6 @@
 # JARVIS Cost Optimization Implementation Plan
 
-Status: **NEXT-CHAT IMPLEMENTATION PLAN / NOT IMPLEMENTED BY THIS DOCUMENTATION PR**
+Status: **C0 + C1 IMPLEMENTED / NEXT SLICE: C2**
 
 Date: 2026-09-29
 
@@ -39,6 +39,8 @@ Do not begin by changing the preferred voice, buying additional development subs
 
 ## Slice C0 — Baseline and call inventory
 
+Status: **COMPLETE** — authoritative inventory: `JARVIS_COST_CALL_INVENTORY.md`.
+
 Goal: establish current truth before changing routing.
 
 - inventory all cloud/model call sites: voice realtime, scripted TTS, work reasoner, Hands, memory, research synthesis and other provider adapters;
@@ -51,6 +53,17 @@ Exit:
 - no unknown paid path remains in the experiment scope.
 
 ## Slice C1 — Cost telemetry foundation
+
+Status: **IMPLEMENTED / ACCEPTANCE TESTED**.
+
+Implemented foundation:
+
+- provider-neutral normalized usage telemetry for routed Gemini/OpenAI structured calls;
+- durable provider/model/stage/usage/retry/cost provenance on routing attempts;
+- explicit missing-usage and unpriced states rather than false zero cost;
+- WorkItem and EngineeringChange mission-level aggregation;
+- deterministic provider-usage, cost-estimation and aggregation tests;
+- routed dry-run Work mission coverage proving a mission cost report can be produced.
 
 Goal: measure before spending.
 
