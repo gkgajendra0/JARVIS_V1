@@ -8,8 +8,7 @@ import itertools
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from jarvis.work.models import WorkItem, WorkStep
-
+from jarvis.work.context import (\n    WorkContextMode,\n    WorkContextPack,\n    normalize_work_context_mode,\n)\nfrom jarvis.work.models import WorkItem, WorkStep\n
 
 @dataclass(frozen=True, slots=True)
 class BrainAction:
@@ -31,12 +30,18 @@ class BrainRequest:
     purpose: str
     allowed_actions: tuple[BrainAction, ...]
     evidence: tuple[dict[str, Any], ...] = field(default_factory=tuple)
+    context_pack: WorkContextPack | None = None
+    context_mode: WorkContextMode = WorkContextMode.OFF
 
     def __post_init__(self) -> None:
         if not self.purpose.strip():
             raise ValueError("brain request purpose must not be empty")
         if not self.allowed_actions:
             raise ValueError("brain request requires at least one allowed action")
+        mode = normalize_work_context_mode(self.context_mode)
+        object.__setattr__(self, "context_mode", mode)
+        if mode is WorkContextMode.APPLY and self.context_pack is None:
+            raise ValueError("apply context mode requires a context_pack")
         names = [item.name for item in self.allowed_actions]
         if len(names) != len(set(names)):
             raise ValueError("brain action names must be unique")
