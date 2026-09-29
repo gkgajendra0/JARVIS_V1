@@ -146,7 +146,9 @@ async def _run() -> dict[str, object]:
         if first_pressure.state is not GpuResidencyState.RESIDENT:
             raise RuntimeError("pressure hysteresis evicted before required samples")
         if second_pressure.state is not GpuResidencyState.PRESSURE_BLOCKED:
-            raise RuntimeError("sustained acceptance pressure did not evict local model")
+            raise RuntimeError(
+                "sustained acceptance pressure did not evict local model"
+            )
         if second_pressure.resident_model is not None:
             raise RuntimeError("evicted local model remained marked resident")
 
@@ -184,9 +186,7 @@ async def _run() -> dict[str, object]:
                 "model_id": target.model_id,
             },
             "production_policy": asdict(production_policy),
-            "acceptance_pressure_override_mib": (
-                acceptance_policy.pressure_free_mib
-            ),
+            "acceptance_pressure_override_mib": (acceptance_policy.pressure_free_mib),
             "baseline_gpu": asdict(baseline),
             "loaded_gpu": asdict(loaded_snapshot),
             "recovered_gpu": asdict(recovered_snapshot),
