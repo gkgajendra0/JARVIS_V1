@@ -20,7 +20,10 @@ from jarvis.model_routing.invoker import (
     build_default_model_adapter_registry,
 )
 from jarvis.model_routing.models import ModelLocality
-from jarvis.model_routing.router import build_default_work_targets
+from jarvis.model_routing.ollama import (
+    C5_LOCAL_TARGET_ID,
+    build_c5_local_target_registry,
+)
 
 
 class _LocalAcceptanceOutput(BaseModel):
@@ -82,14 +85,10 @@ def _stop_model(model: str) -> dict[str, object]:
     }
 
 
-async def _run(provider: str) -> dict[str, object]:
+async def _run() -> dict[str, object]:
     adapters = build_default_model_adapter_registry()
-    targets = build_default_work_targets(
-        configured_provider=provider,
-        configured_model=None,
-        adapter_registry=adapters,
-    )
-    target = targets.registry.require("local.ollama.qwen3_5_4b.c5")
+    targets = build_c5_local_target_registry(adapters)
+    target = targets.require(C5_LOCAL_TARGET_ID)
 
     expected_capabilities = {
         "bounded_planning",
@@ -173,15 +172,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Run C5 production local-target owner acceptance."
     )
-    parser.add_argument(
-        "--configured-provider",
-        choices=("gemini", "openai"),
-        default="gemini",
-    )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
 
-    report = asyncio.run(_run(args.configured_provider))
+    report = asyncio.run(_run())
     encoded = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
