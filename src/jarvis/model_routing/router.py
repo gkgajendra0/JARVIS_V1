@@ -88,10 +88,7 @@ def reasoning_cycle_key(request: BrainRequest) -> str:
 
 def _estimated_context_tokens(request: BrainRequest) -> int:
     pack = request.context_pack
-    use_pack = (
-        request.context_mode is WorkContextMode.APPLY
-        and pack is not None
-    )
+    use_pack = request.context_mode is WorkContextMode.APPLY and pack is not None
     steps = (
         pack.recent_steps_payload()
         if use_pack
