@@ -179,6 +179,11 @@ class JarvisConfig:
             normalize_tts_provider(self.tts_provider),
         )
 
+        if not isinstance(self.tts_project_billing_isolation_verified, bool):
+            raise TypeError(
+                "tts_project_billing_isolation_verified must be a bool"
+            )
+
         if not isinstance(self.autonomy_mode, AutonomyMode):
             raise TypeError("autonomy_mode must be an AutonomyMode")
 
