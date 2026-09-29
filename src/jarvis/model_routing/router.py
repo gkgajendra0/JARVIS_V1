@@ -21,6 +21,7 @@ from jarvis.model_routing.eligibility import (
 )
 from jarvis.model_routing.models import (
     BenchmarkStatus,
+    CostProfile,
     EligibilitySnapshot,
     EvidenceSizeClass,
     LocalityRequirement,
@@ -45,6 +46,17 @@ from jarvis.work.brain import BrainRequest
 
 _WORK_ROUTING_PROVIDERS = ("gemini", "openai")
 _WORK_CONTEXT_BUDGET_TOKENS = 32_000
+
+_C5_LOCAL_TARGET_ID = "local.ollama.qwen3_5_4b.c5"
+_C5_LOCAL_MODEL_ID = "qwen3.5:4b"
+_C5_LOCAL_ENDPOINT = "http://127.0.0.1:11434"
+_C5_LOCAL_CONTEXT_BUDGET_TOKENS = 4_096
+_C5_LOCAL_CAPABILITIES = (
+    "bounded_planning",
+    "classification_extraction",
+    "summarization",
+    "structured_output",
+)
 
 
 def _digest_id(prefix: str, value: str) -> str:
@@ -226,6 +238,40 @@ def build_default_work_targets(
         raise AssertionError(
             "configured work provider did not produce a primary target"
         )
+
+    # C5 owner-machine admission accepted Qwen3.5:4B with thinking disabled only
+    # for bounded planning, classification/extraction and summarization. It is
+    # intentionally registered without engineering_reasoning so existing Work
+    # routing excludes it until a later subsystem explicitly asks for one of the
+    # admitted capabilities.
+    targets.append(
+        ModelTarget(
+            target_id=_C5_LOCAL_TARGET_ID,
+            adapter_id="ollama",
+            provider_id="ollama",
+            model_id=_C5_LOCAL_MODEL_ID,
+            locality=ModelLocality.LOCAL,
+            capabilities=_C5_LOCAL_CAPABILITIES,
+            roles=("efficient", "bounded_decision"),
+            max_context_tokens=_C5_LOCAL_CONTEXT_BUDGET_TOKENS,
+            supports_structured_output=True,
+            supports_tools=False,
+            supports_streaming=False,
+            latency_class="fast",
+            benchmark_status=BenchmarkStatus.ACCEPTED,
+            registry_version=1,
+            endpoint_ref=_C5_LOCAL_ENDPOINT,
+            credential_ref=None,
+            cost_profile=CostProfile(
+                profile_id="ollama-local-api-zero-c5",
+                version=1,
+                effective_from_epoch=0.0,
+                input_usd_per_million_tokens=0.0,
+                output_usd_per_million_tokens=0.0,
+            ),
+            enabled=True,
+        )
+    )
     return DefaultWorkTargets(
         registry=ModelTargetRegistry(adapter_registry, tuple(targets)),
         primary_target_id=primary_target_id,
