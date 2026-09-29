@@ -174,19 +174,13 @@ def _attempt_from_payload(payload: dict[str, object]) -> RoutingAttempt:
             None if payload["failure_class"] is None else str(payload["failure_class"])
         ),
         provider_id=(
-            None
-            if payload.get("provider_id") is None
-            else str(payload["provider_id"])
+            None if payload.get("provider_id") is None else str(payload["provider_id"])
         ),
         model_id=(
-            None
-            if payload.get("model_id") is None
-            else str(payload["model_id"])
+            None if payload.get("model_id") is None else str(payload["model_id"])
         ),
         stage_key=(
-            None
-            if payload.get("stage_key") is None
-            else str(payload["stage_key"])
+            None if payload.get("stage_key") is None else str(payload["stage_key"])
         ),
         usage={str(key): float(value) for key, value in dict(payload["usage"]).items()},
         usage_observed=(
