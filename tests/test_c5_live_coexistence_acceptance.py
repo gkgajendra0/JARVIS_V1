@@ -78,7 +78,6 @@ def test_process_alive_accepts_running_process(monkeypatch) -> None:
     assert module._process_alive(FakeProcess()) is True
 
 
-
 def test_select_jarvis_runtime_prefers_newest_python_candidate(monkeypatch) -> None:
     module = _load_module()
 
@@ -99,12 +98,8 @@ def test_select_jarvis_runtime_prefers_newest_python_candidate(monkeypatch) -> N
             return self._created
 
     launcher = FakeProcess(100, "jarvis-voice.exe", "jarvis-voice.exe", 1000.0)
-    older_python = FakeProcess(
-        200, "python.exe", "python.exe jarvis-voice.exe", 1001.0
-    )
-    newer_python = FakeProcess(
-        300, "python.exe", "python.exe jarvis-voice.exe", 1002.0
-    )
+    older_python = FakeProcess(200, "python.exe", "python.exe jarvis-voice.exe", 1001.0)
+    newer_python = FakeProcess(300, "python.exe", "python.exe jarvis-voice.exe", 1002.0)
 
     monkeypatch.setattr(
         module,
