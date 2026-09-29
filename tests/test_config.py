@@ -88,6 +88,16 @@ def test_tts_provider_defaults_to_gemini_independent_of_brain() -> None:
     assert JarvisConfig(ai_provider="gemini").tts_provider == "gemini"
 
 
+def test_tts_project_billing_attestation_requires_real_bool() -> None:
+    with pytest.raises(
+        TypeError,
+        match="tts_project_billing_isolation_verified",
+    ):
+        JarvisConfig(
+            tts_project_billing_isolation_verified="false",  # type: ignore[arg-type]
+        )
+
+
 def test_invalid_tts_provider_fails_truthfully() -> None:
     with pytest.raises(ValueError, match="JARVIS_TTS_PROVIDER"):
         JarvisConfig(tts_provider="unknown")
