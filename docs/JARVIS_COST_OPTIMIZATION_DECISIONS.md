@@ -76,3 +76,27 @@ Discuss and design, before implementation:
 > JARVIS should use the cheapest sufficient intelligence path while preserving the desired UX, correctness, safety, owner authority and autonomy.
 
 Cost optimization must not mean making JARVIS noticeably slower, less natural, less capable, or less reliable merely to minimize API spend.
+
+
+## Decision 3 — Optimize minimally before buying paid brain credits
+
+Do **not** buy paid API credits and immediately run capability-acquisition experiments against the known current routing inefficiencies.
+
+Also do **not** wait for every possible cost optimization to be complete before testing.
+
+The agreed sequence is:
+
+1. separate TTS/voice-output billing from the paid-brain project so routine free-tier TTS does not consume the paid experiment budget;
+2. evolve the existing Phase-4 Model Router toward the first Global Brain Router slice, with deterministic/local/cheap-model-first routing and stronger-model escalation only when justified;
+3. add enough usage telemetry to attribute provider, model, calls, tokens, retries, stage and estimated cost to a mission;
+4. then purchase approximately **₹400–₹500** of paid brain capacity;
+5. run a controlled blind real-world capability-acquisition experiment;
+6. inspect actual stage-by-stage cost and optimize the components demonstrated to be expensive.
+
+The initial ₹400–₹500 purchase is therefore an **instrumented experiment budget**, not a general authorization for unrestricted paid autonomous operation.
+
+The experiment should answer both:
+- did JARVIS complete the capability autonomously within the existing owner/governance gates?;
+- what did the successful or failed attempt actually cost, by stage and model path?
+
+A later Cost Governor should enforce hard budgets after these real measurements exist.
