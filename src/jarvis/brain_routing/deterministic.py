@@ -206,11 +206,17 @@ class DeterministicResolverRegistry:
             version = getattr(resolver, "resolver_version", None)
             if not resolver_id:
                 raise ValueError("resolver_id must not be empty")
-            if isinstance(version, bool) or not isinstance(version, int) or version <= 0:
+            if (
+                isinstance(version, bool)
+                or not isinstance(version, int)
+                or version <= 0
+            ):
                 raise ValueError("resolver_version must be a positive integer")
             key = (resolver_id, version)
             if key in seen:
-                raise ValueError(f"duplicate deterministic resolver: {resolver_id}.v{version}")
+                raise ValueError(
+                    f"duplicate deterministic resolver: {resolver_id}.v{version}"
+                )
             seen.add(key)
             normalized.append(resolver)
         self._resolvers = tuple(normalized)
