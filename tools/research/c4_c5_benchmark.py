@@ -44,11 +44,10 @@ class QuestionSpec:
             raise ValueError(f"{self.name}: at least two choices are required")
         if self.expected not in self.choices:
             raise ValueError(f"{self.name}: expected answer is not a choice")
-        if self.order:
-            if set(self.order) != set(self.choices):
-                raise ValueError(
-                    f"{self.name}: order must contain every choice exactly once"
-                )
+        if self.order and set(self.order) != set(self.choices):
+            raise ValueError(
+                f"{self.name}: order must contain every choice exactly once"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,7 +300,7 @@ class OllamaRunner(BenchmarkRunner):
         decoded = json.loads(content)
         answers = decoded.get("answers") if isinstance(decoded, dict) else None
         if not isinstance(answers, dict):
-            raise ValueError("Ollama structured response is missing answers")
+            raise TypeError("Ollama structured response is missing answers")
 
         predictions: dict[str, Prediction] = {}
         for question in case.questions:
@@ -541,7 +540,7 @@ def _score(
         ordered = sorted(latencies)
         p95_index = min(
             len(ordered) - 1,
-            max(0, int(round(0.95 * len(ordered) + 0.5)) - 1),
+            max(0, round(0.95 * len(ordered) + 0.5) - 1),
         )
         p95 = ordered[p95_index]
 
