@@ -133,7 +133,6 @@ def test_cooldown_backoff_is_capped() -> None:
     assert mutation.record.cooldown_until_epoch == 500.0
 
 
-
 def test_response_contract_failure_cools_target_and_allows_fallback() -> None:
     mutation = apply_provider_failure(
         TargetHealthRecord(target_id="local-qwen"),
