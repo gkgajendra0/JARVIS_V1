@@ -14,6 +14,9 @@ from jarvis.capability_acquisition.artifacts import (
     resolution_payload,
     typed_resolution_from_payload,
 )
+from jarvis.capability_acquisition.external_contract import (
+    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+)
 from jarvis.capability_acquisition.models import (
     AcquisitionCandidateV1,
     AcquisitionSourceKind,
@@ -123,6 +126,32 @@ def recorded_unverified_candidates(
     return tuple(sorted(output.values(), key=lambda item: item.candidate_id))
 
 
+def recorded_verified_candidates(
+    steps: tuple[WorkStep, ...],
+) -> tuple[AcquisitionCandidateV1, ...]:
+    """Return only candidates promoted by a trusted research verifier action."""
+
+    output: dict[str, AcquisitionCandidateV1] = {}
+    allowed = {
+        AcquisitionTrustClass.VERIFIED_OFFICIAL_REMOTE,
+        AcquisitionTrustClass.VERIFIED_SIGNED_EXTERNAL,
+    }
+    for step in steps:
+        if step.kind != "acq_verify_pypi_sdk" or step.state.value != "completed":
+            continue
+        candidate = candidate_from_payload(step.observation.get("candidate"))
+        if (
+            candidate.source_kind is not AcquisitionSourceKind.SDK_LIBRARY
+            or candidate.trust_class not in allowed
+            or step.observation.get("verified") is not True
+        ):
+            raise AcquisitionProtocolError(
+                "trusted research candidate has invalid verifier evidence"
+            )
+        output[candidate.candidate_id] = candidate
+    return tuple(sorted(output.values(), key=lambda item: item.candidate_id))
+
+
 class AcquisitionInspectGoalExecutor:
     descriptor = BrainAction(
         name="acq_inspect_goal",
@@ -167,8 +196,11 @@ class AcquisitionRecordCandidateExecutor:
     descriptor = BrainAction(
         name="acq_record_candidate",
         description=(
-            "Record one research-discovered capability source candidate. This action "
-            "always stores the source as UNVERIFIED; model text cannot grant trust."
+            "Record one research-discovered capability source candidate and its "
+            "proposed dependency/network/device/acceptance requirements. This action "
+            "always stores the source as UNVERIFIED; model text cannot grant trust. "
+            "For a Python sdk_library intended for PyPI verification, source_identity "
+            "must be the distribution name and source_version should be exact."
         ),
         parameter_schema={
             "type": "object",
@@ -207,6 +239,35 @@ class AcquisitionRecordCandidateExecutor:
                     "items": {"type": "string", "minLength": 1, "maxLength": 500},
                     "minItems": 1,
                     "maxItems": 30,
+                },
+                "secret_scopes": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 240},
+                    "maxItems": 30,
+                },
+                "network_scopes": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
+                    "maxItems": 30,
+                },
+                "device_scopes": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
+                    "maxItems": 30,
+                },
+                "discovery_scopes": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
+                    "maxItems": 30,
+                },
+                "external_acceptance_requirements": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
+                    "maxItems": 30,
+                },
+                "license_id": {
+                    "type": ["string", "null"],
+                    "maxLength": 240,
                 },
             },
             "required": [
@@ -260,8 +321,16 @@ class AcquisitionRecordCandidateExecutor:
             supported_operations=tuple(parameters.get("supported_operations") or ()),
             strategy=strategy,
             evidence_refs=tuple(parameters.get("evidence_refs") or ()),
+            secret_scopes=tuple(parameters.get("secret_scopes") or ()),
+            network_scopes=tuple(parameters.get("network_scopes") or ()),
+            device_scopes=tuple(parameters.get("device_scopes") or ()),
+            discovery_scopes=tuple(parameters.get("discovery_scopes") or ()),
+            license_id=parameters.get("license_id"),
             verification_requirements=tuple(
                 parameters.get("verification_requirements") or ()
+            ),
+            external_acceptance_requirements=tuple(
+                parameters.get("external_acceptance_requirements") or ()
             ),
             reason_codes=("research_discovered_unverified",),
         )
@@ -276,8 +345,10 @@ class AcquisitionResolveExecutor:
     descriptor = BrainAction(
         name="acq_resolve",
         description=(
-            "Resolve trusted registered capability sources against the exact owner goal. "
-            "Research-recorded unverified candidates remain visible but blocked."
+            "Resolve trusted registered and verified research capability sources "
+            "against the exact owner goal. Research-recorded unverified candidates "
+            "remain visible but blocked. Verify a promising exact-version Python SDK "
+            "with acq_verify_pypi_sdk before resolving so reuse can outrank custom build."
         ),
         parameter_schema={"type": "object", "additionalProperties": False},
     )
@@ -326,31 +397,24 @@ class AcquisitionResolveExecutor:
     ) -> dict[str, Any]:
         del parameters
         context = self._resolver.context_for(work.work_id)
-        resolution = self._acquisition.resolve(
+        acquisition_context = self._context_provider.current()
+        registered = self._acquisition.resolve(
             context.goal,
-            self._context_provider.current(),
+            acquisition_context,
         )
-        candidates = list(resolution.candidates)
-        evaluations = list(resolution.evaluations)
-        known = {item.candidate_id for item in candidates}
-        for candidate in recorded_unverified_candidates(
-            self._resolver.completed_steps(work.work_id)
-        ):
-            if candidate.candidate_id in known:
-                continue
-            candidates.append(candidate)
-            evaluations.append(
-                self._acquisition.evaluate(
-                    context.goal,
-                    candidate,
-                    self._context_provider.current(),
-                )
-            )
-        candidates.sort(key=lambda item: item.candidate_id)
-        evaluations.sort(key=lambda item: item.candidate_id)
+        steps = self._resolver.completed_steps(work.work_id)
+        research_candidates = (
+            *recorded_unverified_candidates(steps),
+            *recorded_verified_candidates(steps),
+        )
+        resolution = self._acquisition.resolve_candidates(
+            context.goal,
+            (*registered.candidates, *research_candidates),
+            acquisition_context,
+        )
         payload = resolution_payload(
-            candidates=tuple(candidates),
-            evaluations=tuple(evaluations),
+            candidates=resolution.candidates,
+            evaluations=resolution.evaluations,
             selected_candidate_id=resolution.selected_candidate_id,
         )
         artifact = self._persist_if_changed(
@@ -363,9 +427,9 @@ class AcquisitionResolveExecutor:
             "resolution_artifact_id": artifact.artifact_id,
             "resolution_artifact_digest": artifact.digest,
             "selected_candidate_id": resolution.selected_candidate_id,
-            "candidate_count": len(candidates),
+            "candidate_count": len(resolution.candidates),
             "blocked_candidate_count": sum(
-                item.disposition.value == "blocked" for item in evaluations
+                item.disposition.value == "blocked" for item in resolution.evaluations
             ),
         }
 
@@ -566,6 +630,12 @@ class AcquisitionFinalizeExecutor:
                 {
                     *candidate.discovery_scopes,
                     *(parameters.get("discovery_scopes") or ()),
+                    *(
+                        str(step.observation.get("scope_id")).strip().casefold()
+                        for step in self._resolver.completed_steps(work.work_id)
+                        if step.kind == "acq_discover_local"
+                        and str(step.observation.get("scope_id") or "").strip()
+                    ),
                 }
             ),
             network_scopes=tuple(
@@ -593,6 +663,16 @@ class AcquisitionFinalizeExecutor:
                 {
                     *candidate.external_acceptance_requirements,
                     *(parameters.get("owner_acceptance_contract_ids") or ()),
+                    *(
+                        (PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,)
+                        if (
+                            candidate.network_scopes
+                            or candidate.device_scopes
+                            or parameters.get("network_scopes")
+                            or parameters.get("device_scopes")
+                        )
+                        else ()
+                    ),
                 }
             ),
             evidence_refs=tuple(
@@ -657,22 +737,31 @@ def acquisition_completion_guard(
     if not finalized:
         return False, "capability acquisition requires a canonical acq_finalize plan"
 
-    finalize_index, _ = finalized[-1]
-    relevant = {
+    resolve_index, _ = resolved[-1]
+    source_evidence = {
         "research_web",
+        "acq_discover_local",
         "acq_record_candidate",
-        "acq_resolve",
+        "acq_verify_pypi_sdk",
     }
-    latest_relevant = max(
+    latest_source_evidence = max(
         (
             index
             for index, step in enumerate(steps)
-            if step.state.value == "completed" and step.kind in relevant
+            if step.state.value == "completed" and step.kind in source_evidence
         ),
         default=-1,
     )
-    if finalize_index <= latest_relevant:
-        return False, "capability acquisition must re-finalize after latest evidence"
+    if resolve_index <= latest_source_evidence:
+        return (
+            False,
+            "capability acquisition must re-resolve after latest source evidence",
+        )
+
+    finalize_index, _ = finalized[-1]
+    latest_resolution_evidence = max(resolve_index, latest_source_evidence)
+    if finalize_index <= latest_resolution_evidence:
+        return False, "capability acquisition must re-finalize after latest resolution"
     return True, None
 
 

@@ -9,6 +9,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from jarvis.capabilities.models import CapabilityCatalog
+from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capability_acquisition.activation import (
     CapabilityAcquisitionLifecycleCoordinator,
 )
@@ -16,6 +17,14 @@ from jarvis.capability_acquisition.admission import CapabilityAcquisitionCoordin
 from jarvis.capability_acquisition.architecture import (
     CapabilityAcquisitionDevelopmentRevisionResolver,
     CapabilityAcquisitionSourceCompletionHandler,
+)
+from jarvis.capability_acquisition.discovery_workflow import (
+    build_acquisition_discovery_executors,
+)
+from jarvis.capability_acquisition.external_acceptance import (
+    ExternalAcceptanceCoordinator,
+    build_external_acceptance_executors,
+    external_acceptance_completion_guard,
 )
 from jarvis.capability_acquisition.owner_sources import registered_source_adapters
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
@@ -27,6 +36,9 @@ from jarvis.capability_acquisition.runtime_context import (
     AcquisitionContextProvider,
     StaticAcquisitionContextProvider,
 )
+from jarvis.capability_acquisition.sdk_verification import (
+    build_acquisition_sdk_verification_executors,
+)
 from jarvis.capability_acquisition.source import (
     AcquisitionContextV1,
     CapabilitySourceRegistry,
@@ -34,6 +46,9 @@ from jarvis.capability_acquisition.source import (
 )
 from jarvis.capability_acquisition.standard_sources import (
     CustomBuildCapabilitySourceAdapter,
+)
+from jarvis.capability_acquisition.substrate_workflow import (
+    build_capability_substrate_executors,
 )
 from jarvis.capability_acquisition.verification import (
     CapabilityAcquisitionDevelopmentCompletionHandler,
@@ -48,6 +63,13 @@ from jarvis.capability_registry.lifecycle import CapabilityLifecycleService
 from jarvis.capability_registry.reconciliation import CapabilityLifecycleReconciler
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.store import ChangeStore
+from jarvis.engineering_substrate.change_integration import (
+    EngineeringSubstrateChangeService,
+)
+from jarvis.engineering_substrate.dependency.runtime import (
+    build_runtime_dependency_broker,
+)
+from jarvis.engineering_substrate.discovery import default_discovery_broker
 from jarvis.incident_repair.architecture import (
     IncidentRepairDevelopmentRevisionResolver,
     IncidentRepairSourceCompletionHandler,
@@ -161,6 +183,7 @@ class WorkRuntime:
         model_router: ModelRouter | None = None,
         capability_acquisition: CapabilityAcquisitionCoordinator | None = None,
         capability_lifecycle: CapabilityAcquisitionLifecycleCoordinator | None = None,
+        capability_external_acceptance: ExternalAcceptanceCoordinator | None = None,
         promotion_runtime: PromotionRuntime | None = None,
         release_bridge_task: asyncio.Task[None] | None = None,
         capability_catalog_refresher: Callable[[], object] | None = None,
@@ -178,6 +201,7 @@ class WorkRuntime:
         self.model_router = model_router
         self.capability_acquisition = capability_acquisition
         self.capability_lifecycle = capability_lifecycle
+        self.capability_external_acceptance = capability_external_acceptance
         self.promotion_runtime = promotion_runtime
         self._release_bridge_task = release_bridge_task
         self._capability_catalog_refresher = capability_catalog_refresher
@@ -303,6 +327,7 @@ def build_work_runtime(
     dbos_database_url: str | None = None,
     event_loop: asyncio.AbstractEventLoop | None = None,
     acquisition_context_provider: AcquisitionContextProvider | None = None,
+    capability_runtime: CapabilityRuntime | None = None,
     capability_lifecycle_service: CapabilityLifecycleService | None = None,
     capability_deployment_metadata: DeploymentMetadataStore | None = None,
     capability_package_admission: CapabilityPackageAdmissionService | None = None,
@@ -345,6 +370,7 @@ def build_work_runtime(
         )
     )
     acquisition_work_context = AcquisitionWorkContextResolver(change_store)
+    acquisition_discovery = default_discovery_broker()
 
     adapter_registry = build_default_model_adapter_registry()
     work_targets = build_default_work_targets(
@@ -392,6 +418,16 @@ def build_work_runtime(
     )
     executors = (
         ResearchWorkExecutor(research_service),
+        *build_acquisition_discovery_executors(
+            acquisition_work_context,
+            broker=acquisition_discovery,
+        ),
+        *build_acquisition_sdk_verification_executors(
+            acquisition_work_context,
+            broker_factory=lambda: build_runtime_dependency_broker(
+                protected_main_root=workspace_manager.repository_root,
+            ),
+        ),
         *build_acquisition_protocol_executors(
             acquisition_work_context,
             context_provider=acquisition_context,
@@ -407,6 +443,20 @@ def build_work_runtime(
         DiagnosticStaticCheckExecutor(
             diagnostic_workspace_manager,
             diagnostic_static_runner,
+        ),
+        *build_capability_substrate_executors(
+            change_store,
+            broker_factory=lambda: build_runtime_dependency_broker(
+                protected_main_root=workspace_manager.repository_root,
+            ),
+        ),
+        *(
+            ()
+            if capability_runtime is None
+            else build_external_acceptance_executors(
+                change_store,
+                capability_runtime=capability_runtime,
+            )
         ),
         *build_development_executors(
             workspace_manager,
@@ -431,6 +481,8 @@ def build_work_runtime(
     )
 
     def _completion_guard(work: WorkItem, steps):
+        if work.work_type is WorkType.EXTERNAL_ACCEPTANCE:
+            return external_acceptance_completion_guard(steps)
         stage = change_store.stage_for_work(work.work_id)
         if stage is None:
             return None
@@ -438,10 +490,41 @@ def build_work_runtime(
         if (
             change.process_key == OWNER_CAPABILITY_ACQUISITION_PROCESS.key
             and change.process_version == OWNER_CAPABILITY_ACQUISITION_PROCESS.version
-            and stage.stage_key
-            == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
         ):
-            return acquisition_completion_guard(steps)
+            if (
+                stage.stage_key
+                == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
+            ):
+                return acquisition_completion_guard(steps)
+            if (
+                stage.stage_key
+                == OWNER_CAPABILITY_ACQUISITION_PROCESS.development_stage.stage_key
+            ):
+                architecture = change_store.latest_artifact(
+                    change.change_id,
+                    "architecture",
+                )
+                if (
+                    architecture is not None
+                    and any(
+                        tuple(architecture.payload.get(field, ()))
+                        for field in (
+                            "dependency_refs",
+                            "secret_scopes",
+                            "discovery_scopes",
+                        )
+                    )
+                    and not EngineeringSubstrateChangeService(
+                        change_store
+                    ).verification_current(change.change_id)
+                ):
+                    return (
+                        False,
+                        (
+                            "capability development requires current Phase-5 "
+                            "substrate verification"
+                        ),
+                    )
         return None
 
     engine = WorkEngine(
@@ -485,6 +568,11 @@ def build_work_runtime(
     capability_acquisition = CapabilityAcquisitionCoordinator(
         changes=changes,
         context_provider=acquisition_context,
+    )
+    capability_external_acceptance = (
+        None
+        if capability_runtime is None
+        else ExternalAcceptanceCoordinator(change_store, backend)
     )
     if (
         capability_lifecycle_service is not None
@@ -592,6 +680,7 @@ def build_work_runtime(
         model_router=model_router,
         capability_acquisition=capability_acquisition,
         capability_lifecycle=capability_lifecycle,
+        capability_external_acceptance=capability_external_acceptance,
         promotion_runtime=promotion_runtime,
         release_bridge_task=release_bridge_task,
         capability_catalog_refresher=capability_catalog_refresher,

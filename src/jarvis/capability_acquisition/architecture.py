@@ -10,6 +10,10 @@ from jarvis.capability_acquisition.artifacts import (
     goal_from_payload,
     plan_from_payload,
 )
+from jarvis.capability_acquisition.external_contract import (
+    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+    external_interaction_contract_descriptor,
+)
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change.models import (
     ChangeArtifact,
@@ -80,7 +84,7 @@ class CapabilityAcquisitionArchitecturePlan:
             )
 
     def to_payload(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "schema": "capability_acquisition_architecture.v1",
             "schema_version": self.schema_version,
             "process_key": OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
@@ -117,6 +121,13 @@ class CapabilityAcquisitionArchitecturePlan:
             "build_permitted": self.build_permitted,
             "protected_surface_review_required": self.protected_surface_review_required,
         }
+        if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT in set(
+            self.owner_acceptance_contract_ids
+        ):
+            payload["external_runtime_contract"] = (
+                external_interaction_contract_descriptor()
+            )
+        return payload
 
 
 def _validate_completed_acquisition(

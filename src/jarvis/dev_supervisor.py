@@ -41,6 +41,9 @@ from jarvis.promotion.release import (
     default_releases_root,
     load_active_release_for_startup,
 )
+from jarvis.promotion.runtime_dependencies import (
+    prepare_phase9_release_dependencies,
+)
 from jarvis.promotion.store import PromotionStore
 from jarvis.self_awareness import default_incident_store_path
 from jarvis.self_repair import RepairVerificationStatus
@@ -694,6 +697,11 @@ def _resume_pending_phase7_deployment(
         stager=GitReleaseStager(repository_root, default_releases_root()),
         metadata=metadata,
         runtime=driver,
+        prepare_release=lambda attempt, release: prepare_phase9_release_dependencies(
+            changes,
+            attempt,
+            release,
+        ),
         shutdown_timeout_seconds=config.shutdown_timeout_seconds,
         startup_timeout_seconds=config.startup_timeout_seconds,
     )

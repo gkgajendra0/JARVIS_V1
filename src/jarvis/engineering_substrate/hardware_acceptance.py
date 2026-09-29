@@ -285,6 +285,115 @@ class HardwareAcceptanceService:
                 )
         return request
 
+    def create_post_activation_request(
+        self,
+        *,
+        change_id: str,
+        manifest_id: str,
+        manifest_digest: str,
+        declared_operations: Sequence[str],
+        acceptance_contract_id: str,
+        device_identity: str,
+        operation: str,
+        expected_observation: str,
+        required_automated_evidence_ids: Sequence[str] = (),
+        ttl_seconds: float = 900.0,
+        request_id: str | None = None,
+    ) -> HardwareAcceptanceRequest:
+        """Create Phase-9 post-activation evidence without changing build-time gates.
+
+        The caller must already have proven that the manifest digest is current and
+        that the acceptance contract belongs to the exact owner-approved Phase-9
+        architecture. Keeping this post-activation avoids a pre-promotion deadlock.
+        """
+
+        change = self.store.require(_required_text(change_id, field="change_id"))
+        manifest_key = _required_text(manifest_id, field="manifest_id")
+        manifest_sha = _sha256(manifest_digest, field="manifest_digest")
+        contract = _token(
+            acceptance_contract_id,
+            field="acceptance_contract_id",
+        )
+        operations = {
+            _token(item, field="declared_operation") for item in declared_operations
+        }
+        operation_token = _token(operation, field="operation")
+        if operation_token not in operations:
+            raise HardwareAcceptanceConflict(
+                "post-activation operation is not declared by the current architecture"
+            )
+        ttl = float(ttl_seconds)
+        if ttl <= 0 or ttl > 86_400:
+            raise ValueError("hardware acceptance ttl_seconds must be within one day")
+
+        created = float(self._clock())
+        request = HardwareAcceptanceRequest(
+            request_id=request_id or ("hwreq_" + uuid.uuid4().hex[:20]),
+            change_id=change.change_id,
+            manifest_id=manifest_key,
+            manifest_digest=manifest_sha,
+            device_identity=_required_text(device_identity, field="device_identity"),
+            operation=operation_token,
+            expected_observation=_required_text(
+                expected_observation,
+                field="expected_observation",
+            ),
+            required_automated_evidence_ids=tuple(
+                _required_text(item, field="required_automated_evidence_id")
+                for item in required_automated_evidence_ids
+            ),
+            created_at_epoch=created,
+            expires_at_epoch=created + ttl,
+        )
+        digest = canonical_digest(request)
+        payload = _payload_dict(request)
+
+        work = self.store.work
+        with work._lock, work._connect() as db:
+            existing = db.execute(
+                """SELECT request_digest, payload
+                FROM engineering_hardware_acceptance_requests WHERE request_id=?""",
+                (request.request_id,),
+            ).fetchone()
+            if existing is not None:
+                decoded = work._decode_json(existing["payload"])
+                current = _request_from_payload(decoded)
+                if existing["request_digest"] == digest and current == request:
+                    return current
+                raise HardwareAcceptanceConflict(
+                    "hardware acceptance request identity already differs"
+                )
+            with db:
+                db.execute(
+                    """INSERT INTO engineering_hardware_acceptance_requests
+                    (request_id, change_id, request_digest, payload,
+                     created_at_epoch, expires_at_epoch)
+                    VALUES (?, ?, ?, ?, ?, ?)""",
+                    (
+                        request.request_id,
+                        request.change_id,
+                        digest,
+                        work._encode_json(payload),
+                        request.created_at_epoch,
+                        request.expires_at_epoch,
+                    ),
+                )
+                self.store._event(
+                    db,
+                    request.change_id,
+                    f"post-activation-hardware-request:{request.request_id}",
+                    "post_activation_hardware_acceptance_request",
+                    {
+                        "request_id": request.request_id,
+                        "request_digest": digest,
+                        "manifest_id": request.manifest_id,
+                        "manifest_digest": request.manifest_digest,
+                        "acceptance_contract_id": contract,
+                        "operation": request.operation,
+                    },
+                )
+        return request
+
     def get_request(self, request_id: str) -> HardwareAcceptanceRequest:
         request_key = _required_text(request_id, field="request_id")
         work = self.store.work

@@ -52,6 +52,19 @@ selected action schema.
 
 For development work, JARVIS owns a strict staged sequence. Prepare the isolated
 worktree before source work. Inspect relevant files/search evidence before editing.
+For owner-capability acquisition, when the approved architecture declares dependency,
+secret or discovery substrate requirements, satisfy the supplied Phase-5 substrate
+actions rather than using shell/package-manager shortcuts. Resolve exact approved Python
+dependencies through dev_resolve_python_dependency, bind the capability manifest, and
+after passing sandbox tests record current substrate verification before completion.
+If an acquired executor needs owner pairing input at runtime, return CapabilityResult
+status=partial with data.owner_input_request containing kind=pin or confirmation, a
+bounded human prompt, and an optional safe parameter name. Never persist the supplied
+PIN/token in capability source or result data. When the executor can independently prove
+the real external effect, return data.acceptance_observation with observed=true,
+method=device_state_readback or external_system_readback, a bounded summary, and
+evidence_refs. Do not fabricate readback; omit acceptance_observation when the physical
+effect requires owner observation.
 Use only the isolated-worktree write action for generated source. Never request shell,
 package installation, push, merge, deployment, protected-main mutation or any action
 outside the supplied catalog. Run tests only through the sandboxed test action. After
@@ -60,6 +73,12 @@ status/evidence as needed, then mark the goal complete. If JARVIS reports a comp
 guard, satisfy the missing deterministic verification instead of repeating completion.
 If a test action reports that a safe sandbox is unavailable, request owner input and
 do not substitute host execution.
+
+For external-acceptance work, inspect the exact activation first, prepare one safe
+representative requested operation and expected observation, then invoke it through the
+governed capability runtime. The executor will request explicit live-test authority and
+pairing input when necessary. Record the resulting real-world evidence after a successful
+invocation. Never invent a PIN, owner confirmation, device readback or physical result.
 
 For research work, use retrieved source evidence rather than model-only assumptions.
 A failed or insufficient retrieval is not completion; refine the bounded query when

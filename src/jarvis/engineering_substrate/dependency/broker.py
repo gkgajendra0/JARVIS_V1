@@ -9,7 +9,10 @@ import tempfile
 import urllib.request
 from dataclasses import dataclass, replace
 
-from jarvis.engineering_substrate.artifacts import ArtifactStore
+from jarvis.engineering_substrate.artifacts import (
+    ArtifactAdmissionResult,
+    ArtifactStore,
+)
 from jarvis.engineering_substrate.contracts import (
     DependencyArtifact,
     DependencyEcosystem,
@@ -149,6 +152,12 @@ class DependencyBroker:
             else pathlib.Path(protected_main_root).resolve()
         )
 
+    @property
+    def artifact_store(self) -> ArtifactStore:
+        """Expose the same content-addressed store to provenance verifiers."""
+
+        return self._artifacts
+
     def _workspace(self, value: pathlib.Path | str) -> pathlib.Path:
         path = pathlib.Path(value)
         if path.is_symlink() or not path.is_dir():
@@ -272,6 +281,20 @@ class DependencyBroker:
             ),
             change_id=requirement.change_id,
             work_id=requirement.work_id,
+        )
+
+    def admit_lock(
+        self,
+        resolved: ResolvedPythonDependency,
+    ) -> ArtifactAdmissionResult:
+        """Seal the canonical pylock itself into the content-addressed ArtifactStore."""
+
+        parsed = self.inspect_lock(resolved)
+        return self._artifacts.admit_file(
+            resolved.lock_path,
+            expected_sha256=parsed.lock_sha256,
+            source_id="dependency-lock:"
+            + resolved.requirement.registered_source_ids[0],
         )
 
     def inspect_lock(

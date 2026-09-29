@@ -221,6 +221,49 @@ class CapabilityAcquisitionResolver:
             reason_codes=tuple(reason_codes),
         )
 
+    def resolve_candidates(
+        self,
+        goal: OwnerCapabilityGoalV1,
+        candidates: tuple[AcquisitionCandidateV1, ...],
+        context: AcquisitionContextV1,
+    ) -> AcquisitionResolutionResult:
+        """Evaluate/select an already evidenced candidate set deterministically."""
+
+        if not isinstance(goal, OwnerCapabilityGoalV1):
+            raise TypeError("goal must be OwnerCapabilityGoalV1")
+        if not isinstance(context, AcquisitionContextV1):
+            raise TypeError("context must be AcquisitionContextV1")
+        if any(not isinstance(item, AcquisitionCandidateV1) for item in candidates):
+            raise TypeError("candidates must contain AcquisitionCandidateV1 values")
+
+        normalized = self._deduplicate(candidates)
+        evaluations = tuple(
+            self.evaluate(goal, candidate, context) for candidate in normalized
+        )
+        selectable = [
+            (candidate, evaluation)
+            for candidate, evaluation in zip(normalized, evaluations, strict=True)
+            if evaluation.disposition is AcquisitionDisposition.SELECTABLE
+        ]
+        selected = (
+            None
+            if not selectable
+            else min(
+                selectable,
+                key=lambda pair: (
+                    _STRATEGY_RANK[pair[0].strategy],
+                    _TRUST_RANK[pair[0].trust_class],
+                    _SOURCE_RANK[pair[0].source_kind],
+                    pair[0].candidate_id,
+                ),
+            )[0].candidate_id
+        )
+        return AcquisitionResolutionResult(
+            candidates=normalized,
+            evaluations=evaluations,
+            selected_candidate_id=selected,
+        )
+
     def resolve(
         self,
         goal: OwnerCapabilityGoalV1,
@@ -239,31 +282,4 @@ class CapabilityAcquisitionResolver:
                     "source adapter returned an invalid candidate"
                 )
             discovered.extend(results)
-
-        candidates = self._deduplicate(tuple(discovered))
-        evaluations = tuple(
-            self.evaluate(goal, candidate, context) for candidate in candidates
-        )
-        selectable = [
-            (candidate, evaluation)
-            for candidate, evaluation in zip(candidates, evaluations, strict=True)
-            if evaluation.disposition is AcquisitionDisposition.SELECTABLE
-        ]
-        selected = (
-            None
-            if not selectable
-            else min(
-                selectable,
-                key=lambda pair: (
-                    _STRATEGY_RANK[pair[0].strategy],
-                    _TRUST_RANK[pair[0].trust_class],
-                    _SOURCE_RANK[pair[0].source_kind],
-                    pair[0].candidate_id,
-                ),
-            )[0].candidate_id
-        )
-        return AcquisitionResolutionResult(
-            candidates=candidates,
-            evaluations=evaluations,
-            selected_candidate_id=selected,
-        )
+        return self.resolve_candidates(goal, tuple(discovered), context)

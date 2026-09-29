@@ -434,6 +434,8 @@ def sdk_library_evidence(
     secret_scopes: Sequence[object] = (),
     network_scopes: Sequence[object] = (),
     device_scopes: Sequence[object] = (),
+    discovery_scopes: Sequence[object] = (),
+    external_acceptance_requirements: Sequence[object] = (),
 ) -> StandardSourceEvidenceV1:
     return _evidence(
         source_kind=AcquisitionSourceKind.SDK_LIBRARY,
@@ -448,8 +450,10 @@ def sdk_library_evidence(
         secret_scopes=secret_scopes,
         network_scopes=network_scopes,
         device_scopes=device_scopes,
+        discovery_scopes=discovery_scopes,
         license_id=license_id,
         provenance_refs=provenance_refs,
+        external_acceptance_requirements=external_acceptance_requirements,
         reason_codes=("sdk_library_source",),
     )
 
