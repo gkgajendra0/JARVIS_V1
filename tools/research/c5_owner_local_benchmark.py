@@ -177,8 +177,7 @@ def _pull_model(executable: str, model: str) -> dict[str, Any]:
     elapsed = time.perf_counter() - started
     if result.returncode != 0:
         raise RuntimeError(
-            f"ollama pull {model} failed: "
-            f"{(result.stderr or result.stdout)[-4000:]}"
+            f"ollama pull {model} failed: {(result.stderr or result.stdout)[-4000:]}"
         )
     return {
         "elapsed_seconds": elapsed,
