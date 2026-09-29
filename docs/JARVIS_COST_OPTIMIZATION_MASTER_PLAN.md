@@ -1,10 +1,19 @@
 # JARVIS Cost Optimization Master Plan
 
-Status: **OWNER-DIRECTED DESIGN / IMPLEMENTATION NEXT CHAT / NO RUNTIME CHANGE IN THIS PR**
+Status: **C0-C2 IMPLEMENTED / RESEARCH-CORRECTED / NEXT IMPLEMENTATION SLICE C3**
 
 Date: 2026-09-29
 
 Related decisions: `JARVIS_COST_OPTIMIZATION_DECISIONS.md`
+
+
+Research sources re-verified 2026-09-29:
+
+- Gemini API billing/project/API-key semantics: https://ai.google.dev/gemini-api/docs/billing
+- Gemini Developer API pricing: https://ai.google.dev/gemini-api/docs/pricing
+- Gemini 3.8 Flash TTS model guidance: https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash-tts
+- LiveKit Gemini TTS adapter guidance: https://docs.livekit.io/agents/models/tts/gemini/
+- Exa endpoint pricing: https://exa.ai/pricing
 
 ## 1. Goal
 
