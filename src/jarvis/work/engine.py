@@ -15,8 +15,7 @@ from jarvis.work.brain import (
     BrainRequest,
     ProviderPressure,
 )
-from jarvis.work.models import (
-    WorkDeliveryKind,
+from jarvis.work.context import (\n    WorkContextAssembler,\n    WorkContextMode,\n    normalize_work_context_mode,\n)\nfrom jarvis.work.models import (\n    WorkDeliveryKind,
     WorkItem,
     WorkState,
     WorkStep,
@@ -125,6 +124,8 @@ class WorkEngine:
             tuple[bool, str | None] | None,
         ]
         | None = None,
+        context_assembler: WorkContextAssembler | None = None,
+        context_mode: WorkContextMode | str = WorkContextMode.SHADOW,
     ) -> None:
         self._store = store
         self._brain = brain
@@ -133,6 +134,8 @@ class WorkEngine:
         self._base_resource_keys = self._resources.normalize(base_resource_keys)
         self._action_admission = action_admission
         self._custom_completion_guard = completion_guard
+        self._context_assembler = context_assembler or WorkContextAssembler()
+        self._context_mode = normalize_work_context_mode(context_mode)
 
     def _check_action_admission(self, work: WorkItem) -> WorkAdvanceResult | None:
         if self._action_admission is None or self._action_admission(work.work_id):
@@ -790,6 +793,11 @@ class WorkEngine:
             return WorkAdvanceResult(work.work_id, failed.state, progressed=True)
 
         steps = self._store.list_steps(work.work_id)
+        context_pack = (
+            None
+            if self._context_mode is WorkContextMode.OFF
+            else self._context_assembler.build(work=work, steps=steps)
+        )
         try:
             decision = await self._brain.decide(
                 BrainRequest(
@@ -797,6 +805,8 @@ class WorkEngine:
                     recent_steps=steps[-12:],
                     purpose="choose the next bounded step for this JARVIS-owned work item",
                     allowed_actions=actions,
+                    context_pack=context_pack,
+                    context_mode=self._context_mode,
                 )
             )
         except BrainPreempted:
