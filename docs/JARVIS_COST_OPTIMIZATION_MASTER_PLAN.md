@@ -1,6 +1,6 @@
 # JARVIS Cost Optimization Master Plan
 
-Status: **C0-C2 IMPLEMENTED / RESEARCH-CORRECTED / C3 DEEP RESEARCH COMPLETE / C3 IMPLEMENTATION NEXT**
+Status: **C0-C3 IMPLEMENTED / ACCEPTANCE TESTED / NEXT: C4 + C5 RESEARCH & BENCHMARKS**
 
 Date: 2026-09-29
 
@@ -141,11 +141,15 @@ for owner A/B evaluation. Do not change voice identity merely to reduce spend.
 
 C3 deep research is documented in `JARVIS_C3_GLOBAL_BRAIN_ROUTER_RESEARCH.md`.
 
-The research decision is to preserve the existing Phase-4 ModelRouter as the
-model-target selector and add only a thin global intelligence-path policy around
+C3 implementation and acceptance are documented in `JARVIS_C3_GLOBAL_BRAIN_ROUTER_IMPLEMENTATION.md`.
+
+The implemented design preserves the existing Phase-4 ModelRouter as the
+model-target selector and adds only a thin global intelligence-path policy around
 it. Exact deterministic decisions may bypass model invocation; ambiguous work
-must abstain back to the model path. External routers are references or possible
-later transport/benchmark components, not the C3 authority/routing core.
+abstains back to the model path. Durable route provenance records deterministic
+bypasses and model calls avoided. Production defaults to shadow mode, with explicit
+apply/off rollout controls. External routers remain references or possible later
+transport/benchmark components, not the C3 authority/routing core.
 
 
 The existing Phase-4 Model Router should evolve into the common whole-JARVIS intelligence-routing substrate.
