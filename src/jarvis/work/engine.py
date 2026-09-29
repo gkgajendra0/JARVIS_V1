@@ -1121,6 +1121,7 @@ class WorkEngine:
     def fail(self, work_id: str, reason: str) -> WorkItem:
         work = self._store.require(work_id)
         if work.state.terminal:
+            self._store.clear_sensitive_inputs(work.work_id)
             return work
         normalized = reason.strip()
         if not normalized:
@@ -1131,6 +1132,7 @@ class WorkEngine:
             current_step_id=work.current_step_id,
         )
         saved = self._store.save(failed, expected_version=work.version)
+        self._store.clear_sensitive_inputs(saved.work_id)
         self._store.enqueue_delivery(
             work=saved,
             kind=WorkDeliveryKind.FAILURE,
