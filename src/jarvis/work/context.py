@@ -179,17 +179,13 @@ class WorkContextAssembler:
         evidence: tuple[dict[str, Any], ...] = (),
     ) -> WorkContextPack:
         selected_indices = self._selected_indices(work.work_type, steps)
-        selected = tuple(
-            self._project_step(steps[index]) for index in selected_indices
-        )
+        selected = tuple(self._project_step(steps[index]) for index in selected_indices)
         selected_set = frozenset(selected_indices)
         omitted_indices = [
             index for index in range(len(steps)) if index not in selected_set
         ]
         manifest_indices = (
-            omitted_indices[-self._manifest_limit :]
-            if self._manifest_limit
-            else []
+            omitted_indices[-self._manifest_limit :] if self._manifest_limit else []
         )
         manifest = tuple(
             WorkContextManifestEntry(
@@ -270,9 +266,7 @@ class WorkContextAssembler:
         kind: str,
         limit: int,
     ) -> set[int]:
-        matching = [
-            index for index, step in enumerate(steps) if step.kind == kind
-        ]
+        matching = [index for index, step in enumerate(steps) if step.kind == kind]
         return set(matching[-limit:])
 
     @staticmethod
@@ -337,35 +331,22 @@ class WorkContextAssembler:
             state=step.state.value,
             input_data=compact_input,
             observation=compact_observation,
-            error=(
-                None
-                if step.error is None
-                else self._compact_text(step.error)
-            ),
+            error=(None if step.error is None else self._compact_text(step.error)),
         )
 
     def _compact_value(self, value: Any) -> Any:
         if isinstance(value, str):
             return self._compact_text(value)
         if isinstance(value, dict):
-            return {
-                str(key): self._compact_value(item)
-                for key, item in value.items()
-            }
+            return {str(key): self._compact_value(item) for key, item in value.items()}
         if isinstance(value, tuple):
             value = list(value)
         if isinstance(value, list):
             if len(value) <= self._max_list_items:
                 return [self._compact_value(item) for item in value]
             head_count = max(1, self._max_list_items - 9)
-            head = [
-                self._compact_value(item)
-                for item in value[:head_count]
-            ]
-            tail = [
-                self._compact_value(item)
-                for item in value[-8:]
-            ]
+            head = [self._compact_value(item) for item in value[:head_count]]
+            tail = [self._compact_value(item) for item in value[-8:]]
             omitted = len(value) - len(head) - len(tail)
             return [
                 *head,
