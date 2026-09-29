@@ -1,6 +1,6 @@
 # JARVIS Cost Optimization Implementation Plan
 
-Status: **C0 + C1 IMPLEMENTED / NEXT SLICE: C2**
+Status: **C0 + C1 + C2 IMPLEMENTED / NEXT SLICE: C3**
 
 Date: 2026-09-29
 
@@ -78,6 +78,21 @@ Exit:
 - a dry-run mission can produce a cost report even when estimated cost is zero/mock.
 
 ## Slice C2 — Voice/TTS billing separation
+
+Status: **IMPLEMENTED / ACCEPTANCE TESTED**.
+
+Implemented foundation:
+
+- `JARVIS_AI_PROVIDER` remains the brain/realtime reasoning selector;
+- `JARVIS_TTS_PROVIDER` independently selects scripted lifecycle TTS and defaults to the preferred Gemini path;
+- dedicated `JARVIS_TTS_GOOGLE_API_KEY` / `JARVIS_TTS_OPENAI_API_KEY` credentials take precedence over legacy shared provider keys;
+- legacy shared-key fallback is retained only for migration/compatibility so the current voice does not break immediately;
+- preflight reports whether the TTS lane is dedicated, compatibility/shared, or local-fallback-only;
+- provider CLI can inspect both lanes and switch scripted TTS without changing the brain provider;
+- missing cloud TTS credentials remain non-fatal because the existing Windows-local lifecycle speech fallback is preserved;
+- deterministic tests prove that changing the brain provider cannot redirect scripted TTS.
+
+Pre-paid experiment requirement: configure a **dedicated** TTS credential before using paid-brain credits. Compatibility/shared mode is not considered billing-separated.
 
 Goal: protect the paid-brain experiment from routine voice-output consumption without changing preferred voice UX.
 
