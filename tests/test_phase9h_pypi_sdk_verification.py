@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+from jarvis.capability_acquisition import sdk_verification
 from jarvis.capability_acquisition.artifacts import (
     candidate_from_payload,
     candidate_payload,
@@ -14,7 +15,6 @@ from jarvis.capability_acquisition.models import (
     AcquisitionTrustClass,
     OwnerCapabilityGoalV1,
 )
-from jarvis.capability_acquisition import sdk_verification
 from jarvis.capability_acquisition.sdk_verification import (
     AcquisitionVerifyPyPiSdkExecutor,
 )
