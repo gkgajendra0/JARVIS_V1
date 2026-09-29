@@ -172,9 +172,7 @@ def _json_request(
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(
-            f"HTTP {exc.code} from {url}: {detail[:2000]}"
-        ) from exc
+        raise RuntimeError(f"HTTP {exc.code} from {url}: {detail[:2000]}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"Unable to reach {url}: {exc.reason}") from exc
     latency_ms = (time.perf_counter() - started) * 1000.0
@@ -190,8 +188,7 @@ class AbstainRunner(BenchmarkRunner):
     def run(self, case: CaseSpec) -> RunnerResult:
         return RunnerResult(
             predictions={
-                question.name: Prediction("abstain")
-                for question in case.questions
+                question.name: Prediction("abstain") for question in case.questions
             },
             latency_ms=0.0,
             usage={},
@@ -446,9 +443,7 @@ class JevRunner(BenchmarkRunner):
 
         cost = None
         if self.input_usd_per_million is not None and "input_tokens" in usage:
-            cost = (
-                usage["input_tokens"] / 1_000_000.0
-            ) * self.input_usd_per_million
+            cost = (usage["input_tokens"] / 1_000_000.0) * self.input_usd_per_million
 
         return RunnerResult(
             predictions=predictions,
@@ -559,9 +554,7 @@ def _score(
         "exact": exact,
         "accuracy_over_covered": (exact / covered if covered else None),
         "unsafe_downgrades": unsafe_downgrades,
-        "unsafe_downgrade_rate": (
-            unsafe_downgrades / total if total else 0.0
-        ),
+        "unsafe_downgrade_rate": (unsafe_downgrades / total if total else 0.0),
         "conservative_escalations": conservative_escalations,
         "conservative_escalation_rate": (
             conservative_escalations / total if total else 0.0
@@ -610,8 +603,7 @@ def _build_runner(args: argparse.Namespace) -> BenchmarkRunner:
         api_key = os.getenv(args.jev_api_key_env, "")
         if not api_key.strip():
             raise RuntimeError(
-                f"Jev API key missing from environment variable "
-                f"{args.jev_api_key_env}"
+                f"Jev API key missing from environment variable {args.jev_api_key_env}"
             )
         return JevRunner(
             endpoint=args.jev_endpoint,
