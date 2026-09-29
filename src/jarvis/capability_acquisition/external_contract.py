@@ -20,6 +20,15 @@ _OBSERVATION_METHODS = frozenset({"device_state_readback", "external_system_read
 _PARAMETER = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 
+def normalize_owner_input_parameter(value: object) -> str | None:
+    if value is None or not str(value).strip():
+        return None
+    parameter = str(value).strip().casefold()
+    if _PARAMETER.fullmatch(parameter) is None:
+        raise ValueError("owner-input parameter is invalid")
+    return parameter
+
+
 def _text(value: object, *, field: str, limit: int) -> str:
     normalized = " ".join(str(value or "").split())
     if not normalized or len(normalized) > limit:
@@ -40,11 +49,7 @@ class ExternalOwnerInputRequestV1:
         if kind not in _OWNER_INPUT_KINDS:
             raise ValueError("unsupported external owner-input kind")
         prompt = _text(self.prompt, field="prompt", limit=500)
-        parameter = None
-        if self.parameter is not None and str(self.parameter).strip():
-            parameter = str(self.parameter).strip().casefold()
-            if _PARAMETER.fullmatch(parameter) is None:
-                raise ValueError("owner-input parameter is invalid")
+        parameter = normalize_owner_input_parameter(self.parameter)
         object.__setattr__(self, "kind", kind)
         object.__setattr__(self, "prompt", prompt)
         object.__setattr__(self, "parameter", parameter)
@@ -52,7 +57,7 @@ class ExternalOwnerInputRequestV1:
     @classmethod
     def from_payload(cls, payload: object) -> ExternalOwnerInputRequestV1:
         if not isinstance(payload, dict):
-            raise ValueError("owner-input request must be an object")
+            raise TypeError("owner-input request must be an object")
         return cls(
             kind=payload.get("kind"),
             prompt=payload.get("prompt"),
@@ -99,10 +104,10 @@ class ExternalAcceptanceObservationV1:
     @classmethod
     def from_payload(cls, payload: object) -> ExternalAcceptanceObservationV1:
         if not isinstance(payload, dict):
-            raise ValueError("acceptance observation must be an object")
+            raise TypeError("acceptance observation must be an object")
         refs = payload.get("evidence_refs") or ()
         if not isinstance(refs, (list, tuple)):
-            raise ValueError("acceptance observation evidence_refs must be an array")
+            raise TypeError("acceptance observation evidence_refs must be an array")
         return cls(
             method=payload.get("method"),
             summary=payload.get("summary"),
