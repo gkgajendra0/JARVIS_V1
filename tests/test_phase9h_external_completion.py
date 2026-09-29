@@ -7,6 +7,7 @@ from jarvis.capability_acquisition.external_acceptance import (
 )
 from jarvis.work.engine import WorkActionRegistry, WorkEngine
 from jarvis.work.models import WorkItem, WorkState, WorkStep, WorkType
+from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.privacy import build_protected_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore
 
@@ -29,6 +30,21 @@ def _raw_storage(path: Path) -> bytes:
         if candidate.exists():
             chunks.append(candidate.read_bytes())
     return b"".join(chunks)
+
+
+class FakeBackend:
+    def submit(self, work_id, *, priority):
+        del priority
+        return work_id
+
+    def cancel(self, execution_id, *, idempotency_key=None):
+        del execution_id, idempotency_key
+
+    def pause(self, execution_id):
+        del execution_id
+
+    def resume(self, execution_id, *, idempotency_key=None):
+        del execution_id, idempotency_key
 
 
 def _completed_step(
@@ -104,6 +120,64 @@ def test_sensitive_owner_input_is_redacted_and_consumed_once(tmp_path) -> None:
     assert "response" not in owner_step.observation
     assert secret.encode("utf-8") not in _raw_storage(path)
     assert store.pop_sensitive_input(item.work_id, "pairing_pin") == secret
+    assert store.pop_sensitive_input(item.work_id, "pairing_pin") is None
+
+
+
+
+def test_sensitive_owner_input_is_cleared_on_failure(tmp_path) -> None:
+    path = tmp_path / "failure.sqlite3"
+    codec = build_protected_work_payload_codec(
+        path,
+        key_protector=FakeKeyProtector(),
+        random_bytes=lambda size: b"f" * size,
+    )
+    store = SQLiteWorkStore(path, payload_codec=codec)
+    item = WorkItem(
+        request="external acceptance failure cleanup",
+        work_type=WorkType.EXTERNAL_ACCEPTANCE,
+        source_session_id="phase9-external:change-failure",
+        source_turn_id="activation-failure",
+    )
+    store.create(item)
+    running = store.save(
+        item.transition(WorkState.RUNNING, status_detail="running"),
+        expected_version=item.version,
+    )
+    store.put_sensitive_input(running.work_id, "pairing_pin", "FAILURE_SECRET_9H")
+
+    engine = WorkEngine(
+        store=store,
+        brain=None,  # type: ignore[arg-type]
+        actions=WorkActionRegistry(()),
+    )
+    failed = engine.fail(running.work_id, "synthetic failure")
+
+    assert failed.state is WorkState.FAILED
+    assert store.pop_sensitive_input(running.work_id, "pairing_pin") is None
+
+
+def test_sensitive_owner_input_is_cleared_on_cancel(tmp_path) -> None:
+    path = tmp_path / "cancel.sqlite3"
+    codec = build_protected_work_payload_codec(
+        path,
+        key_protector=FakeKeyProtector(),
+        random_bytes=lambda size: b"c" * size,
+    )
+    store = SQLiteWorkStore(path, payload_codec=codec)
+    item = WorkItem(
+        request="external acceptance cancellation cleanup",
+        work_type=WorkType.EXTERNAL_ACCEPTANCE,
+        source_session_id="phase9-external:change-cancel",
+        source_turn_id="activation-cancel",
+    )
+    store.create(item)
+    store.put_sensitive_input(item.work_id, "pairing_pin", "CANCEL_SECRET_9H")
+
+    orchestrator = WorkOrchestrator(store, FakeBackend())
+    cancelled = orchestrator.cancel(item.work_id)
+
+    assert cancelled.state is WorkState.CANCELLED
     assert store.pop_sensitive_input(item.work_id, "pairing_pin") is None
 
 
