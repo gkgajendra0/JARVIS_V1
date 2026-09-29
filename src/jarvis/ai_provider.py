@@ -184,7 +184,14 @@ def tts_credential_source(provider: str) -> str | None:
     return None
 
 
-def tts_billing_is_separated(provider: str) -> bool:
+def tts_credential_is_separated(provider: str) -> bool:
+    """Return whether scripted TTS uses a dedicated credential variable.
+
+    This deliberately says nothing about billing. Gemini API keys inherit billing
+    from their project, so a dedicated key is necessary but not sufficient for
+    paid/free project isolation.
+    """
+
     return tts_credential_source(provider) == "dedicated"
 
 
