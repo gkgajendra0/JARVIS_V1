@@ -16,7 +16,13 @@ from jarvis.hands.provider_adapters import (
     StructuredOutputError,
     StructuredOutputTelemetry,
 )
-from jarvis.model_routing.models import ModelLocality, ModelTarget
+from jarvis.model_routing.models import (
+    BenchmarkStatus,
+    CostProfile,
+    ModelLocality,
+    ModelTarget,
+)
+from jarvis.model_routing.registry import ModelAdapterRegistry, ModelTargetRegistry
 
 if TYPE_CHECKING:
     from jarvis.model_routing.invoker import ModelInvocationContext
@@ -26,6 +32,59 @@ DEFAULT_OLLAMA_CONTEXT_TOKENS = 4096
 DEFAULT_OLLAMA_NUM_PREDICT = 256
 DEFAULT_OLLAMA_KEEP_ALIVE = "5m"
 DEFAULT_OLLAMA_TIMEOUT_SECONDS = 30.0
+
+C5_LOCAL_TARGET_ID = "local.ollama.qwen3_5_4b.c5"
+C5_LOCAL_MODEL_ID = "qwen3.5:4b"
+C5_LOCAL_CAPABILITIES = (
+    "bounded_planning",
+    "classification_extraction",
+    "summarization",
+    "structured_output",
+)
+
+
+
+
+
+def build_c5_local_target() -> ModelTarget:
+    """Return the owner-machine-admitted C5 local target contract."""
+
+    return ModelTarget(
+        target_id=C5_LOCAL_TARGET_ID,
+        adapter_id="ollama",
+        provider_id="ollama",
+        model_id=C5_LOCAL_MODEL_ID,
+        locality=ModelLocality.LOCAL,
+        capabilities=C5_LOCAL_CAPABILITIES,
+        roles=("efficient", "bounded_decision"),
+        max_context_tokens=DEFAULT_OLLAMA_CONTEXT_TOKENS,
+        supports_structured_output=True,
+        supports_tools=False,
+        supports_streaming=False,
+        latency_class="fast",
+        benchmark_status=BenchmarkStatus.ACCEPTED,
+        registry_version=1,
+        endpoint_ref=DEFAULT_OLLAMA_ENDPOINT,
+        credential_ref=None,
+        cost_profile=CostProfile(
+            profile_id="ollama-local-api-zero-c5",
+            version=1,
+            effective_from_epoch=0.0,
+            input_usd_per_million_tokens=0.0,
+            output_usd_per_million_tokens=0.0,
+        ),
+        enabled=True,
+    )
+
+
+def build_c5_local_target_registry(
+    adapter_registry: ModelAdapterRegistry,
+) -> ModelTargetRegistry:
+    """Build the isolated C5 target pool without changing Work registry digests."""
+
+    if not isinstance(adapter_registry, ModelAdapterRegistry):
+        raise TypeError("adapter_registry must be a ModelAdapterRegistry")
+    return ModelTargetRegistry(adapter_registry, (build_c5_local_target(),))
 
 
 class OllamaRequestError(RuntimeError):
