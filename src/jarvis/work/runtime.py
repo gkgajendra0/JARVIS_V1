@@ -100,6 +100,7 @@ from jarvis.incident_repair.workspace import (
     build_diagnostic_workspace_executors,
 )
 from jarvis.knowledge.research import CurrentResearchService
+from jarvis.model_routing.cost import ProviderCostEventStore
 from jarvis.model_routing.eligibility import EligibilityPolicy
 from jarvis.model_routing.invoker import (
     ModelInvoker,
@@ -379,6 +380,7 @@ def build_work_runtime(
         adapter_registry=adapter_registry,
     )
     routing_store = ModelRoutingStore(store)
+    provider_cost_store = ProviderCostEventStore(store)
     strategy_registry = RoutingStrategyRegistry((EngineeringStageStrategy(),))
     model_router = ModelRouter(
         target_registry=work_targets.registry,
@@ -417,7 +419,10 @@ def build_work_runtime(
         protected_main_root=diagnostic_workspace_manager.repository_root,
     )
     executors = (
-        ResearchWorkExecutor(research_service),
+        ResearchWorkExecutor(
+            research_service,
+            cost_store=provider_cost_store,
+        ),
         *build_acquisition_discovery_executors(
             acquisition_work_context,
             broker=acquisition_discovery,
