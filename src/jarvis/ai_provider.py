@@ -9,11 +9,17 @@ from jarvis.machine_config import runtime_environment_overrides_enabled
 
 AI_PROVIDER_SETTING = "JARVIS_AI_PROVIDER"
 LEGACY_REALTIME_PROVIDER_SETTING = "JARVIS_REALTIME_PROVIDER"
+TTS_PROVIDER_SETTING = "JARVIS_TTS_PROVIDER"
 VALID_AI_PROVIDERS = frozenset({"gemini", "openai"})
 
 _PROVIDER_CREDENTIAL_ENV = {
     "gemini": "GOOGLE_API_KEY",
     "openai": "OPENAI_API_KEY",
+}
+
+_TTS_CREDENTIAL_ENV = {
+    "gemini": "JARVIS_TTS_GOOGLE_API_KEY",
+    "openai": "JARVIS_TTS_OPENAI_API_KEY",
 }
 
 # Capability-specific models are selected *inside* the one active provider family.
@@ -45,6 +51,15 @@ def normalize_ai_provider(value: str) -> str:
     normalized = value.strip().casefold()
     if normalized not in VALID_AI_PROVIDERS:
         raise ValueError(f"Unsupported {AI_PROVIDER_SETTING}: {value!r}")
+    return normalized
+
+
+def normalize_tts_provider(value: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError("TTS provider must be a string")
+    normalized = value.strip().casefold()
+    if normalized not in VALID_AI_PROVIDERS:
+        raise ValueError(f"Unsupported {TTS_PROVIDER_SETTING}: {value!r}")
     return normalized
 
 
@@ -84,8 +99,44 @@ def configured_ai_provider(
     return normalize_ai_provider(default)
 
 
+def configured_tts_provider(
+    machine_settings: Mapping[str, str],
+    *,
+    default: str = "gemini",
+) -> str:
+    """Resolve the independent scripted-TTS provider.
+
+    Scripted lifecycle speech intentionally does not inherit JARVIS_AI_PROVIDER.
+    This protects the routine voice-output lane when the paid reasoning provider
+    changes. Gemini remains the compatibility/default voice because it is the
+    current preferred JARVIS TTS path.
+    """
+
+    if runtime_environment_overrides_enabled():
+        candidates = (
+            os.getenv(TTS_PROVIDER_SETTING),
+            machine_settings.get(TTS_PROVIDER_SETTING),
+            default,
+        )
+    else:
+        candidates = (
+            machine_settings.get(TTS_PROVIDER_SETTING),
+            os.getenv(TTS_PROVIDER_SETTING),
+            default,
+        )
+
+    for value in candidates:
+        if value is not None and value.strip():
+            return normalize_tts_provider(value)
+    return normalize_tts_provider(default)
+
+
 def credential_environment_name(provider: str) -> str:
     return _PROVIDER_CREDENTIAL_ENV[normalize_ai_provider(provider)]
+
+
+def tts_credential_environment_name(provider: str) -> str:
+    return _TTS_CREDENTIAL_ENV[normalize_ai_provider(provider)]
 
 
 def provider_api_key(provider: str) -> str | None:
@@ -103,6 +154,56 @@ def require_provider_api_key(provider: str, *, purpose: str = "cloud AI") -> str
     if api_key is None:
         raise RuntimeError(
             f"{environment_name} is required for active {normalized} {purpose}"
+        )
+    return api_key
+
+
+def tts_provider_api_key(provider: str) -> str | None:
+    """Return the TTS-only credential, with legacy shared-key compatibility.
+
+    A dedicated JARVIS_TTS_* credential always wins. Falling back to the historic
+    provider credential preserves current installations until the owner creates the
+    independent free-tier TTS project/key required by the pre-paid experiment gate.
+    """
+
+    normalized = normalize_ai_provider(provider)
+    dedicated_name = tts_credential_environment_name(normalized)
+    dedicated = os.getenv(dedicated_name)
+    if dedicated is not None and dedicated.strip():
+        return dedicated.strip()
+    return provider_api_key(normalized)
+
+
+def tts_credential_source(provider: str) -> str | None:
+    normalized = normalize_ai_provider(provider)
+    dedicated = os.getenv(tts_credential_environment_name(normalized))
+    if dedicated is not None and dedicated.strip():
+        return "dedicated"
+    if provider_api_key(normalized) is not None:
+        return "shared_compatibility"
+    return None
+
+
+def tts_credential_is_separated(provider: str) -> bool:
+    """Return whether scripted TTS uses a dedicated credential variable.
+
+    This deliberately says nothing about billing. Gemini API keys inherit billing
+    from their project, so a dedicated key is necessary but not sufficient for
+    paid/free project isolation.
+    """
+
+    return tts_credential_source(provider) == "dedicated"
+
+
+def require_tts_api_key(provider: str, *, purpose: str = "scripted TTS") -> str:
+    normalized = normalize_ai_provider(provider)
+    api_key = tts_provider_api_key(normalized)
+    if api_key is None:
+        dedicated_name = tts_credential_environment_name(normalized)
+        legacy_name = credential_environment_name(normalized)
+        raise RuntimeError(
+            f"{dedicated_name} is required for independent {normalized} {purpose}; "
+            f"{legacy_name} remains a temporary compatibility fallback"
         )
     return api_key
 

@@ -38,9 +38,84 @@ def test_preflight_reports_all_core_checks_without_opening_devices(
     assert {check.label for check in checks} >= {
         "Wake model",
         "Cloud AI credentials",
+        "Scripted TTS lane",
         "Conversation microphone",
         "Conversation speaker",
     }
+
+
+def test_preflight_reports_dedicated_tts_credential_lane(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    wake = tmp_path / "jarvis.onnx"
+    wake.write_bytes(b"model")
+    monkeypatch.setenv("OPENAI_API_KEY", "brain-key")
+    monkeypatch.setenv("JARVIS_TTS_GOOGLE_API_KEY", "tts-key")
+    monkeypatch.setattr(preflight, "_audio_checks", lambda _config: [])
+
+    checks = preflight.run_startup_preflight(
+        JarvisConfig(
+            ai_provider="openai",
+            tts_provider="gemini",
+            wake_model_path=str(wake),
+        )
+    )
+
+    tts = next(check for check in checks if check.label == "Scripted TTS lane")
+    assert tts.ok is True
+    assert "credential is separated from brain reasoning" in tts.detail
+    assert "project_billing_isolation_verified=False" in tts.detail
+    assert "JARVIS_TTS_GOOGLE_API_KEY" in tts.detail
+
+
+def test_paid_brain_tts_gate_requires_project_level_billing_verification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("JARVIS_TTS_GOOGLE_API_KEY", "tts-key")
+
+    not_verified = preflight.paid_brain_tts_isolation_check(
+        JarvisConfig(
+            ai_provider="openai",
+            tts_provider="gemini",
+            tts_project_billing_isolation_verified=False,
+        )
+    )
+    assert not_verified.ok is False
+    assert "project-level billing isolation" in not_verified.detail
+
+    verified = preflight.paid_brain_tts_isolation_check(
+        JarvisConfig(
+            ai_provider="openai",
+            tts_provider="gemini",
+            tts_project_billing_isolation_verified=True,
+        )
+    )
+    assert verified.ok is True
+
+
+def test_preflight_allows_missing_cloud_tts_because_local_fallback_exists(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    wake = tmp_path / "jarvis.onnx"
+    wake.write_bytes(b"model")
+    monkeypatch.setenv("OPENAI_API_KEY", "brain-key")
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("JARVIS_TTS_GOOGLE_API_KEY", raising=False)
+    monkeypatch.setattr(preflight, "_audio_checks", lambda _config: [])
+
+    checks = preflight.run_startup_preflight(
+        JarvisConfig(
+            ai_provider="openai",
+            tts_provider="gemini",
+            wake_model_path=str(wake),
+        )
+    )
+
+    tts = next(check for check in checks if check.label == "Scripted TTS lane")
+    assert tts.ok is True
+    assert "local lifecycle speech remains the fallback" in tts.detail
 
 
 def test_preflight_allows_audio_only_speaker_shadow(

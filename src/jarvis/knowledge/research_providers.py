@@ -17,10 +17,15 @@ from jarvis.knowledge.research import (
     ResearchConfigurationError,
     ResearchMode,
     ResearchProvider,
+    ResearchProviderCostEstimate,
     utc_now,
 )
 
 EXA_API_KEY_ENV = "EXA_API_KEY"
+
+_EXA_SEARCH_USD_PER_REQUEST = 7.0 / 1_000.0
+_EXA_CONTENT_USD_PER_PAGE = 1.0 / 1_000.0
+_EXA_PRICING_BASIS = "Exa public endpoint pricing verified 2026-09-29"
 
 
 def _required_exa_api_key() -> str:
@@ -106,7 +111,10 @@ class ExaWebResearchProvider:
         if not isinstance(raw_results, Sequence) or isinstance(
             raw_results, (str, bytes, bytearray)
         ):
-            return ProviderResearchEvidence(sources=())
+            return ProviderResearchEvidence(
+                sources=(),
+                usage={"search_requests": 1.0, "content_pages": 0.0},
+            )
 
         sources: list[EvidenceSource] = []
         seen_urls: set[str] = set()
@@ -139,7 +147,44 @@ class ExaWebResearchProvider:
             )
             seen_urls.add(url)
 
-        return ProviderResearchEvidence(sources=tuple(sources))
+        return ProviderResearchEvidence(
+            sources=tuple(sources),
+            usage={
+                "search_requests": 1.0,
+                "content_pages": float(len(raw_results)),
+            },
+        )
+
+    def estimate_costs(
+        self,
+        usage: dict[str, float],
+    ) -> tuple[ResearchProviderCostEstimate, ...]:
+        search_requests = max(0.0, float(usage.get("search_requests", 0.0)))
+        content_pages = max(0.0, float(usage.get("content_pages", 0.0)))
+        estimates: list[ResearchProviderCostEstimate] = []
+        if search_requests:
+            estimates.append(
+                ResearchProviderCostEstimate(
+                    service_key="search",
+                    cost_kind="search_request",
+                    quantity=search_requests,
+                    unit_cost_usd=_EXA_SEARCH_USD_PER_REQUEST,
+                    estimated_cost_usd=(search_requests * _EXA_SEARCH_USD_PER_REQUEST),
+                    pricing_basis=_EXA_PRICING_BASIS,
+                )
+            )
+        if content_pages:
+            estimates.append(
+                ResearchProviderCostEstimate(
+                    service_key="contents",
+                    cost_kind="content_page",
+                    quantity=content_pages,
+                    unit_cost_usd=_EXA_CONTENT_USD_PER_PAGE,
+                    estimated_cost_usd=(content_pages * _EXA_CONTENT_USD_PER_PAGE),
+                    pricing_basis=_EXA_PRICING_BASIS,
+                )
+            )
+        return tuple(estimates)
 
     def close(self) -> None:
         # exa-py exposes no sync client close requirement for this search path.

@@ -779,7 +779,11 @@ class RoutingAttempt:
     ended_at_epoch: float | None = None
     latency_ms: float | None = None
     failure_class: str | None = None
+    provider_id: str | None = None
+    model_id: str | None = None
+    stage_key: str | None = None
     usage: dict[str, int | float] = field(default_factory=dict)
+    usage_observed: bool | None = None
     estimated_cost_usd: float | None = None
     response_contract_result: ResponseContractResult = ResponseContractResult.UNKNOWN
     correlation_key: str | None = None
@@ -846,6 +850,23 @@ class RoutingAttempt:
             "failure_class",
             _optional_text(self.failure_class),
         )
+        provider_id = _optional_text(self.provider_id)
+        object.__setattr__(
+            self,
+            "provider_id",
+            None if provider_id is None else provider_id.casefold(),
+        )
+        object.__setattr__(
+            self,
+            "model_id",
+            _optional_text(self.model_id),
+        )
+        stage_key = _optional_text(self.stage_key)
+        object.__setattr__(
+            self,
+            "stage_key",
+            None if stage_key is None else stage_key.casefold(),
+        )
         normalized_usage: dict[str, int | float] = {}
         for key, value in self.usage.items():
             normalized_key = _token(
@@ -862,6 +883,18 @@ class RoutingAttempt:
             self,
             "usage",
             normalized_usage,
+        )
+        usage_observed = self.usage_observed
+        if usage_observed is None:
+            usage_observed = bool(normalized_usage)
+        if not isinstance(usage_observed, bool):
+            raise TypeError("usage_observed must be a bool or None")
+        if normalized_usage and not usage_observed:
+            raise ValueError("non-empty usage requires usage_observed=True")
+        object.__setattr__(
+            self,
+            "usage_observed",
+            usage_observed,
         )
         object.__setattr__(
             self,

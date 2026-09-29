@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ValidationError
@@ -18,6 +19,102 @@ class StructuredOutputError(ValueError):
     """Raised when a provider cannot produce validated structured Hands output."""
 
 
+@dataclass(frozen=True, slots=True)
+class StructuredOutputTelemetry:
+    """Validated structured output plus provider-observed usage metadata."""
+
+    parsed: BaseModel
+    usage: dict[str, int]
+    usage_observed: bool
+    latency_ms: float
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.parsed, BaseModel):
+            raise TypeError("parsed must be a Pydantic BaseModel")
+        normalized_usage: dict[str, int] = {}
+        for key, value in self.usage.items():
+            normalized_key = str(key).strip().casefold()
+            if not normalized_key:
+                raise ValueError("usage keys must not be empty")
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError("usage values must be non-negative integers")
+            normalized_usage[normalized_key] = value
+        object.__setattr__(self, "usage", normalized_usage)
+        if not isinstance(self.usage_observed, bool):
+            raise TypeError("usage_observed must be a bool")
+        latency = float(self.latency_ms)
+        if latency < 0:
+            raise ValueError("latency_ms must not be negative")
+        object.__setattr__(self, "latency_ms", latency)
+
+
+def _field(value: Any, name: str) -> Any:
+    if isinstance(value, dict):
+        return value.get(name)
+    return getattr(value, name, None)
+
+
+def _usage_int(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
+
+
+def _record_usage(target: dict[str, int], key: str, value: Any) -> None:
+    normalized = _usage_int(value)
+    if normalized is not None:
+        target[key] = normalized
+
+
+def _openai_usage(response: Any) -> tuple[dict[str, int], bool]:
+    usage = _field(response, "usage")
+    if usage is None:
+        return {}, False
+    result: dict[str, int] = {}
+    _record_usage(result, "input_tokens", _field(usage, "input_tokens"))
+    _record_usage(result, "output_tokens", _field(usage, "output_tokens"))
+    _record_usage(result, "total_tokens", _field(usage, "total_tokens"))
+    input_details = _field(usage, "input_tokens_details")
+    output_details = _field(usage, "output_tokens_details")
+    _record_usage(
+        result,
+        "cached_input_tokens",
+        _field(input_details, "cached_tokens"),
+    )
+    _record_usage(
+        result,
+        "reasoning_tokens",
+        _field(output_details, "reasoning_tokens"),
+    )
+    return result, True
+
+
+def _gemini_usage(response: Any) -> tuple[dict[str, int], bool]:
+    usage = _field(response, "usage")
+    if usage is None:
+        return {}, False
+    result: dict[str, int] = {}
+    _record_usage(result, "input_tokens", _field(usage, "total_input_tokens"))
+    _record_usage(result, "output_tokens", _field(usage, "total_output_tokens"))
+    _record_usage(result, "total_tokens", _field(usage, "total_tokens"))
+    _record_usage(
+        result,
+        "cached_input_tokens",
+        _field(usage, "total_cached_tokens"),
+    )
+    _record_usage(
+        result,
+        "reasoning_tokens",
+        _field(usage, "total_thought_tokens"),
+    )
+    _record_usage(
+        result,
+        "tool_use_tokens",
+        _field(usage, "total_tool_use_tokens"),
+    )
+    return result, True
+
+
 class StructuredOutputClient(Protocol):
     provider_name: str
     model_name: str
@@ -29,6 +126,14 @@ class StructuredOutputClient(Protocol):
         input_payload: dict[str, Any],
         response_model: type[BaseModel],
     ) -> BaseModel: ...
+
+    async def parse_with_telemetry(
+        self,
+        *,
+        system_prompt: str,
+        input_payload: dict[str, Any],
+        response_model: type[BaseModel],
+    ) -> StructuredOutputTelemetry: ...
 
 
 def _openai_reasoning_effort(response_model: type[BaseModel]) -> str:
@@ -66,6 +171,20 @@ class OpenAIStructuredOutputClient:
         input_payload: dict[str, Any],
         response_model: type[BaseModel],
     ) -> BaseModel:
+        result = await self.parse_with_telemetry(
+            system_prompt=system_prompt,
+            input_payload=input_payload,
+            response_model=response_model,
+        )
+        return result.parsed
+
+    async def parse_with_telemetry(
+        self,
+        *,
+        system_prompt: str,
+        input_payload: dict[str, Any],
+        response_model: type[BaseModel],
+    ) -> StructuredOutputTelemetry:
         started = time.perf_counter()
         reasoning_effort = _openai_reasoning_effort(response_model)
         response = await self._client.responses.parse(
@@ -100,7 +219,13 @@ class OpenAIStructuredOutputClient:
             raise StructuredOutputError(
                 "OpenAI returned no validated Hands planner output"
             )
-        return parsed
+        usage, usage_observed = _openai_usage(response)
+        return StructuredOutputTelemetry(
+            parsed=parsed,
+            usage=usage,
+            usage_observed=usage_observed,
+            latency_ms=elapsed_ms,
+        )
 
 
 class GeminiStructuredOutputClient:
@@ -125,6 +250,20 @@ class GeminiStructuredOutputClient:
         input_payload: dict[str, Any],
         response_model: type[BaseModel],
     ) -> BaseModel:
+        result = await self.parse_with_telemetry(
+            system_prompt=system_prompt,
+            input_payload=input_payload,
+            response_model=response_model,
+        )
+        return result.parsed
+
+    async def parse_with_telemetry(
+        self,
+        *,
+        system_prompt: str,
+        input_payload: dict[str, Any],
+        response_model: type[BaseModel],
+    ) -> StructuredOutputTelemetry:
         started = time.perf_counter()
         response = await self._client.aio.interactions.create(
             model=self.model_name,
@@ -155,11 +294,18 @@ class GeminiStructuredOutputClient:
                 "Gemini returned no structured Hands planner output"
             )
         try:
-            return response_model.model_validate_json(output_text)
+            parsed = response_model.model_validate_json(output_text)
         except ValidationError as exc:
             raise StructuredOutputError(
                 "Gemini returned invalid Hands planner output"
             ) from exc
+        usage, usage_observed = _gemini_usage(response)
+        return StructuredOutputTelemetry(
+            parsed=parsed,
+            usage=usage,
+            usage_observed=usage_observed,
+            latency_ms=elapsed_ms,
+        )
 
 
 def build_structured_output_client(

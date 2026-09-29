@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Protocol
@@ -100,6 +100,17 @@ class ProviderResearchEvidence:
     """Raw provider retrieval only; the active brain performs synthesis."""
 
     sources: tuple[EvidenceSource, ...]
+    usage: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class ResearchProviderCostEstimate:
+    service_key: str
+    cost_kind: str
+    quantity: float
+    unit_cost_usd: float | None
+    estimated_cost_usd: float | None
+    pricing_basis: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +122,7 @@ class ResearchResult:
     researched_at: datetime
     provider: str
     reason_code: str | None = None
+    provider_usage: dict[str, float] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -221,6 +233,20 @@ class CurrentResearchService:
 
         return self._provider.model_name
 
+    def cost_estimates(
+        self,
+        result: ResearchResult,
+    ) -> tuple[ResearchProviderCostEstimate, ...]:
+        estimator = getattr(self._provider, "estimate_costs", None)
+        if not callable(estimator):
+            return ()
+        estimates = tuple(estimator(dict(result.provider_usage)))
+        if not all(
+            isinstance(item, ResearchProviderCostEstimate) for item in estimates
+        ):
+            raise TypeError("research provider returned invalid cost estimates")
+        return estimates
+
     async def research(
         self,
         query: str,
@@ -294,6 +320,7 @@ class CurrentResearchService:
             researched_at=researched_at,
             provider=self.provider_name,
             reason_code=reason,
+            provider_usage=dict(evidence.usage),
         )
 
     def _unavailable(

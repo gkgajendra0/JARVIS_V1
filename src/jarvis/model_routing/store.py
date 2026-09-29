@@ -142,7 +142,11 @@ def _attempt_payload(attempt: RoutingAttempt) -> dict[str, object]:
         "ended_at_epoch": attempt.ended_at_epoch,
         "latency_ms": attempt.latency_ms,
         "failure_class": attempt.failure_class,
+        "provider_id": attempt.provider_id,
+        "model_id": attempt.model_id,
+        "stage_key": attempt.stage_key,
         "usage": dict(attempt.usage),
+        "usage_observed": attempt.usage_observed,
         "estimated_cost_usd": attempt.estimated_cost_usd,
         "response_contract_result": attempt.response_contract_result.value,
         "correlation_key": attempt.correlation_key,
@@ -169,7 +173,21 @@ def _attempt_from_payload(payload: dict[str, object]) -> RoutingAttempt:
         failure_class=(
             None if payload["failure_class"] is None else str(payload["failure_class"])
         ),
+        provider_id=(
+            None if payload.get("provider_id") is None else str(payload["provider_id"])
+        ),
+        model_id=(
+            None if payload.get("model_id") is None else str(payload["model_id"])
+        ),
+        stage_key=(
+            None if payload.get("stage_key") is None else str(payload["stage_key"])
+        ),
         usage={str(key): float(value) for key, value in dict(payload["usage"]).items()},
+        usage_observed=(
+            None
+            if "usage_observed" not in payload
+            else bool(payload.get("usage_observed"))
+        ),
         estimated_cost_usd=(
             None
             if payload["estimated_cost_usd"] is None
@@ -271,6 +289,12 @@ class ModelRoutingStore:
     @property
     def path(self):
         return self._work_store.path
+
+    @property
+    def work_store(self) -> SQLiteWorkStore:
+        """Expose the canonical WorkStore for adjacent durable telemetry extensions."""
+
+        return self._work_store
 
     def _initialize(self) -> None:
         with self._work_store.extension_transaction() as connection:
@@ -594,6 +618,66 @@ class ModelRoutingStore:
                 ORDER BY attempt_ordinal
                 """,
                 (decision_id,),
+            ).fetchall()
+        return tuple(
+            _attempt_from_payload(
+                self._work_store.decode_extension_json(row["attempt_json"])
+            )
+            for row in rows
+        )
+
+    def list_attempts_for_work(self, work_id: str) -> tuple[RoutingAttempt, ...]:
+        normalized = work_id.strip()
+        if not normalized:
+            raise ValueError("work_id must not be empty")
+        with self._work_store.extension_transaction() as connection:
+            rows = connection.execute(
+                """
+                SELECT attempt_json
+                FROM model_routing_attempts
+                WHERE work_id = ?
+                ORDER BY started_at_epoch, attempt_ordinal, attempt_id
+                """,
+                (normalized,),
+            ).fetchall()
+        return tuple(
+            _attempt_from_payload(
+                self._work_store.decode_extension_json(row["attempt_json"])
+            )
+            for row in rows
+        )
+
+    def list_work_ids_for_change(self, change_id: str) -> tuple[str, ...]:
+        normalized = change_id.strip()
+        if not normalized:
+            raise ValueError("change_id must not be empty")
+        with self._work_store.extension_transaction() as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT work_id
+                FROM model_routing_decisions
+                WHERE change_id = ?
+                ORDER BY work_id
+                """,
+                (normalized,),
+            ).fetchall()
+        return tuple(str(row["work_id"]) for row in rows)
+
+    def list_attempts_for_change(self, change_id: str) -> tuple[RoutingAttempt, ...]:
+        normalized = change_id.strip()
+        if not normalized:
+            raise ValueError("change_id must not be empty")
+        with self._work_store.extension_transaction() as connection:
+            rows = connection.execute(
+                """
+                SELECT a.attempt_json
+                FROM model_routing_attempts AS a
+                JOIN model_routing_decisions AS d
+                  ON d.decision_id = a.decision_id
+                WHERE d.change_id = ?
+                ORDER BY a.started_at_epoch, a.attempt_ordinal, a.attempt_id
+                """,
+                (normalized,),
             ).fetchall()
         return tuple(
             _attempt_from_payload(

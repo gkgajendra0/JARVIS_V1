@@ -9,10 +9,15 @@ import pytest
 from jarvis.ai_provider import (
     AI_PROVIDER_SETTING,
     LEGACY_REALTIME_PROVIDER_SETTING,
+    TTS_PROVIDER_SETTING,
     configured_ai_provider,
+    configured_tts_provider,
     credential_environment_name,
     require_provider_api_key,
+    require_tts_api_key,
     resolve_ai_role_model,
+    tts_credential_environment_name,
+    tts_credential_is_separated,
 )
 from jarvis.config import JarvisConfig
 
@@ -33,6 +38,33 @@ def test_require_provider_api_key_reads_only_selected_provider(
 
     assert require_provider_api_key("gemini") == "google-test"
     assert require_provider_api_key("openai") == "openai-test"
+
+
+def test_tts_credentials_prefer_dedicated_lane_and_keep_legacy_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GOOGLE_API_KEY", "shared-google")
+    monkeypatch.delenv("JARVIS_TTS_GOOGLE_API_KEY", raising=False)
+
+    assert tts_credential_environment_name("gemini") == "JARVIS_TTS_GOOGLE_API_KEY"
+    assert require_tts_api_key("gemini") == "shared-google"
+    assert tts_credential_is_separated("gemini") is False
+
+    monkeypatch.setenv("JARVIS_TTS_GOOGLE_API_KEY", "tts-only-google")
+
+    assert require_tts_api_key("gemini") == "tts-only-google"
+    assert tts_credential_is_separated("gemini") is True
+
+
+def test_tts_provider_is_independent_from_brain_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(TTS_PROVIDER_SETTING, raising=False)
+    monkeypatch.delenv("JARVIS_RUNTIME_ENV_OVERRIDES", raising=False)
+
+    assert configured_tts_provider({AI_PROVIDER_SETTING: "openai"}) == "gemini"
+    assert configured_tts_provider({AI_PROVIDER_SETTING: "gemini"}) == "gemini"
+    assert configured_tts_provider({TTS_PROVIDER_SETTING: "openai"}) == "openai"
 
 
 def test_configured_provider_accepts_legacy_machine_profile_without_env_override(
@@ -63,14 +95,14 @@ def test_canonical_provider_wins_over_legacy_alias_inside_machine_profile(
     )
 
 
-def test_jarvis_config_has_exactly_one_active_ai_provider_field() -> None:
-    """Protect the one-switch brain contract across all production subsystems."""
+def test_jarvis_config_separates_brain_and_scripted_tts_providers() -> None:
+    """TTS is the only intentional provider lane outside the brain selector."""
 
     provider_fields = [
         field.name for field in fields(JarvisConfig) if field.name.endswith("provider")
     ]
 
-    assert provider_fields == ["ai_provider"]
+    assert provider_fields == ["ai_provider", "tts_provider"]
 
 
 @pytest.mark.parametrize(
@@ -155,7 +187,12 @@ def test_same_provider_custom_role_model_is_preserved() -> None:
 
 
 def test_production_source_has_one_provider_selector_and_one_credential_owner() -> None:
-    credential_literals = {"OPENAI_API_KEY", "GOOGLE_API_KEY"}
+    credential_literals = {
+        "OPENAI_API_KEY",
+        "GOOGLE_API_KEY",
+        "JARVIS_TTS_OPENAI_API_KEY",
+        "JARVIS_TTS_GOOGLE_API_KEY",
+    }
     credential_owners: dict[str, set[Path]] = {
         value: set() for value in credential_literals
     }
@@ -172,6 +209,8 @@ def test_production_source_has_one_provider_selector_and_one_credential_owner() 
     assert credential_owners == {
         "OPENAI_API_KEY": expected,
         "GOOGLE_API_KEY": expected,
+        "JARVIS_TTS_OPENAI_API_KEY": expected,
+        "JARVIS_TTS_GOOGLE_API_KEY": expected,
     }
 
 

@@ -25,6 +25,33 @@ def test_machine_config_round_trip(tmp_path: Path) -> None:
     }
 
 
+def test_machine_config_persists_tts_provider_but_never_tts_secret(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "machine.json"
+    save_machine_settings(
+        {
+            "JARVIS_AI_PROVIDER": "openai",
+            "JARVIS_TTS_PROVIDER": "gemini",
+            "JARVIS_GEMINI_TTS_MODEL": "gemini-3.8-flash-tts",
+            "JARVIS_TTS_PROJECT_BILLING_ISOLATION_VERIFIED": "true",
+        },
+        path,
+    )
+
+    settings = load_machine_settings(path)
+    assert settings["JARVIS_AI_PROVIDER"] == "openai"
+    assert settings["JARVIS_TTS_PROVIDER"] == "gemini"
+    assert settings["JARVIS_GEMINI_TTS_MODEL"] == "gemini-3.8-flash-tts"
+    assert settings["JARVIS_TTS_PROJECT_BILLING_ISOLATION_VERIFIED"] == "true"
+
+    with pytest.raises(ValueError, match="may not be persisted"):
+        save_machine_settings(
+            {"JARVIS_TTS_GOOGLE_API_KEY": "secret"},
+            tmp_path / "secret-machine.json",
+        )
+
+
 def test_machine_config_refuses_unapproved_secret(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="may not be persisted"):
         save_machine_settings(

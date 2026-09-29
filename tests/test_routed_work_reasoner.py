@@ -4,6 +4,8 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
+from jarvis.hands.provider_adapters import StructuredOutputTelemetry
+from jarvis.model_routing.cost import CostTelemetryReader
 from jarvis.model_routing.eligibility import EligibilityPolicy
 from jarvis.model_routing.invoker import (
     ModelInvocationContext,
@@ -12,6 +14,7 @@ from jarvis.model_routing.invoker import (
 )
 from jarvis.model_routing.models import (
     BenchmarkStatus,
+    CostProfile,
     ModelLocality,
     ModelTarget,
 )
@@ -135,6 +138,7 @@ def _target(
     adapter_id: str = "fake",
     provider_id: str = "fake",
     model_id: str = "fake-model",
+    cost_profile: CostProfile | None = None,
 ) -> ModelTarget:
     return ModelTarget(
         target_id=target_id,
@@ -152,6 +156,7 @@ def _target(
         benchmark_status=BenchmarkStatus.ACCEPTED,
         registry_version=1,
         credential_ref=None,
+        cost_profile=cost_profile,
     )
 
 
@@ -190,10 +195,12 @@ class ReasoningAdapter:
         routing_store: ModelRoutingStore | None = None,
         block: asyncio.Event | None = None,
         error: Exception | None = None,
+        usage: dict[str, int] | None = None,
     ) -> None:
         self.routing_store = routing_store
         self.block = block
         self.error = error
+        self.usage = usage
         self.calls: list[ModelInvocationContext] = []
 
     async def invoke_structured(
@@ -205,6 +212,24 @@ class ReasoningAdapter:
         response_model: type[BaseModel],
         request_context: ModelInvocationContext,
     ) -> BaseModel:
+        result = await self.invoke_structured_with_telemetry(
+            target=target,
+            system_prompt=system_prompt,
+            input_payload=input_payload,
+            response_model=response_model,
+            request_context=request_context,
+        )
+        return result.parsed
+
+    async def invoke_structured_with_telemetry(
+        self,
+        *,
+        target: ModelTarget,
+        system_prompt: str,
+        input_payload: dict,
+        response_model: type[BaseModel],
+        request_context: ModelInvocationContext,
+    ) -> StructuredOutputTelemetry:
         del target, system_prompt, input_payload
         self.calls.append(request_context)
         if self.routing_store is not None:
@@ -214,13 +239,19 @@ class ReasoningAdapter:
             raise self.error
         if self.block is not None:
             await self.block.wait()
-        return response_model(
+        parsed = response_model(
             action="do_step",
             summary="Execute bounded step",
             parameters_json="{}",
             goal_complete=False,
             needs_owner=False,
             owner_question=None,
+        )
+        return StructuredOutputTelemetry(
+            parsed=parsed,
+            usage={} if self.usage is None else self.usage,
+            usage_observed=self.usage is not None,
+            latency_ms=1.0,
         )
 
 
@@ -229,6 +260,7 @@ def _routed_reasoner(
     *,
     adapter: ReasoningAdapter | None = None,
     provider_id: str = "fake",
+    cost_profile: CostProfile | None = None,
 ) -> tuple[
     SQLiteWorkStore,
     ModelRoutingStore,
@@ -247,6 +279,7 @@ def _routed_reasoner(
                 "work.fake.default",
                 adapter_id="fake",
                 provider_id=provider_id,
+                cost_profile=cost_profile,
             ),
         ),
     )
@@ -292,6 +325,52 @@ async def test_router_persists_decision_before_provider_invocation(
     attempts = routing_store.list_attempts(persisted.decision.decision_id)
     assert len(attempts) == 1
     assert attempts[0].target_id == "work.fake.default"
+
+
+@pytest.mark.asyncio
+async def test_routed_work_persists_usage_and_cost_telemetry(
+    tmp_path: Path,
+) -> None:
+    usage = {
+        "input_tokens": 1_000,
+        "output_tokens": 200,
+        "total_tokens": 1_200,
+        "cached_input_tokens": 100,
+        "reasoning_tokens": 50,
+    }
+    adapter = ReasoningAdapter(usage=usage)
+    profile = CostProfile(
+        profile_id="fake-2026-09",
+        version=1,
+        effective_from_epoch=1.0,
+        input_usd_per_million_tokens=2.0,
+        output_usd_per_million_tokens=10.0,
+    )
+    work_store, routing_store, reasoner, _ = _routed_reasoner(
+        tmp_path,
+        adapter=adapter,
+        provider_id="openai",
+        cost_profile=profile,
+    )
+    work = _work(work_store)
+
+    await reasoner.decide(_brain_request(work))
+
+    attempts = routing_store.list_attempts_for_work(work.work_id)
+    assert len(attempts) == 1
+    attempt = attempts[0]
+    assert attempt.provider_id == "openai"
+    assert attempt.model_id == "fake-model"
+    assert attempt.stage_key == "development"
+    assert attempt.usage_observed is True
+    assert attempt.usage["input_tokens"] == 1_000
+    assert attempt.usage["output_tokens"] == 200
+    report = CostTelemetryReader(routing_store).for_work(work.work_id)
+    assert report.attempt_count == 1
+    assert report.missing_usage_attempts == 0
+    assert report.unpriced_attempts == 0
+    assert report.estimated_total_cost_usd == pytest.approx(0.004)
+    assert report.breakdown[0].stage_key == "development"
 
 
 @pytest.mark.asyncio

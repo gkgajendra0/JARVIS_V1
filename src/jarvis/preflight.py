@@ -7,7 +7,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from jarvis.ai_provider import credential_environment_name, provider_api_key
+from jarvis.ai_provider import (
+    credential_environment_name,
+    provider_api_key,
+    tts_credential_environment_name,
+    tts_credential_is_separated,
+    tts_credential_source,
+)
 from jarvis.authority.tooling import authority_tool_readiness
 from jarvis.config import JarvisConfig
 from jarvis.voice.audio import DEVICE_CHANNELS, DEVICE_SAMPLE_RATE, LocalAudioRuntime
@@ -62,6 +68,58 @@ def _credential_check(config: JarvisConfig) -> PreflightCheck:
         False,
         f"active provider={config.ai_provider}; {name} is missing from the "
         "process/Windows user environment",
+    )
+
+
+def _tts_lane_check(config: JarvisConfig) -> PreflightCheck:
+    provider = config.tts_provider
+    dedicated_name = tts_credential_environment_name(provider)
+    source = tts_credential_source(provider)
+    if source == "dedicated":
+        return PreflightCheck(
+            "Scripted TTS lane",
+            True,
+            f"provider={provider}; {dedicated_name} is available; "
+            "credential is separated from brain reasoning; "
+            f"project_billing_isolation_verified="
+            f"{config.tts_project_billing_isolation_verified}",
+        )
+    if source == "shared_compatibility":
+        return PreflightCheck(
+            "Scripted TTS lane",
+            True,
+            f"provider={provider}; compatibility credential is available; "
+            f"set {dedicated_name} before paid-brain experiments",
+        )
+    return PreflightCheck(
+        "Scripted TTS lane",
+        True,
+        f"provider={provider}; cloud TTS credential unavailable; "
+        "Windows-local lifecycle speech remains the fallback",
+    )
+
+
+def paid_brain_tts_isolation_check(config: JarvisConfig) -> PreflightCheck:
+    """Fail closed for paid-brain experiments until TTS project billing is verified."""
+
+    provider = config.tts_provider
+    if not tts_credential_is_separated(provider):
+        return PreflightCheck(
+            "Paid experiment TTS isolation",
+            False,
+            "scripted TTS does not use a dedicated credential",
+        )
+    if not config.tts_project_billing_isolation_verified:
+        return PreflightCheck(
+            "Paid experiment TTS isolation",
+            False,
+            "dedicated TTS credential exists but project-level billing isolation "
+            "has not been owner-verified in AI Studio/Cloud Billing",
+        )
+    return PreflightCheck(
+        "Paid experiment TTS isolation",
+        True,
+        "dedicated TTS credential and owner-verified project billing isolation",
     )
 
 
@@ -173,6 +231,7 @@ def run_startup_preflight(config: JarvisConfig) -> list[PreflightCheck]:
     checks = [
         _check_file("Wake model", config.wake_model_path),
         _credential_check(config),
+        _tts_lane_check(config),
         *_audio_checks(config),
         *_authority_checks(),
     ]
