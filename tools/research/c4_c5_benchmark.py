@@ -82,6 +82,10 @@ class RunnerResult:
     raw_metadata: dict[str, Any]
 
 
+class StructuredOutputError(ValueError):
+    """Model returned content that violates the requested structured contract."""
+
+
 class BenchmarkRunner:
     name: str
 
@@ -297,17 +301,27 @@ class OllamaRunner(BenchmarkRunner):
         content = message.get("content")
         if not isinstance(content, str) or not content.strip():
             raise ValueError("Ollama response contains no structured content")
-        decoded = json.loads(content)
+        try:
+            decoded = json.loads(content)
+        except json.JSONDecodeError as exc:
+            snippet = content[:2000]
+            raise StructuredOutputError(
+                "Ollama returned invalid JSON "
+                f"(line={exc.lineno}, column={exc.colno}): {snippet!r}"
+            ) from exc
+
         answers = decoded.get("answers") if isinstance(decoded, dict) else None
         if not isinstance(answers, dict):
-            raise TypeError("Ollama structured response is missing answers")
+            raise StructuredOutputError(
+                "Ollama structured response is missing answers"
+            )
 
         predictions: dict[str, Prediction] = {}
         for question in case.questions:
             value = str(answers.get(question.name, "")).strip()
             allowed = {*question.choices.keys(), "abstain"}
             if value not in allowed:
-                raise ValueError(
+                raise StructuredOutputError(
                     f"Ollama returned unsupported answer for {question.name}: {value!r}"
                 )
             predictions[question.name] = Prediction(value)
@@ -484,6 +498,7 @@ def _score(
     unsafe_downgrades = 0
     conservative_escalations = 0
     abstained = 0
+    structured_output_failures = 0
     latencies: list[float] = []
     input_tokens = 0
     output_tokens = 0
@@ -492,6 +507,9 @@ def _score(
 
     for result in raw_results:
         latencies.append(float(result["latency_ms"]))
+        raw_metadata = result.get("raw_metadata") or {}
+        if raw_metadata.get("structured_output_failure") is True:
+            structured_output_failures += 1
         usage = result.get("usage") or {}
         input_tokens += int(usage.get("input_tokens") or 0)
         output_tokens += int(usage.get("output_tokens") or 0)
@@ -550,6 +568,7 @@ def _score(
         "covered": covered,
         "coverage": (covered / total if total else 0.0),
         "abstained": abstained,
+        "structured_output_failures": structured_output_failures,
         "exact": exact,
         "accuracy_over_covered": (exact / covered if covered else None),
         "unsafe_downgrades": unsafe_downgrades,
@@ -665,6 +684,11 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="suppress final report JSON on stdout while retaining progress on stderr",
+    )
     args = parser.parse_args(argv)
 
     if args.repeat <= 0:
@@ -682,25 +706,70 @@ def main(argv: list[str] | None = None) -> int:
     runner = _build_runner(args)
 
     raw_results: list[dict[str, Any]] = []
+    total_runs = args.repeat * len(cases)
+    completed_runs = 0
     for repetition in range(1, args.repeat + 1):
         for case in cases:
-            result = runner.run(case)
-            raw_results.append(
-                {
-                    "case_id": case.case_id,
-                    "repetition": repetition,
-                    "runner": runner.name,
-                    "model": result.model,
-                    "latency_ms": result.latency_ms,
-                    "usage": result.usage,
-                    "api_cost_usd": result.api_cost_usd,
-                    "predictions": {
-                        name: _prediction_payload(prediction)
-                        for name, prediction in result.predictions.items()
-                    },
-                    "raw_metadata": result.raw_metadata,
-                }
+            ordinal = completed_runs + 1
+            print(
+                f"[benchmark] {ordinal}/{total_runs} "
+                f"model={args.model or runner.name} case={case.case_id}",
+                file=sys.stderr,
+                flush=True,
             )
+            started = time.perf_counter()
+            try:
+                result = runner.run(case)
+                raw_results.append(
+                    {
+                        "case_id": case.case_id,
+                        "repetition": repetition,
+                        "runner": runner.name,
+                        "model": result.model,
+                        "latency_ms": result.latency_ms,
+                        "usage": result.usage,
+                        "api_cost_usd": result.api_cost_usd,
+                        "predictions": {
+                            name: _prediction_payload(prediction)
+                            for name, prediction in result.predictions.items()
+                        },
+                        "raw_metadata": result.raw_metadata,
+                    }
+                )
+                print(
+                    f"[benchmark] {ordinal}/{total_runs} PASS case={case.case_id}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            except StructuredOutputError as exc:
+                latency_ms = (time.perf_counter() - started) * 1000.0
+                raw_results.append(
+                    {
+                        "case_id": case.case_id,
+                        "repetition": repetition,
+                        "runner": runner.name,
+                        "model": args.model or runner.name,
+                        "latency_ms": latency_ms,
+                        "usage": {},
+                        "api_cost_usd": 0.0 if args.runner == "ollama" else None,
+                        "predictions": {
+                            question.name: _prediction_payload(Prediction("abstain"))
+                            for question in case.questions
+                        },
+                        "raw_metadata": {
+                            "structured_output_failure": True,
+                            "error_type": type(exc).__name__,
+                            "error": str(exc),
+                        },
+                    }
+                )
+                print(
+                    f"[benchmark] {ordinal}/{total_runs} "
+                    f"STRUCTURED_OUTPUT_FAILURE case={case.case_id}: {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            completed_runs += 1
 
     thresholds = tuple(args.confidence_threshold) or (0.0,)
     report = {
@@ -721,7 +790,8 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     encoded = json.dumps(report, indent=2, sort_keys=True) + "\n"
-    print(encoded, end="")
+    if not args.quiet:
+        print(encoded, end="")
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(encoded, encoding="utf-8")
