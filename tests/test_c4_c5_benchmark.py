@@ -65,7 +65,9 @@ def test_abstain_baseline_has_zero_semantic_coverage() -> None:
 def test_scorer_separates_unsafe_downgrade_from_over_escalation() -> None:
     module = _load_module()
     _, cases = module._load_cases(_CASES)
-    case = next(item for item in cases if item.case_id == "route-017-cross-cutting-refactor")
+    case = next(
+        item for item in cases if item.case_id == "route-017-cross-cutting-refactor"
+    )
 
     result = {
         "case_id": case.case_id,
@@ -96,7 +98,9 @@ def test_scorer_separates_unsafe_downgrade_from_over_escalation() -> None:
     assert summary["conservative_escalations"] == 1
 
 
-def test_ollama_runner_validates_structured_answers(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ollama_runner_validates_structured_answers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     module = _load_module()
     _, cases = module._load_cases(_CASES)
     case = cases[0]
@@ -106,9 +110,7 @@ def test_ollama_runner_validates_structured_answers(monkeypatch: pytest.MonkeyPa
         assert headers is None
         assert timeout == 15.0
         assert payload["model"] == "test-local"
-        answers = {
-            question.name: question.expected for question in case.questions
-        }
+        answers = {question.name: question.expected for question in case.questions}
         return (
             {
                 "message": {"content": __import__("json").dumps({"answers": answers})},
@@ -156,7 +158,11 @@ def test_jev_runner_keeps_confidence_probabilities_and_usage(
         answers = {}
         for question in case.questions:
             probabilities = {
-                choice: (0.9 if choice == question.expected else 0.1 / (len(question.choices) - 1))
+                choice: (
+                    0.9
+                    if choice == question.expected
+                    else 0.1 / (len(question.choices) - 1)
+                )
                 for choice in question.choices
             }
             answers[question.name] = {
