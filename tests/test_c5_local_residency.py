@@ -228,7 +228,6 @@ def test_nvidia_smi_probe_parses_free_memory_and_utilization(
     )
 
 
-
 class _Decision(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
