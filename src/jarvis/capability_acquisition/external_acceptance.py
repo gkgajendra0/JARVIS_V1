@@ -16,6 +16,7 @@ from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
     ExternalAcceptanceObservationV1,
     ExternalOwnerInputRequestV1,
+    normalize_owner_input_parameter,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change.models import ChangeArtifact, ChangeConflict
@@ -750,9 +751,15 @@ class ExternalAcceptanceInvokeExecutor:
                 str(resume.observation.get("input_key") or "").strip().casefold()
             )
             kind = str(resume_context.get("kind") or "").strip().casefold()
-            parameter = str(resume_context.get("parameter") or "").strip().casefold()
-            if parameter and _PARAMETER.fullmatch(parameter) is None:
-                raise ExternalAcceptanceError("pairing resume parameter is invalid")
+            try:
+                parameter = (
+                    normalize_owner_input_parameter(resume_context.get("parameter"))
+                    or ""
+                )
+            except ValueError as exc:
+                raise ExternalAcceptanceError(
+                    "pairing resume parameter is invalid"
+                ) from exc
             if resume.observation.get("sensitive") is True:
                 owner_value = self._resolver.store.work.pop_sensitive_input(
                     work.work_id,
@@ -817,7 +824,7 @@ class ExternalAcceptanceInvokeExecutor:
         if result.status is CapabilityStatus.PARTIAL and owner_request is not None:
             try:
                 interaction = ExternalOwnerInputRequestV1.from_payload(owner_request)
-            except ValueError as exc:
+            except (TypeError, ValueError) as exc:
                 raise ExternalAcceptanceError(
                     "capability owner-input request violates the Phase-9 contract"
                 ) from exc
@@ -855,7 +862,7 @@ class ExternalAcceptanceInvokeExecutor:
         if observation is not None:
             try:
                 readback = ExternalAcceptanceObservationV1.from_payload(observation)
-            except ValueError as exc:
+            except (TypeError, ValueError) as exc:
                 raise ExternalAcceptanceError(
                     "capability acceptance observation violates the Phase-9 contract"
                 ) from exc
