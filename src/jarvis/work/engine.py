@@ -15,7 +15,13 @@ from jarvis.work.brain import (
     BrainRequest,
     ProviderPressure,
 )
-from jarvis.work.context import (\n    WorkContextAssembler,\n    WorkContextMode,\n    normalize_work_context_mode,\n)\nfrom jarvis.work.models import (\n    WorkDeliveryKind,
+from jarvis.work.context import (
+    WorkContextAssembler,
+    WorkContextMode,
+    normalize_work_context_mode,
+)
+from jarvis.work.models import (
+    WorkDeliveryKind,
     WorkItem,
     WorkState,
     WorkStep,
