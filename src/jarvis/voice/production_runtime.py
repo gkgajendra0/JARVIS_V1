@@ -407,6 +407,7 @@ def build_production_voice_runtime(
             provider=config.ai_provider,
             research_service=research_service,
             model=config.work_orchestration_model,
+            global_brain_router_mode=config.global_brain_router_mode,
             global_concurrency=config.work_global_concurrency,
             development_test_image=config.development_test_docker_image,
             dbos_database_url=config.work_dbos_database_url,
@@ -447,10 +448,11 @@ def build_production_voice_runtime(
         )
         LOGGER.info(
             "Persistent work runtime configured: provider=%s physical_concurrency=%s "
-            "dev_sandbox=%s canonical_store=True durable_backend=DBOS "
+            "brain_router_mode=%s dev_sandbox=%s canonical_store=True durable_backend=DBOS "
             "capability_acquisition_live_catalog=True",
             config.ai_provider,
             config.work_global_concurrency,
+            config.global_brain_router_mode,
             bool(config.development_test_docker_image),
         )
 

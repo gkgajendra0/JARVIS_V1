@@ -27,6 +27,7 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("JARVIS_GEMINI_REALTIME_VOICE", " Charon ")
     monkeypatch.setenv("JARVIS_GEMINI_TTS_MODEL", " gemini-3.8-flash-lite-tts ")
     monkeypatch.setenv("JARVIS_TTS_PROJECT_BILLING_ISOLATION_VERIFIED", "true")
+    monkeypatch.setenv("JARVIS_GLOBAL_BRAIN_ROUTER_MODE", " APPLY ")
     monkeypatch.setenv("JARVIS_SHOW_TRANSCRIPT", "off")
     monkeypatch.setenv("JARVIS_STARTUP_GREETING", "off")
     monkeypatch.setenv("JARVIS_WAKE_MODEL_PATH", " C:\\models\\jarvis.onnx ")
@@ -58,6 +59,7 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.gemini_realtime_voice == "Charon"
     assert config.gemini_tts_model == "gemini-3.8-flash-lite-tts"
     assert config.tts_project_billing_isolation_verified is True
+    assert config.global_brain_router_mode == "apply"
     assert config.show_transcript is False
     assert config.startup_greeting_enabled is False
     assert config.wake_model_path == "C:\\models\\jarvis.onnx"
@@ -192,6 +194,17 @@ def test_invalid_live_context_environment_value_fails_truthfully(
 
     with pytest.raises(ValueError, match="JARVIS_LIVE_CONTEXT_RECENT_TURNS"):
         JarvisConfig.from_environment()
+
+
+def test_global_brain_router_defaults_to_shadow_and_validates_mode() -> None:
+    assert JarvisConfig().global_brain_router_mode == "shadow"
+    assert (
+        JarvisConfig(global_brain_router_mode=" APPLY ").global_brain_router_mode
+        == "apply"
+    )
+
+    with pytest.raises(ValueError, match="global_brain_router_mode"):
+        JarvisConfig(global_brain_router_mode="automatic")
 
 
 def test_work_orchestration_requires_production_postgres() -> None:

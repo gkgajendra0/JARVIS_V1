@@ -1,6 +1,6 @@
 # JARVIS Cost Optimization Implementation Plan
 
-Status: **C0 + C1 + C2 IMPLEMENTED AND RESEARCH-CORRECTED / C3 RESEARCH COMPLETE / C3 IMPLEMENTATION NEXT**
+Status: **C0 + C1 + C2 + C3 IMPLEMENTED AND ACCEPTANCE TESTED / NEXT: C4 + C5 RESEARCH & BENCHMARKS**
 
 Date: 2026-09-29
 
@@ -114,9 +114,32 @@ Exit:
 
 ## Slice C3 — Global Brain Router v1
 
-Status: **DEEP RESEARCH COMPLETE / IMPLEMENTATION NEXT**.
+Status: **IMPLEMENTED / CI ACCEPTED**.
 
 Research source: `JARVIS_C3_GLOBAL_BRAIN_ROUTER_RESEARCH.md`.
+
+Implementation source: `JARVIS_C3_GLOBAL_BRAIN_ROUTER_IMPLEMENTATION.md`.
+
+Implemented foundation:
+
+- subsystem-neutral `GlobalBrainRouteFacts` contract;
+- thin `GlobalBrainRouterReasoner` around the existing Phase-4 `RoutedWorkReasoner`;
+- versioned fail-closed deterministic resolver registry;
+- durable route provenance and per-Work model-calls-avoided summary;
+- rollout modes `off`, `shadow` (default), and explicit `apply`;
+- exact deterministic Work rules for initial development workspace preparation,
+  initial diagnostic incident inspection, and verified post-test diff inspection;
+- ambiguous/missing deterministic matches abstain to the existing model path;
+- unapproved deterministic actions fail closed;
+- durable replay pins an already-persisted Phase-4 model route to the model path;
+- full WorkEngine acceptance proves deterministic execution still passes through the
+  governed executor while model reasoning is bypassed;
+- a non-engineering memory fixture proves the same global facts can feed the existing
+  ModelRouter without redesigning the routing substrate;
+- JARVIS Self Model now explicitly maps `work.brain_routing`.
+
+Production default remains **shadow**. Apply mode exists and is acceptance-tested but
+must be enabled explicitly while shadow evidence accumulates.
 
 Architecture decision:
 
@@ -129,11 +152,21 @@ Architecture decision:
 - start with shadow evaluation, then apply only replay-accepted deterministic rules;
 - do not adopt LiteLLM, vLLM Semantic Router, Not Diamond or another gateway as the C3 core.
 
-Initial deterministic Work candidates:
+Initial deterministic Work rules now implemented:
 
 - development initial workspace preparation;
 - diagnostics initial canonical incident inspection;
 - post-test development diff inspection when canonical state proves it is required.
+
+Acceptance evidence:
+
+- deterministic `WorkEngine.advance()` cycle executes the normal governed WorkStep
+  with zero model-reasoner calls;
+- shadow mode preserves the current model decision and records match/mismatch;
+- `off` mode does not execute deterministic resolvers;
+- ambiguity falls back to the existing model path;
+- route provenance survives/replays consistently;
+- existing Phase-4 routing, Windows Phase-6/7/8/9 regressions and promotion policy pass.
 
 Goal: generalize the existing Phase-4 router rather than create another router.
 
