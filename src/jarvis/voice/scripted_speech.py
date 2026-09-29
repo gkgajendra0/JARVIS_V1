@@ -93,7 +93,7 @@ def build_scripted_speech(config: JarvisConfig) -> LiveKitScriptedSpeech:
     api_key = require_tts_api_key(config.tts_provider, purpose="scripted speech")
     if config.tts_provider == "gemini":
         engine = google.beta.GeminiTTS(
-            model="gemini-3.1-flash-tts-preview",
+            model=config.gemini_tts_model,
             voice_name=config.gemini_realtime_voice,
             api_key=api_key,
             instructions=instructions,
