@@ -39,6 +39,19 @@ architecture.
 - `jarvis-setup` migrates the exact persisted 3.1 legacy model value to 3.8
   while preserving other explicitly configured custom model IDs.
 
+## Gemini 3.8 proactive-audio wake contract
+
+A second-wake owner test exposed a model-specific conversational edge after the
+migration. Gemini 3.8 Live has proactive audio permanently enabled, while the prior
+JARVIS voice prompt instructed the model to acknowledge a wake-name-only turn. In the
+owner log, short wake/greeting turns triggered acknowledgements that overlapped the
+next owner utterance and produced interrupted replies.
+
+The voice contract now treats a standalone wake-name utterance as activation residue:
+JARVIS remains silent and waits for the actual owner request, including when the wake
+name is imperfectly transcribed. Genuine greetings may still receive one short
+acknowledgement.
+
 ## Independent standby race found during acceptance
 
 The successful 3.8 owner-machine run exposed a separate existing standby cleanup
