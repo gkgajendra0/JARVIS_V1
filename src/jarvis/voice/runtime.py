@@ -715,7 +715,12 @@ class VoiceRuntimeController:
         self.audio.activate_session(session_input)
         try:
             try:
-                await session.start(agent=JarvisVoiceAgent(tools=[]))
+                await session.start(
+                    agent=JarvisVoiceAgent(
+                        tools=[],
+                        default_media_target=self.config.default_media_target,
+                    )
+                )
             except Exception:
                 bridge.conversation.fail()
                 raise
@@ -912,7 +917,12 @@ class VoiceRuntimeController:
         tools.extend(standby_tools.tools)
         try:
             try:
-                await session.start(agent=JarvisVoiceAgent(tools=tools))
+                await session.start(
+                    agent=JarvisVoiceAgent(
+                        tools=tools,
+                        default_media_target=self.config.default_media_target,
+                    )
+                )
             except Exception:
                 bridge.conversation.fail()
                 raise
