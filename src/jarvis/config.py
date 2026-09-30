@@ -18,6 +18,8 @@ from jarvis.machine_config import configured_text, load_machine_settings
 VALID_LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})
 TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 FALSE_VALUES = frozenset({"0", "false", "no", "off"})
+DEFAULT_GEMINI_REALTIME_MODEL = "gemini-3.8-live"
+LEGACY_GEMINI_REALTIME_MODELS = frozenset({"gemini-3.1-flash-live-preview"})
 
 
 def _configured_bool(
@@ -113,7 +115,7 @@ class JarvisConfig:
     tts_provider: str = "gemini"
     realtime_model: str = "gpt-realtime"
     realtime_voice: str = "marin"
-    gemini_realtime_model: str = "gemini-3.1-flash-live-preview"
+    gemini_realtime_model: str = DEFAULT_GEMINI_REALTIME_MODEL
     gemini_realtime_voice: str = "Charon"
     gemini_tts_model: str = "gemini-3.8-flash-tts"
     tts_project_billing_isolation_verified: bool = False
@@ -420,7 +422,7 @@ class JarvisConfig:
             ),
             gemini_realtime_model=_configured_required_text(
                 "JARVIS_GEMINI_REALTIME_MODEL",
-                "gemini-3.1-flash-live-preview",
+                DEFAULT_GEMINI_REALTIME_MODEL,
                 machine,
             ),
             gemini_realtime_voice=_configured_required_text(
