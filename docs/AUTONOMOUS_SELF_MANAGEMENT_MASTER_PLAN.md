@@ -162,6 +162,15 @@ with accepted desired state.
 Configuration autonomy must not become privilege autonomy. A configuration change
 outside delegated scope becomes an owner-gated EngineeringChange.
 
+Provider/model lifecycle maintenance is a permanent self-configuration obligation.
+JARVIS should detect first-party deprecation, retirement, model-unavailable and
+compatibility evidence; prefer a provider-recommended replacement over a guessed or
+moving `latest` alias; validate the replacement against the required product surface;
+migrate configuration automatically inside a bounded pre-authorized envelope; observe
+the result; and roll back or escalate to governed engineering when validation fails.
+Routine provider churn must not require the owner to discover the retirement manually.
+The detailed contract is `PROVIDER_MODEL_LIFECYCLE_SELF_EVOLUTION.md`.
+
 ### 4.4 Self-optimize
 
 Observe measurable latency, reliability, resource use, cost, quality and other
@@ -245,6 +254,9 @@ state requires it, not only because the owner explicitly issued a task.
 Examples:
 
 - repeated provider failures create a reliability investigation;
+- provider model legacy/deprecation/retirement creates lifecycle reconciliation and,
+  when a provider-recommended compatible replacement exists, bounded automatic
+  configuration migration;
 - rising voice latency creates a performance diagnosis;
 - a vulnerable dependency creates a remediation candidate;
 - repeated owner manual intervention creates a capability-gap proposal;
