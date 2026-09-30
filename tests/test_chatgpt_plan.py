@@ -12,9 +12,11 @@ from jarvis.chatgpt_plan import (
     ChatGPTPlanCredentials,
     ChatGPTPlanResponse,
     ChatGPTPlanUsageUnavailable,
+    _strict_json_schema,
     load_or_create_chatgpt_plan_host_id,
 )
 from jarvis.machine_config import load_machine_settings, save_machine_settings
+from jarvis.hands.contracts import build_action_response_model
 from jarvis.hands.provider_adapters import (
     ChatGPTPlanStructuredOutputClient,
     FallbackStructuredOutputClient,
@@ -283,3 +285,28 @@ def test_chatgpt_plan_machine_settings_are_persistable_without_credentials(
     assert settings["JARVIS_CHATGPT_PLAN_ENABLED"] == "true"
     assert settings["JARVIS_CHATGPT_PLAN_MODEL"] == "plan-model"
     assert all("TOKEN" not in key and "SECRET" not in key for key in settings)
+
+
+def _schema_nodes(value: object):
+    if isinstance(value, dict):
+        yield value
+        for nested in value.values():
+            yield from _schema_nodes(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            yield from _schema_nodes(nested)
+
+
+def test_chatgpt_plan_strict_schema_normalizes_dynamic_hands_contract() -> None:
+    response_model = build_action_response_model(("open_app", "set_master_volume"))
+    schema = _strict_json_schema(response_model.model_json_schema())
+
+    assert isinstance(schema, dict)
+    for node in _schema_nodes(schema):
+        assert "default" not in node
+        if node.get("type") != "object":
+            continue
+        assert node.get("additionalProperties") is False
+        properties = node.get("properties")
+        if isinstance(properties, dict):
+            assert set(node.get("required", ())) == set(properties)
