@@ -98,9 +98,15 @@ class ProviderResilienceSessionObserver:
         sdk_recoverable = bool(getattr(error, "recoverable", False))
         jarvis_terminal = failure.kind in _JARVIS_TERMINAL_FAILURE_KINDS
         if sdk_recoverable and not jarvis_terminal:
+            # Recoverable is transport guidance, not a claim that the provider is
+            # healthy. Preserve the failure as canonical degraded health evidence so
+            # Self-Awareness/Incidents can observe provider drift even when the SDK
+            # keeps the realtime session alive.
+            self._state.mark_failure(failure)
+            self._notify_health()
             LOGGER.warning(
                 "Recoverable realtime provider error | provider=%s | kind=%s | "
-                "status_code=%s | retryable=%s",
+                "status_code=%s | retryable=%s | health=degraded",
                 self._provider,
                 failure.kind.value,
                 failure.status_code,
