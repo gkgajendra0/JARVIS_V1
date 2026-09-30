@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.voice.agent import INSTRUCTIONS
+from jarvis.voice.agent import INSTRUCTIONS, build_instructions
 from jarvis.voice.work_tools import WorkAgentTools
 from jarvis.work.development import DevelopmentWorkspaceManager
 from jarvis.work.runtime import WorkRuntime
@@ -121,3 +121,21 @@ def test_voice_instructions_research_current_media_availability_before_claiming_
         "subscription context, not current catalog availability"
         in NORMALIZED_INSTRUCTIONS
     )
+
+
+def test_default_media_target_grounds_short_media_request_without_granting_authority() -> (
+    None
+):
+    instructions = " ".join(
+        build_instructions(default_media_target="Hisense TV").split()
+    )
+
+    assert 'configured target for routing' in instructions
+    assert 'capability-acquisition target_hints' in instructions
+    assert '"Hisense TV"' in instructions
+    assert "does not prove a streaming subscription" in instructions
+    assert "Authority gates still apply" in instructions
+
+
+def test_default_media_target_instruction_is_absent_when_unconfigured() -> None:
+    assert build_instructions(default_media_target=None) == INSTRUCTIONS
