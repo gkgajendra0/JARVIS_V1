@@ -158,6 +158,12 @@ This loop must continue to work without AI providers for owner-accepted low-risk
 
 Trigger: an incident or malfunction that has no accepted deterministic repair.
 
+Provider/model semantic regressions are first-class candidates for this loop when a
+bounded lifecycle/configuration controller cannot resolve them. Model retirement itself
+should first use the narrower provider-lifecycle controller defined in
+`PROVIDER_MODEL_LIFECYCLE_SELF_EVOLUTION.md`; only compatibility changes requiring
+source modification become EngineeringChanges.
+
 ```text
 incident
 -> bounded evidence package
