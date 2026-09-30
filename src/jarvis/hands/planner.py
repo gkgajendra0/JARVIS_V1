@@ -270,7 +270,9 @@ def build_hands_planner(
                 "chatgpt_plan_model is required when ChatGPT-plan Hands is enabled"
             )
         fallback_provider = (
-            normalized_provider if provider_api_key(normalized_provider) is not None else None
+            normalized_provider
+            if provider_api_key(normalized_provider) is not None
+            else None
         )
         client = build_chatgpt_plan_structured_output_client(
             model=plan_model,
