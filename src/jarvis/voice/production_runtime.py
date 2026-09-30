@@ -504,9 +504,11 @@ def build_production_voice_runtime(
             health_observer=provider_health_observer,
             failure_observer=(
                 (
-                    lambda failure: provider_lifecycle_trigger.set()
-                    if failure.kind is ProviderFailureKind.MODEL_UNAVAILABLE
-                    else None
+                    lambda failure: (
+                        provider_lifecycle_trigger.set()
+                        if failure.kind is ProviderFailureKind.MODEL_UNAVAILABLE
+                        else None
+                    )
                 )
                 if provider_lifecycle_trigger is not None
                 else None
