@@ -474,6 +474,27 @@ def _schema_name(value: str) -> str:
     return (cleaned or "jarvis_response")[:64]
 
 
+def _strict_json_schema(value: object) -> object:
+    """Project Pydantic JSON Schema into OpenAI strict-output shape."""
+
+    if isinstance(value, list):
+        return [_strict_json_schema(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+
+    normalized = {
+        str(key): _strict_json_schema(item)
+        for key, item in value.items()
+        if key != "default"
+    }
+    if normalized.get("type") == "object":
+        properties = normalized.get("properties")
+        if isinstance(properties, dict):
+            normalized["additionalProperties"] = False
+            normalized["required"] = list(properties)
+    return normalized
+
+
 class ChatGPTPlanSessionManager:
     """Own OAuth renewal, model discovery, and plan-backed Responses transport."""
 
