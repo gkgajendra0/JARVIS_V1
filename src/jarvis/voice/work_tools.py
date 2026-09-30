@@ -847,7 +847,10 @@ class WorkAgentTools:
                 "status": "owner_input_target_unresolved",
                 "reason": str(exc),
             }
-        if bound_work_id is not None and self._on_bound_owner_input_submitted is not None:
+        if (
+            bound_work_id is not None
+            and self._on_bound_owner_input_submitted is not None
+        ):
             self._on_bound_owner_input_submitted(waiting)
         return {
             "ok": True,
