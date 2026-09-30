@@ -921,9 +921,7 @@ class VoiceRuntimeController:
                 return
             try:
                 session.interrupt(force=False)
-                LOGGER.info(
-                    "Owner speech interrupted the wake acknowledgement"
-                )
+                LOGGER.info("Owner speech interrupted the wake acknowledgement")
             except Exception:
                 LOGGER.debug(
                     "Wake acknowledgement interruption failed",
