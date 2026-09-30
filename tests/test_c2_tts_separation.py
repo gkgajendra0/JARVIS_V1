@@ -92,7 +92,7 @@ def test_scripted_speech_can_select_openai_independently(
     assert captured["model"] == "gpt-4o-mini-tts"
 
 
-def test_normal_lifecycle_runtime_does_not_require_scripted_tts_builder() -> None:
+def test_lifecycle_runtime_builds_scripted_tts_lazily() -> None:
     controller = voice_runtime.VoiceRuntimeController(
         JarvisConfig(ai_provider="gemini", tts_provider="gemini"),
         SimpleNamespace(output=object()),  # type: ignore[arg-type]
@@ -100,4 +100,5 @@ def test_normal_lifecycle_runtime_does_not_require_scripted_tts_builder() -> Non
 
     assert controller._scripted_speech is None
     assert controller._owns_scripted_speech is False
-    assert hasattr(controller, "_speak_ephemeral_realtime_message")
+    assert hasattr(controller, "_speak_lifecycle_message")
+    assert not hasattr(controller, "_speak_ephemeral_realtime_message")
