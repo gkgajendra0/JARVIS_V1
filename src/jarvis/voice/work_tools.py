@@ -94,16 +94,20 @@ class WorkAgentTools:
     ) -> dict[str, object]:
         """Start governed Phase-9 acquisition from the latest accepted USER request.
 
-        Use only when the owner asks JARVIS to obtain a capability it does not
-        already have, such as controlling a device or integrating an external
-        service. The owner's exact request comes from the canonical latest USER
-        turn. requested_capability, required_operations and target_hints are only
-        structured interpretation fields; they do not grant extra Authority.
-        target_hints must preserve every explicit target, device, service, or
-        transport qualifier in that USER turn. Do not collapse an external target
-        into a superficially similar local operation, and omit target_hints only
-        when the owner supplied no target qualifier. JARVIS binds the acquisition
-        to its trusted current Git revision.
+        Use when the owner explicitly asks JARVIS to obtain a capability, or when
+        the owner's requested external-device/service outcome requires a capability
+        that is not currently available. The owner's exact latest request remains the
+        canonical goal; outcome-driven acquisition only starts governed engineering
+        work and grants no later Architecture, Authority, promotion, activation, or
+        external-effect permission.
+
+        requested_capability, required_operations and target_hints are structured
+        interpretation fields, not Authority. target_hints must preserve explicit
+        target/device/service/transport qualifiers and may carry a target uniquely
+        grounded by the immediately preceding accepted conversation. Do not invent a
+        target from model assumptions or collapse an external target into a
+        superficially similar local operation. JARVIS binds the acquisition to its
+        trusted current Git revision.
         """
         del context
         coordinator = self._runtime.capability_acquisition
