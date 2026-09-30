@@ -219,7 +219,7 @@ class VoiceRuntimeController:
             )
             handle = session.generate_reply(
                 instructions=instructions,
-                allow_interruptions=False,
+                allow_interruptions=(self.config.ai_provider == "gemini"),
                 input_modality="text",
             )
             await self._wait_for_realtime_speech(
@@ -866,6 +866,10 @@ class VoiceRuntimeController:
                 LOGGER.exception(
                     "Voice input could not be disabled during standby transition"
                 )
+            # Stop routing physical microphone PCM immediately. Disabling the
+            # LiveKit session input alone can still leave a small buffered/in-flight
+            # window where a follow-up utterance reaches the realtime model.
+            self.audio.deactivate_session()
             # Keep the existing realtime output attached. The tool result asks the
             # same Gemini Live session to generate one natural acknowledgement in
             # the established JARVIS voice. If no acknowledgement arrives, fail
@@ -902,6 +906,9 @@ class VoiceRuntimeController:
                 standby_ack_observed = True
                 return
             if item.role != "user":
+                return
+            if exit_in_progress:
+                LOGGER.info("Late user turn ignored during standby transition")
                 return
             has_user_turn = True
             self._cancel_timeout()

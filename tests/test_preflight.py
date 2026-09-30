@@ -195,3 +195,22 @@ def test_require_preflight_fails_once_after_aggregating_failures(
     assert "Wake model" in output
     assert "Cloud AI credentials" in output
     assert "Conversation speaker" in output
+
+
+def test_gemini_31_preflight_requires_compatible_livekit_google_plugin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = JarvisConfig(
+        ai_provider="gemini",
+        gemini_realtime_model="gemini-3.1-flash-live-preview",
+    )
+
+    monkeypatch.setattr(preflight, "version", lambda _name: "1.7.1")
+    incompatible = preflight._gemini_realtime_compatibility_check(config)
+    assert incompatible.ok is False
+    assert "required>=1.8.2" in incompatible.detail
+
+    monkeypatch.setattr(preflight, "version", lambda _name: "1.8.3")
+    compatible = preflight._gemini_realtime_compatibility_check(config)
+    assert compatible.ok is True
+    assert "livekit-plugins-google=1.8.3" in compatible.detail

@@ -152,6 +152,23 @@ class InteractiveBrainGate:
         else:
             self._idle.set()
 
+    def preempt_background_for_shutdown(self) -> None:
+        """Cancel active reasoning and release idle waiters so DBOS can checkpoint."""
+
+        self._interactive_active = True
+        task = self._background_task
+        if (
+            task is not None
+            and not task.done()
+            and task.cancelling() == 0
+            and task.cancel()
+        ):
+            self._interactive_preempted_task = task
+        # Unlike normal interactive ownership, shutdown must not strand a DBOS
+        # advance inside wait_until_idle(). Wake every waiter; run_background()
+        # will see interactive_active and return BrainPreempted deterministically.
+        self._idle.set()
+
     async def run_background(
         self,
         reasoner: BrainReasoner,

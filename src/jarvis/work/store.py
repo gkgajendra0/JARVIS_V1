@@ -9,7 +9,7 @@ import sqlite3
 import threading
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from jarvis.work.models import (
     DeliveryPolicy,
@@ -211,6 +211,25 @@ class SQLiteWorkStore:
                     ON work_steps(work_id, created_at ASC);
                 CREATE INDEX IF NOT EXISTS idx_work_deliveries_pending
                     ON work_deliveries(state, created_at ASC);
+
+                CREATE TABLE IF NOT EXISTS work_execution_refs (
+                    work_id TEXT PRIMARY KEY,
+                    execution_id TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(work_id) REFERENCES work_items(work_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS work_status_updates (
+                    work_id TEXT PRIMARY KEY,
+                    interval_seconds INTEGER NOT NULL,
+                    next_due_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(work_id) REFERENCES work_items(work_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_work_status_updates_due
+                    ON work_status_updates(next_due_at);
 
                 CREATE TABLE IF NOT EXISTS work_sensitive_inputs (
                     work_id TEXT NOT NULL,
@@ -686,6 +705,116 @@ class SQLiteWorkStore:
                 ),
             )
         return updated
+
+    def set_execution_id(self, work_id: str, execution_id: str) -> None:
+        normalized = str(execution_id).strip()
+        if not normalized:
+            raise ValueError("execution_id must not be empty")
+        self.require(work_id)
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO work_execution_refs (work_id, execution_id, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(work_id) DO UPDATE SET
+                    execution_id = excluded.execution_id,
+                    updated_at = excluded.updated_at
+                """,
+                (work_id, normalized, _dt(datetime.now(UTC))),
+            )
+
+    def get_execution_id(self, work_id: str) -> str | None:
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT execution_id FROM work_execution_refs WHERE work_id = ?",
+                (work_id,),
+            ).fetchone()
+        return None if row is None else str(row["execution_id"])
+
+    def set_status_update_interval(
+        self,
+        work_id: str,
+        *,
+        interval_seconds: int,
+    ) -> None:
+        if isinstance(interval_seconds, bool) or interval_seconds <= 0:
+            raise ValueError("status update interval must be positive")
+        self.require(work_id)
+        now = datetime.now(UTC)
+        next_due = now + timedelta(seconds=int(interval_seconds))
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO work_status_updates (
+                    work_id, interval_seconds, next_due_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(work_id) DO UPDATE SET
+                    interval_seconds = excluded.interval_seconds,
+                    next_due_at = excluded.next_due_at,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    work_id,
+                    int(interval_seconds),
+                    _dt(next_due),
+                    _dt(now),
+                    _dt(now),
+                ),
+            )
+
+    def clear_status_update_interval(self, work_id: str) -> None:
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                "DELETE FROM work_status_updates WHERE work_id = ?",
+                (work_id,),
+            )
+
+    def list_due_status_updates(
+        self,
+        *,
+        now: datetime | None = None,
+        limit: int = 20,
+    ) -> tuple[tuple[str, int, datetime], ...]:
+        if limit <= 0:
+            raise ValueError("status update limit must be positive")
+        due_at = (now or datetime.now(UTC)).astimezone(UTC)
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT work_id, interval_seconds, next_due_at
+                FROM work_status_updates
+                WHERE next_due_at <= ?
+                ORDER BY next_due_at ASC
+                LIMIT ?
+                """,
+                (_dt(due_at), limit),
+            ).fetchall()
+        result: list[tuple[str, int, datetime]] = []
+        for row in rows:
+            parsed = _parse_dt(row["next_due_at"])
+            if parsed is None:
+                continue
+            result.append((str(row["work_id"]), int(row["interval_seconds"]), parsed))
+        return tuple(result)
+
+    def advance_status_update_interval(
+        self,
+        work_id: str,
+        *,
+        interval_seconds: int,
+        now: datetime | None = None,
+    ) -> None:
+        base = (now or datetime.now(UTC)).astimezone(UTC)
+        next_due = base + timedelta(seconds=int(interval_seconds))
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE work_status_updates
+                SET next_due_at = ?, updated_at = ?
+                WHERE work_id = ?
+                """,
+                (_dt(next_due), _dt(base), work_id),
+            )
 
     def add_step(self, step: WorkStep) -> WorkStep:
         with self._lock, self._connect() as connection:

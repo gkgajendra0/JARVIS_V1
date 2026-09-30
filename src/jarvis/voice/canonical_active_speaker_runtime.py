@@ -34,7 +34,7 @@ from jarvis.voice.memory_tools import MemoryAgentTools
 from jarvis.voice.research_tools import ResearchAgentTools
 from jarvis.voice.runtime import VoiceRuntimeController
 from jarvis.voice.work_tools import WorkAgentTools
-from jarvis.work.models import WorkDeliveryKind
+from jarvis.work.models import WorkDeliveryKind, WorkState
 from jarvis.work.provider_retry import delivery_retry_delay_seconds, provider_retry_hint
 from jarvis.work.runtime import WorkRuntime
 
@@ -228,6 +228,26 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             return f"Sir, a background task failed. {normalized}"
         return f"Sir, {normalized}"
 
+    @staticmethod
+    def _work_delivery_is_current(kind: WorkDeliveryKind, state: WorkState) -> bool:
+        """Only speak a durable notification while its underlying state is current."""
+
+        if kind is WorkDeliveryKind.OWNER_INPUT:
+            return state is WorkState.WAITING_FOR_OWNER
+        if kind is WorkDeliveryKind.RESOURCE_BLOCKER:
+            return state in {
+                WorkState.WAITING_RESOURCE,
+                WorkState.WAITING_DEPENDENCY,
+                WorkState.WAITING_UNTIL,
+            }
+        if kind is WorkDeliveryKind.PROGRESS:
+            return not state.terminal
+        if kind is WorkDeliveryKind.COMPLETION:
+            return state is WorkState.COMPLETED
+        if kind is WorkDeliveryKind.FAILURE:
+            return state is WorkState.FAILED
+        return True
+
     async def _deliver_pending_work(self) -> None:
         """Speak durable Work notifications only at an exclusive idle boundary.
 
@@ -258,6 +278,19 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 continue
 
             delivery = due[0]
+            work = runtime.store.require(delivery.work_id)
+            if not self._work_delivery_is_current(delivery.kind, work.state):
+                runtime.store.mark_delivery_delivered(delivery.delivery_id)
+                LOGGER.info(
+                    "Obsolete background notification discarded | "
+                    "delivery_id=%s | work_id=%s | kind=%s | current_state=%s",
+                    delivery.delivery_id,
+                    delivery.work_id,
+                    delivery.kind.value,
+                    work.state.value,
+                )
+                await asyncio.sleep(0)
+                continue
 
             # A wake activation and a Work notification may become ready on the
             # same event-loop turn. The shared lease makes the winner explicit;
@@ -296,47 +329,75 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
-                    hint = provider_retry_hint(exc)
-                    retry_seconds = delivery_retry_delay_seconds(
-                        failed_attempts=delivery.failed_attempts,
-                        provider_hint=hint,
-                    )
-                    if hint is not None:
-                        reason = (
-                            f"provider_{hint.reason}"
-                            if hint.status_code is None
-                            else f"provider_{hint.reason}_{hint.status_code}"
-                        )
-                    else:
-                        reason = f"realtime_voice_{type(exc).__name__.casefold()}"
+                    critical = delivery.kind in {
+                        WorkDeliveryKind.OWNER_INPUT,
+                        WorkDeliveryKind.RESOURCE_BLOCKER,
+                        WorkDeliveryKind.FAILURE,
+                    }
+                    local_speech = self._local_status_speech
+                    if critical and local_speech is not None:
+                        try:
+                            await local_speech.speak(output, delivery_text)
+                            spoken = True
+                            LOGGER.warning(
+                                "Critical background notification used local speech fallback | "
+                                "delivery_id=%s | work_id=%s | kind=%s | cloud_error=%s",
+                                delivery.delivery_id,
+                                delivery.work_id,
+                                delivery.kind.value,
+                                type(exc).__name__,
+                            )
+                        except Exception:
+                            LOGGER.exception(
+                                "Critical background notification local fallback failed | "
+                                "delivery_id=%s | work_id=%s | kind=%s",
+                                delivery.delivery_id,
+                                delivery.work_id,
+                                delivery.kind.value,
+                            )
 
-                    deferred = runtime.store.schedule_delivery_retry(
-                        delivery.delivery_id,
-                        delay_seconds=retry_seconds,
-                        reason=reason,
-                    )
-                    if hint is not None:
-                        LOGGER.warning(
-                            "Background work notification deferred for provider pressure | "
-                            "delivery_id=%s | failed_attempts=%s | retry_in=%.1fs | "
-                            "reason=%s | provider_status=%s | provider_retry_after=%s",
-                            delivery.delivery_id,
-                            deferred.failed_attempts,
-                            retry_seconds,
-                            reason,
-                            hint.status_code,
-                            hint.retry_after_seconds,
+                    if not spoken:
+                        hint = provider_retry_hint(exc)
+                        retry_seconds = delivery_retry_delay_seconds(
+                            failed_attempts=delivery.failed_attempts,
+                            provider_hint=hint,
                         )
-                    else:
-                        LOGGER.exception(
-                            "Background work realtime notification failed; durable "
-                            "backoff scheduled | delivery_id=%s | failed_attempts=%s | "
-                            "retry_in=%.1fs | reason=%s",
+                        if hint is not None:
+                            reason = (
+                                f"provider_{hint.reason}"
+                                if hint.status_code is None
+                                else f"provider_{hint.reason}_{hint.status_code}"
+                            )
+                        else:
+                            reason = f"realtime_voice_{type(exc).__name__.casefold()}"
+
+                        deferred = runtime.store.schedule_delivery_retry(
                             delivery.delivery_id,
-                            deferred.failed_attempts,
-                            retry_seconds,
-                            reason,
+                            delay_seconds=retry_seconds,
+                            reason=reason,
                         )
+                        if hint is not None:
+                            LOGGER.warning(
+                                "Background work notification deferred for provider pressure | "
+                                "delivery_id=%s | failed_attempts=%s | retry_in=%.1fs | "
+                                "reason=%s | provider_status=%s | provider_retry_after=%s",
+                                delivery.delivery_id,
+                                deferred.failed_attempts,
+                                retry_seconds,
+                                reason,
+                                hint.status_code,
+                                hint.retry_after_seconds,
+                            )
+                        else:
+                            LOGGER.exception(
+                                "Background work realtime notification failed; durable "
+                                "backoff scheduled | delivery_id=%s | failed_attempts=%s | "
+                                "retry_in=%.1fs | reason=%s",
+                                delivery.delivery_id,
+                                deferred.failed_attempts,
+                                retry_seconds,
+                                reason,
+                            )
                 finally:
                     if not self._shutdown.is_set():
                         try:
@@ -368,7 +429,17 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     delivery.kind.value,
                     delivery.policy.value,
                 )
-                await asyncio.sleep(0.2)
+                # Keep wake detection available between queued notifications. Without
+                # this owner-priority window, a recovered delivery backlog can disable
+                # wake, speak, re-enable wake, and immediately disable it again before
+                # the owner has a realistic chance to say the wake word.
+                try:
+                    await asyncio.wait_for(
+                        self._shutdown.wait(),
+                        timeout=max(3.0, self.config.wake_cooldown_seconds),
+                    )
+                except TimeoutError:
+                    pass
 
     def _arm_timeout(self, seconds: float) -> None:
         """Arm inactivity shutdown only after startup and only while user is silent."""

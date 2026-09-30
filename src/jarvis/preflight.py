@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
@@ -68,6 +70,50 @@ def _credential_check(config: JarvisConfig) -> PreflightCheck:
         False,
         f"active provider={config.ai_provider}; {name} is missing from the "
         "process/Windows user environment",
+    )
+
+
+def _version_triplet(value: str) -> tuple[int, int, int]:
+    match = re.match(r"^(\d+)\.(\d+)\.(\d+)", value.strip())
+    if match is None:
+        return (0, 0, 0)
+    return tuple(int(part) for part in match.groups())
+
+
+def _gemini_realtime_compatibility_check(config: JarvisConfig) -> PreflightCheck:
+    """Fail fast when Gemini 3.1 is paired with an incompatible LiveKit plugin."""
+
+    if config.ai_provider != "gemini":
+        return PreflightCheck(
+            "Gemini realtime compatibility",
+            True,
+            "not applicable for the active provider",
+        )
+    if not config.gemini_realtime_model.startswith("gemini-3.1-"):
+        return PreflightCheck(
+            "Gemini realtime compatibility",
+            True,
+            f"model={config.gemini_realtime_model}; Gemini 3.1 compatibility gate not required",
+        )
+
+    required = (1, 8, 2)
+    try:
+        installed = version("livekit-plugins-google")
+    except PackageNotFoundError:
+        return PreflightCheck(
+            "Gemini realtime compatibility",
+            False,
+            "livekit-plugins-google is not installed; Gemini 3.1 requires >=1.8.2",
+        )
+
+    compatible = _version_triplet(installed) >= required
+    return PreflightCheck(
+        "Gemini realtime compatibility",
+        compatible,
+        (
+            f"model={config.gemini_realtime_model}; "
+            f"livekit-plugins-google={installed}; required>=1.8.2"
+        ),
     )
 
 
@@ -252,6 +298,7 @@ def run_startup_preflight(config: JarvisConfig) -> list[PreflightCheck]:
     checks = [
         _check_file("Wake model", config.wake_model_path),
         _credential_check(config),
+        _gemini_realtime_compatibility_check(config),
         _realtime_lifecycle_voice_check(config),
         *_audio_checks(config),
         *_authority_checks(),

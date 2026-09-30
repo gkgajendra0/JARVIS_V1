@@ -236,3 +236,43 @@ def test_due_filter_accepts_explicit_utc_time(tmp_path: Path) -> None:
     before = datetime.now(UTC)
     assert deferred.next_attempt_at > before
     assert store.list_due_deliveries(now=before) == ()
+
+
+def test_status_update_interval_is_persistent_and_due(tmp_path: Path) -> None:
+    path = tmp_path / "status-updates.sqlite"
+    store = SQLiteWorkStore(path)
+    work = _create_work(store)
+
+    store.set_status_update_interval(work.work_id, interval_seconds=60)
+    future = datetime.now(UTC) + timedelta(seconds=61)
+    due = store.list_due_status_updates(now=future)
+
+    assert len(due) == 1
+    assert due[0][0] == work.work_id
+    assert due[0][1] == 60
+
+    reopened = SQLiteWorkStore(path)
+    persisted = reopened.list_due_status_updates(now=future)
+    assert persisted and persisted[0][0] == work.work_id
+
+    reopened.advance_status_update_interval(
+        work.work_id,
+        interval_seconds=60,
+        now=future,
+    )
+    assert reopened.list_due_status_updates(now=future) == ()
+
+    reopened.clear_status_update_interval(work.work_id)
+    assert reopened.list_due_status_updates(now=future + timedelta(days=1)) == ()
+
+
+def test_work_execution_binding_is_persistent(tmp_path: Path) -> None:
+    path = tmp_path / "execution-binding.sqlite"
+    store = SQLiteWorkStore(path)
+    work = _create_work(store)
+
+    store.set_execution_id(work.work_id, "dbos-retry-execution")
+    assert store.get_execution_id(work.work_id) == "dbos-retry-execution"
+
+    reopened = SQLiteWorkStore(path)
+    assert reopened.get_execution_id(work.work_id) == "dbos-retry-execution"

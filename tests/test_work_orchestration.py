@@ -34,6 +34,7 @@ from jarvis.work.models import (
 from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.reasoner import _provider_pressure_from_exception
 from jarvis.work.resources import ResourceLeaseManager
+from jarvis.work.runtime import WorkRuntime
 from jarvis.work.store import SQLiteWorkStore, WorkStoreError
 
 
@@ -132,11 +133,23 @@ class FakeBackend:
         self.resumed: list[str] = []
         self.cancel_keys: list[str | None] = []
         self.resume_keys: list[str | None] = []
+        self.restarted: list[tuple[str, str]] = []
 
     def submit(self, work_id: str, *, priority: WorkPriority) -> str:
         del priority
         self.submitted.append(work_id)
         return work_id
+
+    def restart(
+        self,
+        work_id: str,
+        *,
+        priority: WorkPriority,
+        retry_token: str,
+    ) -> str:
+        del priority
+        self.restarted.append((work_id, retry_token))
+        return f"{work_id}__retry_{retry_token}"
 
     def cancel(
         self,
@@ -320,7 +333,25 @@ async def test_single_brain_can_control_multiple_concurrent_work_items(
     store = SQLiteWorkStore(tmp_path / "work.sqlite")
     reasoner = ScriptedReasoner()
     brain = BrainCoordinator(reasoner)
-    executor = ConcurrentExecutor()
+
+    class BarrierExecutor(ConcurrentExecutor):
+        def __init__(self) -> None:
+            super().__init__()
+            self.release = asyncio.Event()
+
+        async def execute(self, *, work: WorkItem, parameters: dict) -> dict:
+            del parameters
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            if self.active >= 2:
+                self.release.set()
+            try:
+                await asyncio.wait_for(self.release.wait(), timeout=1.0)
+                return {"work_id": work.work_id, "verified": True}
+            finally:
+                self.active -= 1
+
+    executor = BarrierExecutor()
     engine = WorkEngine(
         store=store,
         brain=brain,
@@ -390,6 +421,120 @@ async def test_waiting_for_owner_does_not_fabricate_progress(
 
     await engine.advance(item.work_id)
     assert store.require(item.work_id).state is WorkState.COMPLETED
+
+
+def test_failed_work_retry_preserves_canonical_identity_and_history(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+    item = create_item(store, request="Build TV control capability")
+    historical = WorkStep(
+        work_id=item.work_id,
+        kind="research_web",
+        summary="Research device control",
+    )
+    store.add_step(historical)
+    store.save_step(historical.start().complete({"evidence": "preserved"}))
+    failed = item.transition(
+        WorkState.FAILED,
+        status_detail="brain reasoning failed: ValueError: bad plan",
+    )
+    store.save(failed, expected_version=item.version)
+
+    retried = orchestrator.retry_failed(
+        item.work_id,
+        owner_request="Try that again and use the brain if needed.",
+        source_session_id="session-retry",
+        source_turn_id="turn-retry",
+    )
+
+    assert retried.work_id == item.work_id
+    assert retried.request == item.request
+    assert retried.state is WorkState.RETRYING
+    assert backend.restarted == [(item.work_id, f"v{retried.version}")]
+    assert store.get_execution_id(item.work_id) == (
+        f"{item.work_id}__retry_v{retried.version}"
+    )
+    steps = store.list_steps(item.work_id)
+    assert [step.kind for step in steps] == ["research_web", "owner_retry"]
+    assert steps[-1].observation["response"].startswith("Try that again")
+
+
+def test_owner_input_routes_to_active_retry_execution(tmp_path: Path) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Build TV control capability")
+    running = item.transition(WorkState.RUNNING)
+    store.save(running, expected_version=item.version)
+    waiting = running.transition(
+        WorkState.WAITING_FOR_OWNER,
+        status_detail="Confirm TV pairing",
+    )
+    store.save(waiting, expected_version=running.version)
+    retry_execution_id = f"{item.work_id}__retry_v4"
+    store.set_execution_id(item.work_id, retry_execution_id)
+
+    class OwnerInputBackend:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, str | None]] = []
+
+        def send_owner_input(
+            self,
+            execution_id: str,
+            response: str,
+            *,
+            idempotency_key: str | None = None,
+        ) -> None:
+            self.calls.append((execution_id, response, idempotency_key))
+
+    backend = OwnerInputBackend()
+    runtime = object.__new__(WorkRuntime)
+    runtime.store = store
+    runtime.backend = backend
+
+    resolved = runtime.submit_owner_input(None, "Yes, continue")
+
+    assert resolved.work_id == item.work_id
+    assert backend.calls == [
+        (
+            retry_execution_id,
+            "Yes, continue",
+            f"owner-input:{waiting.version}",
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_shutdown_preemption_releases_brain_waiters() -> None:
+    gate = InteractiveBrainGate()
+    gate.set_interactive_active(True)
+
+    class NeverCalledReasoner:
+        async def decide(self, request: BrainRequest) -> BrainDecision:
+            del request
+            raise AssertionError("reasoner should not run during shutdown")
+
+    item = WorkItem(
+        request="Wait for shutdown",
+        work_type=WorkType.GENERIC,
+        source_session_id="shutdown-session",
+        source_turn_id="shutdown-turn",
+    )
+    request = BrainRequest(
+        work=item,
+        recent_steps=(),
+        purpose="test",
+        allowed_actions=(ConcurrentExecutor.descriptor,),
+    )
+    waiter = asyncio.create_task(gate.run_background(NeverCalledReasoner(), request))
+    await asyncio.sleep(0)
+    assert not waiter.done()
+
+    gate.preempt_background_for_shutdown()
+
+    with pytest.raises(BrainPreempted):
+        await asyncio.wait_for(waiter, timeout=1.0)
 
 
 def test_orchestrator_accepts_pause_resume_cancel_without_session_ownership(

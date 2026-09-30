@@ -7,9 +7,11 @@ from typing import Protocol
 
 from jarvis.work.models import (
     DeliveryPolicy,
+    WorkDeliveryKind,
     WorkItem,
     WorkPriority,
     WorkState,
+    WorkStep,
     WorkType,
 )
 from jarvis.work.store import SQLiteWorkStore, WorkStoreError
@@ -35,6 +37,14 @@ class WorkExecutionBackend(Protocol):
         *,
         idempotency_key: str | None = None,
     ) -> None: ...
+
+    def restart(
+        self,
+        work_id: str,
+        *,
+        priority: WorkPriority,
+        retry_token: str,
+    ) -> str: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,20 +91,38 @@ class WorkOrchestrator:
         self._store.create(item)
         try:
             execution_id = self._backend.submit(item.work_id, priority=priority)
-        except Exception:
+        except Exception as exc:
+            detail = " ".join(str(exc).split())[:400]
+            reason = f"durable execution could not be submitted: {type(exc).__name__}"
+            if detail:
+                reason += f": {detail}"
             failed = item.transition(
                 WorkState.FAILED,
-                status_detail="durable execution could not be submitted",
+                status_detail=reason,
             )
-            self._store.save(failed, expected_version=item.version)
+            failed = self._store.save(failed, expected_version=item.version)
+            self._store.enqueue_delivery(
+                work=failed,
+                kind=WorkDeliveryKind.FAILURE,
+                message=reason,
+                event_key=f"failure:{failed.version}",
+            )
             raise
         if execution_id != item.work_id:
+            reason = "durable backend returned a mismatched execution id"
             failed = item.transition(
                 WorkState.FAILED,
-                status_detail="durable backend returned a mismatched execution id",
+                status_detail=reason,
             )
-            self._store.save(failed, expected_version=item.version)
+            failed = self._store.save(failed, expected_version=item.version)
+            self._store.enqueue_delivery(
+                work=failed,
+                kind=WorkDeliveryKind.FAILURE,
+                message=reason,
+                event_key=f"failure:{failed.version}",
+            )
             raise RuntimeError("durable backend must use work_id as execution_id")
+        self._store.set_execution_id(item.work_id, execution_id)
         return WorkSubmission(work=item, execution_id=execution_id)
 
     def get(self, work_id: str) -> WorkItem:
@@ -105,9 +133,17 @@ class WorkOrchestrator:
 
         reconciled: list[str] = []
         for item in self.list_active(limit=limit):
+            bound_execution = self._store.get_execution_id(item.work_id)
+            if bound_execution is not None and bound_execution != item.work_id:
+                # DBOS automatically recovers pending non-canonical retry executions
+                # at runtime launch. Re-submitting the canonical workflow ID here would
+                # create a second executor for the same WorkItem.
+                reconciled.append(item.work_id)
+                continue
             execution_id = self._backend.submit(item.work_id, priority=item.priority)
             if execution_id != item.work_id:
                 raise RuntimeError("durable backend must use work_id as execution_id")
+            self._store.set_execution_id(item.work_id, execution_id)
             reconciled.append(item.work_id)
         return tuple(reconciled)
 
@@ -134,8 +170,9 @@ class WorkOrchestrator:
 
         # First make the durable cancellation request. If that fails, canonical
         # truth must remain active instead of falsely claiming terminal cancel.
+        execution_id = self._store.get_execution_id(work_id) or work_id
         self._backend.cancel(
-            work_id,
+            execution_id,
             idempotency_key=f"cancel:{item.version}",
         )
 
@@ -179,7 +216,8 @@ class WorkOrchestrator:
             current_step_id=item.current_step_id,
         )
         saved = self._store.save(paused, expected_version=item.version)
-        self._backend.pause(work_id)
+        execution_id = self._store.get_execution_id(work_id) or work_id
+        self._backend.pause(execution_id)
         return saved
 
     def resume(self, work_id: str) -> WorkItem:
@@ -204,8 +242,9 @@ class WorkOrchestrator:
         )
         saved = self._store.save(resumed, expected_version=item.version)
         try:
+            execution_id = self._store.get_execution_id(work_id) or work_id
             self._backend.resume(
-                work_id,
+                execution_id,
                 idempotency_key=f"resume:{item.version}",
             )
         except Exception:
@@ -216,6 +255,65 @@ class WorkOrchestrator:
                 current_step_id=latest.current_step_id,
             )
             self._store.save(reverted, expected_version=latest.version)
+            raise
+        return saved
+
+    def retry_failed(
+        self,
+        work_id: str,
+        *,
+        owner_request: str,
+        source_session_id: str,
+        source_turn_id: str,
+    ) -> WorkItem:
+        """Retry failed canonical work without losing its identity or evidence."""
+
+        item = self._store.require(work_id)
+        if item.state is not WorkState.FAILED:
+            raise ValueError("only failed work can be retried")
+        normalized = owner_request.strip()
+        if not normalized:
+            raise ValueError("retry request must not be empty")
+
+        retry_step = WorkStep(
+            work_id=item.work_id,
+            kind="owner_retry",
+            summary="Owner requested retry of failed work",
+            input_data={
+                "source_session_id": source_session_id,
+                "source_turn_id": source_turn_id,
+            },
+        )
+        self._store.add_step(retry_step)
+        self._store.save_step(retry_step.start().complete({"response": normalized}))
+
+        retrying = item.transition(
+            WorkState.RETRYING,
+            status_detail="retry requested by owner",
+            current_step_id=None,
+        )
+        saved = self._store.save(retrying, expected_version=item.version)
+        try:
+            execution_id = self._backend.restart(
+                saved.work_id,
+                priority=saved.priority,
+                retry_token=f"v{saved.version}",
+            )
+            self._store.set_execution_id(saved.work_id, execution_id)
+        except Exception as exc:
+            latest = self._store.require(saved.work_id)
+            failed = latest.transition(
+                WorkState.FAILED,
+                status_detail=f"retry submission failed: {type(exc).__name__}: {exc}",
+                current_step_id=latest.current_step_id,
+            )
+            failed = self._store.save(failed, expected_version=latest.version)
+            self._store.enqueue_delivery(
+                work=failed,
+                kind=WorkDeliveryKind.FAILURE,
+                message=failed.status_detail or "Background work retry failed.",
+                event_key=f"failure:{failed.version}",
+            )
             raise
         return saved
 

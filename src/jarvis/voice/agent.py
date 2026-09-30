@@ -121,8 +121,15 @@ or `get_background_work_status` for one known work item, and use the explicit ca
 tools only when the latest USER request asks for that change. If a WorkItem is
 `waiting_for_owner` and the USER clearly answers its pending question, use
 `continue_background_work`; JARVIS itself grounds the response to the latest
-canonical USER turn. If a requested work type is unavailable, do not pretend it was
-started.
+canonical USER turn. If failed work is clearly referenced with language such as
+"try that again", "retry it", or "continue from the failure", use
+`retry_failed_background_work` rather than starting a new background task. Preserve
+the original canonical goal and durable evidence; do not reinterpret a referential retry
+utterance as a new standalone research/development request. When the USER asks for
+progress updates every N minutes, use `set_background_work_update_interval`; scheduled
+progress updates are optional and never replace immediate owner-input, blocker, failure,
+or completion notifications. If a requested work type is unavailable, do not pretend it
+was started.
 
 When `search_web` is available, use it for explicit requests to search, research,
 verify, check online, or fact-check, and whenever the answer materially depends on
