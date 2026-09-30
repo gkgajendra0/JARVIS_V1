@@ -64,7 +64,10 @@ from jarvis.promotion.release import (
     load_active_release_for_startup,
 )
 from jarvis.promotion.runtime_composition import PromotionRuntimeConfig
-from jarvis.provider_model_lifecycle import reconcile_gemini_live_model
+from jarvis.provider_model_lifecycle import (
+    GeminiLiveLifecycleResult,
+    reconcile_gemini_live_model,
+)
 from jarvis.provider_resilience import ProviderFailureKind, ProviderResilienceState
 from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.vision.camera import (
@@ -558,7 +561,7 @@ def build_production_voice_runtime(
 
 async def _reconcile_provider_model_lifecycle(
     config: JarvisConfig,
-):
+) -> GeminiLiveLifecycleResult | None:
     if config.ai_provider != "gemini":
         return None
     try:
@@ -578,7 +581,7 @@ async def _reconcile_provider_model_lifecycle(
 
 async def _run_provider_model_lifecycle_watch(
     config: JarvisConfig,
-    runtime,
+    runtime: CanonicalActiveSpeakerRuntimeController,
     migrated: asyncio.Event,
     lifecycle_trigger: asyncio.Event,
     *,
