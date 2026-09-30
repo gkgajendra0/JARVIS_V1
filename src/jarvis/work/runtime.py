@@ -300,8 +300,9 @@ class WorkRuntime:
         response: str,
     ) -> WorkItem:
         work = self.resolve_waiting_owner_work(work_id)
+        execution_id = self.store.get_execution_id(work.work_id) or work.work_id
         self.backend.send_owner_input(
-            work.work_id,
+            execution_id,
             response,
             idempotency_key=f"owner-input:{work.version}",
         )
