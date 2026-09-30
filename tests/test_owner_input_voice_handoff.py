@@ -76,3 +76,50 @@ async def test_bound_owner_input_uses_exact_work_and_signals_submission(
     assert result["status"] == "owner_input_submitted"
     assert result["work_id"] == "work-tv"
     assert result["canonical_user_turn_id"] == conversation.turns[-1].turn_id
+
+
+@pytest.mark.asyncio
+async def test_owner_input_interaction_builds_exact_bound_conversation() -> None:
+    runtime = object.__new__(WorkRuntime)
+    controller = object.__new__(
+        __import__(
+            "jarvis.voice.canonical_active_speaker_runtime",
+            fromlist=["CanonicalActiveSpeakerRuntimeController"],
+        ).CanonicalActiveSpeakerRuntimeController
+    )
+    controller._work_runtime = runtime
+    controller._shutdown = __import__("asyncio").Event()
+    controller._timeout_handle = None
+    controller._active_end = None
+    controller._state = __import__(
+        "jarvis.voice.runtime",
+        fromlist=["VoiceRuntimeState"],
+    ).VoiceRuntimeState.IDLE
+
+    captured: dict[str, object] = {}
+
+    async def fake_run_one_session_owned(**kwargs) -> None:
+        captured.update(kwargs)
+        conversation = ConversationSession()
+        conversation.start()
+        tool_factory = kwargs["session_tool_factory"]
+        tools = tool_factory(conversation)
+        assert len(tools) == 1
+        tool = tools[0]
+        bound_instance = getattr(tool, "_instance")
+        assert bound_instance._bound_owner_input_work_id == "work-tv"
+        assert callable(bound_instance._on_bound_owner_input_submitted)
+
+    controller._run_one_session_owned = fake_run_one_session_owned
+
+    answered = await controller._run_owner_input_interaction(
+        work_id="work-tv",
+        question="Which platform: VIDAA, Roku, or Android TV?",
+    )
+
+    assert answered is False
+    assert captured["initial_prompt_label"] == "owner input prompt"
+    assert "does not need to say the wake word" in str(captured["initial_instructions"])
+    assert "VIDAA, Roku, or Android TV" in str(captured["initial_instructions"])
+    assert callable(captured["completion_predicate"])
+    assert captured["completion_label"] == "owner input for work-tv"
