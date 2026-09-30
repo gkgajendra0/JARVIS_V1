@@ -52,11 +52,48 @@ Recoverable realtime provider errors are now also mirrored into canonical provid
 health as DEGRADED evidence before recovery, so a Gemini 1011/server-side failure can
 reach Self-Awareness/Incidents even when LiveKit keeps the session alive.
 
-A Phase-11 follow-up is still required for deterministic detection of *semantic*
-voice/provider regressions that do not emit provider exceptions, such as repeated
-wake-success + zero canonical USER turns or sustained voice interaction SLO regression.
-Detection must create canonical health/incident evidence and reuse the existing governed
-engineering path; it must not self-authorize source changes or promotion.
+This migration candidate now closes the first deterministic semantic-observation gap:
+three consecutive wake-triggered realtime sessions that end without a committed owner
+turn degrade `runtime.voice` through Self-Awareness. A subsequent committed owner turn
+resets the streak and publishes recovery when degradation had been reached. A single
+wake with no follow-up remains normal and does not create an incident.
+
+Broader Phase-11 weakness detection is still required for additional behavioral SLOs
+such as sustained latency, repeated immediate response interruption and other semantic
+quality regressions. Those signals must create canonical health/incident evidence and
+reuse the governed engineering path; they do not self-authorize arbitrary source
+changes or promotion.
+
+## Automatic provider-model lifecycle reconciliation
+
+The owner requirement is that routine provider model retirement must not depend on the
+owner noticing it manually. The migration candidate therefore adds a bounded Gemini
+Live lifecycle controller:
+
+- first-party lifecycle evidence is read from Google's Gemini deprecations page;
+- only rows under the Live API model section are eligible;
+- no replacement model is guessed and no moving `latest` alias is used;
+- automatic migration requires Google's explicit recommended replacement;
+- the candidate replacement must remain a Live model;
+- before persistence, the candidate must complete a real Gemini Live setup handshake
+  with the current credentials and installed SDK stack;
+- only the persisted `JARVIS_GEMINI_REALTIME_MODEL` setting is changed;
+- startup reconciles lifecycle before preflight;
+- a six-hour safety sweep rechecks lifecycle while JARVIS runs;
+- a strong `MODEL_UNAVAILABLE` provider failure triggers the same reconciliation
+  immediately instead of waiting for the periodic sweep;
+- after a successful runtime migration, the active voice runtime shuts down cleanly,
+  reloads machine configuration in-process and starts on the replacement model without
+  consuming crash/hang Self-Repair budget.
+
+If authoritative lifecycle evidence is unavailable, no replacement is guessed. If the
+recommended replacement fails its Live handshake, the current configuration is retained
+and the failure remains evidence for investigation.
+
+The durable self-management contract is
+`PROVIDER_MODEL_LIFECYCLE_SELF_EVOLUTION.md`. Provider migrations that require source
+or Authority/security changes remain governed EngineeringChanges rather than silent
+configuration updates.
 
 ## Production guardrails
 
