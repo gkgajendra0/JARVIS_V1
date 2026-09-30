@@ -12,7 +12,9 @@ def test_voice_instructions_keep_wake_only_activation_silent() -> None:
     normalized = " ".join(INSTRUCTIONS.split())
     assert "standalone wake-name utterance is activation residue" in normalized
     assert "remain silent and wait for the owner's actual request" in normalized
-    assert (\n        "even when speech transcription renders the wake name imperfectly" in normalized\n    )
+    assert (
+        "even when speech transcription renders the wake name imperfectly" in normalized
+    )
     assert "genuine brief greeting" in normalized
     assert "exactly one short acknowledgement" in normalized
 
