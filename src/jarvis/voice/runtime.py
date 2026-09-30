@@ -849,6 +849,7 @@ class VoiceRuntimeController:
             task.add_done_callback(shadow_tasks.discard)
 
         standby_ack_observed = False
+        standby_playback_finished = False
 
         def request_standby() -> bool:
             nonlocal exit_in_progress
@@ -891,7 +892,11 @@ class VoiceRuntimeController:
                 self._arm_timeout(timeout)
 
         def on_agent_state(event: AgentStateChangedEvent) -> None:
-            if has_user_turn and event.new_state in {"thinking", "speaking"}:
+            if (
+                not exit_in_progress
+                and has_user_turn
+                and event.new_state in {"thinking", "speaking"}
+            ):
                 self._cancel_timeout()
 
         def on_conversation_item(event: ConversationItemAddedEvent) -> None:
@@ -904,6 +909,11 @@ class VoiceRuntimeController:
                 return
             if item.role == "assistant" and exit_in_progress:
                 standby_ack_observed = True
+                if standby_playback_finished:
+                    LOGGER.info(
+                        "JARVIS realtime standby acknowledgement finished playing"
+                    )
+                    active_end.set()
                 return
             if item.role != "user":
                 return
@@ -915,8 +925,10 @@ class VoiceRuntimeController:
             submit_shadow_turn()
 
         def on_playback_finished(event: PlaybackFinishedEvent) -> None:
+            nonlocal standby_playback_finished
             del event
             if exit_in_progress:
+                standby_playback_finished = True
                 if standby_ack_observed:
                     LOGGER.info(
                         "JARVIS realtime standby acknowledgement finished playing"
