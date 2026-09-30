@@ -39,15 +39,28 @@ architecture.
 - `jarvis-setup` migrates the exact persisted 3.1 legacy model value to 3.8
   while preserving other explicitly configured custom model IDs.
 
-## Scope intentionally unchanged
+## Independent standby race found during acceptance
 
-This migration does not change:
+The successful 3.8 owner-machine run exposed a separate existing standby cleanup
+race: realtime playback could finish before the committed assistant acknowledgement
+item arrived. In that ordering, the acknowledgement flag was set too late, while
+post-standby agent state could also cancel the fail-closed standby timeout. JARVIS
+could therefore speak "Standing by" without returning to local wake mode.
+
+The acceptance branch hardens this bounded lifecycle edge:
+
+- standby timeout is not cancelled by later thinking/speaking state;
+- acknowledgement and playback completion are tracked independently;
+- either event order closes the realtime session exactly once;
+- physical microphone cutoff at standby acceptance remains unchanged.
+
+## Scope otherwise unchanged
+
+This work does not change:
 
 - wake-word detection;
 - MediaDevices microphone routing;
 - SessionAudioInput/ObservedSessionAudioInput;
-- lifecycle/session ownership;
-- semantic standby behavior;
 - ChatGPT plan routing;
 - DBOS Work orchestration;
 - capability acquisition or Hands.
