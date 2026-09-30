@@ -138,7 +138,9 @@ class ChatGPTPlanCredentials:
         try:
             payload = json.loads(raw.decode("utf-8"))
         except (UnicodeError, json.JSONDecodeError) as exc:
-            raise ChatGPTPlanError("stored ChatGPT-plan credentials are invalid") from exc
+            raise ChatGPTPlanError(
+                "stored ChatGPT-plan credentials are invalid"
+            ) from exc
         if not isinstance(payload, dict):
             raise ChatGPTPlanError("stored ChatGPT-plan credentials are invalid")
         try:
@@ -166,7 +168,9 @@ class ChatGPTPlanCredentials:
                 ),
             )
         except (KeyError, TypeError, ValueError) as exc:
-            raise ChatGPTPlanError("stored ChatGPT-plan credentials are incomplete") from exc
+            raise ChatGPTPlanError(
+                "stored ChatGPT-plan credentials are incomplete"
+            ) from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,7 +336,9 @@ def _request_json(
     try:
         payload = json.loads(raw.decode("utf-8"))
     except (UnicodeError, json.JSONDecodeError) as exc:
-        raise ChatGPTPlanHTTPError("ChatGPT-plan endpoint returned invalid JSON") from exc
+        raise ChatGPTPlanHTTPError(
+            "ChatGPT-plan endpoint returned invalid JSON"
+        ) from exc
     if not isinstance(payload, dict):
         raise ChatGPTPlanHTTPError("ChatGPT-plan endpoint returned invalid JSON")
     return payload
@@ -395,11 +401,7 @@ class _OAuthCallbackHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         values = parse.parse_qs(parsed_url.query, keep_blank_values=True)
-        flattened = {
-            key: items[0]
-            for key, items in values.items()
-            if items
-        }
+        flattened = {key: items[0] for key, items in values.items() if items}
         self.result_queue.put(flattened)
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -476,8 +478,7 @@ def _usage_from_response(response_payload: object) -> tuple[dict[str, int], bool
 
 def _schema_name(value: str) -> str:
     cleaned = "".join(
-        char if char.isalnum() or char in {"_", "-"} else "_"
-        for char in value
+        char if char.isalnum() or char in {"_", "-"} else "_" for char in value
     ).strip("_")
     return (cleaned or "jarvis_response")[:64]
 
@@ -541,7 +542,9 @@ class ChatGPTPlanSessionManager:
         verifier = secrets.token_urlsafe(64)
         challenge = _base64url_sha256(verifier)
         requested_client_id = (
-            existing.client_id if existing is not None else CHATGPT_PLAN_DYNAMIC_CLIENT_ID
+            existing.client_id
+            if existing is not None
+            else CHATGPT_PLAN_DYNAMIC_CLIENT_ID
         )
 
         redirect_holder: dict[str, str] = {}
@@ -566,11 +569,7 @@ class ChatGPTPlanSessionManager:
                 params["id_token_hint"] = existing.id_token
                 if existing.email:
                     params["login_hint"] = existing.email
-            return (
-                CHATGPT_PLAN_AUTHORIZATION_URL
-                + "?"
-                + parse.urlencode(params)
-            )
+            return CHATGPT_PLAN_AUTHORIZATION_URL + "?" + parse.urlencode(params)
 
         callback = _wait_for_oauth_callback(
             authorization_url_builder=authorization_url,
@@ -579,16 +578,17 @@ class ChatGPTPlanSessionManager:
         if callback.get("state") != state:
             raise ChatGPTPlanError("ChatGPT OAuth state did not match the request")
         if callback.get("error"):
-            raise ChatGPTPlanError(
-                f"ChatGPT authorization failed: {callback['error']}"
-            )
+            raise ChatGPTPlanError(f"ChatGPT authorization failed: {callback['error']}")
         code = str(callback.get("code") or "").strip()
         if not code:
             raise ChatGPTPlanError("ChatGPT authorization callback contained no code")
 
         if existing is None:
             issued_client_id = str(callback.get("client_id") or "").strip()
-            if not issued_client_id or issued_client_id == CHATGPT_PLAN_DYNAMIC_CLIENT_ID:
+            if (
+                not issued_client_id
+                or issued_client_id == CHATGPT_PLAN_DYNAMIC_CLIENT_ID
+            ):
                 raise ChatGPTPlanError(
                     "ChatGPT dynamic registration did not return an issued client ID"
                 )
@@ -656,9 +656,7 @@ class ChatGPTPlanSessionManager:
             expires_in=expires_in,
             scopes=scopes,
             saved_at_epoch=now,
-            earliest_refresh_at_epoch=(
-                None if earliest is None else float(earliest)
-            ),
+            earliest_refresh_at_epoch=(None if earliest is None else float(earliest)),
         )
         self._credentials.save(credentials)
         return credentials
@@ -726,8 +724,7 @@ class ChatGPTPlanSessionManager:
                 )
             now = float(self._clock())
             refresh_at = (
-                credentials.access_expires_at_epoch
-                - CHATGPT_PLAN_REFRESH_SKEW_SECONDS
+                credentials.access_expires_at_epoch - CHATGPT_PLAN_REFRESH_SKEW_SECONDS
             )
             if now < refresh_at:
                 return credentials.access_token
@@ -866,7 +863,8 @@ class ChatGPTPlanSessionManager:
                                 retryable=True,
                             )
                         raise ChatGPTPlanHTTPError(
-                            message or f"ChatGPT plan response failed: {code or 'unknown'}",
+                            message
+                            or f"ChatGPT plan response failed: {code or 'unknown'}",
                             code=code or None,
                         )
                     elif event_type == "error":
@@ -882,7 +880,8 @@ class ChatGPTPlanSessionManager:
                             else ""
                         )
                         raise ChatGPTPlanHTTPError(
-                            message or f"ChatGPT plan stream error: {code or 'unknown'}",
+                            message
+                            or f"ChatGPT plan stream error: {code or 'unknown'}",
                             code=code or None,
                         )
                     elif event_type == "response.incomplete":
