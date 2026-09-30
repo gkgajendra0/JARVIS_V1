@@ -87,6 +87,8 @@ def test_phase9_owner_voice_tools_are_exposed() -> None:
     assert hasattr(WorkAgentTools, "start_capability_acquisition")
     assert hasattr(WorkAgentTools, "activate_acquired_capability")
     assert hasattr(WorkAgentTools, "disable_acquired_capability")
+    assert hasattr(WorkAgentTools, "retry_failed_background_work")
+    assert hasattr(WorkAgentTools, "set_background_work_update_interval")
     assert hasattr(WorkAgentTools, "prepare_change_promotion")
     assert hasattr(WorkAgentTools, "execute_change_promotion")
 
@@ -139,3 +141,9 @@ def test_default_media_target_grounds_short_media_request_without_granting_autho
 
 def test_default_media_target_instruction_is_absent_when_unconfigured() -> None:
     assert build_instructions(default_media_target=None) == INSTRUCTIONS
+
+
+def test_voice_instructions_preserve_referential_retry_context() -> None:
+    assert "retry_failed_background_work" in NORMALIZED_INSTRUCTIONS
+    assert "referential retry utterance" in NORMALIZED_INSTRUCTIONS
+    assert "set_background_work_update_interval" in NORMALIZED_INSTRUCTIONS
