@@ -544,7 +544,6 @@ async def reconcile_gemini_live_model(
         RuntimeError,
         TimeoutError,
         ValueError,
-        genai_errors.APIError,
     ) as exc:
         LOGGER.error(
             "Gemini recommended replacement failed Live handshake; keeping current "
