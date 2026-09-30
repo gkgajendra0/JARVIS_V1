@@ -65,7 +65,7 @@ def _create_realtime_model(config: JarvisConfig):
                 ),
                 activity_handling=(
                     google_types.ActivityHandling.START_OF_ACTIVITY_INTERRUPTS
-                )
+                ),
             ),
         )
 
