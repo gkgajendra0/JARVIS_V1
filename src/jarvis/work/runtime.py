@@ -363,7 +363,9 @@ class WorkRuntime:
         if work.state.terminal:
             raise ValueError("terminal work does not need scheduled progress updates")
         if isinstance(interval_minutes, bool) or interval_minutes < 0:
-            raise ValueError("update interval must be zero or a positive number of minutes")
+            raise ValueError(
+                "update interval must be zero or a positive number of minutes"
+            )
         if interval_minutes == 0:
             self.store.clear_status_update_interval(work.work_id)
             return work
@@ -394,7 +396,9 @@ class WorkRuntime:
                         parts.append(f"Blocker: {estimate.blocked_reason}.")
                     if estimate.remaining_work:
                         parts.append(
-                            "Remaining work: " + ", ".join(estimate.remaining_work[:3]) + "."
+                            "Remaining work: "
+                            + ", ".join(estimate.remaining_work[:3])
+                            + "."
                         )
                     self.store.enqueue_delivery(
                         work=work,
