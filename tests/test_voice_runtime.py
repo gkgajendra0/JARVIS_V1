@@ -205,7 +205,6 @@ def runtime_with_session(
     return runtime, session, conversation, audio, scripted_speech
 
 
-
 @pytest.mark.asyncio
 async def test_startup_greeting_waits_for_tracking_readiness() -> None:
     import threading
@@ -261,6 +260,7 @@ async def test_startup_greeting_waits_for_tracking_readiness() -> None:
 
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)
+
 
 @pytest.mark.asyncio
 async def test_dev_control_connects_before_audio_start_and_marks_ready_after_audio(
@@ -324,7 +324,6 @@ async def test_dev_control_connects_before_audio_start_and_marks_ready_after_aud
 
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)
-
 
 
 @pytest.mark.asyncio
@@ -576,6 +575,7 @@ async def test_semantic_standby_keeps_realtime_output_until_ack_finishes() -> No
     assert session.closed is True
     assert conversation.status is ConversationStatus.CLOSED
 
+
 @pytest.mark.asyncio
 async def test_initial_timeout_ends_session_without_provider_activity() -> None:
     runtime, session, _, audio, _ = runtime_with_session(initial_timeout=0.01)
@@ -733,7 +733,6 @@ async def test_active_speaker_shadow_uses_separate_paired_audio_window() -> None
     await asyncio.wait_for(task, timeout=1)
 
 
-
 @pytest.mark.asyncio
 async def test_update_approval_uses_realtime_voice_then_real_spoken_yes() -> None:
     runtime, session, _, audio, _ = runtime_with_session()
@@ -809,4 +808,3 @@ async def test_startup_greeting_timeout_does_not_block_runtime(
 
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)
-
