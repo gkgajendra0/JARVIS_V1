@@ -105,6 +105,7 @@ class WorkOrchestrator:
             )
             self._store.save(failed, expected_version=item.version)
             raise RuntimeError("durable backend must use work_id as execution_id")
+        self._store.set_execution_id(item.work_id, execution_id)
         return WorkSubmission(work=item, execution_id=execution_id)
 
     def get(self, work_id: str) -> WorkItem:
@@ -115,9 +116,17 @@ class WorkOrchestrator:
 
         reconciled: list[str] = []
         for item in self.list_active(limit=limit):
+            bound_execution = self._store.get_execution_id(item.work_id)
+            if bound_execution is not None and bound_execution != item.work_id:
+                # DBOS automatically recovers pending non-canonical retry executions
+                # at runtime launch. Re-submitting the canonical workflow ID here would
+                # create a second executor for the same WorkItem.
+                reconciled.append(item.work_id)
+                continue
             execution_id = self._backend.submit(item.work_id, priority=item.priority)
             if execution_id != item.work_id:
                 raise RuntimeError("durable backend must use work_id as execution_id")
+            self._store.set_execution_id(item.work_id, execution_id)
             reconciled.append(item.work_id)
         return tuple(reconciled)
 
@@ -144,8 +153,9 @@ class WorkOrchestrator:
 
         # First make the durable cancellation request. If that fails, canonical
         # truth must remain active instead of falsely claiming terminal cancel.
+        execution_id = self._store.get_execution_id(work_id) or work_id
         self._backend.cancel(
-            work_id,
+            execution_id,
             idempotency_key=f"cancel:{item.version}",
         )
 
@@ -189,7 +199,8 @@ class WorkOrchestrator:
             current_step_id=item.current_step_id,
         )
         saved = self._store.save(paused, expected_version=item.version)
-        self._backend.pause(work_id)
+        execution_id = self._store.get_execution_id(work_id) or work_id
+        self._backend.pause(execution_id)
         return saved
 
     def resume(self, work_id: str) -> WorkItem:
@@ -214,8 +225,9 @@ class WorkOrchestrator:
         )
         saved = self._store.save(resumed, expected_version=item.version)
         try:
+            execution_id = self._store.get_execution_id(work_id) or work_id
             self._backend.resume(
-                work_id,
+                execution_id,
                 idempotency_key=f"resume:{item.version}",
             )
         except Exception:
@@ -267,11 +279,12 @@ class WorkOrchestrator:
         )
         saved = self._store.save(retrying, expected_version=item.version)
         try:
-            self._backend.restart(
+            execution_id = self._backend.restart(
                 saved.work_id,
                 priority=saved.priority,
                 retry_token=f"v{saved.version}",
             )
+            self._store.set_execution_id(saved.work_id, execution_id)
         except Exception as exc:
             latest = self._store.require(saved.work_id)
             failed = latest.transition(
