@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.voice.agent import INSTRUCTIONS
-from jarvis.voice.work_tools import WorkAgentTools
 from jarvis.work.development import DevelopmentWorkspaceManager
 from jarvis.work.runtime import WorkRuntime
+from jarvis.voice.agent import INSTRUCTIONS
+from jarvis.voice.work_tools import WorkAgentTools
 
 
 NORMALIZED_INSTRUCTIONS = " ".join(INSTRUCTIONS.split())
