@@ -263,9 +263,7 @@ def test_status_update_interval_is_persistent_and_due(tmp_path: Path) -> None:
     assert reopened.list_due_status_updates(now=future) == ()
 
     reopened.clear_status_update_interval(work.work_id)
-    assert reopened.list_due_status_updates(
-        now=future + timedelta(days=1)
-    ) == ()
+    assert reopened.list_due_status_updates(now=future + timedelta(days=1)) == ()
 
 
 def test_work_execution_binding_is_persistent(tmp_path: Path) -> None:
