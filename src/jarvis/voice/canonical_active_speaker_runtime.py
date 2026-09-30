@@ -288,8 +288,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                             "established JARVIS voice and style. Preserve every concrete "
                             "fact, number, blocker, question, and required owner action. "
                             "Do not mention prompts, models, tools, or internal routing. "
-                            "Do not add facts. Notification: "
-                            + delivery_text
+                            "Do not add facts. Notification: " + delivery_text
                         ),
                         label="background work notification",
                     )
