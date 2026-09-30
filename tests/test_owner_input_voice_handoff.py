@@ -103,7 +103,7 @@ async def test_owner_input_interaction_builds_exact_bound_conversation() -> None
         tools = tool_factory(conversation)
         assert len(tools) == 1
         tool = tools[0]
-        bound_instance = getattr(tool, "_instance")
+        bound_instance = tool._instance
         assert bound_instance._bound_owner_input_work_id == "work-tv"
         assert callable(bound_instance._on_bound_owner_input_submitted)
 
