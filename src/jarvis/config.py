@@ -145,7 +145,7 @@ class JarvisConfig:
     # The production MediaDevices runtime does not consume this selector.
     audio_output_wasapi_device: str | None = None
     audio_ring_buffer_seconds: float = 2.5
-    audio_pre_roll_seconds: float = 0.75
+    audio_pre_roll_seconds: float = 2.0
     wake_cooldown_seconds: float = 1.0
     initial_request_timeout_seconds: float = 8.0
     follow_up_timeout_seconds: float = 15.0
@@ -520,7 +520,7 @@ class JarvisConfig:
                 "JARVIS_AUDIO_RING_BUFFER_SECONDS", 2.5, machine
             ),
             audio_pre_roll_seconds=_configured_float(
-                "JARVIS_AUDIO_PRE_ROLL_SECONDS", 0.75, machine
+                "JARVIS_AUDIO_PRE_ROLL_SECONDS", 2.0, machine
             ),
             wake_cooldown_seconds=_configured_float(
                 "JARVIS_WAKE_COOLDOWN_SECONDS", 1.0, machine
