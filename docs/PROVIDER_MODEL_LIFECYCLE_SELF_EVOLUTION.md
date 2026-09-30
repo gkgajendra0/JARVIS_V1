@@ -141,9 +141,12 @@ previous model. Only a still-usable previous model may be restored automatically
 that rollback probe fails, JARVIS keeps canonical degraded/incident evidence and
 escalates rather than blindly restoring a retired or unavailable model.
 
-A candidate that was automatically rolled back is blocked from automatic retry until
-new evidence or a later governed engineering change changes that state. This prevents
-migration loops.
+A candidate that was automatically rolled back is blocked from immediate automatic
+retry. The current bounded policy applies a six-hour cooldown before the same
+provider-recommended candidate may be evaluated again. Every retry must repeat the
+authoritative lifecycle lookup and Live handshake, so a transient production regression
+cannot create a tight migration/rollback loop. A governed engineering change may also
+supersede the candidate or policy before that cooldown expires.
 
 ## 5. When source changes are required
 
