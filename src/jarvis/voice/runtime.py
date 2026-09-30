@@ -22,6 +22,7 @@ from livekit.agents.llm import ChatMessage
 from livekit.agents.voice.io import PlaybackFinishedEvent
 
 from jarvis.config import JarvisConfig
+from jarvis.conversation import ConversationSession
 from jarvis.dev_control import DevControlClient, parse_explicit_update_decision
 from jarvis.identity.active_speaker import (
     ActiveSpeakerVisualBuffer,
