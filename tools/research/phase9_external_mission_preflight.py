@@ -7,8 +7,8 @@ import json
 import pathlib
 import subprocess
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from jarvis.chatgpt_plan import ChatGPTPlanSessionManager
 from jarvis.config import JarvisConfig
