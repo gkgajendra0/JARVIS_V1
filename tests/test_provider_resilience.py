@@ -259,6 +259,38 @@ async def test_sdk_recoverable_quota_still_becomes_terminal_jarvis_failure() -> 
     await observer.terminal_task
 
 
+@pytest.mark.asyncio
+async def test_model_unavailable_notifies_lifecycle_observer() -> None:
+    session = FakeSession()
+    state = ProviderResilienceState()
+    failures = []
+    observer = ProviderResilienceSessionObserver(
+        session,
+        provider="gemini",
+        state=state,
+        status_speech=None,
+        output_getter=lambda: None,
+        failure_observer=failures.append,
+    )
+    wrapped = FakeRealtimeError(
+        FakeStatusError(
+            "model not found",
+            status_code=404,
+            body={"error": "model_not_found"},
+        ),
+        recoverable=False,
+    )
+
+    session.emit("error", SimpleNamespace(error=wrapped, source=object()))
+    await asyncio.wait_for(session.closed.wait(), timeout=1)
+
+    assert [failure.kind for failure in failures] == [
+        ProviderFailureKind.MODEL_UNAVAILABLE
+    ]
+    assert observer.terminal_task is not None
+    await observer.terminal_task
+
+
 def test_recoverable_realtime_error_is_not_announced_but_marks_degraded() -> None:
     session = FakeSession()
     state = ProviderResilienceState()
