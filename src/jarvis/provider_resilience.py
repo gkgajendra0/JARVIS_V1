@@ -269,6 +269,19 @@ def classify_provider_failure(error: object, *, provider: str) -> ProviderFailur
         kind = ProviderFailureKind.PROVIDER_SERVER_ERROR
     elif status in {502, 503}:
         kind = ProviderFailureKind.SERVICE_UNAVAILABLE
+    elif (
+        "1011" in evidence
+        and (
+            "internal error" in evidence
+            or "internal server error" in evidence
+        )
+    ):
+        # WebSocket close code 1011 is a server-side/internal-error signal, not
+        # an HTTP status. Gemini Live surfaces it through google-genai/LiveKit
+        # without a conventional 5xx status code.
+        kind = ProviderFailureKind.PROVIDER_SERVER_ERROR
+        if retryable is None:
+            retryable = True
     elif status is not None and 400 <= status < 500:
         kind = ProviderFailureKind.REQUEST_REJECTED
     elif "timeout" in evidence or "timed out" in evidence or "deadline" in evidence:
