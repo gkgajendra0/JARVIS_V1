@@ -794,9 +794,7 @@ class SQLiteWorkStore:
             parsed = _parse_dt(row["next_due_at"])
             if parsed is None:
                 continue
-            result.append(
-                (str(row["work_id"]), int(row["interval_seconds"]), parsed)
-            )
+            result.append((str(row["work_id"]), int(row["interval_seconds"]), parsed))
         return tuple(result)
 
     def advance_status_update_interval(
