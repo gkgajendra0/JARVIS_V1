@@ -192,6 +192,11 @@ async def test_periodic_lifecycle_check_keeps_runtime_when_model_is_current(
         "_reconcile_provider_model_lifecycle",
         reconcile,
     )
+    monkeypatch.setattr(
+        production_runtime,
+        "load_machine_settings",
+        lambda: {"JARVIS_GEMINI_REALTIME_MODEL": "gemini-old-live"},
+    )
     runtime = FakeRuntime()
     migrated = asyncio.Event()
     trigger = asyncio.Event()
