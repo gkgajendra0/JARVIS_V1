@@ -50,6 +50,7 @@ from jarvis.identity.speaker_shadow import (
 from jarvis.identity.speech_region import LiveKitSileroSpeechRegionDetector
 from jarvis.knowledge.research_providers import build_current_research_service
 from jarvis.logging_config import configure_logging
+from jarvis.machine_config import load_machine_settings
 from jarvis.memory.candidate_runtime import MemoryCandidateSessionRuntime
 from jarvis.memory.extractors import build_memory_candidate_extractor
 from jarvis.memory.provider_verified_query import ProviderVerifiedMemoryQueryCoordinator
@@ -57,7 +58,6 @@ from jarvis.memory.query_coordinator import MemoryQueryCoordinator
 from jarvis.memory.query_interpreters import build_memory_query_interpreter
 from jarvis.memory.release_guard import build_memory_release_guard
 from jarvis.memory.runtime import build_default_memory_runtime
-from jarvis.machine_config import load_machine_settings
 from jarvis.preflight import StartupPreflightError, require_startup_preflight
 from jarvis.promotion.release import (
     DeploymentMetadataStore,
