@@ -76,7 +76,7 @@ class _GeminiDeprecationParser(HTMLParser):
     ) -> None:
         del attrs
         lowered = tag.casefold()
-        if lowered in {"h2", "h3"}:
+        if lowered == "h2":
             self._heading_tag = lowered
             self._heading_parts = []
             return
