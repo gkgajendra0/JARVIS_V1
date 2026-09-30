@@ -14,9 +14,6 @@ from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path
 
-from google import genai
-from google.genai import errors as genai_errors
-
 from jarvis.config import JarvisConfig
 from jarvis.machine_config import (
     default_machine_config_path,
@@ -24,6 +21,7 @@ from jarvis.machine_config import (
     runtime_environment_overrides_enabled,
     save_machine_settings,
 )
+from jarvis.voice.livekit_session import probe_gemini_live_model
 
 LOGGER = logging.getLogger(__name__)
 
@@ -220,12 +218,12 @@ async def validated_rollback_pending_gemini_live_migration(
         )
 
     rollback_model = journal.previous_model
-    probe = live_probe or _probe_gemini_live_model
+    probe = live_probe or probe_gemini_live_model
     try:
         await probe(api_key, rollback_model, probe_timeout_seconds)
     except asyncio.CancelledError:
         raise
-    except (OSError, RuntimeError, ValueError, genai_errors.APIError) as exc:
+    except (OSError, RuntimeError, ValueError) as exc:
         LOGGER.error(
             "Pending Gemini migration needs rollback but the previous model failed "
             "its Live handshake | candidate=%s previous=%s error_type=%s",
@@ -392,27 +390,6 @@ def _fetch_text(url: str, timeout_seconds: float) -> str:
     return payload.decode("utf-8", errors="strict")
 
 
-async def _probe_gemini_live_model(
-    api_key: str,
-    model: str,
-    timeout_seconds: float,
-) -> None:
-    """Require the candidate to complete a real Gemini Live setup handshake."""
-
-    async def connect_once() -> None:
-        client = genai.Client(api_key=api_key)
-        try:
-            async with client.aio.live.connect(
-                model=model,
-                config={"response_modalities": ["AUDIO"]},
-            ):
-                return
-        finally:
-            await client.aio.aclose()
-
-    await asyncio.wait_for(connect_once(), timeout=timeout_seconds)
-
-
 def _candidate_record(
     records: tuple[GeminiLiveLifecycleRecord, ...],
     current_model: str,
@@ -469,7 +446,7 @@ async def reconcile_gemini_live_model(
     *,
     api_key: str,
     fetcher: LifecycleFetcher = _fetch_text,
-    live_probe: LiveProbe = _probe_gemini_live_model,
+    live_probe: LiveProbe = probe_gemini_live_model,
     fetch_timeout_seconds: float = DEFAULT_LIFECYCLE_FETCH_TIMEOUT_SECONDS,
     probe_timeout_seconds: float = DEFAULT_LIVE_PROBE_TIMEOUT_SECONDS,
 ) -> GeminiLiveLifecycleResult:
