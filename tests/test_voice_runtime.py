@@ -552,7 +552,9 @@ def test_zero_turn_streak_resets_before_degradation() -> None:
 
 
 @pytest.mark.asyncio
-async def test_proactive_prompt_suspends_initial_request_timeout_until_playout() -> None:
+async def test_proactive_prompt_suspends_initial_request_timeout_until_playout() -> (
+    None
+):
     session = FakeSession(auto_finish_replies=False)
     conversation = ConversationSession()
     bridge = _bridge(session, conversation)
