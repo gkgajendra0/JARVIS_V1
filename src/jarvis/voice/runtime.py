@@ -861,16 +861,31 @@ class VoiceRuntimeController:
         self,
         *,
         pre_roll_after_monotonic: float | None = None,
+        initial_instructions: str | None = None,
+        initial_prompt_label: str = "proactive prompt",
+        session_tool_factory: Callable[[ConversationSession], list] | None = None,
+        completion_predicate: Callable[[], bool] | None = None,
+        completion_label: str = "proactive interaction",
     ) -> None:
         async with self._speech_ownership:
             await self._run_one_session_owned(
-                pre_roll_after_monotonic=pre_roll_after_monotonic
+                pre_roll_after_monotonic=pre_roll_after_monotonic,
+                initial_instructions=initial_instructions,
+                initial_prompt_label=initial_prompt_label,
+                session_tool_factory=session_tool_factory,
+                completion_predicate=completion_predicate,
+                completion_label=completion_label,
             )
 
     async def _run_one_session_owned(
         self,
         *,
         pre_roll_after_monotonic: float | None = None,
+        initial_instructions: str | None = None,
+        initial_prompt_label: str = "proactive prompt",
+        session_tool_factory: Callable[[ConversationSession], list] | None = None,
+        completion_predicate: Callable[[], bool] | None = None,
+        completion_label: str = "proactive interaction",
     ) -> None:
         output = self.audio.output
         if output is None:
@@ -1054,6 +1069,26 @@ class VoiceRuntimeController:
                 and event.new_state in {"thinking", "speaking"}
             ):
                 self._cancel_timeout()
+            if (
+                not exit_in_progress
+                and has_user_turn
+                and event.new_state == "listening"
+                and completion_predicate is not None
+            ):
+                try:
+                    completed = completion_predicate()
+                except Exception:
+                    LOGGER.exception(
+                        "JARVIS %s completion predicate failed",
+                        completion_label,
+                    )
+                else:
+                    if completed:
+                        LOGGER.info(
+                            "JARVIS %s completed; closing interactive voice session",
+                            completion_label,
+                        )
+                        active_end.set()
 
         def on_conversation_item(event: ConversationItemAddedEvent) -> None:
             nonlocal has_user_turn, session_success_observed, standby_ack_observed
@@ -1129,9 +1164,16 @@ class VoiceRuntimeController:
                 pre_roll_after_monotonic,
             )
         self._arm_timeout(self.config.initial_request_timeout_seconds)
-        tools = list(self._vision_tools.tools) if self._vision_tools is not None else []
-        standby_tools = StandbyAgentTools(request_standby)
-        tools.extend(standby_tools.tools)
+        if session_tool_factory is not None:
+            tools = list(session_tool_factory(bridge.conversation))
+        else:
+            tools = (
+                list(self._vision_tools.tools)
+                if self._vision_tools is not None
+                else []
+            )
+            standby_tools = StandbyAgentTools(request_standby)
+            tools.extend(standby_tools.tools)
         try:
             try:
                 await session.start(
@@ -1145,6 +1187,16 @@ class VoiceRuntimeController:
                 raise
             self._state = VoiceRuntimeState.ACTIVE
             LOGGER.info("JARVIS realtime conversation is active")
+            if initial_instructions is not None:
+                prompt_handle = session.generate_reply(
+                    instructions=initial_instructions,
+                    allow_interruptions=True,
+                    input_modality="text",
+                )
+                await self._wait_for_realtime_speech(
+                    prompt_handle,
+                    label=initial_prompt_label,
+                )
             if pre_roll_after_monotonic is not None:
                 wake_ack_task = asyncio.create_task(
                     maybe_acknowledge_wake(),
