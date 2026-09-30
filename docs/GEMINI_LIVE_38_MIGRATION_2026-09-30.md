@@ -48,10 +48,14 @@ a later boundary:
 - Phase 11 autonomous capability-gap/weakness detection is not yet implemented;
 - Phase 14 governed self-evolution is not yet implemented.
 
-A Phase-11 follow-up is therefore required for deterministic detection of semantic
-voice/provider regressions such as repeated wake-success + zero canonical USER turns,
-bounded provider 1011 clusters, or sustained voice interaction SLO regression. Detection
-must create canonical health/incident evidence and reuse the existing governed
+Recoverable realtime provider errors are now also mirrored into canonical provider
+health as DEGRADED evidence before recovery, so a Gemini 1011/server-side failure can
+reach Self-Awareness/Incidents even when LiveKit keeps the session alive.
+
+A Phase-11 follow-up is still required for deterministic detection of *semantic*
+voice/provider regressions that do not emit provider exceptions, such as repeated
+wake-success + zero canonical USER turns or sustained voice interaction SLO regression.
+Detection must create canonical health/incident evidence and reuse the existing governed
 engineering path; it must not self-authorize source changes or promotion.
 
 ## Production guardrails
