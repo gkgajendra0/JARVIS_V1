@@ -96,3 +96,20 @@ def test_phase9_voice_instructions_route_explicit_acquisition_to_governed_tool()
     assert "target_hints" in INSTRUCTIONS
     assert "superficially similar local operation" in INSTRUCTIONS
     assert "use_computer" in INSTRUCTIONS
+
+
+def test_phase9_voice_instructions_support_outcome_driven_acquisition() -> None:
+    assert "outcome-driven acquisition" in INSTRUCTIONS
+    assert "concrete external-device/service outcome" in INSTRUCTIONS
+    assert "does not authorize the eventual external effect" in INSTRUCTIONS
+    assert "immediately preceding accepted conversation" in INSTRUCTIONS
+    assert "ask one concise clarification" in INSTRUCTIONS
+
+
+def test_voice_instructions_research_current_media_availability_before_claiming_service() -> (
+    None
+):
+    assert "watch, play, or listen to a named piece of media" in INSTRUCTIONS
+    assert "current service/catalog availability" in INSTRUCTIONS
+    assert "Use `search_web` before claiming which service currently carries" in INSTRUCTIONS
+    assert "subscription context, not current catalog availability" in INSTRUCTIONS
