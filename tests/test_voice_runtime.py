@@ -749,6 +749,9 @@ async def test_update_approval_uses_realtime_voice_then_real_spoken_yes() -> Non
     assert reply["input_modality"] == "text"
     assert session.output.audio is audio.output
 
+    # Let the runtime advance past prompt playout and enable decision capture.
+    await asyncio.sleep(0)
+
     session.emit(
         "user_input_transcribed",
         UserInputTranscribedEvent(transcript="yes", is_final=True),
