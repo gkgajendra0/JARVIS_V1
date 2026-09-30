@@ -42,37 +42,37 @@ class FakeAudio:
         self.detector.enable()
 
 
-class FakeRealtimeSpeech:
+class FakeScriptedSpeech:
     def __init__(self, audio: FakeAudio) -> None:
         self._audio = audio
-        self.instructions: list[str] = []
-        self.labels: list[str] = []
+        self.messages: list[str] = []
+        self.max_provider_retries: list[int | None] = []
         self.started = asyncio.Event()
         self.detector_was_disabled = False
 
     async def speak(
         self,
         output,
+        text: str,
         *,
-        instructions: str,
-        label: str,
+        max_provider_retries: int | None = None,
     ) -> None:
         assert output is self._audio.output
         self.detector_was_disabled = not self._audio.detector.enabled
-        self.instructions.append(instructions)
-        self.labels.append(label)
+        self.messages.append(text)
+        self.max_provider_retries.append(max_provider_retries)
         self.started.set()
 
 
-class FakeFailingRealtimeSpeech:
+class FakeFailingScriptedSpeech:
     async def speak(
         self,
         output,
+        text: str,
         *,
-        instructions: str,
-        label: str,
+        max_provider_retries: int | None = None,
     ) -> None:
-        del output, instructions, label
+        del output, text, max_provider_retries
         raise RuntimeError("429 RESOURCE_EXHAUSTED")
 
 
@@ -122,7 +122,7 @@ class FakeStore:
 
     def schedule_delivery_retry(self, *args, **kwargs):
         del args, kwargs
-        raise AssertionError("successful realtime speech must not schedule a retry")
+        raise AssertionError("successful scripted speech must not schedule a retry")
 
 
 class FakeWorkRuntime:
@@ -144,14 +144,14 @@ async def test_background_work_speech_waits_until_voice_session_is_idle(
     policy: DeliveryPolicy,
 ) -> None:
     audio = FakeAudio()
-    speech = FakeRealtimeSpeech(audio)
+    speech = FakeScriptedSpeech(audio)
     work = FakeWorkRuntime(policy)
     runtime = CanonicalActiveSpeakerRuntimeController(
         JarvisConfig(wake_cooldown_seconds=0.01),
         audio,  # type: ignore[arg-type]
         work_runtime=work,  # type: ignore[arg-type]
     )
-    runtime._speak_ephemeral_realtime_message = speech.speak  # type: ignore[method-assign]
+    runtime._scripted_speech = speech  # type: ignore[attr-defined]
 
     runtime._state = VoiceRuntimeState.ACTIVE
     runtime._live_session = object()
@@ -159,7 +159,7 @@ async def test_background_work_speech_waits_until_voice_session_is_idle(
     delivery_task = asyncio.create_task(runtime._deliver_pending_work())
     await asyncio.sleep(0.35)
 
-    assert speech.instructions == []
+    assert speech.messages == []
     assert work.store.delivered is False
     assert audio.detector.disable_calls == 0
 
@@ -169,11 +169,10 @@ async def test_background_work_speech_waits_until_voice_session_is_idle(
     await asyncio.wait_for(speech.started.wait(), timeout=1)
     await asyncio.sleep(0)
 
-    assert len(speech.instructions) == 1
-    assert "Please confirm the TV pairing request." in speech.instructions[0]
-    assert "one or two brief, natural sentences" in speech.instructions[0]
-    assert speech.labels == ["background work notification"]
-    assert speech.detector_was_disabled is True
+    assert len(speech.messages) == 1
+    assert "Please confirm the TV pairing request." in speech.messages[0]
+    assert speech.max_provider_retries == [0]
+        assert speech.detector_was_disabled is True
     assert audio.detector.disable_calls == 1
     assert audio.resume_calls == 1
     assert audio.detector.enabled is True
@@ -186,14 +185,14 @@ async def test_background_work_speech_waits_until_voice_session_is_idle(
 @pytest.mark.asyncio
 async def test_background_work_speech_respects_shared_speech_lease() -> None:
     audio = FakeAudio()
-    speech = FakeRealtimeSpeech(audio)
+    speech = FakeScriptedSpeech(audio)
     work = FakeWorkRuntime(DeliveryPolicy.WHEN_IDLE)
     runtime = CanonicalActiveSpeakerRuntimeController(
         JarvisConfig(wake_cooldown_seconds=0.01),
         audio,  # type: ignore[arg-type]
         work_runtime=work,  # type: ignore[arg-type]
     )
-    runtime._speak_ephemeral_realtime_message = speech.speak  # type: ignore[method-assign]
+    runtime._scripted_speech = speech  # type: ignore[attr-defined]
     runtime._state = VoiceRuntimeState.IDLE
     runtime._live_session = None
 
@@ -201,7 +200,7 @@ async def test_background_work_speech_respects_shared_speech_lease() -> None:
     delivery_task = asyncio.create_task(runtime._deliver_pending_work())
     await asyncio.sleep(0.1)
 
-    assert speech.instructions == []
+    assert speech.messages == []
     assert work.store.delivered is False
 
     runtime._speech_ownership.release()
@@ -225,8 +224,8 @@ async def test_critical_background_notification_falls_back_to_local_speech() -> 
         work_runtime=work,  # type: ignore[arg-type]
         local_status_speech=local,  # type: ignore[arg-type]
     )
-    failing = FakeFailingRealtimeSpeech()
-    runtime._speak_ephemeral_realtime_message = failing.speak  # type: ignore[method-assign]
+    failing = FakeFailingScriptedSpeech()
+    runtime._scripted_speech = failing  # type: ignore[attr-defined]
     runtime._state = VoiceRuntimeState.IDLE
     runtime._live_session = None
 
@@ -254,7 +253,7 @@ async def test_obsolete_owner_input_notification_is_discarded_without_speaking()
     None
 ):
     audio = FakeAudio()
-    speech = FakeRealtimeSpeech(audio)
+    speech = FakeScriptedSpeech(audio)
     work = FakeWorkRuntime(
         DeliveryPolicy.WHEN_IDLE,
         work_state=WorkState.FAILED,
@@ -264,7 +263,7 @@ async def test_obsolete_owner_input_notification_is_discarded_without_speaking()
         audio,  # type: ignore[arg-type]
         work_runtime=work,  # type: ignore[arg-type]
     )
-    runtime._speak_ephemeral_realtime_message = speech.speak  # type: ignore[method-assign]
+    runtime._scripted_speech = speech  # type: ignore[attr-defined]
     runtime._state = VoiceRuntimeState.IDLE
     runtime._live_session = None
 
@@ -276,7 +275,7 @@ async def test_obsolete_owner_input_notification_is_discarded_without_speaking()
         await asyncio.sleep(0.025)
 
     assert work.store.delivered is True
-    assert speech.instructions == []
+    assert speech.messages == []
     assert audio.detector.disable_calls == 0
 
     runtime.request_shutdown()
