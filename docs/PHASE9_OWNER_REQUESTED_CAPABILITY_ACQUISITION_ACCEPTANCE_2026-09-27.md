@@ -10,6 +10,21 @@ The complete real external lifecycle was **not** executed end to end. That valid
 
 This acceptance must therefore never be represented as proof that the full external capability lifecycle already completed. The deferred final-system run remains responsible for proving the external device effect, downstream engineering/promotion/package lifecycle, observation and disable/rollback path.
 
+### 2026-09-30 follow-up
+
+The provider-capacity blocker that stopped the original live external run is no longer
+the primary constraint. PR #234 introduced owner-accepted ChatGPT-plan reasoning and the
+owner-machine acceptance proved live `gpt-6-astra` plan-backed inference with
+`work.chatgpt_plan.default` as the durable Work primary. The deferred external lifecycle
+therefore moves from "blocked by provider resources" to **active validation target**.
+
+The next live mission should exercise a generic Hisense-TV capability through a natural
+owner goal (for example: "I want to watch Transporter") and must still collect every
+deferred lifecycle item below. Nothing in the 2026-09-30 provider acceptance itself
+constitutes proof of TV control, app launch, media search, playback, observation, or
+rollback.
+
+
 ## Accepted software baseline
 
 - Phase-9 9A–9F implementation plus 9G deterministic evaluation/acceptance substrate were merged through PR #178;

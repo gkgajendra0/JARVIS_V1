@@ -2,7 +2,7 @@
 
 ## Status
 
-**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC REPAIR FRAMEWORK AND R2 RUNTIME CRASH/HANG RECOVERY FOUNDATION ARE OWNER ACCEPTED ON 2026-09-23. PHASE 1H FOUNDATION HARDENING IS OWNER-MACHINE ACCEPTED ON 2026-09-24. PHASE 2 ENGINEERINGKNOWLEDGE AND PHASE 3 ENGINEERINGCHANGE ARE OWNER-MACHINE ACCEPTED ON 2026-09-25. PHASE 4 RESEARCH + DIAGNOSTIC MODEL ROUTER IS OWNER-MACHINE ACCEPTED ON 2026-09-26. PHASES 5, 6, 7 AND 8 ARE OWNER-MACHINE ACCEPTED ON 2026-09-27. PHASE 9 OWNER-REQUESTED CAPABILITY ACQUISITION IS THE NEXT CROSS-CUTTING RESEARCH/ARCHITECTURE SLICE; STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
+**STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC REPAIR FRAMEWORK AND R2 RUNTIME CRASH/HANG RECOVERY FOUNDATION ARE OWNER ACCEPTED ON 2026-09-23. PHASE 1H FOUNDATION HARDENING IS OWNER-MACHINE ACCEPTED ON 2026-09-24. PHASE 2 ENGINEERINGKNOWLEDGE AND PHASE 3 ENGINEERINGCHANGE ARE OWNER-MACHINE ACCEPTED ON 2026-09-25. PHASE 4 RESEARCH + DIAGNOSTIC MODEL ROUTER IS OWNER-MACHINE ACCEPTED ON 2026-09-26. PHASES 5, 6, 7 AND 8 ARE OWNER-MACHINE ACCEPTED ON 2026-09-27. PHASE 9 OWNER-REQUESTED CAPABILITY ACQUISITION IS DONE BOUNDED WITH THE REAL EXTERNAL TV LIFECYCLE STILL DEFERRED. CHATGPT-PLAN PRIMARY WORK/HANDS REASONING IS OWNER-MACHINE ACCEPTED ON 2026-09-30. STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
 
 The latest owner-machine accepted Self-Repair runtime baseline includes Phase 1H foundation hardening promoted through PR #90 on 2026-09-24; later documentation-only reconciliation commits may advance protected `main` without changing that runtime behavior.
 
@@ -77,6 +77,22 @@ canonical USER turns
 ```
 
 Models may decide what capability is useful, but they do not own canonical truth, identity, memory mutation, risk, permissions, lifecycle state, or execution permits.
+
+### ChatGPT-plan primary reasoning lane
+
+Protected `main` now includes the owner-accepted Sign in with ChatGPT provider from PR
+#234. Durable Work reasoning and Hands semantic planning may use the owner's eligible
+ChatGPT-plan allowance as the primary strong reasoning lane. The selected owner-machine
+model at acceptance was `gpt-6-astra`, discovered dynamically from the account-visible
+catalog rather than hard-coded.
+
+The existing configured Gemini/OpenAI API provider remains only a bounded fallback when
+its credential is present. Realtime voice/TTS remain separate provider-specific paths.
+The C5 Ollama/Qwen implementation is retained as an on-demand/offline option but is not
+kept resident and is not in the production Work target pool when ChatGPT-plan routing is
+enabled. C6 context optimization remains applicable because JARVIS still owns durable
+context projection and provenance.
+
 
 ---
 

@@ -1,6 +1,6 @@
 # JARVIS Cost Optimization Implementation Plan
 
-Status: **C0-C3 LIVE ACCEPTED / C4 DEFERRED / C5 RETAINED AS ON-DEMAND FALLBACK / C6 SHADOW ACTIVE / CHATGPT-PLAN PRIMARY BRAIN IMPLEMENTED FOR ACCEPTANCE**
+Status: **C0-C3 LIVE ACCEPTED / C4 DEFERRED / C5 RETAINED AS ON-DEMAND FALLBACK / C6 SHADOW ACTIVE / CHATGPT-PLAN PRIMARY BRAIN OWNER-MACHINE ACCEPTED**
 
 Date: 2026-09-30
 
@@ -43,8 +43,26 @@ Consequences:
   First prove the plan-backed lane on the owner machine; buy/use paid credits only if
   plan availability or an unsupported capability actually requires them.
 
-Owner acceptance is intentionally required before merge because OAuth authorization and
-live plan-backed inference can only be proven against the owner's ChatGPT account.
+Owner-machine acceptance completed successfully on 2026-09-30 and PR #234 was
+squash-merged to protected `main` as
+`566705afa1e8c2650c57d5bc26ee369c25f5aacc`.
+
+Acceptance proved:
+
+- browser OAuth completed against the owner's ChatGPT account;
+- the required plan-usage scope was granted and persisted in encrypted SecretStore;
+- account-visible model discovery succeeded;
+- `gpt-6-astra` was selected from the returned account-visible catalog;
+- a live subscription-backed Responses structured-inference probe completed;
+- observed usage for that acceptance inference was 82 input + 30 output = 112 tokens;
+- durable Work primary routing resolved to `work.chatgpt_plan.default`;
+- the bounded paid fallback remained `work.gemini.default`;
+- the production Work pool contained no local LLM target.
+
+This closes the ChatGPT-plan provider acceptance gate. The next validation target is a
+real Phase-9 external capability mission, using the TV control request to prove the
+previously deferred research -> architecture -> development -> promotion -> activation ->
+physical effect -> observation -> disable/rollback lifecycle.
 
 ## Research validation checkpoint — 2026-09-29
 
