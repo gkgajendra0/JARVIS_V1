@@ -507,7 +507,7 @@ async def test_shutdown_preemption_releases_brain_waiters() -> None:
         work=item,
         recent_steps=(),
         purpose="test",
-        allowed_actions=(),
+        allowed_actions=(ConcurrentExecutor.descriptor,),
     )
     waiter = asyncio.create_task(gate.run_background(NeverCalledReasoner(), request))
     await asyncio.sleep(0)
