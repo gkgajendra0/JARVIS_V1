@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, ConfigDict
 
+from jarvis.config import JarvisConfig
 from jarvis.chatgpt_plan import (
     CHATGPT_PLAN_REQUIRED_SCOPE,
     CHATGPT_PLAN_TARGET_ID,
@@ -13,6 +14,7 @@ from jarvis.chatgpt_plan import (
     ChatGPTPlanUsageUnavailable,
     load_or_create_chatgpt_plan_host_id,
 )
+from jarvis.machine_config import load_machine_settings, save_machine_settings
 from jarvis.hands.provider_adapters import (
     ChatGPTPlanStructuredOutputClient,
     FallbackStructuredOutputClient,
@@ -251,3 +253,33 @@ def test_legacy_work_pool_is_unchanged_when_plan_is_disabled() -> None:
         "work.gemini.default",
         "work.openai.default",
     )
+
+
+def test_chatgpt_plan_config_requires_model_when_enabled() -> None:
+    with pytest.raises(ValueError, match="CHATGPT_PLAN_MODEL"):
+        JarvisConfig(chatgpt_plan_enabled=True)
+
+    config = JarvisConfig(
+        chatgpt_plan_enabled=True,
+        chatgpt_plan_model=" plan-model ",
+    )
+    assert config.chatgpt_plan_enabled is True
+    assert config.chatgpt_plan_model == "plan-model"
+
+
+def test_chatgpt_plan_machine_settings_are_persistable_without_credentials(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "machine.json"
+    save_machine_settings(
+        {
+            "JARVIS_CHATGPT_PLAN_ENABLED": "true",
+            "JARVIS_CHATGPT_PLAN_MODEL": "plan-model",
+        },
+        path,
+    )
+
+    settings = load_machine_settings(path)
+    assert settings["JARVIS_CHATGPT_PLAN_ENABLED"] == "true"
+    assert settings["JARVIS_CHATGPT_PLAN_MODEL"] == "plan-model"
+    assert all("TOKEN" not in key and "SECRET" not in key for key in settings)
