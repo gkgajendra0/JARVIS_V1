@@ -32,6 +32,7 @@ def lifecycle_html(
       <table>
         <tr><th>Model</th><th>Release date</th><th>Shutdown date</th>
             <th>Recommended replacement</th></tr>
+        <tr><td colspan="4"><h3>Preview models</h3></td></tr>
         <tr>
           <td><code>{current}</code></td>
           <td>March 11, 2026</td>
