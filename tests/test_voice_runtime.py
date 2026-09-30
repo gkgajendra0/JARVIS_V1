@@ -884,6 +884,51 @@ async def test_speaker_shadow_submits_only_after_committed_user_item() -> None:
 
 
 @pytest.mark.asyncio
+async def test_real_user_assistant_turn_notifies_conversation_success() -> None:
+    session = FakeSession()
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
+    audio = FakeAudio()
+    observed: list[str] = []
+    runtime = VoiceRuntimeController(
+        JarvisConfig(initial_request_timeout_seconds=1),
+        audio,  # type: ignore[arg-type]
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+        conversation_success_observer=lambda: observed.append("success"),
+    )
+
+    task = asyncio.create_task(runtime._run_one_session())
+    await session.started.wait()
+
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="user-success",
+                role="user",
+                content=["Can you hear me?"],
+            )
+        ),
+    )
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="assistant-success",
+                role="assistant",
+                content=["Yes, I can hear you."],
+            )
+        ),
+    )
+    await asyncio.sleep(0)
+
+    assert observed == ["success"]
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
 async def test_active_speaker_shadow_uses_separate_paired_audio_window() -> None:
     session = FakeSession()
     conversation = ConversationSession()
