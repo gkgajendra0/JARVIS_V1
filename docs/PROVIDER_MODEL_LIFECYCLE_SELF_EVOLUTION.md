@@ -120,6 +120,31 @@ for manual approval only when **all** of the following are true:
 This exception authorizes **configuration lifecycle maintenance**, not unrestricted
 source evolution.
 
+
+### 4.1 Pending migration acceptance and rollback
+
+A replacement is not accepted merely because its setup websocket opens. Every automatic
+migration is durably journaled as `pending` with the previous and candidate model IDs.
+
+The pending migration becomes `accepted` only after production receives a real owner
+turn and completes a non-interrupted assistant playback. An assistant message that is
+immediately interrupted is not sufficient acceptance evidence.
+
+While a migration is pending, any of the following request rollback evaluation:
+
+- startup/preflight failure;
+- provider `MODEL_UNAVAILABLE`;
+- the deterministic repeated-wake / zero-committed-turn degradation threshold.
+
+Rollback itself is fail-closed: JARVIS first performs a Live handshake against the
+previous model. Only a still-usable previous model may be restored automatically. If
+that rollback probe fails, JARVIS keeps canonical degraded/incident evidence and
+escalates rather than blindly restoring a retired or unavailable model.
+
+A candidate that was automatically rolled back is blocked from automatic retry until
+new evidence or a later governed engineering change changes that state. This prevents
+migration loops.
+
 ## 5. When source changes are required
 
 If the provider-recommended replacement changes API/session semantics enough that source
