@@ -245,6 +245,38 @@ class DBOSWorkExecutionBackend:
             raise RuntimeError("DBOS did not preserve canonical JARVIS work ID")
         return workflow_id
 
+    def restart(
+        self,
+        work_id: str,
+        *,
+        priority: WorkPriority,
+        retry_token: str,
+    ) -> str:
+        """Start a fresh durable execution attempt for the same canonical WorkItem."""
+
+        token = str(retry_token).strip().replace(" ", "_")
+        if not token:
+            raise ValueError("retry token must not be empty")
+        execution_id = f"{work_id}__retry_{token}"
+
+        def enqueue():
+            with (
+                SetWorkflowID(execution_id),
+                SetEnqueueOptions(priority=_queue_priority(priority)),
+            ):
+                return DBOS.enqueue_workflow(
+                    _QUEUE_NAME,
+                    durable_workflow,
+                    work_id,
+                    self._max_reasoning_cycles,
+                )
+
+        handle = _run_dbos_sync(enqueue)
+        workflow_id = handle.get_workflow_id()
+        if workflow_id != execution_id:
+            raise RuntimeError("DBOS did not preserve retry execution ID")
+        return workflow_id
+
     def cancel(
         self,
         execution_id: str,
