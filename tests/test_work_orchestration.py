@@ -34,6 +34,7 @@ from jarvis.work.models import (
 from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.reasoner import _provider_pressure_from_exception
 from jarvis.work.resources import ResourceLeaseManager
+from jarvis.work.runtime import WorkRuntime
 from jarvis.work.store import SQLiteWorkStore, WorkStoreError
 
 
@@ -441,6 +442,49 @@ def test_failed_work_retry_preserves_canonical_identity_and_history(
     steps = store.list_steps(item.work_id)
     assert [step.kind for step in steps] == ["research_web", "owner_retry"]
     assert steps[-1].observation["response"].startswith("Try that again")
+
+
+def test_owner_input_routes_to_active_retry_execution(tmp_path: Path) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Build TV control capability")
+    running = item.transition(WorkState.RUNNING)
+    store.save(running, expected_version=item.version)
+    waiting = running.transition(
+        WorkState.WAITING_FOR_OWNER,
+        status_detail="Confirm TV pairing",
+    )
+    store.save(waiting, expected_version=running.version)
+    retry_execution_id = f"{item.work_id}__retry_v4"
+    store.set_execution_id(item.work_id, retry_execution_id)
+
+    class OwnerInputBackend:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, str | None]] = []
+
+        def send_owner_input(
+            self,
+            execution_id: str,
+            response: str,
+            *,
+            idempotency_key: str | None = None,
+        ) -> None:
+            self.calls.append((execution_id, response, idempotency_key))
+
+    backend = OwnerInputBackend()
+    runtime = object.__new__(WorkRuntime)
+    runtime.store = store
+    runtime.backend = backend
+
+    resolved = runtime.submit_owner_input(None, "Yes, continue")
+
+    assert resolved.work_id == item.work_id
+    assert backend.calls == [
+        (
+            retry_execution_id,
+            "Yes, continue",
+            f"owner-input:{waiting.version}",
+        )
+    ]
 
 
 @pytest.mark.asyncio
