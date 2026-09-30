@@ -276,10 +276,22 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 self.audio.detector.disable()
                 spoken = False
                 try:
-                    await self._get_scripted_speech().speak(
+                    delivery_text = self._work_delivery_text(
+                        delivery.kind,
+                        delivery.message,
+                    )
+                    await self._speak_ephemeral_realtime_message(
                         output,
-                        self._work_delivery_text(delivery.kind, delivery.message),
-                        max_provider_retries=0,
+                        instructions=(
+                            "Deliver the following background-task notification to the "
+                            "owner in one or two brief, natural sentences using your "
+                            "established JARVIS voice and style. Preserve every concrete "
+                            "fact, number, blocker, question, and required owner action. "
+                            "Do not mention prompts, models, tools, or internal routing. "
+                            "Do not add facts. Notification: "
+                            + delivery_text
+                        ),
+                        label="background work notification",
                     )
                     spoken = True
                 except asyncio.CancelledError:
@@ -297,7 +309,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                             else f"provider_{hint.reason}_{hint.status_code}"
                         )
                     else:
-                        reason = f"tts_{type(exc).__name__.casefold()}"
+                        reason = f"realtime_voice_{type(exc).__name__.casefold()}"
 
                     deferred = runtime.store.schedule_delivery_retry(
                         delivery.delivery_id,
@@ -318,7 +330,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         )
                     else:
                         LOGGER.exception(
-                            "Background work notification delivery failed; durable "
+                            "Background work realtime notification failed; durable "
                             "backoff scheduled | delivery_id=%s | failed_attempts=%s | "
                             "retry_in=%.1fs | reason=%s",
                             delivery.delivery_id,
