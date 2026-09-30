@@ -7,7 +7,6 @@ import json
 import logging
 import os
 import re
-import urllib.error
 import urllib.request
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -224,13 +223,7 @@ async def validated_rollback_pending_gemini_live_migration(
         await live_probe(api_key, rollback_model, probe_timeout_seconds)
     except asyncio.CancelledError:
         raise
-    except (
-        OSError,
-        RuntimeError,
-        TimeoutError,
-        ValueError,
-        genai_errors.APIError,
-    ) as exc:
+    except (OSError, RuntimeError, ValueError, genai_errors.APIError) as exc:
         LOGGER.error(
             "Pending Gemini migration needs rollback but the previous model failed "
             "its Live handshake | candidate=%s previous=%s error_type=%s",
@@ -489,13 +482,7 @@ async def reconcile_gemini_live_model(
         records = parse_gemini_live_lifecycle(html)
     except asyncio.CancelledError:
         raise
-    except (
-        OSError,
-        RuntimeError,
-        TimeoutError,
-        UnicodeError,
-        urllib.error.URLError,
-    ) as exc:
+    except (OSError, RuntimeError, UnicodeError) as exc:
         LOGGER.warning(
             "Gemini lifecycle evidence unavailable; keeping current model | "
             "model=%s error_type=%s",
