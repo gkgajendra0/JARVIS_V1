@@ -132,11 +132,23 @@ class FakeBackend:
         self.resumed: list[str] = []
         self.cancel_keys: list[str | None] = []
         self.resume_keys: list[str | None] = []
+        self.restarted: list[tuple[str, str]] = []
 
     def submit(self, work_id: str, *, priority: WorkPriority) -> str:
         del priority
         self.submitted.append(work_id)
         return work_id
+
+    def restart(
+        self,
+        work_id: str,
+        *,
+        priority: WorkPriority,
+        retry_token: str,
+    ) -> str:
+        del priority
+        self.restarted.append((work_id, retry_token))
+        return f"{work_id}__retry_{retry_token}"
 
     def cancel(
         self,
@@ -390,6 +402,77 @@ async def test_waiting_for_owner_does_not_fabricate_progress(
 
     await engine.advance(item.work_id)
     assert store.require(item.work_id).state is WorkState.COMPLETED
+
+
+def test_failed_work_retry_preserves_canonical_identity_and_history(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+    item = create_item(store, request="Build TV control capability")
+    historical = WorkStep(
+        work_id=item.work_id,
+        kind="research_web",
+        summary="Research device control",
+    )
+    store.add_step(historical)
+    store.save_step(historical.start().complete({"evidence": "preserved"}))
+    failed = item.transition(
+        WorkState.FAILED,
+        status_detail="brain reasoning failed: ValueError: bad plan",
+    )
+    store.save(failed, expected_version=item.version)
+
+    retried = orchestrator.retry_failed(
+        item.work_id,
+        owner_request="Try that again and use the brain if needed.",
+        source_session_id="session-retry",
+        source_turn_id="turn-retry",
+    )
+
+    assert retried.work_id == item.work_id
+    assert retried.request == item.request
+    assert retried.state is WorkState.RETRYING
+    assert backend.restarted == [(item.work_id, f"v{retried.version}")]
+    assert store.get_execution_id(item.work_id) == (
+        f"{item.work_id}__retry_v{retried.version}"
+    )
+    steps = store.list_steps(item.work_id)
+    assert [step.kind for step in steps] == ["research_web", "owner_retry"]
+    assert steps[-1].observation["response"].startswith("Try that again")
+
+
+@pytest.mark.asyncio
+async def test_shutdown_preemption_releases_brain_waiters() -> None:
+    gate = InteractiveBrainGate()
+    gate.set_interactive_active(True)
+
+    class NeverCalledReasoner:
+        async def decide(self, request: BrainRequest) -> BrainDecision:
+            del request
+            raise AssertionError("reasoner should not run during shutdown")
+
+    item = WorkItem(
+        request="Wait for shutdown",
+        work_type=WorkType.GENERIC,
+        source_session_id="shutdown-session",
+        source_turn_id="shutdown-turn",
+    )
+    request = BrainRequest(
+        work=item,
+        recent_steps=(),
+        purpose="test",
+        allowed_actions=(),
+    )
+    waiter = asyncio.create_task(gate.run_background(NeverCalledReasoner(), request))
+    await asyncio.sleep(0)
+    assert not waiter.done()
+
+    gate.preempt_background_for_shutdown()
+
+    with pytest.raises(BrainPreempted):
+        await asyncio.wait_for(waiter, timeout=1.0)
 
 
 def test_orchestrator_accepts_pause_resume_cancel_without_session_ownership(
