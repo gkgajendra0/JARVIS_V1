@@ -232,11 +232,11 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         """Speak durable Work notifications only at an exclusive idle boundary.
 
         Realtime AgentSession output owns the physical speaker for the whole
-        conversation. Background scripted TTS therefore stays queued until no
-        live session exists, then temporarily suspends wake detection while it
-        speaks. This prevents two JARVIS producers from interleaving frames on
-        the same MediaDevices output and prevents JARVIS from hearing its own
-        notification as a fresh user/wake utterance.
+        conversation. Background lifecycle speech therefore stays queued until no
+        live session exists, then temporarily suspends wake detection while a
+        short realtime-model session speaks it. This prevents two JARVIS producers
+        from interleaving frames on the same MediaDevices output and prevents
+        JARVIS from hearing its own notification as a fresh user/wake utterance.
         """
 
         while not self._shutdown.is_set():
