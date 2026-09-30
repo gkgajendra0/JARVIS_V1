@@ -17,6 +17,7 @@ from jarvis.hands.contracts import (
 from jarvis.hands.models import HandsOperation
 from jarvis.hands.provider_adapters import (
     StructuredOutputClient,
+    build_chatgpt_plan_structured_output_client,
     build_structured_output_client,
 )
 
@@ -249,6 +250,8 @@ def build_hands_planner(
     *,
     provider: str,
     model: str | None = None,
+    chatgpt_plan_enabled: bool = False,
+    chatgpt_plan_model: str | None = None,
 ) -> HandsSemanticPlanner:
     normalized_provider = normalize_ai_provider(provider)
     model_name = resolve_ai_role_model(
@@ -256,8 +259,20 @@ def build_hands_planner(
         "hands_planner",
         configured_model=model,
     )
-    client = build_structured_output_client(
-        provider=normalized_provider,
-        model=model_name,
-    )
+    if chatgpt_plan_enabled:
+        plan_model = str(chatgpt_plan_model or "").strip()
+        if not plan_model:
+            raise ValueError(
+                "chatgpt_plan_model is required when ChatGPT-plan Hands is enabled"
+            )
+        client = build_chatgpt_plan_structured_output_client(
+            model=plan_model,
+            fallback_provider=normalized_provider,
+            fallback_model=model_name,
+        )
+    else:
+        client = build_structured_output_client(
+            provider=normalized_provider,
+            model=model_name,
+        )
     return HandsSemanticPlanner(client)
