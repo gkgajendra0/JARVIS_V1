@@ -131,6 +131,7 @@ def _gemini_realtime_compatibility_check(config: JarvisConfig) -> PreflightCheck
         ),
     )
 
+
 def _realtime_lifecycle_voice_check(config: JarvisConfig) -> PreflightCheck:
     """Confirm lifecycle speech shares the normal realtime conversation lane."""
 
