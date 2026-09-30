@@ -61,7 +61,10 @@ def main() -> int:
     )
     payload = json.loads(response.output_text)
     if payload.get("ok") is not True or payload.get("route") != "chatgpt_plan":
-        print("FAIL: live inference did not return the acceptance contract.", file=sys.stderr)
+        print(
+            "FAIL: live inference did not return the acceptance contract.",
+            file=sys.stderr,
+        )
         return 2
 
     adapters = build_default_model_adapter_registry(
@@ -84,7 +87,10 @@ def main() -> int:
         print(f"FAIL: unexpected Work target pool: {target_ids}", file=sys.stderr)
         return 2
     if any(item.locality.value == "local" for item in targets.registry.all()):
-        print("FAIL: a local LLM is still present in the production Work pool.", file=sys.stderr)
+        print(
+            "FAIL: a local LLM is still present in the production Work pool.",
+            file=sys.stderr,
+        )
         return 2
 
     print(
