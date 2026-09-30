@@ -91,19 +91,36 @@ class WorkOrchestrator:
         self._store.create(item)
         try:
             execution_id = self._backend.submit(item.work_id, priority=priority)
-        except Exception:
+        except Exception as exc:
+            detail = " ".join(str(exc).split())[:400]
+            reason = f"durable execution could not be submitted: {type(exc).__name__}"
+            if detail:
+                reason += f": {detail}"
             failed = item.transition(
                 WorkState.FAILED,
-                status_detail="durable execution could not be submitted",
+                status_detail=reason,
             )
-            self._store.save(failed, expected_version=item.version)
+            failed = self._store.save(failed, expected_version=item.version)
+            self._store.enqueue_delivery(
+                work=failed,
+                kind=WorkDeliveryKind.FAILURE,
+                message=reason,
+                event_key=f"failure:{failed.version}",
+            )
             raise
         if execution_id != item.work_id:
+            reason = "durable backend returned a mismatched execution id"
             failed = item.transition(
                 WorkState.FAILED,
-                status_detail="durable backend returned a mismatched execution id",
+                status_detail=reason,
             )
-            self._store.save(failed, expected_version=item.version)
+            failed = self._store.save(failed, expected_version=item.version)
+            self._store.enqueue_delivery(
+                work=failed,
+                kind=WorkDeliveryKind.FAILURE,
+                message=reason,
+                event_key=f"failure:{failed.version}",
+            )
             raise RuntimeError("durable backend must use work_id as execution_id")
         self._store.set_execution_id(item.work_id, execution_id)
         return WorkSubmission(work=item, execution_id=execution_id)
