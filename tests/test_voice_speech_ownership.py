@@ -250,7 +250,9 @@ async def test_critical_background_notification_falls_back_to_local_speech() -> 
 
 
 @pytest.mark.asyncio
-async def test_obsolete_owner_input_notification_is_discarded_without_speaking() -> None:
+async def test_obsolete_owner_input_notification_is_discarded_without_speaking() -> (
+    None
+):
     audio = FakeAudio()
     speech = FakeRealtimeSpeech(audio)
     work = FakeWorkRuntime(
