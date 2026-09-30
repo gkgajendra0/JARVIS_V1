@@ -43,75 +43,71 @@ def test_startup_greeting_chooser_receives_multiple_variants() -> None:
     assert len(seen) >= 5
     assert greeting == seen[-1]
 
-
-class FakeScriptedSpeech:
+class FakeRealtimeLifecycleSpeech:
     def __init__(self, *, error: Exception | None = None) -> None:
-        self.spoken: list[str] = []
-        self.max_provider_retries: list[int | None] = []
+        self.calls: list[dict[str, object]] = []
         self.error = error
 
-    async def speak(
-        self,
-        output,
-        text: str,
-        *,
-        max_provider_retries: int | None = None,
-    ) -> None:
-        del output
-        self.spoken.append(text)
-        self.max_provider_retries.append(max_provider_retries)
+    async def speak(self, output, *, instructions: str, label: str) -> None:
+        self.calls.append(
+            {
+                "output": output,
+                "instructions": instructions,
+                "label": label,
+            }
+        )
         if self.error is not None:
             raise self.error
 
-    async def aclose(self) -> None:
-        return None
-
 
 @pytest.mark.asyncio
-async def test_runtime_speaks_selected_startup_greeting() -> None:
-    speech = FakeScriptedSpeech()
+async def test_runtime_speaks_selected_startup_greeting_through_realtime_voice() -> None:
     audio = SimpleNamespace(output=object())
     runtime = VoiceRuntimeController(
         JarvisConfig(),
         audio,  # type: ignore[arg-type]
-        scripted_speech=speech,
         startup_greeting_factory=lambda: "Systems are ready, sir.",
     )
+    realtime = FakeRealtimeLifecycleSpeech()
+    runtime._speak_ephemeral_realtime_message = realtime.speak  # type: ignore[method-assign]
 
     await runtime._speak_startup_greeting()
 
-    assert speech.spoken == ["Systems are ready, sir."]
-    assert speech.max_provider_retries == [0]
+    assert len(realtime.calls) == 1
+    call = realtime.calls[0]
+    assert call["output"] is audio.output
+    assert call["label"] == "startup greeting"
+    assert "Systems are ready, sir." in str(call["instructions"])
+    assert "Vary the wording naturally" in str(call["instructions"])
 
 
 @pytest.mark.asyncio
 async def test_runtime_can_disable_startup_greeting() -> None:
-    speech = FakeScriptedSpeech()
     audio = SimpleNamespace(output=object())
     runtime = VoiceRuntimeController(
         JarvisConfig(startup_greeting_enabled=False),
         audio,  # type: ignore[arg-type]
-        scripted_speech=speech,
         startup_greeting_factory=lambda: "This should not play.",
     )
+    realtime = FakeRealtimeLifecycleSpeech()
+    runtime._speak_ephemeral_realtime_message = realtime.speak  # type: ignore[method-assign]
 
     await runtime._speak_startup_greeting()
 
-    assert speech.spoken == []
+    assert realtime.calls == []
 
 
 @pytest.mark.asyncio
-async def test_startup_greeting_failure_does_not_block_runtime_startup() -> None:
-    speech = FakeScriptedSpeech(error=RuntimeError("tts unavailable"))
+async def test_startup_realtime_voice_failure_does_not_use_local_fallback() -> None:
     audio = SimpleNamespace(output=object())
     runtime = VoiceRuntimeController(
         JarvisConfig(),
         audio,  # type: ignore[arg-type]
-        scripted_speech=speech,
         startup_greeting_factory=lambda: "Good morning, sir.",
     )
+    realtime = FakeRealtimeLifecycleSpeech(error=RuntimeError("realtime unavailable"))
+    runtime._speak_ephemeral_realtime_message = realtime.speak  # type: ignore[method-assign]
 
     await runtime._speak_startup_greeting()
 
-    assert speech.spoken == ["Good morning, sir."]
-    assert speech.max_provider_retries == [0]
+    assert len(realtime.calls) == 1
