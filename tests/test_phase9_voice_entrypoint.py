@@ -11,6 +11,8 @@ from jarvis.voice.work_tools import WorkAgentTools
 from jarvis.work.development import DevelopmentWorkspaceManager
 from jarvis.work.runtime import WorkRuntime
 
+NORMALIZED_INSTRUCTIONS = " ".join(INSTRUCTIONS.split())
+
 
 def _git(root: Path, *args: str) -> str:
     completed = subprocess.run(
@@ -92,7 +94,30 @@ def test_phase9_owner_voice_tools_are_exposed() -> None:
 def test_phase9_voice_instructions_route_explicit_acquisition_to_governed_tool() -> (
     None
 ):
-    assert "start_capability_acquisition" in INSTRUCTIONS
-    assert "target_hints" in INSTRUCTIONS
-    assert "superficially similar local operation" in INSTRUCTIONS
-    assert "use_computer" in INSTRUCTIONS
+    assert "start_capability_acquisition" in NORMALIZED_INSTRUCTIONS
+    assert "target_hints" in NORMALIZED_INSTRUCTIONS
+    assert "superficially similar local operation" in NORMALIZED_INSTRUCTIONS
+    assert "use_computer" in NORMALIZED_INSTRUCTIONS
+
+
+def test_phase9_voice_instructions_support_outcome_driven_acquisition() -> None:
+    assert "outcome-driven acquisition" in NORMALIZED_INSTRUCTIONS
+    assert "concrete external-device/service outcome" in NORMALIZED_INSTRUCTIONS
+    assert "does not authorize the eventual external effect" in NORMALIZED_INSTRUCTIONS
+    assert "immediately preceding accepted conversation" in NORMALIZED_INSTRUCTIONS
+    assert "ask one concise clarification" in NORMALIZED_INSTRUCTIONS
+
+
+def test_voice_instructions_research_current_media_availability_before_claiming_service() -> (
+    None
+):
+    assert "watch, play, or listen to a named piece of media" in NORMALIZED_INSTRUCTIONS
+    assert "current service/catalog availability" in NORMALIZED_INSTRUCTIONS
+    assert (
+        "Use `search_web` before claiming which service currently carries"
+        in NORMALIZED_INSTRUCTIONS
+    )
+    assert (
+        "subscription context, not current catalog availability"
+        in NORMALIZED_INSTRUCTIONS
+    )
