@@ -29,6 +29,31 @@ architecture.
   - assistant response;
   - semantic standby acknowledgement.
 
+## Why accepted Self-Repair did not autonomously fix this incident
+
+This incident was not a crash/hang failure covered by the accepted automatic R2
+production repair policies. The process stayed alive, the local wake path remained
+healthy, and the provider could still establish realtime sessions. The failure was
+semantic/behavioral: accepted USER turns disappeared under the legacy provider target,
+then the new model exposed a different proactive-audio wake/turn contract.
+
+The accepted autonomous-engineering stack already contains the governed path needed
+*after* such a weakness becomes canonical evidence, but automatic weakness discovery is
+a later boundary:
+
+- automatic production Self-Repair is currently bounded R2 crash/hang recovery;
+- Phase 6 can investigate an unknown canonical incident and prepare source repair;
+- Phase 10 learning is advisory and learns only from verified canonical outcomes;
+- Phase 10A production autonomy remains SHADOW;
+- Phase 11 autonomous capability-gap/weakness detection is not yet implemented;
+- Phase 14 governed self-evolution is not yet implemented.
+
+A Phase-11 follow-up is therefore required for deterministic detection of semantic
+voice/provider regressions such as repeated wake-success + zero canonical USER turns,
+bounded provider 1011 clusters, or sustained voice interaction SLO regression. Detection
+must create canonical health/incident evidence and reuse the existing governed
+engineering path; it must not self-authorize source changes or promotion.
+
 ## Production guardrails
 
 - `JarvisConfig` defaults Gemini realtime voice to `gemini-3.8-live`.
