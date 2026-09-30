@@ -21,6 +21,7 @@ from jarvis.capability_acquisition.runtime_context import (
 from jarvis.capability_registry.runtime_composition import (
     build_package_managed_runtime_stack,
 )
+from jarvis.ai_provider import require_provider_api_key
 from jarvis.config import JarvisConfig
 from jarvis.health_adapters import (
     CapabilityExecutionHealthObserver,
@@ -63,6 +64,7 @@ from jarvis.promotion.release import (
     load_active_release_for_startup,
 )
 from jarvis.promotion.runtime_composition import PromotionRuntimeConfig
+from jarvis.provider_model_lifecycle import reconcile_gemini_live_model
 from jarvis.provider_resilience import ProviderResilienceState
 from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.vision.camera import (
@@ -95,6 +97,8 @@ from jarvis.voice.wakeword import LiveKitWakeDetector, load_livekit_predictor
 from jarvis.work.runtime import build_work_runtime
 
 LOGGER = logging.getLogger(__name__)
+
+_PROVIDER_MODEL_LIFECYCLE_POLL_SECONDS = 6 * 60 * 60
 _NATIVE_TRACKING_EVIDENCE_MAX_GAP_SECONDS = 2.0
 _POCKET3_STARTUP_LOCK_WAIT_SECONDS = 30.0
 
@@ -542,36 +546,108 @@ def build_production_voice_runtime(
     )
 
 
-async def _run_from_configuration() -> None:
-    config = JarvisConfig.from_environment()
-    configure_logging(config.log_level)
-
-    self_awareness: SelfAwarenessRuntime | None = None
+async def _reconcile_provider_model_lifecycle(
+    config: JarvisConfig,
+):
+    if config.ai_provider != "gemini":
+        return None
     try:
-        self_awareness = SelfAwarenessRuntime()
-    except Exception as exc:  # noqa: BLE001 - diagnostics must not block startup
-        LOGGER.warning(
-            "Self-awareness evidence is unavailable; continuing without it: %s",
-            type(exc).__name__,
+        api_key = require_provider_api_key(
+            "gemini",
+            purpose="provider model lifecycle validation",
         )
+    except RuntimeError as exc:
+        LOGGER.warning(
+            "Gemini model lifecycle validation skipped because credentials are "
+            "unavailable: %s",
+            exc,
+        )
+        return None
+    return await reconcile_gemini_live_model(config, api_key=api_key)
 
-    if self_awareness is None:
-        require_startup_preflight(config)
-        runtime = build_production_voice_runtime(config)
-        await runtime.run()
+
+async def _run_provider_model_lifecycle_watch(
+    config: JarvisConfig,
+    runtime,
+    migrated: asyncio.Event,
+    *,
+    poll_seconds: float = _PROVIDER_MODEL_LIFECYCLE_POLL_SECONDS,
+) -> None:
+    while True:
+        await asyncio.sleep(poll_seconds)
+        result = await _reconcile_provider_model_lifecycle(config)
+        if result is None or not result.migrated:
+            continue
+        LOGGER.warning(
+            "Provider model lifecycle migration detected while JARVIS is running | "
+            "current=%s replacement=%s; recycling voice runtime in-process",
+            result.current_model,
+            result.replacement_model,
+        )
+        migrated.set()
+        runtime.request_shutdown()
         return
 
-    try:
-        record_foundation_health(self_awareness)
-        require_startup_preflight_with_health(config, self_awareness)
-        runtime = build_production_voice_runtime(
-            config,
-            self_awareness=self_awareness,
-        )
-        await runtime.run()
-    finally:
-        self_awareness.close()
 
+async def _run_from_configuration() -> None:
+    while True:
+        config = JarvisConfig.from_environment()
+        configure_logging(config.log_level)
+
+        startup_lifecycle = await _reconcile_provider_model_lifecycle(config)
+        if startup_lifecycle is not None and startup_lifecycle.migrated:
+            LOGGER.warning(
+                "Provider model lifecycle migration completed before startup | "
+                "current=%s replacement=%s; reloading machine configuration",
+                startup_lifecycle.current_model,
+                startup_lifecycle.replacement_model,
+            )
+            config = JarvisConfig.from_environment()
+
+        self_awareness: SelfAwarenessRuntime | None = None
+        try:
+            self_awareness = SelfAwarenessRuntime()
+        except Exception as exc:  # noqa: BLE001 - diagnostics must not block startup
+            LOGGER.warning(
+                "Self-awareness evidence is unavailable; continuing without it: %s",
+                type(exc).__name__,
+            )
+
+        if self_awareness is None:
+            require_startup_preflight(config)
+            runtime = build_production_voice_runtime(config)
+        else:
+            record_foundation_health(self_awareness)
+            require_startup_preflight_with_health(config, self_awareness)
+            runtime = build_production_voice_runtime(
+                config,
+                self_awareness=self_awareness,
+            )
+
+        migrated = asyncio.Event()
+        lifecycle_task = (
+            asyncio.create_task(
+                _run_provider_model_lifecycle_watch(config, runtime, migrated),
+                name="jarvis-provider-model-lifecycle-watch",
+            )
+            if config.ai_provider == "gemini"
+            else None
+        )
+        try:
+            await runtime.run()
+        finally:
+            if lifecycle_task is not None and not lifecycle_task.done():
+                lifecycle_task.cancel()
+                await asyncio.gather(lifecycle_task, return_exceptions=True)
+            if self_awareness is not None:
+                self_awareness.close()
+
+        if migrated.is_set():
+            LOGGER.warning(
+                "Reloading JARVIS after automatic provider model lifecycle migration"
+            )
+            continue
+        return
 
 def main() -> int:
     try:
