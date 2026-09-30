@@ -100,6 +100,8 @@ context projection and provenance.
 
 LiveKit MediaDevices remains the single production Pocket 3 microphone owner at 48 kHz with WebRTC AEC/NS/HPF/AGC. Provider-native realtime turn completion remains authoritative for accepted USER conversation items.
 
+For Gemini realtime voice, the production target is `gemini-3.8-live`. The legacy `gemini-3.1-flash-live-preview` target is rejected by startup preflight after owner-machine zero-turn/WebSocket-1011 failures were isolated to that model while the same JARVIS/LiveKit stack succeeded on 3.8.
+
 Accepted hardening includes:
 
 - raw VAD / `user_state_changed` activity advances only a user-activity epoch; it does **not** manufacture command identity;
