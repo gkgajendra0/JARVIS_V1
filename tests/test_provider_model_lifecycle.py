@@ -227,6 +227,21 @@ async def test_missing_authoritative_row_does_not_guess_replacement() -> None:
     assert result.status == "unlisted"
 
 
+def test_pending_migration_survives_restart_detection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    journal = lifecycle.GeminiLiveMigrationJournal(
+        previous_model="gemini-old-live",
+        candidate_model="gemini-new-live",
+        state="pending",
+        recorded_at="2026-09-30T00:00:00+00:00",
+    )
+    monkeypatch.setattr(lifecycle, "_load_migration_journal", lambda: journal)
+
+    assert lifecycle.has_pending_gemini_live_migration("gemini-new-live") is True
+    assert lifecycle.has_pending_gemini_live_migration("gemini-old-live") is False
+
+
 def test_pending_migration_acceptance_is_persisted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
