@@ -721,7 +721,10 @@ class LocalAudioRuntime:
                 ):
                     self._overflow_handler()
             else:
-                self.detector.feed(copied)
+                self.detector.feed(
+                    copied,
+                    observed_at_monotonic=observed_at_monotonic,
+                )
 
     def _append_ring(
         self,
@@ -751,7 +754,12 @@ class LocalAudioRuntime:
         ):
             self._ring_samples -= self._ring.popleft().frame.samples_per_channel
 
-    def activate_session(self, session_input: SessionAudioInput) -> None:
+    def activate_session(
+        self,
+        session_input: SessionAudioInput,
+        *,
+        pre_roll_after_monotonic: float | None = None,
+    ) -> None:
         if self._active_input is not None:
             raise RuntimeError("a voice session already owns routed microphone audio")
         self.detector.disable(clear_buffer=False)
@@ -761,6 +769,11 @@ class LocalAudioRuntime:
         selected_samples = 0
 
         for timed_frame in reversed(self._ring):
+            if (
+                pre_roll_after_monotonic is not None
+                and timed_frame.observed_at_monotonic <= pre_roll_after_monotonic
+            ):
+                break
             selected.appendleft(timed_frame)
             selected_samples += timed_frame.frame.samples_per_channel
             if selected_samples >= pre_roll_samples:
