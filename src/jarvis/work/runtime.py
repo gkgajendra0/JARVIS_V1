@@ -412,10 +412,14 @@ class WorkRuntime:
                 LOGGER.exception("Scheduled background-work status update failed")
             await asyncio.sleep(1.0)
 
-    def start_status_updates(self) -> None:
+    def start_status_updates(
+        self,
+        event_loop: asyncio.AbstractEventLoop | None = None,
+    ) -> None:
         if self._status_update_task is not None and not self._status_update_task.done():
             return
-        self._status_update_task = asyncio.create_task(
+        loop = event_loop or asyncio.get_running_loop()
+        self._status_update_task = loop.create_task(
             self._status_update_loop(),
             name="jarvis-work-status-updates",
         )
@@ -850,5 +854,5 @@ def build_work_runtime(
         source_revision_provider=workspace_manager.current_revision,
         autonomy_periodic_reconciler=autonomy_periodic_reconciler,
     )
-    runtime.start_status_updates()
+    runtime.start_status_updates(loop)
     return runtime
