@@ -37,7 +37,7 @@ class FakeAudio:
         self.resume_calls = 0
 
     async def resume_wake(self, *, cooldown_seconds: float) -> None:
-        assert cooldown_seconds == 0
+        assert cooldown_seconds == pytest.approx(0.01)
         self.resume_calls += 1
         self.detector.enable()
 
@@ -110,7 +110,7 @@ async def test_background_work_speech_waits_until_voice_session_is_idle(
     speech = FakeScriptedSpeech(audio)
     work = FakeWorkRuntime(policy)
     runtime = CanonicalActiveSpeakerRuntimeController(
-        JarvisConfig(wake_cooldown_seconds=0),
+        JarvisConfig(wake_cooldown_seconds=0.01),
         audio,  # type: ignore[arg-type]
         scripted_speech=speech,  # type: ignore[arg-type]
         work_runtime=work,  # type: ignore[arg-type]
@@ -154,7 +154,7 @@ async def test_background_work_speech_respects_shared_speech_lease() -> None:
     speech = FakeScriptedSpeech(audio)
     work = FakeWorkRuntime(DeliveryPolicy.WHEN_IDLE)
     runtime = CanonicalActiveSpeakerRuntimeController(
-        JarvisConfig(wake_cooldown_seconds=0),
+        JarvisConfig(wake_cooldown_seconds=0.01),
         audio,  # type: ignore[arg-type]
         scripted_speech=speech,  # type: ignore[arg-type]
         work_runtime=work,  # type: ignore[arg-type]
