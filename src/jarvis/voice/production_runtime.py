@@ -13,6 +13,7 @@ import logging
 import sys
 from pathlib import Path
 
+from jarvis.ai_provider import require_provider_api_key
 from jarvis.capabilities.runtime import build_default_capability_runtime
 from jarvis.capabilities.self_awareness_reads import SelfAwarenessReadExecutor
 from jarvis.capability_acquisition.runtime_context import (
@@ -21,7 +22,6 @@ from jarvis.capability_acquisition.runtime_context import (
 from jarvis.capability_registry.runtime_composition import (
     build_package_managed_runtime_stack,
 )
-from jarvis.ai_provider import require_provider_api_key
 from jarvis.config import JarvisConfig
 from jarvis.health_adapters import (
     CapabilityExecutionHealthObserver,
