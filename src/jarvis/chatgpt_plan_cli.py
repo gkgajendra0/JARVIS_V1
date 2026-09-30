@@ -90,16 +90,10 @@ def _cmd_status(_args: argparse.Namespace) -> int:
         "enabled": enabled,
         "model": model,
         "account": (
-            None
-            if credentials is None
-            else credentials.email or credentials.subject
+            None if credentials is None else credentials.email or credentials.subject
         ),
-        "saved_at_utc": (
-            None if credentials is None else utc_saved_at(credentials)
-        ),
-        "plan_usage_scope": bool(
-            credentials and credentials.plan_usage_enabled
-        ),
+        "saved_at_utc": (None if credentials is None else utc_saved_at(credentials)),
+        "plan_usage_scope": bool(credentials and credentials.plan_usage_enabled),
     }
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0 if payload["connected"] else 2
@@ -211,7 +205,9 @@ def _parser() -> argparse.ArgumentParser:
     models = commands.add_parser("models", help="List plan-visible model slugs.")
     models.set_defaults(handler=_cmd_models)
 
-    model = commands.add_parser("set-model", help="Select and enable one visible model.")
+    model = commands.add_parser(
+        "set-model", help="Select and enable one visible model."
+    )
     model.add_argument("model")
     model.set_defaults(handler=_cmd_set_model)
 
