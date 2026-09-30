@@ -7,7 +7,11 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from jarvis.ai_provider import normalize_ai_provider, resolve_ai_role_model
+from jarvis.ai_provider import (
+    normalize_ai_provider,
+    provider_api_key,
+    resolve_ai_role_model,
+)
 from jarvis.hands.contracts import (
     PlannerTurn,
     build_action_response_model,
@@ -265,10 +269,13 @@ def build_hands_planner(
             raise ValueError(
                 "chatgpt_plan_model is required when ChatGPT-plan Hands is enabled"
             )
+        fallback_provider = (
+            normalized_provider if provider_api_key(normalized_provider) is not None else None
+        )
         client = build_chatgpt_plan_structured_output_client(
             model=plan_model,
-            fallback_provider=normalized_provider,
-            fallback_model=model_name,
+            fallback_provider=fallback_provider,
+            fallback_model=(model_name if fallback_provider is not None else None),
         )
     else:
         client = build_structured_output_client(
