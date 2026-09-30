@@ -53,7 +53,7 @@ from jarvis.voice.livekit_session import (
 from jarvis.voice.local_status_speech import LocalStatusSpeech
 from jarvis.voice.observed_audio import ObservedSessionAudioInput
 from jarvis.voice.paired_audio import PairedAudioRuntime
-from jarvis.voice.scripted_speech import ScriptedSpeech, build_scripted_speech
+from jarvis.voice.scripted_speech import ScriptedSpeech
 from jarvis.voice.standby_tools import StandbyAgentTools
 from jarvis.voice.startup_greeting import select_startup_greeting
 from jarvis.voice.vision_tools import VisionAgentTools
@@ -134,7 +134,7 @@ class VoiceRuntimeController:
             asyncio.Queue()
         )
         # One owner may drive the physical JARVIS speaker at a time. Realtime
-        # sessions hold this lease for their full lifetime; background scripted
+        # sessions hold this lease for their full lifetime; background lifecycle
         # speech acquires the same lease only while no session is active.
         self._speech_ownership = asyncio.Lock()
         self._scripted_speech = scripted_speech
@@ -792,7 +792,6 @@ class VoiceRuntimeController:
         if paired_turn_capture is not None:
             paired_turn_capture.clear()
         shadow_tasks: set[asyncio.Task[None]] = set()
-        exit_task: asyncio.Task[None] | None = None
         exit_in_progress = False
 
         def on_audio_frame(
@@ -973,9 +972,6 @@ class VoiceRuntimeController:
         finally:
             self._cancel_timeout()
             output.off("playback_finished", on_playback_finished)
-            if exit_task is not None and not exit_task.done():
-                exit_task.cancel()
-                await asyncio.gather(exit_task, return_exceptions=True)
             self.audio.deactivate_session()
             await session.aclose()
             if shadow_tasks:
