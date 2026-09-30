@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import urllib.error
 import urllib.request
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from google import genai
+from google.genai import errors as genai_errors
 
 from jarvis.config import JarvisConfig
 from jarvis.machine_config import (
@@ -426,7 +428,13 @@ async def reconcile_gemini_live_model(
         records = parse_gemini_live_lifecycle(html)
     except asyncio.CancelledError:
         raise
-    except Exception as exc:
+    except (
+        OSError,
+        RuntimeError,
+        TimeoutError,
+        UnicodeError,
+        urllib.error.URLError,
+    ) as exc:
         LOGGER.warning(
             "Gemini lifecycle evidence unavailable; keeping current model | "
             "model=%s error_type=%s",
@@ -491,7 +499,13 @@ async def reconcile_gemini_live_model(
         await live_probe(api_key, replacement, probe_timeout_seconds)
     except asyncio.CancelledError:
         raise
-    except Exception as exc:
+    except (
+        OSError,
+        RuntimeError,
+        TimeoutError,
+        ValueError,
+        genai_errors.APIError,
+    ) as exc:
         LOGGER.error(
             "Gemini recommended replacement failed Live handshake; keeping current "
             "model | current=%s replacement=%s error_type=%s",
@@ -511,7 +525,7 @@ async def reconcile_gemini_live_model(
             current_model=current,
             replacement_model=replacement,
         )
-    except Exception as exc:
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
         LOGGER.error(
             "Gemini replacement passed Live handshake but persistence failed | "
             "current=%s replacement=%s error_type=%s",
