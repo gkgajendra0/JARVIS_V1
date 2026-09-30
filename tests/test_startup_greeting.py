@@ -43,6 +43,7 @@ def test_startup_greeting_chooser_receives_multiple_variants() -> None:
     assert len(seen) >= 5
     assert greeting == seen[-1]
 
+
 class FakeRealtimeLifecycleSpeech:
     def __init__(self, *, error: Exception | None = None) -> None:
         self.calls: list[dict[str, object]] = []
@@ -61,7 +62,9 @@ class FakeRealtimeLifecycleSpeech:
 
 
 @pytest.mark.asyncio
-async def test_runtime_speaks_selected_startup_greeting_through_realtime_voice() -> None:
+async def test_runtime_speaks_selected_startup_greeting_through_realtime_voice() -> (
+    None
+):
     audio = SimpleNamespace(output=object())
     runtime = VoiceRuntimeController(
         JarvisConfig(),
