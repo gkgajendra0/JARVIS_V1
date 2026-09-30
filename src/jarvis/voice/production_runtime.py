@@ -753,12 +753,14 @@ async def _run_from_configuration() -> None:
             )
 
         lifecycle_trigger = asyncio.Event()
+        rollback_trigger = asyncio.Event()
         try:
             if self_awareness is None:
                 require_startup_preflight(config)
                 runtime = build_production_voice_runtime(
                     config,
                     provider_lifecycle_trigger=lifecycle_trigger,
+                    provider_migration_rollback_trigger=rollback_trigger,
                 )
             else:
                 record_foundation_health(self_awareness)
@@ -767,11 +769,17 @@ async def _run_from_configuration() -> None:
                     config,
                     self_awareness=self_awareness,
                     provider_lifecycle_trigger=lifecycle_trigger,
+                    provider_migration_rollback_trigger=rollback_trigger,
                 )
         except StartupPreflightError:
-            rolled_back = (
-                migration_needs_preflight_validation
-                and rollback_pending_gemini_live_migration(config.gemini_realtime_model)
+            rollback_result = (
+                await _rollback_provider_model_lifecycle(config)
+                if migration_needs_preflight_validation
+                else None
+            )
+            rolled_back = bool(
+                rollback_result is not None
+                and rollback_result.status == "rolled_back"
             )
             if self_awareness is not None:
                 self_awareness.close()
@@ -793,6 +801,7 @@ async def _run_from_configuration() -> None:
                     runtime,
                     migrated,
                     lifecycle_trigger,
+                    rollback_trigger,
                 ),
                 name="jarvis-provider-model-lifecycle-watch",
             )
