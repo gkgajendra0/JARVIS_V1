@@ -13,10 +13,6 @@ from jarvis.brain_routing.deterministic import default_work_deterministic_resolv
 from jarvis.brain_routing.store import BrainRouteStore
 from jarvis.brain_routing.work import GlobalBrainRouterReasoner
 from jarvis.capabilities.models import CapabilityCatalog
-from jarvis.chatgpt_plan import (
-    CHATGPT_PLAN_PROVIDER_ID,
-    ChatGPTPlanSessionManager,
-)
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capability_acquisition.activation import (
     CapabilityAcquisitionLifecycleCoordinator,
@@ -69,6 +65,10 @@ from jarvis.capability_acquisition.workflow import (
 from jarvis.capability_registry.admission import CapabilityPackageAdmissionService
 from jarvis.capability_registry.lifecycle import CapabilityLifecycleService
 from jarvis.capability_registry.reconciliation import CapabilityLifecycleReconciler
+from jarvis.chatgpt_plan import (
+    CHATGPT_PLAN_PROVIDER_ID,
+    ChatGPTPlanSessionManager,
+)
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.change_integration import (
