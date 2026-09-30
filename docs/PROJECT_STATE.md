@@ -51,6 +51,9 @@ Snapshot baseline verified from protected `main` at
 | EngineeringKnowledge | DONE foundation | Phase 2 owner-machine accepted 2026-09-25: immutable engineering knowledge, deterministic REPAIR projection, lifecycle/provenance/applicability, grounded local hybrid retrieval, integrity/security gates and open-ended facet extensibility |
 | Self-Repair / Self-Evolution program | ACTIVE | Phases 1, 1H, 2–10 and 10A are accepted; Phase 9 final external lifecycle validation is deferred; Phase 11 research/architecture is next |
 | Step 8 notes/tasks/reminders | PLANNED | still the next numbered product slice when numbered roadmap work resumes |
+| ChatGPT-plan primary reasoning | DONE | owner-machine accepted 2026-09-30: Sign in with ChatGPT OAuth, live plan-backed Responses inference, `work.chatgpt_plan.default` primary, bounded paid fallback, no local LLM in production Work pool |
+
+ChatGPT-plan primary reasoning is **DONE / OWNER-MACHINE ACCEPTED 2026-09-30**. The owner-machine run completed browser OAuth, granted plan usage, discovered the account-visible model catalog, selected `gpt-6-astra`, completed a live structured Responses inference, and proved `work.chatgpt_plan.default` as the durable Work primary with `work.gemini.default` as bounded paid fallback and no local LLM in the production Work pool. PR #234 squash-merged the accepted implementation to protected `main` as `566705afa1e8c2650c57d5bc26ee369c25f5aacc`. This removes provider quota as the blocking reason for the previously deferred Phase-9 external TV lifecycle validation.
 
 Phase 3 EngineeringChange is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The canonical record is `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The owner-machine run proved durable same-identity recovery across a full Windows shutdown/reboot and live Exa research; persistent Gemini HTTP 429 pressure was accepted as an external limitation and did not weaken governance.
 
