@@ -15,9 +15,25 @@ The repository is reconciled around one accepted production baseline.
 - Deterministic repair framework: accepted foundation.
 - Automatic production Self-Repair currently accepted: bounded R2 runtime crash/hang recovery.
 - R1 exists in the typed repair vocabulary but has no owner-accepted automatic production policy yet.
+- ChatGPT-plan primary Work/Hands reasoning: OWNER-MACHINE ACCEPTED 2026-09-30; `gpt-6-astra` is the selected account-visible plan model, paid API is bounded fallback, and C5 local LLM is not resident in the production Work pool.
 - Self-Repair issue #65: CLOSED / COMPLETED for the original R2 acceptance scope.
 
 The authoritative completed/deferred/superseded/rejected ledger is `PROJECT_STATE.md`.
+
+## Immediate active validation
+
+The next live acceptance target is the previously deferred **Phase-9 real external
+capability lifecycle**. Use a natural owner goal such as watching *Transporter* on the
+Hisense TV to force JARVIS through the real path: current-source research -> exact
+capability architecture -> owner architecture gate -> isolated implementation -> CI ->
+governed promotion -> package admission -> explicit activation -> physical TV effect ->
+production observation -> explicit disable/rollback evidence.
+
+The point of this run is not to pre-code a movie macro. It is to prove that the
+owner-requested capability-acquisition system can discover/build the missing generic TV
+control capability and then execute the natural goal through JARVIS Hands/planning.
+ChatGPT-plan reasoning is the primary strong model lane for this validation, removing the
+Gemini/OpenAI quota blocker that stopped the 2026-09-28 Phase-9 external run.
 
 ## North-star program architecture
 
