@@ -333,7 +333,25 @@ async def test_single_brain_can_control_multiple_concurrent_work_items(
     store = SQLiteWorkStore(tmp_path / "work.sqlite")
     reasoner = ScriptedReasoner()
     brain = BrainCoordinator(reasoner)
-    executor = ConcurrentExecutor()
+
+    class BarrierExecutor(ConcurrentExecutor):
+        def __init__(self) -> None:
+            super().__init__()
+            self.release = asyncio.Event()
+
+        async def execute(self, *, work: WorkItem, parameters: dict) -> dict:
+            del parameters
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            if self.active >= 2:
+                self.release.set()
+            try:
+                await asyncio.wait_for(self.release.wait(), timeout=1.0)
+                return {"work_id": work.work_id, "verified": True}
+            finally:
+                self.active -= 1
+
+    executor = BarrierExecutor()
     engine = WorkEngine(
         store=store,
         brain=brain,
