@@ -494,9 +494,13 @@ class WorkEngine:
         failed_step = step.start().fail(f"{type(exc).__name__}: {exc}")
         self._store.save_step(failed_step)
         latest = self._store.require(work.work_id)
+        detail = " ".join(str(exc).split())[:400]
+        reason = f"brain reasoning failed: {type(exc).__name__}"
+        if detail:
+            reason += f": {detail}"
         return self._retry_or_fail(
             latest,
-            reason=f"brain reasoning failed: {type(exc).__name__}",
+            reason=reason,
             current_step_id=step.step_id,
         )
 
@@ -1112,9 +1116,13 @@ class WorkEngine:
                     latest.state,
                     progressed=False,
                 )
+            detail = " ".join(str(exc).split())[:400]
+            reason = f"step failed: {decision_action}: {type(exc).__name__}"
+            if detail:
+                reason += f": {detail}"
             return self._retry_or_fail(
                 latest,
-                reason=f"step failed: {decision_action}",
+                reason=reason,
                 current_step_id=step.step_id,
             )
 
