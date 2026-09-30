@@ -252,11 +252,11 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         """Speak durable Work notifications only at an exclusive idle boundary.
 
         Realtime AgentSession output owns the physical speaker for the whole
-        conversation. Background lifecycle speech therefore stays queued until no
-        live session exists, then temporarily suspends wake detection while a
-        short realtime-model session speaks it. This prevents two JARVIS producers
-        from interleaving frames on the same MediaDevices output and prevents
-        JARVIS from hearing its own notification as a fresh user/wake utterance.
+        conversation. Background scripted TTS therefore stays queued until no
+        live session exists, then temporarily suspends wake detection while it
+        speaks. This prevents two JARVIS producers from interleaving frames on
+        the same MediaDevices output and prevents JARVIS from hearing its own
+        notification as a fresh user/wake utterance.
         """
 
         while not self._shutdown.is_set():
@@ -313,17 +313,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         delivery.kind,
                         delivery.message,
                     )
-                    await self._speak_ephemeral_realtime_message(
+                    await self._get_scripted_speech().speak(
                         output,
-                        instructions=(
-                            "Deliver the following background-task notification to the "
-                            "owner in one or two brief, natural sentences using your "
-                            "established JARVIS voice and style. Preserve every concrete "
-                            "fact, number, blocker, question, and required owner action. "
-                            "Do not mention prompts, models, tools, or internal routing. "
-                            "Do not add facts. Notification: " + delivery_text
-                        ),
-                        label="background work notification",
+                        delivery_text,
+                        max_provider_retries=0,
                     )
                     spoken = True
                 except asyncio.CancelledError:
@@ -369,7 +362,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                                 else f"provider_{hint.reason}_{hint.status_code}"
                             )
                         else:
-                            reason = f"realtime_voice_{type(exc).__name__.casefold()}"
+                            reason = f"tts_{type(exc).__name__.casefold()}"
 
                         deferred = runtime.store.schedule_delivery_retry(
                             delivery.delivery_id,
@@ -390,7 +383,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                             )
                         else:
                             LOGGER.exception(
-                                "Background work realtime notification failed; durable "
+                                "Background work notification delivery failed; durable "
                                 "backoff scheduled | delivery_id=%s | failed_attempts=%s | "
                                 "retry_in=%.1fs | reason=%s",
                                 delivery.delivery_id,
