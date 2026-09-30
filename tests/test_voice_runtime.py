@@ -508,8 +508,9 @@ async def test_wake_only_pause_gets_one_brief_realtime_acknowledgement(
     assert audio.pre_roll_after_monotonic == 42.0
     assert len(session.generated_replies) == 1
     reply = session.generated_replies[0]
-    assert "invoked your wake word and then paused" in reply["instructions"]
+    assert "invoked you and then paused" in reply["instructions"]
     assert "exactly one very short, natural acknowledgement" in reply["instructions"]
+    assert "do not use or imitate a fixed phrase list" in reply["instructions"]
     assert reply["allow_interruptions"] is True
     assert reply["input_modality"] == "text"
 
@@ -537,7 +538,7 @@ async def test_immediate_owner_speech_suppresses_wake_acknowledgement(
 
 
 @pytest.mark.asyncio
-async def test_owner_speech_interrupts_acknowledgement_that_already_started(
+async def test_owner_speech_uses_native_barge_in_after_acknowledgement_started(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session = FakeSession(auto_finish_replies=False)
@@ -558,7 +559,9 @@ async def test_owner_speech_interrupts_acknowledgement_that_already_started(
     session.emit("user_state_changed", SimpleNamespace(new_state="speaking"))
     await asyncio.sleep(0)
 
-    assert session.interrupt_calls == [False]
+    # Server-side Gemini/LiveKit activity handling owns the interruption. JARVIS
+    # must not issue a second programmatic interrupt that can cancel the real turn.
+    assert session.interrupt_calls == []
 
     session.reply_release.set()
     runtime.request_shutdown()
