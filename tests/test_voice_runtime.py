@@ -852,4 +852,3 @@ async def test_startup_greeting_timeout_does_not_block_runtime(
 
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)
-
