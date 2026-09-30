@@ -131,6 +131,15 @@ def _journal_now(
     )
 
 
+def has_pending_gemini_live_migration(current_model: str) -> bool:
+    journal = _load_migration_journal()
+    return bool(
+        journal is not None
+        and journal.state == "pending"
+        and journal.candidate_model == current_model.strip().casefold()
+    )
+
+
 def accept_pending_gemini_live_migration(current_model: str) -> bool:
     journal = _load_migration_journal()
     if (
