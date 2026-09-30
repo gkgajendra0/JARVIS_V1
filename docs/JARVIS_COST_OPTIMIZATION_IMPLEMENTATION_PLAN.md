@@ -1,11 +1,50 @@
 # JARVIS Cost Optimization Implementation Plan
 
-Status: **C0-C3 LIVE ACCEPTED / C4 RESEARCH COMPLETE + JEV DEFERRED / C5 FULLY COMPLETE + OWNER-MACHINE ACCEPTED / C6 SHADOW IMPLEMENTATION ACTIVE**
+Status: **C0-C3 LIVE ACCEPTED / C4 DEFERRED / C5 RETAINED AS ON-DEMAND FALLBACK / C6 SHADOW ACTIVE / CHATGPT-PLAN PRIMARY BRAIN IMPLEMENTED FOR ACCEPTANCE**
 
-Date: 2026-09-29
+Date: 2026-09-30
 
 Architecture source: `JARVIS_COST_OPTIMIZATION_MASTER_PLAN.md`
 
+
+
+## Architecture update — ChatGPT-plan primary brain (2026-09-30)
+
+Fresh OpenAI Sign in with ChatGPT plan-usage support changes the cost hierarchy without
+discarding C0-C6.
+
+New production intent after owner acceptance:
+
+1. deterministic JARVIS logic/cached knowledge where sufficient;
+2. ChatGPT-plan OAuth inference as the primary strong reasoning lane for durable Work and
+   Hands semantic planning;
+3. the currently configured Gemini/OpenAI API provider as bounded fallback;
+4. the C5 local Ollama/Qwen target retained only as an optional on-demand/offline lane,
+   never a 24x7 resident production brain.
+
+Consequences:
+
+- C5 is not removed; its benchmark, admission and resource-pressure work remains useful,
+  but JARVIS must not occupy several GiB of owner GPU memory merely to avoid cloud calls.
+- C6 context optimization remains valuable because plan-backed Responses calls are
+  stateless over normal HTTP and JARVIS owns the relevant context projection.
+- Realtime voice/TTS stay on their existing provider-specific path because ChatGPT-plan
+  token sharing is not a substitute for the realtime/audio APIs.
+- ChatGPT OAuth access/refresh tokens live only in the existing encrypted SecretStore.
+  Machine config persists only the enable flag and selected model slug.
+- Plan-backed Responses requests use store=false and stream=true, validate terminal
+  completion, and expose usage telemetry.
+- ChatGPT plan quota/auth/model failures are provider failures, not authority failures:
+  Work falls back through the existing health/router substrate and Hands uses its bounded
+  configured paid-provider fallback.
+- The production Work target pool does not contain the C5 local LLM when ChatGPT-plan
+  primary routing is enabled.
+- Paid API credits are no longer a prerequisite for the first TV capability mission.
+  First prove the plan-backed lane on the owner machine; buy/use paid credits only if
+  plan availability or an unsupported capability actually requires them.
+
+Owner acceptance is intentionally required before merge because OAuth authorization and
+live plan-backed inference can only be proven against the owner's ChatGPT account.
 
 ## Research validation checkpoint — 2026-09-29
 
