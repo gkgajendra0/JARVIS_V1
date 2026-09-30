@@ -64,6 +64,30 @@ class FakeRealtimeSpeech:
         self.started.set()
 
 
+class FakeFailingRealtimeSpeech:
+    async def speak(
+        self,
+        output,
+        *,
+        instructions: str,
+        label: str,
+    ) -> None:
+        del output, instructions, label
+        raise RuntimeError("429 RESOURCE_EXHAUSTED")
+
+
+class FakeLocalStatusSpeech:
+    def __init__(self, audio: FakeAudio) -> None:
+        self._audio = audio
+        self.messages: list[str] = []
+        self.spoken = asyncio.Event()
+
+    async def speak(self, output, text: str) -> None:
+        assert output is self._audio.output
+        self.messages.append(text)
+        self.spoken.set()
+
+
 class FakeStore:
     def __init__(self, policy: DeliveryPolicy) -> None:
         self.delivery = SimpleNamespace(
@@ -170,6 +194,39 @@ async def test_background_work_speech_respects_shared_speech_lease() -> None:
     await asyncio.sleep(0)
 
     assert work.store.delivered is True
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(delivery_task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_critical_background_notification_falls_back_to_local_speech() -> None:
+    audio = FakeAudio()
+    work = FakeWorkRuntime(DeliveryPolicy.WHEN_IDLE)
+    local = FakeLocalStatusSpeech(audio)
+    runtime = CanonicalActiveSpeakerRuntimeController(
+        JarvisConfig(wake_cooldown_seconds=0.01),
+        audio,  # type: ignore[arg-type]
+        work_runtime=work,  # type: ignore[arg-type]
+        local_status_speech=local,  # type: ignore[arg-type]
+    )
+    failing = FakeFailingRealtimeSpeech()
+    runtime._speak_ephemeral_realtime_message = failing.speak  # type: ignore[method-assign]
+    runtime._state = VoiceRuntimeState.IDLE
+    runtime._live_session = None
+
+    delivery_task = asyncio.create_task(runtime._deliver_pending_work())
+
+    await asyncio.wait_for(local.spoken.wait(), timeout=1)
+    await asyncio.sleep(0)
+
+    assert local.messages == [
+        "Sir, I need your input on a background task. "
+        "Please confirm the TV pairing request."
+    ]
+    assert work.store.delivered is True
+    assert audio.resume_calls == 1
+    assert audio.detector.enabled is True
 
     runtime.request_shutdown()
     await asyncio.wait_for(delivery_task, timeout=1)
