@@ -296,47 +296,75 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
-                    hint = provider_retry_hint(exc)
-                    retry_seconds = delivery_retry_delay_seconds(
-                        failed_attempts=delivery.failed_attempts,
-                        provider_hint=hint,
-                    )
-                    if hint is not None:
-                        reason = (
-                            f"provider_{hint.reason}"
-                            if hint.status_code is None
-                            else f"provider_{hint.reason}_{hint.status_code}"
-                        )
-                    else:
-                        reason = f"realtime_voice_{type(exc).__name__.casefold()}"
+                    critical = delivery.kind in {
+                        WorkDeliveryKind.OWNER_INPUT,
+                        WorkDeliveryKind.RESOURCE_BLOCKER,
+                        WorkDeliveryKind.FAILURE,
+                    }
+                    local_speech = self._local_status_speech
+                    if critical and local_speech is not None:
+                        try:
+                            await local_speech.speak(output, delivery_text)
+                            spoken = True
+                            LOGGER.warning(
+                                "Critical background notification used local speech fallback | "
+                                "delivery_id=%s | work_id=%s | kind=%s | cloud_error=%s",
+                                delivery.delivery_id,
+                                delivery.work_id,
+                                delivery.kind.value,
+                                type(exc).__name__,
+                            )
+                        except Exception:
+                            LOGGER.exception(
+                                "Critical background notification local fallback failed | "
+                                "delivery_id=%s | work_id=%s | kind=%s",
+                                delivery.delivery_id,
+                                delivery.work_id,
+                                delivery.kind.value,
+                            )
 
-                    deferred = runtime.store.schedule_delivery_retry(
-                        delivery.delivery_id,
-                        delay_seconds=retry_seconds,
-                        reason=reason,
-                    )
-                    if hint is not None:
-                        LOGGER.warning(
-                            "Background work notification deferred for provider pressure | "
-                            "delivery_id=%s | failed_attempts=%s | retry_in=%.1fs | "
-                            "reason=%s | provider_status=%s | provider_retry_after=%s",
-                            delivery.delivery_id,
-                            deferred.failed_attempts,
-                            retry_seconds,
-                            reason,
-                            hint.status_code,
-                            hint.retry_after_seconds,
+                    if not spoken:
+                        hint = provider_retry_hint(exc)
+                        retry_seconds = delivery_retry_delay_seconds(
+                            failed_attempts=delivery.failed_attempts,
+                            provider_hint=hint,
                         )
-                    else:
-                        LOGGER.exception(
-                            "Background work realtime notification failed; durable "
-                            "backoff scheduled | delivery_id=%s | failed_attempts=%s | "
-                            "retry_in=%.1fs | reason=%s",
+                        if hint is not None:
+                            reason = (
+                                f"provider_{hint.reason}"
+                                if hint.status_code is None
+                                else f"provider_{hint.reason}_{hint.status_code}"
+                            )
+                        else:
+                            reason = f"realtime_voice_{type(exc).__name__.casefold()}"
+
+                        deferred = runtime.store.schedule_delivery_retry(
                             delivery.delivery_id,
-                            deferred.failed_attempts,
-                            retry_seconds,
-                            reason,
+                            delay_seconds=retry_seconds,
+                            reason=reason,
                         )
+                        if hint is not None:
+                            LOGGER.warning(
+                                "Background work notification deferred for provider pressure | "
+                                "delivery_id=%s | failed_attempts=%s | retry_in=%.1fs | "
+                                "reason=%s | provider_status=%s | provider_retry_after=%s",
+                                delivery.delivery_id,
+                                deferred.failed_attempts,
+                                retry_seconds,
+                                reason,
+                                hint.status_code,
+                                hint.retry_after_seconds,
+                            )
+                        else:
+                            LOGGER.exception(
+                                "Background work realtime notification failed; durable "
+                                "backoff scheduled | delivery_id=%s | failed_attempts=%s | "
+                                "retry_in=%.1fs | reason=%s",
+                                delivery.delivery_id,
+                                deferred.failed_attempts,
+                                retry_seconds,
+                                reason,
+                            )
                 finally:
                     if not self._shutdown.is_set():
                         try:
