@@ -631,11 +631,35 @@ async def _reconcile_provider_model_lifecycle(
     return await reconcile_gemini_live_model(config, api_key=api_key)
 
 
+async def _rollback_provider_model_lifecycle(
+    config: JarvisConfig,
+) -> GeminiLiveLifecycleResult | None:
+    if config.ai_provider != "gemini":
+        return None
+    try:
+        api_key = require_provider_api_key(
+            "gemini",
+            purpose="provider model lifecycle rollback validation",
+        )
+    except RuntimeError as exc:
+        LOGGER.warning(
+            "Gemini model lifecycle rollback validation skipped because credentials "
+            "are unavailable: %s",
+            exc,
+        )
+        return None
+    return await validated_rollback_pending_gemini_live_migration(
+        config,
+        api_key=api_key,
+    )
+
+
 async def _run_provider_model_lifecycle_watch(
     config: JarvisConfig,
     runtime: CanonicalActiveSpeakerRuntimeController,
     migrated: asyncio.Event,
     lifecycle_trigger: asyncio.Event,
+    rollback_trigger: asyncio.Event,
     *,
     poll_seconds: float = _PROVIDER_MODEL_LIFECYCLE_POLL_SECONDS,
 ) -> None:
@@ -645,6 +669,29 @@ async def _run_provider_model_lifecycle_watch(
         except TimeoutError:
             pass
         lifecycle_trigger.clear()
+        rollback_requested = rollback_trigger.is_set()
+        rollback_trigger.clear()
+
+        if rollback_requested:
+            rollback_result = await _rollback_provider_model_lifecycle(config)
+            if rollback_result is not None and rollback_result.status == "rolled_back":
+                LOGGER.error(
+                    "Pending Gemini migration rolled back after production failure | "
+                    "failed=%s restored=%s; recycling voice runtime",
+                    rollback_result.current_model,
+                    rollback_result.replacement_model,
+                )
+                migrated.set()
+                runtime.request_shutdown()
+                return
+            if rollback_result is not None:
+                LOGGER.error(
+                    "Pending Gemini migration rollback could not be completed | "
+                    "status=%s detail=%s",
+                    rollback_result.status,
+                    rollback_result.detail,
+                )
+
         result = await _reconcile_provider_model_lifecycle(config)
         persisted_model = (
             load_machine_settings()
