@@ -55,6 +55,7 @@ CHATGPT_PLAN_SECRET_ID = "chatgpt-plan-oauth-active"
 CHATGPT_PLAN_CONSUMER_ID = "jarvis-chatgpt-plan"
 CHATGPT_PLAN_AGENT_NAME = "JARVIS"
 CHATGPT_PLAN_REFRESH_SKEW_SECONDS = 90.0
+_CHATGPT_PLAN_REFRESH_LOCK = threading.RLock()
 
 
 class ChatGPTPlanError(RuntimeError):
@@ -486,7 +487,8 @@ class ChatGPTPlanSessionManager:
         self._credentials = credential_store or ChatGPTPlanCredentialStore()
         self._host_path = host_path
         self._clock = clock
-        self._refresh_lock = threading.RLock()
+        # Refresh tokens rotate. All managers in this process must serialize refreshes.
+        self._refresh_lock = _CHATGPT_PLAN_REFRESH_LOCK
 
     def current_credentials(self) -> ChatGPTPlanCredentials | None:
         return self._credentials.load()
