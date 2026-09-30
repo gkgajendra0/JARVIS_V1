@@ -53,7 +53,7 @@ from jarvis.voice.livekit_session import (
 from jarvis.voice.local_status_speech import LocalStatusSpeech
 from jarvis.voice.observed_audio import ObservedSessionAudioInput
 from jarvis.voice.paired_audio import PairedAudioRuntime
-from jarvis.voice.scripted_speech import ScriptedSpeech
+from jarvis.voice.scripted_speech import ScriptedSpeech, build_scripted_speech
 from jarvis.voice.standby_tools import StandbyAgentTools
 from jarvis.voice.startup_greeting import select_startup_greeting
 from jarvis.voice.vision_tools import VisionAgentTools
@@ -71,6 +71,8 @@ _UPDATE_APPROVAL_PROMPT = (
     "A JARVIS software update is available. Shall I install it and restart now? "
     "Please answer yes or no."
 )
+_LIFECYCLE_CLOUD_PRIMARY_TIMEOUT_SECONDS = 8.0
+_LIFECYCLE_LOCAL_FALLBACK_TIMEOUT_SECONDS = 8.0
 _REALTIME_LIFECYCLE_TIMEOUT_SECONDS = 12.0
 _STANDBY_ACK_TIMEOUT_SECONDS = 8.0
 
@@ -170,6 +172,86 @@ class VoiceRuntimeController:
         )
         return await response
 
+    def _get_scripted_speech(self) -> ScriptedSpeech:
+        if self._scripted_speech is None:
+            self._scripted_speech = build_scripted_speech(self.config)
+            self._owns_scripted_speech = True
+        return self._scripted_speech
+
+    async def _speak_lifecycle_message(
+        self,
+        output,
+        text: str,
+        *,
+        label: str,
+    ) -> bool:
+        """Prefer configured scripted cloud speech, then fall back locally."""
+
+        try:
+            await asyncio.wait_for(
+                self._get_scripted_speech().speak(
+                    output,
+                    text,
+                    max_provider_retries=0,
+                ),
+                timeout=_LIFECYCLE_CLOUD_PRIMARY_TIMEOUT_SECONDS,
+            )
+            LOGGER.info(
+                "JARVIS %s finished playing via primary cloud speech",
+                label,
+            )
+            return True
+        except asyncio.CancelledError:
+            raise
+        except TimeoutError:
+            LOGGER.warning(
+                "JARVIS %s primary cloud speech timed out after %.1fs; "
+                "falling back to local lifecycle speech",
+                label,
+                _LIFECYCLE_CLOUD_PRIMARY_TIMEOUT_SECONDS,
+            )
+        except Exception:
+            LOGGER.exception(
+                "JARVIS %s primary cloud speech failed; "
+                "falling back to local lifecycle speech",
+                label,
+            )
+
+        if self._local_status_speech is None:
+            LOGGER.warning(
+                "JARVIS %s local lifecycle fallback is unavailable; "
+                "continuing lifecycle transition",
+                label,
+            )
+            return False
+
+        try:
+            await asyncio.wait_for(
+                self._local_status_speech.speak(output, text),
+                timeout=_LIFECYCLE_LOCAL_FALLBACK_TIMEOUT_SECONDS,
+            )
+            LOGGER.info(
+                "JARVIS %s finished playing via local lifecycle fallback",
+                label,
+            )
+            return True
+        except asyncio.CancelledError:
+            raise
+        except TimeoutError:
+            LOGGER.warning(
+                "JARVIS %s local lifecycle fallback timed out after %.1fs; "
+                "continuing lifecycle transition",
+                label,
+                _LIFECYCLE_LOCAL_FALLBACK_TIMEOUT_SECONDS,
+            )
+        except Exception:
+            LOGGER.exception(
+                "JARVIS %s local lifecycle fallback failed; "
+                "continuing lifecycle transition",
+                label,
+            )
+        return False
+
     async def _wait_for_realtime_speech(
         self,
         handle,
@@ -190,45 +272,6 @@ class VoiceRuntimeController:
             "JARVIS %s finished playing via realtime conversation voice",
             label,
         )
-
-    async def _speak_ephemeral_realtime_message(
-        self,
-        output,
-        *,
-        instructions: str,
-        label: str,
-    ) -> None:
-        """Speak one system message through the normal realtime model/voice lane."""
-
-        session, bridge = self._session_factory(self.config)
-        session.output.audio = output
-        try:
-            session.input.set_audio_enabled(False)
-        except Exception:
-            LOGGER.debug(
-                "Ephemeral realtime lifecycle session has no mutable input gate",
-                exc_info=True,
-            )
-        bridge.conversation.start()
-        try:
-            await session.start(
-                agent=JarvisVoiceAgent(
-                    tools=[],
-                    default_media_target=self.config.default_media_target,
-                )
-            )
-            handle = session.generate_reply(
-                instructions=instructions,
-                allow_interruptions=(self.config.ai_provider == "gemini"),
-                input_modality="text",
-            )
-            await self._wait_for_realtime_speech(
-                handle,
-                label=label,
-                timeout_seconds=_REALTIME_LIFECYCLE_TIMEOUT_SECONDS,
-            )
-        finally:
-            await session.aclose()
 
     async def _wait_for_startup_readiness(self) -> bool:
         if self._startup_readiness_waiter is None:
@@ -264,25 +307,11 @@ class VoiceRuntimeController:
                 "JARVIS startup greeting skipped because no greeting was selected"
             )
             return
-        instructions = (
-            "JARVIS has just completed startup successfully. Give the owner exactly one "
-            "brief, natural greeting in your established JARVIS voice and style. Vary "
-            "the wording naturally from previous greetings and do not mention prompts, "
-            "models, tools, or internal implementation. Use this machine-selected "
-            f"time-of-day cue only as context, not as a script to repeat verbatim: {greeting}"
+        await self._speak_lifecycle_message(
+            output,
+            greeting,
+            label="startup greeting",
         )
-        try:
-            await self._speak_ephemeral_realtime_message(
-                output,
-                instructions=instructions,
-                label="startup greeting",
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            LOGGER.exception(
-                "JARVIS startup realtime greeting failed; entering wake mode silently"
-            )
 
     def _on_audio_overflow(self) -> None:
         LOGGER.error("Voice session stopped because its microphone queue overflowed")
