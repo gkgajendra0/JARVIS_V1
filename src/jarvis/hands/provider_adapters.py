@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -11,12 +12,18 @@ from typing import Any, Protocol
 from pydantic import BaseModel, ValidationError
 
 from jarvis.ai_provider import normalize_ai_provider, require_provider_api_key
+from jarvis.chatgpt_plan import (
+    ChatGPTPlanError,
+    ChatGPTPlanSessionManager,
+)
 
 LOGGER = logging.getLogger(__name__)
 
 
 class StructuredOutputError(ValueError):
-    """Raised when a provider cannot produce validated structured Hands output."""
+    """Raised when a provider cannot produce validated structured output."""
+
+    response_contract_invalid = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,6 +235,130 @@ class OpenAIStructuredOutputClient:
         )
 
 
+class ChatGPTPlanStructuredOutputClient:
+    """Structured-output client backed by the user's ChatGPT plan allowance."""
+
+    provider_name = "chatgpt_plan"
+
+    def __init__(
+        self,
+        *,
+        session_manager: ChatGPTPlanSessionManager,
+        model: str,
+    ) -> None:
+        self._session_manager = session_manager
+        self.model_name = str(model).strip()
+        if not self.model_name:
+            raise ValueError("ChatGPT plan model must not be empty")
+
+    async def parse(
+        self,
+        *,
+        system_prompt: str,
+        input_payload: dict[str, Any],
+        response_model: type[BaseModel],
+    ) -> BaseModel:
+        result = await self.parse_with_telemetry(
+            system_prompt=system_prompt,
+            input_payload=input_payload,
+            response_model=response_model,
+        )
+        return result.parsed
+
+    async def parse_with_telemetry(
+        self,
+        *,
+        system_prompt: str,
+        input_payload: dict[str, Any],
+        response_model: type[BaseModel],
+    ) -> StructuredOutputTelemetry:
+        started = time.perf_counter()
+        response = await asyncio.to_thread(
+            self._session_manager.invoke_structured,
+            model=self.model_name,
+            instructions=system_prompt,
+            input_payload=input_payload,
+            schema_name=response_model.__name__,
+            schema=response_model.model_json_schema(),
+        )
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        try:
+            parsed = response_model.model_validate_json(response.output_text)
+        except ValidationError as exc:
+            raise StructuredOutputError(
+                "ChatGPT plan returned invalid structured output"
+            ) from exc
+        LOGGER.info(
+            "Hands provider parse | provider=chatgpt_plan | model=%s | "
+            "schema=%s | elapsed_ms=%.1f",
+            self.model_name,
+            response_model.__name__,
+            elapsed_ms,
+        )
+        return StructuredOutputTelemetry(
+            parsed=parsed,
+            usage=response.usage,
+            usage_observed=response.usage_observed,
+            latency_ms=elapsed_ms,
+        )
+
+
+class FallbackStructuredOutputClient:
+    """Prefer ChatGPT-plan inference and use the configured paid provider on failure."""
+
+    provider_name = "chatgpt_plan"
+
+    def __init__(
+        self,
+        *,
+        primary: ChatGPTPlanStructuredOutputClient,
+        fallback: StructuredOutputClient,
+    ) -> None:
+        self._primary = primary
+        self._fallback = fallback
+        self.model_name = primary.model_name
+
+    async def parse(
+        self,
+        *,
+        system_prompt: str,
+        input_payload: dict[str, Any],
+        response_model: type[BaseModel],
+    ) -> BaseModel:
+        result = await self.parse_with_telemetry(
+            system_prompt=system_prompt,
+            input_payload=input_payload,
+            response_model=response_model,
+        )
+        return result.parsed
+
+    async def parse_with_telemetry(
+        self,
+        *,
+        system_prompt: str,
+        input_payload: dict[str, Any],
+        response_model: type[BaseModel],
+    ) -> StructuredOutputTelemetry:
+        try:
+            return await self._primary.parse_with_telemetry(
+                system_prompt=system_prompt,
+                input_payload=input_payload,
+                response_model=response_model,
+            )
+        except (ChatGPTPlanError, StructuredOutputError) as exc:
+            LOGGER.warning(
+                "ChatGPT-plan structured inference unavailable; "
+                "falling back to provider=%s | error=%s",
+                self._fallback.provider_name,
+                type(exc).__name__,
+            )
+            return await self._fallback.parse_with_telemetry(
+                system_prompt=system_prompt,
+                input_payload=input_payload,
+                response_model=response_model,
+            )
+
+
 class GeminiStructuredOutputClient:
     """Gemini Interactions JSON-schema adapter for the Hands planner."""
 
@@ -355,3 +486,33 @@ def build_structured_output_client(
         )
 
     raise AssertionError(f"Unhandled Hands planner provider: {normalized_provider}")
+
+
+def build_chatgpt_plan_structured_output_client(
+    *,
+    model: str,
+    fallback_provider: str | None = None,
+    fallback_model: str | None = None,
+    session_manager: ChatGPTPlanSessionManager | None = None,
+    provider_retries: bool = True,
+) -> StructuredOutputClient:
+    """Build ChatGPT-plan primary structured inference with optional paid fallback."""
+
+    model_name = str(model).strip()
+    if not model_name:
+        raise ValueError("ChatGPT plan model must not be empty")
+    primary = ChatGPTPlanStructuredOutputClient(
+        session_manager=session_manager or ChatGPTPlanSessionManager(),
+        model=model_name,
+    )
+    if fallback_provider is None:
+        return primary
+    fallback_name = str(fallback_model or "").strip()
+    if not fallback_name:
+        raise ValueError("fallback_model is required with fallback_provider")
+    fallback = build_structured_output_client(
+        provider=fallback_provider,
+        model=fallback_name,
+        provider_retries=provider_retries,
+    )
+    return FallbackStructuredOutputClient(primary=primary, fallback=fallback)

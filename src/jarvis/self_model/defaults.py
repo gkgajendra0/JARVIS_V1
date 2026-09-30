@@ -246,6 +246,22 @@ def build_default_self_model() -> SelfModelRegistry:
             ),
         ),
         C(
+            "provider.chatgpt_plan",
+            "Subscription-backed OpenAI reasoning through Sign in with ChatGPT.",
+            (
+                "src/jarvis/chatgpt_plan.py",
+                "src/jarvis/chatgpt_plan_cli.py",
+            ),
+            parent_component_id="runtime.provider",
+            tests=("tests/test_chatgpt_plan.py",),
+            config_keys=(
+                "JARVIS_CHATGPT_PLAN_ENABLED",
+                "JARVIS_CHATGPT_PLAN_MODEL",
+            ),
+            logger_prefixes=("jarvis.chatgpt_plan",),
+            docs=("docs/JARVIS_COST_OPTIMIZATION_IMPLEMENTATION_PLAN.md",),
+        ),
+        C(
             "provider.realtime",
             "Realtime conversational model/session provider surface.",
             (
@@ -878,6 +894,16 @@ def build_default_self_model() -> SelfModelRegistry:
             "voice.session",
             "provider.realtime",
             criticality=DependencyCriticality.BLOCKING,
+        ),
+        DependencyDescriptor(
+            "provider.planner",
+            "provider.chatgpt_plan",
+            criticality=DependencyCriticality.OPTIONAL,
+        ),
+        DependencyDescriptor(
+            "work.model_routing",
+            "provider.chatgpt_plan",
+            criticality=DependencyCriticality.OPTIONAL,
         ),
         DependencyDescriptor(
             "voice.active_speaker",

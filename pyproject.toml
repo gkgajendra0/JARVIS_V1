@@ -14,6 +14,7 @@ dependencies = [
     "livekit-wakeword==0.2.1",
     "openwakeword==0.6.0",
     "openai==2.54.0",
+    "PyJWT[crypto]>=2.10,<3",
     "google-genai==2.22.0",
     "exa-py==2.20.0",
     "dbos==2.31.1",
@@ -38,6 +39,7 @@ dependencies = [
 [project.scripts]
 jarvis-setup = "jarvis.setup:main"
 jarvis-provider = "jarvis.provider_cli:main"
+jarvis-chatgpt-plan = "jarvis.chatgpt_plan_cli:main"
 jarvis-setup-document-reader = "jarvis.capabilities.document_reader:main"
 jarvis-voice = "jarvis.voice.production_runtime:main"
 jarvis-runtime-profile = "jarvis.performance.runtime_profile:main"

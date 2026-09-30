@@ -8,6 +8,7 @@ from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
+from jarvis.ai_provider import provider_api_key
 from jarvis.brain_routing.deterministic import default_work_deterministic_resolvers
 from jarvis.brain_routing.store import BrainRouteStore
 from jarvis.brain_routing.work import GlobalBrainRouterReasoner
@@ -64,6 +65,10 @@ from jarvis.capability_acquisition.workflow import (
 from jarvis.capability_registry.admission import CapabilityPackageAdmissionService
 from jarvis.capability_registry.lifecycle import CapabilityLifecycleService
 from jarvis.capability_registry.reconciliation import CapabilityLifecycleReconciler
+from jarvis.chatgpt_plan import (
+    CHATGPT_PLAN_PROVIDER_ID,
+    ChatGPTPlanSessionManager,
+)
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.change_integration import (
@@ -324,6 +329,8 @@ def build_work_runtime(
     provider: str,
     research_service: CurrentResearchService,
     model: str | None = None,
+    chatgpt_plan_enabled: bool = False,
+    chatgpt_plan_model: str | None = None,
     global_brain_router_mode: str = "shadow",
     global_concurrency: int = 4,
     max_reasoning_cycles: int = 64,
@@ -379,22 +386,39 @@ def build_work_runtime(
     acquisition_work_context = AcquisitionWorkContextResolver(change_store)
     acquisition_discovery = default_discovery_broker()
 
-    adapter_registry = build_default_model_adapter_registry()
+    chatgpt_plan_session = ChatGPTPlanSessionManager() if chatgpt_plan_enabled else None
+    adapter_registry = build_default_model_adapter_registry(
+        chatgpt_plan_session_manager=chatgpt_plan_session,
+    )
     work_targets = build_default_work_targets(
         configured_provider=provider,
         configured_model=model,
         adapter_registry=adapter_registry,
+        chatgpt_plan_enabled=chatgpt_plan_enabled,
+        chatgpt_plan_model=chatgpt_plan_model,
     )
     routing_store = ModelRoutingStore(store)
     brain_route_store = BrainRouteStore(store)
     provider_cost_store = ProviderCostEventStore(store)
     strategy_registry = RoutingStrategyRegistry((EngineeringStageStrategy(),))
+
+    def _credential_available(target) -> bool:
+        if target.provider_id == CHATGPT_PLAN_PROVIDER_ID:
+            return bool(
+                chatgpt_plan_session is not None and chatgpt_plan_session.is_connected()
+            )
+        try:
+            return provider_api_key(target.provider_id) is not None
+        except (KeyError, TypeError, ValueError):
+            return False
+
     model_router = ModelRouter(
         target_registry=work_targets.registry,
         adapter_registry=adapter_registry,
         strategy_registry=strategy_registry,
         routing_store=routing_store,
         eligibility_policy=EligibilityPolicy(),
+        credential_available=_credential_available,
     )
     model_reasoner = RoutedWorkReasoner(
         router=model_router,
