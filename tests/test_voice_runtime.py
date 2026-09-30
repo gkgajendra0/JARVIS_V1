@@ -921,8 +921,65 @@ async def test_real_user_assistant_turn_notifies_conversation_success() -> None:
         ),
     )
     await asyncio.sleep(0)
+    assert observed == []
+
+    audio.output.emit(
+        "playback_finished",
+        SimpleNamespace(interrupted=False),
+    )
+    await asyncio.sleep(0)
 
     assert observed == ["success"]
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_interrupted_assistant_playback_does_not_accept_model_migration() -> None:
+    session = FakeSession()
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
+    audio = FakeAudio()
+    observed: list[str] = []
+    runtime = VoiceRuntimeController(
+        JarvisConfig(initial_request_timeout_seconds=1),
+        audio,  # type: ignore[arg-type]
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+        conversation_success_observer=lambda: observed.append("success"),
+    )
+
+    task = asyncio.create_task(runtime._run_one_session())
+    await session.started.wait()
+
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="user-interrupted",
+                role="user",
+                content=["Can you hear me?"],
+            )
+        ),
+    )
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="assistant-interrupted",
+                role="assistant",
+                content=["Loud and clear."],
+                interrupted=True,
+            )
+        ),
+    )
+    audio.output.emit(
+        "playback_finished",
+        SimpleNamespace(interrupted=True),
+    )
+    await asyncio.sleep(0)
+
+    assert observed == []
 
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)
