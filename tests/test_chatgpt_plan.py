@@ -15,13 +15,13 @@ from jarvis.chatgpt_plan import (
     load_or_create_chatgpt_plan_host_id,
 )
 from jarvis.config import JarvisConfig
-from jarvis.machine_config import load_machine_settings, save_machine_settings
 from jarvis.hands.contracts import build_action_response_model
 from jarvis.hands.provider_adapters import (
     ChatGPTPlanStructuredOutputClient,
     FallbackStructuredOutputClient,
     StructuredOutputTelemetry,
 )
+from jarvis.machine_config import load_machine_settings, save_machine_settings
 from jarvis.model_routing.models import ModelLocality
 from jarvis.model_routing.registry import ModelAdapterRegistry
 from jarvis.model_routing.router import build_default_work_targets
