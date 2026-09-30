@@ -32,7 +32,7 @@ from jarvis.voice.capability_tools import LocalReadAgentTools
 from jarvis.voice.livekit_session import create_voice_session
 from jarvis.voice.memory_tools import MemoryAgentTools
 from jarvis.voice.research_tools import ResearchAgentTools
-from jarvis.voice.runtime import VoiceRuntimeController
+from jarvis.voice.runtime import VoiceRuntimeController, VoiceRuntimeState
 from jarvis.voice.work_tools import WorkAgentTools
 from jarvis.work.models import WorkDeliveryKind, WorkState
 from jarvis.work.provider_retry import delivery_retry_delay_seconds, provider_retry_hint
@@ -248,6 +248,79 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             return state is WorkState.FAILED
         return True
 
+    async def _run_owner_input_interaction(
+        self,
+        *,
+        work_id: str,
+        question: str,
+    ) -> bool:
+        """Open one bounded proactive conversation for an exact waiting WorkItem.
+
+        Work/DBOS remains the durable owner-input truth. This method owns only the
+        voice transport: it asks the pending question, leaves the microphone active,
+        and exposes exactly one Work tool bound to the waiting WorkItem. The shared
+        speech lease is held by the caller for the entire session, so no second JARVIS
+        producer can write to the physical output concurrently.
+        """
+
+        runtime = self._work_runtime
+        if runtime is None:
+            raise RuntimeError("owner-input interaction requires WorkRuntime")
+
+        normalized_question = " ".join(question.split())
+        if not normalized_question:
+            raise ValueError("owner-input question must not be empty")
+
+        def session_tools(conversation: ConversationSession) -> list:
+            work_tools = WorkAgentTools(
+                runtime,
+                conversation,
+                bound_owner_input_work_id=work_id,
+            )
+            return [work_tools.continue_background_work]
+
+        def owner_input_resolved() -> bool:
+            try:
+                current = runtime.store.require(work_id)
+            except Exception:
+                LOGGER.exception(
+                    "Could not read owner-input WorkItem state | work_id=%s",
+                    work_id,
+                )
+                return False
+            return current.state is not WorkState.WAITING_FOR_OWNER
+
+        instructions = (
+            "JARVIS has proactively opened this voice interaction because one exact "
+            "background WorkItem is waiting for the owner's input. Ask the owner the "
+            "pending question below naturally and concisely, preserving every concrete "
+            "fact, option, identifier, number, and required action. Then stop and listen; "
+            "the owner does not need to say the wake word. Interpret short or imperfect "
+            "speech transcription in the context of this exact question. If the answer "
+            "is genuinely ambiguous, ask one concise clarification and keep listening. "
+            "When the owner clearly answers, call continue_background_work. That tool is "
+            "already deterministically bound to the correct WorkItem, so do not invent or "
+            "target another work ID. After the tool succeeds, acknowledge briefly and do "
+            "not start, cancel, reprioritize, or modify any other work. Pending question: "
+            + normalized_question
+        )
+
+        try:
+            await self._run_one_session_owned(
+                initial_instructions=instructions,
+                initial_prompt_label="owner input prompt",
+                session_tool_factory=session_tools,
+                completion_predicate=owner_input_resolved,
+                completion_label=f"owner input for {work_id}",
+            )
+        finally:
+            self._cancel_timeout()
+            self._active_end = None
+            if not self._shutdown.is_set():
+                self._state = VoiceRuntimeState.IDLE
+
+        return owner_input_resolved()
+
     async def _deliver_pending_work(self) -> None:
         """Speak durable Work notifications only at an exclusive idle boundary.
 
@@ -313,24 +386,53 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         delivery.kind,
                         delivery.message,
                     )
-                    await self._speak_ephemeral_realtime_message(
-                        output,
-                        instructions=(
-                            "Deliver the following background-task notification to the "
-                            "owner in one or two brief, natural sentences using your "
-                            "established JARVIS voice and style. Preserve every concrete "
-                            "fact, number, blocker, question, and required owner action. "
-                            "Do not mention prompts, models, tools, or internal routing. "
-                            "Do not add facts. Notification: " + delivery_text
-                        ),
-                        label="background work notification",
-                    )
-                    spoken = True
+                    if delivery.kind is WorkDeliveryKind.OWNER_INPUT:
+                        answered = await self._run_owner_input_interaction(
+                            work_id=delivery.work_id,
+                            question=delivery.message,
+                        )
+                        if not answered:
+                            retry_seconds = max(
+                                30.0,
+                                delivery_retry_delay_seconds(
+                                    failed_attempts=delivery.failed_attempts,
+                                    provider_hint=None,
+                                ),
+                            )
+                            deferred = runtime.store.schedule_delivery_retry(
+                                delivery.delivery_id,
+                                delay_seconds=retry_seconds,
+                                reason="owner_input_unanswered",
+                            )
+                            LOGGER.info(
+                                "Owner-input interaction ended without a resolved answer; "
+                                "durable retry scheduled | delivery_id=%s | work_id=%s | "
+                                "failed_attempts=%s | retry_in=%.1fs",
+                                delivery.delivery_id,
+                                delivery.work_id,
+                                deferred.failed_attempts,
+                                retry_seconds,
+                            )
+                        else:
+                            spoken = True
+                    else:
+                        await self._speak_ephemeral_realtime_message(
+                            output,
+                            instructions=(
+                                "Deliver the following background-task notification to the "
+                                "owner in one or two brief, natural sentences using your "
+                                "established JARVIS voice and style. Preserve every concrete "
+                                "fact, number, blocker, question, and required owner action. "
+                                "Do not mention prompts, models, tools, or internal routing. "
+                                "Do not add facts. Notification: " + delivery_text
+                            ),
+                            label="background work notification",
+                        )
+                        spoken = True
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
                     critical = delivery.kind in {
-                        WorkDeliveryKind.OWNER_INPUT,
                         WorkDeliveryKind.RESOURCE_BLOCKER,
                         WorkDeliveryKind.FAILURE,
                     }
