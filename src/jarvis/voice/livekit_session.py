@@ -39,10 +39,10 @@ _OPENAI_REALTIME_RETENTION_RATIO = 0.75
 def _create_realtime_model(config: JarvisConfig):
     api_key = require_provider_api_key(config.ai_provider, purpose="realtime voice")
     if config.ai_provider == "gemini":
-        # Gemini 3.1 + the currently pinned LiveKit Google adapter must retain
-        # provider-native activity/turn completion. The paired audio runtime
-        # separately gates AEC-clean PCM with local Silero only while JARVIS is
-        # speaking, so residual echo is filtered before Gemini's native VAD.
+        # Gemini 3.8 Live permanently enables proactive audio. Keep provider-native
+        # activity/turn completion and explicit start-of-activity barge-in. The
+        # JARVIS wake boundary removes already-consumed wake audio before this model
+        # sees the conversation stream; Gemini then owns normal conversational VAD.
         return google.realtime.RealtimeModel(
             model=config.gemini_realtime_model,
             voice=config.gemini_realtime_voice,
@@ -62,6 +62,9 @@ def _create_realtime_model(config: JarvisConfig):
                     ),
                     prefix_padding_ms=300,
                     silence_duration_ms=800,
+                ),
+                activity_handling=(
+                    google_types.ActivityHandling.START_OF_ACTIVITY_INTERRUPTS
                 )
             ),
         )
