@@ -299,7 +299,7 @@ def run_startup_preflight(config: JarvisConfig) -> list[PreflightCheck]:
         _check_file("Wake model", config.wake_model_path),
         _credential_check(config),
         _gemini_realtime_compatibility_check(config),
-        _realtime_lifecycle_voice_check(config),
+        _tts_lane_check(config),
         *_audio_checks(config),
         *_authority_checks(),
     ]
