@@ -501,9 +501,7 @@ async def test_wake_only_pause_gets_one_brief_realtime_acknowledgement(
     runtime, session, _, audio, _ = runtime_with_session(initial_timeout=1)
     monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
 
-    task = asyncio.create_task(
-        runtime._run_one_session(pre_roll_after_monotonic=42.0)
-    )
+    task = asyncio.create_task(runtime._run_one_session(pre_roll_after_monotonic=42.0))
     await session.started.wait()
     await asyncio.wait_for(session.reply_started.wait(), timeout=1)
 
@@ -526,9 +524,7 @@ async def test_immediate_owner_speech_suppresses_wake_acknowledgement(
     runtime, session, _, _, _ = runtime_with_session(initial_timeout=1)
     monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.05)
 
-    task = asyncio.create_task(
-        runtime._run_one_session(pre_roll_after_monotonic=42.0)
-    )
+    task = asyncio.create_task(runtime._run_one_session(pre_roll_after_monotonic=42.0))
     await session.started.wait()
 
     session.emit("user_state_changed", SimpleNamespace(new_state="speaking"))
@@ -555,9 +551,7 @@ async def test_owner_speech_interrupts_acknowledgement_that_already_started(
     )
     monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
 
-    task = asyncio.create_task(
-        runtime._run_one_session(pre_roll_after_monotonic=42.0)
-    )
+    task = asyncio.create_task(runtime._run_one_session(pre_roll_after_monotonic=42.0))
     await session.started.wait()
     await asyncio.wait_for(session.reply_started.wait(), timeout=1)
 
