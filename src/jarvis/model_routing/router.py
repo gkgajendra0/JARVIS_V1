@@ -14,6 +14,11 @@ from jarvis.ai_provider import (
     provider_api_key,
     resolve_ai_role_model,
 )
+from jarvis.chatgpt_plan import (
+    CHATGPT_PLAN_PROVIDER_ID,
+    CHATGPT_PLAN_RESOURCE,
+    CHATGPT_PLAN_TARGET_ID,
+)
 from jarvis.model_routing.eligibility import (
     EligibilityPolicy,
     EligibilityRuntimeState,
@@ -21,6 +26,7 @@ from jarvis.model_routing.eligibility import (
 )
 from jarvis.model_routing.models import (
     BenchmarkStatus,
+    CostProfile,
     EligibilitySnapshot,
     EvidenceSizeClass,
     LocalityRequirement,
@@ -162,6 +168,11 @@ def build_work_routing_request(
 
     signals = derive_work_step_signals(request.recent_steps)
     cycle_key = reasoning_cycle_key(request)
+    if primary == CHATGPT_PLAN_TARGET_ID:
+        cycle_key = _digest_id(
+            "reasoning_plan",
+            f"{cycle_key}|{CHATGPT_PLAN_TARGET_ID}",
+        )
     features = dict(signals.routing_features)
     features["affinity_target_id"] = primary
 
@@ -195,56 +206,110 @@ class DefaultWorkTargets:
     primary_target_id: str
 
 
+def _paid_work_target(
+    provider: str,
+    *,
+    configured_model: str | None,
+) -> ModelTarget:
+    model = resolve_ai_role_model(
+        provider,
+        "work_orchestration",
+        configured_model=configured_model,
+    )
+    return ModelTarget(
+        target_id=f"work.{provider}.default",
+        adapter_id=provider,
+        provider_id=provider,
+        model_id=model,
+        locality=ModelLocality.CLOUD,
+        capabilities=(
+            "engineering_reasoning",
+            "structured_output",
+        ),
+        roles=("efficient", "capable"),
+        max_context_tokens=_WORK_CONTEXT_BUDGET_TOKENS,
+        supports_structured_output=True,
+        supports_tools=False,
+        supports_streaming=False,
+        latency_class="standard",
+        benchmark_status=BenchmarkStatus.ACCEPTED,
+        registry_version=1,
+        credential_ref=credential_environment_name(provider),
+        enabled=True,
+    )
+
+
 def build_default_work_targets(
     *,
     configured_provider: str,
     configured_model: str | None,
     adapter_registry: ModelAdapterRegistry,
+    chatgpt_plan_enabled: bool = False,
+    chatgpt_plan_model: str | None = None,
 ) -> DefaultWorkTargets:
-    """Build the small approved target pool using existing provider support."""
+    """Build the approved Work pool.
+
+    Legacy mode is byte-for-byte compatible with the Phase-4 two-provider pool.
+    When ChatGPT-plan usage is explicitly enabled, the subscription-backed target
+    becomes primary and the configured paid provider becomes the single bounded
+    fallback. The C5 Ollama target intentionally remains outside this durable pool.
+    """
 
     primary_provider = normalize_ai_provider(configured_provider)
-    targets: list[ModelTarget] = []
-    primary_target_id = ""
-    for provider in _WORK_ROUTING_PROVIDERS:
-        model = resolve_ai_role_model(
-            provider,
-            "work_orchestration",
-            configured_model=configured_model,
+    if not chatgpt_plan_enabled:
+        targets = tuple(
+            _paid_work_target(provider, configured_model=configured_model)
+            for provider in _WORK_ROUTING_PROVIDERS
         )
-        target_id = f"work.{provider}.default"
-        if provider == primary_provider:
-            primary_target_id = target_id
-        targets.append(
-            ModelTarget(
-                target_id=target_id,
-                adapter_id=provider,
-                provider_id=provider,
-                model_id=model,
-                locality=ModelLocality.CLOUD,
-                capabilities=(
-                    "engineering_reasoning",
-                    "structured_output",
-                ),
-                roles=("efficient", "capable"),
-                max_context_tokens=_WORK_CONTEXT_BUDGET_TOKENS,
-                supports_structured_output=True,
-                supports_tools=False,
-                supports_streaming=False,
-                latency_class="standard",
-                benchmark_status=BenchmarkStatus.ACCEPTED,
-                registry_version=1,
-                credential_ref=credential_environment_name(provider),
-                enabled=True,
-            )
+        return DefaultWorkTargets(
+            registry=ModelTargetRegistry(adapter_registry, targets),
+            primary_target_id=f"work.{primary_provider}.default",
         )
-    if not primary_target_id:
-        raise AssertionError(
-            "configured work provider did not produce a primary target"
+
+    plan_model = str(chatgpt_plan_model or "").strip()
+    if not plan_model:
+        raise ValueError(
+            "chatgpt_plan_model is required when ChatGPT-plan routing is enabled"
         )
+    plan_target = ModelTarget(
+        target_id=CHATGPT_PLAN_TARGET_ID,
+        adapter_id=CHATGPT_PLAN_PROVIDER_ID,
+        provider_id=CHATGPT_PLAN_PROVIDER_ID,
+        model_id=plan_model,
+        locality=ModelLocality.CLOUD,
+        capabilities=(
+            "engineering_reasoning",
+            "structured_output",
+        ),
+        roles=("efficient", "capable"),
+        max_context_tokens=_WORK_CONTEXT_BUDGET_TOKENS,
+        supports_structured_output=True,
+        supports_tools=False,
+        supports_streaming=True,
+        latency_class="standard",
+        benchmark_status=BenchmarkStatus.ACCEPTED,
+        registry_version=1,
+        endpoint_ref=CHATGPT_PLAN_RESOURCE,
+        credential_ref=None,
+        cost_profile=CostProfile(
+            profile_id="chatgpt-plan-subscription-2026-09",
+            version=1,
+            effective_from_epoch=0.0,
+            input_usd_per_million_tokens=0.0,
+            output_usd_per_million_tokens=0.0,
+        ),
+        enabled=True,
+    )
+    paid_fallback = _paid_work_target(
+        primary_provider,
+        configured_model=configured_model,
+    )
     return DefaultWorkTargets(
-        registry=ModelTargetRegistry(adapter_registry, tuple(targets)),
-        primary_target_id=primary_target_id,
+        registry=ModelTargetRegistry(
+            adapter_registry,
+            (plan_target, paid_fallback),
+        ),
+        primary_target_id=CHATGPT_PLAN_TARGET_ID,
     )
 
 
