@@ -7,10 +7,15 @@ import pytest
 
 from jarvis import provider_model_lifecycle as lifecycle
 from jarvis.config import JarvisConfig
+from jarvis import provider_model_lifecycle as lifecycle
+from jarvis.machine_config import load_machine_settings, save_machine_settings
 from jarvis.provider_model_lifecycle import (
     GEMINI_DEPRECATIONS_URL,
+    accept_pending_gemini_live_migration,
+    has_pending_gemini_live_migration,
     parse_gemini_live_lifecycle,
     reconcile_gemini_live_model,
+    validated_rollback_pending_gemini_live_migration,
 )
 
 
@@ -342,6 +347,151 @@ def test_rolled_back_replacement_becomes_retryable_after_cooldown(
         )
         is False
     )
+
+
+def _configure_machine_model(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    model: str,
+) -> None:
+    machine_path = tmp_path / "machine.json"
+    monkeypatch.setenv("JARVIS_MACHINE_CONFIG", str(machine_path))
+    save_machine_settings({"JARVIS_GEMINI_REALTIME_MODEL": model})
+
+
+def test_pending_migration_is_accepted_only_after_explicit_success(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    _configure_machine_model(monkeypatch, tmp_path, "gemini-old-live")
+    lifecycle._persist_replacement(
+        current_model="gemini-old-live",
+        replacement_model="gemini-new-live",
+    )
+
+    assert load_machine_settings()["JARVIS_GEMINI_REALTIME_MODEL"] == "gemini-new-live"
+    assert has_pending_gemini_live_migration("gemini-new-live") is True
+
+    assert accept_pending_gemini_live_migration("gemini-new-live") is True
+    assert has_pending_gemini_live_migration("gemini-new-live") is False
+    journal = lifecycle._load_migration_journal()
+    assert journal is not None
+    assert journal.state == "accepted"
+
+
+@pytest.mark.asyncio
+async def test_validated_rollback_probes_previous_model_before_restore(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    _configure_machine_model(monkeypatch, tmp_path, "gemini-old-live")
+    lifecycle._persist_replacement(
+        current_model="gemini-old-live",
+        replacement_model="gemini-new-live",
+    )
+    probes: list[str] = []
+
+    async def probe(api_key: str, model: str, timeout_seconds: float) -> None:
+        assert api_key == "test-key"
+        assert timeout_seconds > 0
+        probes.append(model)
+
+    result = await validated_rollback_pending_gemini_live_migration(
+        JarvisConfig(
+            ai_provider="gemini",
+            gemini_realtime_model="gemini-new-live",
+        ),
+        api_key="test-key",
+        live_probe=probe,
+    )
+
+    assert result.status == "rolled_back"
+    assert result.replacement_model == "gemini-old-live"
+    assert probes == ["gemini-old-live"]
+    assert load_machine_settings()["JARVIS_GEMINI_REALTIME_MODEL"] == "gemini-old-live"
+    journal = lifecycle._load_migration_journal()
+    assert journal is not None
+    assert journal.state == "rolled_back"
+
+
+@pytest.mark.asyncio
+async def test_failed_rollback_probe_keeps_candidate_pending(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    _configure_machine_model(monkeypatch, tmp_path, "gemini-old-live")
+    lifecycle._persist_replacement(
+        current_model="gemini-old-live",
+        replacement_model="gemini-new-live",
+    )
+
+    async def probe(api_key: str, model: str, timeout_seconds: float) -> None:
+        del api_key, model, timeout_seconds
+        raise RuntimeError("previous model is unavailable")
+
+    result = await validated_rollback_pending_gemini_live_migration(
+        JarvisConfig(
+            ai_provider="gemini",
+            gemini_realtime_model="gemini-new-live",
+        ),
+        api_key="test-key",
+        live_probe=probe,
+    )
+
+    assert result.status == "rollback_probe_failed"
+    assert load_machine_settings()["JARVIS_GEMINI_REALTIME_MODEL"] == "gemini-new-live"
+    assert has_pending_gemini_live_migration("gemini-new-live") is True
+
+
+@pytest.mark.asyncio
+async def test_rolled_back_replacement_is_not_automatically_retried(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    _configure_machine_model(monkeypatch, tmp_path, "gemini-old-live")
+    lifecycle._persist_replacement(
+        current_model="gemini-old-live",
+        replacement_model="gemini-new-live",
+    )
+
+    async def probe_previous(api_key: str, model: str, timeout_seconds: float) -> None:
+        del api_key, timeout_seconds
+        assert model == "gemini-old-live"
+
+    rollback = await validated_rollback_pending_gemini_live_migration(
+        JarvisConfig(
+            ai_provider="gemini",
+            gemini_realtime_model="gemini-new-live",
+        ),
+        api_key="test-key",
+        live_probe=probe_previous,
+    )
+    assert rollback.status == "rolled_back"
+
+    async def forbidden_probe(
+        api_key: str,
+        model: str,
+        timeout_seconds: float,
+    ) -> None:
+        del api_key, model, timeout_seconds
+        raise AssertionError("rolled-back replacement must not be retried")
+
+    result = await reconcile_gemini_live_model(
+        JarvisConfig(
+            ai_provider="gemini",
+            gemini_realtime_model="gemini-old-live",
+        ),
+        api_key="test-key",
+        fetcher=fetcher_for(
+            lifecycle_html(
+                current="gemini-old-live",
+                replacement="gemini-new-live",
+            )
+        ),
+        live_probe=forbidden_probe,
+    )
+
+    assert result.status == "replacement_blocked_after_rollback"
 
 
 @pytest.mark.asyncio
