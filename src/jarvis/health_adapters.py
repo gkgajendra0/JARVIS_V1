@@ -201,6 +201,38 @@ class CapabilityExecutionHealthObserver:
         )
 
 
+class VoiceBehaviorHealthObserver:
+    """Mirror deterministic voice-behavior SLO observations into Self-Awareness."""
+
+    def __init__(self, awareness: SelfAwarenessRuntime) -> None:
+        self._awareness = awareness
+
+    def __call__(
+        self,
+        state: str,
+        reason_code: str,
+        summary: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        normalized = str(state).strip().casefold()
+        if normalized == "healthy":
+            health_state = HealthState.HEALTHY
+        elif normalized == "degraded":
+            health_state = HealthState.DEGRADED
+        else:
+            raise ValueError(f"unsupported voice behavior health state: {state!r}")
+        _observe_safely(
+            self._awareness,
+            component_id="runtime.voice",
+            source="voice_behavior",
+            state=health_state,
+            reason_code=reason_code,
+            summary=summary,
+            ttl_seconds=120.0,
+            metadata=redact_data(metadata or {}),
+        )
+
+
 class ProviderResilienceHealthObserver:
     """Mirror deterministic provider resilience state into the Self Model."""
 

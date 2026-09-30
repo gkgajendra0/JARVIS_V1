@@ -8,7 +8,10 @@ from typing import Any
 
 import pytest
 
-from jarvis.health_adapters import ProviderResilienceHealthObserver
+from jarvis.health_adapters import (
+    ProviderResilienceHealthObserver,
+    VoiceBehaviorHealthObserver,
+)
 from jarvis.provider_resilience import (
     ProviderResilienceState,
     classify_provider_failure,
@@ -52,6 +55,33 @@ class FakeSession:
         self.closed.set()
 
 
+def test_voice_behavior_health_becomes_canonical_self_awareness_evidence(
+    tmp_path: Path,
+) -> None:
+    awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
+    observer = VoiceBehaviorHealthObserver(awareness)
+
+    observer(
+        "degraded",
+        "voice_repeated_wake_without_user_turn",
+        "Repeated wake-triggered realtime sessions committed no owner turn",
+        {"consecutive_zero_turn_sessions": 3},
+    )
+    degraded = awareness.component_snapshot("runtime.voice")
+    assert degraded.health.state is HealthState.DEGRADED
+    assert "voice_repeated_wake_without_user_turn" in degraded.health.reason_codes
+
+    observer(
+        "healthy",
+        "voice_user_turn_recovered",
+        "Realtime voice is committing owner turns again",
+    )
+    recovered = awareness.component_snapshot("runtime.voice")
+    assert recovered.health.state is HealthState.HEALTHY
+    assert "voice_user_turn_recovered" in recovered.health.reason_codes
+    awareness.close()
+
+
 def test_provider_health_adapter_maps_degraded_then_recovered(tmp_path: Path) -> None:
     awareness = SelfAwarenessRuntime(incident_store_path=tmp_path / "incidents.sqlite3")
     state = ProviderResilienceState()
@@ -74,6 +104,43 @@ def test_provider_health_adapter_maps_degraded_then_recovered(tmp_path: Path) ->
     assert healthy.health.state is HealthState.HEALTHY
     assert "provider_healthy" in healthy.health.reason_codes
     awareness.close()
+
+
+@pytest.mark.asyncio
+async def test_recoverable_provider_error_is_visible_as_degraded_health() -> None:
+    session = FakeSession()
+    state = ProviderResilienceState()
+    observed: list[tuple[str, str | None]] = []
+
+    def observe(current: ProviderResilienceState) -> None:
+        observed.append(
+            (
+                current.health.value,
+                current.last_failure.kind.value if current.last_failure else None,
+            )
+        )
+
+    provider_observer = ProviderResilienceSessionObserver(
+        session,
+        provider="gemini",
+        state=state,
+        status_speech=None,
+        output_getter=lambda: None,
+        health_observer=observe,
+    )
+    wrapped = FakeRealtimeError(
+        RuntimeError("1011 Internal error encountered"),
+        recoverable=True,
+    )
+
+    session.emit("error", SimpleNamespace(error=wrapped, source=object()))
+
+    assert session.closed.is_set() is False
+    assert observed == [("degraded", "provider_server_error")]
+    assert provider_observer.terminal_task is None
+
+    session.emit("agent_state_changed", SimpleNamespace(new_state="listening"))
+    assert observed[-1] == ("healthy", None)
 
 
 @pytest.mark.asyncio

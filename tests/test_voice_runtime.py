@@ -119,10 +119,17 @@ class FakeAudio:
         self.output = LocalAudioOutput(output_device=None)
         self.activated = False
         self.deactivated = False
+        self.pre_roll_after_monotonic: float | None = None
 
-    def activate_session(self, session_input) -> None:
+    def activate_session(
+        self,
+        session_input,
+        *,
+        pre_roll_after_monotonic: float | None = None,
+    ) -> None:
         del session_input
         self.activated = True
+        self.pre_roll_after_monotonic = pre_roll_after_monotonic
 
     def deactivate_session(self) -> None:
         self.deactivated = True
@@ -487,6 +494,137 @@ async def test_startup_realtime_failure_does_not_use_local_voice() -> None:
     await asyncio.wait_for(task, timeout=1)
 
 
+def test_repeated_zero_turn_wakes_publish_degraded_then_recover() -> None:
+    observations: list[tuple[str, str, dict[str, object]]] = []
+
+    def observe(
+        state: str,
+        reason_code: str,
+        summary: str,
+        metadata: dict[str, object],
+    ) -> None:
+        del summary
+        observations.append((state, reason_code, metadata))
+
+    runtime, _, _, _, _ = runtime_with_session()
+    runtime._voice_behavior_observer = observe
+
+    runtime._note_wake_session_without_user_turn()
+    runtime._note_wake_session_without_user_turn()
+    assert observations == []
+
+    runtime._note_wake_session_without_user_turn()
+    assert observations[-1][0:2] == (
+        "degraded",
+        "voice_repeated_wake_without_user_turn",
+    )
+    assert observations[-1][2]["consecutive_zero_turn_sessions"] == 3
+
+    runtime._note_committed_user_turn()
+    assert observations[-1][0:2] == (
+        "healthy",
+        "voice_user_turn_recovered",
+    )
+
+
+def test_zero_turn_streak_resets_before_degradation() -> None:
+    observations: list[tuple[str, str]] = []
+
+    def observe(
+        state: str,
+        reason_code: str,
+        summary: str,
+        metadata: dict[str, object],
+    ) -> None:
+        del summary, metadata
+        observations.append((state, reason_code))
+
+    runtime, _, _, _, _ = runtime_with_session()
+    runtime._voice_behavior_observer = observe
+
+    runtime._note_wake_session_without_user_turn()
+    runtime._note_wake_session_without_user_turn()
+    runtime._note_committed_user_turn()
+    runtime._note_wake_session_without_user_turn()
+    runtime._note_wake_session_without_user_turn()
+
+    assert observations == []
+
+
+@pytest.mark.asyncio
+async def test_wake_only_pause_gets_one_brief_realtime_acknowledgement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime, session, _, audio, _ = runtime_with_session(initial_timeout=1)
+    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
+
+    task = asyncio.create_task(runtime._run_one_session(pre_roll_after_monotonic=42.0))
+    await session.started.wait()
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+
+    assert audio.pre_roll_after_monotonic == 42.0
+    assert len(session.generated_replies) == 1
+    reply = session.generated_replies[0]
+    assert "invoked you and then paused" in reply["instructions"]
+    assert "exactly one very short, natural acknowledgement" in reply["instructions"]
+    assert "do not use or imitate a fixed phrase list" in reply["instructions"]
+    assert reply["allow_interruptions"] is True
+    assert reply["input_modality"] == "text"
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_immediate_owner_speech_suppresses_wake_acknowledgement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime, session, _, _, _ = runtime_with_session(initial_timeout=1)
+    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.05)
+
+    task = asyncio.create_task(runtime._run_one_session(pre_roll_after_monotonic=42.0))
+    await session.started.wait()
+
+    session.emit("user_state_changed", SimpleNamespace(new_state="speaking"))
+    await asyncio.sleep(0.08)
+
+    assert session.generated_replies == []
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_owner_speech_uses_native_barge_in_after_acknowledgement_started(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = FakeSession(auto_finish_replies=False)
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
+    audio = FakeAudio()
+    runtime = VoiceRuntimeController(
+        JarvisConfig(initial_request_timeout_seconds=1),
+        audio,  # type: ignore[arg-type]
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+    )
+    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
+
+    task = asyncio.create_task(runtime._run_one_session(pre_roll_after_monotonic=42.0))
+    await session.started.wait()
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+
+    session.emit("user_state_changed", SimpleNamespace(new_state="speaking"))
+    await asyncio.sleep(0)
+
+    # Server-side Gemini/LiveKit activity handling owns the interruption. JARVIS
+    # must not issue a second programmatic interrupt that can cancel the real turn.
+    assert session.interrupt_calls == []
+
+    session.reply_release.set()
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
 @pytest.mark.asyncio
 async def test_standby_times_out_silently_without_local_voice(
     monkeypatch: pytest.MonkeyPatch,
@@ -531,6 +669,7 @@ async def test_standby_times_out_silently_without_local_voice(
 
     assert result.raw_exception is None
     assert "Standby transition accepted" in str(result.raw_output)
+    session.emit("agent_state_changed", SimpleNamespace(new_state="thinking"))
     await asyncio.wait_for(task, timeout=1)
 
     assert local_speech.spoken == []
@@ -591,6 +730,11 @@ async def test_semantic_standby_keeps_realtime_output_until_ack_finishes() -> No
         ),
     )
 
+    # LiveKit may surface playback completion before the committed assistant
+    # conversation item. Either event order must finish standby exactly once.
+    audio.output.emit("playback_finished", object())
+    assert task.done() is False
+
     session.emit(
         "conversation_item_added",
         ConversationItemAddedEvent(
@@ -601,7 +745,6 @@ async def test_semantic_standby_keeps_realtime_output_until_ack_finishes() -> No
             )
         ),
     )
-    audio.output.emit("playback_finished", object())
 
     await asyncio.wait_for(task, timeout=1)
 
@@ -735,6 +878,108 @@ async def test_speaker_shadow_submits_only_after_committed_user_item() -> None:
     assert len(observed_turns) == 1
     assert observed_turns[0].duration_seconds == pytest.approx(1.0)
     np.testing.assert_array_equal(observed_turns[0].samples, samples)
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_real_user_assistant_turn_notifies_conversation_success() -> None:
+    session = FakeSession()
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
+    audio = FakeAudio()
+    observed: list[str] = []
+    runtime = VoiceRuntimeController(
+        JarvisConfig(initial_request_timeout_seconds=1),
+        audio,  # type: ignore[arg-type]
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+        conversation_success_observer=lambda: observed.append("success"),
+    )
+
+    task = asyncio.create_task(runtime._run_one_session())
+    await session.started.wait()
+
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="user-success",
+                role="user",
+                content=["Can you hear me?"],
+            )
+        ),
+    )
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="assistant-success",
+                role="assistant",
+                content=["Yes, I can hear you."],
+            )
+        ),
+    )
+    await asyncio.sleep(0)
+    assert observed == []
+
+    audio.output.emit(
+        "playback_finished",
+        SimpleNamespace(interrupted=False),
+    )
+    await asyncio.sleep(0)
+
+    assert observed == ["success"]
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_interrupted_assistant_playback_does_not_accept_model_migration() -> None:
+    session = FakeSession()
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
+    audio = FakeAudio()
+    observed: list[str] = []
+    runtime = VoiceRuntimeController(
+        JarvisConfig(initial_request_timeout_seconds=1),
+        audio,  # type: ignore[arg-type]
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+        conversation_success_observer=lambda: observed.append("success"),
+    )
+
+    task = asyncio.create_task(runtime._run_one_session())
+    await session.started.wait()
+
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="user-interrupted",
+                role="user",
+                content=["Can you hear me?"],
+            )
+        ),
+    )
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="assistant-interrupted",
+                role="assistant",
+                content=["Loud and clear."],
+                interrupted=True,
+            )
+        ),
+    )
+    audio.output.emit(
+        "playback_finished",
+        SimpleNamespace(interrupted=True),
+    )
+    await asyncio.sleep(0)
+
+    assert observed == []
 
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)

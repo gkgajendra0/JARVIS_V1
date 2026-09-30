@@ -66,6 +66,8 @@ SessionFactory = Callable[
 ]
 StartupGreetingFactory = Callable[[], str]
 StartupReadinessWaiter = Callable[[float], bool]
+VoiceBehaviorObserver = Callable[[str, str, str, dict[str, object]], None]
+ConversationSuccessObserver = Callable[[], None]
 
 _UPDATE_APPROVAL_PROMPT = (
     "A JARVIS software update is available. Shall I install it and restart now? "
@@ -73,6 +75,16 @@ _UPDATE_APPROVAL_PROMPT = (
 )
 _REALTIME_LIFECYCLE_TIMEOUT_SECONDS = 12.0
 _STANDBY_ACK_TIMEOUT_SECONDS = 8.0
+_WAKE_ACK_GRACE_SECONDS = 0.85
+_WAKE_ZERO_TURN_DEGRADED_THRESHOLD = 3
+_WAKE_ACK_INSTRUCTIONS = (
+    "The owner invoked you and then paused without giving a request. "
+    "Respond with exactly one very short, natural acknowledgement consistent with "
+    "your established JARVIS personality and the current conversational context. "
+    "Choose the wording naturally; do not use or imitate a fixed phrase list. "
+    "Use one short sentence only. Do not mention prompts, models, tools, wake-word "
+    "mechanics, or internal implementation."
+)
 
 
 class VoiceRuntimeState(str, Enum):
@@ -111,6 +123,8 @@ class VoiceRuntimeController:
         startup_greeting_factory: StartupGreetingFactory = select_startup_greeting,
         startup_readiness_waiter: StartupReadinessWaiter | None = None,
         startup_readiness_timeout_seconds: float = 30.0,
+        voice_behavior_observer: VoiceBehaviorObserver | None = None,
+        conversation_success_observer: ConversationSuccessObserver | None = None,
     ) -> None:
         self.config = config
         self.audio = audio
@@ -145,6 +159,78 @@ class VoiceRuntimeController:
             raise ValueError("startup_readiness_timeout_seconds must be positive")
         self._startup_readiness_waiter = startup_readiness_waiter
         self._startup_readiness_timeout_seconds = startup_readiness_timeout_seconds
+        self._voice_behavior_observer = voice_behavior_observer
+        self._conversation_success_observer = conversation_success_observer
+        self._consecutive_wake_sessions_without_user_turn = 0
+        self._voice_behavior_degraded = False
+
+    def _publish_voice_behavior(
+        self,
+        state: str,
+        reason_code: str,
+        summary: str,
+        *,
+        metadata: dict[str, object] | None = None,
+    ) -> None:
+        observer = self._voice_behavior_observer
+        if observer is None:
+            return
+        try:
+            observer(state, reason_code, summary, metadata or {})
+        except Exception:
+            LOGGER.debug("Voice behavior health observer failed", exc_info=True)
+
+    def _note_successful_conversation(self) -> None:
+        observer = self._conversation_success_observer
+        if observer is None:
+            return
+        try:
+            observer()
+        except Exception:
+            LOGGER.debug("Conversation success observer failed", exc_info=True)
+
+    def _note_committed_user_turn(self) -> None:
+        had_zero_turn_streak = self._consecutive_wake_sessions_without_user_turn > 0
+        self._consecutive_wake_sessions_without_user_turn = 0
+        if self._voice_behavior_degraded:
+            self._voice_behavior_degraded = False
+            self._publish_voice_behavior(
+                "healthy",
+                "voice_user_turn_recovered",
+                "Realtime voice is committing owner turns again",
+            )
+        elif had_zero_turn_streak:
+            LOGGER.info("Wake-to-user-turn voice behavior recovered before degradation")
+
+    def _note_wake_session_without_user_turn(self) -> None:
+        self._consecutive_wake_sessions_without_user_turn += 1
+        streak = self._consecutive_wake_sessions_without_user_turn
+        LOGGER.warning(
+            "Wake-triggered realtime session ended without a committed user turn | "
+            "consecutive=%s threshold=%s",
+            streak,
+            _WAKE_ZERO_TURN_DEGRADED_THRESHOLD,
+        )
+        if (
+            streak >= _WAKE_ZERO_TURN_DEGRADED_THRESHOLD
+            and not self._voice_behavior_degraded
+        ):
+            self._voice_behavior_degraded = True
+            self._publish_voice_behavior(
+                "degraded",
+                "voice_repeated_wake_without_user_turn",
+                "Repeated wake-triggered realtime sessions committed no owner turn",
+                metadata={
+                    "consecutive_zero_turn_sessions": streak,
+                    "threshold": _WAKE_ZERO_TURN_DEGRADED_THRESHOLD,
+                    "provider": self.config.ai_provider,
+                    "realtime_model": (
+                        self.config.gemini_realtime_model
+                        if self.config.ai_provider == "gemini"
+                        else self.config.realtime_model
+                    ),
+                },
+            )
 
     @property
     def state(self) -> VoiceRuntimeState:
@@ -637,7 +723,9 @@ class VoiceRuntimeController:
                 # queued background notification cannot race a just-detected wake.
                 self._state = VoiceRuntimeState.ACTIVATING
                 try:
-                    await self._run_one_session()
+                    await self._run_one_session(
+                        pre_roll_after_monotonic=detection.audio_end_at
+                    )
                 except asyncio.CancelledError:
                     raise
                 except Exception:
@@ -769,11 +857,21 @@ class VoiceRuntimeController:
             self.audio.deactivate_session()
             await session.aclose()
 
-    async def _run_one_session(self) -> None:
+    async def _run_one_session(
+        self,
+        *,
+        pre_roll_after_monotonic: float | None = None,
+    ) -> None:
         async with self._speech_ownership:
-            await self._run_one_session_owned()
+            await self._run_one_session_owned(
+                pre_roll_after_monotonic=pre_roll_after_monotonic
+            )
 
-    async def _run_one_session_owned(self) -> None:
+    async def _run_one_session_owned(
+        self,
+        *,
+        pre_roll_after_monotonic: float | None = None,
+    ) -> None:
         output = self.audio.output
         if output is None:
             raise RuntimeError("local audio output is not available")
@@ -849,6 +947,64 @@ class VoiceRuntimeController:
             task.add_done_callback(shadow_tasks.discard)
 
         standby_ack_observed = False
+        standby_playback_finished = False
+        owner_activity = asyncio.Event()
+        wake_ack_task: asyncio.Task[None] | None = None
+        wake_ack_started = False
+        session_success_observed = False
+
+        async def maybe_acknowledge_wake() -> None:
+            nonlocal wake_ack_started
+            try:
+                await asyncio.sleep(_WAKE_ACK_GRACE_SECONDS)
+                if (
+                    owner_activity.is_set()
+                    or exit_in_progress
+                    or active_end.is_set()
+                    or self._shutdown.is_set()
+                ):
+                    return
+                wake_ack_started = True
+                LOGGER.info(
+                    "Wake acknowledgement grace expired with no owner speech; "
+                    "requesting one brief realtime acknowledgement"
+                )
+                handle = session.generate_reply(
+                    instructions=_WAKE_ACK_INSTRUCTIONS,
+                    allow_interruptions=True,
+                    input_modality="text",
+                )
+                await handle.wait_for_playout()
+                error = handle.exception()
+                if error is not None:
+                    raise error
+                LOGGER.info("JARVIS wake acknowledgement finished playing")
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                LOGGER.exception(
+                    "JARVIS wake acknowledgement failed; continuing conversation silently"
+                )
+            finally:
+                wake_ack_started = False
+
+        def note_owner_activity() -> None:
+            nonlocal wake_ack_task
+            owner_activity.set()
+            task = wake_ack_task
+            if task is None or task.done():
+                return
+            if not wake_ack_started:
+                task.cancel()
+                wake_ack_task = None
+                return
+            # Gemini Live server-side activity detection already owns barge-in.
+            # Calling AgentSession.interrupt() here races the provider's new user
+            # turn and can cancel the response generated for the real utterance.
+            LOGGER.info(
+                "Owner speech arrived during wake acknowledgement; "
+                "provider-native barge-in owns interruption"
+            )
 
         def request_standby() -> bool:
             nonlocal exit_in_progress
@@ -881,6 +1037,7 @@ class VoiceRuntimeController:
             if exit_in_progress:
                 return
             if event.new_state == "speaking":
+                note_owner_activity()
                 self._arm_timeout(self.config.max_utterance_seconds)
             elif event.new_state == "listening":
                 timeout = (
@@ -891,11 +1048,15 @@ class VoiceRuntimeController:
                 self._arm_timeout(timeout)
 
         def on_agent_state(event: AgentStateChangedEvent) -> None:
-            if has_user_turn and event.new_state in {"thinking", "speaking"}:
+            if (
+                not exit_in_progress
+                and has_user_turn
+                and event.new_state in {"thinking", "speaking"}
+            ):
                 self._cancel_timeout()
 
         def on_conversation_item(event: ConversationItemAddedEvent) -> None:
-            nonlocal has_user_turn, standby_ack_observed
+            nonlocal has_user_turn, session_success_observed, standby_ack_observed
             item = event.item
             if not isinstance(item, ChatMessage):
                 return
@@ -904,25 +1065,43 @@ class VoiceRuntimeController:
                 return
             if item.role == "assistant" and exit_in_progress:
                 standby_ack_observed = True
+                if standby_playback_finished:
+                    LOGGER.info(
+                        "JARVIS realtime standby acknowledgement finished playing"
+                    )
+                    active_end.set()
+                return
+            if item.role == "assistant":
                 return
             if item.role != "user":
                 return
             if exit_in_progress:
                 LOGGER.info("Late user turn ignored during standby transition")
                 return
+            note_owner_activity()
             has_user_turn = True
+            self._note_committed_user_turn()
             self._cancel_timeout()
             submit_shadow_turn()
 
         def on_playback_finished(event: PlaybackFinishedEvent) -> None:
-            del event
+            nonlocal standby_playback_finished, session_success_observed
             if exit_in_progress:
+                standby_playback_finished = True
                 if standby_ack_observed:
                     LOGGER.info(
                         "JARVIS realtime standby acknowledgement finished playing"
                     )
                     active_end.set()
                 return
+            if (
+                has_user_turn
+                and not session_success_observed
+                and not event.interrupted
+                and (wake_ack_task is None or wake_ack_task.done())
+            ):
+                session_success_observed = True
+                self._note_successful_conversation()
             if self._state is VoiceRuntimeState.ACTIVE:
                 self._arm_timeout(self.config.follow_up_timeout_seconds)
 
@@ -937,7 +1116,18 @@ class VoiceRuntimeController:
         output.on("playback_finished", on_playback_finished)
 
         bridge.conversation.start()
-        self.audio.activate_session(session_input)
+        if pre_roll_after_monotonic is None:
+            self.audio.activate_session(session_input)
+        else:
+            self.audio.activate_session(
+                session_input,
+                pre_roll_after_monotonic=pre_roll_after_monotonic,
+            )
+            LOGGER.info(
+                "Wake handoff trimmed realtime pre-roll through %.6f; "
+                "post-wake speech is preserved",
+                pre_roll_after_monotonic,
+            )
         self._arm_timeout(self.config.initial_request_timeout_seconds)
         tools = list(self._vision_tools.tools) if self._vision_tools is not None else []
         standby_tools = StandbyAgentTools(request_standby)
@@ -955,6 +1145,11 @@ class VoiceRuntimeController:
                 raise
             self._state = VoiceRuntimeState.ACTIVE
             LOGGER.info("JARVIS realtime conversation is active")
+            if pre_roll_after_monotonic is not None:
+                wake_ack_task = asyncio.create_task(
+                    maybe_acknowledge_wake(),
+                    name="jarvis-wake-acknowledgement",
+                )
             if turn_capture is not None:
                 LOGGER.info(
                     "Speaker shadow bridge active: committed user turns snapshot a bounded "
@@ -979,6 +1174,16 @@ class VoiceRuntimeController:
             await active_end.wait()
         finally:
             self._cancel_timeout()
+            if (
+                pre_roll_after_monotonic is not None
+                and not has_user_turn
+                and not exit_in_progress
+                and not self._shutdown.is_set()
+            ):
+                self._note_wake_session_without_user_turn()
+            if wake_ack_task is not None and not wake_ack_task.done():
+                wake_ack_task.cancel()
+                await asyncio.gather(wake_ack_task, return_exceptions=True)
             output.off("playback_finished", on_playback_finished)
             self.audio.deactivate_session()
             await session.aclose()

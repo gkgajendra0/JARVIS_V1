@@ -89,6 +89,31 @@ async def test_activation_sends_pre_roll_in_order_without_reopening_device() -> 
     assert runtime.detector.enabled is False
 
 
+@pytest.mark.asyncio
+async def test_activation_drops_wake_window_but_preserves_post_wake_pre_roll() -> None:
+    runtime = LocalAudioRuntime(
+        FakeDetector(),  # type: ignore[arg-type]
+        input_device_name=None,
+        output_device_name=None,
+        pre_roll_seconds=0.05,
+        ring_buffer_seconds=0.10,
+    )
+    runtime._append_ring(frame(1), observed_at_monotonic=10.00)
+    runtime._append_ring(frame(2), observed_at_monotonic=10.01)
+    runtime._append_ring(frame(3), observed_at_monotonic=10.02)
+    runtime._append_ring(frame(4), observed_at_monotonic=10.03)
+    session_input = SessionAudioInput(capacity_frames=5)
+
+    runtime.activate_session(
+        session_input,
+        pre_roll_after_monotonic=10.02,
+    )
+
+    preserved = await session_input.__anext__()
+    assert np.frombuffer(preserved.data, dtype=np.int16)[0] == 4
+    assert session_input._queue.empty()
+
+
 def test_activation_preserves_pre_roll_observation_timestamps() -> None:
     runtime = LocalAudioRuntime(
         FakeDetector(),  # type: ignore[arg-type]

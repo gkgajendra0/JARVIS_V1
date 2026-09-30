@@ -14,6 +14,12 @@ The repository is reconciled around one accepted production baseline.
 - Persistent Concurrent Work Orchestration: accepted foundation.
 - Deterministic repair framework: accepted foundation.
 - Automatic production Self-Repair currently accepted: bounded R2 runtime crash/hang recovery.
+- Provider-model lifecycle self-management: IMPLEMENTATION CANDIDATE on PR #243;
+  first-party Gemini Live replacement evidence -> Live handshake -> persisted model
+  migration -> in-process runtime recycle, with periodic and model-unavailable triggers.
+- Voice behavioral health: IMPLEMENTATION CANDIDATE on PR #243; repeated wake sessions
+  with zero committed owner turns now create canonical runtime.voice degradation rather
+  than remaining log-only evidence.
 - R1 exists in the typed repair vocabulary but has no owner-accepted automatic production policy yet.
 - ChatGPT-plan primary Work/Hands reasoning: OWNER-MACHINE ACCEPTED 2026-09-30; `gpt-6-astra` is the selected account-visible plan model, paid API is bounded fallback, and C5 local LLM is not resident in the production Work pool.
 - Self-Repair issue #65: CLOSED / COMPLETED for the original R2 acceptance scope.
@@ -22,7 +28,11 @@ The authoritative completed/deferred/superseded/rejected ledger is `PROJECT_STAT
 
 ## Immediate active validation
 
-The next live acceptance target is the previously deferred **Phase-9 real external
+First complete PR #243 owner-machine acceptance for Gemini 3.8 voice behavior,
+provider-native barge-in, behavioral health evidence and provider-model lifecycle
+reconciliation. Do not merge until exact-head CI and owner-machine voice acceptance pass.
+
+After that, the next live acceptance target is the previously deferred **Phase-9 real external
 capability lifecycle**. Use a natural owner goal such as watching *Transporter* on the
 Hisense TV to force JARVIS through the real path: current-source research -> exact
 capability architecture -> owner architecture gate -> isolated implementation -> CI ->
@@ -204,6 +214,8 @@ They remain separate unless evidence shows that one directly blocks the current 
 - `AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md` — authoritative whole-JARVIS product/operating north star.
 - `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` — autonomous-engineering subsystem under that north star.
 - `SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md` — specialized repair/evolution program under the engineering subsystem.
+- `PROVIDER_MODEL_LIFECYCLE_SELF_EVOLUTION.md` — permanent bounded provider/model
+  retirement, replacement, behavioral-health and self-evolution contract.
 - `SELF_REPAIR_PHASE1H_HARDENING.md` — current hardening gate.
 - `PHASE2_ENGINEERING_KNOWLEDGE_RESEARCH.md` — consolidated Phase-2 research findings and technology dispositions.
 - `PHASE2_ENGINEERING_KNOWLEDGE_ARCHITECTURE.md` — owner-approved Phase-2 architecture and invariants.

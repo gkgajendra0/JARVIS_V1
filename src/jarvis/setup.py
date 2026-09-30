@@ -17,7 +17,13 @@ from jarvis.ai_provider import (
     configured_ai_provider,
 )
 from jarvis.authority.tool_setup import configure_authority_tool_settings
-from jarvis.config import FALSE_VALUES, TRUE_VALUES, JarvisConfig
+from jarvis.config import (
+    DEFAULT_GEMINI_REALTIME_MODEL,
+    FALSE_VALUES,
+    LEGACY_GEMINI_REALTIME_MODELS,
+    TRUE_VALUES,
+    JarvisConfig,
+)
 from jarvis.identity.active_speaker_assets import ensure_lr_asd_model
 from jarvis.machine_config import (
     PERSISTABLE_SETTINGS,
@@ -270,6 +276,19 @@ def _existing_file_or_prompt(
         print(f"File not found: {candidate}")
 
 
+def _migrate_legacy_gemini_realtime_setting(
+    settings: dict[str, str],
+) -> None:
+    model = settings.get("JARVIS_GEMINI_REALTIME_MODEL")
+    if model not in LEGACY_GEMINI_REALTIME_MODELS:
+        return
+    settings["JARVIS_GEMINI_REALTIME_MODEL"] = DEFAULT_GEMINI_REALTIME_MODEL
+    print(
+        "Migrating legacy Gemini realtime model "
+        f"{model} -> {DEFAULT_GEMINI_REALTIME_MODEL}"
+    )
+
+
 def _build_settings(existing: dict[str, str]) -> dict[str, str]:
     # First capture every allow-listed legacy runtime value so migration does not
     # silently discard tuned thresholds, voices, timeouts, or model locations.
@@ -278,6 +297,8 @@ def _build_settings(existing: dict[str, str]) -> dict[str, str]:
         value = os.getenv(name)
         if value is not None:
             settings[name] = value.strip()
+
+    _migrate_legacy_gemini_realtime_setting(settings)
 
     provider = configured_ai_provider(existing, default="gemini")
     settings[AI_PROVIDER_SETTING] = provider

@@ -292,11 +292,12 @@ async def test_detector_uses_streaming_predictor_window() -> None:
         debounce_seconds=2,
     )
     detector.enable()
-    detector.feed(frame())
+    detector.feed(frame(), observed_at_monotonic=42.25)
 
     detection = await asyncio.wait_for(detector.wait_for_detection(), timeout=1)
 
     assert detection.name == "jarvis"
+    assert detection.audio_end_at == 42.25
     assert predictor.windows[0].shape == (1_280,)
     assert predictor.reset_calls == 1
     await detector.aclose()

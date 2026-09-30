@@ -8,10 +8,15 @@ def test_voice_instructions_define_language_routing() -> None:
     assert "retain it for the rest of the session" in INSTRUCTIONS
 
 
-def test_voice_instructions_limit_wake_only_acknowledgement() -> None:
+def test_voice_instructions_keep_wake_only_activation_silent() -> None:
     normalized = " ".join(INSTRUCTIONS.split())
-    assert "give exactly one short acknowledgement and wait" in normalized
-    assert "Do not add a second check-in" in normalized
+    assert "standalone wake-name utterance is activation residue" in normalized
+    assert "remain silent and wait for the owner's actual request" in normalized
+    assert (
+        "even when speech transcription renders the wake name imperfectly" in normalized
+    )
+    assert "genuine brief greeting" in normalized
+    assert "exactly one short acknowledgement" in normalized
 
 
 def test_voice_instructions_forbid_unobserved_scene_claims() -> None:

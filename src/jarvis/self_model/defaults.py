@@ -310,6 +310,22 @@ def build_default_self_model() -> SelfModelRegistry:
             ),
         ),
         C(
+            "provider.lifecycle",
+            "Authoritative provider-model lifecycle detection, migration, acceptance, and rollback.",
+            ("src/jarvis/provider_model_lifecycle.py",),
+            parent_component_id="runtime.provider",
+            tests=(
+                "tests/test_provider_model_lifecycle.py",
+                "tests/test_provider_model_lifecycle_runtime.py",
+            ),
+            config_keys=("JARVIS_GEMINI_REALTIME_MODEL",),
+            logger_prefixes=("jarvis.provider_model_lifecycle",),
+            docs=(
+                "docs/PROVIDER_MODEL_LIFECYCLE_SELF_EVOLUTION.md",
+                "docs/GEMINI_LIVE_38_MIGRATION_2026-09-30.md",
+            ),
+        ),
+        C(
             "vision.base",
             "Camera perception and tracking foundation.",
             ("src/jarvis/vision",),

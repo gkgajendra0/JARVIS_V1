@@ -11,6 +11,7 @@ from livekit.agents import ErrorEvent
 from livekit.agents.voice import io
 
 from jarvis.provider_resilience import (
+    ProviderFailure,
     ProviderFailureKind,
     ProviderResilienceState,
     classify_provider_failure,
@@ -49,6 +50,7 @@ class ProviderResilienceSessionObserver:
         status_speech: LocalStatusSpeech | None,
         output_getter: Callable[[], io.AudioOutput | None],
         health_observer: Callable[[ProviderResilienceState], None] | None = None,
+        failure_observer: Callable[[ProviderFailure], None] | None = None,
     ) -> None:
         self._session = session
         self._provider = provider
@@ -56,6 +58,7 @@ class ProviderResilienceSessionObserver:
         self._status_speech = status_speech
         self._output_getter = output_getter
         self._health_observer = health_observer
+        self._failure_observer = failure_observer
         self._terminal_task: asyncio.Task[None] | None = None
         session.on("error", self._on_error)
         session.on("agent_state_changed", self._on_agent_state_changed)
@@ -92,15 +95,26 @@ class ProviderResilienceSessionObserver:
             return
 
         failure = classify_provider_failure(error, provider=self._provider)
+        if self._failure_observer is not None:
+            try:
+                self._failure_observer(failure)
+            except Exception:  # noqa: BLE001,S110 - diagnostics must not break resilience
+                pass
         if self._terminal_task is not None and not self._terminal_task.done():
             return
 
         sdk_recoverable = bool(getattr(error, "recoverable", False))
         jarvis_terminal = failure.kind in _JARVIS_TERMINAL_FAILURE_KINDS
         if sdk_recoverable and not jarvis_terminal:
+            # Recoverable is transport guidance, not a claim that the provider is
+            # healthy. Preserve the failure as canonical degraded health evidence so
+            # Self-Awareness/Incidents can observe provider drift even when the SDK
+            # keeps the realtime session alive.
+            self._state.mark_failure(failure)
+            self._notify_health()
             LOGGER.warning(
                 "Recoverable realtime provider error | provider=%s | kind=%s | "
-                "status_code=%s | retryable=%s",
+                "status_code=%s | retryable=%s | health=degraded",
                 self._provider,
                 failure.kind.value,
                 failure.status_code,

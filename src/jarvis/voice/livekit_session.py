@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 
+from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types as google_types
 from livekit.agents import (
     AgentSession,
@@ -36,13 +39,43 @@ _OPENAI_REALTIME_POST_INSTRUCTION_TOKEN_LIMIT = 12_000
 _OPENAI_REALTIME_RETENTION_RATIO = 0.75
 
 
+class GeminiLiveProbeError(RuntimeError):
+    """Provider-adapter failure while validating a Gemini Live model."""
+
+
+async def probe_gemini_live_model(
+    api_key: str,
+    model: str,
+    timeout_seconds: float,
+) -> None:
+    """Require a candidate model to complete a real Gemini Live setup handshake."""
+
+    async def connect_once() -> None:
+        client = genai.Client(api_key=api_key)
+        try:
+            async with client.aio.live.connect(
+                model=model,
+                config={"response_modalities": ["AUDIO"]},
+            ):
+                return
+        except (genai_errors.APIError, OSError, RuntimeError, ValueError) as exc:
+            raise GeminiLiveProbeError(type(exc).__name__) from exc
+        finally:
+            await client.aio.aclose()
+
+    try:
+        await asyncio.wait_for(connect_once(), timeout=timeout_seconds)
+    except TimeoutError as exc:
+        raise GeminiLiveProbeError("timeout") from exc
+
+
 def _create_realtime_model(config: JarvisConfig):
     api_key = require_provider_api_key(config.ai_provider, purpose="realtime voice")
     if config.ai_provider == "gemini":
-        # Gemini 3.1 + the currently pinned LiveKit Google adapter must retain
-        # provider-native activity/turn completion. The paired audio runtime
-        # separately gates AEC-clean PCM with local Silero only while JARVIS is
-        # speaking, so residual echo is filtered before Gemini's native VAD.
+        # Gemini 3.8 Live permanently enables proactive audio. Keep provider-native
+        # activity/turn completion and explicit start-of-activity barge-in. The
+        # JARVIS wake boundary removes already-consumed wake audio before this model
+        # sees the conversation stream; Gemini then owns normal conversational VAD.
         return google.realtime.RealtimeModel(
             model=config.gemini_realtime_model,
             voice=config.gemini_realtime_voice,
@@ -62,7 +95,10 @@ def _create_realtime_model(config: JarvisConfig):
                     ),
                     prefix_padding_ms=300,
                     silence_duration_ms=800,
-                )
+                ),
+                activity_handling=(
+                    google_types.ActivityHandling.START_OF_ACTIVITY_INTERRUPTS
+                ),
             ),
         )
 
