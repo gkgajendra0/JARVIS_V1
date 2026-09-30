@@ -334,3 +334,17 @@ def test_local_resource_pressure_is_classified_for_immediate_fallback() -> None:
     assert failure.kind is ProviderFailureKind.LOCAL_RESOURCE_PRESSURE
     assert failure.retryable is True
     assert "local gpu resources" in failure.spoken_message.casefold()
+
+
+def test_gemini_live_websocket_1011_is_retryable_provider_server_error() -> None:
+    class GeminiLiveInternalError(RuntimeError):
+        pass
+
+    failure = classify_provider_failure(
+        GeminiLiveInternalError("1011 None. Internal error encountered."),
+        provider="gemini",
+    )
+
+    assert failure.kind is ProviderFailureKind.PROVIDER_SERVER_ERROR
+    assert failure.retryable is True
+    assert "internal server error" in failure.spoken_message
