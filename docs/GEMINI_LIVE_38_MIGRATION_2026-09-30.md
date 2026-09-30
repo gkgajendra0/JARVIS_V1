@@ -52,6 +52,21 @@ JARVIS remains silent and waits for the actual owner request, including when the
 name is imperfectly transcribed. Genuine greetings may still receive one short
 acknowledgement.
 
+## Deterministic wake-boundary handoff
+
+Prompt-level silence was not sufficient for Gemini 3.8. Owner acceptance showed that
+the recognized wake name itself was still present in the audio ring pre-roll handed to
+the realtime session. Gemini therefore created a real turn for `Jarvis`/nearby
+transcriptions even when the agent instructions requested silence, producing silent or
+near-silent generations that could still disturb turn timing.
+
+The wake detector now records the monotonic end timestamp of the exact audio window that
+triggered detection. Wake-triggered conversation activation trims pre-roll through that
+boundary and preserves only frames observed afterward. This removes already-consumed
+wake audio from Gemini while retaining speech that follows immediately after the wake
+word, including commands spoken without waiting for session startup. Non-wake sessions
+retain the previous pre-roll behavior.
+
 ## Independent standby race found during acceptance
 
 The successful 3.8 owner-machine run exposed a separate existing standby cleanup
