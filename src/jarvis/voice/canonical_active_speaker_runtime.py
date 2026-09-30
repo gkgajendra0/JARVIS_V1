@@ -34,7 +34,7 @@ from jarvis.voice.memory_tools import MemoryAgentTools
 from jarvis.voice.research_tools import ResearchAgentTools
 from jarvis.voice.runtime import VoiceRuntimeController
 from jarvis.voice.work_tools import WorkAgentTools
-from jarvis.work.models import WorkDeliveryKind
+from jarvis.work.models import WorkDeliveryKind, WorkState
 from jarvis.work.provider_retry import delivery_retry_delay_seconds, provider_retry_hint
 from jarvis.work.runtime import WorkRuntime
 
@@ -228,6 +228,26 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             return f"Sir, a background task failed. {normalized}"
         return f"Sir, {normalized}"
 
+    @staticmethod
+    def _work_delivery_is_current(kind: WorkDeliveryKind, state: WorkState) -> bool:
+        """Only speak a durable notification while its underlying state is current."""
+
+        if kind is WorkDeliveryKind.OWNER_INPUT:
+            return state is WorkState.WAITING_FOR_OWNER
+        if kind is WorkDeliveryKind.RESOURCE_BLOCKER:
+            return state in {
+                WorkState.WAITING_RESOURCE,
+                WorkState.WAITING_DEPENDENCY,
+                WorkState.WAITING_UNTIL,
+            }
+        if kind is WorkDeliveryKind.PROGRESS:
+            return not state.terminal
+        if kind is WorkDeliveryKind.COMPLETION:
+            return state is WorkState.COMPLETED
+        if kind is WorkDeliveryKind.FAILURE:
+            return state is WorkState.FAILED
+        return True
+
     async def _deliver_pending_work(self) -> None:
         """Speak durable Work notifications only at an exclusive idle boundary.
 
@@ -258,6 +278,19 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 continue
 
             delivery = due[0]
+            work = runtime.store.require(delivery.work_id)
+            if not self._work_delivery_is_current(delivery.kind, work.state):
+                runtime.store.mark_delivery_delivered(delivery.delivery_id)
+                LOGGER.info(
+                    "Obsolete background notification discarded | "
+                    "delivery_id=%s | work_id=%s | kind=%s | current_state=%s",
+                    delivery.delivery_id,
+                    delivery.work_id,
+                    delivery.kind.value,
+                    work.state.value,
+                )
+                await asyncio.sleep(0)
+                continue
 
             # A wake activation and a Work notification may become ready on the
             # same event-loop turn. The shared lease makes the winner explicit;
@@ -396,7 +429,11 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     delivery.kind.value,
                     delivery.policy.value,
                 )
-                await asyncio.sleep(0.2)
+                # Keep wake detection available between queued notifications. Without
+                # this owner-priority window, a recovered delivery backlog can disable
+                # wake, speak, re-enable wake, and immediately disable it again before
+                # the owner has a realistic chance to say the wake word.
+                await asyncio.sleep(max(3.0, self.config.wake_cooldown_seconds))
 
     def _arm_timeout(self, seconds: float) -> None:
         """Arm inactivity shutdown only after startup and only while user is silent."""
