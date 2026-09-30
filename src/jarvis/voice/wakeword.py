@@ -278,6 +278,7 @@ class WakeDetection:
     name: str
     confidence: float
     detected_at: float
+    audio_end_at: float
 
 
 def load_livekit_predictor(model_path: Path) -> WakePredictor:
@@ -364,7 +365,12 @@ class LiveKitWakeDetector:
             if callable(reset):
                 reset()
 
-    def feed(self, frame: rtc.AudioFrame) -> None:
+    def feed(
+        self,
+        frame: rtc.AudioFrame,
+        *,
+        observed_at_monotonic: float | None = None,
+    ) -> None:
         if self._closed or not self._enabled:
             return
         if frame.num_channels != 1:
@@ -389,7 +395,14 @@ class LiveKitWakeDetector:
         ):
             self._samples_since_inference %= INFERENCE_STRIDE_SAMPLES
             window = self._window(self._predictor_window_samples)
-            self._inference_task = asyncio.create_task(self._score(window))
+            audio_end_at = (
+                self._clock()
+                if observed_at_monotonic is None
+                else observed_at_monotonic
+            )
+            self._inference_task = asyncio.create_task(
+                self._score(window, audio_end_at=audio_end_at)
+            )
 
     def _trim_window(self) -> None:
         while (
@@ -403,7 +416,12 @@ class LiveKitWakeDetector:
         audio = np.concatenate(tuple(self._chunks))
         return audio[-samples:].copy()
 
-    async def _score(self, window: np.ndarray) -> None:
+    async def _score(
+        self,
+        window: np.ndarray,
+        *,
+        audio_end_at: float,
+    ) -> None:
         loop = asyncio.get_running_loop()
         scores = await loop.run_in_executor(
             self._executor,
@@ -421,7 +439,7 @@ class LiveKitWakeDetector:
                 continue
             self._last_detection = now
             self._enabled = False
-            detection = WakeDetection(name, confidence, now)
+            detection = WakeDetection(name, confidence, now, audio_end_at)
             if self._detections.full():
                 self._detections.get_nowait()
             self._detections.put_nowait(detection)
