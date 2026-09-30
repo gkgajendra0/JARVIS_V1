@@ -259,7 +259,7 @@ async def test_sdk_recoverable_quota_still_becomes_terminal_jarvis_failure() -> 
     await observer.terminal_task
 
 
-def test_recoverable_realtime_error_is_not_announced_or_marked_degraded() -> None:
+def test_recoverable_realtime_error_is_not_announced_but_marks_degraded() -> None:
     session = FakeSession()
     state = ProviderResilienceState()
     speech = FakeStatusSpeech()
@@ -278,7 +278,9 @@ def test_recoverable_realtime_error_is_not_announced_or_marked_degraded() -> Non
     session.emit("error", SimpleNamespace(error=wrapped, source=object()))
 
     assert observer.terminal_task is None
-    assert state.health is ProviderHealth.HEALTHY
+    assert state.health is ProviderHealth.DEGRADED
+    assert state.last_failure is not None
+    assert state.last_failure.kind is ProviderFailureKind.SERVICE_UNAVAILABLE
     assert speech.spoken == []
 
 
