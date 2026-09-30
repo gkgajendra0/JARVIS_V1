@@ -67,6 +67,24 @@ wake audio from Gemini while retaining speech that follows immediately after the
 word, including commands spoken without waiting for session startup. Non-wake sessions
 retain the previous pre-roll behavior.
 
+## Conditional wake acknowledgement
+
+The deterministic wake-boundary handoff deliberately removes the recognized wake name
+from Gemini input, but JARVIS should still feel responsive when the owner invokes only
+the wake word. Wake-triggered sessions now use a short grace window:
+
+- if owner speech arrives during the grace window, no acknowledgement is generated and
+  the real request proceeds directly;
+- if the owner pauses after waking JARVIS, the already-open realtime session generates
+  exactly one brief natural acknowledgement in the established JARVIS voice;
+- if owner speech begins while that acknowledgement is starting, the acknowledgement is
+  interruptible so the owner request wins;
+- startup greetings, standby acknowledgements, update prompts, and non-wake sessions are
+  unchanged.
+
+This restores the familiar wake acknowledgement without re-injecting the wake word into
+the conversational audio stream.
+
 ## Independent standby race found during acceptance
 
 The successful 3.8 owner-machine run exposed a separate existing standby cleanup
