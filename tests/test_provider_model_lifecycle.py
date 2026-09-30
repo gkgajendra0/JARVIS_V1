@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -295,7 +296,7 @@ async def test_rolled_back_replacement_is_not_retried_automatically(
         previous_model="gemini-3.1-flash-live-preview",
         candidate_model="gemini-3.8-live",
         state="rolled_back",
-        recorded_at="2026-09-30T00:00:00+00:00",
+        recorded_at=datetime.now(UTC).isoformat(),
     )
     monkeypatch.setattr(lifecycle, "_load_migration_journal", lambda: journal)
 
@@ -318,6 +319,29 @@ async def test_rolled_back_replacement_is_not_retried_automatically(
     )
 
     assert result.status == "replacement_blocked_after_rollback"
+
+
+def test_rolled_back_replacement_becomes_retryable_after_cooldown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    journal = lifecycle.GeminiLiveMigrationJournal(
+        previous_model="gemini-old-live",
+        candidate_model="gemini-new-live",
+        state="rolled_back",
+        recorded_at=(
+            datetime.now(UTC)
+            - timedelta(seconds=lifecycle.ROLLED_BACK_RETRY_COOLDOWN_SECONDS + 1)
+        ).isoformat(),
+    )
+    monkeypatch.setattr(lifecycle, "_load_migration_journal", lambda: journal)
+
+    assert (
+        lifecycle._replacement_blocked_after_rollback(
+            "gemini-old-live",
+            "gemini-new-live",
+        )
+        is False
+    )
 
 
 @pytest.mark.asyncio
