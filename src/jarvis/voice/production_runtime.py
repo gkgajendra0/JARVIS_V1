@@ -65,7 +65,7 @@ from jarvis.promotion.release import (
 )
 from jarvis.promotion.runtime_composition import PromotionRuntimeConfig
 from jarvis.provider_model_lifecycle import reconcile_gemini_live_model
-from jarvis.provider_resilience import ProviderResilienceState
+from jarvis.provider_resilience import ProviderFailureKind, ProviderResilienceState
 from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.vision.camera import (
     OpenCVCameraConfig,
@@ -134,6 +134,7 @@ def build_production_voice_runtime(
     config: JarvisConfig,
     *,
     self_awareness: SelfAwarenessRuntime | None = None,
+    provider_lifecycle_trigger: asyncio.Event | None = None,
 ) -> CanonicalActiveSpeakerRuntimeController:
     """Build the production single-microphone-owner voice/vision runtime."""
     if config.wake_model_path is None:
@@ -498,6 +499,15 @@ def build_production_voice_runtime(
             status_speech=local_status_speech,
             output_getter=lambda: audio.output,
             health_observer=provider_health_observer,
+            failure_observer=(
+                (
+                    lambda failure: provider_lifecycle_trigger.set()
+                    if failure.kind is ProviderFailureKind.MODEL_UNAVAILABLE
+                    else None
+                )
+                if provider_lifecycle_trigger is not None
+                else None
+            ),
         )
         silent_audio_recovery = SilentRealtimeAudioRecovery(
             session_config,
@@ -570,11 +580,16 @@ async def _run_provider_model_lifecycle_watch(
     config: JarvisConfig,
     runtime,
     migrated: asyncio.Event,
+    lifecycle_trigger: asyncio.Event,
     *,
     poll_seconds: float = _PROVIDER_MODEL_LIFECYCLE_POLL_SECONDS,
 ) -> None:
     while True:
-        await asyncio.sleep(poll_seconds)
+        try:
+            await asyncio.wait_for(lifecycle_trigger.wait(), timeout=poll_seconds)
+        except TimeoutError:
+            pass
+        lifecycle_trigger.clear()
         result = await _reconcile_provider_model_lifecycle(config)
         if result is None or not result.migrated:
             continue
@@ -613,21 +628,31 @@ async def _run_from_configuration() -> None:
                 type(exc).__name__,
             )
 
+        lifecycle_trigger = asyncio.Event()
         if self_awareness is None:
             require_startup_preflight(config)
-            runtime = build_production_voice_runtime(config)
+            runtime = build_production_voice_runtime(
+                config,
+                provider_lifecycle_trigger=lifecycle_trigger,
+            )
         else:
             record_foundation_health(self_awareness)
             require_startup_preflight_with_health(config, self_awareness)
             runtime = build_production_voice_runtime(
                 config,
                 self_awareness=self_awareness,
+                provider_lifecycle_trigger=lifecycle_trigger,
             )
 
         migrated = asyncio.Event()
         lifecycle_task = (
             asyncio.create_task(
-                _run_provider_model_lifecycle_watch(config, runtime, migrated),
+                _run_provider_model_lifecycle_watch(
+                    config,
+                    runtime,
+                    migrated,
+                    lifecycle_trigger,
+                ),
                 name="jarvis-provider-model-lifecycle-watch",
             )
             if config.ai_provider == "gemini"
