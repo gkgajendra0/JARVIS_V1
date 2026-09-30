@@ -162,7 +162,9 @@ async def test_chatgpt_plan_structured_client_uses_plan_transport() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chatgpt_plan_client_falls_back_when_plan_allowance_is_unavailable() -> None:
+async def test_chatgpt_plan_client_falls_back_when_plan_allowance_is_unavailable() -> (
+    None
+):
     manager = _FakePlanManager(
         error=ChatGPTPlanUsageUnavailable(
             "limit",
