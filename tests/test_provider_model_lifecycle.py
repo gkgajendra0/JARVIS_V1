@@ -7,7 +7,6 @@ import pytest
 
 from jarvis import provider_model_lifecycle as lifecycle
 from jarvis.config import JarvisConfig
-from jarvis import provider_model_lifecycle as lifecycle
 from jarvis.machine_config import load_machine_settings, save_machine_settings
 from jarvis.provider_model_lifecycle import (
     GEMINI_DEPRECATIONS_URL,
