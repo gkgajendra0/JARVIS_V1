@@ -72,7 +72,11 @@ from jarvis.provider_model_lifecycle import (
     reconcile_gemini_live_model,
     rollback_pending_gemini_live_migration,
 )
-from jarvis.provider_resilience import ProviderFailureKind, ProviderResilienceState
+from jarvis.provider_resilience import (
+    ProviderFailure,
+    ProviderFailureKind,
+    ProviderResilienceState,
+)
 from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.vision.camera import (
     OpenCVCameraConfig,
@@ -500,7 +504,7 @@ def build_production_voice_runtime(
     def production_session_factory(session_config: JarvisConfig):
         session, bridge = create_voice_session(session_config)
 
-        def observe_provider_failure(failure) -> None:
+        def observe_provider_failure(failure: ProviderFailure) -> None:
             if (
                 provider_lifecycle_trigger is None
                 or failure.kind is not ProviderFailureKind.MODEL_UNAVAILABLE
