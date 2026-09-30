@@ -94,23 +94,27 @@ class FakeStore:
         policy: DeliveryPolicy,
         *,
         work_state: WorkState = WorkState.WAITING_FOR_OWNER,
+        kind: WorkDeliveryKind = WorkDeliveryKind.OWNER_INPUT,
+        message: str = "Please confirm the TV pairing request.",
     ) -> None:
         self.work_state = work_state
         self.delivery = SimpleNamespace(
             delivery_id="delivery-tv-owner-input",
             work_id="work-tv-capability",
-            kind=WorkDeliveryKind.OWNER_INPUT,
+            kind=kind,
             policy=policy,
-            message="Please confirm the TV pairing request.",
+            message=message,
             failed_attempts=0,
         )
         self.delivered = False
+        self.deferred = False
+        self.retry: tuple[float, str] | None = None
         self.list_calls = 0
 
     def list_due_deliveries(self, *, limit: int = 5):
         assert limit == 5
         self.list_calls += 1
-        return () if self.delivered else (self.delivery,)
+        return () if self.delivered or self.deferred else (self.delivery,)
 
     def require(self, work_id: str):
         assert work_id == self.delivery.work_id
@@ -120,9 +124,18 @@ class FakeStore:
         assert delivery_id == self.delivery.delivery_id
         self.delivered = True
 
-    def schedule_delivery_retry(self, *args, **kwargs):
-        del args, kwargs
-        raise AssertionError("successful realtime speech must not schedule a retry")
+    def schedule_delivery_retry(
+        self,
+        delivery_id: str,
+        *,
+        delay_seconds: float,
+        reason: str,
+    ):
+        assert delivery_id == self.delivery.delivery_id
+        self.deferred = True
+        self.retry = (delay_seconds, reason)
+        self.delivery.failed_attempts += 1
+        return SimpleNamespace(failed_attempts=self.delivery.failed_attempts)
 
 
 class FakeWorkRuntime:
@@ -131,8 +144,15 @@ class FakeWorkRuntime:
         policy: DeliveryPolicy,
         *,
         work_state: WorkState = WorkState.WAITING_FOR_OWNER,
+        kind: WorkDeliveryKind = WorkDeliveryKind.OWNER_INPUT,
+        message: str = "Please confirm the TV pairing request.",
     ) -> None:
-        self.store = FakeStore(policy, work_state=work_state)
+        self.store = FakeStore(
+            policy,
+            work_state=work_state,
+            kind=kind,
+            message=message,
+        )
 
 
 @pytest.mark.asyncio
@@ -140,7 +160,7 @@ class FakeWorkRuntime:
     "policy",
     [DeliveryPolicy.WHEN_IDLE, DeliveryPolicy.INTERRUPT],
 )
-async def test_background_work_speech_waits_until_voice_session_is_idle(
+async def test_owner_input_waits_for_idle_then_opens_interactive_session(
     policy: DeliveryPolicy,
 ) -> None:
     audio = FakeAudio()
@@ -152,48 +172,68 @@ async def test_background_work_speech_waits_until_voice_session_is_idle(
         work_runtime=work,  # type: ignore[arg-type]
     )
     runtime._speak_ephemeral_realtime_message = speech.speak  # type: ignore[method-assign]
+    interaction_started = asyncio.Event()
+    calls: list[tuple[str, str, bool]] = []
 
+    async def interactive_owner_input(*, work_id: str, question: str) -> bool:
+        calls.append((work_id, question, audio.detector.enabled))
+        interaction_started.set()
+        work.store.work_state = WorkState.RUNNING
+        return True
+
+    runtime._run_owner_input_interaction = interactive_owner_input  # type: ignore[method-assign]
     runtime._state = VoiceRuntimeState.ACTIVE
     runtime._live_session = object()
 
     delivery_task = asyncio.create_task(runtime._deliver_pending_work())
     await asyncio.sleep(0.35)
 
-    assert speech.instructions == []
+    assert calls == []
     assert work.store.delivered is False
     assert audio.detector.disable_calls == 0
 
     runtime._state = VoiceRuntimeState.IDLE
     runtime._live_session = None
 
-    await asyncio.wait_for(speech.started.wait(), timeout=1)
+    await asyncio.wait_for(interaction_started.wait(), timeout=1)
     await asyncio.sleep(0)
 
-    assert len(speech.instructions) == 1
-    assert "Please confirm the TV pairing request." in speech.instructions[0]
-    assert "one or two brief, natural sentences" in speech.instructions[0]
-    assert speech.labels == ["background work notification"]
-    assert speech.detector_was_disabled is True
+    assert calls == [
+        (
+            "work-tv-capability",
+            "Please confirm the TV pairing request.",
+            False,
+        )
+    ]
+    assert speech.instructions == []
     assert audio.detector.disable_calls == 1
     assert audio.resume_calls == 1
     assert audio.detector.enabled is True
     assert work.store.delivered is True
+    assert work.store.retry is None
 
     runtime.request_shutdown()
     await asyncio.wait_for(delivery_task, timeout=1)
 
 
 @pytest.mark.asyncio
-async def test_background_work_speech_respects_shared_speech_lease() -> None:
+async def test_owner_input_interaction_respects_shared_speech_lease() -> None:
     audio = FakeAudio()
-    speech = FakeRealtimeSpeech(audio)
     work = FakeWorkRuntime(DeliveryPolicy.WHEN_IDLE)
     runtime = CanonicalActiveSpeakerRuntimeController(
         JarvisConfig(wake_cooldown_seconds=0.01),
         audio,  # type: ignore[arg-type]
         work_runtime=work,  # type: ignore[arg-type]
     )
-    runtime._speak_ephemeral_realtime_message = speech.speak  # type: ignore[method-assign]
+    interaction_started = asyncio.Event()
+
+    async def interactive_owner_input(*, work_id: str, question: str) -> bool:
+        del work_id, question
+        interaction_started.set()
+        work.store.work_state = WorkState.RUNNING
+        return True
+
+    runtime._run_owner_input_interaction = interactive_owner_input  # type: ignore[method-assign]
     runtime._state = VoiceRuntimeState.IDLE
     runtime._live_session = None
 
@@ -201,11 +241,11 @@ async def test_background_work_speech_respects_shared_speech_lease() -> None:
     delivery_task = asyncio.create_task(runtime._deliver_pending_work())
     await asyncio.sleep(0.1)
 
-    assert speech.instructions == []
+    assert not interaction_started.is_set()
     assert work.store.delivered is False
 
     runtime._speech_ownership.release()
-    await asyncio.wait_for(speech.started.wait(), timeout=1)
+    await asyncio.wait_for(interaction_started.wait(), timeout=1)
     await asyncio.sleep(0)
 
     assert work.store.delivered is True
@@ -215,9 +255,51 @@ async def test_background_work_speech_respects_shared_speech_lease() -> None:
 
 
 @pytest.mark.asyncio
-async def test_critical_background_notification_falls_back_to_local_speech() -> None:
+async def test_unanswered_owner_input_stays_durable_and_retries() -> None:
     audio = FakeAudio()
     work = FakeWorkRuntime(DeliveryPolicy.WHEN_IDLE)
+    runtime = CanonicalActiveSpeakerRuntimeController(
+        JarvisConfig(wake_cooldown_seconds=0.01),
+        audio,  # type: ignore[arg-type]
+        work_runtime=work,  # type: ignore[arg-type]
+    )
+
+    async def unanswered_owner_input(*, work_id: str, question: str) -> bool:
+        del work_id, question
+        return False
+
+    runtime._run_owner_input_interaction = unanswered_owner_input  # type: ignore[method-assign]
+    runtime._state = VoiceRuntimeState.IDLE
+    runtime._live_session = None
+
+    delivery_task = asyncio.create_task(runtime._deliver_pending_work())
+
+    for _ in range(40):
+        if work.store.retry is not None:
+            break
+        await asyncio.sleep(0.025)
+
+    assert work.store.delivered is False
+    assert work.store.retry is not None
+    delay_seconds, reason = work.store.retry
+    assert delay_seconds >= 30.0
+    assert reason == "owner_input_unanswered"
+    assert audio.resume_calls == 1
+    assert audio.detector.enabled is True
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(delivery_task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_noninteractive_critical_notification_falls_back_to_local_speech() -> None:
+    audio = FakeAudio()
+    work = FakeWorkRuntime(
+        DeliveryPolicy.WHEN_IDLE,
+        work_state=WorkState.FAILED,
+        kind=WorkDeliveryKind.FAILURE,
+        message="The capability build failed.",
+    )
     local = FakeLocalStatusSpeech(audio)
     runtime = CanonicalActiveSpeakerRuntimeController(
         JarvisConfig(wake_cooldown_seconds=0.01),
@@ -236,10 +318,7 @@ async def test_critical_background_notification_falls_back_to_local_speech() -> 
     await asyncio.sleep(0)
 
     assert local.messages == [
-        (
-            "Sir, I need your input on a background task. "
-            "Please confirm the TV pairing request."
-        )
+        "Sir, a background task failed. The capability build failed."
     ]
     assert work.store.delivered is True
     assert audio.resume_calls == 1
