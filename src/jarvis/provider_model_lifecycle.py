@@ -453,7 +453,7 @@ def _persist_replacement(
     settings[GEMINI_REALTIME_MODEL_SETTING] = replacement_model
     try:
         save_machine_settings(settings)
-    except Exception:
+    except (OSError, RuntimeError, TypeError, ValueError):
         _write_migration_journal(
             _journal_now(
                 current_model,
