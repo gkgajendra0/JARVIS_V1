@@ -27,7 +27,7 @@ GEMINI_REALTIME_MODEL_SETTING = "JARVIS_GEMINI_REALTIME_MODEL"
 DEFAULT_LIFECYCLE_FETCH_TIMEOUT_SECONDS = 8.0
 DEFAULT_LIVE_PROBE_TIMEOUT_SECONDS = 10.0
 
-_MODEL_ID = re.compile(r"\\bgemini-[a-z0-9][a-z0-9._-]*\\b", re.IGNORECASE)
+_MODEL_ID = re.compile(r"\bgemini-[a-z0-9][a-z0-9._-]*\b", re.IGNORECASE)
 
 LifecycleFetcher = Callable[[str, float], str]
 LiveProbe = Callable[[str, str, float], Awaitable[None]]
