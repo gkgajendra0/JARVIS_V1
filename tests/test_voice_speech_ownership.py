@@ -172,7 +172,7 @@ async def test_background_work_speech_waits_until_voice_session_is_idle(
     assert len(speech.messages) == 1
     assert "Please confirm the TV pairing request." in speech.messages[0]
     assert speech.max_provider_retries == [0]
-        assert speech.detector_was_disabled is True
+    assert speech.detector_was_disabled is True
     assert audio.detector.disable_calls == 1
     assert audio.resume_calls == 1
     assert audio.detector.enabled is True
