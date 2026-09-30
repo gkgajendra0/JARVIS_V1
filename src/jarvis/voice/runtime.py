@@ -66,6 +66,7 @@ SessionFactory = Callable[
 ]
 StartupGreetingFactory = Callable[[], str]
 StartupReadinessWaiter = Callable[[float], bool]
+VoiceBehaviorObserver = Callable[[str, str, str, dict[str, object]], None]
 
 _UPDATE_APPROVAL_PROMPT = (
     "A JARVIS software update is available. Shall I install it and restart now? "
@@ -74,6 +75,7 @@ _UPDATE_APPROVAL_PROMPT = (
 _REALTIME_LIFECYCLE_TIMEOUT_SECONDS = 12.0
 _STANDBY_ACK_TIMEOUT_SECONDS = 8.0
 _WAKE_ACK_GRACE_SECONDS = 0.85
+_WAKE_ZERO_TURN_DEGRADED_THRESHOLD = 3
 _WAKE_ACK_INSTRUCTIONS = (
     "The owner invoked you and then paused without giving a request. "
     "Respond with exactly one very short, natural acknowledgement consistent with "
@@ -120,6 +122,7 @@ class VoiceRuntimeController:
         startup_greeting_factory: StartupGreetingFactory = select_startup_greeting,
         startup_readiness_waiter: StartupReadinessWaiter | None = None,
         startup_readiness_timeout_seconds: float = 30.0,
+        voice_behavior_observer: VoiceBehaviorObserver | None = None,
     ) -> None:
         self.config = config
         self.audio = audio
@@ -154,6 +157,68 @@ class VoiceRuntimeController:
             raise ValueError("startup_readiness_timeout_seconds must be positive")
         self._startup_readiness_waiter = startup_readiness_waiter
         self._startup_readiness_timeout_seconds = startup_readiness_timeout_seconds
+        self._voice_behavior_observer = voice_behavior_observer
+        self._consecutive_wake_sessions_without_user_turn = 0
+        self._voice_behavior_degraded = False
+
+    def _publish_voice_behavior(
+        self,
+        state: str,
+        reason_code: str,
+        summary: str,
+        *,
+        metadata: dict[str, object] | None = None,
+    ) -> None:
+        observer = self._voice_behavior_observer
+        if observer is None:
+            return
+        try:
+            observer(state, reason_code, summary, metadata or {})
+        except Exception:
+            LOGGER.debug("Voice behavior health observer failed", exc_info=True)
+
+    def _note_committed_user_turn(self) -> None:
+        had_zero_turn_streak = self._consecutive_wake_sessions_without_user_turn > 0
+        self._consecutive_wake_sessions_without_user_turn = 0
+        if self._voice_behavior_degraded:
+            self._voice_behavior_degraded = False
+            self._publish_voice_behavior(
+                "healthy",
+                "voice_user_turn_recovered",
+                "Realtime voice is committing owner turns again",
+            )
+        elif had_zero_turn_streak:
+            LOGGER.info("Wake-to-user-turn voice behavior recovered before degradation")
+
+    def _note_wake_session_without_user_turn(self) -> None:
+        self._consecutive_wake_sessions_without_user_turn += 1
+        streak = self._consecutive_wake_sessions_without_user_turn
+        LOGGER.warning(
+            "Wake-triggered realtime session ended without a committed user turn | "
+            "consecutive=%s threshold=%s",
+            streak,
+            _WAKE_ZERO_TURN_DEGRADED_THRESHOLD,
+        )
+        if (
+            streak >= _WAKE_ZERO_TURN_DEGRADED_THRESHOLD
+            and not self._voice_behavior_degraded
+        ):
+            self._voice_behavior_degraded = True
+            self._publish_voice_behavior(
+                "degraded",
+                "voice_repeated_wake_without_user_turn",
+                "Repeated wake-triggered realtime sessions committed no owner turn",
+                metadata={
+                    "consecutive_zero_turn_sessions": streak,
+                    "threshold": _WAKE_ZERO_TURN_DEGRADED_THRESHOLD,
+                    "provider": self.config.ai_provider,
+                    "realtime_model": (
+                        self.config.gemini_realtime_model
+                        if self.config.ai_provider == "gemini"
+                        else self.config.realtime_model
+                    ),
+                },
+            )
 
     @property
     def state(self) -> VoiceRuntimeState:
@@ -1000,6 +1065,7 @@ class VoiceRuntimeController:
                 return
             note_owner_activity()
             has_user_turn = True
+            self._note_committed_user_turn()
             self._cancel_timeout()
             submit_shadow_turn()
 
@@ -1086,6 +1152,13 @@ class VoiceRuntimeController:
             await active_end.wait()
         finally:
             self._cancel_timeout()
+            if (
+                pre_roll_after_monotonic is not None
+                and not has_user_turn
+                and not exit_in_progress
+                and not self._shutdown.is_set()
+            ):
+                self._note_wake_session_without_user_turn()
             if wake_ack_task is not None and not wake_ack_task.done():
                 wake_ack_task.cancel()
                 await asyncio.gather(wake_ack_task, return_exceptions=True)
