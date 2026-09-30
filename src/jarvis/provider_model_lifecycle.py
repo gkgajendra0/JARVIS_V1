@@ -198,6 +198,67 @@ def rollback_pending_gemini_live_migration(current_model: str) -> bool:
     return True
 
 
+async def validated_rollback_pending_gemini_live_migration(
+    config: JarvisConfig,
+    *,
+    api_key: str,
+    live_probe: LiveProbe = _probe_gemini_live_model,
+    probe_timeout_seconds: float = DEFAULT_LIVE_PROBE_TIMEOUT_SECONDS,
+) -> GeminiLiveLifecycleResult:
+    """Restore the previous model only if it can still establish Gemini Live."""
+
+    current = config.gemini_realtime_model.strip().casefold()
+    journal = _load_migration_journal()
+    if (
+        journal is None
+        or journal.state != "pending"
+        or journal.candidate_model != current
+    ):
+        return GeminiLiveLifecycleResult(
+            current_model=current,
+            status="no_pending_migration",
+        )
+
+    rollback_model = journal.previous_model
+    try:
+        await live_probe(api_key, rollback_model, probe_timeout_seconds)
+    except asyncio.CancelledError:
+        raise
+    except (
+        OSError,
+        RuntimeError,
+        TimeoutError,
+        ValueError,
+        genai_errors.APIError,
+    ) as exc:
+        LOGGER.error(
+            "Pending Gemini migration needs rollback but the previous model failed "
+            "its Live handshake | candidate=%s previous=%s error_type=%s",
+            current,
+            rollback_model,
+            type(exc).__name__,
+        )
+        return GeminiLiveLifecycleResult(
+            current_model=current,
+            status="rollback_probe_failed",
+            replacement_model=rollback_model,
+            detail=type(exc).__name__,
+        )
+
+    if not rollback_pending_gemini_live_migration(current):
+        return GeminiLiveLifecycleResult(
+            current_model=current,
+            status="rollback_state_changed",
+            replacement_model=rollback_model,
+        )
+
+    return GeminiLiveLifecycleResult(
+        current_model=current,
+        status="rolled_back",
+        replacement_model=rollback_model,
+    )
+
+
 def _replacement_blocked_after_rollback(
     current_model: str,
     replacement_model: str,
