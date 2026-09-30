@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -17,7 +16,11 @@ from jarvis.ai_provider import (
     tts_credential_source,
 )
 from jarvis.authority.tooling import authority_tool_readiness
-from jarvis.config import JarvisConfig
+from jarvis.config import (
+    DEFAULT_GEMINI_REALTIME_MODEL,
+    LEGACY_GEMINI_REALTIME_MODELS,
+    JarvisConfig,
+)
 from jarvis.voice.audio import DEVICE_CHANNELS, DEVICE_SAMPLE_RATE, LocalAudioRuntime
 
 
@@ -74,14 +77,17 @@ def _credential_check(config: JarvisConfig) -> PreflightCheck:
 
 
 def _version_triplet(value: str) -> tuple[int, int, int]:
-    match = re.match(r"^(\d+)\.(\d+)\.(\d+)", value.strip())
-    if match is None:
+    parts = value.strip().split(".", maxsplit=3)
+    if len(parts) < 3:
         return (0, 0, 0)
-    return tuple(int(part) for part in match.groups())
+    try:
+        return tuple(int(part) for part in parts[:3])
+    except ValueError:
+        return (0, 0, 0)
 
 
 def _gemini_realtime_compatibility_check(config: JarvisConfig) -> PreflightCheck:
-    """Fail fast when Gemini 3.1 is paired with an incompatible LiveKit plugin."""
+    """Reject known-legacy Gemini Live targets and verify the tested adapter floor."""
 
     if config.ai_provider != "gemini":
         return PreflightCheck(
@@ -89,21 +95,29 @@ def _gemini_realtime_compatibility_check(config: JarvisConfig) -> PreflightCheck
             True,
             "not applicable for the active provider",
         )
-    if not config.gemini_realtime_model.startswith("gemini-3.1-"):
+
+    if config.gemini_realtime_model in LEGACY_GEMINI_REALTIME_MODELS:
         return PreflightCheck(
             "Gemini realtime compatibility",
-            True,
-            f"model={config.gemini_realtime_model}; Gemini 3.1 compatibility gate not required",
+            False,
+            (
+                f"model={config.gemini_realtime_model} is a retired JARVIS production "
+                f"target after owner-machine zero-turn/1011 failures; use "
+                f"{DEFAULT_GEMINI_REALTIME_MODEL}"
+            ),
         )
 
-    required = (1, 8, 2)
+    required = (1, 8, 3)
     try:
         installed = version("livekit-plugins-google")
     except PackageNotFoundError:
         return PreflightCheck(
             "Gemini realtime compatibility",
             False,
-            "livekit-plugins-google is not installed; Gemini 3.1 requires >=1.8.2",
+            (
+                "livekit-plugins-google is not installed; JARVIS production Gemini "
+                f"Live requires >={'.'.join(str(part) for part in required)}"
+            ),
         )
 
     compatible = _version_triplet(installed) >= required
@@ -112,10 +126,10 @@ def _gemini_realtime_compatibility_check(config: JarvisConfig) -> PreflightCheck
         compatible,
         (
             f"model={config.gemini_realtime_model}; "
-            f"livekit-plugins-google={installed}; required>=1.8.2"
+            f"livekit-plugins-google={installed}; "
+            f"tested>={'.'.join(str(part) for part in required)}"
         ),
     )
-
 
 def _realtime_lifecycle_voice_check(config: JarvisConfig) -> PreflightCheck:
     """Confirm lifecycle speech shares the normal realtime conversation lane."""
