@@ -9,9 +9,11 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from jarvis.chatgpt_plan import ChatGPTPlanSessionManager
 from jarvis.hands.provider_adapters import (
     StructuredOutputClient,
     StructuredOutputTelemetry,
+    build_chatgpt_plan_structured_output_client,
     build_structured_output_client,
 )
 from jarvis.model_routing.local_residency import LocalModelResidencyManager
@@ -218,21 +220,42 @@ class ModelInvoker:
 def build_default_model_adapter_registry(
     *,
     ollama_residency_manager: LocalModelResidencyManager | None = None,
+    chatgpt_plan_session_manager: ChatGPTPlanSessionManager | None = None,
 ) -> ModelAdapterRegistry:
-    """Register only the provider families already approved by JARVIS."""
+    """Register approved provider families without activating unused runtimes."""
 
-    return ModelAdapterRegistry(
-        (
+    adapters = [
+        StructuredOutputModelAdapter(
+            adapter_id="gemini",
+            provider_id="gemini",
+        ),
+        StructuredOutputModelAdapter(
+            adapter_id="openai",
+            provider_id="openai",
+        ),
+        OllamaStructuredOutputAdapter(
+            residency_manager=ollama_residency_manager,
+        ),
+    ]
+    if chatgpt_plan_session_manager is not None:
+
+        def _chatgpt_plan_client_factory(
+            provider: str,
+            model: str,
+        ) -> StructuredOutputClient:
+            if provider.strip().casefold() != "chatgpt_plan":
+                raise ValueError("ChatGPT-plan adapter received a different provider")
+            return build_chatgpt_plan_structured_output_client(
+                model=model,
+                session_manager=chatgpt_plan_session_manager,
+                provider_retries=False,
+            )
+
+        adapters.append(
             StructuredOutputModelAdapter(
-                adapter_id="gemini",
-                provider_id="gemini",
-            ),
-            StructuredOutputModelAdapter(
-                adapter_id="openai",
-                provider_id="openai",
-            ),
-            OllamaStructuredOutputAdapter(
-                residency_manager=ollama_residency_manager,
-            ),
+                adapter_id="chatgpt_plan",
+                provider_id="chatgpt_plan",
+                client_factory=_chatgpt_plan_client_factory,
+            )
         )
-    )
+    return ModelAdapterRegistry(tuple(adapters))
