@@ -83,7 +83,9 @@ def run_preflight(
     config = JarvisConfig.from_environment()
     _require(config.chatgpt_plan_enabled, "ChatGPT-plan reasoning is not enabled")
     _require(bool(config.chatgpt_plan_model), "ChatGPT-plan model is not configured")
-    _require(config.work_orchestration_enabled, "durable Work orchestration is disabled")
+    _require(
+        config.work_orchestration_enabled, "durable Work orchestration is disabled"
+    )
     _require(config.github_promotion_enabled, "governed GitHub promotion is disabled")
 
     manager = ChatGPTPlanSessionManager()
