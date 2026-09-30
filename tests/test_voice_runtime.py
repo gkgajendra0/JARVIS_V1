@@ -420,6 +420,28 @@ async def test_startup_greeting_uses_realtime_conversation_voice() -> None:
 
 
 @pytest.mark.asyncio
+async def test_gemini_lifecycle_reply_allows_server_side_interruptions() -> None:
+    session = FakeSession()
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
+    audio = FakeAudio()
+    runtime = VoiceRuntimeController(
+        JarvisConfig(ai_provider="gemini"),
+        audio,  # type: ignore[arg-type]
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+    )
+
+    await runtime._speak_ephemeral_realtime_message(
+        audio.output,
+        instructions="Say ready.",
+        label="test lifecycle",
+    )
+
+    assert session.generated_replies[0]["allow_interruptions"] is True
+    assert session.generated_replies[0]["input_modality"] == "text"
+
+
+@pytest.mark.asyncio
 async def test_startup_realtime_failure_does_not_use_local_voice() -> None:
     class Detector:
         async def wait_for_detection(self):
