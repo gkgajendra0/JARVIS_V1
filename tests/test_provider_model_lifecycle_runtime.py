@@ -1,0 +1,110 @@
+from __future__ import annotations
+
+import asyncio
+
+import pytest
+
+from jarvis.config import JarvisConfig
+from jarvis.provider_model_lifecycle import GeminiLiveLifecycleResult
+from jarvis.voice import production_runtime
+
+
+class FakeRuntime:
+    def __init__(self) -> None:
+        self.shutdown_calls = 0
+
+    def request_shutdown(self) -> None:
+        self.shutdown_calls += 1
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_trigger_reconciles_immediately_and_recycles_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    async def reconcile(config: JarvisConfig):
+        nonlocal calls
+        calls += 1
+        assert config.gemini_realtime_model == "gemini-old-live"
+        return GeminiLiveLifecycleResult(
+            current_model="gemini-old-live",
+            status="migrated",
+            replacement_model="gemini-new-live",
+        )
+
+    monkeypatch.setattr(
+        production_runtime,
+        "_reconcile_provider_model_lifecycle",
+        reconcile,
+    )
+    runtime = FakeRuntime()
+    migrated = asyncio.Event()
+    trigger = asyncio.Event()
+    trigger.set()
+
+    await asyncio.wait_for(
+        production_runtime._run_provider_model_lifecycle_watch(
+            JarvisConfig(
+                ai_provider="gemini",
+                gemini_realtime_model="gemini-old-live",
+            ),
+            runtime,
+            migrated,
+            trigger,
+            poll_seconds=3600,
+        ),
+        timeout=1,
+    )
+
+    assert calls == 1
+    assert migrated.is_set()
+    assert runtime.shutdown_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_periodic_lifecycle_check_keeps_runtime_when_model_is_current(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    async def reconcile(config: JarvisConfig):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return GeminiLiveLifecycleResult(
+                current_model=config.gemini_realtime_model,
+                status="current",
+            )
+        return GeminiLiveLifecycleResult(
+            current_model=config.gemini_realtime_model,
+            status="migrated",
+            replacement_model="gemini-new-live",
+        )
+
+    monkeypatch.setattr(
+        production_runtime,
+        "_reconcile_provider_model_lifecycle",
+        reconcile,
+    )
+    runtime = FakeRuntime()
+    migrated = asyncio.Event()
+    trigger = asyncio.Event()
+
+    await asyncio.wait_for(
+        production_runtime._run_provider_model_lifecycle_watch(
+            JarvisConfig(
+                ai_provider="gemini",
+                gemini_realtime_model="gemini-old-live",
+            ),
+            runtime,
+            migrated,
+            trigger,
+            poll_seconds=0.01,
+        ),
+        timeout=1,
+    )
+
+    assert calls == 2
+    assert migrated.is_set()
+    assert runtime.shutdown_calls == 1
