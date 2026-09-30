@@ -45,12 +45,39 @@ class FakeSessionOutput:
         self.audio_enabled = enabled
 
 
+class FakeSpeechHandle:
+    def __init__(self, session: "FakeSession") -> None:
+        self._session = session
+        self._done = False
+
+    async def wait_for_playout(self) -> None:
+        if not self._session.auto_finish_replies:
+            await self._session.reply_release.wait()
+        self._done = True
+
+    def exception(self):
+        if not self._done:
+            raise asyncio.InvalidStateError("speech is not complete")
+        return self._session.reply_error
+
+
 class FakeSession:
-    def __init__(self, *, start_error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        start_error: Exception | None = None,
+        reply_error: BaseException | None = None,
+        auto_finish_replies: bool = True,
+    ) -> None:
         self.handlers: dict[str, list] = defaultdict(list)
         self.input = FakeSessionInput()
         self.output = FakeSessionOutput()
         self.started = asyncio.Event()
+        self.reply_started = asyncio.Event()
+        self.reply_release = asyncio.Event()
+        self.auto_finish_replies = auto_finish_replies
+        self.reply_error = reply_error
+        self.generated_replies: list[dict[str, Any]] = []
         self.closed = False
         self.start_error = start_error
         self.interrupt_calls: list[bool] = []
@@ -76,6 +103,11 @@ class FakeSession:
         future = asyncio.get_running_loop().create_future()
         future.set_result(None)
         return future
+
+    def generate_reply(self, **kwargs) -> FakeSpeechHandle:
+        self.generated_replies.append(dict(kwargs))
+        self.reply_started.set()
+        return FakeSpeechHandle(self)
 
     async def aclose(self) -> None:
         self.closed = True
