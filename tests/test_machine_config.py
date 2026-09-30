@@ -193,3 +193,14 @@ def test_github_private_key_plaintext_cannot_be_persisted(tmp_path: Path) -> Non
             {"JARVIS_GITHUB_APP_PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----"},
             tmp_path / "machine.json",
         )
+
+
+def test_default_media_target_is_persistable_non_secret_setting(tmp_path: Path) -> None:
+    path = tmp_path / "machine.json"
+    save_machine_settings(
+        {"JARVIS_DEFAULT_MEDIA_TARGET": "Hisense TV"},
+        path,
+    )
+
+    settings = load_machine_settings(path)
+    assert settings["JARVIS_DEFAULT_MEDIA_TARGET"] == "Hisense TV"
