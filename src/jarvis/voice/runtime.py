@@ -961,11 +961,13 @@ class VoiceRuntimeController:
         output.on("playback_finished", on_playback_finished)
 
         bridge.conversation.start()
-        self.audio.activate_session(
-            session_input,
-            pre_roll_after_monotonic=pre_roll_after_monotonic,
-        )
-        if pre_roll_after_monotonic is not None:
+        if pre_roll_after_monotonic is None:
+            self.audio.activate_session(session_input)
+        else:
+            self.audio.activate_session(
+                session_input,
+                pre_roll_after_monotonic=pre_roll_after_monotonic,
+            )
             LOGGER.info(
                 "Wake handoff trimmed realtime pre-roll through %.6f; "
                 "post-wake speech is preserved",
