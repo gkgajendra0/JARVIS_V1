@@ -276,7 +276,10 @@ def test_invalid_vision_camera_configuration_fails_truthfully() -> None:
 
 def test_default_media_target_is_optional_and_bounded() -> None:
     assert JarvisConfig().default_media_target is None
-    assert JarvisConfig(default_media_target=" Hisense TV ").default_media_target == "Hisense TV"
+    assert (
+        JarvisConfig(default_media_target=" Hisense TV ").default_media_target
+        == "Hisense TV"
+    )
 
     with pytest.raises(ValueError, match="at most 160"):
         JarvisConfig(default_media_target="x" * 161)
