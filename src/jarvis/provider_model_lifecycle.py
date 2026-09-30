@@ -32,6 +32,7 @@ GEMINI_REALTIME_MODEL_SETTING = "JARVIS_GEMINI_REALTIME_MODEL"
 DEFAULT_LIFECYCLE_FETCH_TIMEOUT_SECONDS = 8.0
 DEFAULT_LIVE_PROBE_TIMEOUT_SECONDS = 10.0
 MODEL_LIFECYCLE_STATE_SCHEMA_VERSION = 1
+ROLLED_BACK_RETRY_COOLDOWN_SECONDS = 6 * 60 * 60
 
 _MODEL_ID = re.compile(r"\bgemini-[a-z0-9][a-z0-9._-]*\b", re.IGNORECASE)
 
@@ -255,14 +256,27 @@ async def validated_rollback_pending_gemini_live_migration(
 def _replacement_blocked_after_rollback(
     current_model: str,
     replacement_model: str,
+    *,
+    now: datetime | None = None,
 ) -> bool:
     journal = _load_migration_journal()
-    return bool(
+    if not (
         journal is not None
         and journal.state == "rolled_back"
         and journal.previous_model == current_model.strip().casefold()
         and journal.candidate_model == replacement_model.strip().casefold()
-    )
+    ):
+        return False
+
+    try:
+        recorded_at = datetime.fromisoformat(journal.recorded_at)
+    except ValueError:
+        return True
+    if recorded_at.tzinfo is None:
+        recorded_at = recorded_at.replace(tzinfo=UTC)
+    current_time = now or datetime.now(UTC)
+    elapsed = (current_time - recorded_at.astimezone(UTC)).total_seconds()
+    return elapsed < ROLLED_BACK_RETRY_COOLDOWN_SECONDS
 
 
 class _GeminiDeprecationParser(HTMLParser):
@@ -517,8 +531,8 @@ async def reconcile_gemini_live_model(
 
     if _replacement_blocked_after_rollback(current, replacement):
         LOGGER.error(
-            "Gemini lifecycle replacement was previously rolled back; "
-            "automatic retry is blocked | current=%s replacement=%s",
+            "Gemini lifecycle replacement was recently rolled back; "
+            "automatic retry is cooling down | current=%s replacement=%s",
             current,
             replacement,
         )
@@ -526,7 +540,7 @@ async def reconcile_gemini_live_model(
             current_model=current,
             status="replacement_blocked_after_rollback",
             replacement_model=replacement,
-            detail="previous_automatic_migration_rolled_back",
+            detail="previous_automatic_migration_in_cooldown",
         )
 
     if "live" not in replacement:
