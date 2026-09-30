@@ -119,10 +119,17 @@ class FakeAudio:
         self.output = LocalAudioOutput(output_device=None)
         self.activated = False
         self.deactivated = False
+        self.pre_roll_after_monotonic: float | None = None
 
-    def activate_session(self, session_input) -> None:
+    def activate_session(
+        self,
+        session_input,
+        *,
+        pre_roll_after_monotonic: float | None = None,
+    ) -> None:
         del session_input
         self.activated = True
+        self.pre_roll_after_monotonic = pre_roll_after_monotonic
 
     def deactivate_session(self) -> None:
         self.deactivated = True
@@ -483,6 +490,83 @@ async def test_startup_realtime_failure_does_not_use_local_voice() -> None:
     assert local_speech.spoken == []
     assert runtime.state is VoiceRuntimeState.IDLE
 
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_wake_only_pause_gets_one_brief_realtime_acknowledgement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime, session, _, audio, _ = runtime_with_session(initial_timeout=1)
+    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
+
+    task = asyncio.create_task(
+        runtime._run_one_session(pre_roll_after_monotonic=42.0)
+    )
+    await session.started.wait()
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+
+    assert audio.pre_roll_after_monotonic == 42.0
+    assert len(session.generated_replies) == 1
+    reply = session.generated_replies[0]
+    assert "invoked your wake word and then paused" in reply["instructions"]
+    assert "exactly one very short, natural acknowledgement" in reply["instructions"]
+    assert reply["allow_interruptions"] is True
+    assert reply["input_modality"] == "text"
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_immediate_owner_speech_suppresses_wake_acknowledgement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime, session, _, _, _ = runtime_with_session(initial_timeout=1)
+    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.05)
+
+    task = asyncio.create_task(
+        runtime._run_one_session(pre_roll_after_monotonic=42.0)
+    )
+    await session.started.wait()
+
+    session.emit("user_state_changed", SimpleNamespace(new_state="speaking"))
+    await asyncio.sleep(0.08)
+
+    assert session.generated_replies == []
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_owner_speech_interrupts_acknowledgement_that_already_started(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = FakeSession(auto_finish_replies=False)
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
+    audio = FakeAudio()
+    runtime = VoiceRuntimeController(
+        JarvisConfig(initial_request_timeout_seconds=1),
+        audio,  # type: ignore[arg-type]
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+    )
+    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
+
+    task = asyncio.create_task(
+        runtime._run_one_session(pre_roll_after_monotonic=42.0)
+    )
+    await session.started.wait()
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+
+    session.emit("user_state_changed", SimpleNamespace(new_state="speaking"))
+    await asyncio.sleep(0)
+
+    assert session.interrupt_calls == [False]
+
+    session.reply_release.set()
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)
 
