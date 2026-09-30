@@ -271,7 +271,9 @@ def test_dbos_cancel_uses_cooperative_control_message_only(
     callable_, args, kwargs = calls[0]
     assert getattr(callable_, "__name__", None) == getattr(DBOS.send, "__name__", None)
     assert args == ("work_control", "cancel")
-    assert kwargs["topic"] == "jarvis-control"
+    from jarvis.work.dbos_backend import _CONTROL_TOPIC
+
+    assert kwargs["topic"] == _CONTROL_TOPIC
     assert kwargs["idempotency_key"] == "cancel:4"
 
 
