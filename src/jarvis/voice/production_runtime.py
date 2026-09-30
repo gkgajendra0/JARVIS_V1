@@ -674,6 +674,7 @@ async def _run_from_configuration() -> None:
             continue
         return
 
+
 def main() -> int:
     try:
         asyncio.run(_run_from_configuration())
