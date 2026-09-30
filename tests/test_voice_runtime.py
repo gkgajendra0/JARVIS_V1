@@ -531,6 +531,7 @@ async def test_standby_times_out_silently_without_local_voice(
 
     assert result.raw_exception is None
     assert "Standby transition accepted" in str(result.raw_output)
+    session.emit("agent_state_changed", SimpleNamespace(new_state="thinking"))
     await asyncio.wait_for(task, timeout=1)
 
     assert local_speech.spoken == []
@@ -591,6 +592,11 @@ async def test_semantic_standby_keeps_realtime_output_until_ack_finishes() -> No
         ),
     )
 
+    # LiveKit may surface playback completion before the committed assistant
+    # conversation item. Either event order must finish standby exactly once.
+    audio.output.emit("playback_finished", object())
+    assert task.done() is False
+
     session.emit(
         "conversation_item_added",
         ConversationItemAddedEvent(
@@ -601,7 +607,6 @@ async def test_semantic_standby_keeps_realtime_output_until_ack_finishes() -> No
             )
         ),
     )
-    audio.output.emit("playback_finished", object())
 
     await asyncio.wait_for(task, timeout=1)
 
