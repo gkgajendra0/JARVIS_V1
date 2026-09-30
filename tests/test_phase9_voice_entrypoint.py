@@ -11,7 +11,6 @@ from jarvis.voice.work_tools import WorkAgentTools
 from jarvis.work.development import DevelopmentWorkspaceManager
 from jarvis.work.runtime import WorkRuntime
 
-
 NORMALIZED_INSTRUCTIONS = " ".join(INSTRUCTIONS.split())
 
 
