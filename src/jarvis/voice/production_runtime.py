@@ -372,6 +372,8 @@ def build_production_voice_runtime(
     capability_runtime = build_default_capability_runtime(
         ai_provider=config.ai_provider,
         hands_planner_model=config.hands_planner_model,
+        chatgpt_plan_enabled=config.chatgpt_plan_enabled,
+        chatgpt_plan_model=config.chatgpt_plan_model,
         result_observer=result_observer,
         extra_executors=extra_executors,
         catalog_projection=(
@@ -390,13 +392,14 @@ def build_production_voice_runtime(
     LOGGER.info(
         "Governed capability runtime configured: capabilities=%s "
         "structured_desktop_control=%s visual_fallback=%s browser_control=%s "
-        "hands_planner=%s/%s package_managed=%s raw_shell=False",
+        "hands_planner=%s/%s chatgpt_plan=%s package_managed=%s raw_shell=False",
         len(capability_catalog.capabilities),
         bool(structured_hands and structured_hands.execution_enabled),
         bool(visual_hands and visual_hands.execution_enabled),
         bool(browser_hands and browser_hands.execution_enabled),
         getattr(hands_planner, "provider_name", "none"),
         getattr(hands_planner, "model_name", "none"),
+        config.chatgpt_plan_enabled,
         len(package_executors),
     )
 
@@ -407,6 +410,8 @@ def build_production_voice_runtime(
             provider=config.ai_provider,
             research_service=research_service,
             model=config.work_orchestration_model,
+            chatgpt_plan_enabled=config.chatgpt_plan_enabled,
+            chatgpt_plan_model=config.chatgpt_plan_model,
             global_brain_router_mode=config.global_brain_router_mode,
             global_concurrency=config.work_global_concurrency,
             development_test_image=config.development_test_docker_image,
