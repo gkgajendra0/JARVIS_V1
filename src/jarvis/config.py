@@ -107,6 +107,8 @@ def _configured_required_text(
 class JarvisConfig:
     log_level: str = "INFO"
     ai_provider: str = "openai"
+    chatgpt_plan_enabled: bool = False
+    chatgpt_plan_model: str | None = None
     tts_provider: str = "gemini"
     realtime_model: str = "gpt-realtime"
     realtime_voice: str = "marin"
@@ -180,6 +182,9 @@ class JarvisConfig:
             normalize_tts_provider(self.tts_provider),
         )
 
+        if not isinstance(self.chatgpt_plan_enabled, bool):
+            raise TypeError("chatgpt_plan_enabled must be a bool")
+
         if not isinstance(self.tts_project_billing_isolation_verified, bool):
             raise TypeError("tts_project_billing_isolation_verified must be a bool")
 
@@ -231,6 +236,7 @@ class JarvisConfig:
             "memory_candidate_extraction_model",
             "memory_semantic_recall_model",
             "hands_planner_model",
+            "chatgpt_plan_model",
             "work_orchestration_model",
             "work_dbos_database_url",
             "development_test_docker_image",
@@ -242,6 +248,11 @@ class JarvisConfig:
             if value is not None:
                 normalized_value = str(value).strip()
                 object.__setattr__(self, name, normalized_value or None)
+
+        if self.chatgpt_plan_enabled and self.chatgpt_plan_model is None:
+            raise ValueError(
+                "JARVIS_CHATGPT_PLAN_MODEL is required when ChatGPT-plan usage is enabled"
+            )
 
         if self.work_orchestration_enabled:
             if self.work_dbos_database_url is None:
@@ -381,6 +392,12 @@ class JarvisConfig:
         return cls(
             log_level=_configured_required_text("JARVIS_LOG_LEVEL", "INFO", machine),
             ai_provider=configured_ai_provider(machine),
+            chatgpt_plan_enabled=_configured_bool(
+                "JARVIS_CHATGPT_PLAN_ENABLED", False, machine
+            ),
+            chatgpt_plan_model=_configured_optional_text(
+                "JARVIS_CHATGPT_PLAN_MODEL", machine
+            ),
             tts_provider=configured_tts_provider(machine),
             realtime_model=_configured_required_text(
                 "JARVIS_REALTIME_MODEL", "gpt-realtime", machine
