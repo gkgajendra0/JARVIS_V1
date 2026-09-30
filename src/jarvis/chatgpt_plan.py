@@ -20,7 +20,7 @@ import time
 import uuid
 import webbrowser
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Protocol
@@ -134,7 +134,7 @@ class ChatGPTPlanCredentials:
         ).encode("utf-8")
 
     @classmethod
-    def from_bytes(cls, raw: bytes) -> "ChatGPTPlanCredentials":
+    def from_bytes(cls, raw: bytes) -> ChatGPTPlanCredentials:
         try:
             payload = json.loads(raw.decode("utf-8"))
         except (UnicodeError, json.JSONDecodeError) as exc:
@@ -392,9 +392,9 @@ def _validate_id_token(
 
 
 class _OAuthCallbackHandler(BaseHTTPRequestHandler):
-    result_queue: "queue.Queue[dict[str, str]]"
+    result_queue: queue.Queue[dict[str, str]]
 
-    def do_GET(self) -> None:  # noqa: N802 - stdlib callback contract
+    def do_GET(self) -> None:
         parsed_url = parse.urlparse(self.path)
         if parsed_url.path != "/auth/callback":
             self.send_response(404)
@@ -421,7 +421,7 @@ def _wait_for_oauth_callback(
     authorization_url_builder,
     timeout_seconds: float,
 ) -> dict[str, str]:
-    result_queue: "queue.Queue[dict[str, str]]" = queue.Queue(maxsize=1)
+    result_queue: queue.Queue[dict[str, str]] = queue.Queue(maxsize=1)
 
     class Handler(_OAuthCallbackHandler):
         pass
@@ -937,5 +937,5 @@ class ChatGPTPlanSessionManager:
 def utc_saved_at(credentials: ChatGPTPlanCredentials) -> str:
     return datetime.fromtimestamp(
         credentials.saved_at_epoch,
-        tz=timezone.utc,
+        tz=UTC,
     ).isoformat()
