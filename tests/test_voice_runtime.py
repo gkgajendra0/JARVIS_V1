@@ -576,7 +576,20 @@ async def test_semantic_standby_keeps_realtime_output_until_ack_finishes() -> No
     assert session.interrupt_calls == []
     assert task.done() is False
     assert session.closed is False
-    assert audio.deactivated is False
+    assert audio.deactivated is True
+
+    # A late/in-flight user turn after standby acceptance must not extend the
+    # conversation or trigger another response path.
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="late-user",
+                role="user",
+                content=["You up?"],
+            )
+        ),
+    )
 
     session.emit(
         "conversation_item_added",
@@ -596,6 +609,52 @@ async def test_semantic_standby_keeps_realtime_output_until_ack_finishes() -> No
     assert audio.deactivated is True
     assert session.closed is True
     assert conversation.status is ConversationStatus.CLOSED
+
+
+@pytest.mark.asyncio
+async def test_semantic_standby_deactivates_physical_microphone_immediately() -> None:
+    runtime, session, _, audio, _ = runtime_with_session()
+    task = asyncio.create_task(runtime._run_one_session())
+    await session.started.wait()
+    assert session.agent is not None
+
+    tool_ctx = llm.ToolContext(session.agent.tools)
+    call_ctx = RunContext(
+        session=session,  # type: ignore[arg-type]
+        speech_handle=SimpleNamespace(num_steps=1),  # type: ignore[arg-type]
+        function_call=llm.FunctionCall(
+            name="enter_standby",
+            arguments="{}",
+            call_id="standby-mic-cutoff",
+        ),
+    )
+    result = await llm.execute_function_call(
+        llm.FunctionToolCall(
+            name="enter_standby",
+            arguments="{}",
+            call_id="standby-mic-cutoff",
+        ),
+        tool_ctx,
+        call_ctx=call_ctx,
+    )
+
+    assert result.raw_exception is None
+    assert session.input.audio_enabled is False
+    assert audio.deactivated is True
+    assert task.done() is False
+
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="standby-ack-cutoff",
+                role="assistant",
+                content=["Standing by, sir."],
+            )
+        ),
+    )
+    audio.output.emit("playback_finished", object())
+    await asyncio.wait_for(task, timeout=1)
 
 
 @pytest.mark.asyncio
