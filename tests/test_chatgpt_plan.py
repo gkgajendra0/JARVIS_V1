@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, ConfigDict
 
-from jarvis.config import JarvisConfig
 from jarvis.chatgpt_plan import (
     CHATGPT_PLAN_REQUIRED_SCOPE,
     CHATGPT_PLAN_TARGET_ID,
@@ -15,6 +14,7 @@ from jarvis.chatgpt_plan import (
     _strict_json_schema,
     load_or_create_chatgpt_plan_host_id,
 )
+from jarvis.config import JarvisConfig
 from jarvis.machine_config import load_machine_settings, save_machine_settings
 from jarvis.hands.contracts import build_action_response_model
 from jarvis.hands.provider_adapters import (
