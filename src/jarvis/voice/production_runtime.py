@@ -518,6 +518,7 @@ def build_production_voice_runtime(
             )
             provider_migration_rollback_trigger.set()
             provider_lifecycle_trigger.set()
+
     local_status_speech = build_local_status_speech()
     LOGGER.info(
         "Step-5 minimal provider resilience is configured: provider=%s "
@@ -778,8 +779,7 @@ async def _run_from_configuration() -> None:
                 else None
             )
             rolled_back = bool(
-                rollback_result is not None
-                and rollback_result.status == "rolled_back"
+                rollback_result is not None and rollback_result.status == "rolled_back"
             )
             if self_awareness is not None:
                 self_awareness.close()
