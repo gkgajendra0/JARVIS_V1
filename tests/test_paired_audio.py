@@ -23,7 +23,8 @@ class FakeDetector:
         del clear_buffer
         self.enabled = False
 
-    def feed(self, frame) -> None:
+    def feed(self, frame, *, observed_at_monotonic=None) -> None:
+        del observed_at_monotonic
         if self.enabled:
             self.frames.append(frame)
 
@@ -164,6 +165,39 @@ async def test_clean_paired_pcm_preserves_pre_roll_timestamp_for_observed_input(
     runtime.activate_session(ObservedInput(capacity_frames=5))
 
     assert observed == [pytest.approx(30.0)]
+
+
+@pytest.mark.asyncio
+async def test_paired_activation_drops_wake_window_and_keeps_post_wake_audio() -> None:
+    detector = FakeDetector()
+    runtime = make_runtime(
+        detector,
+        pre_roll_seconds=0.05,
+        ring_buffer_seconds=0.10,
+    )
+    runtime._loop = asyncio.get_running_loop()
+    detector.enable()
+
+    for value, observed_at in ((1, 40.00), (2, 40.01), (3, 40.02), (4, 40.03)):
+        await asyncio.to_thread(
+            runtime.feed_clean_pcm,
+            pcm(value),
+            sample_rate=48_000,
+            num_channels=1,
+            samples_per_channel=480,
+            observed_at_monotonic=observed_at,
+        )
+    await asyncio.sleep(0.01)
+
+    session_input = SessionAudioInput(capacity_frames=5)
+    runtime.activate_session(
+        session_input,
+        pre_roll_after_monotonic=40.02,
+    )
+
+    preserved = await session_input.__anext__()
+    assert np.frombuffer(preserved.data, dtype=np.int16)[0] == 4
+    assert session_input._queue.empty()
 
 
 def test_clean_paired_pcm_rejects_noncanonical_capture_format() -> None:
