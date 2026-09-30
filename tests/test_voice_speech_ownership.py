@@ -221,8 +221,10 @@ async def test_critical_background_notification_falls_back_to_local_speech() -> 
     await asyncio.sleep(0)
 
     assert local.messages == [
-        "Sir, I need your input on a background task. "
-        "Please confirm the TV pairing request."
+        (
+            "Sir, I need your input on a background task. "
+            "Please confirm the TV pairing request."
+        )
     ]
     assert work.store.delivered is True
     assert audio.resume_calls == 1
