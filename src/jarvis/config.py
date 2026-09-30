@@ -260,7 +260,9 @@ class JarvisConfig:
             if len(self.default_media_target) > 160:
                 raise ValueError("default_media_target must be at most 160 characters")
             if any(ord(character) < 32 for character in self.default_media_target):
-                raise ValueError("default_media_target must not contain control characters")
+                raise ValueError(
+                    "default_media_target must not contain control characters"
+                )
 
         if self.work_orchestration_enabled:
             if self.work_dbos_database_url is None:
