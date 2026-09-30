@@ -16,6 +16,7 @@ from jarvis.chatgpt_plan import (
 )
 from jarvis.config import JarvisConfig
 from jarvis.hands.contracts import build_action_response_model
+from jarvis.hands import planner as hands_planner_module
 from jarvis.hands.provider_adapters import (
     ChatGPTPlanStructuredOutputClient,
     FallbackStructuredOutputClient,
@@ -312,3 +313,40 @@ def test_chatgpt_plan_strict_schema_normalizes_dynamic_hands_contract() -> None:
         properties = node.get("properties")
         if isinstance(properties, dict):
             assert set(node.get("required", ())) == set(properties)
+
+
+def test_hands_plan_primary_does_not_require_paid_fallback_key(monkeypatch) -> None:
+    class _PlanClient:
+        provider_name = "chatgpt_plan"
+        model_name = "plan-model"
+
+        async def parse(self, **kwargs):
+            raise AssertionError("parse should not run in builder test")
+
+        async def parse_with_telemetry(self, **kwargs):
+            raise AssertionError("parse should not run in builder test")
+
+    seen: dict[str, object] = {}
+
+    def _fake_plan_builder(**kwargs):
+        seen.update(kwargs)
+        return _PlanClient()
+
+    monkeypatch.setattr(hands_planner_module, "provider_api_key", lambda provider: None)
+    monkeypatch.setattr(
+        hands_planner_module,
+        "build_chatgpt_plan_structured_output_client",
+        _fake_plan_builder,
+    )
+
+    planner = hands_planner_module.build_hands_planner(
+        provider="gemini",
+        model=None,
+        chatgpt_plan_enabled=True,
+        chatgpt_plan_model="plan-model",
+    )
+
+    assert planner.provider_name == "chatgpt_plan"
+    assert planner.model_name == "plan-model"
+    assert seen["fallback_provider"] is None
+    assert seen["fallback_model"] is None
