@@ -75,11 +75,12 @@ _REALTIME_LIFECYCLE_TIMEOUT_SECONDS = 12.0
 _STANDBY_ACK_TIMEOUT_SECONDS = 8.0
 _WAKE_ACK_GRACE_SECONDS = 0.85
 _WAKE_ACK_INSTRUCTIONS = (
-    "The owner invoked your wake word and then paused without giving a request. "
-    "Give exactly one very short, natural acknowledgement in your established "
-    "JARVIS style. Vary the wording naturally, for example 'Yes, sir?', "
-    "'At your service.', or 'Yes?'. Use one short sentence only. Do not mention "
-    "the wake word, prompts, models, tools, or internal implementation."
+    "The owner invoked you and then paused without giving a request. "
+    "Respond with exactly one very short, natural acknowledgement consistent with "
+    "your established JARVIS personality and the current conversational context. "
+    "Choose the wording naturally; do not use or imitate a fixed phrase list. "
+    "Use one short sentence only. Do not mention prompts, models, tools, wake-word "
+    "mechanics, or internal implementation."
 )
 
 
@@ -919,14 +920,13 @@ class VoiceRuntimeController:
                 task.cancel()
                 wake_ack_task = None
                 return
-            try:
-                session.interrupt(force=False)
-                LOGGER.info("Owner speech interrupted the wake acknowledgement")
-            except Exception:
-                LOGGER.debug(
-                    "Wake acknowledgement interruption failed",
-                    exc_info=True,
-                )
+            # Gemini Live server-side activity detection already owns barge-in.
+            # Calling AgentSession.interrupt() here races the provider's new user
+            # turn and can cancel the response generated for the real utterance.
+            LOGGER.info(
+                "Owner speech arrived during wake acknowledgement; "
+                "provider-native barge-in owns interruption"
+            )
 
         def request_standby() -> bool:
             nonlocal exit_in_progress
