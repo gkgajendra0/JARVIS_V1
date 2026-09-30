@@ -38,7 +38,7 @@ def test_preflight_reports_all_core_checks_without_opening_devices(
     assert {check.label for check in checks} >= {
         "Wake model",
         "Cloud AI credentials",
-        "Scripted TTS lane",
+        "Lifecycle voice",
         "Conversation microphone",
         "Conversation speaker",
     }
@@ -54,15 +54,13 @@ def test_preflight_reports_dedicated_tts_credential_lane(
     monkeypatch.setenv("JARVIS_TTS_GOOGLE_API_KEY", "tts-key")
     monkeypatch.setattr(preflight, "_audio_checks", lambda _config: [])
 
-    checks = preflight.run_startup_preflight(
+    tts = preflight._tts_lane_check(
         JarvisConfig(
             ai_provider="openai",
             tts_provider="gemini",
             wake_model_path=str(wake),
         )
     )
-
-    tts = next(check for check in checks if check.label == "Scripted TTS lane")
     assert tts.ok is True
     assert "credential is separated from brain reasoning" in tts.detail
     assert "project_billing_isolation_verified=False" in tts.detail
@@ -105,15 +103,13 @@ def test_preflight_allows_missing_cloud_tts_because_local_fallback_exists(
     monkeypatch.delenv("JARVIS_TTS_GOOGLE_API_KEY", raising=False)
     monkeypatch.setattr(preflight, "_audio_checks", lambda _config: [])
 
-    checks = preflight.run_startup_preflight(
+    tts = preflight._tts_lane_check(
         JarvisConfig(
             ai_provider="openai",
             tts_provider="gemini",
             wake_model_path=str(wake),
         )
     )
-
-    tts = next(check for check in checks if check.label == "Scripted TTS lane")
     assert tts.ok is True
     assert "local lifecycle speech remains the fallback" in tts.detail
 

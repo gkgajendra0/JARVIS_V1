@@ -71,6 +71,27 @@ def _credential_check(config: JarvisConfig) -> PreflightCheck:
     )
 
 
+def _realtime_lifecycle_voice_check(config: JarvisConfig) -> PreflightCheck:
+    """Confirm lifecycle speech shares the normal realtime conversation lane."""
+
+    name = credential_environment_name(config.ai_provider)
+    available = provider_api_key(config.ai_provider) is not None
+    return PreflightCheck(
+        "Lifecycle voice",
+        available,
+        (
+            f"provider={config.ai_provider}; startup, standby, update prompts, and "
+            "background notifications share the realtime conversation model/voice; "
+            "no separate scripted TTS request"
+            if available
+            else (
+                f"provider={config.ai_provider}; {name} is missing, so realtime "
+                "lifecycle speech is unavailable"
+            )
+        ),
+    )
+
+
 def _tts_lane_check(config: JarvisConfig) -> PreflightCheck:
     provider = config.tts_provider
     dedicated_name = tts_credential_environment_name(provider)
@@ -231,7 +252,7 @@ def run_startup_preflight(config: JarvisConfig) -> list[PreflightCheck]:
     checks = [
         _check_file("Wake model", config.wake_model_path),
         _credential_check(config),
-        _tts_lane_check(config),
+        _realtime_lifecycle_voice_check(config),
         *_audio_checks(config),
         *_authority_checks(),
     ]

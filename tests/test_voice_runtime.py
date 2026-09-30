@@ -45,12 +45,39 @@ class FakeSessionOutput:
         self.audio_enabled = enabled
 
 
+class FakeSpeechHandle:
+    def __init__(self, session: FakeSession) -> None:
+        self._session = session
+        self._done = False
+
+    async def wait_for_playout(self) -> None:
+        if not self._session.auto_finish_replies:
+            await self._session.reply_release.wait()
+        self._done = True
+
+    def exception(self):
+        if not self._done:
+            raise asyncio.InvalidStateError("speech is not complete")
+        return self._session.reply_error
+
+
 class FakeSession:
-    def __init__(self, *, start_error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        start_error: Exception | None = None,
+        reply_error: BaseException | None = None,
+        auto_finish_replies: bool = True,
+    ) -> None:
         self.handlers: dict[str, list] = defaultdict(list)
         self.input = FakeSessionInput()
         self.output = FakeSessionOutput()
         self.started = asyncio.Event()
+        self.reply_started = asyncio.Event()
+        self.reply_release = asyncio.Event()
+        self.auto_finish_replies = auto_finish_replies
+        self.reply_error = reply_error
+        self.generated_replies: list[dict[str, Any]] = []
         self.closed = False
         self.start_error = start_error
         self.interrupt_calls: list[bool] = []
@@ -76,6 +103,11 @@ class FakeSession:
         future = asyncio.get_running_loop().create_future()
         future.set_result(None)
         return future
+
+    def generate_reply(self, **kwargs) -> FakeSpeechHandle:
+        self.generated_replies.append(dict(kwargs))
+        self.reply_started.set()
+        return FakeSpeechHandle(self)
 
     async def aclose(self) -> None:
         self.closed = True
@@ -200,7 +232,9 @@ async def test_startup_greeting_waits_for_tracking_readiness() -> None:
             return None
 
     audio = StartupAudio()
-    scripted_speech = FakeScriptedSpeech()
+    session = FakeSession()
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
     readiness = threading.Event()
     calls: list[float] = []
 
@@ -211,20 +245,19 @@ async def test_startup_greeting_waits_for_tracking_readiness() -> None:
     runtime = VoiceRuntimeController(
         JarvisConfig(),
         audio,  # type: ignore[arg-type]
-        scripted_speech=scripted_speech,
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
         startup_readiness_waiter=wait_for_ready,
         startup_readiness_timeout_seconds=1.0,
     )
     task = asyncio.create_task(runtime.run())
     await asyncio.wait_for(audio.started.wait(), timeout=1)
     await asyncio.sleep(0.05)
-    assert scripted_speech.started.is_set() is False
+    assert session.reply_started.is_set() is False
 
     readiness.set()
-    await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
     assert calls == [1.0]
 
-    scripted_speech.release.set()
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)
 
@@ -317,23 +350,25 @@ async def test_startup_readiness_timeout_skips_greeting() -> None:
             return None
 
     audio = StartupAudio()
-    scripted_speech = FakeScriptedSpeech()
+    session = FakeSession()
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
     runtime = VoiceRuntimeController(
         JarvisConfig(),
         audio,  # type: ignore[arg-type]
-        scripted_speech=scripted_speech,
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
         startup_readiness_waiter=lambda _timeout: False,
         startup_readiness_timeout_seconds=0.01,
     )
     task = asyncio.create_task(runtime.run())
     await asyncio.sleep(0.05)
-    assert scripted_speech.started.is_set() is False
+    assert session.reply_started.is_set() is False
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)
 
 
 @pytest.mark.asyncio
-async def test_startup_greeting_prefers_primary_cloud_lifecycle_speech() -> None:
+async def test_startup_greeting_uses_realtime_conversation_voice() -> None:
     class Detector:
         async def wait_for_detection(self):
             await asyncio.Event().wait()
@@ -356,93 +391,96 @@ async def test_startup_greeting_prefers_primary_cloud_lifecycle_speech() -> None
             return None
 
     audio = StartupAudio()
-    scripted_speech = FakeScriptedSpeech()
+    session = FakeSession()
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
     local_speech = FakeLocalStatusSpeech()
     runtime = VoiceRuntimeController(
         JarvisConfig(),
         audio,  # type: ignore[arg-type]
-        scripted_speech=scripted_speech,
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
         local_status_speech=local_speech,  # type: ignore[arg-type]
         startup_greeting_factory=lambda: "Good evening, sir.",
     )
     task = asyncio.create_task(runtime.run())
-    await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
 
-    assert scripted_speech.spoken == ["Good evening, sir."]
-    assert scripted_speech.max_provider_retries == [0]
+    assert len(session.generated_replies) == 1
+    reply = session.generated_replies[0]
+    assert "Good evening, sir." in reply["instructions"]
+    assert "Vary the wording naturally" in reply["instructions"]
+    assert reply["allow_interruptions"] is False
+    assert reply["input_modality"] == "text"
+    assert session.output.audio is audio.output
+    assert session.input.audio_enabled is False
     assert local_speech.spoken == []
 
-    scripted_speech.release.set()
-    await asyncio.sleep(0)
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)
 
 
 @pytest.mark.asyncio
-async def test_lifecycle_speech_falls_back_locally_after_one_cloud_attempt() -> None:
-    class FailingScriptedSpeech(FakeScriptedSpeech):
-        async def speak(
-            self,
-            output: LocalAudioOutput,
-            text: str,
-            *,
-            max_provider_retries: int | None = None,
-        ) -> None:
-            del output
-            self.spoken.append(text)
-            self.max_provider_retries.append(max_provider_retries)
-            self.started.set()
-            raise RuntimeError("cloud failed")
+async def test_startup_realtime_failure_does_not_use_local_voice() -> None:
+    class Detector:
+        async def wait_for_detection(self):
+            await asyncio.Event().wait()
 
-    runtime, _, _, audio, _ = runtime_with_session()
-    scripted_speech = FailingScriptedSpeech()
+    class StartupAudio(FakeAudio):
+        def __init__(self) -> None:
+            super().__init__()
+            self.detector = Detector()
+
+        def set_overflow_handler(self, handler) -> None:
+            del handler
+
+        async def start(self) -> None:
+            return None
+
+        async def resume_wake(self, *, cooldown_seconds: float) -> None:
+            del cooldown_seconds
+
+        async def aclose(self) -> None:
+            return None
+
+    audio = StartupAudio()
+    session = FakeSession(reply_error=RuntimeError("realtime voice failed"))
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
     local_speech = FakeLocalStatusSpeech()
-    runtime._scripted_speech = scripted_speech  # type: ignore[attr-defined]
-    runtime._local_status_speech = local_speech  # type: ignore[attr-defined]
-
-    assert (
-        await runtime._speak_lifecycle_message(
-            audio.output,
-            "Lifecycle message.",
-            label="test lifecycle",
-        )
-        is True
+    runtime = VoiceRuntimeController(
+        JarvisConfig(),
+        audio,  # type: ignore[arg-type]
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+        local_status_speech=local_speech,  # type: ignore[arg-type]
     )
 
-    assert scripted_speech.spoken == ["Lifecycle message."]
-    assert scripted_speech.max_provider_retries == [0]
-    assert local_speech.spoken == ["Lifecycle message."]
+    task = asyncio.create_task(runtime.run())
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+    await asyncio.sleep(0)
+
+    assert local_speech.spoken == []
+    assert runtime.state is VoiceRuntimeState.IDLE
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
 
 
 @pytest.mark.asyncio
-async def test_standby_closes_when_local_and_cloud_speech_fail() -> None:
-    class FailingScriptedSpeech(FakeScriptedSpeech):
-        async def speak(
-            self,
-            output: LocalAudioOutput,
-            text: str,
-            *,
-            max_provider_retries: int | None = None,
-        ) -> None:
-            del output
-            self.spoken.append(text)
-            self.max_provider_retries.append(max_provider_retries)
-            self.started.set()
-            raise RuntimeError("cloud failed")
-
+async def test_standby_times_out_silently_without_local_voice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     session = FakeSession()
     conversation = ConversationSession()
     bridge = _bridge(session, conversation)
     audio = FakeAudio()
-    scripted_speech = FailingScriptedSpeech()
-    local_speech = FakeLocalStatusSpeech(error=RuntimeError("local failed"))
+    local_speech = FakeLocalStatusSpeech()
     runtime = VoiceRuntimeController(
         JarvisConfig(initial_request_timeout_seconds=1),
         audio,  # type: ignore[arg-type]
         session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
-        scripted_speech=scripted_speech,
         local_status_speech=local_speech,  # type: ignore[arg-type]
     )
+    monkeypatch.setattr("jarvis.voice.runtime._STANDBY_ACK_TIMEOUT_SECONDS", 0.01)
 
     task = asyncio.create_task(runtime._run_one_session())
     await session.started.wait()
@@ -452,7 +490,7 @@ async def test_standby_closes_when_local_and_cloud_speech_fail() -> None:
     function_call = llm.FunctionCall(
         name="enter_standby",
         arguments="{}",
-        call_id="standby-failure-test",
+        call_id="standby-timeout-test",
     )
     call_ctx = RunContext(
         session=session,  # type: ignore[arg-type]
@@ -463,25 +501,26 @@ async def test_standby_closes_when_local_and_cloud_speech_fail() -> None:
         llm.FunctionToolCall(
             name="enter_standby",
             arguments="{}",
-            call_id="standby-failure-test",
+            call_id="standby-timeout-test",
         ),
         tool_ctx,
         call_ctx=call_ctx,
     )
 
     assert result.raw_exception is None
+    assert "Standby transition accepted" in str(result.raw_output)
     await asyncio.wait_for(task, timeout=1)
 
-    assert local_speech.spoken == ["Of course. I'll be standing by if you need me."]
-    assert scripted_speech.spoken == ["Of course. I'll be standing by if you need me."]
-    assert scripted_speech.max_provider_retries == [0]
+    assert local_speech.spoken == []
+    assert session.input.audio_enabled is False
+    assert session.output.audio_enabled is True
     assert session.closed is True
     assert conversation.status is ConversationStatus.CLOSED
 
 
 @pytest.mark.asyncio
-async def test_semantic_standby_speaks_ack_before_session_cleanup() -> None:
-    runtime, session, conversation, audio, scripted_speech = runtime_with_session()
+async def test_semantic_standby_keeps_realtime_output_until_ack_finishes() -> None:
+    runtime, session, conversation, audio, _ = runtime_with_session()
     task = asyncio.create_task(runtime._run_one_session())
     await session.started.wait()
     assert runtime.state is VoiceRuntimeState.ACTIVE
@@ -509,18 +548,26 @@ async def test_semantic_standby_speaks_ack_before_session_cleanup() -> None:
         call_ctx=call_ctx,
     )
     assert result.raw_exception is None
-    assert result.raw_output is None
+    assert "exactly one brief, natural acknowledgement" in str(result.raw_output)
     assert session.input.audio_enabled is False
-    assert session.output.audio_enabled is False
-    await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
-
-    assert scripted_speech.spoken == ["Of course. I'll be standing by if you need me."]
-    assert session.interrupt_calls == [True]
+    assert session.output.audio_enabled is True
+    assert session.interrupt_calls == []
     assert task.done() is False
     assert session.closed is False
     assert audio.deactivated is False
 
-    scripted_speech.release.set()
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="standby-ack",
+                role="assistant",
+                content=["Very well, sir. I'll be standing by."],
+            )
+        ),
+    )
+    audio.output.emit("playback_finished", object())
+
     await asyncio.wait_for(task, timeout=1)
 
     assert audio.activated is True
@@ -687,28 +734,24 @@ async def test_active_speaker_shadow_uses_separate_paired_audio_window() -> None
 
 
 @pytest.mark.asyncio
-async def test_update_approval_uses_scripted_speech_then_real_spoken_yes() -> None:
-    runtime, session, _, audio, scripted_speech = runtime_with_session()
+async def test_update_approval_uses_realtime_voice_then_real_spoken_yes() -> None:
+    runtime, session, _, audio, _ = runtime_with_session()
     task = asyncio.create_task(runtime._run_update_approval_session("a" * 40, "b" * 40))
-    await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
 
-    assert scripted_speech.spoken == [
-        (
-            "A JARVIS software update is available. Shall I install it and restart now? "
-            "Please answer yes or no."
-        )
-    ]
-    assert session.output.audio is None
+    assert len(session.generated_replies) == 1
+    reply = session.generated_replies[0]
+    assert (
+        "A JARVIS software update is available. Shall I install it and restart now? "
+        "Please answer yes or no."
+    ) in reply["instructions"]
+    assert reply["allow_interruptions"] is False
+    assert reply["input_modality"] == "text"
+    assert session.output.audio is audio.output
 
-    session.emit(
-        "user_input_transcribed",
-        UserInputTranscribedEvent(transcript="yes", is_final=True),
-    )
+    # Let the runtime advance past prompt playout and enable decision capture.
     await asyncio.sleep(0)
-    assert task.done() is False
 
-    scripted_speech.release.set()
-    await asyncio.sleep(0)
     session.emit(
         "user_input_transcribed",
         UserInputTranscribedEvent(transcript="yes", is_final=True),
@@ -746,20 +789,22 @@ async def test_startup_greeting_timeout_does_not_block_runtime(
             return None
 
     audio = StartupAudio()
-    scripted_speech = FakeScriptedSpeech()
+    session = FakeSession(auto_finish_replies=False)
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
     runtime = VoiceRuntimeController(
         JarvisConfig(),
         audio,  # type: ignore[arg-type]
-        scripted_speech=scripted_speech,
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
         startup_readiness_waiter=lambda _timeout: True,
     )
     monkeypatch.setattr(
-        "jarvis.voice.runtime._LIFECYCLE_CLOUD_PRIMARY_TIMEOUT_SECONDS",
+        "jarvis.voice.runtime._REALTIME_LIFECYCLE_TIMEOUT_SECONDS",
         0.01,
     )
 
     task = asyncio.create_task(runtime.run())
-    await asyncio.wait_for(scripted_speech.started.wait(), timeout=1)
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
     await asyncio.sleep(0.05)
 
     assert runtime.state is VoiceRuntimeState.IDLE

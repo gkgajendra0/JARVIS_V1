@@ -42,28 +42,26 @@ class FakeAudio:
         self.detector.enable()
 
 
-class FakeScriptedSpeech:
+class FakeRealtimeSpeech:
     def __init__(self, audio: FakeAudio) -> None:
         self._audio = audio
-        self.spoken: list[str] = []
+        self.instructions: list[str] = []
+        self.labels: list[str] = []
         self.started = asyncio.Event()
         self.detector_was_disabled = False
 
     async def speak(
         self,
         output,
-        text: str,
         *,
-        max_provider_retries: int | None = None,
+        instructions: str,
+        label: str,
     ) -> None:
         assert output is self._audio.output
-        assert max_provider_retries == 0
         self.detector_was_disabled = not self._audio.detector.enabled
-        self.spoken.append(text)
+        self.instructions.append(instructions)
+        self.labels.append(label)
         self.started.set()
-
-    async def aclose(self) -> None:
-        return None
 
 
 class FakeStore:
@@ -90,7 +88,7 @@ class FakeStore:
 
     def schedule_delivery_retry(self, *args, **kwargs):
         del args, kwargs
-        raise AssertionError("successful scripted speech must not schedule a retry")
+        raise AssertionError("successful realtime speech must not schedule a retry")
 
 
 class FakeWorkRuntime:
@@ -107,14 +105,14 @@ async def test_background_work_speech_waits_until_voice_session_is_idle(
     policy: DeliveryPolicy,
 ) -> None:
     audio = FakeAudio()
-    speech = FakeScriptedSpeech(audio)
+    speech = FakeRealtimeSpeech(audio)
     work = FakeWorkRuntime(policy)
     runtime = CanonicalActiveSpeakerRuntimeController(
         JarvisConfig(wake_cooldown_seconds=0.01),
         audio,  # type: ignore[arg-type]
-        scripted_speech=speech,  # type: ignore[arg-type]
         work_runtime=work,  # type: ignore[arg-type]
     )
+    runtime._speak_ephemeral_realtime_message = speech.speak  # type: ignore[method-assign]
 
     runtime._state = VoiceRuntimeState.ACTIVE
     runtime._live_session = object()
@@ -122,7 +120,7 @@ async def test_background_work_speech_waits_until_voice_session_is_idle(
     delivery_task = asyncio.create_task(runtime._deliver_pending_work())
     await asyncio.sleep(0.35)
 
-    assert speech.spoken == []
+    assert speech.instructions == []
     assert work.store.delivered is False
     assert audio.detector.disable_calls == 0
 
@@ -132,12 +130,10 @@ async def test_background_work_speech_waits_until_voice_session_is_idle(
     await asyncio.wait_for(speech.started.wait(), timeout=1)
     await asyncio.sleep(0)
 
-    assert speech.spoken == [
-        (
-            "Sir, I need your input on a background task. "
-            "Please confirm the TV pairing request."
-        )
-    ]
+    assert len(speech.instructions) == 1
+    assert "Please confirm the TV pairing request." in speech.instructions[0]
+    assert "one or two brief, natural sentences" in speech.instructions[0]
+    assert speech.labels == ["background work notification"]
     assert speech.detector_was_disabled is True
     assert audio.detector.disable_calls == 1
     assert audio.resume_calls == 1
@@ -151,14 +147,14 @@ async def test_background_work_speech_waits_until_voice_session_is_idle(
 @pytest.mark.asyncio
 async def test_background_work_speech_respects_shared_speech_lease() -> None:
     audio = FakeAudio()
-    speech = FakeScriptedSpeech(audio)
+    speech = FakeRealtimeSpeech(audio)
     work = FakeWorkRuntime(DeliveryPolicy.WHEN_IDLE)
     runtime = CanonicalActiveSpeakerRuntimeController(
         JarvisConfig(wake_cooldown_seconds=0.01),
         audio,  # type: ignore[arg-type]
-        scripted_speech=speech,  # type: ignore[arg-type]
         work_runtime=work,  # type: ignore[arg-type]
     )
+    runtime._speak_ephemeral_realtime_message = speech.speak  # type: ignore[method-assign]
     runtime._state = VoiceRuntimeState.IDLE
     runtime._live_session = None
 
@@ -166,7 +162,7 @@ async def test_background_work_speech_respects_shared_speech_lease() -> None:
     delivery_task = asyncio.create_task(runtime._deliver_pending_work())
     await asyncio.sleep(0.1)
 
-    assert speech.spoken == []
+    assert speech.instructions == []
     assert work.store.delivered is False
 
     runtime._speech_ownership.release()

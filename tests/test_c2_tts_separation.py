@@ -92,39 +92,12 @@ def test_scripted_speech_can_select_openai_independently(
     assert captured["model"] == "gpt-4o-mini-tts"
 
 
-class _LocalFallback:
-    def __init__(self) -> None:
-        self.spoken: list[str] = []
-
-    async def speak(self, output, text: str) -> None:
-        del output
-        self.spoken.append(text)
-
-
-@pytest.mark.asyncio
-async def test_missing_cloud_tts_credential_falls_back_to_local_lifecycle_speech(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    monkeypatch.delenv("JARVIS_TTS_GOOGLE_API_KEY", raising=False)
-    monkeypatch.setattr(
-        voice_runtime,
-        "build_scripted_speech",
-        lambda _config: (_ for _ in ()).throw(RuntimeError("tts credential missing")),
-    )
-
-    local = _LocalFallback()
+def test_normal_lifecycle_runtime_does_not_require_scripted_tts_builder() -> None:
     controller = voice_runtime.VoiceRuntimeController(
-        JarvisConfig(ai_provider="openai", tts_provider="gemini"),
+        JarvisConfig(ai_provider="gemini", tts_provider="gemini"),
         SimpleNamespace(output=object()),  # type: ignore[arg-type]
-        local_status_speech=local,
     )
 
-    spoken = await controller._speak_lifecycle_message(
-        object(),
-        "Systems are ready, sir.",
-        label="C2 test",
-    )
-
-    assert spoken is True
-    assert local.spoken == ["Systems are ready, sir."]
+    assert controller._scripted_speech is None
+    assert controller._owns_scripted_speech is False
+    assert hasattr(controller, "_speak_ephemeral_realtime_message")
