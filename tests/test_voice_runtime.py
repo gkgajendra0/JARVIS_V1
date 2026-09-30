@@ -494,6 +494,63 @@ async def test_startup_realtime_failure_does_not_use_local_voice() -> None:
     await asyncio.wait_for(task, timeout=1)
 
 
+def test_repeated_zero_turn_wakes_publish_degraded_then_recover() -> None:
+    observations: list[tuple[str, str, dict[str, object]]] = []
+
+    def observe(
+        state: str,
+        reason_code: str,
+        summary: str,
+        metadata: dict[str, object],
+    ) -> None:
+        del summary
+        observations.append((state, reason_code, metadata))
+
+    runtime, _, _, _, _ = runtime_with_session()
+    runtime._voice_behavior_observer = observe
+
+    runtime._note_wake_session_without_user_turn()
+    runtime._note_wake_session_without_user_turn()
+    assert observations == []
+
+    runtime._note_wake_session_without_user_turn()
+    assert observations[-1][0:2] == (
+        "degraded",
+        "voice_repeated_wake_without_user_turn",
+    )
+    assert observations[-1][2]["consecutive_zero_turn_sessions"] == 3
+
+    runtime._note_committed_user_turn()
+    assert observations[-1][0:2] == (
+        "healthy",
+        "voice_user_turn_recovered",
+    )
+
+
+def test_zero_turn_streak_resets_before_degradation() -> None:
+    observations: list[tuple[str, str]] = []
+
+    def observe(
+        state: str,
+        reason_code: str,
+        summary: str,
+        metadata: dict[str, object],
+    ) -> None:
+        del summary, metadata
+        observations.append((state, reason_code))
+
+    runtime, _, _, _, _ = runtime_with_session()
+    runtime._voice_behavior_observer = observe
+
+    runtime._note_wake_session_without_user_turn()
+    runtime._note_wake_session_without_user_turn()
+    runtime._note_committed_user_turn()
+    runtime._note_wake_session_without_user_turn()
+    runtime._note_wake_session_without_user_turn()
+
+    assert observations == []
+
+
 @pytest.mark.asyncio
 async def test_wake_only_pause_gets_one_brief_realtime_acknowledgement(
     monkeypatch: pytest.MonkeyPatch,
