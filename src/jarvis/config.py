@@ -109,6 +109,7 @@ class JarvisConfig:
     ai_provider: str = "openai"
     chatgpt_plan_enabled: bool = False
     chatgpt_plan_model: str | None = None
+    default_media_target: str | None = None
     tts_provider: str = "gemini"
     realtime_model: str = "gpt-realtime"
     realtime_voice: str = "marin"
@@ -237,6 +238,7 @@ class JarvisConfig:
             "memory_semantic_recall_model",
             "hands_planner_model",
             "chatgpt_plan_model",
+            "default_media_target",
             "work_orchestration_model",
             "work_dbos_database_url",
             "development_test_docker_image",
@@ -253,6 +255,14 @@ class JarvisConfig:
             raise ValueError(
                 "JARVIS_CHATGPT_PLAN_MODEL is required when ChatGPT-plan usage is enabled"
             )
+
+        if self.default_media_target is not None:
+            if len(self.default_media_target) > 160:
+                raise ValueError("default_media_target must be at most 160 characters")
+            if any(ord(character) < 32 for character in self.default_media_target):
+                raise ValueError(
+                    "default_media_target must not contain control characters"
+                )
 
         if self.work_orchestration_enabled:
             if self.work_dbos_database_url is None:
@@ -397,6 +407,9 @@ class JarvisConfig:
             ),
             chatgpt_plan_model=_configured_optional_text(
                 "JARVIS_CHATGPT_PLAN_MODEL", machine
+            ),
+            default_media_target=_configured_optional_text(
+                "JARVIS_DEFAULT_MEDIA_TARGET", machine
             ),
             tts_provider=configured_tts_provider(machine),
             realtime_model=_configured_required_text(

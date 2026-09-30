@@ -20,6 +20,7 @@ def _isolate_machine_config(
 
 def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("JARVIS_AI_PROVIDER", " GEMINI ")
+    monkeypatch.setenv("JARVIS_DEFAULT_MEDIA_TARGET", " Hisense TV ")
     monkeypatch.setenv("JARVIS_TTS_PROVIDER", " OPENAI ")
     monkeypatch.setenv("JARVIS_REALTIME_MODEL", " model-x ")
     monkeypatch.setenv("JARVIS_REALTIME_VOICE", " voice-y ")
@@ -51,6 +52,7 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     config = JarvisConfig.from_environment()
 
     assert config.ai_provider == "gemini"
+    assert config.default_media_target == "Hisense TV"
     assert config.tts_provider == "openai"
     assert config.realtime_provider == "gemini"
     assert config.realtime_model == "model-x"
@@ -270,3 +272,17 @@ def test_invalid_vision_camera_configuration_fails_truthfully() -> None:
         JarvisConfig(vision_lenovo_device_index=-1)
     with pytest.raises(TypeError, match="vision_pocket3_device_index"):
         JarvisConfig(vision_pocket3_device_index=True)
+
+
+def test_default_media_target_is_optional_and_bounded() -> None:
+    assert JarvisConfig().default_media_target is None
+    assert (
+        JarvisConfig(default_media_target=" Hisense TV ").default_media_target
+        == "Hisense TV"
+    )
+
+    with pytest.raises(ValueError, match="at most 160"):
+        JarvisConfig(default_media_target="x" * 161)
+
+    with pytest.raises(ValueError, match="control characters"):
+        JarvisConfig(default_media_target="Hisense\x00TV")
