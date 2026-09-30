@@ -67,6 +67,7 @@ SessionFactory = Callable[
 StartupGreetingFactory = Callable[[], str]
 StartupReadinessWaiter = Callable[[float], bool]
 VoiceBehaviorObserver = Callable[[str, str, str, dict[str, object]], None]
+ConversationSuccessObserver = Callable[[], None]
 
 _UPDATE_APPROVAL_PROMPT = (
     "A JARVIS software update is available. Shall I install it and restart now? "
@@ -123,6 +124,7 @@ class VoiceRuntimeController:
         startup_readiness_waiter: StartupReadinessWaiter | None = None,
         startup_readiness_timeout_seconds: float = 30.0,
         voice_behavior_observer: VoiceBehaviorObserver | None = None,
+        conversation_success_observer: ConversationSuccessObserver | None = None,
     ) -> None:
         self.config = config
         self.audio = audio
@@ -158,6 +160,7 @@ class VoiceRuntimeController:
         self._startup_readiness_waiter = startup_readiness_waiter
         self._startup_readiness_timeout_seconds = startup_readiness_timeout_seconds
         self._voice_behavior_observer = voice_behavior_observer
+        self._conversation_success_observer = conversation_success_observer
         self._consecutive_wake_sessions_without_user_turn = 0
         self._voice_behavior_degraded = False
 
@@ -176,6 +179,15 @@ class VoiceRuntimeController:
             observer(state, reason_code, summary, metadata or {})
         except Exception:
             LOGGER.debug("Voice behavior health observer failed", exc_info=True)
+
+    def _note_successful_conversation(self) -> None:
+        observer = self._conversation_success_observer
+        if observer is None:
+            return
+        try:
+            observer()
+        except Exception:
+            LOGGER.debug("Conversation success observer failed", exc_info=True)
 
     def _note_committed_user_turn(self) -> None:
         had_zero_turn_streak = self._consecutive_wake_sessions_without_user_turn > 0
@@ -939,6 +951,7 @@ class VoiceRuntimeController:
         owner_activity = asyncio.Event()
         wake_ack_task: asyncio.Task[None] | None = None
         wake_ack_started = False
+        session_success_observed = False
 
         async def maybe_acknowledge_wake() -> None:
             nonlocal wake_ack_started
@@ -1043,7 +1056,7 @@ class VoiceRuntimeController:
                 self._cancel_timeout()
 
         def on_conversation_item(event: ConversationItemAddedEvent) -> None:
-            nonlocal has_user_turn, standby_ack_observed
+            nonlocal has_user_turn, session_success_observed, standby_ack_observed
             item = event.item
             if not isinstance(item, ChatMessage):
                 return
@@ -1057,6 +1070,15 @@ class VoiceRuntimeController:
                         "JARVIS realtime standby acknowledgement finished playing"
                     )
                     active_end.set()
+                return
+            if item.role == "assistant":
+                if (
+                    has_user_turn
+                    and not session_success_observed
+                    and (wake_ack_task is None or wake_ack_task.done())
+                ):
+                    session_success_observed = True
+                    self._note_successful_conversation()
                 return
             if item.role != "user":
                 return
