@@ -90,7 +90,9 @@ Live lifecycle controller:
 - pending migrations request rollback on startup-preflight failure,
   `MODEL_UNAVAILABLE`, or repeated wake-with-zero-user-turn degradation;
 - rollback probes the previous model with a real Live handshake before restoring it;
-- a rolled-back candidate is blocked from automatic retry to avoid migration loops.
+- a rolled-back candidate is blocked from immediate retry and re-evaluated only
+  after the bounded six-hour cooldown, with fresh lifecycle evidence and a new Live
+  handshake, to avoid migration loops.
 
 If authoritative lifecycle evidence is unavailable, no replacement is guessed. If the
 recommended replacement fails its Live handshake, the current configuration is retained
