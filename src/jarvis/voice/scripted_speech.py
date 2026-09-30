@@ -87,8 +87,8 @@ def build_scripted_speech(config: JarvisConfig) -> LiveKitScriptedSpeech:
     """Build scripted TTS on its independent provider/credential lane."""
 
     instructions = (
-        "Speak like JARVIS: calm, concise, professional, and authoritative. "
-        "Do not add, remove, or paraphrase words from the supplied script."
+        "Read the supplied text exactly as written. "
+        "Do not add, remove, explain, or paraphrase any words."
     )
     api_key = require_tts_api_key(config.tts_provider, purpose="scripted speech")
     if config.tts_provider == "gemini":
