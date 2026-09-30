@@ -433,7 +433,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 # this owner-priority window, a recovered delivery backlog can disable
                 # wake, speak, re-enable wake, and immediately disable it again before
                 # the owner has a realistic chance to say the wake word.
-                await asyncio.sleep(max(3.0, self.config.wake_cooldown_seconds))
+                try:
+                    await asyncio.wait_for(
+                        self._shutdown.wait(),
+                        timeout=max(3.0, self.config.wake_cooldown_seconds),
+                    )
+                except TimeoutError:
+                    pass
 
     def _arm_timeout(self, seconds: float) -> None:
         """Arm inactivity shutdown only after startup and only while user is silent."""
