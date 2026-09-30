@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 
 from livekit.agents import RunContext, function_tool
 
@@ -57,6 +58,7 @@ class WorkAgentTools:
         conversation: ConversationSession,
         *,
         bound_owner_input_work_id: str | None = None,
+        on_bound_owner_input_submitted: Callable[[WorkItem], None] | None = None,
     ) -> None:
         if not isinstance(runtime, WorkRuntime):
             raise TypeError("runtime must be a WorkRuntime")
@@ -66,6 +68,7 @@ class WorkAgentTools:
         self._runtime = runtime
         self._conversation = conversation
         self._bound_owner_input_work_id = normalized_bound_work_id
+        self._on_bound_owner_input_submitted = on_bound_owner_input_submitted
 
     @property
     def tools(self) -> list:
@@ -844,6 +847,8 @@ class WorkAgentTools:
                 "status": "owner_input_target_unresolved",
                 "reason": str(exc),
             }
+        if bound_work_id is not None and self._on_bound_owner_input_submitted is not None:
+            self._on_bound_owner_input_submitted(waiting)
         return {
             "ok": True,
             "status": "owner_input_submitted",
