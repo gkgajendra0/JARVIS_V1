@@ -61,16 +61,24 @@ def run_preflight(
     repo_root: pathlib.Path,
     expected_commit: str | None = None,
 ) -> dict[str, object]:
-    _require(sys.platform == "win32", "real external mission preflight requires Windows")
+    _require(
+        sys.platform == "win32", "real external mission preflight requires Windows"
+    )
 
     repo = pathlib.Path(repo_root).resolve()
-    _require(repo.is_dir() and not repo.is_symlink(), "repo root must be a real directory")
+    _require(
+        repo.is_dir() and not repo.is_symlink(), "repo root must be a real directory"
+    )
     state = _repo_state(repo)
     _require(not state.tracked_dirty, "tracked working tree must be clean")
 
-    expected = None if expected_commit is None else str(expected_commit).strip().casefold()
+    expected = (
+        None if expected_commit is None else str(expected_commit).strip().casefold()
+    )
     if expected:
-        _require(state.head_sha == expected, "repository HEAD does not match expected commit")
+        _require(
+            state.head_sha == expected, "repository HEAD does not match expected commit"
+        )
 
     config = JarvisConfig.from_environment()
     _require(config.chatgpt_plan_enabled, "ChatGPT-plan reasoning is not enabled")
