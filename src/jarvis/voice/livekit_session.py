@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 
+from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types as google_types
 from livekit.agents import (
     AgentSession,
@@ -34,6 +37,36 @@ ConversationCloseObserver = Callable[[], None]
 
 _OPENAI_REALTIME_POST_INSTRUCTION_TOKEN_LIMIT = 12_000
 _OPENAI_REALTIME_RETENTION_RATIO = 0.75
+
+
+class GeminiLiveProbeError(RuntimeError):
+    """Provider-adapter failure while validating a Gemini Live model."""
+
+
+async def probe_gemini_live_model(
+    api_key: str,
+    model: str,
+    timeout_seconds: float,
+) -> None:
+    """Require a candidate model to complete a real Gemini Live setup handshake."""
+
+    async def connect_once() -> None:
+        client = genai.Client(api_key=api_key)
+        try:
+            async with client.aio.live.connect(
+                model=model,
+                config={"response_modalities": ["AUDIO"]},
+            ):
+                return
+        except (genai_errors.APIError, OSError, RuntimeError, ValueError) as exc:
+            raise GeminiLiveProbeError(type(exc).__name__) from exc
+        finally:
+            await client.aio.aclose()
+
+    try:
+        await asyncio.wait_for(connect_once(), timeout=timeout_seconds)
+    except TimeoutError as exc:
+        raise GeminiLiveProbeError("timeout") from exc
 
 
 def _create_realtime_model(config: JarvisConfig):
