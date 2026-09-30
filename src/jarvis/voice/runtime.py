@@ -637,7 +637,9 @@ class VoiceRuntimeController:
                 # queued background notification cannot race a just-detected wake.
                 self._state = VoiceRuntimeState.ACTIVATING
                 try:
-                    await self._run_one_session()
+                    await self._run_one_session(
+                        pre_roll_after_monotonic=detection.audio_end_at
+                    )
                 except asyncio.CancelledError:
                     raise
                 except Exception:
@@ -769,11 +771,21 @@ class VoiceRuntimeController:
             self.audio.deactivate_session()
             await session.aclose()
 
-    async def _run_one_session(self) -> None:
+    async def _run_one_session(
+        self,
+        *,
+        pre_roll_after_monotonic: float | None = None,
+    ) -> None:
         async with self._speech_ownership:
-            await self._run_one_session_owned()
+            await self._run_one_session_owned(
+                pre_roll_after_monotonic=pre_roll_after_monotonic
+            )
 
-    async def _run_one_session_owned(self) -> None:
+    async def _run_one_session_owned(
+        self,
+        *,
+        pre_roll_after_monotonic: float | None = None,
+    ) -> None:
         output = self.audio.output
         if output is None:
             raise RuntimeError("local audio output is not available")
@@ -949,7 +961,16 @@ class VoiceRuntimeController:
         output.on("playback_finished", on_playback_finished)
 
         bridge.conversation.start()
-        self.audio.activate_session(session_input)
+        self.audio.activate_session(
+            session_input,
+            pre_roll_after_monotonic=pre_roll_after_monotonic,
+        )
+        if pre_roll_after_monotonic is not None:
+            LOGGER.info(
+                "Wake handoff trimmed realtime pre-roll through %.6f; "
+                "post-wake speech is preserved",
+                pre_roll_after_monotonic,
+            )
         self._arm_timeout(self.config.initial_request_timeout_seconds)
         tools = list(self._vision_tools.tools) if self._vision_tools is not None else []
         standby_tools = StandbyAgentTools(request_standby)
