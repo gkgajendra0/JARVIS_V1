@@ -271,24 +271,19 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         if not normalized_question:
             raise ValueError("owner-input question must not be empty")
 
+        owner_input_submitted = asyncio.Event()
+
         def session_tools(conversation: ConversationSession) -> list:
             work_tools = WorkAgentTools(
                 runtime,
                 conversation,
                 bound_owner_input_work_id=work_id,
+                on_bound_owner_input_submitted=lambda _work: owner_input_submitted.set(),
             )
             return [work_tools.continue_background_work]
 
         def owner_input_resolved() -> bool:
-            try:
-                current = runtime.store.require(work_id)
-            except Exception:
-                LOGGER.exception(
-                    "Could not read owner-input WorkItem state | work_id=%s",
-                    work_id,
-                )
-                return False
-            return current.state is not WorkState.WAITING_FOR_OWNER
+            return owner_input_submitted.is_set()
 
         instructions = (
             "JARVIS has proactively opened this voice interaction because one exact "
@@ -319,7 +314,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             if not self._shutdown.is_set():
                 self._state = VoiceRuntimeState.IDLE
 
-        return owner_input_resolved()
+        return owner_input_submitted.is_set()
 
     async def _deliver_pending_work(self) -> None:
         """Speak durable Work notifications only at an exclusive idle boundary.
