@@ -25,6 +25,7 @@ from jarvis.config import JarvisConfig
 from jarvis.health_adapters import (
     CapabilityExecutionHealthObserver,
     ProviderResilienceHealthObserver,
+    VoiceBehaviorHealthObserver,
     record_capability_catalog_health,
     record_foundation_health,
     record_hands_availability_health,
@@ -467,6 +468,11 @@ def build_production_voice_runtime(
         if self_awareness is not None
         else None
     )
+    voice_behavior_observer = (
+        VoiceBehaviorHealthObserver(self_awareness)
+        if self_awareness is not None
+        else None
+    )
     local_status_speech = build_local_status_speech()
     LOGGER.info(
         "Step-5 minimal provider resilience is configured: provider=%s "
@@ -532,6 +538,7 @@ def build_production_voice_runtime(
             else None
         ),
         startup_readiness_timeout_seconds=_POCKET3_STARTUP_LOCK_WAIT_SECONDS,
+        voice_behavior_observer=voice_behavior_observer,
     )
 
 
