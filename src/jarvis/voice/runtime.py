@@ -1072,13 +1072,6 @@ class VoiceRuntimeController:
                     active_end.set()
                 return
             if item.role == "assistant":
-                if (
-                    has_user_turn
-                    and not session_success_observed
-                    and (wake_ack_task is None or wake_ack_task.done())
-                ):
-                    session_success_observed = True
-                    self._note_successful_conversation()
                 return
             if item.role != "user":
                 return
@@ -1092,8 +1085,7 @@ class VoiceRuntimeController:
             submit_shadow_turn()
 
         def on_playback_finished(event: PlaybackFinishedEvent) -> None:
-            nonlocal standby_playback_finished
-            del event
+            nonlocal standby_playback_finished, session_success_observed
             if exit_in_progress:
                 standby_playback_finished = True
                 if standby_ack_observed:
@@ -1102,6 +1094,14 @@ class VoiceRuntimeController:
                     )
                     active_end.set()
                 return
+            if (
+                has_user_turn
+                and not session_success_observed
+                and not event.interrupted
+                and (wake_ack_task is None or wake_ack_task.done())
+            ):
+                session_success_observed = True
+                self._note_successful_conversation()
             if self._state is VoiceRuntimeState.ACTIVE:
                 self._arm_timeout(self.config.follow_up_timeout_seconds)
 
