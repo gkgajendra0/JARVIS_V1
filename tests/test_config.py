@@ -80,6 +80,12 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.speaker_shadow_enabled is True
 
 
+def test_wake_handoff_defaults_to_two_second_pre_roll() -> None:
+    config = JarvisConfig()
+    assert config.audio_pre_roll_seconds == 2.0
+    assert config.audio_pre_roll_seconds <= config.audio_ring_buffer_seconds
+
+
 def test_tts_defaults_to_current_quality_first_model() -> None:
     config = JarvisConfig()
     assert config.gemini_tts_model == "gemini-3.8-flash-tts"
