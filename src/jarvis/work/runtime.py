@@ -401,6 +401,7 @@ def build_work_runtime(
     brain_route_store = BrainRouteStore(store)
     provider_cost_store = ProviderCostEventStore(store)
     strategy_registry = RoutingStrategyRegistry((EngineeringStageStrategy(),))
+
     def _credential_available(target) -> bool:
         if target.provider_id == CHATGPT_PLAN_PROVIDER_ID:
             return bool(
