@@ -1187,6 +1187,11 @@ class VoiceRuntimeController:
             self._state = VoiceRuntimeState.ACTIVE
             LOGGER.info("JARVIS realtime conversation is active")
             if initial_instructions is not None:
+                # A proactive question can itself take longer than the normal
+                # initial-request window. Do not let the wake-flow timer expire
+                # while JARVIS is still asking the question. Playback completion
+                # will arm the ordinary follow-up window for the owner's reply.
+                self._cancel_timeout()
                 prompt_handle = session.generate_reply(
                     instructions=initial_instructions,
                     allow_interruptions=True,
