@@ -130,8 +130,8 @@ def test_default_media_target_grounds_short_media_request_without_granting_autho
         build_instructions(default_media_target="Hisense TV").split()
     )
 
-    assert 'configured target for routing' in instructions
-    assert 'capability-acquisition target_hints' in instructions
+    assert "configured target for routing" in instructions
+    assert "capability-acquisition target_hints" in instructions
     assert '"Hisense TV"' in instructions
     assert "does not prove a streaming subscription" in instructions
     assert "Authority gates still apply" in instructions
