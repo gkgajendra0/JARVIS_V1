@@ -38,7 +38,7 @@ def test_preflight_reports_all_core_checks_without_opening_devices(
     assert {check.label for check in checks} >= {
         "Wake model",
         "Cloud AI credentials",
-        "Lifecycle voice",
+        "Scripted TTS lane",
         "Conversation microphone",
         "Conversation speaker",
     }
