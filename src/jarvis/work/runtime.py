@@ -438,7 +438,15 @@ class WorkRuntime:
         # cycle is still using the canonical event loop. Preempt background
         # reasoning first, then give already-running DBOS workflow code a bounded
         # window to checkpoint before database connections are closed.
-        self._interactive_brain_gate.preempt_background_for_shutdown()
+        shutdown_preempt = getattr(
+            self._interactive_brain_gate,
+            "preempt_background_for_shutdown",
+            None,
+        )
+        if callable(shutdown_preempt):
+            shutdown_preempt()
+        else:
+            self._interactive_brain_gate.set_interactive_active(True)
         status_task = getattr(self, "_status_update_task", None)
         if status_task is not None and not status_task.done():
             status_task.cancel()
