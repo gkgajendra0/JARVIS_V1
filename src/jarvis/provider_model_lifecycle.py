@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import re
 import urllib.request
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from html.parser import HTMLParser
+from pathlib import Path
 
 from google import genai
 
 from jarvis.config import JarvisConfig
 from jarvis.machine_config import (
+    default_machine_config_path,
     load_machine_settings,
     runtime_environment_overrides_enabled,
     save_machine_settings,
@@ -26,6 +30,7 @@ GEMINI_DEPRECATIONS_URL = "https://ai.google.dev/gemini-api/docs/deprecations"
 GEMINI_REALTIME_MODEL_SETTING = "JARVIS_GEMINI_REALTIME_MODEL"
 DEFAULT_LIFECYCLE_FETCH_TIMEOUT_SECONDS = 8.0
 DEFAULT_LIVE_PROBE_TIMEOUT_SECONDS = 10.0
+MODEL_LIFECYCLE_STATE_SCHEMA_VERSION = 1
 
 _MODEL_ID = re.compile(r"\bgemini-[a-z0-9][a-z0-9._-]*\b", re.IGNORECASE)
 
@@ -53,6 +58,146 @@ class GeminiLiveLifecycleResult:
     @property
     def migrated(self) -> bool:
         return self.status == "migrated"
+
+
+@dataclass(frozen=True, slots=True)
+class GeminiLiveMigrationJournal:
+    previous_model: str
+    candidate_model: str
+    state: str
+    recorded_at: str
+    source_url: str = GEMINI_DEPRECATIONS_URL
+
+
+def default_model_lifecycle_state_path() -> Path:
+    return default_machine_config_path().with_name("provider_model_lifecycle.json")
+
+
+def _load_migration_journal(
+    path: Path | None = None,
+) -> GeminiLiveMigrationJournal | None:
+    target = path or default_model_lifecycle_state_path()
+    if not target.exists():
+        return None
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    if payload.get("schema_version") != MODEL_LIFECYCLE_STATE_SCHEMA_VERSION:
+        raise RuntimeError("unsupported provider model lifecycle state schema")
+    migration = payload.get("migration")
+    if not isinstance(migration, dict):
+        raise TypeError("provider model lifecycle state migration must be an object")
+    return GeminiLiveMigrationJournal(
+        previous_model=str(migration["previous_model"]).strip().casefold(),
+        candidate_model=str(migration["candidate_model"]).strip().casefold(),
+        state=str(migration["state"]).strip().casefold(),
+        recorded_at=str(migration["recorded_at"]).strip(),
+        source_url=str(migration.get("source_url", GEMINI_DEPRECATIONS_URL)).strip(),
+    )
+
+
+def _write_migration_journal(
+    journal: GeminiLiveMigrationJournal,
+    path: Path | None = None,
+) -> None:
+    target = path or default_model_lifecycle_state_path()
+    payload = {
+        "schema_version": MODEL_LIFECYCLE_STATE_SCHEMA_VERSION,
+        "migration": {
+            "previous_model": journal.previous_model,
+            "candidate_model": journal.candidate_model,
+            "state": journal.state,
+            "recorded_at": journal.recorded_at,
+            "source_url": journal.source_url,
+        },
+    }
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_suffix(target.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(temporary, target)
+
+
+def _journal_now(
+    previous_model: str,
+    candidate_model: str,
+    state: str,
+) -> GeminiLiveMigrationJournal:
+    return GeminiLiveMigrationJournal(
+        previous_model=previous_model.strip().casefold(),
+        candidate_model=candidate_model.strip().casefold(),
+        state=state,
+        recorded_at=datetime.now(UTC).isoformat(),
+    )
+
+
+def accept_pending_gemini_live_migration(current_model: str) -> bool:
+    journal = _load_migration_journal()
+    if (
+        journal is None
+        or journal.state != "pending"
+        or journal.candidate_model != current_model.strip().casefold()
+    ):
+        return False
+    _write_migration_journal(
+        _journal_now(
+            journal.previous_model,
+            journal.candidate_model,
+            "accepted",
+        )
+    )
+    LOGGER.info(
+        "Gemini lifecycle migration accepted after real conversation | "
+        "previous=%s current=%s",
+        journal.previous_model,
+        journal.candidate_model,
+    )
+    return True
+
+
+def rollback_pending_gemini_live_migration(current_model: str) -> bool:
+    journal = _load_migration_journal()
+    normalized = current_model.strip().casefold()
+    if (
+        journal is None
+        or journal.state != "pending"
+        or journal.candidate_model != normalized
+    ):
+        return False
+
+    settings = load_machine_settings()
+    persisted = settings.get(GEMINI_REALTIME_MODEL_SETTING, "").strip().casefold()
+    if persisted != journal.candidate_model:
+        return False
+
+    settings[GEMINI_REALTIME_MODEL_SETTING] = journal.previous_model
+    save_machine_settings(settings)
+    _write_migration_journal(
+        _journal_now(
+            journal.previous_model,
+            journal.candidate_model,
+            "rolled_back",
+        )
+    )
+    LOGGER.error(
+        "Rolled back pending Gemini lifecycle migration | candidate=%s previous=%s",
+        journal.candidate_model,
+        journal.previous_model,
+    )
+    return True
+
+
+def _replacement_blocked_after_rollback(
+    current_model: str,
+    replacement_model: str,
+) -> bool:
+    journal = _load_migration_journal()
+    return bool(
+        journal is not None
+        and journal.state == "rolled_back"
+        and journal.previous_model == current_model.strip().casefold()
+        and journal.candidate_model == replacement_model.strip().casefold()
+    )
 
 
 class _GeminiDeprecationParser(HTMLParser):
@@ -218,8 +363,25 @@ def _persist_replacement(
         raise RuntimeError(
             "persisted Gemini realtime model changed during lifecycle reconciliation"
         )
+    _write_migration_journal(
+        _journal_now(
+            current_model,
+            replacement_model,
+            "pending",
+        )
+    )
     settings[GEMINI_REALTIME_MODEL_SETTING] = replacement_model
-    save_machine_settings(settings)
+    try:
+        save_machine_settings(settings)
+    except Exception:
+        _write_migration_journal(
+            _journal_now(
+                current_model,
+                replacement_model,
+                "persistence_failed",
+            )
+        )
+        raise
 
 
 async def reconcile_gemini_live_model(
@@ -286,6 +448,20 @@ async def reconcile_gemini_live_model(
             current_model=current,
             status="current",
             detail=f"shutdown={record.shutdown_date or 'unknown'}",
+        )
+
+    if _replacement_blocked_after_rollback(current, replacement):
+        LOGGER.error(
+            "Gemini lifecycle replacement was previously rolled back; "
+            "automatic retry is blocked | current=%s replacement=%s",
+            current,
+            replacement,
+        )
+        return GeminiLiveLifecycleResult(
+            current_model=current,
+            status="replacement_blocked_after_rollback",
+            replacement_model=replacement,
+            detail="previous_automatic_migration_rolled_back",
         )
 
     if "live" not in replacement:
