@@ -386,9 +386,7 @@ def build_work_runtime(
     acquisition_work_context = AcquisitionWorkContextResolver(change_store)
     acquisition_discovery = default_discovery_broker()
 
-    chatgpt_plan_session = (
-        ChatGPTPlanSessionManager() if chatgpt_plan_enabled else None
-    )
+    chatgpt_plan_session = ChatGPTPlanSessionManager() if chatgpt_plan_enabled else None
     adapter_registry = build_default_model_adapter_registry(
         chatgpt_plan_session_manager=chatgpt_plan_session,
     )
@@ -406,8 +404,7 @@ def build_work_runtime(
     def _credential_available(target) -> bool:
         if target.provider_id == CHATGPT_PLAN_PROVIDER_ID:
             return bool(
-                chatgpt_plan_session is not None
-                and chatgpt_plan_session.is_connected()
+                chatgpt_plan_session is not None and chatgpt_plan_session.is_connected()
             )
         try:
             return provider_api_key(target.provider_id) is not None
