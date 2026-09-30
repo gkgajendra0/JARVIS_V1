@@ -211,7 +211,10 @@ def _persist_replacement(
 
     settings = load_machine_settings()
     persisted = settings.get(GEMINI_REALTIME_MODEL_SETTING)
-    if persisted is not None and persisted.strip().casefold() != current_model.casefold():
+    if (
+        persisted is not None
+        and persisted.strip().casefold() != current_model.casefold()
+    ):
         raise RuntimeError(
             "persisted Gemini realtime model changed during lifecycle reconciliation"
         )
