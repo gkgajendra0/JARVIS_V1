@@ -47,7 +47,9 @@ def _create_realtime_model(config: JarvisConfig):
             model=config.gemini_realtime_model,
             voice=config.gemini_realtime_voice,
             api_key=api_key,
-            instructions=build_instructions(default_media_target=config.default_media_target),
+            instructions=build_instructions(
+                default_media_target=config.default_media_target
+            ),
             input_audio_transcription={},
             output_audio_transcription={},
             realtime_input_config=google_types.RealtimeInputConfig(
