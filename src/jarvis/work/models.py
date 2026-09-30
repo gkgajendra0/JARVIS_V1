@@ -60,6 +60,7 @@ class DeliveryPolicy(str, Enum):
 class WorkDeliveryKind(str, Enum):
     OWNER_INPUT = "owner_input"
     RESOURCE_BLOCKER = "resource_blocker"
+    PROGRESS = "progress"
     COMPLETION = "completion"
     FAILURE = "failure"
 
@@ -138,7 +139,7 @@ _ALLOWED_TRANSITIONS: dict[WorkState, frozenset[WorkState]] = {
         }
     ),
     WorkState.COMPLETED: frozenset(),
-    WorkState.FAILED: frozenset(),
+    WorkState.FAILED: frozenset({WorkState.RETRYING}),
     WorkState.CANCELLED: frozenset(),
 }
 
