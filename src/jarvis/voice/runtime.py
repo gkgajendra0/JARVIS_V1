@@ -134,6 +134,10 @@ class VoiceRuntimeController:
         self._update_approval_requests: asyncio.Queue[_UpdateApprovalRequest] = (
             asyncio.Queue()
         )
+        # One owner may drive the physical JARVIS speaker at a time. Realtime
+        # sessions hold this lease for their full lifetime; background scripted
+        # speech acquires the same lease only while no session is active.
+        self._speech_ownership = asyncio.Lock()
         self._scripted_speech = scripted_speech
         self._owns_scripted_speech = False
         self._local_status_speech = local_status_speech
@@ -605,6 +609,7 @@ class VoiceRuntimeController:
                 if approval_task is not None and approval_task in done:
                     request = approval_task.result()
                     approved = False
+                    self._state = VoiceRuntimeState.ACTIVATING
                     try:
                         approved = await self._run_update_approval_session(
                             request.local_sha,
@@ -635,6 +640,9 @@ class VoiceRuntimeController:
                     detection.name,
                     detection.confidence,
                 )
+                # Claim the lifecycle before awaiting the speech lease so a
+                # queued background notification cannot race a just-detected wake.
+                self._state = VoiceRuntimeState.ACTIVATING
                 try:
                     await self._run_one_session()
                 except asyncio.CancelledError:
@@ -676,6 +684,17 @@ class VoiceRuntimeController:
                 self._active_speaker_audio_capture.clear()
 
     async def _run_update_approval_session(
+        self,
+        local_sha: str,
+        remote_sha: str,
+    ) -> bool:
+        async with self._speech_ownership:
+            return await self._run_update_approval_session_owned(
+                local_sha,
+                remote_sha,
+            )
+
+    async def _run_update_approval_session_owned(
         self,
         local_sha: str,
         remote_sha: str,
@@ -746,6 +765,10 @@ class VoiceRuntimeController:
             await session.aclose()
 
     async def _run_one_session(self) -> None:
+        async with self._speech_ownership:
+            await self._run_one_session_owned()
+
+    async def _run_one_session_owned(self) -> None:
         output = self.audio.output
         if output is None:
             raise RuntimeError("local audio output is not available")
