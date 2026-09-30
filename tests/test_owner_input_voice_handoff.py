@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
 
 from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.voice import work_tools as work_tools_module
+from jarvis.voice.canonical_active_speaker_runtime import (
+    CanonicalActiveSpeakerRuntimeController,
+)
+from jarvis.voice.runtime import VoiceRuntimeState
 from jarvis.voice.work_tools import WorkAgentTools
 from jarvis.work.runtime import WorkRuntime
 
@@ -81,20 +86,12 @@ async def test_bound_owner_input_uses_exact_work_and_signals_submission(
 @pytest.mark.asyncio
 async def test_owner_input_interaction_builds_exact_bound_conversation() -> None:
     runtime = object.__new__(WorkRuntime)
-    controller = object.__new__(
-        __import__(
-            "jarvis.voice.canonical_active_speaker_runtime",
-            fromlist=["CanonicalActiveSpeakerRuntimeController"],
-        ).CanonicalActiveSpeakerRuntimeController
-    )
+    controller = object.__new__(CanonicalActiveSpeakerRuntimeController)
     controller._work_runtime = runtime
-    controller._shutdown = __import__("asyncio").Event()
+    controller._shutdown = asyncio.Event()
     controller._timeout_handle = None
     controller._active_end = None
-    controller._state = __import__(
-        "jarvis.voice.runtime",
-        fromlist=["VoiceRuntimeState"],
-    ).VoiceRuntimeState.IDLE
+    controller._state = VoiceRuntimeState.IDLE
 
     captured: dict[str, object] = {}
 
