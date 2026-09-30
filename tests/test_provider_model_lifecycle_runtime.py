@@ -52,12 +52,65 @@ async def test_lifecycle_trigger_reconciles_immediately_and_recycles_runtime(
             runtime,
             migrated,
             trigger,
+            asyncio.Event(),
             poll_seconds=3600,
         ),
         timeout=1,
     )
 
     assert calls == 1
+    assert migrated.is_set()
+    assert runtime.shutdown_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_pending_migration_rollback_recycles_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def rollback(config: JarvisConfig):
+        assert config.gemini_realtime_model == "gemini-new-live"
+        return GeminiLiveLifecycleResult(
+            current_model="gemini-new-live",
+            status="rolled_back",
+            replacement_model="gemini-old-live",
+        )
+
+    async def forbidden_reconcile(config: JarvisConfig):
+        del config
+        raise AssertionError("reconcile should not run after successful rollback")
+
+    monkeypatch.setattr(
+        production_runtime,
+        "_rollback_provider_model_lifecycle",
+        rollback,
+    )
+    monkeypatch.setattr(
+        production_runtime,
+        "_reconcile_provider_model_lifecycle",
+        forbidden_reconcile,
+    )
+    runtime = FakeRuntime()
+    migrated = asyncio.Event()
+    lifecycle_trigger = asyncio.Event()
+    rollback_trigger = asyncio.Event()
+    lifecycle_trigger.set()
+    rollback_trigger.set()
+
+    await asyncio.wait_for(
+        production_runtime._run_provider_model_lifecycle_watch(
+            JarvisConfig(
+                ai_provider="gemini",
+                gemini_realtime_model="gemini-new-live",
+            ),
+            runtime,
+            migrated,
+            lifecycle_trigger,
+            rollback_trigger,
+            poll_seconds=3600,
+        ),
+        timeout=1,
+    )
+
     assert migrated.is_set()
     assert runtime.shutdown_calls == 1
 
@@ -100,6 +153,7 @@ async def test_periodic_lifecycle_check_keeps_runtime_when_model_is_current(
             runtime,
             migrated,
             trigger,
+            asyncio.Event(),
             poll_seconds=0.01,
         ),
         timeout=1,
