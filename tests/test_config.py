@@ -83,6 +83,7 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
 def test_tts_defaults_to_current_quality_first_model() -> None:
     config = JarvisConfig()
     assert config.gemini_tts_model == "gemini-3.8-flash-tts"
+    assert config.gemini_realtime_model == "gemini-3.8-live"
     assert config.gemini_realtime_voice == "Charon"
     assert config.tts_project_billing_isolation_verified is False
 
