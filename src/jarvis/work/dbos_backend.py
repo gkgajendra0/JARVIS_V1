@@ -283,17 +283,16 @@ class DBOSWorkExecutionBackend:
         *,
         idempotency_key: str | None = None,
     ) -> None:
+        # Cancellation is cooperative: canonical WorkItem truth is transitioned to
+        # CANCELLED by WorkOrchestrator, and the durable workflow observes that state
+        # on its next bounded loop. Avoid DBOS.cancel_workflow() here because DBOS
+        # reports owner-requested cancellation as a background workflow exception.
         _run_dbos_sync(
             DBOS.send,
             execution_id,
             "cancel",
             topic=_CONTROL_TOPIC,
             idempotency_key=idempotency_key,
-        )
-        _run_dbos_sync(
-            DBOS.cancel_workflow,
-            execution_id,
-            cancel_children=True,
         )
 
     def pause(self, execution_id: str) -> None:
