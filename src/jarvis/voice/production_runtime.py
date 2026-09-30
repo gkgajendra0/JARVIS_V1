@@ -57,6 +57,7 @@ from jarvis.memory.query_coordinator import MemoryQueryCoordinator
 from jarvis.memory.query_interpreters import build_memory_query_interpreter
 from jarvis.memory.release_guard import build_memory_release_guard
 from jarvis.memory.runtime import build_default_memory_runtime
+from jarvis.machine_config import load_machine_settings
 from jarvis.preflight import StartupPreflightError, require_startup_preflight
 from jarvis.promotion.release import (
     DeploymentMetadataStore,
@@ -65,8 +66,11 @@ from jarvis.promotion.release import (
 )
 from jarvis.promotion.runtime_composition import PromotionRuntimeConfig
 from jarvis.provider_model_lifecycle import (
+    GEMINI_REALTIME_MODEL_SETTING,
     GeminiLiveLifecycleResult,
+    accept_pending_gemini_live_migration,
     reconcile_gemini_live_model,
+    rollback_pending_gemini_live_migration,
 )
 from jarvis.provider_resilience import ProviderFailureKind, ProviderResilienceState
 from jarvis.self_awareness import SelfAwarenessRuntime
@@ -495,6 +499,23 @@ def build_production_voice_runtime(
 
     def production_session_factory(session_config: JarvisConfig):
         session, bridge = create_voice_session(session_config)
+
+        def observe_provider_failure(failure) -> None:
+            if (
+                provider_lifecycle_trigger is None
+                or failure.kind is not ProviderFailureKind.MODEL_UNAVAILABLE
+            ):
+                return
+            rolled_back = rollback_pending_gemini_live_migration(
+                session_config.gemini_realtime_model
+            )
+            if rolled_back:
+                LOGGER.error(
+                    "Pending Gemini model migration rolled back after "
+                    "MODEL_UNAVAILABLE; runtime reload requested"
+                )
+            provider_lifecycle_trigger.set()
+
         ProviderResilienceSessionObserver(
             session,
             provider=session_config.ai_provider,
@@ -502,17 +523,7 @@ def build_production_voice_runtime(
             status_speech=local_status_speech,
             output_getter=lambda: audio.output,
             health_observer=provider_health_observer,
-            failure_observer=(
-                (
-                    lambda failure: (
-                        provider_lifecycle_trigger.set()
-                        if failure.kind is ProviderFailureKind.MODEL_UNAVAILABLE
-                        else None
-                    )
-                )
-                if provider_lifecycle_trigger is not None
-                else None
-            ),
+            failure_observer=observe_provider_failure,
         )
         silent_audio_recovery = SilentRealtimeAudioRecovery(
             session_config,
@@ -558,6 +569,9 @@ def build_production_voice_runtime(
         ),
         startup_readiness_timeout_seconds=_POCKET3_STARTUP_LOCK_WAIT_SECONDS,
         voice_behavior_observer=voice_behavior_observer,
+        conversation_success_observer=lambda: accept_pending_gemini_live_migration(
+            config.gemini_realtime_model
+        ),
     )
 
 
@@ -596,26 +610,44 @@ async def _run_provider_model_lifecycle_watch(
             pass
         lifecycle_trigger.clear()
         result = await _reconcile_provider_model_lifecycle(config)
-        if result is None or not result.migrated:
-            continue
-        LOGGER.warning(
-            "Provider model lifecycle migration detected while JARVIS is running | "
-            "current=%s replacement=%s; recycling voice runtime in-process",
-            result.current_model,
-            result.replacement_model,
+        persisted_model = (
+            load_machine_settings()
+            .get(GEMINI_REALTIME_MODEL_SETTING, "")
+            .strip()
+            .casefold()
         )
+        configured_model = config.gemini_realtime_model.strip().casefold()
+        reload_required = bool(
+            persisted_model and persisted_model != configured_model
+        )
+        if (result is None or not result.migrated) and not reload_required:
+            continue
+        if result is not None and result.migrated:
+            LOGGER.warning(
+                "Provider model lifecycle migration detected while JARVIS is running | "
+                "current=%s replacement=%s; recycling voice runtime in-process",
+                result.current_model,
+                result.replacement_model,
+            )
+        else:
+            LOGGER.warning(
+                "Persisted Gemini model changed during runtime; recycling voice "
+                "runtime to load the authoritative machine configuration"
+            )
         migrated.set()
         runtime.request_shutdown()
         return
 
 
 async def _run_from_configuration() -> None:
+    migration_needs_preflight_validation = False
     while True:
         config = JarvisConfig.from_environment()
         configure_logging(config.log_level)
 
         startup_lifecycle = await _reconcile_provider_model_lifecycle(config)
         if startup_lifecycle is not None and startup_lifecycle.migrated:
+            migration_needs_preflight_validation = True
             LOGGER.warning(
                 "Provider model lifecycle migration completed before startup | "
                 "current=%s replacement=%s; reloading machine configuration",
@@ -634,21 +666,40 @@ async def _run_from_configuration() -> None:
             )
 
         lifecycle_trigger = asyncio.Event()
-        if self_awareness is None:
-            require_startup_preflight(config)
-            runtime = build_production_voice_runtime(
-                config,
-                provider_lifecycle_trigger=lifecycle_trigger,
+        try:
+            if self_awareness is None:
+                require_startup_preflight(config)
+                runtime = build_production_voice_runtime(
+                    config,
+                    provider_lifecycle_trigger=lifecycle_trigger,
+                )
+            else:
+                record_foundation_health(self_awareness)
+                require_startup_preflight_with_health(config, self_awareness)
+                runtime = build_production_voice_runtime(
+                    config,
+                    self_awareness=self_awareness,
+                    provider_lifecycle_trigger=lifecycle_trigger,
+                )
+        except StartupPreflightError:
+            rolled_back = (
+                migration_needs_preflight_validation
+                and rollback_pending_gemini_live_migration(
+                    config.gemini_realtime_model
+                )
             )
-        else:
-            record_foundation_health(self_awareness)
-            require_startup_preflight_with_health(config, self_awareness)
-            runtime = build_production_voice_runtime(
-                config,
-                self_awareness=self_awareness,
-                provider_lifecycle_trigger=lifecycle_trigger,
-            )
+            if self_awareness is not None:
+                self_awareness.close()
+            if rolled_back:
+                migration_needs_preflight_validation = False
+                LOGGER.error(
+                    "Provider model migration failed startup preflight; "
+                    "previous model restored and startup will retry"
+                )
+                continue
+            raise
 
+        migration_needs_preflight_validation = False
         migrated = asyncio.Event()
         lifecycle_task = (
             asyncio.create_task(
@@ -673,6 +724,7 @@ async def _run_from_configuration() -> None:
                 self_awareness.close()
 
         if migrated.is_set():
+            migration_needs_preflight_validation = True
             LOGGER.warning(
                 "Reloading JARVIS after automatic provider model lifecycle migration"
             )
