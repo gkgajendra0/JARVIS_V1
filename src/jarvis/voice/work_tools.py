@@ -71,6 +71,8 @@ class WorkAgentTools:
             self.resume_background_work,
             self.reprioritize_background_work,
             self.continue_background_work,
+            self.retry_failed_background_work,
+            self.set_background_work_update_interval,
             self.start_capability_acquisition,
             self.activate_acquired_capability,
             self.disable_acquired_capability,
@@ -83,6 +85,83 @@ class WorkAgentTools:
             self.decide_change_gate,
             self.get_engineering_change_status,
         ]
+
+    @function_tool()
+    async def retry_failed_background_work(
+        self,
+        context: RunContext,
+        work_id: str = "",
+    ) -> dict[str, object]:
+        """Retry failed durable work without creating a new semantic task.
+
+        Use when the latest accepted USER turn clearly refers back to failed work with
+        language such as "try that again", "retry it", or "continue from the failure".
+        If exactly one failed WorkItem exists, work_id may be omitted. JARVIS preserves
+        the original canonical request, EngineeringChange linkage, steps and evidence,
+        while recording the latest USER retry instruction as new durable evidence.
+        """
+        del context
+        turn = self._latest_user_turn()
+        try:
+            item = self._runtime.retry_failed_work(
+                work_id or None,
+                owner_request=turn.text,
+                source_session_id=self._conversation.session_id,
+                source_turn_id=turn.turn_id,
+            )
+        except WorkStoreError:
+            return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
+        except ValueError as exc:
+            return {
+                "ok": False,
+                "status": "retry_target_unresolved",
+                "reason": str(exc),
+            }
+        return {
+            "ok": True,
+            "status": "retrying",
+            **_public_work(item, self._runtime),
+            "canonical_user_turn_id": turn.turn_id,
+            "truth_note": (
+                "retry continues the same canonical work and preserved evidence; "
+                "it does not create a new background goal"
+            ),
+        }
+
+    @function_tool()
+    async def set_background_work_update_interval(
+        self,
+        context: RunContext,
+        interval_minutes: int,
+        work_id: str = "",
+    ) -> dict[str, object]:
+        """Configure periodic owner-visible progress updates for active work.
+
+        interval_minutes must be 1..1440. Use 0 to disable scheduled updates. If
+        exactly one WorkItem is active, work_id may be omitted. Critical owner-input,
+        blocker, failure and completion notifications remain independent of this timer.
+        """
+        del context
+        try:
+            item = self._runtime.configure_status_updates(
+                work_id or None,
+                interval_minutes=interval_minutes,
+            )
+        except WorkStoreError:
+            return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
+        except ValueError as exc:
+            return {
+                "ok": False,
+                "status": "update_target_unresolved",
+                "reason": str(exc),
+            }
+        return {
+            "ok": True,
+            "status": "disabled" if interval_minutes == 0 else "scheduled",
+            "work_id": item.work_id,
+            "interval_minutes": interval_minutes,
+            "state": item.state.value,
+        }
 
     @function_tool()
     async def start_capability_acquisition(
