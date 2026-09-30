@@ -908,9 +908,7 @@ class VoiceRuntimeController:
             if item.role != "user":
                 return
             if exit_in_progress:
-                LOGGER.info(
-                    "Late user turn ignored during standby transition"
-                )
+                LOGGER.info("Late user turn ignored during standby transition")
                 return
             has_user_turn = True
             self._cancel_timeout()
