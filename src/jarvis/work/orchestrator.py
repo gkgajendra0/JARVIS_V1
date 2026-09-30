@@ -268,9 +268,7 @@ class WorkOrchestrator:
             },
         )
         self._store.add_step(retry_step)
-        self._store.save_step(
-            retry_step.start().complete({"response": normalized})
-        )
+        self._store.save_step(retry_step.start().complete({"response": normalized}))
 
         retrying = item.transition(
             WorkState.RETRYING,
