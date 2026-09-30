@@ -10,7 +10,7 @@ from jarvis.voice.canonical_active_speaker_runtime import (
     CanonicalActiveSpeakerRuntimeController,
 )
 from jarvis.voice.runtime import VoiceRuntimeState
-from jarvis.work.models import DeliveryPolicy, WorkDeliveryKind
+from jarvis.work.models import DeliveryPolicy, WorkDeliveryKind, WorkState
 
 
 class FakeDetector:
@@ -89,7 +89,13 @@ class FakeLocalStatusSpeech:
 
 
 class FakeStore:
-    def __init__(self, policy: DeliveryPolicy) -> None:
+    def __init__(
+        self,
+        policy: DeliveryPolicy,
+        *,
+        work_state: WorkState = WorkState.WAITING_FOR_OWNER,
+    ) -> None:
+        self.work_state = work_state
         self.delivery = SimpleNamespace(
             delivery_id="delivery-tv-owner-input",
             work_id="work-tv-capability",
@@ -106,6 +112,10 @@ class FakeStore:
         self.list_calls += 1
         return () if self.delivered else (self.delivery,)
 
+    def require(self, work_id: str):
+        assert work_id == self.delivery.work_id
+        return SimpleNamespace(work_id=work_id, state=self.work_state)
+
     def mark_delivery_delivered(self, delivery_id: str) -> None:
         assert delivery_id == self.delivery.delivery_id
         self.delivered = True
@@ -116,8 +126,13 @@ class FakeStore:
 
 
 class FakeWorkRuntime:
-    def __init__(self, policy: DeliveryPolicy) -> None:
-        self.store = FakeStore(policy)
+    def __init__(
+        self,
+        policy: DeliveryPolicy,
+        *,
+        work_state: WorkState = WorkState.WAITING_FOR_OWNER,
+    ) -> None:
+        self.store = FakeStore(policy, work_state=work_state)
 
 
 @pytest.mark.asyncio
@@ -229,6 +244,38 @@ async def test_critical_background_notification_falls_back_to_local_speech() -> 
     assert work.store.delivered is True
     assert audio.resume_calls == 1
     assert audio.detector.enabled is True
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(delivery_task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_obsolete_owner_input_notification_is_discarded_without_speaking() -> None:
+    audio = FakeAudio()
+    speech = FakeRealtimeSpeech(audio)
+    work = FakeWorkRuntime(
+        DeliveryPolicy.WHEN_IDLE,
+        work_state=WorkState.FAILED,
+    )
+    runtime = CanonicalActiveSpeakerRuntimeController(
+        JarvisConfig(wake_cooldown_seconds=0.01),
+        audio,  # type: ignore[arg-type]
+        work_runtime=work,  # type: ignore[arg-type]
+    )
+    runtime._speak_ephemeral_realtime_message = speech.speak  # type: ignore[method-assign]
+    runtime._state = VoiceRuntimeState.IDLE
+    runtime._live_session = None
+
+    delivery_task = asyncio.create_task(runtime._deliver_pending_work())
+
+    for _ in range(20):
+        if work.store.delivered:
+            break
+        await asyncio.sleep(0.025)
+
+    assert work.store.delivered is True
+    assert speech.instructions == []
+    assert audio.detector.disable_calls == 0
 
     runtime.request_shutdown()
     await asyncio.wait_for(delivery_task, timeout=1)
