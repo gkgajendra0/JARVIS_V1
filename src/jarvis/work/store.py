@@ -212,6 +212,13 @@ class SQLiteWorkStore:
                 CREATE INDEX IF NOT EXISTS idx_work_deliveries_pending
                     ON work_deliveries(state, created_at ASC);
 
+                CREATE TABLE IF NOT EXISTS work_execution_refs (
+                    work_id TEXT PRIMARY KEY,
+                    execution_id TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(work_id) REFERENCES work_items(work_id)
+                );
+
                 CREATE TABLE IF NOT EXISTS work_status_updates (
                     work_id TEXT PRIMARY KEY,
                     interval_seconds INTEGER NOT NULL,
@@ -698,6 +705,31 @@ class SQLiteWorkStore:
                 ),
             )
         return updated
+
+    def set_execution_id(self, work_id: str, execution_id: str) -> None:
+        normalized = str(execution_id).strip()
+        if not normalized:
+            raise ValueError("execution_id must not be empty")
+        self.require(work_id)
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO work_execution_refs (work_id, execution_id, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(work_id) DO UPDATE SET
+                    execution_id = excluded.execution_id,
+                    updated_at = excluded.updated_at
+                """,
+                (work_id, normalized, _dt(datetime.now(UTC))),
+            )
+
+    def get_execution_id(self, work_id: str) -> str | None:
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT execution_id FROM work_execution_refs WHERE work_id = ?",
+                (work_id,),
+            ).fetchone()
+        return None if row is None else str(row["execution_id"])
 
     def set_status_update_interval(
         self,
