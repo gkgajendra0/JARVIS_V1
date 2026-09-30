@@ -225,6 +225,7 @@ class VoiceRuntimeController:
             await self._wait_for_realtime_speech(
                 handle,
                 label=label,
+                timeout_seconds=_REALTIME_LIFECYCLE_TIMEOUT_SECONDS,
             )
         finally:
             await session.aclose()
