@@ -219,7 +219,7 @@ class VoiceRuntimeController:
             )
             handle = session.generate_reply(
                 instructions=instructions,
-                allow_interruptions=False,
+                allow_interruptions=(self.config.ai_provider == "gemini"),
                 input_modality="text",
             )
             await self._wait_for_realtime_speech(
