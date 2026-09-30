@@ -46,7 +46,7 @@ class FakeSessionOutput:
 
 
 class FakeSpeechHandle:
-    def __init__(self, session: "FakeSession") -> None:
+    def __init__(self, session: FakeSession) -> None:
         self._session = session
         self._done = False
 
