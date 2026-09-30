@@ -621,9 +621,7 @@ async def _run_provider_model_lifecycle_watch(
             .casefold()
         )
         configured_model = config.gemini_realtime_model.strip().casefold()
-        reload_required = bool(
-            persisted_model and persisted_model != configured_model
-        )
+        reload_required = bool(persisted_model and persisted_model != configured_model)
         if (result is None or not result.migrated) and not reload_required:
             continue
         if result is not None and result.migrated:
@@ -688,9 +686,7 @@ async def _run_from_configuration() -> None:
         except StartupPreflightError:
             rolled_back = (
                 migration_needs_preflight_validation
-                and rollback_pending_gemini_live_migration(
-                    config.gemini_realtime_model
-                )
+                and rollback_pending_gemini_live_migration(config.gemini_realtime_model)
             )
             if self_awareness is not None:
                 self_awareness.close()
