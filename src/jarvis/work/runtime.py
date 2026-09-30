@@ -141,7 +141,8 @@ from jarvis.work.development import (
     build_development_test_runner,
 )
 from jarvis.work.engine import WorkActionRegistry, WorkEngine
-from jarvis.work.models import WorkItem, WorkState, WorkType
+from jarvis.work.estimates import estimate_work
+from jarvis.work.models import WorkDeliveryKind, WorkItem, WorkState, WorkType
 from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.reasoner import RoutedWorkReasoner
@@ -225,6 +226,7 @@ class WorkRuntime:
                 "autonomy_periodic_reconciler must provide start() and stop()"
             )
         self._autonomy_periodic_reconciler = autonomy_periodic_reconciler
+        self._status_update_task: asyncio.Task[None] | None = None
         self._closed = False
 
     @property
@@ -305,6 +307,119 @@ class WorkRuntime:
         )
         return work
 
+    def resolve_retryable_work(self, work_id: str | None = None) -> WorkItem:
+        normalized = str(work_id or "").strip()
+        if normalized:
+            work = self.store.require(normalized)
+            if work.state is not WorkState.FAILED:
+                raise ValueError("work is not failed and cannot be retried")
+            return work
+
+        failed = self.store.list(states=(WorkState.FAILED,), limit=10)
+        if len(failed) == 1:
+            return failed[0]
+        if not failed:
+            raise ValueError("no failed background work is available to retry")
+        raise ValueError(
+            "multiple failed background tasks exist; identify the task before retrying"
+        )
+
+    def retry_failed_work(
+        self,
+        work_id: str | None,
+        *,
+        owner_request: str,
+        source_session_id: str,
+        source_turn_id: str,
+    ) -> WorkItem:
+        work = self.resolve_retryable_work(work_id)
+        return self.orchestrator.retry_failed(
+            work.work_id,
+            owner_request=owner_request,
+            source_session_id=source_session_id,
+            source_turn_id=source_turn_id,
+        )
+
+    def resolve_status_target(self, work_id: str | None = None) -> WorkItem:
+        normalized = str(work_id or "").strip()
+        if normalized:
+            return self.store.require(normalized)
+        active = self.orchestrator.list_active(limit=10)
+        if len(active) == 1:
+            return active[0]
+        if not active:
+            raise ValueError("no active background work is available")
+        raise ValueError(
+            "multiple background tasks are active; identify the task for scheduled updates"
+        )
+
+    def configure_status_updates(
+        self,
+        work_id: str | None,
+        *,
+        interval_minutes: int,
+    ) -> WorkItem:
+        work = self.resolve_status_target(work_id)
+        if work.state.terminal:
+            raise ValueError("terminal work does not need scheduled progress updates")
+        if isinstance(interval_minutes, bool) or interval_minutes < 0:
+            raise ValueError("update interval must be zero or a positive number of minutes")
+        if interval_minutes == 0:
+            self.store.clear_status_update_interval(work.work_id)
+            return work
+        if interval_minutes > 24 * 60:
+            raise ValueError("update interval cannot exceed 1440 minutes")
+        self.store.set_status_update_interval(
+            work.work_id,
+            interval_seconds=int(interval_minutes) * 60,
+        )
+        return work
+
+    async def _status_update_loop(self) -> None:
+        while not self._closed:
+            try:
+                due = self.store.list_due_status_updates(limit=20)
+                for work_id, interval_seconds, due_at in due:
+                    work = self.store.require(work_id)
+                    if work.state.terminal:
+                        self.store.clear_status_update_interval(work_id)
+                        continue
+                    estimate = estimate_work(self.store, work)
+                    parts = [
+                        f"Background task update: approximately {estimate.progress_percent}% complete."
+                    ]
+                    if work.status_detail:
+                        parts.append(f"Current status: {work.status_detail}.")
+                    if estimate.blocked_reason:
+                        parts.append(f"Blocker: {estimate.blocked_reason}.")
+                    if estimate.remaining_work:
+                        parts.append(
+                            "Remaining work: " + ", ".join(estimate.remaining_work[:3]) + "."
+                        )
+                    self.store.enqueue_delivery(
+                        work=work,
+                        kind=WorkDeliveryKind.PROGRESS,
+                        message=" ".join(parts),
+                        event_key=f"progress:{int(due_at.timestamp())}",
+                    )
+                    self.store.advance_status_update_interval(
+                        work_id,
+                        interval_seconds=interval_seconds,
+                    )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                LOGGER.exception("Scheduled background-work status update failed")
+            await asyncio.sleep(1.0)
+
+    def start_status_updates(self) -> None:
+        if self._status_update_task is not None and not self._status_update_task.done():
+            return
+        self._status_update_task = asyncio.create_task(
+            self._status_update_loop(),
+            name="jarvis-work-status-updates",
+        )
+
     def close(self) -> None:
         if self._closed:
             return
@@ -314,7 +429,10 @@ class WorkRuntime:
         # cycle is still using the canonical event loop. Preempt background
         # reasoning first, then give already-running DBOS workflow code a bounded
         # window to checkpoint before database connections are closed.
-        self._interactive_brain_gate.set_interactive_active(True)
+        self._interactive_brain_gate.preempt_background_for_shutdown()
+        status_task = getattr(self, "_status_update_task", None)
+        if status_task is not None and not status_task.done():
+            status_task.cancel()
         autonomy = getattr(self, "_autonomy_periodic_reconciler", None)
         if autonomy is not None:
             autonomy.stop()
@@ -712,7 +830,7 @@ def build_work_runtime(
 
     configure_terminal_reconciliation(changes.reconcile_for_work)
     changes.reconcile_active()
-    return WorkRuntime(
+    runtime = WorkRuntime(
         store=store,
         engine=engine,
         backend=backend,
@@ -732,3 +850,5 @@ def build_work_runtime(
         source_revision_provider=workspace_manager.current_revision,
         autonomy_periodic_reconciler=autonomy_periodic_reconciler,
     )
+    runtime.start_status_updates()
+    return runtime
