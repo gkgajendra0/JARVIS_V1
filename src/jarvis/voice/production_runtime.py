@@ -69,6 +69,7 @@ from jarvis.provider_model_lifecycle import (
     GEMINI_REALTIME_MODEL_SETTING,
     GeminiLiveLifecycleResult,
     accept_pending_gemini_live_migration,
+    has_pending_gemini_live_migration,
     reconcile_gemini_live_model,
     rollback_pending_gemini_live_migration,
 )
@@ -646,6 +647,12 @@ async def _run_from_configuration() -> None:
     while True:
         config = JarvisConfig.from_environment()
         configure_logging(config.log_level)
+        if has_pending_gemini_live_migration(config.gemini_realtime_model):
+            migration_needs_preflight_validation = True
+            LOGGER.warning(
+                "Recovered pending provider model migration from durable journal; "
+                "startup preflight remains rollback-protected"
+            )
 
         startup_lifecycle = await _reconcile_provider_model_lifecycle(config)
         if startup_lifecycle is not None and startup_lifecycle.migrated:
