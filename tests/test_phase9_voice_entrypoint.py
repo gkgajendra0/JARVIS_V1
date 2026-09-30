@@ -111,5 +111,8 @@ def test_voice_instructions_research_current_media_availability_before_claiming_
 ):
     assert "watch, play, or listen to a named piece of media" in INSTRUCTIONS
     assert "current service/catalog availability" in INSTRUCTIONS
-    assert "Use `search_web` before claiming which service currently carries" in INSTRUCTIONS
+    assert (
+        "Use `search_web` before claiming which service currently carries"
+        in INSTRUCTIONS
+    )
     assert "subscription context, not current catalog availability" in INSTRUCTIONS
