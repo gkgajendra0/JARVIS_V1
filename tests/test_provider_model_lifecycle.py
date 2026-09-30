@@ -190,9 +190,7 @@ async def test_non_live_replacement_is_rejected_without_probe() -> None:
             gemini_realtime_model="gemini-3.1-flash-live-preview",
         ),
         api_key="test-key",
-        fetcher=fetcher_for(
-            lifecycle_html(replacement="gemini-3.8-flash")
-        ),
+        fetcher=fetcher_for(lifecycle_html(replacement="gemini-3.8-flash")),
         live_probe=probe,
     )
 
