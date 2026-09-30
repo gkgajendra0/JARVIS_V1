@@ -77,6 +77,43 @@ def test_provider_health_adapter_maps_degraded_then_recovered(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
+async def test_recoverable_provider_error_is_visible_as_degraded_health() -> None:
+    session = FakeSession()
+    state = ProviderResilienceState()
+    observed: list[tuple[str, str | None]] = []
+
+    def observe(current: ProviderResilienceState) -> None:
+        observed.append(
+            (
+                current.health.value,
+                current.last_failure.kind.value if current.last_failure else None,
+            )
+        )
+
+    provider_observer = ProviderResilienceSessionObserver(
+        session,
+        provider="gemini",
+        state=state,
+        status_speech=None,
+        output_getter=lambda: None,
+        health_observer=observe,
+    )
+    wrapped = FakeRealtimeError(
+        RuntimeError("1011 Internal error encountered"),
+        recoverable=True,
+    )
+
+    session.emit("error", SimpleNamespace(error=wrapped, source=object()))
+
+    assert session.closed.is_set() is False
+    assert observed == [("degraded", "provider_server_error")]
+    assert provider_observer.terminal_task is None
+
+    session.emit("agent_state_changed", SimpleNamespace(new_state="listening"))
+    assert observed[-1] == ("healthy", None)
+
+
+@pytest.mark.asyncio
 async def test_session_observer_notifies_health_on_terminal_failure_and_recovery() -> (
     None
 ):
