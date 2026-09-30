@@ -85,6 +85,12 @@ Live lifecycle controller:
 - after a successful runtime migration, the active voice runtime shuts down cleanly,
   reloads machine configuration in-process and starts on the replacement model without
   consuming crash/hang Self-Repair budget.
+- each automatic migration is durably journaled as pending until a real owner turn
+  receives a non-interrupted assistant playback;
+- pending migrations request rollback on startup-preflight failure,
+  `MODEL_UNAVAILABLE`, or repeated wake-with-zero-user-turn degradation;
+- rollback probes the previous model with a real Live handshake before restoring it;
+- a rolled-back candidate is blocked from automatic retry to avoid migration loops.
 
 If authoritative lifecycle evidence is unavailable, no replacement is guessed. If the
 recommended replacement fails its Live handshake, the current configuration is retained
