@@ -202,7 +202,7 @@ async def validated_rollback_pending_gemini_live_migration(
     config: JarvisConfig,
     *,
     api_key: str,
-    live_probe: LiveProbe = _probe_gemini_live_model,
+    live_probe: LiveProbe | None = None,
     probe_timeout_seconds: float = DEFAULT_LIVE_PROBE_TIMEOUT_SECONDS,
 ) -> GeminiLiveLifecycleResult:
     """Restore the previous model only if it can still establish Gemini Live."""
@@ -220,8 +220,9 @@ async def validated_rollback_pending_gemini_live_migration(
         )
 
     rollback_model = journal.previous_model
+    probe = live_probe or _probe_gemini_live_model
     try:
-        await live_probe(api_key, rollback_model, probe_timeout_seconds)
+        await probe(api_key, rollback_model, probe_timeout_seconds)
     except asyncio.CancelledError:
         raise
     except (OSError, RuntimeError, ValueError, genai_errors.APIError) as exc:
