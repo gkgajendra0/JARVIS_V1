@@ -71,7 +71,7 @@ from jarvis.provider_model_lifecycle import (
     accept_pending_gemini_live_migration,
     has_pending_gemini_live_migration,
     reconcile_gemini_live_model,
-    rollback_pending_gemini_live_migration,
+    validated_rollback_pending_gemini_live_migration,
 )
 from jarvis.provider_resilience import (
     ProviderFailure,
@@ -147,6 +147,7 @@ def build_production_voice_runtime(
     *,
     self_awareness: SelfAwarenessRuntime | None = None,
     provider_lifecycle_trigger: asyncio.Event | None = None,
+    provider_migration_rollback_trigger: asyncio.Event | None = None,
 ) -> CanonicalActiveSpeakerRuntimeController:
     """Build the production single-microphone-owner voice/vision runtime."""
     if config.wake_model_path is None:
@@ -485,11 +486,38 @@ def build_production_voice_runtime(
         if self_awareness is not None
         else None
     )
-    voice_behavior_observer = (
+    canonical_voice_behavior_observer = (
         VoiceBehaviorHealthObserver(self_awareness)
         if self_awareness is not None
         else None
     )
+
+    def observe_voice_behavior(
+        state: str,
+        reason_code: str,
+        summary: str,
+        metadata: dict[str, object],
+    ) -> None:
+        if canonical_voice_behavior_observer is not None:
+            canonical_voice_behavior_observer(
+                state,
+                reason_code,
+                summary,
+                metadata,
+            )
+        if (
+            state == "degraded"
+            and reason_code == "voice_repeated_wake_without_user_turn"
+            and provider_lifecycle_trigger is not None
+            and provider_migration_rollback_trigger is not None
+            and has_pending_gemini_live_migration(config.gemini_realtime_model)
+        ):
+            LOGGER.error(
+                "Pending Gemini migration crossed the zero-turn behavioral "
+                "degradation threshold; validated rollback requested"
+            )
+            provider_migration_rollback_trigger.set()
+            provider_lifecycle_trigger.set()
     local_status_speech = build_local_status_speech()
     LOGGER.info(
         "Step-5 minimal provider resilience is configured: provider=%s "
@@ -511,13 +539,16 @@ def build_production_voice_runtime(
                 or failure.kind is not ProviderFailureKind.MODEL_UNAVAILABLE
             ):
                 return
-            rolled_back = rollback_pending_gemini_live_migration(
-                session_config.gemini_realtime_model
-            )
-            if rolled_back:
+            if (
+                provider_migration_rollback_trigger is not None
+                and has_pending_gemini_live_migration(
+                    session_config.gemini_realtime_model
+                )
+            ):
+                provider_migration_rollback_trigger.set()
                 LOGGER.error(
-                    "Pending Gemini model migration rolled back after "
-                    "MODEL_UNAVAILABLE; runtime reload requested"
+                    "Pending Gemini migration reported MODEL_UNAVAILABLE; "
+                    "validated rollback requested"
                 )
             provider_lifecycle_trigger.set()
 
@@ -573,7 +604,7 @@ def build_production_voice_runtime(
             else None
         ),
         startup_readiness_timeout_seconds=_POCKET3_STARTUP_LOCK_WAIT_SECONDS,
-        voice_behavior_observer=voice_behavior_observer,
+        voice_behavior_observer=observe_voice_behavior,
         conversation_success_observer=lambda: accept_pending_gemini_live_migration(
             config.gemini_realtime_model
         ),
