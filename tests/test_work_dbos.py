@@ -250,6 +250,31 @@ def test_dbos_control_messages_use_idempotency_keys(
     ]
 
 
+def test_dbos_cancel_uses_cooperative_control_message_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, tuple, dict]] = []
+
+    def fake_run_dbos_sync(callable_, /, *args, **kwargs):
+        calls.append((callable_, args, kwargs))
+
+    monkeypatch.setattr(
+        "jarvis.work.dbos_backend._run_dbos_sync",
+        fake_run_dbos_sync,
+    )
+    from jarvis.work.dbos_backend import DBOSWorkExecutionBackend
+
+    backend = DBOSWorkExecutionBackend()
+    backend.cancel("work_control", idempotency_key="cancel:4")
+
+    assert len(calls) == 1
+    callable_, args, kwargs = calls[0]
+    assert callable_ is DBOS.send
+    assert args == ("work_control", "cancel")
+    assert kwargs["topic"] == "jarvis-control"
+    assert kwargs["idempotency_key"] == "cancel:4"
+
+
 def test_dbos_backend_rejects_invalid_reasoning_budget() -> None:
     from jarvis.work.dbos_backend import DBOSWorkExecutionBackend
 
