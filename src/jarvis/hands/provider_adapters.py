@@ -21,7 +21,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 class StructuredOutputError(ValueError):
-    """Raised when a provider cannot produce validated structured Hands output."""
+    """Raised when a provider cannot produce validated structured output."""
+
+    response_contract_invalid = True
 
 
 @dataclass(frozen=True, slots=True)
