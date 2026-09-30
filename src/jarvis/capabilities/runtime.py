@@ -367,6 +367,8 @@ def build_default_capability_runtime(
     *,
     ai_provider: str | None = None,
     hands_planner_model: str | None = None,
+    chatgpt_plan_enabled: bool = False,
+    chatgpt_plan_model: str | None = None,
     visual_computer_use_enabled: bool | None = None,
     result_observer: CapabilityResultObserver | None = None,
     extra_executors: tuple[CapabilityExecutor, ...] = (),
@@ -440,6 +442,8 @@ def build_default_capability_runtime(
         hands_planner = build_hands_planner(
             provider=ai_provider,
             model=hands_planner_model,
+            chatgpt_plan_enabled=chatgpt_plan_enabled,
+            chatgpt_plan_model=chatgpt_plan_model,
         )
     return CapabilityRuntime(
         executors=executor_tuple,
