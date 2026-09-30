@@ -278,7 +278,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 runtime,
                 conversation,
                 bound_owner_input_work_id=work_id,
-                on_bound_owner_input_submitted=lambda _work: owner_input_submitted.set(),
+                on_bound_owner_input_submitted=lambda _work: (
+                    owner_input_submitted.set()
+                ),
             )
             return [work_tools.continue_background_work]
 
