@@ -1168,9 +1168,7 @@ class VoiceRuntimeController:
             tools = list(session_tool_factory(bridge.conversation))
         else:
             tools = (
-                list(self._vision_tools.tools)
-                if self._vision_tools is not None
-                else []
+                list(self._vision_tools.tools) if self._vision_tools is not None else []
             )
             standby_tools = StandbyAgentTools(request_standby)
             tools.extend(standby_tools.tools)
