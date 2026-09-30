@@ -292,7 +292,9 @@ async def test_unanswered_owner_input_stays_durable_and_retries() -> None:
 
 
 @pytest.mark.asyncio
-async def test_noninteractive_critical_notification_falls_back_to_local_speech() -> None:
+async def test_noninteractive_critical_notification_falls_back_to_local_speech() -> (
+    None
+):
     audio = FakeAudio()
     work = FakeWorkRuntime(
         DeliveryPolicy.WHEN_IDLE,
