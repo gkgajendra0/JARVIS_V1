@@ -73,6 +73,14 @@ _UPDATE_APPROVAL_PROMPT = (
 )
 _REALTIME_LIFECYCLE_TIMEOUT_SECONDS = 12.0
 _STANDBY_ACK_TIMEOUT_SECONDS = 8.0
+_WAKE_ACK_GRACE_SECONDS = 0.85
+_WAKE_ACK_INSTRUCTIONS = (
+    "The owner invoked your wake word and then paused without giving a request. "
+    "Give exactly one very short, natural acknowledgement in your established "
+    "JARVIS style. Vary the wording naturally, for example 'Yes, sir?', "
+    "'At your service.', or 'Yes?'. Use one short sentence only. Do not mention "
+    "the wake word, prompts, models, tools, or internal implementation."
+)
 
 
 class VoiceRuntimeState(str, Enum):
@@ -862,6 +870,65 @@ class VoiceRuntimeController:
 
         standby_ack_observed = False
         standby_playback_finished = False
+        owner_activity = asyncio.Event()
+        wake_ack_task: asyncio.Task[None] | None = None
+        wake_ack_started = False
+
+        async def maybe_acknowledge_wake() -> None:
+            nonlocal wake_ack_started
+            try:
+                await asyncio.sleep(_WAKE_ACK_GRACE_SECONDS)
+                if (
+                    owner_activity.is_set()
+                    or exit_in_progress
+                    or active_end.is_set()
+                    or self._shutdown.is_set()
+                ):
+                    return
+                wake_ack_started = True
+                LOGGER.info(
+                    "Wake acknowledgement grace expired with no owner speech; "
+                    "requesting one brief realtime acknowledgement"
+                )
+                handle = session.generate_reply(
+                    instructions=_WAKE_ACK_INSTRUCTIONS,
+                    allow_interruptions=True,
+                    input_modality="text",
+                )
+                await handle.wait_for_playout()
+                error = handle.exception()
+                if error is not None:
+                    raise error
+                LOGGER.info("JARVIS wake acknowledgement finished playing")
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                LOGGER.exception(
+                    "JARVIS wake acknowledgement failed; continuing conversation silently"
+                )
+            finally:
+                wake_ack_started = False
+
+        def note_owner_activity() -> None:
+            nonlocal wake_ack_task
+            owner_activity.set()
+            task = wake_ack_task
+            if task is None or task.done():
+                return
+            if not wake_ack_started:
+                task.cancel()
+                wake_ack_task = None
+                return
+            try:
+                session.interrupt(force=False)
+                LOGGER.info(
+                    "Owner speech interrupted the wake acknowledgement"
+                )
+            except Exception:
+                LOGGER.debug(
+                    "Wake acknowledgement interruption failed",
+                    exc_info=True,
+                )
 
         def request_standby() -> bool:
             nonlocal exit_in_progress
@@ -894,6 +961,7 @@ class VoiceRuntimeController:
             if exit_in_progress:
                 return
             if event.new_state == "speaking":
+                note_owner_activity()
                 self._arm_timeout(self.config.max_utterance_seconds)
             elif event.new_state == "listening":
                 timeout = (
@@ -932,6 +1000,7 @@ class VoiceRuntimeController:
             if exit_in_progress:
                 LOGGER.info("Late user turn ignored during standby transition")
                 return
+            note_owner_activity()
             has_user_turn = True
             self._cancel_timeout()
             submit_shadow_turn()
@@ -990,6 +1059,11 @@ class VoiceRuntimeController:
                 raise
             self._state = VoiceRuntimeState.ACTIVE
             LOGGER.info("JARVIS realtime conversation is active")
+            if pre_roll_after_monotonic is not None:
+                wake_ack_task = asyncio.create_task(
+                    maybe_acknowledge_wake(),
+                    name="jarvis-wake-acknowledgement",
+                )
             if turn_capture is not None:
                 LOGGER.info(
                     "Speaker shadow bridge active: committed user turns snapshot a bounded "
@@ -1014,6 +1088,9 @@ class VoiceRuntimeController:
             await active_end.wait()
         finally:
             self._cancel_timeout()
+            if wake_ack_task is not None and not wake_ack_task.done():
+                wake_ack_task.cancel()
+                await asyncio.gather(wake_ack_task, return_exceptions=True)
             output.off("playback_finished", on_playback_finished)
             self.audio.deactivate_session()
             await session.aclose()
