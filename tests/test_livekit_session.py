@@ -337,12 +337,14 @@ def test_gemini_model_keeps_provider_native_activity_detection(
     assert captured["instructions"] == INSTRUCTIONS
     assert captured["input_audio_transcription"] == {}
     assert captured["output_audio_transcription"] == {}
-    activity = captured["realtime_input_config"].automatic_activity_detection
+    realtime_input = captured["realtime_input_config"]
+    activity = realtime_input.automatic_activity_detection
     assert activity.disabled is not True
     assert activity.start_of_speech_sensitivity == "START_SENSITIVITY_LOW"
     assert activity.end_of_speech_sensitivity == "END_SENSITIVITY_LOW"
     assert activity.prefix_padding_ms == 300
     assert activity.silence_duration_ms == 800
+    assert realtime_input.activity_handling == "START_OF_ACTIVITY_INTERRUPTS"
 
 
 def test_openai_model_uses_stricter_vad_threshold(
