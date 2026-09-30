@@ -65,9 +65,17 @@ class ChatGPTPlanError(RuntimeError):
 class ChatGPTPlanNotConnected(ChatGPTPlanError):
     """No usable ChatGPT-plan registration is available."""
 
+    status_code = 401
+    code = "chatgpt_plan_not_connected"
+    retryable = False
+
 
 class ChatGPTPlanPermissionMissing(ChatGPTPlanError):
     """OAuth completed without permission to consume the ChatGPT plan."""
+
+    status_code = 403
+    code = "chatgpt_plan_permission_missing"
+    retryable = False
 
 
 class ChatGPTPlanHTTPError(ChatGPTPlanError):
@@ -656,15 +664,25 @@ class ChatGPTPlanSessionManager:
         return credentials
 
     def _refresh(self, previous: ChatGPTPlanCredentials) -> ChatGPTPlanCredentials:
-        payload = _request_json(
-            CHATGPT_PLAN_TOKEN_URL,
-            data={
-                "grant_type": "refresh_token",
-                "client_id": previous.client_id,
-                "refresh_token": previous.refresh_token,
-                "resource": CHATGPT_PLAN_RESOURCE,
-            },
-        )
+        try:
+            payload = _request_json(
+                CHATGPT_PLAN_TOKEN_URL,
+                data={
+                    "grant_type": "refresh_token",
+                    "client_id": previous.client_id,
+                    "refresh_token": previous.refresh_token,
+                    "resource": CHATGPT_PLAN_RESOURCE,
+                },
+            )
+        except ChatGPTPlanHTTPError as exc:
+            if exc.code == "invalid_grant":
+                raise ChatGPTPlanHTTPError(
+                    "ChatGPT-plan authorization must be renewed",
+                    status_code=401,
+                    code=exc.code,
+                    retryable=False,
+                ) from exc
+            raise
         access_token = str(payload.get("access_token") or "").strip()
         refresh_token = str(payload.get("refresh_token") or "").strip()
         if not access_token or not refresh_token:
