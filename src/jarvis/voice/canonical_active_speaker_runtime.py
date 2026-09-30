@@ -34,7 +34,7 @@ from jarvis.voice.memory_tools import MemoryAgentTools
 from jarvis.voice.research_tools import ResearchAgentTools
 from jarvis.voice.runtime import VoiceRuntimeController
 from jarvis.voice.work_tools import WorkAgentTools
-from jarvis.work.models import DeliveryPolicy, WorkDeliveryKind
+from jarvis.work.models import WorkDeliveryKind
 from jarvis.work.provider_retry import delivery_retry_delay_seconds, provider_retry_hint
 from jarvis.work.runtime import WorkRuntime
 
