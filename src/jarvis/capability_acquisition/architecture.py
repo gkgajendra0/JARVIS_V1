@@ -37,6 +37,7 @@ class SemanticCapabilityBuildContractV1:
     target_entity_type: str
     target_entity_id: str | None
     required_operations: tuple[str, ...]
+    monitor_event_contract: str | None = None
 
     def __post_init__(self) -> None:
         family = str(self.semantic_capability_family).strip().casefold()
@@ -55,6 +56,11 @@ class SemanticCapabilityBuildContractV1:
             if self.target_entity_id is None
             else str(self.target_entity_id).strip().casefold() or None
         )
+        monitor_contract = (
+            None
+            if self.monitor_event_contract is None
+            else str(self.monitor_event_contract).strip().casefold() or None
+        )
         if not family or not target_type or not operations:
             raise CapabilityAcquisitionArchitectureError(
                 "semantic capability build contract is incomplete"
@@ -63,18 +69,27 @@ class SemanticCapabilityBuildContractV1:
         object.__setattr__(self, "target_entity_type", target_type)
         object.__setattr__(self, "target_entity_id", target_id)
         object.__setattr__(self, "required_operations", operations)
+        object.__setattr__(self, "monitor_event_contract", monitor_contract)
 
     def to_payload(self) -> dict[str, object]:
+        descriptor_requirements: dict[str, object] = {
+            "semantic_capability_family": self.semantic_capability_family,
+            "target_entity_types": [self.target_entity_type],
+        }
+        if self.monitor_event_contract is not None:
+            descriptor_requirements.update(
+                {
+                    "observation_operations": list(self.required_operations),
+                    "monitor_event_contract": self.monitor_event_contract,
+                }
+            )
         return {
             "schema": "semantic_capability_build_contract.v1",
             "semantic_capability_family": self.semantic_capability_family,
             "target_entity_type": self.target_entity_type,
             "target_entity_id": self.target_entity_id,
             "required_operations": list(self.required_operations),
-            "descriptor_requirements": {
-                "semantic_capability_family": self.semantic_capability_family,
-                "target_entity_types": [self.target_entity_type],
-            },
+            "descriptor_requirements": descriptor_requirements,
         }
 
 
@@ -101,6 +116,11 @@ def _gicc_semantic_contract(
             else str(payload.get("target_entity_id"))
         ),
         required_operations=tuple(payload.get("minimum_required_operations") or ()),
+        monitor_event_contract=(
+            None
+            if not payload.get("monitor_event_contract_required")
+            else str(payload.get("monitor_event_contract") or "")
+        ),
     )
     if contract.semantic_capability_family != goal.requested_capability.casefold():
         raise CapabilityAcquisitionArchitectureError(
@@ -125,6 +145,13 @@ def _gicc_semantic_contract(
     ):
         raise CapabilityAcquisitionArchitectureError(
             "GICC target entity is not bound to the admitted Phase-9 goal"
+        )
+    if (
+        contract.monitor_event_contract is not None
+        and f"monitor_event_contract:{contract.monitor_event_contract}" not in hints
+    ):
+        raise CapabilityAcquisitionArchitectureError(
+            "GICC monitor event contract is not bound to the admitted Phase-9 goal"
         )
     return contract
 
