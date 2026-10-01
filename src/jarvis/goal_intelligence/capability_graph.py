@@ -133,8 +133,7 @@ class CapabilityGraphResolver:
         metadata = descriptor.metadata()
         return bool(
             requirement.operation in semantic.observation_operations
-            and metadata.get("monitor_event_contract")
-            == GICC_MONITOR_EVENT_CONTRACT
+            and metadata.get("monitor_event_contract") == GICC_MONITOR_EVENT_CONTRACT
         )
 
     @classmethod
