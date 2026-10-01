@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from tests.test_gicc_planning import _catalog, _valid_proposal
 
 from jarvis.authority.types import ActionOrigin
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
@@ -23,7 +24,6 @@ from jarvis.goal_intelligence.service import GoalOrchestrator, VerificationRegis
 from jarvis.goal_intelligence.store import GoalStore
 from jarvis.work.privacy import ProtectedWorkPayloadCodec
 from jarvis.work.store import SQLiteWorkStore
-from tests.test_gicc_planning import _catalog, _valid_proposal
 
 
 class FakeRuntime:
