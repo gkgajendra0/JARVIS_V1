@@ -16,6 +16,7 @@ from .information import InformationResolver
 from .interpretation import GoalInterpretationResult, GoalInterpreter
 from .models import (
     ContinuationBlockerType,
+    GoalInterpretationCandidateV1,
     GoalKind,
     GoalState,
     InformationNeedCategory,
@@ -81,6 +82,17 @@ def _entity_candidate(value: str) -> tuple[str | None, str]:
         None if normalized_type in {"", "unresolved"} else normalized_type,
         mention.strip(),
     )
+
+
+def _task_specific_values(
+    candidate: GoalInterpretationCandidateV1,
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for encoded in candidate.candidate_entities:
+        proposed_type, mention = _entity_candidate(encoded)
+        if mention and proposed_type not in _WORLD_RESOURCE_TYPES:
+            values.append(mention)
+    return tuple(values)
 
 
 def _task_terms(values: tuple[str, ...] | list[str]) -> tuple[str, ...]:
@@ -223,6 +235,10 @@ class GoalIntelligenceCoordinator:
                 ),
             )
         )
+        self._store.put_goal_interpretation_evidence(
+            goal.goal_id,
+            interpretation.candidate,
+        )
         self._telemetry.emit(
             "gicc_goal_admitted",
             goal_id=goal.goal_id,
@@ -299,75 +315,212 @@ class GoalIntelligenceCoordinator:
                 information_interactions=tuple(interactions),
             )
 
-        requirement_result = await self._requirements.derive(
+        return await self._advance_goal(
             goal=goal,
-            interpretation=interpretation.candidate,
-            known_entity_ids=goal.referenced_entity_ids,
-            task_specific_terms=_task_terms(task_specific_values),
-        )
-        graph = self._store.put_requirement_graph(requirement_result.graph)
-        self._telemetry.emit(
-            "gicc_requirement_graph_created",
-            goal_id=goal.goal_id,
-            graph_id=graph.graph_id,
-            graph_digest=graph.digest,
-            requirement_count=len(graph.requirements),
-            edge_count=len(graph.edges),
-        )
-        goal = self._store.update_goal_state(
-            goal.goal_id,
-            GoalState.REQUIREMENTS_READY,
-            expected_revision=goal.goal_revision,
-        )
-        analysis = self._capability_graph.analyze(
-            graph,
-            self._capability_context.current(),
-            persist_gaps=True,
+            candidate=interpretation.candidate,
+            interpretation_result=interpretation,
         )
 
-        for gap in analysis.gaps:
-            self._telemetry.emit(
-                "gicc_capability_gap_created",
-                goal_id=goal.goal_id,
-                gap_id=gap.gap_id,
-                gap_digest=gap.digest,
-                capability_family=gap.reusable_capability_family,
-                operation_count=len(gap.minimum_required_operations),
-                target_entity_type=gap.target_entity_type,
-                target_entity_id=gap.target_entity_id,
+    async def continue_goal(self, goal_id: str) -> GoalIntakeResult:
+        """Resume one exact durable goal after its current blocker is resolved."""
+
+        goal = self._store.get_goal(str(goal_id).strip())
+        if goal is None:
+            raise ValueError(f"unknown GICC goal: {goal_id}")
+        candidate = self._store.get_goal_interpretation_evidence(goal.goal_id)
+        if candidate is None:
+            raise ValueError(
+                "GICC goal has no durable interpretation evidence and cannot resume"
             )
 
-        if analysis.gaps:
+        if goal.state is GoalState.WAITING_INFORMATION:
+            needs = self._store.list_information_needs(goal_id=goal.goal_id)
+            unresolved = tuple(
+                need
+                for need in needs
+                if need.state.value != "resolved"
+            )
+            if unresolved:
+                return GoalIntakeResult(
+                    disposition=GoalIntakeDisposition.WAITING_INFORMATION,
+                    goal=goal,
+                    information_needs=unresolved,
+                )
+            entity_ids = tuple(
+                need.resolution_ref
+                for need in needs
+                if need.resolution_ref is not None
+                and self._store.get_entity(need.resolution_ref) is not None
+            )
+            goal = self._store.update_goal_referenced_entities(
+                goal.goal_id,
+                entity_ids,
+                expected_revision=goal.goal_revision,
+                state=GoalState.RESOLVING,
+            )
+            for need in needs:
+                self._telemetry.emit(
+                    "gicc_information_need_resolved",
+                    goal_id=goal.goal_id,
+                    information_need_id=need.information_need_id,
+                    state=need.state.value,
+                )
+            return await self._advance_goal(
+                goal=goal,
+                candidate=candidate,
+                interpretation_result=None,
+            )
+
+        return GoalIntakeResult(
+            disposition=GoalIntakeDisposition.EXISTING_GOAL,
+            goal=goal,
+        )
+
+    async def _advance_goal(
+        self,
+        *,
+        goal: OwnerGoalV2,
+        candidate: GoalInterpretationCandidateV1,
+        interpretation_result: GoalInterpretationResult | None,
+    ) -> GoalIntakeResult:
+            requirement_result = await self._requirements.derive(
+                goal=goal,
+                interpretation=candidate,
+                known_entity_ids=goal.referenced_entity_ids,
+                task_specific_terms=_task_terms(_task_specific_values(candidate)),
+            )
+            graph = self._store.put_requirement_graph(requirement_result.graph)
+            self._telemetry.emit(
+                "gicc_requirement_graph_created",
+                goal_id=goal.goal_id,
+                graph_id=graph.graph_id,
+                graph_digest=graph.digest,
+                requirement_count=len(graph.requirements),
+                edge_count=len(graph.edges),
+            )
             goal = self._store.update_goal_state(
                 goal.goal_id,
-                GoalState.WAITING_CAPABILITY,
+                GoalState.REQUIREMENTS_READY,
                 expected_revision=goal.goal_revision,
             )
-            admissions = (
-                ()
-                if self._phase9 is None
-                else tuple(self._phase9.admit_gap(gap, goal) for gap in analysis.gaps)
+            analysis = self._capability_graph.analyze(
+                graph,
+                self._capability_context.current(),
+                persist_gaps=True,
             )
-            for admission in admissions:
-                admission_change = getattr(admission.admission, "change", None)
+
+            for gap in analysis.gaps:
                 self._telemetry.emit(
-                    "gicc_phase9_linked",
+                    "gicc_capability_gap_created",
                     goal_id=goal.goal_id,
-                    gap_id=admission.request.gap_id,
-                    request_id=getattr(admission.request, "request_id", None),
-                    request_digest=getattr(admission.request, "digest", None),
-                    acquisition_work_id=getattr(
-                        admission.admission,
-                        "acquisition_work_id",
-                        None,
-                    ),
-                    change_id=(
-                        None
-                        if admission_change is None
-                        else admission_change.change_id
-                    ),
+                    gap_id=gap.gap_id,
+                    gap_digest=gap.digest,
+                    capability_family=gap.reusable_capability_family,
+                    operation_count=len(gap.minimum_required_operations),
+                    target_entity_type=gap.target_entity_type,
+                    target_entity_id=gap.target_entity_id,
                 )
-            plan = self._build_acquisition_plan(goal, analysis)
+
+            if analysis.gaps:
+                goal = self._store.update_goal_state(
+                    goal.goal_id,
+                    GoalState.WAITING_CAPABILITY,
+                    expected_revision=goal.goal_revision,
+                )
+                admissions = (
+                    ()
+                    if self._phase9 is None
+                    else tuple(self._phase9.admit_gap(gap, goal) for gap in analysis.gaps)
+                )
+                for admission in admissions:
+                    admission_change = getattr(admission.admission, "change", None)
+                    self._telemetry.emit(
+                        "gicc_phase9_linked",
+                        goal_id=goal.goal_id,
+                        gap_id=admission.request.gap_id,
+                        request_id=getattr(admission.request, "request_id", None),
+                        request_digest=getattr(admission.request, "digest", None),
+                        acquisition_work_id=getattr(
+                            admission.admission,
+                            "acquisition_work_id",
+                            None,
+                        ),
+                        change_id=(
+                            None
+                            if admission_change is None
+                            else admission_change.change_id
+                        ),
+                    )
+                plan = self._build_acquisition_plan(goal, analysis)
+                self._telemetry.emit(
+                    "gicc_plan_created",
+                    goal_id=goal.goal_id,
+                    plan_id=plan.plan_id,
+                    plan_digest=plan.digest,
+                    plan_revision=plan.plan_revision,
+                    node_count=len(plan.nodes),
+                    edge_count=len(plan.edges),
+                )
+                for node in plan.nodes:
+                    assert node.gap_id is not None
+                    admission = next(
+                        (item for item in admissions if item.request.gap_id == node.gap_id),
+                        None,
+                    )
+                    work_ids = (
+                        ()
+                        if admission is None
+                        or admission.admission.acquisition_work_id is None
+                        else (admission.admission.acquisition_work_id,)
+                    )
+                    self._continuations.block(
+                        goal=goal,
+                        plan=plan,
+                        blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+                        blocked_by_id=node.gap_id,
+                        resume_node_id=node.node_id,
+                        work_ids=work_ids,
+                    )
+                return GoalIntakeResult(
+                    disposition=GoalIntakeDisposition.WAITING_CAPABILITY,
+                    goal=goal,
+                    interpretation=interpretation_result,
+                    requirement_result=requirement_result,
+                    capability_analysis=analysis,
+                    phase9_admissions=admissions,
+                    plan=plan,
+                )
+
+            if self._planner is None:
+                return GoalIntakeResult(
+                    disposition=GoalIntakeDisposition.PLAN_READY,
+                    goal=goal,
+                    interpretation=interpretation_result,
+                    requirement_result=requirement_result,
+                    capability_analysis=analysis,
+                )
+
+            monitor_predicates = self._monitor_predicates(goal, graph)
+            allowed_postconditions = set(goal.completion_predicates)
+            for requirement in graph.requirements:
+                allowed_postconditions.update(requirement.expected_postconditions)
+                allowed_postconditions.update(requirement.observation_requirements)
+            context = self._capability_context.current()
+            plan = await self._planner.plan(
+                goal=goal,
+                context=PlanValidationContext(
+                    catalog=context.catalog,
+                    allowed_capability_operations=tuple(
+                        sorted(
+                            (match.capability_key, match.operation)
+                            for match in analysis.matches
+                        )
+                    ),
+                    monitor_predicates=monitor_predicates,
+                    allowed_postcondition_refs=tuple(sorted(allowed_postconditions)),
+                ),
+            )
+            plan = self._store.put_plan(plan)
             self._telemetry.emit(
                 "gicc_plan_created",
                 goal_id=goal.goal_id,
@@ -377,92 +530,24 @@ class GoalIntelligenceCoordinator:
                 node_count=len(plan.nodes),
                 edge_count=len(plan.edges),
             )
-            for node in plan.nodes:
-                assert node.gap_id is not None
-                admission = next(
-                    (item for item in admissions if item.request.gap_id == node.gap_id),
-                    None,
-                )
-                work_ids = (
-                    ()
-                    if admission is None
-                    or admission.admission.acquisition_work_id is None
-                    else (admission.admission.acquisition_work_id,)
-                )
-                self._continuations.block(
-                    goal=goal,
-                    plan=plan,
-                    blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
-                    blocked_by_id=node.gap_id,
-                    resume_node_id=node.node_id,
-                    work_ids=work_ids,
-                )
-            return GoalIntakeResult(
-                disposition=GoalIntakeDisposition.WAITING_CAPABILITY,
-                goal=goal,
-                interpretation=interpretation,
-                requirement_result=requirement_result,
-                capability_analysis=analysis,
-                phase9_admissions=admissions,
-                plan=plan,
+            goal = self._store.update_goal_state(
+                goal.goal_id,
+                (
+                    GoalState.MONITORING
+                    if goal.goal_kind is GoalKind.MONITORING
+                    else GoalState.PLANNED
+                ),
+                expected_revision=goal.goal_revision,
             )
-
-        if self._planner is None:
             return GoalIntakeResult(
                 disposition=GoalIntakeDisposition.PLAN_READY,
                 goal=goal,
-                interpretation=interpretation,
+                interpretation=interpretation_result,
                 requirement_result=requirement_result,
                 capability_analysis=analysis,
+                plan=plan,
             )
 
-        monitor_predicates = self._monitor_predicates(goal, graph)
-        allowed_postconditions = set(goal.completion_predicates)
-        for requirement in graph.requirements:
-            allowed_postconditions.update(requirement.expected_postconditions)
-            allowed_postconditions.update(requirement.observation_requirements)
-        context = self._capability_context.current()
-        plan = await self._planner.plan(
-            goal=goal,
-            context=PlanValidationContext(
-                catalog=context.catalog,
-                allowed_capability_operations=tuple(
-                    sorted(
-                        (match.capability_key, match.operation)
-                        for match in analysis.matches
-                    )
-                ),
-                monitor_predicates=monitor_predicates,
-                allowed_postcondition_refs=tuple(sorted(allowed_postconditions)),
-            ),
-        )
-        plan = self._store.put_plan(plan)
-        self._telemetry.emit(
-            "gicc_plan_created",
-            goal_id=goal.goal_id,
-            plan_id=plan.plan_id,
-            plan_digest=plan.digest,
-            plan_revision=plan.plan_revision,
-            node_count=len(plan.nodes),
-            edge_count=len(plan.edges),
-        )
-        goal = self._store.update_goal_state(
-            goal.goal_id,
-            (
-                GoalState.MONITORING
-                if goal.goal_kind is GoalKind.MONITORING
-                else GoalState.PLANNED
-            ),
-            expected_revision=goal.goal_revision,
-        )
-        return GoalIntakeResult(
-            disposition=GoalIntakeDisposition.PLAN_READY,
-            goal=goal,
-            interpretation=interpretation,
-            requirement_result=requirement_result,
-            capability_analysis=analysis,
-            plan=plan,
-        )
 
     def _build_acquisition_plan(
         self,
