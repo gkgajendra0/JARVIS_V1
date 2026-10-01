@@ -10,6 +10,7 @@ from jarvis.capabilities.models import (
 from jarvis.goal_intelligence.models import GoalKind, OwnerGoalV2, PlanNodeType
 from jarvis.goal_intelligence.planning import (
     PlanNodeCandidate,
+    PlanProgressGuard,
     PlanProposalV1,
     PlanValidationContext,
     PlanValidationError,
@@ -54,6 +55,7 @@ def _catalog() -> CapabilityCatalog:
 def _context() -> PlanValidationContext:
     return PlanValidationContext(
         catalog=_catalog(),
+        allowed_capability_operations=(("app:lifecycle", "open_app"),),
         allowed_postcondition_refs=("app_open",),
     )
 
@@ -142,3 +144,69 @@ def test_plan_cannot_use_unregistered_postcondition() -> None:
             proposal=proposal,
             context=_context(),
         )
+
+
+def test_catalog_operation_requires_satisfied_requirement_permission() -> None:
+    context = PlanValidationContext(
+        catalog=_catalog(),
+        allowed_capability_operations=(),
+        allowed_postcondition_refs=("app_open",),
+    )
+
+    with pytest.raises(
+        PlanValidationError,
+        match="satisfied canonical requirements",
+    ):
+        PlanValidator().validate(
+            goal=_goal(),
+            proposal=_valid_proposal(),
+            context=context,
+        )
+
+
+def test_non_action_node_cannot_smuggle_capability_payload() -> None:
+    proposal = PlanProposalV1(
+        nodes=[
+            PlanNodeCandidate(
+                node_type=PlanNodeType.VERIFY,
+                summary="Verify Calculator opened",
+                capability_key="app:lifecycle",
+                operation="open_app",
+                parameters={"app": "calculator"},
+                postcondition_ref="app_open",
+            )
+        ]
+    )
+
+    with pytest.raises(PlanValidationError, match="cannot carry executable"):
+        PlanValidator().validate(
+            goal=_goal(),
+            proposal=proposal,
+            context=_context(),
+        )
+
+
+def test_progress_guard_rejects_exact_repeat_and_bounds_replan() -> None:
+    plan = PlanValidator().validate(
+        goal=_goal(),
+        proposal=_valid_proposal(),
+        context=_context(),
+    )
+    guard = PlanProgressGuard(max_replans=1)
+    action = plan.nodes[0]
+
+    fingerprint = guard.admit_action(
+        action,
+        observed_state_digest="a" * 64,
+    )
+    assert len(fingerprint) == 64
+
+    with pytest.raises(PlanValidationError, match="no progress"):
+        guard.admit_action(
+            action,
+            observed_state_digest="a" * 64,
+        )
+
+    assert guard.admit_replan() == 1
+    with pytest.raises(PlanValidationError, match="budget exhausted"):
+        guard.admit_replan()
