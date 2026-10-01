@@ -183,3 +183,40 @@ async def test_gicc_voice_rejects_candidate_not_bound_to_interaction(
     need = store.get_information_need(str(question["information_need_id"]))
     assert need is not None
     assert need.state.value == "waiting_for_owner"
+
+class FailingGoalCoordinator(GoalIntelligenceCoordinator):
+    def __init__(self) -> None:
+        pass
+
+    async def pursue(self, *, conversation, turn):
+        del conversation, turn
+        raise RuntimeError("synthetic internal requirement failure")
+
+
+@pytest.mark.asyncio
+async def test_gicc_voice_internal_failure_does_not_invent_device_problem(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    conversation, _ = _conversation("Play Interstellar on my TV.")
+    telemetry = CapturingGiccTelemetry()
+    tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        conversation,
+        store,
+        telemetry=telemetry,
+    )
+
+    result = await tools.pursue_owner_goal(None)
+
+    assert result["ok"] is False
+    assert result["status"] == "internal_goal_processing_error"
+    assert result["retryable"] is True
+    truth_note = str(result["truth_note"])
+    assert "internally" in truth_note
+    assert "Do not claim a device connectivity failure" in truth_note
+    assert any(
+        event["event"] == "gicc_goal_processing_error"
+        for event in telemetry.events
+    )
+
