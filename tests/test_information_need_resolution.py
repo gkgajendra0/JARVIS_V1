@@ -119,10 +119,7 @@ def test_owner_input_is_last_and_creates_exact_binding(tmp_path: Path) -> None:
     assert result.need.state is InformationNeedState.WAITING_FOR_OWNER
     assert result.interaction is not None
     assert result.interaction["goal_id"] == goal.goal_id
-    assert (
-        result.interaction["information_need_id"]
-        == result.need.information_need_id
-    )
+    assert result.interaction["information_need_id"] == result.need.information_need_id
     assert result.need.self_resolution_attempts == (
         "bounded_local_discovery",
         "conversation_context",
