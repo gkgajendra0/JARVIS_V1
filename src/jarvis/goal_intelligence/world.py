@@ -36,9 +36,11 @@ class EntityResolution:
                 raise ValueError("resolved entity result cannot contain candidates")
         elif self.entity_id is not None:
             raise ValueError("non-resolved entity result cannot contain entity_id")
-        if self.state is EntityResolutionState.AMBIGUOUS:
-            if len(self.candidate_entity_ids) < 2:
-                raise ValueError("ambiguous entity result requires multiple candidates")
+        if (
+            self.state is EntityResolutionState.AMBIGUOUS
+            and len(self.candidate_entity_ids) < 2
+        ):
+            raise ValueError("ambiguous entity result requires multiple candidates")
 
 
 class BoundedEntityDiscovery(Protocol):
