@@ -681,6 +681,47 @@ class SQLiteWorkStore:
             )
         return updated
 
+    def requeue_delivered_owner_input(self, delivery_id: str) -> WorkDelivery:
+        """Repair a delivered OWNER_INPUT whose WorkItem is still waiting.
+
+        OWNER_INPUT delivery is complete only when the owner's response has been
+        durably submitted. Older runtime versions could mark the spoken question
+        delivered before collecting a reply. Reopening that exact durable record
+        preserves event identity while restoring the canonical waiting invariant.
+        """
+
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM work_deliveries WHERE delivery_id = ?",
+                (delivery_id,),
+            ).fetchone()
+            if row is None:
+                raise WorkStoreError(f"unknown work delivery: {delivery_id}")
+            delivery = self._delivery_from_row(row)
+            if delivery.kind is not WorkDeliveryKind.OWNER_INPUT:
+                raise ValueError("only owner-input deliveries may be reopened")
+            if delivery.state is WorkDeliveryState.PENDING:
+                return delivery
+            connection.execute(
+                """
+                UPDATE work_deliveries
+                SET state = ?, delivered_at = NULL, next_attempt_at = NULL,
+                    last_failure_reason = ?
+                WHERE delivery_id = ?
+                """,
+                (
+                    WorkDeliveryState.PENDING.value,
+                    "reconciled_waiting_owner_without_durable_response",
+                    delivery.delivery_id,
+                ),
+            )
+            reopened_row = connection.execute(
+                "SELECT * FROM work_deliveries WHERE delivery_id = ?",
+                (delivery_id,),
+            ).fetchone()
+            assert reopened_row is not None
+            return self._delivery_from_row(reopened_row)
+
     def mark_delivery_delivered(self, delivery_id: str) -> WorkDelivery:
         with self._lock, self._connect() as connection:
             row = connection.execute(
