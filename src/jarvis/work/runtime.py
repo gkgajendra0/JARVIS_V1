@@ -575,10 +575,11 @@ class WorkRuntime:
                     quiesced,
                 )
 
-        # Keep the canonical event loop free while DBOS drains. New workflow
-        # history uses <=1s durable wait chunks. The longer bound also covers one
-        # legacy WAITING_RESOURCE sleep (historically capped at 60s) while old
-        # PAUSED recv calls are explicitly woken by park_for_shutdown().
+        # Keep the canonical event loop free while DBOS drains. New
+        # WAITING_RESOURCE history uses wakeable DBOS.recv timeouts that preserve
+        # absolute durable timing. The longer bound only exists for one legacy
+        # single DBOS.sleep (historically capped at 60s); PAUSED recv calls are
+        # explicitly woken by park_for_shutdown().
         await asyncio.to_thread(
             shutdown_dbos_work_runtime,
             workflow_completion_timeout_sec=70,
