@@ -14,6 +14,7 @@ from jarvis.goal_intelligence.execution import (
 from jarvis.goal_intelligence.models import (
     GoalKind,
     OwnerGoalV2,
+    PlanNodeState,
     PlanState,
 )
 from jarvis.goal_intelligence.planning import (
@@ -244,6 +245,85 @@ async def test_action_can_execute_without_fabricated_state_fingerprint(
 
     assert result.disposition is PlanDispatchDisposition.SUCCEEDED
     assert len(runtime.requests) == 1
+
+
+def test_interrupted_running_node_without_durable_outcome_fails_closed(
+    tmp_path: Path,
+) -> None:
+    store, goal = _store(tmp_path)
+    plan = _plan(store, goal)
+    action = plan.nodes[0]
+    running = plan.with_node_state(
+        action.node_id,
+        PlanNodeState.RUNNING,
+        plan_state=PlanState.ACTIVE,
+    )
+    running = store.update_plan_execution(running, expected_digest=plan.digest)
+    dispatcher = GoalPlanDispatcher(
+        store=store,
+        orchestrator=GoalOrchestrator(
+            goal_store=store,
+            capability_runtime=FakeRuntime(),
+        ),
+    )
+
+    recovered = dispatcher.recover_interrupted(running.plan_id)
+
+    assert recovered.state is PlanState.FAILED
+    assert next(
+        node for node in recovered.nodes if node.node_id == action.node_id
+    ).state is PlanNodeState.FAILED
+
+
+def test_interrupted_running_node_with_durable_success_is_finalized(
+    tmp_path: Path,
+) -> None:
+    store, goal = _store(tmp_path)
+    plan = _plan(store, goal)
+    action = plan.nodes[0]
+    running = plan.with_node_state(
+        action.node_id,
+        PlanNodeState.RUNNING,
+        plan_state=PlanState.ACTIVE,
+    )
+    running = store.update_plan_execution(running, expected_digest=plan.digest)
+    store.put_plan_node_result(
+        plan_id=running.plan_id,
+        node_id=action.node_id,
+        attempt=1,
+        status="succeeded",
+        payload={"route": "capability_runtime"},
+        created_at="2026-10-01T15:30:00+00:00",
+    )
+    dispatcher = GoalPlanDispatcher(
+        store=store,
+        orchestrator=GoalOrchestrator(
+            goal_store=store,
+            capability_runtime=FakeRuntime(),
+        ),
+    )
+
+    recovered = dispatcher.recover_interrupted(running.plan_id)
+
+    assert recovered.state is PlanState.ACTIVE
+    assert next(
+        node for node in recovered.nodes if node.node_id == action.node_id
+    ).state is PlanNodeState.SUCCEEDED
+    assert dispatcher.ready_nodes(recovered)[0].node_type.value == "verify"
+
+
+def test_latest_plan_for_goal_prefers_newest_goal_and_plan_revision(
+    tmp_path: Path,
+) -> None:
+    store, goal = _store(tmp_path)
+    first = _plan(store, goal, revision=1)
+    second = _plan(store, goal, revision=2)
+
+    latest = store.latest_plan_for_goal(goal.goal_id)
+
+    assert latest is not None
+    assert latest.plan_id == second.plan_id
+    assert latest.plan_id != first.plan_id
 
 
 def test_action_fingerprint_is_parameter_sensitive(tmp_path: Path) -> None:
