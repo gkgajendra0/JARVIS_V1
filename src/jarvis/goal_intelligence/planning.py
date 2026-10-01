@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from jarvis.capabilities.models import CapabilityCatalog
 from jarvis.engineering_substrate.canonical import canonical_digest
@@ -55,6 +55,23 @@ class PlanNodeCandidate(BaseModel):
     monitor_predicate_id: str | None = Field(default=None, max_length=180)
     postcondition_ref: str | None = Field(default=None, max_length=320)
     depends_on_indexes: list[int] = Field(default_factory=list, max_length=32)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_parameters_input(cls, value):
+        if not isinstance(value, dict):
+            return value
+        if "parameters" not in value or "parameters_json" in value:
+            return value
+        normalized = dict(value)
+        legacy = normalized.pop("parameters")
+        normalized["parameters_json"] = json.dumps(
+            legacy,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return normalized
 
     @field_validator("parameters_json")
     @classmethod
