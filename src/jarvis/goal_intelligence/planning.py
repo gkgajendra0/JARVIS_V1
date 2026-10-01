@@ -269,9 +269,7 @@ class PlanValidator:
                 candidate.node_type is not PlanNodeType.ACQUIRE_CAPABILITY
                 and candidate.gap_id is not None
             ):
-                raise PlanValidationError(
-                    "gap_id is only valid for ACQUIRE_CAPABILITY"
-                )
+                raise PlanValidationError("gap_id is only valid for ACQUIRE_CAPABILITY")
             if (
                 candidate.node_type is not PlanNodeType.CLARIFY
                 and candidate.information_need_id is not None
@@ -346,9 +344,8 @@ class PlanValidator:
             return False
 
         for node in nodes:
-            if (
-                node.node_type is PlanNodeType.ACTION
-                and not has_verify_descendant(node.node_id)
+            if node.node_type is PlanNodeType.ACTION and not has_verify_descendant(
+                node.node_id
             ):
                 raise PlanValidationError(
                     "consequential ACTION must lead to a VERIFY node"
