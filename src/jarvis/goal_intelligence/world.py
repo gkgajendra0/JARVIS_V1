@@ -265,14 +265,10 @@ class EntityResolver:
             )
 
         recent_ids = tuple(
-            item.strip().casefold()
-            for item in recent_entity_ids
-            if str(item).strip()
+            item.strip().casefold() for item in recent_entity_ids if str(item).strip()
         )
         recent = tuple(
-            entity
-            for entity in candidates
-            if entity.entity_id.casefold() in recent_ids
+            entity for entity in candidates if entity.entity_id.casefold() in recent_ids
         )
         if len(recent) == 1:
             return self._result(
@@ -287,7 +283,9 @@ class EntityResolver:
         if alias:
             return self._result(
                 alias,
-                reason="unique alias match" if len(alias) == 1 else "ambiguous alias match",
+                reason="unique alias match"
+                if len(alias) == 1
+                else "ambiguous alias match",
                 evidence_prefix="world_alias",
             )
 
@@ -326,9 +324,7 @@ class EntityResolver:
         inferred_types = set(expected or _generic_reference_types(query))
         if inferred_types:
             typed = tuple(
-                entity
-                for entity in candidates
-                if entity.entity_type in inferred_types
+                entity for entity in candidates if entity.entity_type in inferred_types
             )
             if typed:
                 return self._result(
@@ -354,10 +350,7 @@ class EntityResolver:
                         continue
                     self._registry.register_entity(entity)
                     discovered.append(entity)
-            unique = {
-                entity.entity_id: entity
-                for entity in discovered
-            }
+            unique = {entity.entity_id: entity for entity in discovered}
             if unique:
                 return self._result(
                     tuple(unique[key] for key in sorted(unique)),
