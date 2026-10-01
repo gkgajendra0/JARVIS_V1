@@ -9,8 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from jarvis.work import dbos_backend
 import jarvis.work.runtime as work_runtime_module
+from jarvis.work import dbos_backend
 from jarvis.work.dbos_backend import DBOSWorkExecutionBackend
 from jarvis.work.models import WorkPriority, WorkState
 from jarvis.work.orchestrator import WorkOrchestrator
