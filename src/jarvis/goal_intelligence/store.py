@@ -835,17 +835,24 @@ class GoalStore:
                 )
             if current.binding_digest == binding.binding_digest:
                 return current
-            if binding.last_verified_at < current.last_verified_at:
-                raise GoalStoreConflict(
-                    "resource binding refresh is older than canonical observation"
-                )
+
+            verified_at = max(
+                current.last_verified_at,
+                binding.last_verified_at,
+            )
+            if (
+                current.capability_keys == binding.capability_keys
+                and current.evidence_refs == binding.evidence_refs
+                and verified_at == current.last_verified_at
+            ):
+                return current
 
             candidate = replace(
                 current,
                 binding_revision=current.binding_revision + 1,
                 capability_keys=binding.capability_keys,
                 evidence_refs=binding.evidence_refs,
-                last_verified_at=binding.last_verified_at,
+                last_verified_at=verified_at,
                 binding_digest="pending",
             )
             updated = replace(
