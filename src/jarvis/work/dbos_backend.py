@@ -406,14 +406,12 @@ class DBOSWorkExecutionBackend:
                 execution_id,
                 _SHUTDOWN_WAKE_COMMAND,
                 topic=_CONTROL_TOPIC,
-                idempotency_key=f"shutdown-control-wake:{execution_id}",
             )
             _run_dbos_sync(
                 DBOS.send,
                 execution_id,
                 _SHUTDOWN_WAKE_COMMAND,
                 topic=_RUNTIME_WAKE_TOPIC,
-                idempotency_key=f"shutdown-runtime-wake:{execution_id}",
             )
         return normalized
 
