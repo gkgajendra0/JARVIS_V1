@@ -23,17 +23,42 @@ from jarvis.goal_intelligence.models import (
     WorldEntityRefV1,
 )
 from jarvis.goal_intelligence.store import GoalStore, GoalStoreConflict
-from jarvis.work.privacy import ProtectedWorkPayloadCodec
+from jarvis.work.privacy import build_protected_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore
+
+
+class FakeKeyProtector:
+    protector_id = "fake-gicc-test-protector"
+
+    def seal(self, plaintext: bytes, *, purpose: str) -> bytes:
+        return purpose.encode("utf-8") + b"|" + plaintext
+
+    def unseal(self, sealed: bytes, *, purpose: str) -> bytes:
+        prefix = purpose.encode("utf-8") + b"|"
+        assert sealed.startswith(prefix)
+        return sealed[len(prefix) :]
+
+
+def _protected_codec(path: Path):
+    return build_protected_work_payload_codec(
+        path,
+        key_protector=FakeKeyProtector(),
+        random_bytes=lambda size: b"k" * size,
+    )
+
+
+def _raw_storage(path: Path) -> bytes:
+    chunks: list[bytes] = []
+    for candidate in (path, Path(f"{path}-wal"), Path(f"{path}-shm")):
+        if candidate.exists():
+            chunks.append(candidate.read_bytes())
+    return b"".join(chunks)
 
 
 @pytest.fixture
 def goal_store(tmp_path: Path) -> GoalStore:
     path = tmp_path / "work.sqlite3"
-    work = SQLiteWorkStore(
-        path,
-        payload_codec=ProtectedWorkPayloadCodec(b"k" * 32),
-    )
+    work = SQLiteWorkStore(path, payload_codec=_protected_codec(path))
     return GoalStore(work)
 
 
@@ -66,6 +91,9 @@ def test_goal_store_protects_owner_payload_and_round_trips(
 
     assert raw.startswith("enc:v1:")
     assert goal.exact_owner_request not in raw
+    assert goal.exact_owner_request.encode("utf-8") not in _raw_storage(
+        goal_store.work.path
+    )
 
 
 def test_goal_state_update_uses_compare_and_swap(goal_store: GoalStore) -> None:
@@ -238,3 +266,36 @@ def test_goal_store_persists_entity_graph_gap_plan_continuation_and_monitor(
     assert goal_store.get_plan(plan.plan_id) == plan
     assert repeated == resumed
     assert goal_store.get_monitor_predicate(predicate.predicate_id) == predicate
+
+
+def test_goal_store_restart_reopens_protected_canonical_state(tmp_path: Path) -> None:
+    path = tmp_path / "restart-work.sqlite3"
+    first = GoalStore(SQLiteWorkStore(path, payload_codec=_protected_codec(path)))
+    goal = first.create_goal(_goal())
+    need = InformationNeedV1.create(
+        goal_id=goal.goal_id,
+        category=InformationNeedCategory.MISSING_VALUE,
+        subject="main gate observation",
+        required_fact="verified camera resource binding",
+        why_required="Monitoring cannot start without an observable resource.",
+        allowed_resolution_sources=("world_state", "bounded_discovery"),
+        created_at="2026-10-01T10:08:00+00:00",
+    )
+    first.create_information_need(need)
+    resolved = first.resolve_information_need(
+        need.information_need_id,
+        resolution_ref="binding:main-gate-camera",
+        expected_revision=1,
+        resolved_at="2026-10-01T10:09:00+00:00",
+    )
+
+    reopened_codec = build_protected_work_payload_codec(
+        path,
+        key_protector=FakeKeyProtector(),
+        random_bytes=lambda size: b"z" * size,
+    )
+    reopened = GoalStore(SQLiteWorkStore(path, payload_codec=reopened_codec))
+
+    assert reopened.get_goal(goal.goal_id) == goal
+    assert reopened.get_information_need(need.information_need_id) == resolved
+    assert goal.exact_owner_request.encode("utf-8") not in _raw_storage(path)
