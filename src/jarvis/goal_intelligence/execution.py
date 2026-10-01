@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Callable, Protocol
+from typing import Protocol
 
 from jarvis.authority.types import ActionOrigin
 from jarvis.capabilities.models import CapabilityRequest, CapabilityStatus
@@ -18,7 +19,7 @@ from .models import (
     PlanNodeV1,
     PlanState,
 )
-from .store import GoalStore, GoalStoreConflict, GoalStoreError
+from .store import GoalStore, GoalStoreError
 
 
 class GovernedCapabilityRuntime(Protocol):
