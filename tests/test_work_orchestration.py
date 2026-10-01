@@ -1962,9 +1962,9 @@ def test_work_runtime_close_preempts_reasoning_before_bounded_dbos_drain(
         async def quiesce_active_advances(
             self,
             *,
-            timeout_seconds: float = 5.0,
+            timeout_seconds: float | None = None,
         ) -> int:
-            assert timeout_seconds == 5.0
+            assert timeout_seconds is None
             return 0
 
     class Orchestrator:
@@ -1993,4 +1993,4 @@ def test_work_runtime_close_preempts_reasoning_before_bounded_dbos_drain(
 
     assert runtime.backend.shutdown_started is True
     assert runtime._interactive_brain_gate.calls == [True]
-    assert drain_timeouts == [10]
+    assert drain_timeouts == [70]
