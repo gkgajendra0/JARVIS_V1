@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from jarvis.capabilities.models import CapabilityCatalog
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.hands.provider_adapters import StructuredOutputClient
 
 from .models import (
@@ -89,6 +90,7 @@ class PlanProposalV1(BaseModel):
 @dataclass(frozen=True, slots=True)
 class PlanValidationContext:
     catalog: CapabilityCatalog
+    allowed_capability_operations: tuple[tuple[str, str], ...] = ()
     gaps: tuple[CapabilityGapV1, ...] = ()
     information_needs: tuple[InformationNeedV1, ...] = ()
     monitor_predicates: tuple[MonitorPredicateV1, ...] = ()
@@ -162,6 +164,11 @@ class PlanValidator:
         if len(proposal.nodes) > _MAX_PLAN_NODES:
             raise PlanValidationError("plan exceeds node limit")
 
+        allowed_operations = {
+            (str(key).strip(), str(operation).strip())
+            for key, operation in context.allowed_capability_operations
+            if str(key).strip() and str(operation).strip()
+        }
         gaps = {item.gap_id for item in context.gaps}
         needs = {item.information_need_id for item in context.information_needs}
         monitors = {item.predicate_id for item in context.monitor_predicates}
@@ -185,6 +192,13 @@ class PlanValidator:
                 ):
                     raise PlanValidationError(
                         "ACTION/OBSERVE references unavailable capability operation"
+                    )
+                if (
+                    candidate.capability_key,
+                    candidate.operation,
+                ) not in allowed_operations:
+                    raise PlanValidationError(
+                        "ACTION/OBSERVE is outside satisfied canonical requirements"
                     )
                 if (
                     candidate.node_type is PlanNodeType.ACTION
@@ -239,6 +253,44 @@ class PlanValidator:
                     raise PlanValidationError(
                         "VERIFY references an unregistered postcondition"
                     )
+
+            if candidate.node_type not in {
+                PlanNodeType.ACTION,
+                PlanNodeType.OBSERVE,
+            } and (
+                candidate.capability_key is not None
+                or candidate.operation is not None
+                or candidate.parameters
+            ):
+                raise PlanValidationError(
+                    "non ACTION/OBSERVE node cannot carry executable capability data"
+                )
+            if (
+                candidate.node_type is not PlanNodeType.ACQUIRE_CAPABILITY
+                and candidate.gap_id is not None
+            ):
+                raise PlanValidationError(
+                    "gap_id is only valid for ACQUIRE_CAPABILITY"
+                )
+            if (
+                candidate.node_type is not PlanNodeType.CLARIFY
+                and candidate.information_need_id is not None
+            ):
+                raise PlanValidationError(
+                    "information_need_id is only valid for CLARIFY"
+                )
+            if (
+                candidate.node_type is not PlanNodeType.MONITOR
+                and candidate.monitor_predicate_id is not None
+            ):
+                raise PlanValidationError(
+                    "monitor_predicate_id is only valid for MONITOR"
+                )
+            if (
+                candidate.node_type is not PlanNodeType.SUBGOAL
+                and candidate.subgoal_id is not None
+            ):
+                raise PlanValidationError("subgoal_id is only valid for SUBGOAL")
 
             nodes.append(
                 PlanNodeV1.create(
@@ -338,13 +390,22 @@ class GoalPlanner:
         prior_evidence: tuple[str, ...] | list[str] = (),
         plan_revision: int = 1,
     ) -> PlanGraphV1:
+        allowed = {
+            (str(key).strip(), str(operation).strip())
+            for key, operation in context.allowed_capability_operations
+            if str(key).strip() and str(operation).strip()
+        }
         catalog_payload = [
             {
                 "capability_key": item.key,
-                "operations": list(item.operations),
+                "operations": [
+                    operation
+                    for operation in item.operations
+                    if (item.key, operation) in allowed
+                ],
             }
             for item in context.catalog.capabilities
-            if item.execution_enabled
+            if item.execution_enabled and any(key == item.key for key, _ in allowed)
         ]
         input_payload = {
             "goal": {
@@ -382,3 +443,67 @@ class GoalPlanner:
             context=context,
             plan_revision=plan_revision,
         )
+
+
+@dataclass(slots=True)
+class PlanProgressGuard:
+    """Reject exact no-progress action repeats and bound replanning."""
+
+    max_replans: int = 3
+    _seen_fingerprints: set[str] = field(default_factory=set)
+    _replan_count: int = 0
+
+    def __post_init__(self) -> None:
+        if (
+            isinstance(self.max_replans, bool)
+            or not isinstance(self.max_replans, int)
+            or self.max_replans < 0
+        ):
+            raise ValueError("max_replans must be a non-negative integer")
+
+    @property
+    def replan_count(self) -> int:
+        return self._replan_count
+
+    def action_fingerprint(
+        self,
+        node: PlanNodeV1,
+        *,
+        observed_state_digest: str,
+    ) -> str:
+        if node.node_type not in {PlanNodeType.ACTION, PlanNodeType.OBSERVE}:
+            raise ValueError("fingerprint requires ACTION or OBSERVE node")
+        state_digest = str(observed_state_digest).strip().casefold()
+        if not state_digest:
+            raise ValueError("observed_state_digest must not be empty")
+        return canonical_digest(
+            {
+                "capability_key": node.capability_key,
+                "operation": node.operation,
+                "parameters": node.parameters,
+                "observed_state_digest": state_digest,
+            }
+        )
+
+    def admit_action(
+        self,
+        node: PlanNodeV1,
+        *,
+        observed_state_digest: str,
+    ) -> str:
+        fingerprint = self.action_fingerprint(
+            node,
+            observed_state_digest=observed_state_digest,
+        )
+        if fingerprint in self._seen_fingerprints:
+            raise PlanValidationError(
+                "exact action+parameter+state repetition would make no progress"
+            )
+        self._seen_fingerprints.add(fingerprint)
+        return fingerprint
+
+    def admit_replan(self) -> int:
+        if self._replan_count >= self.max_replans:
+            raise PlanValidationError("bounded replan budget exhausted")
+        self._replan_count += 1
+        return self._replan_count
