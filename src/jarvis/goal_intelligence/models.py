@@ -225,7 +225,7 @@ class OwnerGoalV2:
         priority: int = 0,
         interpretation_evidence: tuple[str, ...] | list[str] = (),
         created_at: str | None = None,
-    ) -> "OwnerGoalV2":
+    ) -> OwnerGoalV2:
         session_id = _text(source_session_id, field="source_session_id")
         turn_id = _text(source_turn_id, field="source_turn_id")
         if not isinstance(goal_kind, GoalKind):
@@ -305,7 +305,7 @@ class OwnerGoalV2:
         state: GoalState,
         *,
         updated_at: str | None = None,
-    ) -> "OwnerGoalV2":
+    ) -> OwnerGoalV2:
         if not isinstance(state, GoalState):
             raise TypeError("state must be GoalState")
         candidate = replace(
@@ -320,7 +320,7 @@ class OwnerGoalV2:
         )
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any], digest: str) -> "OwnerGoalV2":
+    def from_payload(cls, payload: dict[str, Any], digest: str) -> OwnerGoalV2:
         return cls(
             goal_id=payload["goal_id"],
             goal_revision=int(payload["goal_revision"]),
@@ -360,7 +360,7 @@ class GoalInterpretationCandidateV1:
         candidate_completion_predicates: tuple[str, ...] | list[str] = (),
         candidate_information_needs: tuple[str, ...] | list[str] = (),
         reasoning_evidence_refs: tuple[str, ...] | list[str] = (),
-    ) -> "GoalInterpretationCandidateV1":
+    ) -> GoalInterpretationCandidateV1:
         if not isinstance(goal_kind, GoalKind):
             raise TypeError("goal_kind must be GoalKind")
         item = cls(
@@ -428,7 +428,7 @@ class WorldEntityRefV1:
         provenance_refs: tuple[str, ...] | list[str] = (),
         lifecycle_state: EntityLifecycleState = EntityLifecycleState.ACTIVE,
         entity_id: str | None = None,
-    ) -> "WorldEntityRefV1":
+    ) -> WorldEntityRefV1:
         kind = _text(entity_type, field="entity_type").casefold()
         name = _text(canonical_name, field="canonical_name")
         if not isinstance(lifecycle_state, EntityLifecycleState):
@@ -471,7 +471,7 @@ class WorldEntityRefV1:
             _assert_digest(self.canonical_payload(), self.digest, field="entity digest")
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any], digest: str) -> "WorldEntityRefV1":
+    def from_payload(cls, payload: dict[str, Any], digest: str) -> WorldEntityRefV1:
         return cls(
             entity_id=payload["entity_id"],
             entity_type=payload["entity_type"],
@@ -506,7 +506,7 @@ class ResourceBindingV1:
         capability_keys: tuple[str, ...] | list[str] = (),
         evidence_refs: tuple[str, ...] | list[str] = (),
         last_verified_at: str | None = None,
-    ) -> "ResourceBindingV1":
+    ) -> ResourceBindingV1:
         entity = _text(entity_id, field="entity_id").casefold()
         provider = _text(provider_id, field="provider_id").casefold()
         resource = _text(provider_resource_id, field="provider_resource_id")
@@ -556,7 +556,7 @@ class ResourceBindingV1:
             )
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any], digest: str) -> "ResourceBindingV1":
+    def from_payload(cls, payload: dict[str, Any], digest: str) -> ResourceBindingV1:
         return cls(
             binding_id=payload["binding_id"],
             binding_revision=int(payload["binding_revision"]),
@@ -610,7 +610,7 @@ class InformationNeedV1:
         state: InformationNeedState = InformationNeedState.OPEN,
         evidence_refs: tuple[str, ...] | list[str] = (),
         created_at: str | None = None,
-    ) -> "InformationNeedV1":
+    ) -> InformationNeedV1:
         if not isinstance(category, InformationNeedCategory):
             raise TypeError("category must be InformationNeedCategory")
         if not isinstance(state, InformationNeedState):
@@ -693,16 +693,18 @@ class InformationNeedV1:
         if (
             self.category is InformationNeedCategory.OWNER_SECRET
             and self.resolution_ref
+            and self.resolution_ref.startswith(("plain:", "value:"))
         ):
-            if self.resolution_ref.startswith(("plain:", "value:")):
-                raise ValueError(
-                    "OWNER_SECRET resolution must reference the secret store"
-                )
-        if self.state is InformationNeedState.RESOLVED:
-            if self.resolved_at is None or self.resolution_ref is None:
-                raise ValueError(
-                    "resolved information need requires resolution metadata"
-                )
+            raise ValueError(
+                "OWNER_SECRET resolution must reference the secret store"
+            )
+        if (
+            self.state is InformationNeedState.RESOLVED
+            and (self.resolved_at is None or self.resolution_ref is None)
+        ):
+            raise ValueError(
+                "resolved information need requires resolution metadata"
+            )
         if self.digest != "pending":
             _assert_digest(
                 self.canonical_payload(), self.digest, field="information need digest"
@@ -714,7 +716,7 @@ class InformationNeedV1:
         resolution_ref: str,
         evidence_refs: tuple[str, ...] | list[str] = (),
         resolved_at: str | None = None,
-    ) -> "InformationNeedV1":
+    ) -> InformationNeedV1:
         reference = _text(resolution_ref, field="resolution_ref")
         combined = _tokens(
             tuple(self.evidence_refs) + tuple(evidence_refs), field="evidence_ref"
@@ -733,7 +735,7 @@ class InformationNeedV1:
         )
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any], digest: str) -> "InformationNeedV1":
+    def from_payload(cls, payload: dict[str, Any], digest: str) -> InformationNeedV1:
         return cls(
             information_need_id=payload["information_need_id"],
             revision=int(payload["revision"]),
@@ -786,7 +788,7 @@ class CapabilityRequirementV1:
         expected_postconditions: tuple[str, ...] | list[str] = (),
         observation_requirements: tuple[str, ...] | list[str] = (),
         reason: str,
-    ) -> "CapabilityRequirementV1":
+    ) -> CapabilityRequirementV1:
         goal = _text(goal_id, field="goal_id").casefold()
         semantic = _text(semantic_capability, field="semantic_capability").casefold()
         operation_value = _text(operation, field="operation").casefold()
@@ -850,7 +852,7 @@ class CapabilityRequirementV1:
     @classmethod
     def from_payload(
         cls, payload: dict[str, Any], digest: str
-    ) -> "CapabilityRequirementV1":
+    ) -> CapabilityRequirementV1:
         return cls(
             requirement_id=payload["requirement_id"],
             goal_id=payload["goal_id"],
@@ -889,7 +891,7 @@ class CapabilityRequirementGraphV1:
         world_state_preconditions: tuple[str, ...] | list[str] = (),
         completion_predicates: tuple[str, ...] | list[str] = (),
         edges: tuple[tuple[str, str], ...] | list[tuple[str, str]] = (),
-    ) -> "CapabilityRequirementGraphV1":
+    ) -> CapabilityRequirementGraphV1:
         goal = _text(goal_id, field="goal_id").casefold()
         requirement_values = tuple(requirements)
         if any(
@@ -992,7 +994,7 @@ class CapabilityRequirementGraphV1:
     @classmethod
     def from_payload(
         cls, payload: dict[str, Any], digest: str
-    ) -> "CapabilityRequirementGraphV1":
+    ) -> CapabilityRequirementGraphV1:
         requirements = tuple(
             CapabilityRequirementV1.from_payload(
                 {key: value for key, value in item.items() if key != "digest"},
@@ -1042,7 +1044,7 @@ class CapabilityGapV1:
         missing_reason_codes: tuple[str, ...] | list[str] = (),
         motivating_goal_id: str | None = None,
         state: CapabilityGapState = CapabilityGapState.OPEN,
-    ) -> "CapabilityGapV1":
+    ) -> CapabilityGapV1:
         if not isinstance(state, CapabilityGapState):
             raise TypeError("state must be CapabilityGapState")
         goal = _text(goal_id, field="goal_id").casefold()
@@ -1121,7 +1123,7 @@ class CapabilityGapV1:
             _assert_digest(self.canonical_payload(), self.digest, field="gap digest")
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any], digest: str) -> "CapabilityGapV1":
+    def from_payload(cls, payload: dict[str, Any], digest: str) -> CapabilityGapV1:
         return cls(
             gap_id=payload["gap_id"],
             revision=int(payload["revision"]),
@@ -1170,7 +1172,7 @@ class PlanNodeV1:
         gap_id: str | None = None,
         subgoal_id: str | None = None,
         postcondition_ref: str | None = None,
-    ) -> "PlanNodeV1":
+    ) -> PlanNodeV1:
         if not isinstance(node_type, PlanNodeType):
             raise TypeError("node_type must be PlanNodeType")
         if not isinstance(state, PlanNodeState):
@@ -1239,7 +1241,7 @@ class PlanNodeV1:
             )
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any], digest: str) -> "PlanNodeV1":
+    def from_payload(cls, payload: dict[str, Any], digest: str) -> PlanNodeV1:
         return cls(
             node_id=payload["node_id"],
             node_type=PlanNodeType(payload["node_type"]),
@@ -1284,7 +1286,7 @@ class PlanGraphV1:
         plan_revision: int = 1,
         state: PlanState = PlanState.PROPOSED,
         created_at: str | None = None,
-    ) -> "PlanGraphV1":
+    ) -> PlanGraphV1:
         if not isinstance(state, PlanState):
             raise TypeError("state must be PlanState")
         goal = _text(goal_id, field="goal_id").casefold()
@@ -1379,7 +1381,7 @@ class PlanGraphV1:
             _assert_digest(self.canonical_payload(), self.digest, field="plan digest")
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any], digest: str) -> "PlanGraphV1":
+    def from_payload(cls, payload: dict[str, Any], digest: str) -> PlanGraphV1:
         node_payloads = payload["nodes"]
         nodes = tuple(
             PlanNodeV1.from_payload(
@@ -1433,7 +1435,7 @@ class GoalContinuationV1:
         work_ids: tuple[str, ...] | list[str] = (),
         state: ContinuationState = ContinuationState.BLOCKED,
         created_at: str | None = None,
-    ) -> "GoalContinuationV1":
+    ) -> GoalContinuationV1:
         if not isinstance(blocked_by_type, ContinuationBlockerType):
             raise TypeError("blocked_by_type must be ContinuationBlockerType")
         if not isinstance(state, ContinuationState):
@@ -1499,7 +1501,7 @@ class GoalContinuationV1:
                 self.canonical_payload(), self.digest, field="continuation digest"
             )
 
-    def resumed(self, *, resumed_at: str | None = None) -> "GoalContinuationV1":
+    def resumed(self, *, resumed_at: str | None = None) -> GoalContinuationV1:
         if self.state is ContinuationState.RESUMED:
             return self
         candidate = replace(
@@ -1514,7 +1516,7 @@ class GoalContinuationV1:
         )
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any], digest: str) -> "GoalContinuationV1":
+    def from_payload(cls, payload: dict[str, Any], digest: str) -> GoalContinuationV1:
         return cls(
             continuation_id=payload["continuation_id"],
             revision=int(payload["revision"]),
@@ -1563,7 +1565,7 @@ class MonitorPredicateV1:
         completion_policy: str,
         notification_policy: str,
         verification_requirement: str,
-    ) -> "MonitorPredicateV1":
+    ) -> MonitorPredicateV1:
         timeout_value = (
             None if timeout is None else _finite_non_negative(timeout, field="timeout")
         )
@@ -1634,7 +1636,7 @@ class MonitorPredicateV1:
             )
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any], digest: str) -> "MonitorPredicateV1":
+    def from_payload(cls, payload: dict[str, Any], digest: str) -> MonitorPredicateV1:
         return cls(
             predicate_id=payload["predicate_id"],
             goal_id=payload["goal_id"],
