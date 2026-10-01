@@ -16,6 +16,7 @@ from jarvis.hands.provider_adapters import (
 )
 from jarvis.voice.generic_grounded_hands import GenericGroundedVoiceHandsOrchestrator
 from jarvis.voice.hands_fast_path import FAST_PATH_OPERATIONS, execute_fast_hint
+from jarvis.work.models import WorkDeliveryKind
 from jarvis.work.runtime import WorkRuntime
 
 from .capability_graph import CapabilityGraphResolver
@@ -291,6 +292,58 @@ class GiccApplyRuntime:
         result = await self.coordinator.continue_goal(goal_id)
         return await self._advance_intake_result(result)
 
+    def _enqueue_background_terminal_delivery(self, goal: OwnerGoalV2) -> bool:
+        if goal.state not in {GoalState.COMPLETED, GoalState.FAILED}:
+            return False
+        work_ids = tuple(
+            sorted(
+                {
+                    work_id
+                    for continuation in self.store.list_continuations(
+                        goal_id=goal.goal_id
+                    )
+                    for work_id in continuation.work_ids
+                }
+            )
+        )
+        if not work_ids:
+            return False
+
+        kind = (
+            WorkDeliveryKind.COMPLETION
+            if goal.state is GoalState.COMPLETED
+            else WorkDeliveryKind.FAILURE
+        )
+        message = (
+            f"Goal completed: {goal.exact_owner_request}"
+            if goal.state is GoalState.COMPLETED
+            else (
+                "JARVIS could not verify completion of the goal: "
+                f"{goal.exact_owner_request}"
+            )
+        )
+        event_key = f"gicc-goal:{goal.goal_id}:{goal.state.value}"
+        for work_id in work_ids:
+            work = self.store.work.get(work_id)
+            if work is None:
+                continue
+            delivery = self.store.work.enqueue_delivery(
+                work=work,
+                kind=kind,
+                message=message,
+                event_key=event_key,
+            )
+            if delivery is not None:
+                self.telemetry.emit(
+                    "gicc_goal_owner_delivery_enqueued",
+                    goal_id=goal.goal_id,
+                    goal_state=goal.state.value,
+                    work_id=work.work_id,
+                    delivery_id=delivery.delivery_id,
+                )
+                return True
+        return False
+
     async def reconcile_once(self) -> int:
         active = self.store.list_active_goals(limit=100)
         if not active:
@@ -329,6 +382,11 @@ class GiccApplyRuntime:
                 )
             ):
                 advanced += 1
+                if (
+                    before_goal.state not in {GoalState.COMPLETED, GoalState.FAILED}
+                    and after_goal.state in {GoalState.COMPLETED, GoalState.FAILED}
+                ):
+                    self._enqueue_background_terminal_delivery(after_goal)
                 LOGGER.info(
                     "GICC runtime advanced | goal_id=%s from_state=%s "
                     "to_state=%s plan_state=%s",
