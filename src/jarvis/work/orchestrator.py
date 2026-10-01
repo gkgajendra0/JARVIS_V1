@@ -56,6 +56,8 @@ class WorkSubmission:
 class WorkOrchestrator:
     """Own work identity/state while delegating durable execution mechanics."""
 
+    _EVENT_DRIVEN_WORK_TYPES = frozenset({WorkType.MONITORING})
+
     def __init__(self, store: SQLiteWorkStore, backend: WorkExecutionBackend) -> None:
         self._store = store
         self._backend = backend
@@ -79,16 +81,29 @@ class WorkOrchestrator:
         if existing is not None:
             return WorkSubmission(work=existing, execution_id=existing.work_id)
 
+        event_driven = work_type in self._EVENT_DRIVEN_WORK_TYPES
         item = WorkItem(
             request=request,
             work_type=work_type,
             source_session_id=source_session_id,
             source_turn_id=source_turn_id,
+            state=(
+                WorkState.WAITING_RESOURCE
+                if event_driven
+                else WorkState.QUEUED
+            ),
             priority=priority,
             delivery_policy=delivery_policy,
             dependencies=dependencies,
+            status_detail=(
+                "waiting for monitored event"
+                if event_driven
+                else None
+            ),
         )
         self._store.create(item)
+        if event_driven:
+            return WorkSubmission(work=item, execution_id=item.work_id)
         try:
             execution_id = self._backend.submit(item.work_id, priority=priority)
         except Exception as exc:
@@ -133,6 +148,9 @@ class WorkOrchestrator:
 
         reconciled: list[str] = []
         for item in self.list_active(limit=limit):
+            if item.work_type in self._EVENT_DRIVEN_WORK_TYPES:
+                reconciled.append(item.work_id)
+                continue
             bound_execution = self._store.get_execution_id(item.work_id)
             if bound_execution is not None and bound_execution != item.work_id:
                 # Retry executions intentionally use a non-canonical DBOS ID. After
@@ -165,6 +183,7 @@ class WorkOrchestrator:
                 WorkState.QUEUED,
                 WorkState.RUNNING,
                 WorkState.WAITING_RESOURCE,
+                WorkState.WAITING_RESOURCE,
                 WorkState.WAITING_DEPENDENCY,
                 WorkState.WAITING_UNTIL,
                 WorkState.WAITING_FOR_OWNER,
@@ -182,11 +201,12 @@ class WorkOrchestrator:
 
         # First make the durable cancellation request. If that fails, canonical
         # truth must remain active instead of falsely claiming terminal cancel.
-        execution_id = self._store.get_execution_id(work_id) or work_id
-        self._backend.cancel(
-            execution_id,
-            idempotency_key=f"cancel:{item.version}",
-        )
+        if item.work_type not in self._EVENT_DRIVEN_WORK_TYPES:
+            execution_id = self._store.get_execution_id(work_id) or work_id
+            self._backend.cancel(
+                execution_id,
+                idempotency_key=f"cancel:{item.version}",
+            )
 
         # The engine may advance one optimistic version while cancellation is
         # being requested. Re-read and CAS the latest non-terminal state so an
@@ -228,8 +248,9 @@ class WorkOrchestrator:
             current_step_id=item.current_step_id,
         )
         saved = self._store.save(paused, expected_version=item.version)
-        execution_id = self._store.get_execution_id(work_id) or work_id
-        self._backend.pause(execution_id)
+        if item.work_type not in self._EVENT_DRIVEN_WORK_TYPES:
+            execution_id = self._store.get_execution_id(work_id) or work_id
+            self._backend.pause(execution_id)
         return saved
 
     def resume(self, work_id: str) -> WorkItem:
@@ -253,6 +274,8 @@ class WorkOrchestrator:
             current_step_id=item.current_step_id,
         )
         saved = self._store.save(resumed, expected_version=item.version)
+        if item.work_type in self._EVENT_DRIVEN_WORK_TYPES:
+            return saved
         try:
             execution_id = self._store.get_execution_id(work_id) or work_id
             self._backend.resume(
@@ -283,6 +306,10 @@ class WorkOrchestrator:
         item = self._store.require(work_id)
         if item.state is not WorkState.FAILED:
             raise ValueError("only failed work can be retried")
+        if item.work_type in self._EVENT_DRIVEN_WORK_TYPES:
+            raise ValueError(
+                "event-driven monitoring retry requires the owning goal to be re-armed"
+            )
         normalized = owner_request.strip()
         if not normalized:
             raise ValueError("retry request must not be empty")
