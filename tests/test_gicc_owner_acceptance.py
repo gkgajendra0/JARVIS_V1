@@ -75,6 +75,7 @@ class CallbackStructuredClient:
 def _events(telemetry: CapturingGiccTelemetry) -> list[str]:
     return [str(item["event"]) for item in telemetry.events]
 
+
 @pytest.mark.asyncio
 async def test_owner_acceptance_scenario_1_tv_uses_reusable_gap_only(
     tmp_path: Path,
