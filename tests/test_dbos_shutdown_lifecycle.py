@@ -201,6 +201,7 @@ def test_dbos_backend_parks_exact_execution_ids(monkeypatch) -> None:
         ("work-b__retry_v3", dbos_backend._SHUTDOWN_WAKE_COMMAND, "work-control"),
         ("work-b__retry_v3", dbos_backend._SHUTDOWN_WAKE_COMMAND, "runtime-wake"),
     ]
+    assert all(item[3] is None for item in wake_messages)
 
 
 class _RetryStore:
@@ -376,7 +377,7 @@ from jarvis.work.dbos_backend import (
 from jarvis.work.models import WorkPriority, WorkState
 
 
-class FirstEngine:
+class BlockingEngine:
     def __init__(self):
         self.started = {{
             "work-a": asyncio.Event(),
@@ -430,7 +431,7 @@ async def wait_for_success(workflow_ids):
 
 async def main():
     loop = asyncio.get_running_loop()
-    first = FirstEngine()
+    first = BlockingEngine()
     backend = initialize_dbos_work_runtime(
         engine=first,
         event_loop=loop,
@@ -460,9 +461,9 @@ async def main():
         workflow_completion_timeout_sec=70,
     )
 
-    recovery = RecoveryEngine()
+    second = BlockingEngine()
     backend2 = initialize_dbos_work_runtime(
-        engine=recovery,
+        engine=second,
         event_loop=loop,
         application_version="shutdown-regression-v1",
         system_database_url={db_url!r},
@@ -470,12 +471,40 @@ async def main():
     )
     assert backend2.reconcile_execution("work-a") == "work-a"
     assert backend2.reconcile_execution("work-b") == "work-b"
+    await asyncio.wait_for(
+        asyncio.gather(*(event.wait() for event in second.started.values())),
+        timeout=10.0,
+    )
+
+    backend2.begin_shutdown()
+    parked_again = await asyncio.to_thread(
+        backend2.park_for_shutdown,
+        ("work-a", "work-b"),
+    )
+    assert parked_again == ("work-a", "work-b")
+    second.release.set()
+    assert await backend2.quiesce_active_advances(timeout_seconds=10.0) == 2
+    await asyncio.to_thread(
+        shutdown_dbos_work_runtime,
+        workflow_completion_timeout_sec=70,
+    )
+
+    recovery = RecoveryEngine()
+    backend3 = initialize_dbos_work_runtime(
+        engine=recovery,
+        event_loop=loop,
+        application_version="shutdown-regression-v1",
+        system_database_url={db_url!r},
+        max_reasoning_cycles=8,
+    )
+    assert backend3.reconcile_execution("work-a") == "work-a"
+    assert backend3.reconcile_execution("work-b") == "work-b"
 
     await wait_for_success(("work-a", "work-b"))
     assert recovery.completed == {{"work-a", "work-b"}}
 
-    backend2.begin_shutdown()
-    assert await backend2.quiesce_active_advances(timeout_seconds=10.0) == 0
+    backend3.begin_shutdown()
+    assert await backend3.quiesce_active_advances(timeout_seconds=10.0) == 0
     await asyncio.to_thread(
         shutdown_dbos_work_runtime,
         workflow_completion_timeout_sec=70,
