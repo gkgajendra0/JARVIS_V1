@@ -217,6 +217,12 @@ def durable_workflow(
 class DBOSWorkExecutionBackend:
     """Queue/recovery mechanics only; canonical work truth remains in JARVIS store."""
 
+    _ACTIVE_DBOS_STATES = frozenset({"PENDING", "ENQUEUED", "DELAYED"})
+    _RESUMABLE_DBOS_STATES = frozenset(
+        {"CANCELLED", "MAX_RECOVERY_ATTEMPTS_EXCEEDED"}
+    )
+    _TERMINAL_DBOS_STATES = frozenset({"SUCCESS", "ERROR"})
+
     def __init__(
         self,
         *,
@@ -226,7 +232,85 @@ class DBOSWorkExecutionBackend:
             raise ValueError("max reasoning cycles must be positive")
         self._max_reasoning_cycles = int(max_reasoning_cycles)
 
+    @classmethod
+    def _classify_existing_status(cls, status: object | None) -> str | None:
+        if status is None:
+            return None
+        value = str(getattr(status, "status", "")).strip().upper()
+        if not value:
+            raise RuntimeError("DBOS returned a workflow status without a state")
+        return value
+
+    def _resume_existing(self, execution_id: str) -> str:
+        handle = _run_dbos_sync(
+            DBOS.resume_workflow,
+            execution_id,
+            queue_name=_QUEUE_NAME,
+        )
+        workflow_id = handle.get_workflow_id()
+        if workflow_id != execution_id:
+            raise RuntimeError("DBOS did not preserve resumed workflow identity")
+        return workflow_id
+
+    def reconcile_execution(self, execution_id: str) -> str:
+        """Ensure a known durable execution is runnable after restart.
+
+        Shutdown parking deliberately uses DBOS cancellation without changing the
+        canonical JARVIS WorkItem state. On restart, CANCELLED DBOS executions are
+        resumed from their last durable checkpoint instead of creating duplicate
+        WorkItems or workflow identities.
+        """
+
+        normalized = str(execution_id).strip()
+        if not normalized:
+            raise ValueError("execution id must not be empty")
+        status = _run_dbos_sync(DBOS.get_workflow_status, normalized)
+        state = self._classify_existing_status(status)
+        if state is None:
+            raise RuntimeError(
+                f"durable execution is missing from DBOS: {normalized}"
+            )
+        if state in self._ACTIVE_DBOS_STATES:
+            return normalized
+        if state in self._RESUMABLE_DBOS_STATES:
+            return self._resume_existing(normalized)
+        if state in self._TERMINAL_DBOS_STATES:
+            raise RuntimeError(
+                "canonical JARVIS work is active but its DBOS execution is "
+                f"terminal: {normalized} ({state})"
+            )
+        raise RuntimeError(
+            f"unsupported DBOS workflow state for {normalized}: {state}"
+        )
+
+    def park_for_shutdown(self, execution_ids: tuple[str, ...]) -> tuple[str, ...]:
+        """Durably park active executions so process shutdown can drain safely."""
+
+        normalized = tuple(
+            sorted({str(item).strip() for item in execution_ids if str(item).strip()})
+        )
+        if not normalized:
+            return ()
+        _run_dbos_sync(DBOS.cancel_workflows, list(normalized))
+        return normalized
+
     def submit(self, work_id: str, *, priority: WorkPriority) -> str:
+        existing = _run_dbos_sync(DBOS.get_workflow_status, work_id)
+        state = self._classify_existing_status(existing)
+        if state is not None:
+            if state in self._ACTIVE_DBOS_STATES:
+                return work_id
+            if state in self._RESUMABLE_DBOS_STATES:
+                return self._resume_existing(work_id)
+            if state in self._TERMINAL_DBOS_STATES:
+                raise RuntimeError(
+                    "canonical JARVIS work is active but its DBOS execution is "
+                    f"terminal: {work_id} ({state})"
+                )
+            raise RuntimeError(
+                f"unsupported DBOS workflow state for {work_id}: {state}"
+            )
+
         def enqueue():
             with (
                 SetWorkflowID(work_id),
