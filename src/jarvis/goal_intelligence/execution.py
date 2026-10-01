@@ -21,11 +21,8 @@ from .models import (
     PlanNodeV1,
     PlanState,
 )
-from .service import (
-    GoalDispatchStatus,
-    GoalOrchestrator,
-    PlanDispatchResult as RoutedResult,
-)
+from .service import GoalDispatchStatus, GoalOrchestrator
+from .service import PlanDispatchResult as RoutedResult
 from .store import GoalStore, GoalStoreError
 
 
