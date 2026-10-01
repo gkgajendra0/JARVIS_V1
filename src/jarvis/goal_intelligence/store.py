@@ -311,6 +311,32 @@ class GoalStore:
             return None
         return OwnerGoalV2.from_payload(self._decode(row["payload"]), row["digest"])
 
+    def get_goal_by_source(
+        self,
+        *,
+        source_session_id: str,
+        source_turn_id: str,
+    ) -> OwnerGoalV2 | None:
+        session_id = str(source_session_id).strip()
+        turn_id = str(source_turn_id).strip()
+        if not session_id or not turn_id:
+            raise ValueError("source session/turn IDs must not be empty")
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM owner_goals_v2
+                WHERE source_session_id=? AND source_turn_id=?
+                """,
+                (session_id, turn_id),
+            ).fetchone()
+        if row is None:
+            return None
+        return OwnerGoalV2.from_payload(
+            self._decode(row["payload"]),
+            row["digest"],
+        )
+
     def update_goal_state(
         self,
         goal_id: str,
