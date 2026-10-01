@@ -12,7 +12,7 @@ import pytest
 import jarvis.work.runtime as work_runtime_module
 from jarvis.work import dbos_backend
 from jarvis.work.dbos_backend import DBOSWorkExecutionBackend
-from jarvis.work.models import WorkPriority, WorkState
+from jarvis.work.models import WorkPriority, WorkState, WorkType
 from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.runtime import WorkRuntime
 
@@ -40,8 +40,8 @@ class _FakeShutdownOrchestrator:
     def list_active(self, *, limit: int = 100):
         assert limit == 10_000
         return (
-            SimpleNamespace(work_id="work-a"),
-            SimpleNamespace(work_id="work-b"),
+            SimpleNamespace(work_id="work-a", work_type=WorkType.GENERIC),
+            SimpleNamespace(work_id="work-b", work_type=WorkType.GENERIC),
         )
 
 
@@ -210,6 +210,7 @@ class _RetryStore:
             work_id="work-retry",
             state=WorkState.RETRYING,
             priority=WorkPriority.HIGH,
+            work_type=WorkType.GENERIC,
         )
         self.execution_id = "work-retry__retry_v4"
 
