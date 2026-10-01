@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import jarvis.work.dbos_backend as dbos_backend
+from jarvis.work import dbos_backend
 import jarvis.work.runtime as work_runtime_module
 from jarvis.work.dbos_backend import DBOSWorkExecutionBackend
 from jarvis.work.models import WorkPriority, WorkState
@@ -323,7 +323,6 @@ def test_interruptible_durable_wait_uses_wakeable_absolute_timeout(
 
     def recv(*, topic: str | None = None, timeout_seconds: float = 60):
         receives.append((topic, float(timeout_seconds)))
-        return None
 
     monkeypatch.setattr(dbos_backend.DBOS, "recv", staticmethod(recv))
 
