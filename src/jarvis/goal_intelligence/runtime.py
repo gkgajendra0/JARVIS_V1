@@ -9,8 +9,15 @@ from dataclasses import dataclass, field, replace
 
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
+from jarvis.capability_acquisition.external_acceptance import (
+    EXTERNAL_ACCEPTANCE_RESULT_KIND,
+)
+from jarvis.capability_acquisition.external_contract import (
+    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+)
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
 from jarvis.config import JarvisConfig
+from jarvis.engineering_change import ChangeStore
 from jarvis.hands.provider_adapters import (
     build_chatgpt_plan_structured_output_client,
     build_structured_output_client,
@@ -31,6 +38,7 @@ from .execution import GoalPlanDispatcher, PlanDispatchDisposition
 from .information import InformationResolver
 from .interpretation import GoalInterpreter, build_goal_interpreter
 from .models import (
+    ContinuationBlockerType,
     GoalState,
     OwnerGoalV2,
     PlanGraphV1,
@@ -146,6 +154,7 @@ class GiccApplyRuntime:
     dispatcher: GoalPlanDispatcher
     telemetry: GiccTelemetrySink
     replan_controller: ReplanController | None = None
+    change_store: ChangeStore | None = None
     capability_runtime: CapabilityRuntime
     reconcile_interval_seconds: float = 1.0
     _task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
@@ -461,6 +470,66 @@ class GiccApplyRuntime:
                 return True
         return False
 
+    def _capability_continuation_acceptance_ready(
+        self,
+        goal: OwnerGoalV2,
+    ) -> bool:
+        changes = self.change_store
+        if changes is None:
+            return True
+
+        continuations = tuple(
+            continuation
+            for continuation in self.store.list_continuations(goal_id=goal.goal_id)
+            if continuation.blocked_by_type
+            is ContinuationBlockerType.CAPABILITY_ACQUISITION
+        )
+        for continuation in continuations:
+            for work_id in continuation.work_ids:
+                stage = changes.stage_for_work(work_id)
+                if stage is None:
+                    continue
+                architecture = changes.latest_artifact(stage.change_id, "architecture")
+                if architecture is None:
+                    continue
+                contracts = {
+                    str(item).strip()
+                    for item in (
+                        architecture.payload.get("owner_acceptance_contract_ids") or ()
+                    )
+                    if str(item).strip()
+                }
+                if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT not in contracts:
+                    continue
+
+                candidate = changes.latest_artifact(
+                    stage.change_id,
+                    "capability_candidate",
+                )
+                activation = changes.latest_artifact(
+                    stage.change_id,
+                    "capability_lifecycle_activation",
+                )
+                acceptance = changes.latest_artifact(
+                    stage.change_id,
+                    EXTERNAL_ACCEPTANCE_RESULT_KIND,
+                )
+                if candidate is None or activation is None or acceptance is None:
+                    return False
+                payload = acceptance.payload
+                if (
+                    payload.get("schema") != "capability_external_acceptance.v1"
+                    or payload.get("verdict") != "pass"
+                    or payload.get("candidate_artifact_id")
+                    != candidate.artifact_id
+                    or payload.get("candidate_artifact_digest") != candidate.digest
+                    or payload.get("activation_artifact_id")
+                    != activation.artifact_id
+                    or payload.get("activation_artifact_digest") != activation.digest
+                ):
+                    return False
+        return True
+
     async def reconcile_once(self) -> int:
         active = self.store.list_active_goals(limit=100)
         if not active:
@@ -474,6 +543,8 @@ class GiccApplyRuntime:
             before_goal = self.store.get_goal(goal.goal_id)
             before_plan = self.store.latest_plan_for_goal(goal.goal_id)
             if goal.state is GoalState.WAITING_CAPABILITY:
+                if not self._capability_continuation_acceptance_ready(goal):
+                    continue
                 await self.continue_goal(goal.goal_id)
             elif goal.state in {
                 GoalState.PLANNED,
@@ -638,5 +709,6 @@ def build_gicc_apply_runtime(
             store=store,
             planner=planner,
         ),
+        change_store=work_runtime.changes.store,
         capability_runtime=capability_runtime,
     )
