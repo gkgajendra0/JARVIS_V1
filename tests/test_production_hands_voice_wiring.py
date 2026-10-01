@@ -66,3 +66,27 @@ def test_production_session_bundle_includes_hands_specialist_tool(monkeypatch) -
 
     assert bundle.tools == [sentinel_hands]
     assert seen == [(runtime, conversation)]
+
+
+def test_production_session_bundle_adds_gicc_tools_without_replacing_hands() -> None:
+    runtime = _runtime()
+    conversation = _conversation()
+    sentinel_gicc = object()
+
+    bundle = active_runtime._SessionToolBundle(
+        None,
+        lambda: conversation,
+        memory_runtime=None,
+        memory_query_coordinator=None,
+        research_service=None,
+        capability_runtime=runtime,
+        gicc_tool_factory=lambda active_conversation: (
+            [sentinel_gicc] if active_conversation is conversation else []
+        ),
+        allow_direct_capability_acquisition=False,
+    )
+
+    tools = bundle.tools
+
+    assert sentinel_gicc in tools
+    assert len(tools) == 2

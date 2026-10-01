@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Protocol
 
 from livekit.agents import AgentStateChangedEvent, UserStateChangedEvent
 
@@ -41,6 +41,12 @@ from jarvis.work.runtime import WorkRuntime
 LOGGER = logging.getLogger(__name__)
 
 
+class _ManagedBackgroundRuntime(Protocol):
+    def start(self) -> None: ...
+
+    async def close(self) -> None: ...
+
+
 class _SessionToolBundle:
     """Combine vision with per-session memory, research, and governed capabilities."""
 
@@ -54,6 +60,8 @@ class _SessionToolBundle:
         research_service: CurrentResearchService | None,
         capability_runtime: CapabilityRuntime | None,
         work_runtime: WorkRuntime | None = None,
+        gicc_tool_factory: Callable[[ConversationSession], list] | None = None,
+        allow_direct_capability_acquisition: bool = True,
     ) -> None:
         self._vision_tools = vision_tools
         self._conversation_getter = conversation_getter
@@ -62,6 +70,8 @@ class _SessionToolBundle:
         self._research_service = research_service
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
+        self._gicc_tool_factory = gicc_tool_factory
+        self._allow_direct_capability_acquisition = allow_direct_capability_acquisition
 
     @property
     def tools(self) -> list:
@@ -83,8 +93,18 @@ class _SessionToolBundle:
             tools.extend(
                 LocalReadAgentTools(self._capability_runtime, conversation).tools
             )
+        if self._gicc_tool_factory is not None:
+            tools.extend(self._gicc_tool_factory(conversation))
         if self._work_runtime is not None:
-            tools.extend(WorkAgentTools(self._work_runtime, conversation).tools)
+            tools.extend(
+                WorkAgentTools(
+                    self._work_runtime,
+                    conversation,
+                    allow_capability_acquisition=(
+                        self._allow_direct_capability_acquisition
+                    ),
+                ).tools
+            )
         return tools
 
 
@@ -100,6 +120,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         research_service: CurrentResearchService | None = None,
         capability_runtime: CapabilityRuntime | None = None,
         work_runtime: WorkRuntime | None = None,
+        gicc_runtime: _ManagedBackgroundRuntime | None = None,
+        gicc_tool_factory: Callable[[ConversationSession], list] | None = None,
+        allow_direct_capability_acquisition: bool = True,
         **kwargs: Any,
     ) -> None:
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
@@ -203,11 +226,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._research_service = research_service
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
+        self._gicc_runtime = gicc_runtime
         if (
             memory_runtime is not None
             or research_service is not None
             or capability_runtime is not None
             or work_runtime is not None
+            or gicc_tool_factory is not None
         ):
             self._vision_tools = _SessionToolBundle(
                 self._vision_tools,
@@ -217,6 +242,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 research_service=research_service,
                 capability_runtime=capability_runtime,
                 work_runtime=work_runtime,
+                gicc_tool_factory=gicc_tool_factory,
+                allow_direct_capability_acquisition=(
+                    allow_direct_capability_acquisition
+                ),
             )
 
     @staticmethod
@@ -619,6 +648,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 "browser_control=%s | raw_shell=False",
                 bool(browser_hands and browser_hands.execution_enabled),
             )
+        gicc_runtime = self._gicc_runtime
+        if gicc_runtime is not None:
+            gicc_runtime.start()
+            LOGGER.info("GICC durable continuation reconciliation is active")
         if self._work_runtime is not None:
             delivery_task = asyncio.create_task(
                 self._deliver_pending_work(),
@@ -630,6 +663,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             if delivery_task is not None:
                 delivery_task.cancel()
                 await asyncio.gather(delivery_task, return_exceptions=True)
+            if gicc_runtime is not None:
+                await gicc_runtime.close()
             self._session_ready_for_inactivity = False
             self._user_is_speaking = False
             self._session_conversation = None
@@ -638,7 +673,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             if self._work_runtime is not None:
                 self._work_runtime.set_interactive_brain_active(False)
             if self._work_runtime is not None:
-                self._work_runtime.close()
+                await self._work_runtime.aclose()
             if capability_runtime is not None:
                 capability_runtime.close()
             if self._research_service is not None:

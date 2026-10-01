@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
 
 from dbos import DBOS, DBOSConfig, SetEnqueueOptions, SetWorkflowID
@@ -16,6 +17,8 @@ from jarvis.work.store import default_work_state_dir
 _QUEUE_NAME = "jarvis-work"
 _OWNER_TOPIC = "owner-input"
 _CONTROL_TOPIC = "work-control"
+_RUNTIME_WAKE_TOPIC = "runtime-wake"
+_SHUTDOWN_WAKE_COMMAND = "__jarvis_shutdown_wake__"
 _EVENT_STATE = "jarvis-work-state"
 _MAX_REASONING_CYCLES = 200
 _WAITING_STATES = frozenset(
@@ -31,6 +34,9 @@ _WAITING_STATES = frozenset(
 _ENGINE: WorkEngine | None = None
 _JARVIS_EVENT_LOOP: asyncio.AbstractEventLoop | None = None
 _ON_WORK_TERMINAL: Callable[[str], object] | None = None
+_ACTIVE_ADVANCE_LOCK = threading.Lock()
+_ACTIVE_ADVANCES: dict[Future[Any], threading.Event] = {}
+_ADVANCE_QUIESCING = False
 
 
 def configure_terminal_reconciliation(callback: Callable[[str], object]) -> None:
@@ -54,6 +60,11 @@ def configure_work_engine(
         raise RuntimeError("JARVIS work event loop is already configured")
     if event_loop.is_closed():
         raise RuntimeError("JARVIS work event loop is closed")
+    global _ADVANCE_QUIESCING
+    with _ACTIVE_ADVANCE_LOCK:
+        if _ACTIVE_ADVANCES:
+            raise RuntimeError("JARVIS work runtime still has active engine advances")
+        _ADVANCE_QUIESCING = False
     _ENGINE = engine
     _JARVIS_EVENT_LOOP = event_loop
 
@@ -111,15 +122,59 @@ def _waiting_resource_delay(payload: dict[str, Any]) -> float:
     return min(delay, 60.0)
 
 
-@DBOS.step(retries_allowed=True, max_attempts=3, interval_seconds=1.0)
-def _advance_work(work_id: str) -> dict[str, Any]:
-    """Run one async JARVIS cycle on the canonical production event loop."""
+def _durable_interruptible_wait(seconds: float, *, patch_name: str) -> None:
+    """Preserve absolute durable timing while making new waits wakeable.
 
-    future = asyncio.run_coroutine_threadsafe(
-        _engine().advance(work_id),
-        _jarvis_loop(),
+    Historical workflow executions may already have a DBOS.sleep checkpoint at
+    this position. DBOS.patch replays that exact legacy sleep once. New history
+    uses DBOS.recv with a timeout instead: DBOS persists the absolute timeout,
+    while JARVIS can wake the wait immediately on shutdown through a dedicated
+    runtime topic. A normal timeout returns None and changes no WorkItem truth.
+    """
+
+    delay = max(0.0, float(seconds))
+    if delay <= 0:
+        return
+    if not DBOS.patch(patch_name):
+        DBOS.sleep(delay)
+        return
+    DBOS.recv(
+        topic=_RUNTIME_WAKE_TOPIC,
+        timeout_seconds=delay,
     )
-    result = future.result()
+
+
+async def _advance_on_jarvis_loop(
+    work_id: str,
+    completion: threading.Event,
+):
+    try:
+        return await _engine().advance(work_id)
+    finally:
+        # This event is stronger than concurrent Future.done(): it is set only
+        # after the canonical asyncio coroutine has actually unwound.
+        completion.set()
+
+
+def _run_advance_work(work_id: str) -> dict[str, Any]:
+    """Run one engine advance while exposing a shutdown completion barrier."""
+
+    completion = threading.Event()
+    with _ACTIVE_ADVANCE_LOCK:
+        if _ADVANCE_QUIESCING:
+            raise RuntimeError("JARVIS work runtime is quiescing")
+        future = asyncio.run_coroutine_threadsafe(
+            _advance_on_jarvis_loop(work_id, completion),
+            _jarvis_loop(),
+        )
+        _ACTIVE_ADVANCES[future] = completion
+
+    try:
+        result = future.result()
+    finally:
+        with _ACTIVE_ADVANCE_LOCK:
+            _ACTIVE_ADVANCES.pop(future, None)
+
     return {
         "work_id": result.work_id,
         "state": result.state.value,
@@ -127,6 +182,13 @@ def _advance_work(work_id: str) -> dict[str, Any]:
         "owner_question": result.owner_question,
         "retry_after_seconds": result.retry_after_seconds,
     }
+
+
+@DBOS.step(retries_allowed=True, max_attempts=3, interval_seconds=1.0)
+def _advance_work(work_id: str) -> dict[str, Any]:
+    """Run one async JARVIS cycle on the canonical production event loop."""
+
+    return _run_advance_work(work_id)
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3, interval_seconds=1.0)
@@ -178,7 +240,10 @@ def durable_workflow(
                 _apply_owner_input(work_id, str(owner_input))
 
         elif state is WorkState.WAITING_RESOURCE:
-            DBOS.sleep(_waiting_resource_delay(payload))
+            _durable_interruptible_wait(
+                _waiting_resource_delay(payload),
+                patch_name="wakeable-waiting-resource-v1",
+            )
 
         elif state in {
             WorkState.WAITING_DEPENDENCY,
@@ -217,6 +282,10 @@ def durable_workflow(
 class DBOSWorkExecutionBackend:
     """Queue/recovery mechanics only; canonical work truth remains in JARVIS store."""
 
+    _ACTIVE_DBOS_STATES = frozenset({"PENDING", "ENQUEUED", "DELAYED"})
+    _RESUMABLE_DBOS_STATES = frozenset({"CANCELLED", "MAX_RECOVERY_ATTEMPTS_EXCEEDED"})
+    _TERMINAL_DBOS_STATES = frozenset({"SUCCESS", "ERROR"})
+
     def __init__(
         self,
         *,
@@ -225,8 +294,145 @@ class DBOSWorkExecutionBackend:
         if isinstance(max_reasoning_cycles, bool) or max_reasoning_cycles <= 0:
             raise ValueError("max reasoning cycles must be positive")
         self._max_reasoning_cycles = int(max_reasoning_cycles)
+        self._accepting_work = True
+
+    def begin_shutdown(self) -> None:
+        """Stop new work and prevent DBOS from starting another engine advance."""
+
+        global _ADVANCE_QUIESCING
+        self._accepting_work = False
+        with _ACTIVE_ADVANCE_LOCK:
+            _ADVANCE_QUIESCING = True
+
+    async def quiesce_active_advances(
+        self,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> int:
+        """Await active atomic engine advances without cancelling side effects."""
+
+        if timeout_seconds is not None and timeout_seconds <= 0:
+            raise ValueError("advance quiesce timeout must be positive")
+
+        with _ACTIVE_ADVANCE_LOCK:
+            active = tuple(_ACTIVE_ADVANCES.items())
+
+        loop = asyncio.get_running_loop()
+        deadline = None if timeout_seconds is None else loop.time() + timeout_seconds
+        while True:
+            incomplete = [
+                completion for _future, completion in active if not completion.is_set()
+            ]
+            if not incomplete:
+                return len(active)
+            if deadline is not None and loop.time() >= deadline:
+                raise RuntimeError(
+                    "active JARVIS work did not quiesce before DBOS shutdown"
+                )
+            # Existing provider reasoning is preempted separately by
+            # InteractiveBrainGate. Actions already admitted are atomic from the
+            # durable-work perspective and must finish rather than be cancelled
+            # after an external side effect may already have occurred.
+            await asyncio.sleep(0.01)
+
+    def _require_accepting_work(self) -> None:
+        if not self._accepting_work:
+            raise RuntimeError("JARVIS work runtime is shutting down")
+
+    @classmethod
+    def _classify_existing_status(cls, status: object | None) -> str | None:
+        if status is None:
+            return None
+        value = str(getattr(status, "status", "")).strip().upper()
+        if not value:
+            raise RuntimeError("DBOS returned a workflow status without a state")
+        return value
+
+    def _resume_existing(self, execution_id: str) -> str:
+        handle = _run_dbos_sync(
+            DBOS.resume_workflow,
+            execution_id,
+            queue_name=_QUEUE_NAME,
+        )
+        workflow_id = handle.get_workflow_id()
+        if workflow_id != execution_id:
+            raise RuntimeError("DBOS did not preserve resumed workflow identity")
+        return workflow_id
+
+    def reconcile_execution(self, execution_id: str) -> str:
+        """Ensure a known durable execution is runnable after restart.
+
+        Shutdown parking deliberately uses DBOS cancellation without changing the
+        canonical JARVIS WorkItem state. On restart, CANCELLED DBOS executions are
+        resumed from their last durable checkpoint instead of creating duplicate
+        WorkItems or workflow identities.
+        """
+
+        self._require_accepting_work()
+        normalized = str(execution_id).strip()
+        if not normalized:
+            raise ValueError("execution id must not be empty")
+        status = _run_dbos_sync(DBOS.get_workflow_status, normalized)
+        state = self._classify_existing_status(status)
+        if state is None:
+            raise RuntimeError(f"durable execution is missing from DBOS: {normalized}")
+        if state in self._ACTIVE_DBOS_STATES:
+            return normalized
+        if state in self._RESUMABLE_DBOS_STATES:
+            return self._resume_existing(normalized)
+        if state in self._TERMINAL_DBOS_STATES:
+            raise RuntimeError(
+                "canonical JARVIS work is active but its DBOS execution is "
+                f"terminal: {normalized} ({state})"
+            )
+        raise RuntimeError(f"unsupported DBOS workflow state for {normalized}: {state}")
+
+    def park_for_shutdown(self, execution_ids: tuple[str, ...]) -> tuple[str, ...]:
+        """Durably park active executions so process shutdown can drain safely."""
+
+        normalized = tuple(
+            sorted({str(item).strip() for item in execution_ids if str(item).strip()})
+        )
+        if not normalized:
+            return ()
+        _run_dbos_sync(DBOS.cancel_workflows, list(normalized))
+        # Wake both durable wait classes. The control message releases PAUSED
+        # workflows, including legacy 3600-second recv calls. The runtime-wake
+        # message releases new WAITING_RESOURCE recv timeouts without shortening
+        # their normal durable delay semantics.
+        for execution_id in normalized:
+            _run_dbos_sync(
+                DBOS.send,
+                execution_id,
+                _SHUTDOWN_WAKE_COMMAND,
+                topic=_CONTROL_TOPIC,
+            )
+            _run_dbos_sync(
+                DBOS.send,
+                execution_id,
+                _SHUTDOWN_WAKE_COMMAND,
+                topic=_RUNTIME_WAKE_TOPIC,
+            )
+        return normalized
 
     def submit(self, work_id: str, *, priority: WorkPriority) -> str:
+        self._require_accepting_work()
+        existing = _run_dbos_sync(DBOS.get_workflow_status, work_id)
+        state = self._classify_existing_status(existing)
+        if state is not None:
+            if state in self._ACTIVE_DBOS_STATES:
+                return work_id
+            if state in self._RESUMABLE_DBOS_STATES:
+                return self._resume_existing(work_id)
+            if state in self._TERMINAL_DBOS_STATES:
+                raise RuntimeError(
+                    "canonical JARVIS work is active but its DBOS execution is "
+                    f"terminal: {work_id} ({state})"
+                )
+            raise RuntimeError(
+                f"unsupported DBOS workflow state for {work_id}: {state}"
+            )
+
         def enqueue():
             with (
                 SetWorkflowID(work_id),
@@ -254,6 +460,7 @@ class DBOSWorkExecutionBackend:
     ) -> str:
         """Start a fresh durable execution attempt for the same canonical WorkItem."""
 
+        self._require_accepting_work()
         token = str(retry_token).strip().replace(" ", "_")
         if not token:
             raise ValueError("retry token must not be empty")

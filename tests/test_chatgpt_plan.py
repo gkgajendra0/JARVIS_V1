@@ -377,6 +377,16 @@ def _schema_nodes(value: object):
             yield from _schema_nodes(nested)
 
 
+def test_chatgpt_plan_strict_schema_rejects_dynamic_object_maps() -> None:
+    with pytest.raises(ValueError, match="dynamic object maps"):
+        _strict_json_schema(
+            {
+                "type": "object",
+                "additionalProperties": {"type": "string"},
+            }
+        )
+
+
 def test_chatgpt_plan_strict_schema_normalizes_dynamic_hands_contract() -> None:
     response_model = build_action_response_model(("open_app", "set_master_volume"))
     schema = _strict_json_schema(response_model.model_json_schema())
@@ -390,6 +400,74 @@ def test_chatgpt_plan_strict_schema_normalizes_dynamic_hands_contract() -> None:
         properties = node.get("properties")
         if isinstance(properties, dict):
             assert set(node.get("required", ())) == set(properties)
+
+
+class _OptionalStrictResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    required_name: str
+    optional_type: str | None = None
+
+
+def test_chatgpt_plan_invoke_structured_sends_normalized_strict_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _CredentialStore:
+        def load(self):
+            return _credentials()
+
+        def save(self, credentials) -> None:
+            del credentials
+
+    captured: dict[str, object] = {}
+
+    class _StreamResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            del exc_type, exc, tb
+            return False
+
+        def __iter__(self):
+            delta = {
+                "type": "response.output_text.delta",
+                "delta": json.dumps(
+                    {"required_name": "ok", "optional_type": None},
+                    separators=(",", ":"),
+                ),
+            }
+            completed = {
+                "type": "response.completed",
+                "response": {"usage": {"input_tokens": 1, "output_tokens": 1}},
+            }
+            yield f"data: {json.dumps(delta)}\n".encode()
+            yield f"data: {json.dumps(completed)}\n".encode()
+
+    def _urlopen(req, timeout):
+        del timeout
+        captured.update(json.loads(req.data.decode("utf-8")))
+        return _StreamResponse()
+
+    monkeypatch.setattr(chatgpt_plan_module.request, "urlopen", _urlopen)
+    manager = ChatGPTPlanSessionManager(
+        credential_store=_CredentialStore(),  # type: ignore[arg-type]
+        clock=lambda: 100.0,
+    )
+
+    response = manager.invoke_structured(
+        model="plan-model",
+        instructions="system",
+        input_payload={"task": "test"},
+        schema_name=_OptionalStrictResult.__name__,
+        schema=_OptionalStrictResult.model_json_schema(),
+        timeout_seconds=1.0,
+    )
+
+    schema = captured["text"]["format"]["schema"]  # type: ignore[index]
+    assert schema["additionalProperties"] is False  # type: ignore[index]
+    assert set(schema["required"]) == {"required_name", "optional_type"}  # type: ignore[index]
+    assert "default" not in schema["properties"]["optional_type"]  # type: ignore[index]
+    assert response.output_text == '{"required_name":"ok","optional_type":null}'
 
 
 def test_hands_plan_primary_does_not_require_paid_fallback_key(monkeypatch) -> None:

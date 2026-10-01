@@ -501,6 +501,16 @@ def _strict_json_schema(value: object) -> object:
         if isinstance(properties, dict):
             normalized["additionalProperties"] = False
             normalized["required"] = list(properties)
+        else:
+            additional = normalized.get("additionalProperties")
+            if additional is not None and additional is not False:
+                raise ValueError(
+                    "OpenAI strict structured output cannot contain dynamic object "
+                    "maps; use a fixed object model or encode flexible JSON as a string"
+                )
+            normalized["properties"] = {}
+            normalized["additionalProperties"] = False
+            normalized["required"] = []
     return normalized
 
 
@@ -791,7 +801,7 @@ class ChatGPTPlanSessionManager:
                         "type": "json_schema",
                         "name": _schema_name(schema_name),
                         "strict": True,
-                        "schema": schema,
+                        "schema": _strict_json_schema(schema),
                     }
                 },
                 "store": False,
