@@ -243,9 +243,7 @@ class RequirementDeriver:
         task_specific_terms: tuple[str, ...] | list[str] = (),
     ) -> RequirementDerivationResult:
         if not isinstance(interpretation, GoalInterpretationCandidateV1):
-            raise TypeError(
-                "interpretation must be GoalInterpretationCandidateV1"
-            )
+            raise TypeError("interpretation must be GoalInterpretationCandidateV1")
         input_payload = {
             "goal": {
                 "goal_id": goal.goal_id,
