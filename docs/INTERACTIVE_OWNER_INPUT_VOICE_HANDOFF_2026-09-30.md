@@ -172,6 +172,33 @@ The repair is idempotent, does not create duplicate WorkItems or duplicate deliv
 identities, and does not affect already-pending owner prompts. It also provides
 self-healing if the same inconsistent state is ever produced again.
 
+## Owner-input boundary exposed by recovered TV work
+
+The next owner-machine run recovered one already-existing DBOS workflow. That WorkItem
+had been created under the older generic research interpretation of the media goal, so
+the new interactive handoff correctly resumed its durable state rather than silently
+reclassifying it.
+
+The recovered work then exposed a separate semantic bug: after identifying VIDAA and
+JioHotstar context, the Work reasoner asked the owner to search the app on the TV and
+report whether the title exposed a Play button. That is not valid human-in-the-loop
+input for this goal. It is execution that JARVIS is supposed to gain the capability to
+perform.
+
+The contract is therefore tightened without adding TV-specific vocabulary:
+
+- owner input is not an execution fallback;
+- generic research Work must not substitute for governed capability acquisition;
+- external-device/service outcomes with missing control route to Phase-9 acquisition;
+- JARVIS may ask for an owner-only decision, credential/pairing input, material target
+  clarification or genuinely unobservable physical-world evidence;
+- JARVIS must not ask the owner to open/click/search/inspect/run/test an operation merely
+  because JARVIS lacks the automation capability.
+
+Persisted WorkItem type remains canonical durable truth. Existing misclassified work is
+not silently mutated into another type during restart; it must be explicitly cancelled
+or superseded before a fresh correctly routed Phase-9 acquisition is accepted.
+
 ## Required invariants
 
 - exactly one JARVIS speech producer owns the physical speaker;

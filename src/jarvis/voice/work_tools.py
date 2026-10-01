@@ -610,9 +610,12 @@ class WorkAgentTools:
         independently of the current voice turn, such as long-running research or an
         isolated JARVIS repository implementation request, and expects to continue talking
         or be told later when it is ready. Use research for web/current-information work
-        and development for repository implementation/testing. The canonical
-        request text comes from JARVIS's latest accepted USER turn; never invent or
-        paraphrase a hidden task prompt.
+        and development for repository implementation/testing. This generic background-work
+        tool is not a fallback for a missing external-device/service capability: when the
+        latest owner outcome requires unavailable control, use `start_capability_acquisition`
+        instead of creating research work or asking the owner to perform the missing operation.
+        The canonical request text comes from JARVIS's latest accepted USER turn; never invent
+        or paraphrase a hidden task prompt.
 
         Currently only work types explicitly reported as supported by JARVIS may start.
         A successful result means the work was durably accepted, not that it completed.

@@ -110,6 +110,20 @@ def test_phase9_voice_instructions_support_outcome_driven_acquisition() -> None:
     assert "ask one concise clarification" in NORMALIZED_INSTRUCTIONS
 
 
+def test_phase9_voice_instructions_never_outsource_missing_automation_to_owner() -> None:
+    assert "Owner input is not an execution fallback" in NORMALIZED_INSTRUCTIONS
+    assert "open, click, search, inspect, run, test" in NORMALIZED_INSTRUCTIONS
+    assert "treat that as a capability gap" in NORMALIZED_INSTRUCTIONS
+    assert "physical-world observation" in NORMALIZED_INSTRUCTIONS
+    assert "genuinely cannot obtain independently" in NORMALIZED_INSTRUCTIONS
+
+
+def test_background_research_is_not_a_capability_acquisition_substitute() -> None:
+    assert "Do not use `start_background_work`" in NORMALIZED_INSTRUCTIONS
+    assert '`work_type="research"` as a substitute' in NORMALIZED_INSTRUCTIONS
+    assert "use governed capability acquisition" in NORMALIZED_INSTRUCTIONS
+
+
 def test_voice_instructions_research_current_media_availability_before_claiming_service() -> (
     None
 ):
@@ -123,6 +137,10 @@ def test_voice_instructions_research_current_media_availability_before_claiming_
         "subscription context, not current catalog availability"
         in NORMALIZED_INSTRUCTIONS
     )
+    assert "After service discovery" in NORMALIZED_INSTRUCTIONS
+    assert "call `start_capability_acquisition`" in NORMALIZED_INSTRUCTIONS
+    assert "inspect a Play button" in NORMALIZED_INSTRUCTIONS
+    assert "substitute for the missing automation" in NORMALIZED_INSTRUCTIONS
 
 
 def test_default_media_target_grounds_short_media_request_without_granting_authority() -> (

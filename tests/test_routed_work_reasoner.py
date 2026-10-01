@@ -38,7 +38,7 @@ from jarvis.work.brain import (
     InteractiveBrainGate,
 )
 from jarvis.work.models import WorkItem, WorkType
-from jarvis.work.reasoner import RoutedWorkReasoner, _WorkDecisionModel
+from jarvis.work.reasoner import RoutedWorkReasoner, _SYSTEM_PROMPT, _WorkDecisionModel
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -67,6 +67,15 @@ def test_work_decision_schema_is_strict_output_compatible() -> None:
         properties = node.get("properties")
         if isinstance(properties, dict):
             assert set(node.get("required", ())) == set(properties)
+
+
+def test_work_reasoner_never_uses_owner_as_execution_fallback() -> None:
+    normalized = " ".join(_SYSTEM_PROMPT.split())
+
+    assert "Owner input is a constitutional boundary, not an execution tool" in normalized
+    assert "open an app, click, search, inspect a UI, run a command" in normalized
+    assert "A missing automation capability remains a capability gap" in normalized
+    assert "owner labor must not be used as a substitute" in normalized
 
 
 class FakeStructuredClient:
