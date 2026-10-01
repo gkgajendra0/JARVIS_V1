@@ -87,9 +87,12 @@ class CapabilityGraphResolver:
             and semantic.semantic_capability_family != requirement.semantic_capability
         ):
             return False
-        if requirement.target_entity_type and semantic.target_entity_types:
-            if requirement.target_entity_type not in semantic.target_entity_types:
-                return False
+        if (
+            requirement.target_entity_type
+            and semantic.target_entity_types
+            and requirement.target_entity_type not in semantic.target_entity_types
+        ):
+            return False
         return True
 
     @classmethod
@@ -159,7 +162,7 @@ class CapabilityGraphResolver:
                 if self._matches(requirement, descriptor, context)
             )
             if candidates:
-                selected = sorted(candidates, key=lambda item: item.key)[0]
+                selected = min(candidates, key=lambda item: item.key)
                 matches.append(
                     CapabilityRequirementMatch(
                         requirement_id=requirement.requirement_id,
