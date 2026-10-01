@@ -27,6 +27,7 @@ from jarvis.goal_intelligence.interpretation import (
     GoalInterpretationShadowRuntime,
     build_goal_interpreter,
 )
+from jarvis.goal_intelligence.runtime import build_gicc_apply_runtime
 from jarvis.goal_intelligence.store import build_default_goal_store
 from jarvis.health_adapters import (
     CapabilityExecutionHealthObserver,
@@ -100,6 +101,7 @@ from jarvis.vision.native_owner_tracking import (
     build_default_native_owner_tracking_observer,
 )
 from jarvis.vision.service import build_default_vision_service
+from jarvis.voice.gicc_tools import GiccAgentTools
 from jarvis.voice.canonical_active_speaker_runtime import (
     CanonicalActiveSpeakerRuntimeController,
 )
@@ -428,6 +430,11 @@ def build_production_voice_runtime(
         len(package_executors),
     )
 
+    acquisition_context = CapabilityRuntimeAcquisitionContextProvider(
+        capability_runtime,
+        projection=None if package_stack is None else package_stack.projection,
+    )
+
     work_runtime = None
     if config.work_orchestration_enabled:
         deployment_metadata = DeploymentMetadataStore(default_deployment_root())
@@ -443,14 +450,7 @@ def build_production_voice_runtime(
             dbos_database_url=config.work_dbos_database_url,
             event_loop=asyncio.get_running_loop(),
             capability_runtime=capability_runtime,
-            acquisition_context_provider=(
-                CapabilityRuntimeAcquisitionContextProvider(
-                    capability_runtime,
-                    projection=(
-                        None if package_stack is None else package_stack.projection
-                    ),
-                )
-            ),
+            acquisition_context_provider=acquisition_context,
             capability_lifecycle_service=(
                 None if package_stack is None else package_stack.lifecycle
             ),
@@ -484,6 +484,25 @@ def build_production_voice_runtime(
             config.work_global_concurrency,
             config.global_brain_router_mode,
             bool(config.development_test_docker_image),
+        )
+
+    gicc_apply_runtime = None
+    if config.gicc_mode is GiccMode.APPLY:
+        if work_runtime is None:
+            raise RuntimeError(
+                "GICC APPLY requires persistent work orchestration to be enabled"
+            )
+        gicc_apply_runtime = build_gicc_apply_runtime(
+            config=config,
+            capability_runtime=capability_runtime,
+            work_runtime=work_runtime,
+            capability_context=acquisition_context,
+        )
+        LOGGER.warning(
+            "GICC APPLY configured for development runtime: "
+            "canonical_goal_writes=True exact_information_binding=True "
+            "phase9_bridge=True direct_phase9_voice_entry=False "
+            "production_activation=False"
         )
 
     gicc_shadow_interpreter = None
@@ -646,6 +665,17 @@ def build_production_voice_runtime(
         research_service=research_service,
         capability_runtime=capability_runtime,
         work_runtime=work_runtime,
+        gicc_tool_factory=(
+            None
+            if gicc_apply_runtime is None
+            else lambda conversation: GiccAgentTools(
+                gicc_apply_runtime.coordinator,
+                conversation,
+                gicc_apply_runtime.store,
+                telemetry=gicc_apply_runtime.telemetry,
+            ).tools
+        ),
+        allow_direct_capability_acquisition=gicc_apply_runtime is None,
         session_factory=production_session_factory,
         local_status_speech=local_status_speech,
         startup_readiness_waiter=(
