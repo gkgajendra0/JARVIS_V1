@@ -862,7 +862,7 @@ class CapabilityRequirementV1:
 class CapabilityRequirementGraphV1:
     graph_id: str
     goal_id: str
-    requirement_ids: tuple[str, ...]
+    requirements: tuple[CapabilityRequirementV1, ...]
     information_need_ids: tuple[str, ...]
     world_state_preconditions: tuple[str, ...]
     completion_predicates: tuple[str, ...]
@@ -874,16 +874,27 @@ class CapabilityRequirementGraphV1:
         cls,
         *,
         goal_id: str,
-        requirement_ids: tuple[str, ...] | list[str],
+        requirements: tuple[CapabilityRequirementV1, ...]
+        | list[CapabilityRequirementV1],
         information_need_ids: tuple[str, ...] | list[str] = (),
         world_state_preconditions: tuple[str, ...] | list[str] = (),
         completion_predicates: tuple[str, ...] | list[str] = (),
         edges: tuple[tuple[str, str], ...] | list[tuple[str, str]] = (),
     ) -> "CapabilityRequirementGraphV1":
         goal = _text(goal_id, field="goal_id").casefold()
-        requirements = _tokens(
-            tuple(requirement_ids), field="requirement_id", normalized=True
+        requirement_values = tuple(requirements)
+        if any(
+            not isinstance(requirement, CapabilityRequirementV1)
+            for requirement in requirement_values
+        ):
+            raise TypeError("requirements must contain CapabilityRequirementV1 values")
+        if any(requirement.goal_id != goal for requirement in requirement_values):
+            raise ValueError("all requirements must belong to the graph goal")
+        requirement_ids = tuple(
+            sorted(requirement.requirement_id for requirement in requirement_values)
         )
+        if len(set(requirement_ids)) != len(requirement_ids):
+            raise ValueError("requirement IDs must be unique")
         normalized_edges = tuple(sorted(tuple(edge) for edge in edges))
         if any(len(edge) != 2 or edge[0] == edge[1] for edge in normalized_edges):
             raise ValueError("requirement graph edges must be two distinct node IDs")
@@ -891,14 +902,14 @@ class CapabilityRequirementGraphV1:
             "requirement_graph",
             {
                 "goal_id": goal,
-                "requirement_ids": list(requirements),
+                "requirement_ids": list(requirement_ids),
                 "edges": [list(edge) for edge in normalized_edges],
             },
         )
         item = cls(
             graph_id=graph_id,
             goal_id=goal,
-            requirement_ids=requirements,
+            requirements=requirement_values,
             information_need_ids=_tokens(
                 tuple(information_need_ids),
                 field="information_need_id",
@@ -915,6 +926,10 @@ class CapabilityRequirementGraphV1:
         )
         item._validate_acyclic()
         return replace(item, digest=canonical_digest(item.canonical_payload()))
+
+    @property
+    def requirement_ids(self) -> tuple[str, ...]:
+        return tuple(sorted(requirement.requirement_id for requirement in self.requirements))
 
     def _validate_acyclic(self) -> None:
         nodes = set(self.requirement_ids) | set(self.information_need_ids)
@@ -946,7 +961,10 @@ class CapabilityRequirementGraphV1:
         return {
             "graph_id": self.graph_id,
             "goal_id": self.goal_id,
-            "requirement_ids": list(self.requirement_ids),
+            "requirements": [
+                requirement.canonical_payload() | {"digest": requirement.digest}
+                for requirement in self.requirements
+            ],
             "information_need_ids": list(self.information_need_ids),
             "world_state_preconditions": list(self.world_state_preconditions),
             "completion_predicates": list(self.completion_predicates),
@@ -964,10 +982,17 @@ class CapabilityRequirementGraphV1:
     def from_payload(
         cls, payload: dict[str, Any], digest: str
     ) -> "CapabilityRequirementGraphV1":
+        requirements = tuple(
+            CapabilityRequirementV1.from_payload(
+                {key: value for key, value in item.items() if key != "digest"},
+                item["digest"],
+            )
+            for item in payload["requirements"]
+        )
         return cls(
             graph_id=payload["graph_id"],
             goal_id=payload["goal_id"],
-            requirement_ids=tuple(payload["requirement_ids"]),
+            requirements=requirements,
             information_need_ids=tuple(payload["information_need_ids"]),
             world_state_preconditions=tuple(payload["world_state_preconditions"]),
             completion_predicates=tuple(payload["completion_predicates"]),
