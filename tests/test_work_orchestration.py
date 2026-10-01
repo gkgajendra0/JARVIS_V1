@@ -25,6 +25,7 @@ from jarvis.work.engine import (
 from jarvis.work.models import (
     DeliveryPolicy,
     WorkDeliveryKind,
+    WorkDeliveryState,
     WorkItem,
     WorkPriority,
     WorkState,
@@ -182,6 +183,84 @@ def create_item(store: SQLiteWorkStore, *, request: str = "Do work") -> WorkItem
     )
     store.create(item)
     return item
+
+
+def test_reconcile_waiting_owner_reopens_legacy_delivered_prompt(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Control the Hisense TV")
+    running = item.transition(WorkState.RUNNING, status_detail="researching TV control")
+    running = store.save(running, expected_version=item.version)
+    waiting = running.transition(
+        WorkState.WAITING_FOR_OWNER,
+        status_detail="Which platform does your Hisense TV use?",
+    )
+    waiting = store.save(waiting, expected_version=running.version)
+    delivery = store.enqueue_delivery(
+        work=waiting,
+        kind=WorkDeliveryKind.OWNER_INPUT,
+        message=waiting.status_detail or "This work needs your input.",
+        event_key=f"owner:{waiting.version}",
+    )
+    assert delivery is not None
+    delivered = store.mark_delivery_delivered(delivery.delivery_id)
+    assert delivered.state is WorkDeliveryState.DELIVERED
+
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(ScriptedReasoner()),
+        actions=WorkActionRegistry(()),
+    )
+
+    reconciled = engine.reconcile_waiting_owner_deliveries()
+
+    assert reconciled == (waiting.work_id,)
+    due = store.list_due_deliveries(limit=10)
+    assert len(due) == 1
+    reopened = due[0]
+    assert reopened.delivery_id == delivery.delivery_id
+    assert reopened.work_id == waiting.work_id
+    assert reopened.kind is WorkDeliveryKind.OWNER_INPUT
+    assert reopened.state is WorkDeliveryState.PENDING
+    assert reopened.delivered_at is None
+    assert (
+        reopened.last_failure_reason
+        == "reconciled_waiting_owner_without_durable_response"
+    )
+
+
+def test_reconcile_waiting_owner_is_idempotent_for_pending_prompt(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Control the Hisense TV")
+    running = item.transition(WorkState.RUNNING, status_detail="researching TV control")
+    running = store.save(running, expected_version=item.version)
+    waiting = running.transition(
+        WorkState.WAITING_FOR_OWNER,
+        status_detail="Which platform does your Hisense TV use?",
+    )
+    waiting = store.save(waiting, expected_version=running.version)
+    delivery = store.enqueue_delivery(
+        work=waiting,
+        kind=WorkDeliveryKind.OWNER_INPUT,
+        message=waiting.status_detail or "This work needs your input.",
+        event_key=f"owner:{waiting.version}",
+    )
+    assert delivery is not None
+
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(ScriptedReasoner()),
+        actions=WorkActionRegistry(()),
+    )
+
+    assert engine.reconcile_waiting_owner_deliveries() == ()
+    assert engine.reconcile_waiting_owner_deliveries() == ()
+    pending = store.list_pending_deliveries(limit=10)
+    assert len(pending) == 1
+    assert pending[0].delivery_id == delivery.delivery_id
 
 
 def test_public_work_status_preserves_canonical_owner_request(tmp_path: Path) -> None:
