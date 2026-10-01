@@ -37,6 +37,16 @@ from .evaluation import ReplanController
 from .execution import GoalPlanDispatcher, PlanDispatchDisposition
 from .information import InformationResolver
 from .interpretation import GoalInterpreter, build_goal_interpreter
+from .monitoring import (
+    DEFAULT_MONITOR_OBSERVATION_BUS,
+    GICC_MONITOR_EVENT_CONTRACT,
+    GoalMonitoringDispatcher,
+    MonitorEventProcessor,
+    MonitoringStrategy,
+    MonitoringWorkCoordinator,
+    MonitorObservationBus,
+    VerifiedMonitorObservationV1,
+)
 from .models import (
     ContinuationBlockerType,
     GoalState,
@@ -156,8 +166,16 @@ class GiccApplyRuntime:
     capability_runtime: CapabilityRuntime
     replan_controller: ReplanController | None = None
     change_store: ChangeStore | None = None
+    monitor_processor: MonitorEventProcessor | None = None
+    monitor_bus: MonitorObservationBus | None = None
     reconcile_interval_seconds: float = 1.0
     _task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
+    _monitor_subscription_id: str | None = field(default=None, init=False, repr=False)
+    _event_loop: asyncio.AbstractEventLoop | None = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
     _advance_lock: asyncio.Lock = field(
         default_factory=asyncio.Lock,
         init=False,
@@ -167,18 +185,95 @@ class GiccApplyRuntime:
     def start(self) -> None:
         if self._task is not None and not self._task.done():
             return
+        self._event_loop = asyncio.get_running_loop()
+        if self.monitor_bus is not None and self._monitor_subscription_id is None:
+            self._monitor_subscription_id = self.monitor_bus.subscribe(
+                self._receive_monitor_observation
+            )
         self._task = asyncio.create_task(
             self._reconcile_loop(),
             name="jarvis-gicc-runtime-reconciler",
         )
 
     async def close(self) -> None:
+        subscription_id = self._monitor_subscription_id
+        self._monitor_subscription_id = None
+        if self.monitor_bus is not None and subscription_id is not None:
+            self.monitor_bus.unsubscribe(subscription_id)
+        self._event_loop = None
+
         task = self._task
         self._task = None
         if task is None:
             return
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+
+    def _receive_monitor_observation(
+        self,
+        observation: VerifiedMonitorObservationV1,
+    ) -> None:
+        loop = self._event_loop
+        if loop is None or loop.is_closed():
+            return
+        loop.call_soon_threadsafe(
+            lambda: asyncio.create_task(
+                self._process_monitor_observation(observation),
+                name=f"jarvis-gicc-monitor-{observation.predicate_id}",
+            )
+        )
+
+    async def _process_monitor_observation(
+        self,
+        observation: VerifiedMonitorObservationV1,
+    ) -> None:
+        processor = self.monitor_processor
+        if processor is None:
+            return
+        predicate = self.store.get_monitor_predicate(observation.predicate_id)
+        if predicate is None:
+            return
+        runtime_state = self.store.get_monitor_runtime_state(predicate.predicate_id)
+        if runtime_state is None:
+            return
+
+        descriptor = self.capability_runtime.catalog.by_key(
+            observation.source_capability_key
+        )
+        if descriptor is None or not descriptor.execution_enabled:
+            return
+        semantic = descriptor.semantic_metadata()
+        if (
+            semantic.semantic_capability_family
+            not in set(predicate.observation_capabilities)
+            or observation.source_operation not in semantic.observation_operations
+            or descriptor.metadata().get("monitor_event_contract")
+            != GICC_MONITOR_EVENT_CONTRACT
+        ):
+            LOGGER.warning(
+                "Rejected unbound GICC monitor observation | predicate_id=%s "
+                "capability=%s operation=%s",
+                predicate.predicate_id,
+                observation.source_capability_key,
+                observation.source_operation,
+            )
+            return
+
+        goal = self.store.get_goal(predicate.goal_id)
+        if goal is None or self._terminal_goal_state(goal.state):
+            return
+        await asyncio.to_thread(
+            processor.process,
+            predicate=predicate,
+            observation_digest=observation.observation_digest,
+            condition_met=observation.condition_met,
+            observed_at_epoch=observation.observed_at_epoch,
+            notification_message=(
+                "Monitoring condition verified: "
+                f"{goal.exact_owner_request}"
+            ),
+            evidence_refs=observation.evidence_refs,
+        )
 
     @staticmethod
     def _terminal_goal_state(state: GoalState) -> bool:
@@ -682,12 +777,26 @@ def build_gicc_apply_runtime(
         planner=planner,
         telemetry=telemetry,
     )
+    monitor_coordinator = MonitoringWorkCoordinator(
+        goal_store=store,
+        work_starter=work_runtime.orchestrator,
+    )
+    monitor_dispatcher = GoalMonitoringDispatcher(
+        coordinator=monitor_coordinator,
+        available_strategies=(MonitoringStrategy.NATIVE_EVENT,),
+    )
+    monitor_processor = MonitorEventProcessor(
+        goal_store=store,
+        work_store=work_runtime.store,
+        telemetry=telemetry,
+    )
     orchestrator = GoalOrchestrator(
         goal_store=store,
         capability_runtime=capability_runtime,
         specialist_action_dispatcher=HandsPlanActionDispatcher(capability_runtime),
         information_resolver=information_resolver,
         phase9_bridge=phase9_bridge,
+        monitor_dispatcher=monitor_dispatcher,
         telemetry=telemetry,
     )
     dispatcher = GoalPlanDispatcher(
@@ -705,5 +814,7 @@ def build_gicc_apply_runtime(
             planner=planner,
         ),
         change_store=work_runtime.changes.store,
+        monitor_processor=monitor_processor,
+        monitor_bus=DEFAULT_MONITOR_OBSERVATION_BUS,
         capability_runtime=capability_runtime,
     )
