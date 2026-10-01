@@ -69,9 +69,7 @@ def test_continuation_restores_exact_blocker_after_restart(tmp_path: Path) -> No
         created_at="2026-10-01T17:02:00+00:00",
     )
 
-    restored = ContinuationCoordinator(store).restore(
-        continuation.continuation_id
-    )
+    restored = ContinuationCoordinator(store).restore(continuation.continuation_id)
 
     assert restored == continuation
     assert restored.state is ContinuationState.BLOCKED
