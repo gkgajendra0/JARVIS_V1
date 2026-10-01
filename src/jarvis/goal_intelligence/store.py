@@ -1599,6 +1599,25 @@ class GoalStore:
             return None
         return PlanGraphV1.from_payload(self._decode(row["payload"]), row["digest"])
 
+    def latest_plan_for_goal(self, goal_id: str) -> PlanGraphV1 | None:
+        key = str(goal_id).strip()
+        if not key:
+            raise ValueError("goal_id must not be empty")
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM plan_graphs_v1
+                WHERE goal_id=?
+                ORDER BY goal_revision DESC, plan_revision DESC, updated_at DESC
+                LIMIT 1
+                """,
+                (key,),
+            ).fetchone()
+        if row is None:
+            return None
+        return PlanGraphV1.from_payload(self._decode(row["payload"]), row["digest"])
+
     def update_plan_execution(
         self,
         plan: PlanGraphV1,
