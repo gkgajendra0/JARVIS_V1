@@ -322,7 +322,7 @@ def test_realtime_session_explicitly_disables_default_livekit_vad(
 
     assert "vad" in captured
     assert captured["vad"] is None
-    assert captured["turn_handling"].turn_detection is None
+    assert captured["turn_handling"]["turn_detection"] is None
 
 
 def test_gemini_api_key_is_required_only_for_gemini(
