@@ -9,6 +9,8 @@ from jarvis.goal_intelligence.composition import (
 )
 from jarvis.goal_intelligence.execution import GoalPlanDispatcher
 from jarvis.goal_intelligence.models import (
+    ContinuationBlockerType,
+    GoalContinuationV1,
     GoalKind,
     GoalState,
     OwnerGoalV2,
@@ -21,6 +23,7 @@ from jarvis.goal_intelligence.runtime import GiccApplyRuntime
 from jarvis.goal_intelligence.service import GoalOrchestrator
 from jarvis.goal_intelligence.store import GoalStore
 from jarvis.goal_intelligence.telemetry import CapturingGiccTelemetry
+from jarvis.work.models import WorkItem, WorkState, WorkType
 from jarvis.work.privacy import ProtectedWorkPayloadCodec
 from jarvis.work.store import SQLiteWorkStore
 
@@ -202,6 +205,27 @@ async def test_background_capability_continuation_uses_same_dispatcher(
     capability_runtime = FakeCapabilityRuntime()
     coordinator = CapabilityContinuationCoordinator(store)
     runtime = _runtime(store, coordinator, capability_runtime)
+    anchor = store.work.create(
+        WorkItem(
+            request="Acquire TV control capability.",
+            work_type=WorkType.RESEARCH,
+            source_session_id="phase9-session",
+            source_turn_id="phase9-turn",
+            state=WorkState.COMPLETED,
+        )
+    )
+    store.put_continuation(
+        GoalContinuationV1.create(
+            goal_id=goal.goal_id,
+            plan_id="phase9-acquisition-plan",
+            blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+            blocked_by_id="gap-tv-control",
+            resume_node_id="resume-tv-control",
+            work_ids=(anchor.work_id,),
+            goal_revision=goal.goal_revision,
+            created_at="2026-10-01T18:12:00+00:00",
+        )
+    )
 
     advanced = await runtime.reconcile_once()
 
@@ -215,3 +239,11 @@ async def test_background_capability_continuation_uses_same_dispatcher(
     assert latest_plan is not None
     assert latest_plan.state is PlanState.SUCCEEDED
     assert len(capability_runtime.requests) == 1
+    deliveries = store.work.list_pending_deliveries(limit=10)
+    goal_deliveries = [
+        item
+        for item in deliveries
+        if item.event_key == f"gicc-goal:{goal.goal_id}:completed"
+    ]
+    assert len(goal_deliveries) == 1
+    assert "Open Calculator." in goal_deliveries[0].message
