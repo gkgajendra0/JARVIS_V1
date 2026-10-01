@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from jarvis.authority.types import ActionOrigin
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.goal_intelligence.models import (
@@ -87,7 +89,8 @@ def _plan(goal: OwnerGoalV2) -> PlanGraphV1:
     )
 
 
-def test_action_dispatch_preserves_authority_boundary(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_action_dispatch_preserves_authority_boundary(tmp_path: Path) -> None:
     store = _store(tmp_path)
     goal = _goal(store)
     plan = _plan(goal)
@@ -97,7 +100,7 @@ def test_action_dispatch_preserves_authority_boundary(tmp_path: Path) -> None:
         capability_runtime=runtime,
     )
 
-    result = orchestrator.dispatch_node(
+    result = await orchestrator.dispatch_node(
         goal=goal,
         plan=plan,
         node=plan.nodes[0],
@@ -111,7 +114,8 @@ def test_action_dispatch_preserves_authority_boundary(tmp_path: Path) -> None:
     assert request.parameters == {"app": "calculator"}
 
 
-def test_verification_false_is_not_reported_as_success(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_verification_false_is_not_reported_as_success(tmp_path: Path) -> None:
     store = _store(tmp_path)
     goal = _goal(store)
     plan = _plan(goal)
@@ -130,7 +134,7 @@ def test_verification_false_is_not_reported_as_success(tmp_path: Path) -> None:
         verification_registry=registry,
     )
 
-    result = orchestrator.dispatch_node(
+    result = await orchestrator.dispatch_node(
         goal=goal,
         plan=plan,
         node=plan.nodes[1],
@@ -158,7 +162,8 @@ def test_ready_nodes_only_advance_after_dependencies_succeed(tmp_path: Path) -> 
     assert tuple(node.node_id for node in second) == (verify.node_id,)
 
 
-def test_acquisition_node_blocks_without_phase9_bridge(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_acquisition_node_blocks_without_phase9_bridge(tmp_path: Path) -> None:
     store = _store(tmp_path)
     goal = _goal(store)
     acquire = PlanNodeV1.create(
@@ -181,7 +186,7 @@ def test_acquisition_node_blocks_without_phase9_bridge(tmp_path: Path) -> None:
         capability_runtime=FakeCapabilityRuntime(),
     )
 
-    result = orchestrator.dispatch_node(
+    result = await orchestrator.dispatch_node(
         goal=goal,
         plan=plan,
         node=acquire,
