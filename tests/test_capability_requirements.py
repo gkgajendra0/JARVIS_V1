@@ -148,15 +148,19 @@ def test_required_parameters_json_decodes_to_canonical_object() -> None:
     proposal = CapabilityRequirementProposal(
         semantic_capability="media_player.control",
         operation="play",
-        required_parameters_json=' { "query": "Interstellar", "retry": 1 } ',
+        required_parameters_json=(
+            ' { "query": {"type": "string"}, "retry": {"type": "integer"} } '
+        ),
         expected_postconditions=["playback started"],
         reason="Play selected media.",
     )
 
-    assert proposal.required_parameters_json == '{"query":"Interstellar","retry":1}'
+    assert proposal.required_parameters_json == (
+        '{"query":{"type":"string"},"retry":{"type":"integer"}}'
+    )
     assert proposal.required_parameters_schema == {
-        "query": "Interstellar",
-        "retry": 1,
+        "query": {"type": "string"},
+        "retry": {"type": "integer"},
     }
 
     with pytest.raises(ValueError, match="JSON object"):
