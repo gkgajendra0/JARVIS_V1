@@ -1014,7 +1014,6 @@ class SQLiteWorkStore:
             rows = connection.execute(query, parameters).fetchall()
         return tuple(self._item_from_row(row) for row in rows)
 
-
     def list_recent(
         self,
         *,
