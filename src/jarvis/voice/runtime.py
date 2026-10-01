@@ -303,7 +303,7 @@ class VoiceRuntimeController:
                 agent=JarvisVoiceAgent(
                     tools=[],
                     default_media_target=self.config.default_media_target,
-                        gicc_apply=self.config.gicc_mode is GiccMode.APPLY,
+                    gicc_apply=self.config.gicc_mode is GiccMode.APPLY,
                 )
             )
             handle = session.generate_reply(
