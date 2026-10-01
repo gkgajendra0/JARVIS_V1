@@ -299,3 +299,75 @@ def test_goal_store_restart_reopens_protected_canonical_state(tmp_path: Path) ->
     assert reopened.get_goal(goal.goal_id) == goal
     assert reopened.get_information_need(need.information_need_id) == resolved
     assert goal.exact_owner_request.encode("utf-8") not in _raw_storage(path)
+
+def test_resource_binding_refreshes_same_identity_across_restart(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "binding-restart.sqlite3"
+    first = GoalStore(SQLiteWorkStore(path, payload_codec=_protected_codec(path)))
+    entity = first.put_entity(
+        WorldEntityRefV1.create(
+            entity_type="computer",
+            canonical_name="Current Computer",
+        )
+    )
+    initial = first.put_resource_binding(
+        ResourceBindingV1.create(
+            entity_id=entity.entity_id,
+            provider_id="capability_runtime",
+            provider_resource_id="local_machine",
+            capability_keys=("app:lifecycle",),
+            evidence_refs=("capability_runtime:catalog",),
+            last_verified_at="2026-10-01T10:00:00+00:00",
+        )
+    )
+
+    reopened = GoalStore(SQLiteWorkStore(path, payload_codec=_protected_codec(path)))
+    refreshed = reopened.put_resource_binding(
+        ResourceBindingV1.create(
+            entity_id=entity.entity_id,
+            provider_id="capability_runtime",
+            provider_resource_id="local_machine",
+            capability_keys=("app:lifecycle", "browser:web"),
+            evidence_refs=("capability_runtime:catalog",),
+            last_verified_at="2026-10-01T10:01:00+00:00",
+        )
+    )
+
+    assert refreshed.binding_id == initial.binding_id
+    assert refreshed.binding_revision == initial.binding_revision + 1
+    assert refreshed.capability_keys == ("app:lifecycle", "browser:web")
+    assert refreshed.last_verified_at == "2026-10-01T10:01:00+00:00"
+    assert reopened.get_resource_binding(initial.binding_id) == refreshed
+
+
+def test_resource_binding_rejects_stale_refresh(goal_store: GoalStore) -> None:
+    entity = goal_store.put_entity(
+        WorldEntityRefV1.create(
+            entity_type="computer",
+            canonical_name="Current Computer",
+        )
+    )
+    current = goal_store.put_resource_binding(
+        ResourceBindingV1.create(
+            entity_id=entity.entity_id,
+            provider_id="capability_runtime",
+            provider_resource_id="local_machine",
+            capability_keys=("app:lifecycle",),
+            last_verified_at="2026-10-01T10:02:00+00:00",
+        )
+    )
+
+    with pytest.raises(GoalStoreConflict, match="older than canonical"):
+        goal_store.put_resource_binding(
+            ResourceBindingV1.create(
+                entity_id=entity.entity_id,
+                provider_id="capability_runtime",
+                provider_resource_id="local_machine",
+                capability_keys=("app:lifecycle", "browser:web"),
+                last_verified_at="2026-10-01T10:01:00+00:00",
+            )
+        )
+
+    assert goal_store.get_resource_binding(current.binding_id) == current
+
