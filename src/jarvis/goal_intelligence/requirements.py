@@ -116,9 +116,7 @@ Permanent rules:
 
 def _identifier_terms(value: str) -> set[str]:
     return {
-        token
-        for token in re.split(r"[._:-]+", str(value).strip().casefold())
-        if token
+        token for token in re.split(r"[._:-]+", str(value).strip().casefold()) if token
     }
 
 
@@ -172,8 +170,7 @@ class RequirementValidator:
                     "requirement target entity is not bound to canonical world state"
                 )
             if not (
-                proposal.expected_postconditions
-                or proposal.observation_requirements
+                proposal.expected_postconditions or proposal.observation_requirements
             ):
                 raise RequirementDerivationError(
                     "requirement lacks completion/observation evidence"
@@ -187,12 +184,8 @@ class RequirementValidator:
                     target_entity_type=proposal.target_entity_type,
                     required_parameters_schema=proposal.required_parameters_schema,
                     preconditions=tuple(proposal.preconditions),
-                    expected_postconditions=tuple(
-                        proposal.expected_postconditions
-                    ),
-                    observation_requirements=tuple(
-                        proposal.observation_requirements
-                    ),
+                    expected_postconditions=tuple(proposal.expected_postconditions),
+                    observation_requirements=tuple(proposal.observation_requirements),
                     reason=proposal.reason,
                 )
             )
