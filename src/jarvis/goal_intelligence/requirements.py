@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 
@@ -31,12 +32,41 @@ class CapabilityRequirementProposal(BaseModel):
     operation: str = Field(min_length=1, max_length=120)
     target_entity_id: str | None = Field(default=None, max_length=180)
     target_entity_type: str | None = Field(default=None, max_length=80)
-    required_parameters_schema: dict[str, object] = Field(default_factory=dict)
+    required_parameters_json: str = Field(default="{}", min_length=2, max_length=16_000)
     preconditions: list[str] = Field(default_factory=list, max_length=16)
     expected_postconditions: list[str] = Field(default_factory=list, max_length=16)
     observation_requirements: list[str] = Field(default_factory=list, max_length=16)
     reason: str = Field(min_length=1, max_length=480)
     depends_on_indexes: list[int] = Field(default_factory=list, max_length=20)
+
+    @field_validator("required_parameters_json")
+    @classmethod
+    def _parameters_json(cls, value: str) -> str:
+        raw = str(value).strip()
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("required_parameters_json must be valid JSON") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError("required_parameters_json must encode a JSON object")
+        encoded = json.dumps(
+            parsed,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        if len(encoded) > 16_000:
+            raise ValueError("required_parameters_json exceeds bounded size")
+        return encoded
+
+    @property
+    def required_parameters_schema(self) -> dict[str, object]:
+        parsed = json.loads(self.required_parameters_json)
+        if not isinstance(parsed, dict):
+            raise RequirementDerivationError(
+                "required parameter contract is not a JSON object"
+            )
+        return parsed
 
     @field_validator("semantic_capability")
     @classmethod
@@ -109,6 +139,8 @@ Permanent rules:
   into capability family or operation identifiers;
 - target_entity_id may only use an ID supplied by JARVIS;
 - every consequential requirement must include a postcondition or observation requirement;
+- required_parameters_json must be a compact JSON object string describing only
+  task parameters required by the generic operation; use "{}" when none are needed;
 - do not grant permission and do not claim execution succeeded;
 - keep acquisition requirements to the minimum operations needed by the current goal.
 """.strip()
