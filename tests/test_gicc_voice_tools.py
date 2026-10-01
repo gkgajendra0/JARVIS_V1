@@ -11,13 +11,22 @@ from tests.test_gicc_composition import (
 
 from jarvis.conversation import ConversationRole
 from jarvis.goal_intelligence.capability_graph import CapabilityGraphResolver
-from jarvis.goal_intelligence.composition import GoalIntelligenceCoordinator
+from jarvis.goal_intelligence.composition import (
+    GoalIntakeDisposition,
+    GoalIntakeResult,
+    GoalIntelligenceCoordinator,
+)
 from jarvis.goal_intelligence.interpretation import (
     GoalInterpreter,
     ShadowEntityCandidate,
     ShadowGoalInterpretationOutput,
 )
-from jarvis.goal_intelligence.models import GoalKind, WorldEntityRefV1
+from jarvis.goal_intelligence.models import (
+    GoalKind,
+    GoalState,
+    OwnerGoalV2,
+    WorldEntityRefV1,
+)
 from jarvis.goal_intelligence.requirements import (
     CapabilityRequirementProposal,
     CapabilityRequirementProposalSet,
@@ -192,6 +201,59 @@ class FailingGoalCoordinator(GoalIntelligenceCoordinator):
     async def pursue(self, *, conversation, turn):
         del conversation, turn
         raise RuntimeError("synthetic internal requirement failure")
+
+
+class CompletedExecutionRuntime:
+    def __init__(self, result: GoalIntakeResult) -> None:
+        self.result = result
+        self.pursue_calls = 0
+
+    async def pursue(self, *, conversation, turn):
+        del conversation, turn
+        self.pursue_calls += 1
+        return self.result
+
+    async def continue_goal(self, goal_id: str):
+        del goal_id
+        return self.result
+
+
+@pytest.mark.asyncio
+async def test_gicc_voice_reports_only_verified_durable_completion(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    conversation, turn = _conversation("Open Calculator.")
+    goal = store.create_goal(
+        OwnerGoalV2.create(
+            source_session_id=conversation.session_id,
+            source_turn_id=turn.turn_id,
+            exact_owner_request=turn.text,
+            goal_kind=GoalKind.ONE_SHOT,
+            desired_outcome="Calculator is open.",
+            completion_predicates=("app_open",),
+            state=GoalState.COMPLETED,
+            created_at="2026-10-01T18:00:00+00:00",
+        )
+    )
+    result = GoalIntakeResult(
+        disposition=GoalIntakeDisposition.PLAN_READY,
+        goal=goal,
+    )
+    execution = CompletedExecutionRuntime(result)
+    tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        conversation,
+        store,
+        execution_runtime=execution,
+    )
+
+    payload = await tools.pursue_owner_goal(None)
+
+    assert execution.pursue_calls == 1
+    assert payload["status"] == "completed"
+    assert payload["verified_completion"] is True
+    assert "may acknowledge" in str(payload["truth_note"])
 
 
 @pytest.mark.asyncio
