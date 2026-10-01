@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 import rfc8785
 
-from jarvis.work.models import WorkItem
+from jarvis.work.models import WorkItem, WorkState
 from jarvis.work.store import SQLiteWorkStore
 
 from .models import (
@@ -430,6 +430,119 @@ class ChangeStore:
             )
             for row in rows
         )
+
+    def reopen_failed_stage_for_retry(
+        self,
+        work_id: str,
+    ) -> EngineeringChange | None:
+        """Reopen only the exact failed change stage being explicitly retried.
+
+        FAILED remains terminal for ordinary lifecycle transitions. This narrow
+        recovery path is available only when the linked canonical WorkItem is also
+        FAILED and the same stage can still be admitted under its preserved evidence.
+        """
+
+        normalized_work_id = str(work_id).strip()
+        if not normalized_work_id:
+            raise ValueError("work_id must not be empty")
+
+        with self.work._lock, self.work._connect() as db:
+            stage_row = db.execute(
+                "SELECT * FROM engineering_change_stages WHERE work_id=?",
+                (normalized_work_id,),
+            ).fetchone()
+            if stage_row is None:
+                return None
+
+            change_row = db.execute(
+                "SELECT * FROM engineering_changes WHERE change_id=?",
+                (stage_row["change_id"],),
+            ).fetchone()
+            if change_row is None:
+                raise ChangeConflict("retry stage has no EngineeringChange")
+            change = self._from_row(change_row)
+
+            work_row = db.execute(
+                "SELECT * FROM work_items WHERE work_id=?",
+                (normalized_work_id,),
+            ).fetchone()
+            if work_row is None:
+                raise ChangeConflict("retry stage has no canonical WorkItem")
+            work = self.work._item_from_row(work_row)
+            if work.state is not WorkState.FAILED:
+                raise ChangeConflict("change retry requires a failed stage WorkItem")
+
+            process = self.process_contract(
+                change.process_key,
+                change.process_version,
+            )
+            stage_contract = process.stage_for_key(stage_row["stage_key"])
+
+            if stage_contract.role is ProcessStageRole.ARCHITECTURE_SOURCE:
+                target_state = ChangeState.RESEARCHING
+            elif stage_contract.role is ProcessStageRole.DEVELOPMENT:
+                latest_architecture = db.execute(
+                    """SELECT artifact_id
+                    FROM engineering_change_artifacts
+                    WHERE change_id=? AND kind='architecture'
+                    ORDER BY revision DESC LIMIT 1""",
+                    (change.change_id,),
+                ).fetchone()
+                if (
+                    latest_architecture is None
+                    or stage_row["plan_artifact_id"]
+                    != latest_architecture["artifact_id"]
+                ):
+                    raise ChangeConflict(
+                        "failed development retry belongs to an older architecture"
+                    )
+                target_state = ChangeState.DEVELOPING
+            else:  # pragma: no cover - process validation owns known roles
+                raise ChangeConflict("unregistered change stage role")
+
+            if change.state is target_state:
+                return None
+            if change.state is not ChangeState.FAILED:
+                raise ChangeConflict(
+                    "only the failed governing EngineeringChange may be reopened"
+                )
+
+            timestamp = _now()
+            cursor = db.execute(
+                """UPDATE engineering_changes
+                SET state=?, version=version+1, updated_at=?
+                WHERE change_id=? AND version=? AND state=?""",
+                (
+                    target_state.value,
+                    timestamp,
+                    change.change_id,
+                    change.version,
+                    ChangeState.FAILED.value,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ChangeConflict("stale failed-change retry recovery")
+
+            self._event(
+                db,
+                change.change_id,
+                f"stage-retry:{normalized_work_id}:v{work.version}",
+                "failed_stage_reopened",
+                {
+                    "work_id": normalized_work_id,
+                    "stage_key": stage_row["stage_key"],
+                    "attempt": stage_row["attempt"],
+                    "from": ChangeState.FAILED.value,
+                    "to": target_state.value,
+                    "work_version": work.version,
+                },
+            )
+            reopened_row = db.execute(
+                "SELECT * FROM engineering_changes WHERE change_id=?",
+                (change.change_id,),
+            ).fetchone()
+            assert reopened_row is not None
+            return self._from_row(reopened_row)
 
     def stage_for_work(self, work_id: str) -> ChangeStage | None:
         with self.work._lock, self.work._connect() as db:
