@@ -331,10 +331,13 @@ class GoalStore:
         if not key:
             raise ValueError("goal_id must not be empty")
         with self.work.extension_transaction() as db:
-            if db.execute(
-                "SELECT 1 FROM owner_goals_v2 WHERE goal_id=?",
-                (key,),
-            ).fetchone() is None:
+            if (
+                db.execute(
+                    "SELECT 1 FROM owner_goals_v2 WHERE goal_id=?",
+                    (key,),
+                ).fetchone()
+                is None
+            ):
                 raise GoalStoreError(f"unknown goal_id: {key}")
             row = db.execute(
                 """
@@ -358,7 +361,10 @@ class GoalStore:
                     ),
                     reasoning_evidence_refs=tuple(payload["reasoning_evidence_refs"]),
                 )
-                if existing.digest != row["digest"] or existing.digest != candidate.digest:
+                if (
+                    existing.digest != row["digest"]
+                    or existing.digest != candidate.digest
+                ):
                     raise GoalStoreConflict(
                         "goal interpretation evidence already differs"
                     )
@@ -400,9 +406,7 @@ class GoalStore:
             candidate_completion_predicates=tuple(
                 payload["candidate_completion_predicates"]
             ),
-            candidate_information_needs=tuple(
-                payload["candidate_information_needs"]
-            ),
+            candidate_information_needs=tuple(payload["candidate_information_needs"]),
             reasoning_evidence_refs=tuple(payload["reasoning_evidence_refs"]),
         )
         if candidate.digest != row["digest"]:
@@ -460,9 +464,7 @@ class GoalStore:
                 row["digest"],
             )
             if current.goal_revision != expected_revision:
-                raise GoalStoreConflict(
-                    "goal revision changed before entity update"
-                )
+                raise GoalStoreConflict("goal revision changed before entity update")
             entity_ids = tuple(
                 sorted(
                     {
@@ -476,9 +478,7 @@ class GoalStore:
                 )
             )
             timestamp = (
-                current.updated_at
-                if updated_at is None
-                else str(updated_at).strip()
+                current.updated_at if updated_at is None else str(updated_at).strip()
             )
             candidate = replace(
                 current,
