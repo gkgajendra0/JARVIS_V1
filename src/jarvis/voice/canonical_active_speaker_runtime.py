@@ -659,7 +659,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             if self._work_runtime is not None:
                 self._work_runtime.set_interactive_brain_active(False)
             if self._work_runtime is not None:
-                self._work_runtime.close()
+                await self._work_runtime.aclose()
             if capability_runtime is not None:
                 capability_runtime.close()
             if self._research_service is not None:
