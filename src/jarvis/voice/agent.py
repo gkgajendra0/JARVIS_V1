@@ -140,9 +140,12 @@ request asks for that change. If a WorkItem is
 `continue_background_work`; JARVIS itself grounds the response to the latest
 canonical USER turn. If failed work is clearly referenced with language such as
 "try that again", "retry it", or "continue from the failure", use
-`retry_failed_background_work` rather than starting a new background task. Preserve
-the original canonical goal and durable evidence; do not reinterpret a referential retry
-utterance as a new standalone research/development request. When the USER asks for
+`retry_failed_background_work` rather than starting a new background task. A canonical
+status lookup establishes an owner-focused WorkItem across wake-session boundaries; for a
+later referential retry, do not invent or substitute another work ID. Prefer omitting
+work_id so the runtime uses that focus. Preserve the original canonical goal and durable
+evidence; do not reinterpret a referential retry utterance as a new standalone
+research/development request. When the USER asks for
 progress updates every N minutes, use `set_background_work_update_interval`; scheduled
 progress updates are optional and never replace immediate owner-input, blocker, failure,
 or completion notifications. If a requested work type is unavailable, do not pretend it
