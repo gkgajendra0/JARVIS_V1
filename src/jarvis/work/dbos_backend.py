@@ -17,8 +17,10 @@ from jarvis.work.store import default_work_state_dir
 _QUEUE_NAME = "jarvis-work"
 _OWNER_TOPIC = "owner-input"
 _CONTROL_TOPIC = "work-control"
+_SHUTDOWN_WAKE_COMMAND = "__jarvis_shutdown_wake__"
 _EVENT_STATE = "jarvis-work-state"
 _MAX_REASONING_CYCLES = 200
+_SHUTDOWN_SLEEP_CHUNK_SECONDS = 1.0
 _WAITING_STATES = frozenset(
     {
         WorkState.WAITING_RESOURCE,
@@ -120,6 +122,37 @@ def _waiting_resource_delay(payload: dict[str, Any]) -> float:
     return min(delay, 60.0)
 
 
+def _durable_interruptible_sleep(seconds: float, *, patch_name: str) -> None:
+    """Preserve durable delay while adding <=1s cancellation checkpoints.
+
+    DBOS.patch keeps existing workflow histories deterministic: an execution
+    replaying an older single-sleep checkpoint consumes that old sleep once.
+    As soon as it reaches new history, waits are split into short durable chunks
+    so shutdown cancellation cannot be stranded inside time.sleep(60).
+    """
+
+    delay = max(0.0, float(seconds))
+    if delay <= 0:
+        return
+    if not DBOS.patch(patch_name):
+        DBOS.sleep(delay)
+        return
+
+    remaining = delay
+    while remaining > 0:
+        chunk = min(_SHUTDOWN_SLEEP_CHUNK_SECONDS, remaining)
+        DBOS.sleep(chunk)
+        remaining = max(0.0, remaining - chunk)
+
+
+def _paused_control_timeout() -> float:
+    """Use short control waits for new history, preserving old replay exactly."""
+
+    if DBOS.patch("bounded-paused-control-recv-v1"):
+        return _SHUTDOWN_SLEEP_CHUNK_SECONDS
+    return 3600.0
+
+
 async def _advance_on_jarvis_loop(
     work_id: str,
     completion: threading.Event,
@@ -216,7 +249,10 @@ def durable_workflow(
                 _apply_owner_input(work_id, str(owner_input))
 
         elif state is WorkState.WAITING_RESOURCE:
-            DBOS.sleep(_waiting_resource_delay(payload))
+            _durable_interruptible_sleep(
+                _waiting_resource_delay(payload),
+                patch_name="bounded-waiting-resource-sleep-v1",
+            )
 
         elif state in {
             WorkState.WAITING_DEPENDENCY,
@@ -229,7 +265,7 @@ def durable_workflow(
             while True:
                 command = DBOS.recv(
                     topic=_CONTROL_TOPIC,
-                    timeout_seconds=3600,
+                    timeout_seconds=_paused_control_timeout(),
                 )
                 if command == "resume":
                     break
@@ -277,19 +313,23 @@ class DBOSWorkExecutionBackend:
         with _ACTIVE_ADVANCE_LOCK:
             _ADVANCE_QUIESCING = True
 
-    async def quiesce_active_advances(self, *, timeout_seconds: float = 5.0) -> int:
-        """Cancel and await canonical asyncio work before DBOS database teardown."""
+    async def quiesce_active_advances(
+        self,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> int:
+        """Await active atomic engine advances without cancelling side effects."""
 
-        if timeout_seconds <= 0:
+        if timeout_seconds is not None and timeout_seconds <= 0:
             raise ValueError("advance quiesce timeout must be positive")
 
         with _ACTIVE_ADVANCE_LOCK:
             active = tuple(_ACTIVE_ADVANCES.items())
 
-        for future, _completion in active:
-            future.cancel()
-
-        deadline = asyncio.get_running_loop().time() + timeout_seconds
+        loop = asyncio.get_running_loop()
+        deadline = (
+            None if timeout_seconds is None else loop.time() + timeout_seconds
+        )
         while True:
             incomplete = [
                 completion
@@ -298,12 +338,14 @@ class DBOSWorkExecutionBackend:
             ]
             if not incomplete:
                 return len(active)
-            if asyncio.get_running_loop().time() >= deadline:
+            if deadline is not None and loop.time() >= deadline:
                 raise RuntimeError(
                     "active JARVIS work did not quiesce before DBOS shutdown"
                 )
-            # The completion barriers are set by coroutines on this same event loop.
-            # Yield here instead of blocking on threading.Event.wait().
+            # Existing provider reasoning is preempted separately by
+            # InteractiveBrainGate. Actions already admitted are atomic from the
+            # durable-work perspective and must finish rather than be cancelled
+            # after an external side effect may already have occurred.
             await asyncio.sleep(0.01)
 
     def _require_accepting_work(self) -> None:
@@ -367,6 +409,18 @@ class DBOSWorkExecutionBackend:
         if not normalized:
             return ()
         _run_dbos_sync(DBOS.cancel_workflows, list(normalized))
+        # Legacy workflows may already be blocked in a 3600-second DBOS.recv()
+        # recorded before bounded control waits existed. A harmless control
+        # message wakes that exact recv so cancellation is observed at the next
+        # durable boundary. Unknown commands never mutate canonical WorkItem state.
+        for execution_id in normalized:
+            _run_dbos_sync(
+                DBOS.send,
+                execution_id,
+                _SHUTDOWN_WAKE_COMMAND,
+                topic=_CONTROL_TOPIC,
+                idempotency_key=f"shutdown-wake:{execution_id}",
+            )
         return normalized
 
     def submit(self, work_id: str, *, priority: WorkPriority) -> str:
