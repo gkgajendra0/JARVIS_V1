@@ -14,6 +14,8 @@ from .models import (
     CapabilityGapV1,
     CapabilityRequirementGraphV1,
     GoalContinuationV1,
+    GoalInterpretationCandidateV1,
+    GoalKind,
     GoalState,
     InformationNeedState,
     InformationNeedV1,
@@ -61,6 +63,13 @@ class GoalStore:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     UNIQUE(source_session_id, source_turn_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS goal_interpretation_evidence_v1 (
+                    goal_id TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    digest TEXT NOT NULL,
+                    FOREIGN KEY(goal_id) REFERENCES owner_goals_v2(goal_id)
                 );
 
                 CREATE TABLE IF NOT EXISTS world_entities_v1 (
@@ -311,6 +320,95 @@ class GoalStore:
             return None
         return OwnerGoalV2.from_payload(self._decode(row["payload"]), row["digest"])
 
+    def put_goal_interpretation_evidence(
+        self,
+        goal_id: str,
+        candidate: GoalInterpretationCandidateV1,
+    ) -> GoalInterpretationCandidateV1:
+        if not isinstance(candidate, GoalInterpretationCandidateV1):
+            raise TypeError("candidate must be GoalInterpretationCandidateV1")
+        key = str(goal_id).strip()
+        if not key:
+            raise ValueError("goal_id must not be empty")
+        with self.work.extension_transaction() as db:
+            if db.execute(
+                "SELECT 1 FROM owner_goals_v2 WHERE goal_id=?",
+                (key,),
+            ).fetchone() is None:
+                raise GoalStoreError(f"unknown goal_id: {key}")
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM goal_interpretation_evidence_v1
+                WHERE goal_id=?
+                """,
+                (key,),
+            ).fetchone()
+            if row is not None:
+                payload = self._decode(row["payload"])
+                existing = GoalInterpretationCandidateV1.create(
+                    desired_outcome=payload["desired_outcome"],
+                    goal_kind=GoalKind(payload["goal_kind"]),
+                    candidate_entities=tuple(payload["candidate_entities"]),
+                    candidate_completion_predicates=tuple(
+                        payload["candidate_completion_predicates"]
+                    ),
+                    candidate_information_needs=tuple(
+                        payload["candidate_information_needs"]
+                    ),
+                    reasoning_evidence_refs=tuple(payload["reasoning_evidence_refs"]),
+                )
+                if existing.digest != row["digest"] or existing.digest != candidate.digest:
+                    raise GoalStoreConflict(
+                        "goal interpretation evidence already differs"
+                    )
+                return existing
+            db.execute(
+                """
+                INSERT INTO goal_interpretation_evidence_v1 (
+                    goal_id, payload, digest
+                ) VALUES (?, ?, ?)
+                """,
+                (
+                    key,
+                    self._encode(candidate.canonical_payload()),
+                    candidate.digest,
+                ),
+            )
+        return candidate
+
+    def get_goal_interpretation_evidence(
+        self,
+        goal_id: str,
+    ) -> GoalInterpretationCandidateV1 | None:
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM goal_interpretation_evidence_v1
+                WHERE goal_id=?
+                """,
+                (str(goal_id).strip(),),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = self._decode(row["payload"])
+        candidate = GoalInterpretationCandidateV1.create(
+            desired_outcome=payload["desired_outcome"],
+            goal_kind=GoalKind(payload["goal_kind"]),
+            candidate_entities=tuple(payload["candidate_entities"]),
+            candidate_completion_predicates=tuple(
+                payload["candidate_completion_predicates"]
+            ),
+            candidate_information_needs=tuple(
+                payload["candidate_information_needs"]
+            ),
+            reasoning_evidence_refs=tuple(payload["reasoning_evidence_refs"]),
+        )
+        if candidate.digest != row["digest"]:
+            raise GoalStoreError("goal interpretation evidence digest mismatch")
+        return candidate
+
     def get_goal_by_source(
         self,
         *,
@@ -336,6 +434,83 @@ class GoalStore:
             self._decode(row["payload"]),
             row["digest"],
         )
+
+    def update_goal_referenced_entities(
+        self,
+        goal_id: str,
+        referenced_entity_ids: tuple[str, ...] | list[str],
+        *,
+        expected_revision: int,
+        state: GoalState | None = None,
+        updated_at: str | None = None,
+    ) -> OwnerGoalV2:
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM owner_goals_v2
+                WHERE goal_id=?
+                """,
+                (goal_id,),
+            ).fetchone()
+            if row is None:
+                raise GoalStoreError(f"unknown goal_id: {goal_id}")
+            current = OwnerGoalV2.from_payload(
+                self._decode(row["payload"]),
+                row["digest"],
+            )
+            if current.goal_revision != expected_revision:
+                raise GoalStoreConflict(
+                    "goal revision changed before entity update"
+                )
+            entity_ids = tuple(
+                sorted(
+                    {
+                        *current.referenced_entity_ids,
+                        *(
+                            str(item).strip().casefold()
+                            for item in referenced_entity_ids
+                            if str(item).strip()
+                        ),
+                    }
+                )
+            )
+            timestamp = (
+                current.updated_at
+                if updated_at is None
+                else str(updated_at).strip()
+            )
+            candidate = replace(
+                current,
+                goal_revision=current.goal_revision + 1,
+                referenced_entity_ids=entity_ids,
+                state=current.state if state is None else state,
+                updated_at=timestamp,
+                digest="pending",
+            )
+            updated = replace(
+                candidate,
+                digest=canonical_digest(candidate.canonical_payload()),
+            )
+            result = db.execute(
+                """
+                UPDATE owner_goals_v2
+                SET goal_revision=?, state=?, payload=?, digest=?, updated_at=?
+                WHERE goal_id=? AND goal_revision=?
+                """,
+                (
+                    updated.goal_revision,
+                    updated.state.value,
+                    self._encode(updated.canonical_payload()),
+                    updated.digest,
+                    updated.updated_at,
+                    goal_id,
+                    current.goal_revision,
+                ),
+            )
+            if result.rowcount != 1:
+                raise GoalStoreConflict("goal entity compare-and-swap update lost")
+        return updated
 
     def update_goal_state(
         self,
@@ -718,6 +893,30 @@ class GoalStore:
             return None
         return InformationNeedV1.from_payload(
             self._decode(row["payload"]), row["digest"]
+        )
+
+    def list_information_needs(
+        self,
+        *,
+        goal_id: str,
+        limit: int = 100,
+    ) -> tuple[InformationNeedV1, ...]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+            raise ValueError("limit must be a positive integer")
+        with self.work.extension_transaction() as db:
+            rows = db.execute(
+                """
+                SELECT payload, digest
+                FROM information_needs_v1
+                WHERE goal_id=?
+                ORDER BY created_at ASC, information_need_id ASC
+                LIMIT ?
+                """,
+                (str(goal_id).strip(), limit),
+            ).fetchall()
+        return tuple(
+            InformationNeedV1.from_payload(self._decode(row["payload"]), row["digest"])
+            for row in rows
         )
 
     def update_information_need_state(
