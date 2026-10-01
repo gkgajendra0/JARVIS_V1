@@ -344,7 +344,10 @@ async def test_gicc_voice_surfaces_sensitive_external_owner_input_without_leak(
         "sensitive": True,
     }
     assert "generic GICC tool argument" in str(payload["truth_note"])
-    assert "PIN" not in str(evidence["payload"])
+    interaction = evidence["payload"]["interaction"]
+    assert "owner_value" not in interaction
+    assert "response" not in interaction
+    assert "1234" not in str(evidence["payload"])
 
 
 @pytest.mark.asyncio
