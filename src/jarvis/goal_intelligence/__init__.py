@@ -44,15 +44,6 @@ from .store import (
 )
 
 __all__ = [
-    "GoalInterpretationError",
-    "GoalInterpretationResult",
-    "GoalInterpretationShadowRuntime",
-    "GoalInterpreter",
-    "ShadowCapabilityRequirement",
-    "ShadowEntityCandidate",
-    "ShadowGoalInterpretationOutput",
-    "ShadowInformationNeedCandidate",
-    "build_goal_interpreter",
     "CapabilityGapState",
     "CapabilityGapV1",
     "CapabilityRequirementGraphV1",
@@ -62,6 +53,10 @@ __all__ = [
     "EntityLifecycleState",
     "GoalContinuationV1",
     "GoalInterpretationCandidateV1",
+    "GoalInterpretationError",
+    "GoalInterpretationResult",
+    "GoalInterpretationShadowRuntime",
+    "GoalInterpreter",
     "GoalKind",
     "GoalState",
     "GoalStore",
@@ -78,6 +73,11 @@ __all__ = [
     "PlanNodeV1",
     "PlanState",
     "ResourceBindingV1",
+    "ShadowCapabilityRequirement",
+    "ShadowEntityCandidate",
+    "ShadowGoalInterpretationOutput",
+    "ShadowInformationNeedCandidate",
     "WorldEntityRefV1",
     "build_default_goal_store",
+    "build_goal_interpreter",
 ]
