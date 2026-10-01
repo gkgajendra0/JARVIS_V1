@@ -1,7 +1,5 @@
 import pytest
 
-from jarvis.chatgpt_plan import _strict_json_schema
-
 from jarvis.capabilities.models import (
     CapabilityCatalog,
     CapabilityDescriptor,
@@ -9,6 +7,7 @@ from jarvis.capabilities.models import (
     DiscoverySnapshot,
     DiscoveryState,
 )
+from jarvis.chatgpt_plan import _strict_json_schema
 from jarvis.goal_intelligence.models import GoalKind, OwnerGoalV2, PlanNodeType
 from jarvis.goal_intelligence.planning import (
     PlanNodeCandidate,
