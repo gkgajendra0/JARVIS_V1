@@ -21,7 +21,11 @@ from .models import (
     PlanNodeV1,
     PlanState,
 )
-from .service import GoalDispatchStatus, GoalOrchestrator, PlanDispatchResult as RoutedResult
+from .service import (
+    GoalDispatchStatus,
+    GoalOrchestrator,
+    PlanDispatchResult as RoutedResult,
+)
 from .store import GoalStore, GoalStoreError
 
 
@@ -147,9 +151,7 @@ class GoalPlanDispatcher:
         if all(
             by_id[completion_id].state is PlanNodeState.SUCCEEDED
             for completion_id in updated.completion_node_ids
-        ) and all(
-            node.state is not PlanNodeState.PENDING for node in updated.nodes
-        ):
+        ) and all(node.state is not PlanNodeState.PENDING for node in updated.nodes):
             final = updated.with_node_state(
                 node_id,
                 PlanNodeState.SUCCEEDED,
