@@ -25,6 +25,11 @@ from jarvis.goal_intelligence.models import (
     GoalKind,
     GoalState,
     OwnerGoalV2,
+    PlanGraphV1,
+    PlanNodeState,
+    PlanNodeType,
+    PlanNodeV1,
+    PlanState,
     WorldEntityRefV1,
 )
 from jarvis.goal_intelligence.requirements import (
@@ -254,6 +259,92 @@ async def test_gicc_voice_reports_only_verified_durable_completion(
     assert payload["status"] == "completed"
     assert payload["verified_completion"] is True
     assert "may acknowledge" in str(payload["truth_note"])
+
+
+@pytest.mark.asyncio
+async def test_gicc_voice_surfaces_sensitive_external_owner_input_without_leak(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    conversation, turn = _conversation("Play Transporter on my TV.")
+    goal = store.create_goal(
+        OwnerGoalV2.create(
+            source_session_id=conversation.session_id,
+            source_turn_id=turn.turn_id,
+            exact_owner_request=turn.text,
+            goal_kind=GoalKind.ONE_SHOT,
+            desired_outcome="Transporter is playing on my TV.",
+            completion_predicates=("playback_started",),
+            state=GoalState.EXECUTING,
+            created_at="2026-10-01T18:02:00+00:00",
+        )
+    )
+    action = PlanNodeV1.create(
+        plan_identity=goal.goal_id,
+        ordinal=0,
+        node_type=PlanNodeType.ACTION,
+        summary="Play Transporter on the TV.",
+        capability_key="package:tv-control",
+        operation="play",
+        parameters={"title": "Transporter"},
+        postcondition_ref="playback_started",
+    )
+    proposed = PlanGraphV1.create(
+        goal_id=goal.goal_id,
+        goal_revision=goal.goal_revision,
+        nodes=(action,),
+        edges=(),
+        root_node_ids=(action.node_id,),
+        completion_node_ids=(action.node_id,),
+        created_at="2026-10-01T18:03:00+00:00",
+    )
+    waiting = proposed.with_node_state(
+        action.node_id,
+        PlanNodeState.WAITING,
+        plan_state=PlanState.WAITING,
+    )
+    waiting = store.put_plan(waiting)
+    evidence = store.put_plan_node_result(
+        plan_id=waiting.plan_id,
+        node_id=action.node_id,
+        attempt=1,
+        status="waiting",
+        payload={
+            "route": "capability_runtime:owner_input",
+            "interaction": {
+                "kind": "external_owner_input",
+                "input_kind": "pin",
+                "prompt": "Enter the TV pairing PIN.",
+                "parameter": "pin",
+                "sensitive": True,
+            },
+        },
+        created_at="2026-10-01T18:04:00+00:00",
+    )
+    result = GoalIntakeResult(
+        disposition=GoalIntakeDisposition.PLAN_READY,
+        goal=goal,
+        plan=waiting,
+    )
+    tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        conversation,
+        store,
+        execution_runtime=CompletedExecutionRuntime(result),
+    )
+
+    payload = await tools.pursue_owner_goal(None)
+
+    assert payload["status"] == "waiting_owner_input"
+    assert payload["owner_input"] == {
+        "interaction_ref": evidence["result_id"],
+        "input_kind": "pin",
+        "prompt": "Enter the TV pairing PIN.",
+        "parameter": "pin",
+        "sensitive": True,
+    }
+    assert "generic GICC tool argument" in str(payload["truth_note"])
+    assert "PIN" not in str(evidence["payload"])
 
 
 @pytest.mark.asyncio
