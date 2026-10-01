@@ -503,7 +503,7 @@ def _strict_json_schema(value: object) -> object:
             normalized["required"] = list(properties)
         else:
             additional = normalized.get("additionalProperties")
-            if additional not in {None, False}:
+            if additional is not None and additional is not False:
                 raise ValueError(
                     "OpenAI strict structured output cannot contain dynamic object "
                     "maps; use a fixed object model or encode flexible JSON as a string"
