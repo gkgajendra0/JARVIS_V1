@@ -138,8 +138,8 @@ class SafeInputCapture:
         try:
             self.input_stream.stop()
             self.input_stream.close()
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 - best-effort native stream cleanup
+            LOGGER.debug("Safe microphone input cleanup failed", exc_info=True)
         if self.task and not self.task.done():
             self.task.cancel()
             await asyncio.gather(self.task, return_exceptions=True)
@@ -212,8 +212,11 @@ class SafeMediaDevices(rtc.MediaDevices):
                         max((input_delay_sec + output_delay_sec) * 1000.0, 0.0)
                     )
                     apm.set_stream_delay_ms(total_delay_ms)
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001 - realtime callback must survive
+                    LOGGER.debug(
+                        "Microphone APM delay update failed",
+                        exc_info=True,
+                    )
 
             num_frames = frame_count // frame_samples
             for index in range(num_frames):
@@ -231,8 +234,11 @@ class SafeMediaDevices(rtc.MediaDevices):
                 if apm is not None:
                     try:
                         apm.process_stream(frame)
-                    except Exception:
-                        pass
+                    except Exception:  # noqa: BLE001 - realtime callback must survive
+                        LOGGER.debug(
+                            "Microphone APM processing failed",
+                            exc_info=True,
+                        )
                 ingress.submit_from_audio_thread(frame)
 
         input_stream = sd.InputStream(
@@ -247,17 +253,16 @@ class SafeMediaDevices(rtc.MediaDevices):
 
         async def pump() -> None:
             while True:
-                try:
-                    frame = await ingress.get()
-                except asyncio.CancelledError:
-                    raise
+                frame = await ingress.get()
                 try:
                     await source.capture_frame(frame)
                 except asyncio.CancelledError:
                     raise
-                except Exception:
-                    # Capture errors must not kill the physical microphone pump.
-                    pass
+                except Exception:  # noqa: BLE001 - keep physical mic pump alive
+                    LOGGER.debug(
+                        "LiveKit AudioSource capture rejected one microphone frame",
+                        exc_info=True,
+                    )
 
         task = asyncio.create_task(
             pump(),
