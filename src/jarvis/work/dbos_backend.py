@@ -333,7 +333,6 @@ class DBOSWorkExecutionBackend:
         return workflow_id
 
     def reconcile_execution(self, execution_id: str) -> str:
-        self._require_accepting_work()
         """Ensure a known durable execution is runnable after restart.
 
         Shutdown parking deliberately uses DBOS cancellation without changing the
@@ -342,6 +341,7 @@ class DBOSWorkExecutionBackend:
         WorkItems or workflow identities.
         """
 
+        self._require_accepting_work()
         normalized = str(execution_id).strip()
         if not normalized:
             raise ValueError("execution id must not be empty")
