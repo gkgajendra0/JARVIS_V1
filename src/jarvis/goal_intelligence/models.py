@@ -693,7 +693,7 @@ class InformationNeedV1:
         if (
             self.category is InformationNeedCategory.OWNER_SECRET
             and self.resolution_ref
-            and self.resolution_ref.startswith(("plain:", "value:"))
+            and not self.resolution_ref.casefold().startswith("secret:")
         ):
             raise ValueError("OWNER_SECRET resolution must reference the secret store")
         if self.state is InformationNeedState.RESOLVED and (
