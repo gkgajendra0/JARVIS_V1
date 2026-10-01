@@ -39,6 +39,7 @@ from jarvis.identity.speech_region import (
     SpeechRegionDetector,
 )
 from jarvis.logging_config import configure_logging
+from jarvis.runtime_lane import GiccMode
 from jarvis.sensors.gstreamer_av import (
     GStreamerPairedAVConfig,
     GStreamerPairedAVSource,
@@ -302,6 +303,7 @@ class VoiceRuntimeController:
                 agent=JarvisVoiceAgent(
                     tools=[],
                     default_media_target=self.config.default_media_target,
+                    gicc_apply=self.config.gicc_mode is GiccMode.APPLY,
                 )
             )
             handle = session.generate_reply(
@@ -820,6 +822,7 @@ class VoiceRuntimeController:
                     agent=JarvisVoiceAgent(
                         tools=[],
                         default_media_target=self.config.default_media_target,
+                    gicc_apply=self.config.gicc_mode is GiccMode.APPLY,
                     )
                 )
             except Exception:
@@ -1179,6 +1182,7 @@ class VoiceRuntimeController:
                     agent=JarvisVoiceAgent(
                         tools=tools,
                         default_media_target=self.config.default_media_target,
+                    gicc_apply=self.config.gicc_mode is GiccMode.APPLY,
                     )
                 )
             except Exception:
