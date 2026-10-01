@@ -116,9 +116,7 @@ class GoalIntelligenceCoordinator:
         if not isinstance(requirement_deriver, RequirementDeriver):
             raise TypeError("requirement_deriver must be RequirementDeriver")
         if not isinstance(capability_graph_resolver, CapabilityGraphResolver):
-            raise TypeError(
-                "capability_graph_resolver must be CapabilityGraphResolver"
-            )
+            raise TypeError("capability_graph_resolver must be CapabilityGraphResolver")
         if not callable(getattr(capability_context, "current", None)):
             raise TypeError("capability_context must provide current()")
         self._store = store
@@ -291,19 +289,13 @@ class GoalIntelligenceCoordinator:
             admissions = (
                 ()
                 if self._phase9 is None
-                else tuple(
-                    self._phase9.admit_gap(gap, goal) for gap in analysis.gaps
-                )
+                else tuple(self._phase9.admit_gap(gap, goal) for gap in analysis.gaps)
             )
             plan = self._build_acquisition_plan(goal, analysis)
             for node in plan.nodes:
                 assert node.gap_id is not None
                 admission = next(
-                    (
-                        item
-                        for item in admissions
-                        if item.request.gap_id == node.gap_id
-                    ),
+                    (item for item in admissions if item.request.gap_id == node.gap_id),
                     None,
                 )
                 work_ids = (
