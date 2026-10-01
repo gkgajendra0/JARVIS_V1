@@ -100,8 +100,7 @@ class WorkAgentTools:
             self.get_engineering_change_status,
         ]
         if self._allow_capability_acquisition:
-            insert_at = tools.index(self.activate_acquired_capability)
-            tools.insert(insert_at, self.start_capability_acquisition)
+            tools.append(self.start_capability_acquisition)
         return tools
 
     @function_tool()
