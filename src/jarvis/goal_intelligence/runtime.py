@@ -6,6 +6,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 
+from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
 from jarvis.config import JarvisConfig
@@ -13,16 +14,20 @@ from jarvis.hands.provider_adapters import (
     build_chatgpt_plan_structured_output_client,
     build_structured_output_client,
 )
+from jarvis.voice.generic_grounded_hands import GenericGroundedVoiceHandsOrchestrator
+from jarvis.voice.hands_fast_path import FAST_PATH_OPERATIONS, execute_fast_hint
 from jarvis.work.runtime import WorkRuntime
 
 from .capability_graph import CapabilityGraphResolver
 from .composition import GoalIntelligenceCoordinator
+from .execution import GoalPlanDispatcher
 from .information import InformationResolver
 from .interpretation import GoalInterpreter, build_goal_interpreter
-from .models import GoalState, WorldEntityRefV1
+from .models import GoalState, OwnerGoalV2, PlanGraphV1, PlanNodeV1, WorldEntityRefV1
 from .phase9 import Phase9GoalBridge
 from .planning import GoalPlanner
 from .requirements import RequirementDeriver
+from .service import GoalOrchestrator, SpecialistActionDispatch
 from .store import GoalStore, build_default_goal_store
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 from .world import EntityResolver, WorldRegistry
@@ -30,11 +35,104 @@ from .world import EntityResolver, WorldRegistry
 LOGGER = logging.getLogger(__name__)
 
 
+class HandsPlanActionDispatcher:
+    """Route only canonical Hands operations through the existing Hands specialist."""
+
+    def __init__(self, runtime: CapabilityRuntime) -> None:
+        if not isinstance(runtime, CapabilityRuntime):
+            raise TypeError("runtime must be a CapabilityRuntime")
+        self._runtime = runtime
+        self._orchestrator = GenericGroundedVoiceHandsOrchestrator(
+            runtime,
+            runtime.hands_planner,
+        )
+
+    def handles(self, node: PlanNodeV1) -> bool:
+        operation = str(node.operation or "").strip()
+        if not operation or self._runtime.hands_registry.operation(operation) is None:
+            return False
+        return self._runtime.capability_for_operation(operation) == node.capability_key
+
+    @staticmethod
+    def _result_from_payload(
+        node: PlanNodeV1,
+        payload: dict[str, object],
+        *,
+        route: str,
+    ) -> SpecialistActionDispatch:
+        ok = payload.get("ok") is True
+        reason_value = payload.get("reason") or payload.get("clarification_question")
+        reason = None if ok else str(reason_value or "Hands goal execution failed")
+        result = CapabilityResult(
+            status=(
+                CapabilityStatus.SUCCEEDED
+                if ok
+                else CapabilityStatus.FAILED
+            ),
+            capability_key=str(node.capability_key or "hands"),
+            operation=str(node.operation or "hands_goal"),
+            data={
+                "verification_passed": ok,
+                "hands_goal_result": payload,
+            },
+            reason=reason,
+            provenance=("JARVIS Hands", route),
+        )
+        return SpecialistActionDispatch(result=result, route=route)
+
+    async def execute(
+        self,
+        *,
+        goal: OwnerGoalV2,
+        plan: PlanGraphV1,
+        node: PlanNodeV1,
+    ) -> SpecialistActionDispatch:
+        del plan
+        operation = str(node.operation or "").strip()
+        if not self.handles(node):
+            raise ValueError("plan node is not owned by JARVIS Hands")
+
+        if operation in FAST_PATH_OPERATIONS:
+            fast = await execute_fast_hint(
+                self._orchestrator,
+                session_id=goal.source_session_id,
+                goal=goal.exact_owner_request,
+                recent_user_turns=(),
+                operation_hint=operation,
+                parameters=dict(node.parameters),
+            )
+            if fast is not None:
+                return self._result_from_payload(
+                    node,
+                    fast,
+                    route="hands_fast_path",
+                )
+
+        if self._runtime.hands_planner is None:
+            return self._result_from_payload(
+                node,
+                {
+                    "ok": False,
+                    "status": "unavailable",
+                    "reason": "JARVIS Hands semantic planner is not configured",
+                },
+                route="hands",
+            )
+
+        result = await self._orchestrator.execute_goal(
+            session_id=goal.source_session_id,
+            goal=goal.exact_owner_request,
+            recent_user_turns=(),
+        )
+        return self._result_from_payload(node, result, route="hands")
+
+
 @dataclass(slots=True)
 class GiccApplyRuntime:
     store: GoalStore
     world: WorldRegistry
     coordinator: GoalIntelligenceCoordinator
+    dispatcher: GoalPlanDispatcher
     telemetry: GiccTelemetrySink
     capability_runtime: CapabilityRuntime
     reconcile_interval_seconds: float = 1.0
@@ -163,6 +261,13 @@ def build_gicc_apply_runtime(
         raise TypeError("GICC interpreter composition returned wrong type")
 
     reasoning_client = _reasoning_client(config)
+    information_resolver = InformationResolver(store=store)
+    phase9_bridge = Phase9GoalBridge(
+        coordinator=work_runtime.capability_acquisition,
+        change_store=work_runtime.changes.store,
+        goal_store=store,
+        source_revision_provider=work_runtime.current_source_revision,
+    )
     coordinator = GoalIntelligenceCoordinator(
         store=store,
         interpreter=interpreter,
@@ -170,20 +275,28 @@ def build_gicc_apply_runtime(
         requirement_deriver=RequirementDeriver(client=reasoning_client),
         capability_context=capability_context,
         capability_graph_resolver=CapabilityGraphResolver(store=store),
-        information_resolver=InformationResolver(store=store),
-        phase9_bridge=Phase9GoalBridge(
-            coordinator=work_runtime.capability_acquisition,
-            change_store=work_runtime.changes.store,
-            goal_store=store,
-            source_revision_provider=work_runtime.current_source_revision,
-        ),
+        information_resolver=information_resolver,
+        phase9_bridge=phase9_bridge,
         planner=GoalPlanner(client=reasoning_client),
         telemetry=telemetry,
+    )
+    orchestrator = GoalOrchestrator(
+        goal_store=store,
+        capability_runtime=capability_runtime,
+        specialist_action_dispatcher=HandsPlanActionDispatcher(capability_runtime),
+        information_resolver=information_resolver,
+        phase9_bridge=phase9_bridge,
+        telemetry=telemetry,
+    )
+    dispatcher = GoalPlanDispatcher(
+        store=store,
+        orchestrator=orchestrator,
     )
     return GiccApplyRuntime(
         store=store,
         world=world,
         coordinator=coordinator,
+        dispatcher=dispatcher,
         telemetry=telemetry,
         capability_runtime=capability_runtime,
     )
