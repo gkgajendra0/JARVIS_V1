@@ -665,6 +665,7 @@ def build_production_voice_runtime(
         research_service=research_service,
         capability_runtime=capability_runtime,
         work_runtime=work_runtime,
+        gicc_runtime=gicc_apply_runtime,
         gicc_tool_factory=(
             None
             if gicc_apply_runtime is None
