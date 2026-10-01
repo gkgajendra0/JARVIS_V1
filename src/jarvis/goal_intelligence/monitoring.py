@@ -97,8 +97,7 @@ class MonitoringPlanner:
         self,
         predicate: MonitorPredicateV1,
         *,
-        available_strategies: tuple[MonitoringStrategy, ...]
-        | list[MonitoringStrategy],
+        available_strategies: tuple[MonitoringStrategy, ...] | list[MonitoringStrategy],
     ) -> MonitoringStrategy:
         if not isinstance(predicate, MonitorPredicateV1):
             raise TypeError("predicate must be MonitorPredicateV1")
@@ -201,9 +200,8 @@ class MonitorEventProcessor:
     ) -> None:
         if not isinstance(goal_store, GoalStore):
             raise TypeError("goal_store must be GoalStore")
-        if (
-            not callable(getattr(work_store, "require", None))
-            or not callable(getattr(work_store, "enqueue_delivery", None))
+        if not callable(getattr(work_store, "require", None)) or not callable(
+            getattr(work_store, "enqueue_delivery", None)
         ):
             raise TypeError("work_store must provide require/enqueue_delivery")
         self._goals = goal_store
@@ -312,9 +310,8 @@ class MonitorEventProcessor:
                 runtime_state=updated,
             )
 
-        if (
-            predicate.completion_policy == "complete_once"
-            and bool(payload.get("notified"))
+        if predicate.completion_policy == "complete_once" and bool(
+            payload.get("notified")
         ):
             updated = self._goals.update_monitor_runtime_state(
                 predicate_id=predicate.predicate_id,
