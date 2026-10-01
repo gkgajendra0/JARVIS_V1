@@ -364,6 +364,194 @@ They must not become the canonical owner of:
 
 This is essential to long-term local independence.
 
+
+---
+
+## 11A. Continuous External Intelligence and Live World State
+
+**OWNER-APPROVED FUTURE REQUIREMENT — 2026-09-28**
+
+Universal Knowledge Intelligence must support both **on-demand research** and
+**continuous/event-driven knowledge acquisition**.
+
+The useful architectural pattern is not a trading agent. The reusable idea is a governed
+pipeline that continuously notices external changes, converts raw information into
+source-aware events and knowledge, maintains freshness, and surfaces only changes that are
+relevant enough to affect JARVIS work.
+
+Target flow:
+
+```text
+governed external sources
+        ↓
+ingestion / polling / subscription
+        ↓
+normalization + deduplication
+        ↓
+entity / event / topic extraction
+        ↓
+provenance + time + freshness + confidence
+        ↓
+correlation / contradiction / supersession
+        ↓
+Knowledge Fabric / bounded live world state
+        ↓
+relevance + novelty + consequence evaluation
+        ↓
+optional trigger into existing JARVIS work/control plane
+        ↓
+research / planning / governed action
+        ↓
+outcome evaluation + knowledge update
+```
+
+Examples of future source classes include:
+
+- software and dependency releases;
+- Git repositories and project activity;
+- technical/security advisories;
+- scientific papers and preprints;
+- selected news and public events;
+- weather and environmental feeds;
+- market/economic data where explicitly enabled;
+- owner-authorized email/calendar/application events;
+- device and sensor observations;
+- specialist APIs and datasets.
+
+### Required event semantics
+
+A normalized external observation/event should be able to retain at least:
+
+- source identity and source adapter/version;
+- source-native event/reference identity;
+- observed time and, where known, event occurrence time;
+- retrieval time;
+- entity/concept references;
+- event/topic type;
+- raw evidence reference or digest rather than uncontrolled duplication;
+- provenance and access/authorization context;
+- freshness/expiry policy;
+- confidence/epistemic state;
+- deduplication/correlation key;
+- contradiction/retraction/supersession linkage;
+- relevance/novelty/consequence signals;
+- processing history.
+
+Model-generated text alone must not become an external event fact.
+
+### Live world state
+
+The purpose is not to save every incoming item. JARVIS should maintain a **bounded,
+evidence-backed current view of the external world relevant to active owner goals and
+JARVIS responsibilities**.
+
+That state may answer questions such as:
+
+- what materially changed since the last evaluation;
+- which previously known claims became stale or superseded;
+- whether multiple independent sources describe the same event;
+- whether a new event contradicts durable knowledge;
+- whether an external change affects a current project, dependency, device, plan or
+  research objective.
+
+Raw high-volume streams may be retained only according to explicit storage, privacy,
+licensing and cost policies. Durable knowledge promotion remains selective.
+
+### Relevance and trigger boundary
+
+Continuous awareness does **not** mean continuous action.
+
+External information must cross an explicit relevance/novelty/consequence gate before it
+can create or influence work. The expected boundary is:
+
+```text
+external event
+    ↓
+source/provenance validation
+    ↓
+knowledge/event interpretation
+    ↓
+relevance + novelty + consequence evaluation
+    ↓
+IGNORE / RETAIN / RESEARCH / SURFACE / PROPOSE WORK
+    ↓
+existing WorkItem + control-plane + authority machinery
+```
+
+An external event never grants authority by itself. Protected actions, spending,
+communications, credentials, production changes and physical actions remain governed by
+the existing Authority/OPA/owner boundaries.
+
+### Cost, rate and backpressure requirements
+
+The future system must support:
+
+- source-specific polling/subscription budgets;
+- rate limits;
+- deduplication before expensive model work where possible;
+- backpressure and queue bounds;
+- priority based on owner goals and active objectives;
+- cheap deterministic filtering before deep reasoning;
+- model-depth routing only when justified;
+- retention limits for raw events;
+- graceful degradation when providers or feeds are unavailable.
+
+The architecture should prefer event-native APIs/webhooks/feeds where reliable, but may
+use bounded polling when no event source exists. Technology selection is deferred to K0/K1
+research.
+
+### Relationship to Phase 10A
+
+Phase 10A remains the **internal autonomous operations control plane** and must not be
+expanded into a general internet/news/event ingestion system.
+
+Its read-only `SystemState` contracts should remain extensible enough that future
+evidence-backed external knowledge can influence Objectives/DesiredStates or create
+bounded WorkItems through an explicit bridge. External world events are not automatically
+canonical internal SystemState facts.
+
+The future relationship is:
+
+```text
+Continuous External Intelligence
+        ↓
+Universal Knowledge Fabric
+        ↓
+evidence/relevance gate
+        ↓
+Phase 10A-style objective/work management
+        ↓
+existing governed execution/evolution systems
+```
+
+Therefore no Phase 0–10 rewrite is required and Phase 10A should not be delayed for this
+capability.
+
+### Program ownership
+
+This requirement is implemented primarily inside the Universal Knowledge program:
+
+- **K0** — define external observation/event contracts, provenance, temporal semantics,
+  freshness, contradiction/retraction and trigger boundaries;
+- **K1** — build governed source adapters plus ingestion/subscription/polling and bounded
+  event processing;
+- **K2** — connect selected events to verified persistent knowledge and maintain
+  freshness/supersession;
+- **K3** — add cross-source correlation, entity resolution, contradiction and cross-domain
+  significance detection;
+- **K4** — expose the resulting live source-aware knowledge/current-world service to all
+  JARVIS capabilities and reasoning models.
+
+Discovery stages then consume it:
+
+- **D0** may use newly arriving evidence to update Frontier Maps;
+- **D5** may run owner-approved long-lived quests over changing external evidence;
+- **D7** closes continuous discovery loops over knowledge, experiments and new world
+  observations.
+
+This is a future implementation requirement, not a claim that continuous external
+awareness exists today.
+
 ---
 
 # PART II — DISCOVERY INTELLIGENCE

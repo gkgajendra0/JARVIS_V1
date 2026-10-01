@@ -366,6 +366,42 @@ deployed release condition.
 OpenTelemetry/OperationalEvent may be linked as supporting evidence but cannot override
 these canonical adapters.
 
+### Future external-intelligence compatibility — deferred
+
+Phase 10A does **not** implement generalized news, internet, scientific-feed, market,
+weather or other external-world ingestion.
+
+The control-plane boundary must nevertheless avoid blocking the approved future Universal
+Knowledge continuous-intelligence requirement:
+
+- keep SystemState facts source-versioned, time-aware and evidence-referenced;
+- keep SystemState source adapters extensible rather than hard-coding only today's
+  sources;
+- do not treat raw external events as canonical internal SystemState truth;
+- allow a future Knowledge/Event bridge to provide verified, policy-allowed evidence when
+  a DesiredState or Objective explicitly depends on external reality;
+- require relevance/evidence evaluation before external information can create autonomous
+  work;
+- route any resulting work through the existing WorkItem, Authority, governance,
+  verification and owner-attention machinery;
+- do not add an event bus, feed collector, news processor or new persistence platform in
+  Phase 10A solely for this future requirement.
+
+Future target boundary:
+
+```text
+external source/event
+    -> Universal Knowledge ingestion + verification
+    -> relevant evidence / knowledge
+    -> explicit control-plane bridge
+    -> Objective / DesiredState / WorkItem
+    -> governed execution
+```
+
+This is a compatibility guardrail only. Full continuous external intelligence belongs to
+the K0-K4 Universal Knowledge program and does not change Phase 10A scope or acceptance.
+
+
 ## 9. Evaluation result contract
 
 A DesiredState evaluator returns one of:
