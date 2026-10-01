@@ -16,6 +16,7 @@ from jarvis.capability_registry.projection import (
     EffectiveCapabilityState,
 )
 from jarvis.goal_intelligence.capability_graph import CapabilityGraphResolver
+from jarvis.goal_intelligence.monitoring import GICC_MONITOR_EVENT_CONTRACT
 from jarvis.goal_intelligence.models import (
     CapabilityRequirementGraphV1,
     CapabilityRequirementV1,
@@ -330,6 +331,85 @@ def test_package_managed_capability_must_be_effectively_enabled() -> None:
 
     assert result.satisfied is False
     assert result.gaps[0].reusable_capability_family == "camera.observe"
+
+
+def test_monitoring_goal_rejects_pull_only_observer_capability() -> None:
+    goal = _goal()
+    requirement = CapabilityRequirementV1.create(
+        goal_id=goal.goal_id,
+        semantic_capability="vision.perceive",
+        operation="verify_scene_condition",
+        target_entity_type="camera",
+        observation_requirements=("delivery_agent_verified",),
+        reason="Verify the semantic scene condition.",
+    )
+    graph = CapabilityRequirementGraphV1.create(
+        goal_id=goal.goal_id,
+        requirements=(requirement,),
+    )
+    descriptor = CapabilityDescriptor.create(
+        capability_id="scene",
+        source_id="vision",
+        kind=CapabilityKind.LOCAL_READ,
+        name="Scene verifier",
+        description="Verify a scene condition on demand.",
+        operations=("verify_scene_condition",),
+        metadata={
+            "semantic_capability_family": "vision.perceive",
+            "target_entity_types": ["camera"],
+            "observation_operations": ["verify_scene_condition"],
+        },
+        execution_enabled=True,
+    )
+
+    result = CapabilityGraphResolver().analyze(
+        graph,
+        _context((descriptor,)),
+        monitoring_goal=True,
+    )
+
+    assert result.satisfied is False
+    assert result.gaps[0].reusable_capability_family == "vision.perceive"
+
+
+def test_monitoring_goal_accepts_verified_event_observer_capability() -> None:
+    goal = _goal()
+    requirement = CapabilityRequirementV1.create(
+        goal_id=goal.goal_id,
+        semantic_capability="vision.perceive",
+        operation="verify_scene_condition",
+        target_entity_type="camera",
+        observation_requirements=("delivery_agent_verified",),
+        reason="Verify the semantic scene condition.",
+    )
+    graph = CapabilityRequirementGraphV1.create(
+        goal_id=goal.goal_id,
+        requirements=(requirement,),
+    )
+    descriptor = CapabilityDescriptor.create(
+        capability_id="scene",
+        source_id="vision",
+        kind=CapabilityKind.LOCAL_READ,
+        name="Event scene verifier",
+        description="Publish verified scene-condition observations.",
+        operations=("verify_scene_condition",),
+        metadata={
+            "semantic_capability_family": "vision.perceive",
+            "target_entity_types": ["camera"],
+            "observation_operations": ["verify_scene_condition"],
+            "monitor_event_contract": GICC_MONITOR_EVENT_CONTRACT,
+        },
+        execution_enabled=True,
+    )
+
+    result = CapabilityGraphResolver().analyze(
+        graph,
+        _context((descriptor,)),
+        monitoring_goal=True,
+    )
+
+    assert result.satisfied is True
+    assert result.matches[0].capability_key == descriptor.key
 
 
 def test_gap_persistence_is_idempotent_for_same_semantic_gap(tmp_path: Path) -> None:
