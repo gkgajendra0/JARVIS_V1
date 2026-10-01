@@ -13,7 +13,15 @@ from enum import Enum
 from typing import Protocol
 
 from jarvis.authority.types import ActionOrigin
-from jarvis.capabilities.models import CapabilityRequest, CapabilityResult
+from jarvis.capabilities.models import (
+    CapabilityRequest,
+    CapabilityResult,
+    CapabilityStatus,
+)
+from jarvis.capability_acquisition.external_contract import (
+    OWNER_INPUT_REQUEST_KEY,
+    ExternalOwnerInputRequestV1,
+)
 
 from .information import InformationResolutionState, InformationResolver
 from .models import (
@@ -333,12 +341,52 @@ class GoalOrchestrator:
                 result = await asyncio.to_thread(self._capabilities.execute, request)
                 route = "capability_runtime"
 
+            if result.status is CapabilityStatus.PARTIAL:
+                owner_request = result.data.get(OWNER_INPUT_REQUEST_KEY)
+                if owner_request is not None:
+                    try:
+                        interaction = ExternalOwnerInputRequestV1.from_payload(
+                            owner_request
+                        )
+                    except (TypeError, ValueError):
+                        return PlanDispatchResult(
+                            node_id=node.node_id,
+                            node_type=node.node_type,
+                            status=GoalDispatchStatus.FAILED,
+                            route=f"{route}:invalid_owner_input_contract",
+                            result_ref=f"capability_result:{node.node_id}",
+                            capability_result=result,
+                        )
+                    return PlanDispatchResult(
+                        node_id=node.node_id,
+                        node_type=node.node_type,
+                        status=GoalDispatchStatus.WAITING,
+                        route=f"{route}:owner_input",
+                        result_ref=f"capability_result:{node.node_id}",
+                        capability_result=result,
+                        interaction={
+                            "kind": "external_owner_input",
+                            "input_kind": interaction.kind,
+                            "prompt": interaction.prompt,
+                            "parameter": interaction.parameter,
+                            "sensitive": interaction.kind == "pin",
+                        },
+                    )
+                return PlanDispatchResult(
+                    node_id=node.node_id,
+                    node_type=node.node_type,
+                    status=GoalDispatchStatus.BLOCKED,
+                    route=f"{route}:partial_unresolved",
+                    result_ref=f"capability_result:{node.node_id}",
+                    capability_result=result,
+                )
+
             return PlanDispatchResult(
                 node_id=node.node_id,
                 node_type=node.node_type,
                 status=(
                     GoalDispatchStatus.SUCCEEDED
-                    if result.ok
+                    if result.status is CapabilityStatus.SUCCEEDED
                     else GoalDispatchStatus.FAILED
                 ),
                 route=route,
