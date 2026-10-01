@@ -350,9 +350,7 @@ class GoalOrchestrator:
                 predicate_ref=node.postcondition_ref,
                 verified=outcome.verified,
                 evidence_count=len(outcome.evidence_refs),
-                reason_code=(
-                    "verified" if outcome.verified else "verification_failed"
-                ),
+                reason_code=("verified" if outcome.verified else "verification_failed"),
             )
             if (
                 outcome.verified
