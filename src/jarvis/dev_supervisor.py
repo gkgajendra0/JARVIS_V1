@@ -45,6 +45,7 @@ from jarvis.promotion.runtime_dependencies import (
     prepare_phase9_release_dependencies,
 )
 from jarvis.promotion.store import PromotionStore
+from jarvis.runtime_lane import RUNTIME_LANE_ENV, RuntimeLane
 from jarvis.self_awareness import default_incident_store_path
 from jarvis.self_repair import RepairVerificationStatus
 from jarvis.self_repair.supervisor import (
@@ -56,7 +57,6 @@ from jarvis.self_repair.windows_job import (
     WindowsJobObjectError,
     WindowsRuntimeJob,
 )
-from jarvis.runtime_lane import RUNTIME_LANE_ENV, RuntimeLane
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
