@@ -100,9 +100,7 @@ class ShadowCapabilityRequirement(BaseModel):
     def _validate_family(cls, value: str) -> str:
         normalized = value.strip().casefold()
         if not _CAPABILITY_KEY.fullmatch(normalized):
-            raise ValueError(
-                "capability family must be a reusable dotted semantic key"
-            )
+            raise ValueError("capability family must be a reusable dotted semantic key")
         return normalized
 
     @field_validator("operations")
@@ -273,7 +271,9 @@ class GoalInterpreter:
         client: StructuredOutputClient,
         recent_turn_limit: int = _DEFAULT_RECENT_TURNS,
     ) -> None:
-        if not isinstance(recent_turn_limit, int) or isinstance(recent_turn_limit, bool):
+        if not isinstance(recent_turn_limit, int) or isinstance(
+            recent_turn_limit, bool
+        ):
             raise TypeError("recent_turn_limit must be an integer")
         if not 1 <= recent_turn_limit <= 24:
             raise ValueError("recent_turn_limit must be between 1 and 24")
