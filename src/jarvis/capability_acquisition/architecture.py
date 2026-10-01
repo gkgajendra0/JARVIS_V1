@@ -93,9 +93,7 @@ def _gicc_semantic_contract(
             "GICC capability-gap link uses an unsupported contract"
         )
     contract = SemanticCapabilityBuildContractV1(
-        semantic_capability_family=str(
-            payload.get("reusable_capability_family") or ""
-        ),
+        semantic_capability_family=str(payload.get("reusable_capability_family") or ""),
         target_entity_type=str(payload.get("target_entity_type") or ""),
         target_entity_id=(
             None
