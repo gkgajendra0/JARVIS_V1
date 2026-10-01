@@ -38,7 +38,7 @@ from jarvis.work.brain import (
     InteractiveBrainGate,
 )
 from jarvis.work.models import WorkItem, WorkType
-from jarvis.work.reasoner import RoutedWorkReasoner, _SYSTEM_PROMPT, _WorkDecisionModel
+from jarvis.work.reasoner import _SYSTEM_PROMPT, RoutedWorkReasoner, _WorkDecisionModel
 from jarvis.work.store import SQLiteWorkStore
 
 
