@@ -14,6 +14,7 @@ from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
     external_interaction_contract_descriptor,
 )
+from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change.models import (
     ChangeArtifact,
@@ -28,6 +29,106 @@ from jarvis.work.models import WorkItem, WorkState
 
 class CapabilityAcquisitionArchitectureError(ChangeConflict):
     """Acquisition plan/architecture provenance is missing, stale or non-buildable."""
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticCapabilityBuildContractV1:
+    semantic_capability_family: str
+    target_entity_type: str
+    target_entity_id: str | None
+    required_operations: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        family = str(self.semantic_capability_family).strip().casefold()
+        target_type = str(self.target_entity_type).strip().casefold()
+        operations = tuple(
+            sorted(
+                {
+                    str(item).strip().casefold()
+                    for item in self.required_operations
+                    if str(item).strip()
+                }
+            )
+        )
+        target_id = (
+            None
+            if self.target_entity_id is None
+            else str(self.target_entity_id).strip().casefold() or None
+        )
+        if not family or not target_type or not operations:
+            raise CapabilityAcquisitionArchitectureError(
+                "semantic capability build contract is incomplete"
+            )
+        object.__setattr__(self, "semantic_capability_family", family)
+        object.__setattr__(self, "target_entity_type", target_type)
+        object.__setattr__(self, "target_entity_id", target_id)
+        object.__setattr__(self, "required_operations", operations)
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "schema": "semantic_capability_build_contract.v1",
+            "semantic_capability_family": self.semantic_capability_family,
+            "target_entity_type": self.target_entity_type,
+            "target_entity_id": self.target_entity_id,
+            "required_operations": list(self.required_operations),
+            "descriptor_requirements": {
+                "semantic_capability_family": self.semantic_capability_family,
+                "target_entity_types": [self.target_entity_type],
+            },
+        }
+
+
+def _gicc_semantic_contract(
+    store: ChangeStore,
+    *,
+    change_id: str,
+    goal: OwnerCapabilityGoalV1,
+) -> SemanticCapabilityBuildContractV1 | None:
+    link = store.latest_artifact(change_id, "gicc_capability_gap_link")
+    if link is None:
+        return None
+    payload = link.payload
+    if payload.get("schema") != "gicc_phase9_gap_link.v1":
+        raise CapabilityAcquisitionArchitectureError(
+            "GICC capability-gap link uses an unsupported contract"
+        )
+    contract = SemanticCapabilityBuildContractV1(
+        semantic_capability_family=str(
+            payload.get("reusable_capability_family") or ""
+        ),
+        target_entity_type=str(payload.get("target_entity_type") or ""),
+        target_entity_id=(
+            None
+            if payload.get("target_entity_id") is None
+            else str(payload.get("target_entity_id"))
+        ),
+        required_operations=tuple(payload.get("minimum_required_operations") or ()),
+    )
+    if contract.semantic_capability_family != goal.requested_capability.casefold():
+        raise CapabilityAcquisitionArchitectureError(
+            "GICC semantic family differs from the admitted Phase-9 goal"
+        )
+    if contract.required_operations != goal.required_operations:
+        raise CapabilityAcquisitionArchitectureError(
+            "GICC semantic operations differ from the admitted Phase-9 goal"
+        )
+    hints = {
+        " ".join(str(item).split()).casefold()
+        for item in goal.target_hints
+        if str(item).strip()
+    }
+    if f"entity_type:{contract.target_entity_type}" not in hints:
+        raise CapabilityAcquisitionArchitectureError(
+            "GICC target type is not bound to the admitted Phase-9 goal"
+        )
+    if (
+        contract.target_entity_id is not None
+        and f"entity_id:{contract.target_entity_id}" not in hints
+    ):
+        raise CapabilityAcquisitionArchitectureError(
+            "GICC target entity is not bound to the admitted Phase-9 goal"
+        )
+    return contract
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +162,7 @@ class CapabilityAcquisitionArchitecturePlan:
     proposed_package_id: str
     proposed_package_version: str
     rollback_strategy: str
+    semantic_capability_contract: SemanticCapabilityBuildContractV1 | None = None
     build_permitted: bool = True
     protected_surface_review_required: bool = True
     schema_version: int = 1
@@ -121,6 +223,10 @@ class CapabilityAcquisitionArchitecturePlan:
             "build_permitted": self.build_permitted,
             "protected_surface_review_required": self.protected_surface_review_required,
         }
+        if self.semantic_capability_contract is not None:
+            payload["semantic_capability_contract"] = (
+                self.semantic_capability_contract.to_payload()
+            )
         if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT in set(
             self.owner_acceptance_contract_ids
         ):
@@ -228,6 +334,11 @@ def derive_capability_acquisition_architecture(
         evaluation=selected_evaluation,
     )
     source_revision = str(admission.payload.get("source_revision") or "").strip()
+    semantic_contract = _gicc_semantic_contract(
+        store,
+        change_id=change.change_id,
+        goal=goal,
+    )
     architecture = CapabilityAcquisitionArchitecturePlan(
         goal_artifact_id=goal_artifact.artifact_id,
         goal_artifact_digest=goal_artifact.digest,
@@ -258,6 +369,7 @@ def derive_capability_acquisition_architecture(
         proposed_package_id=plan.proposed_package_id,
         proposed_package_version=plan.proposed_package_version,
         rollback_strategy=plan.rollback_summary,
+        semantic_capability_contract=semantic_contract,
     )
     payload = architecture.to_payload()
     current = store.latest_artifact(change.change_id, "architecture")
