@@ -190,6 +190,7 @@ class SafeMediaDevices(rtc.MediaDevices):
         )
 
         frame_samples = int(self._blocksize)
+        callback_errors = {"delay": 0, "process": 0}
 
         def input_callback(
             indata: np.ndarray,
@@ -213,10 +214,7 @@ class SafeMediaDevices(rtc.MediaDevices):
                     )
                     apm.set_stream_delay_ms(total_delay_ms)
                 except Exception:  # noqa: BLE001 - realtime callback must survive
-                    LOGGER.debug(
-                        "Microphone APM delay update failed",
-                        exc_info=True,
-                    )
+                    callback_errors["delay"] += 1
 
             num_frames = frame_count // frame_samples
             for index in range(num_frames):
@@ -235,10 +233,7 @@ class SafeMediaDevices(rtc.MediaDevices):
                     try:
                         apm.process_stream(frame)
                     except Exception:  # noqa: BLE001 - realtime callback must survive
-                        LOGGER.debug(
-                            "Microphone APM processing failed",
-                            exc_info=True,
-                        )
+                        callback_errors["process"] += 1
                 ingress.submit_from_audio_thread(frame)
 
         input_stream = sd.InputStream(
@@ -252,6 +247,7 @@ class SafeMediaDevices(rtc.MediaDevices):
         input_stream.start()
 
         async def pump() -> None:
+            capture_errors = 0
             while True:
                 frame = await ingress.get()
                 try:
@@ -259,10 +255,12 @@ class SafeMediaDevices(rtc.MediaDevices):
                 except asyncio.CancelledError:
                     raise
                 except Exception:  # noqa: BLE001 - keep physical mic pump alive
-                    LOGGER.debug(
-                        "LiveKit AudioSource capture rejected one microphone frame",
-                        exc_info=True,
-                    )
+                    capture_errors += 1
+                    if capture_errors == 1:
+                        LOGGER.warning(
+                            "LiveKit AudioSource rejected a microphone frame; "
+                            "capture pump remains active"
+                        )
 
         task = asyncio.create_task(
             pump(),
