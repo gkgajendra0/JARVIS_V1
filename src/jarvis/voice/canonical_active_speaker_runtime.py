@@ -258,9 +258,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
         Work/DBOS remains the durable owner-input truth. This method owns only the
         voice transport: it asks the pending question, leaves the microphone active,
-        and exposes exactly one Work tool bound to the waiting WorkItem. The shared
-        speech lease is held by the caller for the entire session, so no second JARVIS
-        producer can write to the physical output concurrently.
+        and exposes only answer-or-cancel Work tools bound to the waiting WorkItem. The
+        shared speech lease is held by the caller for the entire session, so no second
+        JARVIS producer can write to the physical output concurrently.
         """
 
         runtime = self._work_runtime
@@ -282,7 +282,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     owner_input_submitted.set()
                 ),
             )
-            return [work_tools.continue_background_work]
+            return [
+                work_tools.continue_background_work,
+                work_tools.cancel_background_work,
+            ]
 
         def owner_input_resolved() -> bool:
             return owner_input_submitted.is_set()
@@ -295,10 +298,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             "the owner does not need to say the wake word. Interpret short or imperfect "
             "speech transcription in the context of this exact question. If the answer "
             "is genuinely ambiguous, ask one concise clarification and keep listening. "
-            "When the owner clearly answers, call continue_background_work. That tool is "
-            "already deterministically bound to the correct WorkItem, so do not invent or "
-            "target another work ID. After the tool succeeds, acknowledge briefly and do "
-            "not start, cancel, reprioritize, or modify any other work. Pending question: "
+            "When the owner clearly answers, call continue_background_work. If the owner "
+            "instead clearly asks to cancel or stop this exact pending task, call "
+            "cancel_background_work. Both tools are already deterministically bound to "
+            "the correct WorkItem, so do not invent or target another work ID. After one "
+            "tool succeeds, acknowledge briefly and do not start, reprioritize, or modify "
+            "any other work. Pending question: "
             + normalized_question
         )
 

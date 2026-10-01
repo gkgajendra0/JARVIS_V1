@@ -95,7 +95,7 @@ The implementation therefore uses only public, already-adopted LiveKit primitive
 - one normal `AgentSession`;
 - the same accepted realtime provider and voice;
 - one active microphone/output session;
-- one deliberately constrained Work tool;
+- a deliberately constrained answer-or-cancel Work tool pair;
 - canonical conversation turns through the existing LiveKitConversationBridge.
 
 This keeps LiveKit replaceable behind JARVIS-owned lifecycle and avoids private
@@ -119,14 +119,18 @@ boundary:
    wake event;
 3. open one realtime AgentSession with microphone and speaker active;
 4. generate the pending Work question inside that same session;
-5. expose only `continue_background_work`;
-6. bind that tool to the exact delivery `work_id`;
-7. leave the microphone active while the owner answers;
-8. preserve the canonical USER utterance as the actual durable response;
-9. on successful DBOS owner-input submission, allow one brief acknowledgement;
+5. expose only `continue_background_work` and `cancel_background_work`;
+6. bind both tools to the exact delivery `work_id`;
+7. leave the microphone active while the owner answers or cancels that exact task;
+8. preserve the canonical USER utterance as the actual durable response when answering;
+9. on successful DBOS owner-input submission or exact-task cancellation, allow one brief
+   acknowledgement;
 10. close the proactive interaction and resume local wake detection.
 
-If the model attempts to target a different WorkItem, the bound tool fails closed.
+If the model attempts to answer or cancel a different WorkItem, the bound tools fail
+closed. Cancellation uses the canonical WorkOrchestrator path, so it stops durable
+execution before canonical Work is marked cancelled; it never edits Work SQLite state
+directly.
 
 If the owner does not answer, the WorkItem remains `WAITING_FOR_OWNER`, the delivery
 is not falsely marked complete, and a bounded durable retry is scheduled.
@@ -206,6 +210,8 @@ or superseded before a fresh correctly routed Phase-9 acquisition is accepted.
 - the microphone remains active after JARVIS asks;
 - the answer is bound to the exact waiting WorkItem;
 - multiple waiting tasks cannot cause target guessing;
+- the owner can cancel the exact pending task from the proactive interaction;
+- bound cancellation cannot target unrelated work;
 - no model-generated text substitutes for canonical owner speech;
 - DBOS/WorkItem remains restart-safe durable truth;
 - unanswered questions remain unresolved and retryable;

@@ -719,14 +719,52 @@ class WorkAgentTools:
     async def cancel_background_work(
         self,
         context: RunContext,
-        work_id: str,
+        work_id: str = "",
     ) -> dict[str, object]:
-        """Cancel one JARVIS WorkItem without affecting independent work."""
+        """Cancel one JARVIS WorkItem without affecting independent work.
+
+        In an ordinary voice session, pass the exact work_id resolved from canonical
+        Work state. In a proactive owner-input interaction, work_id may be omitted
+        because the tool is already bound to one exact WAITING_FOR_OWNER WorkItem.
+        A bound interaction cannot cancel a different WorkItem.
+        """
         del context
+        requested_work_id = str(work_id or "").strip()
+        bound_work_id = self._bound_owner_input_work_id
+        if (
+            bound_work_id is not None
+            and requested_work_id
+            and requested_work_id != bound_work_id
+        ):
+            return {
+                "ok": False,
+                "status": "owner_input_target_mismatch",
+                "work_id": requested_work_id,
+                "bound_work_id": bound_work_id,
+            }
+        target_work_id = requested_work_id or bound_work_id
+        if target_work_id is None:
+            return {
+                "ok": False,
+                "status": "cancel_target_unresolved",
+                "reason": "cancel requires an exact work_id outside bound owner input",
+            }
         try:
-            item = self._runtime.orchestrator.cancel(work_id)
+            item = self._runtime.orchestrator.cancel(target_work_id)
         except WorkStoreError:
-            return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
+            return {
+                "ok": False,
+                "status": "unknown_work_id",
+                "work_id": target_work_id,
+            }
+        if (
+            bound_work_id is not None
+            and self._on_bound_owner_input_submitted is not None
+        ):
+            # The callback closes the bounded proactive interaction. Cancellation
+            # resolves the pending owner-attention dependency just as definitively
+            # as supplying an answer, without submitting fake owner input to DBOS.
+            self._on_bound_owner_input_submitted(item)
         return {"ok": True, "status": "cancelled", **_public_work(item, self._runtime)}
 
     @function_tool()
