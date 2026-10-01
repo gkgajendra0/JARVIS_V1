@@ -17,10 +17,10 @@ from jarvis.work.store import default_work_state_dir
 _QUEUE_NAME = "jarvis-work"
 _OWNER_TOPIC = "owner-input"
 _CONTROL_TOPIC = "work-control"
+_RUNTIME_WAKE_TOPIC = "runtime-wake"
 _SHUTDOWN_WAKE_COMMAND = "__jarvis_shutdown_wake__"
 _EVENT_STATE = "jarvis-work-state"
 _MAX_REASONING_CYCLES = 200
-_SHUTDOWN_SLEEP_CHUNK_SECONDS = 1.0
 _WAITING_STATES = frozenset(
     {
         WorkState.WAITING_RESOURCE,
@@ -122,13 +122,14 @@ def _waiting_resource_delay(payload: dict[str, Any]) -> float:
     return min(delay, 60.0)
 
 
-def _durable_interruptible_sleep(seconds: float, *, patch_name: str) -> None:
-    """Preserve durable delay while adding <=1s cancellation checkpoints.
+def _durable_interruptible_wait(seconds: float, *, patch_name: str) -> None:
+    """Preserve absolute durable timing while making new waits wakeable.
 
-    DBOS.patch keeps existing workflow histories deterministic: an execution
-    replaying an older single-sleep checkpoint consumes that old sleep once.
-    As soon as it reaches new history, waits are split into short durable chunks
-    so shutdown cancellation cannot be stranded inside time.sleep(60).
+    Historical workflow executions may already have a DBOS.sleep checkpoint at
+    this position. DBOS.patch replays that exact legacy sleep once. New history
+    uses DBOS.recv with a timeout instead: DBOS persists the absolute timeout,
+    while JARVIS can wake the wait immediately on shutdown through a dedicated
+    runtime topic. A normal timeout returns None and changes no WorkItem truth.
     """
 
     delay = max(0.0, float(seconds))
@@ -137,20 +138,10 @@ def _durable_interruptible_sleep(seconds: float, *, patch_name: str) -> None:
     if not DBOS.patch(patch_name):
         DBOS.sleep(delay)
         return
-
-    remaining = delay
-    while remaining > 0:
-        chunk = min(_SHUTDOWN_SLEEP_CHUNK_SECONDS, remaining)
-        DBOS.sleep(chunk)
-        remaining = max(0.0, remaining - chunk)
-
-
-def _paused_control_timeout() -> float:
-    """Use short control waits for new history, preserving old replay exactly."""
-
-    if DBOS.patch("bounded-paused-control-recv-v1"):
-        return _SHUTDOWN_SLEEP_CHUNK_SECONDS
-    return 3600.0
+    DBOS.recv(
+        topic=_RUNTIME_WAKE_TOPIC,
+        timeout_seconds=delay,
+    )
 
 
 async def _advance_on_jarvis_loop(
@@ -249,9 +240,9 @@ def durable_workflow(
                 _apply_owner_input(work_id, str(owner_input))
 
         elif state is WorkState.WAITING_RESOURCE:
-            _durable_interruptible_sleep(
+            _durable_interruptible_wait(
                 _waiting_resource_delay(payload),
-                patch_name="bounded-waiting-resource-sleep-v1",
+                patch_name="wakeable-waiting-resource-v1",
             )
 
         elif state in {
@@ -265,7 +256,7 @@ def durable_workflow(
             while True:
                 command = DBOS.recv(
                     topic=_CONTROL_TOPIC,
-                    timeout_seconds=_paused_control_timeout(),
+                    timeout_seconds=3600,
                 )
                 if command == "resume":
                     break
@@ -405,17 +396,24 @@ class DBOSWorkExecutionBackend:
         if not normalized:
             return ()
         _run_dbos_sync(DBOS.cancel_workflows, list(normalized))
-        # Legacy workflows may already be blocked in a 3600-second DBOS.recv()
-        # recorded before bounded control waits existed. A harmless control
-        # message wakes that exact recv so cancellation is observed at the next
-        # durable boundary. Unknown commands never mutate canonical WorkItem state.
+        # Wake both durable wait classes. The control message releases PAUSED
+        # workflows, including legacy 3600-second recv calls. The runtime-wake
+        # message releases new WAITING_RESOURCE recv timeouts without shortening
+        # their normal durable delay semantics.
         for execution_id in normalized:
             _run_dbos_sync(
                 DBOS.send,
                 execution_id,
                 _SHUTDOWN_WAKE_COMMAND,
                 topic=_CONTROL_TOPIC,
-                idempotency_key=f"shutdown-wake:{execution_id}",
+                idempotency_key=f"shutdown-control-wake:{execution_id}",
+            )
+            _run_dbos_sync(
+                DBOS.send,
+                execution_id,
+                _SHUTDOWN_WAKE_COMMAND,
+                topic=_RUNTIME_WAKE_TOPIC,
+                idempotency_key=f"shutdown-runtime-wake:{execution_id}",
             )
         return normalized
 
