@@ -54,6 +54,8 @@ class _SessionToolBundle:
         research_service: CurrentResearchService | None,
         capability_runtime: CapabilityRuntime | None,
         work_runtime: WorkRuntime | None = None,
+        gicc_tool_factory: Callable[[ConversationSession], list] | None = None,
+        allow_direct_capability_acquisition: bool = True,
     ) -> None:
         self._vision_tools = vision_tools
         self._conversation_getter = conversation_getter
@@ -62,6 +64,10 @@ class _SessionToolBundle:
         self._research_service = research_service
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
+        self._gicc_tool_factory = gicc_tool_factory
+        self._allow_direct_capability_acquisition = (
+            allow_direct_capability_acquisition
+        )
 
     @property
     def tools(self) -> list:
@@ -83,8 +89,18 @@ class _SessionToolBundle:
             tools.extend(
                 LocalReadAgentTools(self._capability_runtime, conversation).tools
             )
+        if self._gicc_tool_factory is not None:
+            tools.extend(self._gicc_tool_factory(conversation))
         if self._work_runtime is not None:
-            tools.extend(WorkAgentTools(self._work_runtime, conversation).tools)
+            tools.extend(
+                WorkAgentTools(
+                    self._work_runtime,
+                    conversation,
+                    allow_capability_acquisition=(
+                        self._allow_direct_capability_acquisition
+                    ),
+                ).tools
+            )
         return tools
 
 
@@ -100,6 +116,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         research_service: CurrentResearchService | None = None,
         capability_runtime: CapabilityRuntime | None = None,
         work_runtime: WorkRuntime | None = None,
+        gicc_tool_factory: Callable[[ConversationSession], list] | None = None,
+        allow_direct_capability_acquisition: bool = True,
         **kwargs: Any,
     ) -> None:
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
@@ -208,6 +226,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             or research_service is not None
             or capability_runtime is not None
             or work_runtime is not None
+            or gicc_tool_factory is not None
         ):
             self._vision_tools = _SessionToolBundle(
                 self._vision_tools,
@@ -217,6 +236,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 research_service=research_service,
                 capability_runtime=capability_runtime,
                 work_runtime=work_runtime,
+                gicc_tool_factory=gicc_tool_factory,
+                allow_direct_capability_acquisition=(
+                    allow_direct_capability_acquisition
+                ),
             )
 
     @staticmethod
