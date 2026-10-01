@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 from pydantic import BaseModel, ConfigDict
 
+import jarvis.chatgpt_plan as chatgpt_plan_module
 from jarvis.chatgpt_plan import (
     CHATGPT_PLAN_REQUIRED_SCOPE,
     CHATGPT_PLAN_TARGET_ID,
     ChatGPTPlanCredentials,
+    ChatGPTPlanHTTPError,
     ChatGPTPlanResponse,
+    ChatGPTPlanSessionManager,
     ChatGPTPlanUsageUnavailable,
     _strict_json_schema,
     load_or_create_chatgpt_plan_host_id,
@@ -192,6 +196,79 @@ async def test_chatgpt_plan_client_falls_back_when_plan_allowance_is_unavailable
 
     assert result.parsed == _Result(ok=True, message="fallback")
     assert fallback.calls == 1
+
+
+def test_chatgpt_plan_stream_error_maps_subscription_limit_to_usage_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _CredentialStore:
+        def load(self):
+            return _credentials()
+
+        def save(self, credentials) -> None:
+            del credentials
+
+    class _StreamResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            del exc_type, exc, tb
+            return False
+
+        def __iter__(self):
+            event = {
+                "type": "error",
+                "error": {
+                    "code": "subscription_sharing_usage_limit_exceeded",
+                    "message": (
+                        "The ChatGPT user has reached their Subscription Sharing "
+                        "usage limit. Ask the user to try again after their usage "
+                        "limit resets or use an API key instead."
+                    ),
+                },
+            }
+            yield f"data: {json.dumps(event)}\n".encode()
+
+    monkeypatch.setattr(
+        chatgpt_plan_module.request,
+        "urlopen",
+        lambda request, timeout: _StreamResponse(),
+    )
+    manager = ChatGPTPlanSessionManager(
+        credential_store=_CredentialStore(),  # type: ignore[arg-type]
+        clock=lambda: 100.0,
+    )
+
+    with pytest.raises(ChatGPTPlanUsageUnavailable) as captured:
+        manager.invoke_structured(
+            model="plan-model",
+            instructions="system",
+            input_payload={"task": "test"},
+            schema_name="result",
+            schema={"type": "object", "properties": {}},
+            timeout_seconds=1.0,
+        )
+
+    assert captured.value.status_code == 429
+    assert captured.value.code == "subscription_sharing_usage_limit_exceeded"
+    assert captured.value.retryable is True
+
+
+def test_raw_chatgpt_plan_subscription_limit_is_provider_pressure() -> None:
+    failure = classify_provider_failure(
+        ChatGPTPlanHTTPError(
+            (
+                "The ChatGPT user has reached their Subscription Sharing usage "
+                "limit. Ask the user to try again after their usage limit resets "
+                "or use an API key instead."
+            ),
+            code="subscription_sharing_usage_limit_exceeded",
+        ),
+        provider="chatgpt_plan",
+    )
+
+    assert failure.kind is ProviderFailureKind.RATE_LIMITED
 
 
 def test_chatgpt_plan_usage_error_maps_to_rate_limit_for_work_fallback() -> None:
