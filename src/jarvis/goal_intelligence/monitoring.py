@@ -419,6 +419,7 @@ class MonitorEventProcessor:
         condition_met: bool,
         observed_at_epoch: float,
         notification_message: str,
+        evidence_refs: tuple[str, ...] | list[str] = (),
     ) -> MonitorObservationResult:
         if not isinstance(predicate, MonitorPredicateV1):
             raise TypeError("predicate must be MonitorPredicateV1")
@@ -430,6 +431,15 @@ class MonitorEventProcessor:
         observed = float(observed_at_epoch)
         if not math.isfinite(observed) or observed < 0:
             raise ValueError("observed_at_epoch must be finite and non-negative")
+        evidence = tuple(
+            sorted(
+                {
+                    str(item).strip()
+                    for item in evidence_refs
+                    if str(item).strip()
+                }
+            )
+        )
         state = self._goals.get_monitor_runtime_state(predicate.predicate_id)
         if state is None:
             raise GoalStoreError(
@@ -457,6 +467,7 @@ class MonitorEventProcessor:
             updated_payload = {
                 **payload,
                 "last_observation_digest": digest,
+                "last_evidence_refs": list(evidence),
             }
             updated = self._goals.update_monitor_runtime_state(
                 predicate_id=predicate.predicate_id,
@@ -497,6 +508,7 @@ class MonitorEventProcessor:
             updated_payload = {
                 **payload,
                 "last_observation_digest": digest,
+                "last_evidence_refs": list(evidence),
                 "stable_since_epoch": None,
             }
             updated = self._goals.update_monitor_runtime_state(
@@ -519,6 +531,7 @@ class MonitorEventProcessor:
             updated_payload = {
                 **payload,
                 "last_observation_digest": digest,
+                "last_evidence_refs": list(evidence),
                 "stable_since_epoch": stable_value,
             }
             updated = self._goals.update_monitor_runtime_state(
@@ -544,6 +557,7 @@ class MonitorEventProcessor:
                 runtime_payload={
                     **payload,
                     "last_observation_digest": digest,
+                    "last_evidence_refs": list(evidence),
                     "stable_since_epoch": stable_value,
                 },
                 updated_at=datetime.now(UTC).isoformat(),
@@ -571,6 +585,7 @@ class MonitorEventProcessor:
                 runtime_payload={
                     **payload,
                     "last_observation_digest": digest,
+                    "last_evidence_refs": list(evidence),
                     "stable_since_epoch": stable_value,
                 },
                 updated_at=datetime.now(UTC).isoformat(),
@@ -602,6 +617,7 @@ class MonitorEventProcessor:
             runtime_payload={
                 **payload,
                 "last_observation_digest": digest,
+                "last_evidence_refs": list(evidence),
                 "stable_since_epoch": stable_value,
                 "last_trigger_epoch": observed,
                 "notification_event_key": event_key,
@@ -619,6 +635,7 @@ class MonitorEventProcessor:
                     "outcome": "triggered",
                     "observation_digest": digest,
                     "notification_event_key": event_key,
+                    "evidence_refs": list(evidence),
                 },
             )
             self._advance_bound_plan(
