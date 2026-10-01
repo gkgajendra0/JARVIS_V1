@@ -91,8 +91,7 @@ class ContinuationCoordinator:
         continuation = self.restore(continuation_id)
         need_id = str(information_need_id).strip()
         if (
-            continuation.blocked_by_type
-            is not ContinuationBlockerType.INFORMATION_NEED
+            continuation.blocked_by_type is not ContinuationBlockerType.INFORMATION_NEED
             or continuation.blocked_by_id != need_id
         ):
             raise GoalStoreConflict(
