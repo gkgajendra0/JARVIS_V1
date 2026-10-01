@@ -136,7 +136,7 @@ def test_unrelated_or_wrong_bound_reply_cannot_resolve_need(tmp_path: Path) -> N
     assert result.interaction is not None
     interaction_id = str(result.interaction["interaction_id"])
 
-    with pytest.raises(GoalStoreConflict, match="do not match"):
+    with pytest.raises(GoalStoreConflict, match="does not match"):
         store.submit_information_interaction_reply(
             interaction_id=interaction_id,
             goal_id="goal_other",
@@ -211,7 +211,7 @@ def test_another_need_cannot_receive_bound_reply(tmp_path: Path) -> None:
     assert first.interaction is not None
     assert second.interaction is not None
 
-    with pytest.raises(GoalStoreConflict, match="does not match"):
+    with pytest.raises(GoalStoreConflict, match="do not match"):
         BoundInformationInteraction(
             store=store,
             interaction_id=str(first.interaction["interaction_id"]),
