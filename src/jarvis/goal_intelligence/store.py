@@ -200,7 +200,9 @@ class GoalStore:
                     self._decode(existing["payload"]), existing["digest"]
                 )
                 if current.digest != goal.digest:
-                    raise GoalStoreConflict("goal_id already exists with different payload")
+                    raise GoalStoreConflict(
+                        "goal_id already exists with different payload"
+                    )
                 return current
             db.execute(
                 """
@@ -577,9 +579,7 @@ class GoalStore:
             ).fetchone()
         if row is None:
             return None
-        return CapabilityGapV1.from_payload(
-            self._decode(row["payload"]), row["digest"]
-        )
+        return CapabilityGapV1.from_payload(self._decode(row["payload"]), row["digest"])
 
     def update_gap_state(
         self,
@@ -681,9 +681,7 @@ class GoalStore:
             return None
         return PlanGraphV1.from_payload(self._decode(row["payload"]), row["digest"])
 
-    def put_continuation(
-        self, continuation: GoalContinuationV1
-    ) -> GoalContinuationV1:
+    def put_continuation(self, continuation: GoalContinuationV1) -> GoalContinuationV1:
         if not isinstance(continuation, GoalContinuationV1):
             raise TypeError("continuation must be GoalContinuationV1")
         with self.work.extension_transaction() as db:
@@ -767,9 +765,7 @@ class GoalStore:
             if current.state.value == "resumed":
                 return current
             if current.revision != expected_revision:
-                raise GoalStoreConflict(
-                    "continuation revision changed before resume"
-                )
+                raise GoalStoreConflict("continuation revision changed before resume")
             updated = current.resumed(resumed_at=resumed_at)
             result = db.execute(
                 """
@@ -804,9 +800,7 @@ class GoalStore:
             loader=MonitorPredicateV1.from_payload,
         )
 
-    def get_monitor_predicate(
-        self, predicate_id: str
-    ) -> MonitorPredicateV1 | None:
+    def get_monitor_predicate(self, predicate_id: str) -> MonitorPredicateV1 | None:
         result = self._get_immutable(
             table="monitor_predicates_v1",
             id_column="predicate_id",
