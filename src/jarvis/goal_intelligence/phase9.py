@@ -6,13 +6,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable, Protocol
 
-from jarvis.capability_acquisition.admission import (
-    CapabilityAcquisitionAdmission,
-    CapabilityAcquisitionCoordinator,
-)
+from jarvis.capability_acquisition.admission import CapabilityAcquisitionAdmission
 from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
-from jarvis.engineering_change.store import ChangeStore
+from jarvis.engineering_change import ChangeArtifact
 from jarvis.engineering_substrate.canonical import canonical_digest
 
 from .capability_graph import CapabilityGapAnalysis, CapabilityGraphResolver
@@ -29,6 +26,31 @@ from .store import GoalStore, GoalStoreConflict, GoalStoreError
 
 class CapabilityCatalogRefresher(Protocol):
     def __call__(self) -> object: ...
+
+
+class CapabilityAcquisitionAdmitter(Protocol):
+    def admit(
+        self,
+        goal: OwnerCapabilityGoalV1,
+        *,
+        source_revision: str,
+    ) -> CapabilityAcquisitionAdmission: ...
+
+
+class Phase9ChangeArtifactStore(Protocol):
+    def latest_artifact(
+        self,
+        change_id: str,
+        kind: str,
+    ) -> ChangeArtifact | None: ...
+
+    def add_artifact(
+        self,
+        change_id: str,
+        *,
+        kind: str,
+        payload: dict[str, object],
+    ) -> ChangeArtifact: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,15 +165,18 @@ class Phase9GoalBridge:
     def __init__(
         self,
         *,
-        coordinator: CapabilityAcquisitionCoordinator,
-        change_store: ChangeStore,
+        coordinator: CapabilityAcquisitionAdmitter,
+        change_store: Phase9ChangeArtifactStore,
         goal_store: GoalStore,
         source_revision_provider: Callable[[], str],
     ) -> None:
-        if not isinstance(coordinator, CapabilityAcquisitionCoordinator):
-            raise TypeError("coordinator must be CapabilityAcquisitionCoordinator")
-        if not isinstance(change_store, ChangeStore):
-            raise TypeError("change_store must be ChangeStore")
+        if not callable(getattr(coordinator, "admit", None)):
+            raise TypeError("coordinator must provide admit()")
+        if (
+            not callable(getattr(change_store, "latest_artifact", None))
+            or not callable(getattr(change_store, "add_artifact", None))
+        ):
+            raise TypeError("change_store must provide artifact persistence")
         if not isinstance(goal_store, GoalStore):
             raise TypeError("goal_store must be GoalStore")
         if not callable(source_revision_provider):
