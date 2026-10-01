@@ -1,6 +1,14 @@
 from pathlib import Path
 
 import pytest
+from tests.test_gicc_composition import (
+    FakePhase9Bridge,
+    QueueStructuredClient,
+    StaticContext,
+    _computer_descriptor,
+    _conversation,
+    _store,
+)
 
 from jarvis.capabilities.models import (
     CapabilityDescriptor,
@@ -38,14 +46,6 @@ from jarvis.goal_intelligence.telemetry import CapturingGiccTelemetry
 from jarvis.goal_intelligence.world import EntityResolver, WorldRegistry
 from jarvis.hands.provider_adapters import StructuredOutputTelemetry
 
-from tests.test_gicc_composition import (
-    FakePhase9Bridge,
-    QueueStructuredClient,
-    StaticContext,
-    _computer_descriptor,
-    _conversation,
-    _store,
-)
 
 
 class CallbackStructuredClient:
