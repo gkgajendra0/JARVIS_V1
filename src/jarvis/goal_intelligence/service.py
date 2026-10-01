@@ -73,9 +73,50 @@ class VerificationRegistry:
         key = str(predicate_ref).strip()
         evaluator = self._evaluators.get(key)
         if evaluator is None:
+            raw_results = evidence.get("results", ())
+            results = (
+                tuple(raw_results)
+                if isinstance(raw_results, (list, tuple))
+                else ()
+            )
+            matching = []
+            for item in results:
+                if not isinstance(item, dict):
+                    continue
+                payload = item.get("payload")
+                if not isinstance(payload, dict):
+                    continue
+                if str(payload.get("postcondition_ref") or "").strip() != key:
+                    continue
+                data = payload.get("data")
+                if not isinstance(data, dict):
+                    continue
+                if item.get("status") != "succeeded":
+                    continue
+                matching.append((item, data))
+            passed = [
+                item
+                for item, data in matching
+                if data.get("verification_passed") is True
+            ]
+            if passed:
+                return VerificationOutcome(
+                    verified=True,
+                    reason="executor postcondition verification passed",
+                    evidence_refs=tuple(
+                        str(item.get("result_id"))
+                        for item in passed
+                        if str(item.get("result_id") or "").strip()
+                    ),
+                )
             return VerificationOutcome(
                 verified=False,
-                reason="verification predicate has no registered evaluator",
+                reason=(
+                    "matching executor evidence did not verify the postcondition"
+                    if matching
+                    else "verification predicate has no registered evaluator or "
+                    "matching executor evidence"
+                ),
             )
         result = evaluator(dict(evidence))
         if isinstance(result, VerificationOutcome):
