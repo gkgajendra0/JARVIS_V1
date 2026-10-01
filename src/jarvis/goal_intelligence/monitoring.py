@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
@@ -160,6 +162,7 @@ class MonitoringWorkCoordinator:
                 payload={
                     "strategy": strategy.value,
                     "continuation_id": continuation_id,
+                    "source_entity_ids": list(predicate.source_entity_ids),
                     "started_at_epoch": timestamp,
                     "last_observation_digest": None,
                     "stable_since_epoch": None,
@@ -391,3 +394,56 @@ class MonitorEventProcessor:
             notification_event_key=event_key,
             runtime_state=updated,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class MonitoringDispatchReceipt:
+    work_id: str
+    route: str = "work_monitoring"
+
+
+class GoalMonitoringDispatcher:
+    """Adapter from a validated MONITOR plan node to durable monitoring Work."""
+
+    def __init__(
+        self,
+        *,
+        coordinator: MonitoringWorkCoordinator,
+        available_strategies: tuple[MonitoringStrategy, ...]
+        | list[MonitoringStrategy],
+        planner: MonitoringPlanner | None = None,
+        now_epoch: Callable[[], float] = time.time,
+    ) -> None:
+        if not isinstance(coordinator, MonitoringWorkCoordinator):
+            raise TypeError("coordinator must be MonitoringWorkCoordinator")
+        if not callable(now_epoch):
+            raise TypeError("now_epoch must be callable")
+        self._coordinator = coordinator
+        self._available = tuple(available_strategies)
+        self._planner = planner or MonitoringPlanner()
+        self._now_epoch = now_epoch
+
+    def start_monitor(
+        self,
+        *,
+        goal,
+        plan,
+        node,
+        predicate: MonitorPredicateV1,
+    ) -> MonitoringDispatchReceipt:
+        if predicate.goal_id != goal.goal_id or plan.goal_id != goal.goal_id:
+            raise ValueError("monitor predicate/plan must belong to owner goal")
+        if node.monitor_predicate_id != predicate.predicate_id:
+            raise ValueError("MONITOR node does not bind the supplied predicate")
+        if node.node_id not in {item.node_id for item in plan.nodes}:
+            raise ValueError("MONITOR node does not belong to supplied plan")
+        strategy = self._planner.choose(
+            predicate,
+            available_strategies=self._available,
+        )
+        started = self._coordinator.start(
+            predicate,
+            strategy=strategy,
+            now_epoch=float(self._now_epoch()),
+        )
+        return MonitoringDispatchReceipt(work_id=started.work_id)
