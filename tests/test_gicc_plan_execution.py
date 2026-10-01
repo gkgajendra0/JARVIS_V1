@@ -64,6 +64,7 @@ def _store(tmp_path: Path) -> tuple[GoalStore, OwnerGoalV2]:
 def _plan(store: GoalStore, goal: OwnerGoalV2, revision: int = 1):
     context = PlanValidationContext(
         catalog=_catalog(),
+        allowed_capability_operations=(("app:lifecycle", "open_app"),),
         allowed_postcondition_refs=("app_open",),
     )
     plan = PlanValidator().validate(
