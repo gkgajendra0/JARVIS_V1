@@ -1561,9 +1561,7 @@ class GoalStore:
                 return count
             configured_max = int(row["max_attempts"])
             if configured_max != max_attempts:
-                raise GoalStoreConflict(
-                    "replan budget maximum changed for active goal"
-                )
+                raise GoalStoreConflict("replan budget maximum changed for active goal")
             count = int(row["attempt_count"])
             if count >= max_attempts:
                 raise GoalStoreConflict("replan budget exhausted")
