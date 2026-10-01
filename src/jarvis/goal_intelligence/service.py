@@ -6,6 +6,7 @@ validated PlanNode at a time to the canonical subsystem that already owns that w
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
@@ -44,6 +45,28 @@ class VerificationOutcome:
 
 class GovernedCapabilityRuntime(Protocol):
     def execute(self, request: CapabilityRequest) -> CapabilityResult: ...
+
+
+@dataclass(frozen=True, slots=True)
+class SpecialistActionDispatch:
+    result: CapabilityResult
+    route: str
+
+    def __post_init__(self) -> None:
+        if not self.route.strip():
+            raise ValueError("specialist action route must not be empty")
+
+
+class SpecialistActionDispatcher(Protocol):
+    def handles(self, node: PlanNodeV1) -> bool: ...
+
+    async def execute(
+        self,
+        *,
+        goal: OwnerGoalV2,
+        plan: PlanGraphV1,
+        node: PlanNodeV1,
+    ) -> SpecialistActionDispatch: ...
 
 
 class VerificationRegistry:
@@ -196,6 +219,7 @@ class GoalOrchestrator:
         *,
         goal_store: GoalStore,
         capability_runtime: GovernedCapabilityRuntime,
+        specialist_action_dispatcher: SpecialistActionDispatcher | None = None,
         information_resolver: InformationResolver | None = None,
         phase9_bridge: Phase9GoalBridge | None = None,
         verification_registry: VerificationRegistry | None = None,
@@ -211,6 +235,14 @@ class GoalOrchestrator:
             raise TypeError("capability_runtime must provide execute()")
         self._store = goal_store
         self._capabilities = capability_runtime
+        if specialist_action_dispatcher is not None and (
+            not callable(getattr(specialist_action_dispatcher, "handles", None))
+            or not callable(getattr(specialist_action_dispatcher, "execute", None))
+        ):
+            raise TypeError(
+                "specialist_action_dispatcher must provide handles() and execute()"
+            )
+        self._specialist_actions = specialist_action_dispatcher
         self._information = information_resolver
         self._phase9 = phase9_bridge
         self._verification = verification_registry or VerificationRegistry()
@@ -250,7 +282,7 @@ class GoalOrchestrator:
             )
         )
 
-    def dispatch_node(
+    async def dispatch_node(
         self,
         *,
         goal: OwnerGoalV2,
@@ -273,26 +305,34 @@ class GoalOrchestrator:
         )
 
         if node.node_type in {PlanNodeType.ACTION, PlanNodeType.OBSERVE}:
-            if self._progress is not None:
-                if observed_state_digest is None:
-                    raise ValueError(
-                        "progress-guarded action requires observed_state_digest"
-                    )
+            if self._progress is not None and observed_state_digest is not None:
                 self._progress.admit_action(
                     node,
                     observed_state_digest=observed_state_digest,
                 )
             assert node.capability_key is not None
             assert node.operation is not None
-            result = self._capabilities.execute(
-                CapabilityRequest(
+
+            specialist = self._specialist_actions
+            if specialist is not None and specialist.handles(node):
+                dispatched = await specialist.execute(
+                    goal=goal,
+                    plan=plan,
+                    node=node,
+                )
+                result = dispatched.result
+                route = dispatched.route
+            else:
+                request = CapabilityRequest(
                     session_id=goal.source_session_id,
                     capability_key=node.capability_key,
                     operation=node.operation,
                     parameters=dict(node.parameters),
                     origin=ActionOrigin.MODEL_SUGGESTED,
                 )
-            )
+                result = await asyncio.to_thread(self._capabilities.execute, request)
+                route = "capability_runtime"
+
             return PlanDispatchResult(
                 node_id=node.node_id,
                 node_type=node.node_type,
@@ -301,7 +341,7 @@ class GoalOrchestrator:
                     if result.ok
                     else GoalDispatchStatus.FAILED
                 ),
-                route="capability_runtime",
+                route=route,
                 result_ref=f"capability_result:{node.node_id}",
                 capability_result=result,
             )
