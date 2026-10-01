@@ -110,8 +110,7 @@ async def test_tv_shadow_interpretation_separates_task_from_reusable_capability(
         "media_player.control"
     ]
     assert all(
-        "transporter" not in item.family
-        for item in result.capability_requirements
+        "transporter" not in item.family for item in result.capability_requirements
     )
 
 
