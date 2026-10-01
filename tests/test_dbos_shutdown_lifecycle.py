@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import CancelledError as FutureCancelledError
 from types import SimpleNamespace
 
 import pytest
@@ -43,11 +44,21 @@ class _FakeShutdownOrchestrator:
 
 class _FakeShutdownBackend:
     def __init__(self) -> None:
+        self.began_shutdown = False
         self.parked: tuple[str, ...] = ()
+        self.quiesced = False
+
+    def begin_shutdown(self) -> None:
+        self.began_shutdown = True
 
     def park_for_shutdown(self, execution_ids: tuple[str, ...]) -> tuple[str, ...]:
         self.parked = execution_ids
         return execution_ids
+
+    async def quiesce_active_advances(self, *, timeout_seconds: float = 5.0) -> int:
+        assert timeout_seconds == 5.0
+        self.quiesced = True
+        return len(self.parked)
 
 
 @pytest.mark.asyncio
@@ -88,8 +99,10 @@ async def test_work_runtime_shutdown_keeps_event_loop_alive_during_dbos_drain(
 
     await runtime.aclose()
 
+    assert runtime.backend.began_shutdown is True
     assert runtime._interactive_brain_gate.preempted is True
     assert runtime.backend.parked == ("work-a", "work-b__retry_v3")
+    assert runtime.backend.quiesced is True
     assert observed == ["event-loop-alive"]
     assert shutdown_timeouts == [10]
 
@@ -208,3 +221,45 @@ def test_orchestrator_reconciles_parked_retry_without_duplicate_submission() -> 
     assert orchestrator.reconcile_active() == ("work-retry",)
     assert backend.reconciled == ["work-retry__retry_v4"]
     assert backend.submitted == []
+
+
+
+@pytest.mark.asyncio
+async def test_active_engine_advance_unwinds_before_dbos_teardown(
+    monkeypatch,
+) -> None:
+    started = asyncio.Event()
+    released = asyncio.Event()
+
+    class _BlockingEngine:
+        async def advance(self, work_id: str):
+            assert work_id == "work-active"
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                released.set()
+
+    monkeypatch.setattr(dbos_backend, "_ENGINE", _BlockingEngine())
+    monkeypatch.setattr(
+        dbos_backend,
+        "_JARVIS_EVENT_LOOP",
+        asyncio.get_running_loop(),
+    )
+    monkeypatch.setattr(dbos_backend, "_ADVANCE_QUIESCING", False)
+    with dbos_backend._ACTIVE_ADVANCE_LOCK:
+        dbos_backend._ACTIVE_ADVANCES.clear()
+
+    backend = DBOSWorkExecutionBackend()
+    worker = asyncio.create_task(
+        asyncio.to_thread(dbos_backend._run_advance_work, "work-active")
+    )
+    await asyncio.wait_for(started.wait(), timeout=1.0)
+
+    backend.begin_shutdown()
+    quiesced = await backend.quiesce_active_advances(timeout_seconds=1.0)
+
+    assert quiesced == 1
+    assert released.is_set()
+    with pytest.raises(FutureCancelledError):
+        await worker
