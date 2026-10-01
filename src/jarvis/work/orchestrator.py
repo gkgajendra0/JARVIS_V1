@@ -135,9 +135,21 @@ class WorkOrchestrator:
         for item in self.list_active(limit=limit):
             bound_execution = self._store.get_execution_id(item.work_id)
             if bound_execution is not None and bound_execution != item.work_id:
-                # DBOS automatically recovers pending non-canonical retry executions
-                # at runtime launch. Re-submitting the canonical workflow ID here would
-                # create a second executor for the same WorkItem.
+                # Retry executions intentionally use a non-canonical DBOS ID. After
+                # graceful shutdown they may be durably parked as CANCELLED, so let
+                # production backends resume that exact execution instead of creating
+                # a second canonical executor for the same WorkItem.
+                reconcile_execution = getattr(
+                    self._backend,
+                    "reconcile_execution",
+                    None,
+                )
+                if callable(reconcile_execution):
+                    resumed_id = reconcile_execution(bound_execution)
+                    if resumed_id != bound_execution:
+                        raise RuntimeError(
+                            "durable backend changed retry execution identity"
+                        )
                 reconciled.append(item.work_id)
                 continue
             execution_id = self._backend.submit(item.work_id, priority=item.priority)
