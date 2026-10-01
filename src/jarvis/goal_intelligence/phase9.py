@@ -172,9 +172,8 @@ class Phase9GoalBridge:
     ) -> None:
         if not callable(getattr(coordinator, "admit", None)):
             raise TypeError("coordinator must provide admit()")
-        if (
-            not callable(getattr(change_store, "latest_artifact", None))
-            or not callable(getattr(change_store, "add_artifact", None))
+        if not callable(getattr(change_store, "latest_artifact", None)) or not callable(
+            getattr(change_store, "add_artifact", None)
         ):
             raise TypeError("change_store must provide artifact persistence")
         if not isinstance(goal_store, GoalStore):
@@ -283,10 +282,7 @@ class Phase9GoalContinuationVerifier:
             self._context.current(),
             persist_gaps=False,
         )
-        still_missing = {
-            gap.gap_id: gap
-            for gap in analysis.gaps
-        }
+        still_missing = {gap.gap_id: gap for gap in analysis.gaps}
         if request.gap_id in still_missing:
             return Phase9GapRecheck(
                 request=request,
@@ -306,9 +302,7 @@ class Phase9GoalContinuationVerifier:
         if continuation_id is not None:
             continuation = self._store.get_continuation(continuation_id)
             if continuation is None:
-                raise GoalStoreError(
-                    f"unknown continuation_id: {continuation_id}"
-                )
+                raise GoalStoreError(f"unknown continuation_id: {continuation_id}")
             if (
                 continuation.goal_id != request.motivating_goal_id
                 or continuation.blocked_by_id != request.gap_id
