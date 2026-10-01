@@ -188,6 +188,20 @@ class GoalStore:
                     created_at TEXT NOT NULL,
                     UNIQUE(source_session_id, source_turn_id)
                 );
+
+                CREATE TABLE IF NOT EXISTS information_need_interactions_v1 (
+                    interaction_id TEXT PRIMARY KEY,
+                    goal_id TEXT NOT NULL,
+                    information_need_id TEXT NOT NULL UNIQUE,
+                    state TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    digest TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    resolved_at TEXT,
+                    FOREIGN KEY(goal_id) REFERENCES owner_goals_v2(goal_id),
+                    FOREIGN KEY(information_need_id)
+                        REFERENCES information_needs_v1(information_need_id)
+                );
                 """
             )
 
@@ -478,6 +492,44 @@ class GoalStore:
             self._decode(row["payload"]), row["digest"]
         )
 
+    def list_resource_bindings(
+        self,
+        *,
+        entity_id: str | None = None,
+        limit: int = 100,
+    ) -> tuple[ResourceBindingV1, ...]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+            raise ValueError("limit must be a positive integer")
+        with self.work.extension_transaction() as db:
+            if entity_id is None:
+                rows = db.execute(
+                    """
+                    SELECT payload, binding_digest
+                    FROM resource_bindings_v1
+                    ORDER BY last_verified_at DESC, binding_id ASC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
+            else:
+                rows = db.execute(
+                    """
+                    SELECT payload, binding_digest
+                    FROM resource_bindings_v1
+                    WHERE entity_id=?
+                    ORDER BY last_verified_at DESC, binding_id ASC
+                    LIMIT ?
+                    """,
+                    (str(entity_id).strip(), limit),
+                ).fetchall()
+        return tuple(
+            ResourceBindingV1.from_payload(
+                self._decode(row["payload"]),
+                row["binding_digest"],
+            )
+            for row in rows
+        )
+
     def put_resource_binding(self, binding: ResourceBindingV1) -> ResourceBindingV1:
         if not isinstance(binding, ResourceBindingV1):
             raise TypeError("binding must be ResourceBindingV1")
@@ -592,6 +644,346 @@ class GoalStore:
         return InformationNeedV1.from_payload(
             self._decode(row["payload"]), row["digest"]
         )
+
+    def update_information_need_state(
+        self,
+        need_id: str,
+        state: InformationNeedState,
+        *,
+        expected_revision: int,
+        self_resolution_attempts: tuple[str, ...] | list[str] | None = None,
+        owner_question: str | None = None,
+    ) -> InformationNeedV1:
+        if not isinstance(state, InformationNeedState):
+            raise TypeError("state must be InformationNeedState")
+        if state is InformationNeedState.RESOLVED:
+            raise ValueError("use resolve_information_need for RESOLVED state")
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM information_needs_v1
+                WHERE information_need_id=?
+                """,
+                (need_id,),
+            ).fetchone()
+            if row is None:
+                raise GoalStoreError(f"unknown information_need_id: {need_id}")
+            current = InformationNeedV1.from_payload(
+                self._decode(row["payload"]),
+                row["digest"],
+            )
+            if current.revision != expected_revision:
+                raise GoalStoreConflict(
+                    "information need revision changed before state update"
+                )
+            attempts = (
+                current.self_resolution_attempts
+                if self_resolution_attempts is None
+                else tuple(
+                    sorted(
+                        {
+                            *current.self_resolution_attempts,
+                            *(
+                                str(item).strip()
+                                for item in self_resolution_attempts
+                                if str(item).strip()
+                            ),
+                        }
+                    )
+                )
+            )
+            question = (
+                current.owner_question
+                if owner_question is None
+                else str(owner_question).strip() or None
+            )
+            if (
+                current.state is state
+                and attempts == current.self_resolution_attempts
+                and question == current.owner_question
+            ):
+                return current
+            candidate = replace(
+                current,
+                revision=current.revision + 1,
+                state=state,
+                self_resolution_attempts=attempts,
+                owner_question=question,
+                digest="pending",
+            )
+            updated = replace(
+                candidate,
+                digest=canonical_digest(candidate.canonical_payload()),
+            )
+            result = db.execute(
+                """
+                UPDATE information_needs_v1
+                SET revision=?, state=?, payload=?, digest=?
+                WHERE information_need_id=? AND revision=?
+                """,
+                (
+                    updated.revision,
+                    updated.state.value,
+                    self._encode(updated.canonical_payload()),
+                    updated.digest,
+                    need_id,
+                    current.revision,
+                ),
+            )
+            if result.rowcount != 1:
+                raise GoalStoreConflict(
+                    "information need compare-and-swap state update lost"
+                )
+        return updated
+
+    def begin_information_interaction(
+        self,
+        *,
+        need_id: str,
+        created_at: str,
+    ) -> dict[str, object]:
+        timestamp = str(created_at).strip()
+        if not timestamp:
+            raise ValueError("created_at must not be empty")
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM information_needs_v1
+                WHERE information_need_id=?
+                """,
+                (need_id,),
+            ).fetchone()
+            if row is None:
+                raise GoalStoreError(f"unknown information_need_id: {need_id}")
+            need = InformationNeedV1.from_payload(
+                self._decode(row["payload"]),
+                row["digest"],
+            )
+            if need.state is not InformationNeedState.WAITING_FOR_OWNER:
+                raise GoalStoreConflict(
+                    "information need must be WAITING_FOR_OWNER before interaction"
+                )
+            interaction_id = (
+                "gicc_interaction_"
+                + canonical_digest(
+                    {
+                        "goal_id": need.goal_id,
+                        "information_need_id": need.information_need_id,
+                    }
+                )[:20]
+            )
+            existing = db.execute(
+                """
+                SELECT payload, digest
+                FROM information_need_interactions_v1
+                WHERE interaction_id=?
+                """,
+                (interaction_id,),
+            ).fetchone()
+            if existing is not None:
+                payload = self._decode(existing["payload"])
+                if canonical_digest(payload) != existing["digest"]:
+                    raise GoalStoreError("information interaction digest mismatch")
+                return payload | {
+                    "interaction_id": interaction_id,
+                    "digest": existing["digest"],
+                }
+            payload = {
+                "goal_id": need.goal_id,
+                "information_need_id": need.information_need_id,
+                "expected_answer_schema": need.answer_schema,
+                "allowed_candidate_values": list(need.candidate_values),
+                "state": "active",
+                "created_at": timestamp,
+                "resolved_at": None,
+                "resolved_turn_id": None,
+                "resolution_ref": None,
+            }
+            digest = canonical_digest(payload)
+            db.execute(
+                """
+                INSERT INTO information_need_interactions_v1 (
+                    interaction_id, goal_id, information_need_id, state,
+                    payload, digest, created_at, resolved_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    interaction_id,
+                    need.goal_id,
+                    need.information_need_id,
+                    "active",
+                    self._encode(payload),
+                    digest,
+                    timestamp,
+                    None,
+                ),
+            )
+        return payload | {"interaction_id": interaction_id, "digest": digest}
+
+    def get_information_interaction(
+        self,
+        interaction_id: str,
+    ) -> dict[str, object] | None:
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM information_need_interactions_v1
+                WHERE interaction_id=?
+                """,
+                (str(interaction_id).strip(),),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = self._decode(row["payload"])
+        if canonical_digest(payload) != row["digest"]:
+            raise GoalStoreError("information interaction digest mismatch")
+        return payload | {
+            "interaction_id": str(interaction_id).strip(),
+            "digest": row["digest"],
+        }
+
+    def submit_information_interaction_reply(
+        self,
+        *,
+        interaction_id: str,
+        goal_id: str,
+        need_id: str,
+        source_turn_id: str,
+        resolution_ref: str,
+        resolved_at: str,
+    ) -> InformationNeedV1:
+        interaction_key = str(interaction_id).strip()
+        goal_key = str(goal_id).strip()
+        need_key = str(need_id).strip()
+        turn_key = str(source_turn_id).strip()
+        resolution = str(resolution_ref).strip()
+        timestamp = str(resolved_at).strip()
+        if not all(
+            (interaction_key, goal_key, need_key, turn_key, resolution, timestamp)
+        ):
+            raise ValueError("bound information reply metadata must not be empty")
+        with self.work.extension_transaction() as db:
+            interaction_row = db.execute(
+                """
+                SELECT payload, digest
+                FROM information_need_interactions_v1
+                WHERE interaction_id=?
+                """,
+                (interaction_key,),
+            ).fetchone()
+            if interaction_row is None:
+                raise GoalStoreError(
+                    f"unknown information interaction: {interaction_key}"
+                )
+            interaction = self._decode(interaction_row["payload"])
+            if canonical_digest(interaction) != interaction_row["digest"]:
+                raise GoalStoreError("information interaction digest mismatch")
+            if (
+                interaction["goal_id"] != goal_key
+                or interaction["information_need_id"] != need_key
+            ):
+                raise GoalStoreConflict(
+                    "owner reply does not match the bound InformationNeed interaction"
+                )
+            if interaction["state"] == "resolved":
+                if interaction["resolution_ref"] == resolution:
+                    need_row = db.execute(
+                        """
+                        SELECT payload, digest
+                        FROM information_needs_v1
+                        WHERE information_need_id=?
+                        """,
+                        (need_key,),
+                    ).fetchone()
+                    if need_row is None:
+                        raise GoalStoreError(
+                            f"unknown information_need_id: {need_key}"
+                        )
+                    return InformationNeedV1.from_payload(
+                        self._decode(need_row["payload"]),
+                        need_row["digest"],
+                    )
+                raise GoalStoreConflict(
+                    "information interaction already resolved differently"
+                )
+
+            need_row = db.execute(
+                """
+                SELECT payload, digest
+                FROM information_needs_v1
+                WHERE information_need_id=?
+                """,
+                (need_key,),
+            ).fetchone()
+            if need_row is None:
+                raise GoalStoreError(f"unknown information_need_id: {need_key}")
+            current = InformationNeedV1.from_payload(
+                self._decode(need_row["payload"]),
+                need_row["digest"],
+            )
+            if current.goal_id != goal_key:
+                raise GoalStoreConflict(
+                    "InformationNeed does not belong to the bound goal"
+                )
+            if current.state is not InformationNeedState.WAITING_FOR_OWNER:
+                raise GoalStoreConflict(
+                    "InformationNeed is not waiting for owner input"
+                )
+            updated = current.with_resolution(
+                resolution_ref=resolution,
+                evidence_refs=(f"owner_turn:{turn_key}",),
+                resolved_at=timestamp,
+            )
+            need_update = db.execute(
+                """
+                UPDATE information_needs_v1
+                SET revision=?, state=?, payload=?, digest=?, resolved_at=?
+                WHERE information_need_id=? AND revision=?
+                """,
+                (
+                    updated.revision,
+                    updated.state.value,
+                    self._encode(updated.canonical_payload()),
+                    updated.digest,
+                    updated.resolved_at,
+                    need_key,
+                    current.revision,
+                ),
+            )
+            if need_update.rowcount != 1:
+                raise GoalStoreConflict(
+                    "information need compare-and-swap owner resolution lost"
+                )
+
+            resolved_interaction = {
+                **interaction,
+                "state": "resolved",
+                "resolved_at": timestamp,
+                "resolved_turn_id": turn_key,
+                "resolution_ref": resolution,
+            }
+            interaction_digest = canonical_digest(resolved_interaction)
+            interaction_update = db.execute(
+                """
+                UPDATE information_need_interactions_v1
+                SET state='resolved', payload=?, digest=?, resolved_at=?
+                WHERE interaction_id=? AND state='active'
+                """,
+                (
+                    self._encode(resolved_interaction),
+                    interaction_digest,
+                    timestamp,
+                    interaction_key,
+                ),
+            )
+            if interaction_update.rowcount != 1:
+                raise GoalStoreConflict(
+                    "information interaction compare-and-swap resolution lost"
+                )
+        return updated
 
     def resolve_information_need(
         self,
