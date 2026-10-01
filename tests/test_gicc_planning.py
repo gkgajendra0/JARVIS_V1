@@ -1,5 +1,7 @@
 import pytest
 
+from jarvis.chatgpt_plan import _strict_json_schema
+
 from jarvis.capabilities.models import (
     CapabilityCatalog,
     CapabilityDescriptor,
@@ -68,7 +70,7 @@ def _valid_proposal() -> PlanProposalV1:
                 summary="Open Calculator",
                 capability_key="app:lifecycle",
                 operation="open_app",
-                parameters={"app": "calculator"},
+                parameters_json='{"app":"calculator"}',
                 postcondition_ref="app_open",
             ),
             PlanNodeCandidate(
@@ -105,7 +107,7 @@ def test_action_without_downstream_verify_is_rejected() -> None:
                 summary="Open Calculator",
                 capability_key="app:lifecycle",
                 operation="open_app",
-                parameters={"app": "calculator"},
+                parameters_json='{"app":"calculator"}',
                 postcondition_ref="app_open",
             )
         ]
@@ -121,9 +123,9 @@ def test_action_without_downstream_verify_is_rejected() -> None:
 
 def test_plan_cannot_embed_arbitrary_executable_payload() -> None:
     proposal = _valid_proposal()
-    proposal.nodes[0].parameters = {
-        "shell": "powershell -EncodedCommand deadbeef",
-    }
+    proposal.nodes[0].parameters_json = (
+        '{"shell":"powershell -EncodedCommand deadbeef"}'
+    )
 
     with pytest.raises(PlanValidationError, match="executable field"):
         PlanValidator().validate(
@@ -172,7 +174,7 @@ def test_non_action_node_cannot_smuggle_capability_payload() -> None:
                 summary="Verify Calculator opened",
                 capability_key="app:lifecycle",
                 operation="open_app",
-                parameters={"app": "calculator"},
+                parameters_json='{"app":"calculator"}',
                 postcondition_ref="app_open",
             )
         ]
@@ -210,3 +212,46 @@ def test_progress_guard_rejects_exact_repeat_and_bounds_replan() -> None:
     assert guard.admit_replan() == 1
     with pytest.raises(PlanValidationError, match="budget exhausted"):
         guard.admit_replan()
+
+def _schema_nodes(value: object):
+    if isinstance(value, dict):
+        yield value
+        for nested in value.values():
+            yield from _schema_nodes(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            yield from _schema_nodes(nested)
+
+
+def test_gicc_plan_proposal_is_openai_strict_schema_safe() -> None:
+    schema = _strict_json_schema(PlanProposalV1.model_json_schema())
+
+    assert isinstance(schema, dict)
+    for node in _schema_nodes(schema):
+        if node.get("type") != "object":
+            continue
+        assert node.get("additionalProperties") is False
+        properties = node.get("properties")
+        assert isinstance(properties, dict)
+        assert set(node.get("required", ())) == set(properties)
+
+
+def test_plan_parameters_json_decodes_to_bounded_object() -> None:
+    candidate = PlanNodeCandidate(
+        node_type=PlanNodeType.ACTION,
+        summary="Open Calculator",
+        parameters_json='{"app":"calculator","retry":1}',
+        capability_key="app:lifecycle",
+        operation="open_app",
+        postcondition_ref="app_open",
+    )
+
+    assert candidate.parameters == {"app": "calculator", "retry": 1}
+
+    with pytest.raises(ValueError, match="JSON object"):
+        PlanNodeCandidate(
+            node_type=PlanNodeType.WAIT,
+            summary="Wait",
+            parameters_json='["not","an","object"]',
+        )
+
