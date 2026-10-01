@@ -430,8 +430,8 @@ def test_chatgpt_plan_invoke_structured_sends_normalized_strict_schema(
                 "type": "response.completed",
                 "response": {"usage": {"input_tokens": 1, "output_tokens": 1}},
             }
-            yield f"data: {json.dumps(delta)}\\n".encode()
-            yield f"data: {json.dumps(completed)}\\n".encode()
+            yield f"data: {json.dumps(delta)}\n".encode()
+            yield f"data: {json.dumps(completed)}\n".encode()
 
     def _urlopen(req, timeout):
         del timeout
