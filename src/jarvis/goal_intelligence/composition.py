@@ -170,8 +170,8 @@ class GoalIntelligenceCoordinator:
             proposed_type, mention = _entity_candidate(encoded)
             if not mention:
                 continue
-            task_specific_values.append(mention)
             if proposed_type not in _WORLD_RESOURCE_TYPES:
+                task_specific_values.append(mention)
                 continue
             resolution = self._entities.resolve(
                 mention,
