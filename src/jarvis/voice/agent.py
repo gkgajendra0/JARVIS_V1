@@ -336,8 +336,7 @@ def build_instructions(
 
     instructions = INSTRUCTIONS
     if gicc_apply:
-        instructions += """
-        
+        instructions += "\n\n" + """
 GICC APPLY mode is active for this development runtime. For an owner request whose
 outcome involves an external device/service, conditional monitoring, or multi-step
 goal pursuit where target/resource/capability resolution may be required, call
