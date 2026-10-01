@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
+from jarvis.chatgpt_plan import ChatGPTPlanHTTPError
 from jarvis.hands.provider_adapters import StructuredOutputTelemetry
 from jarvis.model_routing.cost import CostTelemetryReader
 from jarvis.model_routing.eligibility import EligibilityPolicy
@@ -483,6 +484,86 @@ async def test_interactive_voice_still_preempts_routed_background_reasoning(
     gate.set_interactive_active(True)
     with pytest.raises(BrainPreempted):
         await task
+
+
+@pytest.mark.asyncio
+async def test_chatgpt_plan_subscription_limit_falls_back_to_paid_provider(
+    tmp_path: Path,
+) -> None:
+    class PlanAdapter(ReasoningAdapter):
+        adapter_id = "chatgpt_plan"
+
+    class GeminiAdapter(ReasoningAdapter):
+        adapter_id = "gemini"
+
+    work_store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    routing_store = ModelRoutingStore(work_store)
+    plan_adapter = PlanAdapter(
+        routing_store=routing_store,
+        error=ChatGPTPlanHTTPError(
+            (
+                "The ChatGPT user has reached their Subscription Sharing usage "
+                "limit. Ask the user to try again after their usage limit resets "
+                "or use an API key instead."
+            ),
+            code="subscription_sharing_usage_limit_exceeded",
+        ),
+    )
+    fallback_adapter = GeminiAdapter(routing_store=routing_store)
+    adapters = ModelAdapterRegistry((plan_adapter, fallback_adapter))
+    targets = ModelTargetRegistry(
+        adapters,
+        (
+            _target(
+                "work.chatgpt_plan.default",
+                adapter_id="chatgpt_plan",
+                provider_id="chatgpt_plan",
+            ),
+            _target(
+                "work.gemini.default",
+                adapter_id="gemini",
+                provider_id="gemini",
+            ),
+        ),
+    )
+    router = ModelRouter(
+        target_registry=targets,
+        adapter_registry=adapters,
+        strategy_registry=RoutingStrategyRegistry((EngineeringStageStrategy(),)),
+        routing_store=routing_store,
+        eligibility_policy=EligibilityPolicy(),
+        credential_available=lambda target: True,
+        clock=lambda: 100.0,
+    )
+    reasoner = RoutedWorkReasoner(
+        router=router,
+        invoker=ModelInvoker(adapters),
+        primary_target_id="work.chatgpt_plan.default",
+        clock=lambda: 101.0,
+    )
+    work = _work(work_store)
+    request = _brain_request(work)
+
+    decision = await reasoner.decide(request)
+
+    assert decision.action == "do_step"
+    assert len(plan_adapter.calls) == 1
+    assert len(fallback_adapter.calls) == 1
+    route_request = build_work_routing_request(
+        request,
+        primary_target_id="work.chatgpt_plan.default",
+    )
+    persisted = routing_store.find_decision_by_request(
+        route_request.routing_request_id
+    )
+    assert persisted is not None
+    attempts = routing_store.list_attempts(persisted.decision.decision_id)
+    assert [attempt.target_id for attempt in attempts] == [
+        "work.chatgpt_plan.default",
+        "work.gemini.default",
+    ]
+    assert attempts[0].failure_class == "rate_limited"
+    assert attempts[1].failure_class is None
 
 
 @pytest.mark.asyncio
