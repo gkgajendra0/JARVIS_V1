@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Any
@@ -43,12 +44,31 @@ class BoundedAudioIngress:
         self._lock = threading.Lock()
         self._drain_scheduled = False
         self._dropped_frames = 0
+        self._pending_dropped_frames = 0
+        self._queue_dropped_frames = 0
+        self._drain_scheduled_at_monotonic: float | None = None
+        self._max_drain_schedule_lag_ms = 0.0
         self._drop_warning_emitted = False
 
     @property
     def dropped_frames(self) -> int:
         with self._lock:
             return self._dropped_frames
+
+    @property
+    def pending_dropped_frames(self) -> int:
+        with self._lock:
+            return self._pending_dropped_frames
+
+    @property
+    def queue_dropped_frames(self) -> int:
+        with self._lock:
+            return self._queue_dropped_frames
+
+    @property
+    def max_drain_schedule_lag_ms(self) -> float:
+        with self._lock:
+            return self._max_drain_schedule_lag_ms
 
     def submit_from_audio_thread(self, frame: rtc.AudioFrame) -> bool:
         """Retain freshest audio and schedule at most one event-loop drain."""
@@ -58,9 +78,11 @@ class BoundedAudioIngress:
             if len(self._pending) >= self._capacity:
                 self._pending.popleft()
                 self._dropped_frames += 1
+                self._pending_dropped_frames += 1
             self._pending.append(frame)
             if not self._drain_scheduled:
                 self._drain_scheduled = True
+                self._drain_scheduled_at_monotonic = time.monotonic()
                 schedule_drain = True
 
         if not schedule_drain:
@@ -71,6 +93,7 @@ class BoundedAudioIngress:
         except RuntimeError:
             with self._lock:
                 self._drain_scheduled = False
+                self._drain_scheduled_at_monotonic = None
                 self._pending.clear()
             return False
         return True
@@ -78,13 +101,27 @@ class BoundedAudioIngress:
     def _record_queue_drop(self) -> None:
         with self._lock:
             self._dropped_frames += 1
+            self._queue_dropped_frames += 1
 
     def _drain_pending(self) -> None:
+        started_at = time.monotonic()
+        with self._lock:
+            scheduled_at = self._drain_scheduled_at_monotonic
+            if scheduled_at is not None:
+                lag_ms = max(0.0, (started_at - scheduled_at) * 1_000.0)
+                self._max_drain_schedule_lag_ms = max(
+                    self._max_drain_schedule_lag_ms,
+                    lag_ms,
+                )
         while True:
             with self._lock:
                 if not self._pending:
                     self._drain_scheduled = False
+                    self._drain_scheduled_at_monotonic = None
                     dropped = self._dropped_frames
+                    pending_drops = self._pending_dropped_frames
+                    queue_drops = self._queue_dropped_frames
+                    max_lag_ms = self._max_drain_schedule_lag_ms
                     break
                 frame = self._pending.popleft()
 
@@ -100,9 +137,15 @@ class BoundedAudioIngress:
         if dropped and not self._drop_warning_emitted:
             self._drop_warning_emitted = True
             LOGGER.warning(
-                "Live microphone ingress shed stale PCM under event-loop "
-                "backpressure; conversation remains live | dropped_frames=%s",
+                "Live microphone ingress shed stale PCM under backpressure; "
+                "conversation remains live | dropped_frames=%s | pending_drops=%s | "
+                "queue_drops=%s | capacity_frames=%s | "
+                "max_event_loop_schedule_lag_ms=%.1f",
                 dropped,
+                pending_drops,
+                queue_drops,
+                self._capacity,
+                max_lag_ms,
             )
 
     async def get(self) -> rtc.AudioFrame:
