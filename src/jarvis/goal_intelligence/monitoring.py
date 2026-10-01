@@ -64,11 +64,7 @@ class VerifiedMonitorObservationV1:
         object.__setattr__(self, "observed_at_epoch", observed)
         refs = tuple(
             sorted(
-                {
-                    str(item).strip()
-                    for item in self.evidence_refs
-                    if str(item).strip()
-                }
+                {str(item).strip() for item in self.evidence_refs if str(item).strip()}
             )
         )
         object.__setattr__(self, "evidence_refs", refs)
@@ -439,13 +435,7 @@ class MonitorEventProcessor:
         if not math.isfinite(observed) or observed < 0:
             raise ValueError("observed_at_epoch must be finite and non-negative")
         evidence = tuple(
-            sorted(
-                {
-                    str(item).strip()
-                    for item in evidence_refs
-                    if str(item).strip()
-                }
-            )
+            sorted({str(item).strip() for item in evidence_refs if str(item).strip()})
         )
         state = self._goals.get_monitor_runtime_state(predicate.predicate_id)
         if state is None:
