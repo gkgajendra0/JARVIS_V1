@@ -88,6 +88,9 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         self._track: rtc.LocalAudioTrack | None = None
         self._player: Any = None
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._track_attached = False
+        self._track_lock = asyncio.Lock()
+        self._detach_task: asyncio.Task[None] | None = None
         self._resampler: rtc.AudioResampler | None = None
         self._resampler_input_rate: int | None = None
         self._current_samples = 0
@@ -195,8 +198,70 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         self._player = self._media_devices.open_output(
             output_device=self._output_device
         )
-        await self._player.add_track(self._track)
+        # Keep the physical OutputPlayer alive so MediaDevices continues feeding
+        # render audio into the shared AEC path, but do not leave a silent track
+        # registered in LiveKit's AudioMixer. A permanently registered track has
+        # no frames between JARVIS utterances, which makes AudioMixer emit a
+        # timeout warning every 100 ms even though silence is healthy.
         await self._player.start()
+
+    async def _ensure_track_attached(self) -> None:
+        detach_task = self._detach_task
+        current = asyncio.current_task()
+        if (
+            detach_task is not None
+            and detach_task is not current
+            and not detach_task.done()
+        ):
+            detach_task.cancel()
+            await asyncio.gather(detach_task, return_exceptions=True)
+
+        async with self._track_lock:
+            if self._closed or self._track_attached:
+                return
+            player = self._player
+            track = self._track
+            if player is None or track is None:
+                raise RuntimeError("MediaDevices audio output is not started")
+            await player.add_track(track)
+            self._track_attached = True
+
+    async def _detach_track_if_idle(self, generation: int) -> None:
+        try:
+            # Give a new capture callback one loop turn to cancel this detach.
+            await asyncio.sleep(0)
+            async with self._track_lock:
+                if (
+                    self._closed
+                    or generation != self._generation
+                    or self._current_samples > 0
+                    or any(not segment.completed for segment in self._segments)
+                    or not self._track_attached
+                ):
+                    return
+                player = self._player
+                track = self._track
+                if player is None or track is None:
+                    return
+                await player.remove_track(track)
+                self._track_attached = False
+        finally:
+            if self._detach_task is asyncio.current_task():
+                self._detach_task = None
+
+    def _schedule_detach_if_idle(self) -> None:
+        if self._closed:
+            return
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            return
+        task = self._detach_task
+        if task is not None and not task.done():
+            return
+        self._detach_task = loop.create_task(
+            self._detach_track_if_idle(self._generation),
+            name="jarvis-media-devices-output-detach",
+        )
 
     def _frames_at_canonical_rate(self, frame: rtc.AudioFrame) -> list[rtc.AudioFrame]:
         if frame.num_channels != DEVICE_CHANNELS:
@@ -220,7 +285,10 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         if source is None:
             raise RuntimeError("MediaDevices audio output is not started")
         await super().capture_frame(frame)
-        for canonical in self._frames_at_canonical_rate(frame):
+        canonical_frames = self._frames_at_canonical_rate(frame)
+        if canonical_frames:
+            await self._ensure_track_attached()
+        for canonical in canonical_frames:
             playback_started_at: float | None = None
             if self._current_samples == 0:
                 self._current_started_at_wall = time.time()
@@ -350,6 +418,7 @@ class MediaDevicesAudioOutput(io.AudioOutput):
             playback_position=playback_position,
             interrupted=False,
         )
+        self._schedule_detach_if_idle()
 
     def clear_buffer(self) -> None:
         source = self._source
@@ -439,16 +508,23 @@ class MediaDevicesAudioOutput(io.AudioOutput):
                 playback_position=playback_position,
                 interrupted=True,
             )
+        self._schedule_detach_if_idle()
 
     async def aclose(self) -> None:
         if self._closed:
             return
         self.clear_buffer()
         self._closed = True
+        detach_task = self._detach_task
+        self._detach_task = None
+        if detach_task is not None and not detach_task.done():
+            detach_task.cancel()
+            await asyncio.gather(detach_task, return_exceptions=True)
         player = self._player
         self._player = None
         if player is not None:
             await player.aclose()
+        self._track_attached = False
         source = self._source
         self._source = None
         if source is not None:
