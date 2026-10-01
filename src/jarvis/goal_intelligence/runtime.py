@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from dataclasses import dataclass, field, replace
 
@@ -25,6 +26,7 @@ from .composition import (
     GoalIntakeResult,
     GoalIntelligenceCoordinator,
 )
+from .evaluation import ReplanController
 from .execution import GoalPlanDispatcher, PlanDispatchDisposition
 from .information import InformationResolver
 from .interpretation import GoalInterpreter, build_goal_interpreter
@@ -143,6 +145,7 @@ class GiccApplyRuntime:
     coordinator: GoalIntelligenceCoordinator
     dispatcher: GoalPlanDispatcher
     telemetry: GiccTelemetrySink
+    replan_controller: ReplanController | None = None
     capability_runtime: CapabilityRuntime
     reconcile_interval_seconds: float = 1.0
     _task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
@@ -188,6 +191,92 @@ class GiccApplyRuntime:
             expected_revision=goal.goal_revision,
         )
 
+    async def _replan_failed_verification(
+        self,
+        *,
+        goal: OwnerGoalV2,
+        failed_plan: PlanGraphV1,
+    ) -> PlanGraphV1 | None:
+        controller = self.replan_controller
+        if controller is None:
+            return None
+
+        results = self.store.list_plan_node_results(
+            plan_id=failed_plan.plan_id,
+            limit=1000,
+        )
+        failed_verification = next(
+            (
+                item
+                for item in reversed(results)
+                if str(item.get("status") or "").strip().casefold() == "failed"
+                and isinstance(item.get("payload"), dict)
+                and item["payload"].get("route") == "verification"
+                and item["payload"].get("verified") is False
+            ),
+            None,
+        )
+        if failed_verification is None:
+            return None
+
+        prior_evidence = tuple(
+            json.dumps(
+                {
+                    "result_id": item.get("result_id"),
+                    "status": item.get("status"),
+                    "route": (
+                        item["payload"].get("route")
+                        if isinstance(item.get("payload"), dict)
+                        else None
+                    ),
+                    "capability_key": (
+                        item["payload"].get("capability_key")
+                        if isinstance(item.get("payload"), dict)
+                        else None
+                    ),
+                    "operation": (
+                        item["payload"].get("operation")
+                        if isinstance(item.get("payload"), dict)
+                        else None
+                    ),
+                    "postcondition_ref": (
+                        item["payload"].get("postcondition_ref")
+                        if isinstance(item.get("payload"), dict)
+                        else None
+                    ),
+                    "reason": (
+                        item["payload"].get("reason")
+                        if isinstance(item.get("payload"), dict)
+                        else None
+                    ),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            for item in results[-20:]
+        )
+        try:
+            replanned = await controller.replan(
+                goal=goal,
+                failed_plan=failed_plan,
+                context=self.coordinator.current_plan_validation_context(
+                    goal.goal_id
+                ),
+                prior_evidence=prior_evidence,
+            )
+        except Exception as exc:  # noqa: BLE001 - bounded replan fails closed
+            LOGGER.warning(
+                "GICC verification replan unavailable | goal_id=%s plan_id=%s "
+                "error=%s",
+                goal.goal_id,
+                failed_plan.plan_id,
+                type(exc).__name__,
+            )
+            return None
+
+        self._set_goal_state(goal.goal_id, GoalState.PLANNED)
+        return replanned.replacement
+
     async def _advance_plan_to_blocker(
         self,
         goal_id: str,
@@ -207,7 +296,14 @@ class GiccApplyRuntime:
 
             plan = self.dispatcher.recover_interrupted(plan.plan_id)
             if plan.state is PlanState.FAILED:
-                return self._set_goal_state(goal.goal_id, GoalState.FAILED), plan
+                replacement = await self._replan_failed_verification(
+                    goal=goal,
+                    failed_plan=plan,
+                )
+                if replacement is None:
+                    return self._set_goal_state(goal.goal_id, GoalState.FAILED), plan
+                plan = replacement
+                goal = self.store.get_goal(goal.goal_id) or goal
             if plan.state is PlanState.SUCCEEDED:
                 return self._set_goal_state(goal.goal_id, GoalState.COMPLETED), plan
 
@@ -224,7 +320,17 @@ class GiccApplyRuntime:
                         GoalState.COMPLETED,
                     ), plan
                 if plan.state is PlanState.FAILED:
-                    return self._set_goal_state(goal.goal_id, GoalState.FAILED), plan
+                    replacement = await self._replan_failed_verification(
+                        goal=goal,
+                        failed_plan=plan,
+                    )
+                    if replacement is None:
+                        return self._set_goal_state(
+                            goal.goal_id,
+                            GoalState.FAILED,
+                        ), plan
+                    plan = replacement
+                    goal = self.store.get_goal(goal.goal_id) or goal
 
                 ready = self.dispatcher.ready_nodes(plan)
                 if not ready:
@@ -254,7 +360,18 @@ class GiccApplyRuntime:
                         ), plan
                     continue
                 if dispatched.disposition is PlanDispatchDisposition.FAILED:
-                    return self._set_goal_state(goal.goal_id, GoalState.FAILED), plan
+                    replacement = await self._replan_failed_verification(
+                        goal=goal,
+                        failed_plan=plan,
+                    )
+                    if replacement is None:
+                        return self._set_goal_state(
+                            goal.goal_id,
+                            GoalState.FAILED,
+                        ), plan
+                    plan = replacement
+                    goal = self.store.get_goal(goal.goal_id) or goal
+                    continue
                 return goal, plan
 
             LOGGER.warning(
@@ -479,6 +596,7 @@ def build_gicc_apply_runtime(
         raise TypeError("GICC interpreter composition returned wrong type")
 
     reasoning_client = _reasoning_client(config)
+    planner = GoalPlanner(client=reasoning_client)
     information_resolver = InformationResolver(store=store)
     phase9_bridge = Phase9GoalBridge(
         coordinator=work_runtime.capability_acquisition,
@@ -495,7 +613,7 @@ def build_gicc_apply_runtime(
         capability_graph_resolver=CapabilityGraphResolver(store=store),
         information_resolver=information_resolver,
         phase9_bridge=phase9_bridge,
-        planner=GoalPlanner(client=reasoning_client),
+        planner=planner,
         telemetry=telemetry,
     )
     orchestrator = GoalOrchestrator(
@@ -516,5 +634,9 @@ def build_gicc_apply_runtime(
         coordinator=coordinator,
         dispatcher=dispatcher,
         telemetry=telemetry,
+        replan_controller=ReplanController(
+            store=store,
+            planner=planner,
+        ),
         capability_runtime=capability_runtime,
     )
