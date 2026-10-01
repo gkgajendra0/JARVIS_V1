@@ -409,8 +409,7 @@ class GoalMonitoringDispatcher:
         self,
         *,
         coordinator: MonitoringWorkCoordinator,
-        available_strategies: tuple[MonitoringStrategy, ...]
-        | list[MonitoringStrategy],
+        available_strategies: tuple[MonitoringStrategy, ...] | list[MonitoringStrategy],
         planner: MonitoringPlanner | None = None,
         now_epoch: Callable[[], float] = time.time,
     ) -> None:
