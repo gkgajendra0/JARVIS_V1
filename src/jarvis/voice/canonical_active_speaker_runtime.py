@@ -303,8 +303,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             "cancel_background_work. Both tools are already deterministically bound to "
             "the correct WorkItem, so do not invent or target another work ID. After one "
             "tool succeeds, acknowledge briefly and do not start, reprioritize, or modify "
-            "any other work. Pending question: "
-            + normalized_question
+            "any other work. Pending question: " + normalized_question
         )
 
         try:
