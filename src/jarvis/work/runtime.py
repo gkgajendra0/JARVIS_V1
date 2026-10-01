@@ -347,15 +347,19 @@ class WorkRuntime:
                 source_turn_id=source_turn_id,
             )
         except Exception:
-            if reopened_change is not None and self.changes is not None:
+            if self.changes is not None:
                 try:
                     self.changes.reconcile_for_work(work.work_id)
                 except Exception:
                     LOGGER.exception(
-                        "Failed to restore EngineeringChange after Work retry "
+                        "Failed to reconcile EngineeringChange after Work retry "
                         "submission failure | work_id=%s | change_id=%s",
                         work.work_id,
-                        reopened_change.change_id,
+                        (
+                            reopened_change.change_id
+                            if reopened_change is not None
+                            else "unknown"
+                        ),
                     )
             raise
 
