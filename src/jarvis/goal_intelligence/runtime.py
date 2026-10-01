@@ -153,9 +153,9 @@ class GiccApplyRuntime:
     coordinator: GoalIntelligenceCoordinator
     dispatcher: GoalPlanDispatcher
     telemetry: GiccTelemetrySink
+    capability_runtime: CapabilityRuntime
     replan_controller: ReplanController | None = None
     change_store: ChangeStore | None = None
-    capability_runtime: CapabilityRuntime
     reconcile_interval_seconds: float = 1.0
     _task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
     _advance_lock: asyncio.Lock = field(
@@ -268,15 +268,12 @@ class GiccApplyRuntime:
             replanned = await controller.replan(
                 goal=goal,
                 failed_plan=failed_plan,
-                context=self.coordinator.current_plan_validation_context(
-                    goal.goal_id
-                ),
+                context=self.coordinator.current_plan_validation_context(goal.goal_id),
                 prior_evidence=prior_evidence,
             )
         except Exception as exc:  # noqa: BLE001 - bounded replan fails closed
             LOGGER.warning(
-                "GICC verification replan unavailable | goal_id=%s plan_id=%s "
-                "error=%s",
+                "GICC verification replan unavailable | goal_id=%s plan_id=%s error=%s",
                 goal.goal_id,
                 failed_plan.plan_id,
                 type(exc).__name__,
@@ -520,11 +517,9 @@ class GiccApplyRuntime:
                 if (
                     payload.get("schema") != "capability_external_acceptance.v1"
                     or payload.get("verdict") != "pass"
-                    or payload.get("candidate_artifact_id")
-                    != candidate.artifact_id
+                    or payload.get("candidate_artifact_id") != candidate.artifact_id
                     or payload.get("candidate_artifact_digest") != candidate.digest
-                    or payload.get("activation_artifact_id")
-                    != activation.artifact_id
+                    or payload.get("activation_artifact_id") != activation.artifact_id
                     or payload.get("activation_artifact_digest") != activation.digest
                 ):
                     return False
@@ -570,10 +565,10 @@ class GiccApplyRuntime:
                 )
             ):
                 advanced += 1
-                if (
-                    before_goal.state not in {GoalState.COMPLETED, GoalState.FAILED}
-                    and after_goal.state in {GoalState.COMPLETED, GoalState.FAILED}
-                ):
+                if before_goal.state not in {
+                    GoalState.COMPLETED,
+                    GoalState.FAILED,
+                } and after_goal.state in {GoalState.COMPLETED, GoalState.FAILED}:
                     self._enqueue_background_terminal_delivery(after_goal)
                 LOGGER.info(
                     "GICC runtime advanced | goal_id=%s from_state=%s "
