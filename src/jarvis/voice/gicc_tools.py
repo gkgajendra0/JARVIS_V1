@@ -14,7 +14,7 @@ from jarvis.goal_intelligence.composition import (
     GoalIntelligenceCoordinator,
 )
 from jarvis.goal_intelligence.information import BoundInformationInteraction
-from jarvis.goal_intelligence.models import GoalState
+from jarvis.goal_intelligence.models import GoalState, PlanState
 from jarvis.goal_intelligence.store import GoalStore, GoalStoreConflict
 from jarvis.goal_intelligence.telemetry import (
     DEFAULT_GICC_TELEMETRY,
@@ -154,6 +154,48 @@ class GiccAgentTools:
                 "Do not claim the requested outcome completed."
             )
             return payload
+
+        if result.plan is not None and result.plan.state is PlanState.WAITING:
+            results = self._store.list_plan_node_results(
+                plan_id=result.plan.plan_id,
+                limit=1000,
+            )
+            pending = next(
+                (
+                    item
+                    for item in reversed(results)
+                    if isinstance(item.get("payload"), dict)
+                    and isinstance(item["payload"].get("interaction"), dict)
+                    and item["payload"]["interaction"].get("kind")
+                    == "external_owner_input"
+                ),
+                None,
+            )
+            if pending is not None:
+                interaction = dict(pending["payload"]["interaction"])
+                payload["status"] = "waiting_owner_input"
+                payload["plan_id"] = result.plan.plan_id
+                payload["owner_input"] = {
+                    "interaction_ref": pending.get("result_id"),
+                    "input_kind": interaction.get("input_kind"),
+                    "prompt": interaction.get("prompt"),
+                    "parameter": interaction.get("parameter"),
+                    "sensitive": interaction.get("sensitive") is True,
+                }
+                if interaction.get("sensitive") is True:
+                    payload["truth_note"] = (
+                        "The exact capability is waiting for sensitive owner input. "
+                        "Do not ask the owner to send the PIN through a generic GICC "
+                        "tool argument or claim completion; use the dedicated secure "
+                        "owner-input/acceptance path."
+                    )
+                else:
+                    payload["truth_note"] = (
+                        "The exact capability is waiting for bound owner input. "
+                        "Do not claim completion until that interaction is resolved "
+                        "and postconditions verify."
+                    )
+                return payload
 
         if result.disposition is GoalIntakeDisposition.CONVERSATION_ONLY:
             payload["handled"] = False
