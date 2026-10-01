@@ -458,7 +458,10 @@ async def test_owner_acceptance_scenario_4_ambiguity_asks_one_bound_question(
     assert len(result.information_needs) == 1
     assert len(result.information_interactions) == 1
     interaction = result.information_interactions[0]
-    assert interaction["information_need_id"] == result.information_needs[0].information_need_id
+    assert (
+        interaction["information_need_id"]
+        == result.information_needs[0].information_need_id
+    )
     assert interaction["goal_id"] == result.goal.goal_id
 
 
