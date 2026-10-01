@@ -505,6 +505,10 @@ class WorkRuntime:
             return
         self._closed = True
 
+        begin_shutdown = getattr(self.backend, "begin_shutdown", None)
+        if callable(begin_shutdown):
+            begin_shutdown()
+
         shutdown_preempt = getattr(
             self._interactive_brain_gate,
             "preempt_background_for_shutdown",
@@ -557,6 +561,19 @@ class WorkRuntime:
                 "Durably parked active DBOS executions for shutdown: %s",
                 ", ".join(parked),
             )
+
+        # DBOS cancellation prevents the workflow from starting another durable
+        # step, but it does not interrupt a step already blocked inside
+        # _advance_work(). Cancel those canonical asyncio advances and wait until
+        # their coroutines have actually unwound before database teardown.
+        quiesce_advances = getattr(self.backend, "quiesce_active_advances", None)
+        if callable(quiesce_advances):
+            quiesced = await quiesce_advances(timeout_seconds=5.0)
+            if quiesced:
+                LOGGER.info(
+                    "Quiesced active JARVIS engine advances before DBOS shutdown: %s",
+                    quiesced,
+                )
 
         # Keep the canonical event loop free while DBOS waits. _advance_work()
         # uses run_coroutine_threadsafe() into this loop, so blocking here would
