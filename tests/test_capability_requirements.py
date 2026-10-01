@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from jarvis.goal_intelligence.models import GoalKind, OwnerGoalV2
