@@ -404,6 +404,13 @@ class MonitorEventProcessor:
         work = self._work.require(work_id)
         if work.state.terminal:
             return work
+        if state is WorkState.COMPLETED and work.state is not WorkState.RUNNING:
+            running = work.transition(
+                WorkState.RUNNING,
+                status_detail="monitor condition is being finalized",
+                current_step_id=work.current_step_id,
+            )
+            work = self._work.save(running, expected_version=work.version)
         updated = work.transition(
             state,
             status_detail=status_detail,
