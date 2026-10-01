@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import asyncio
+import logging
+from dataclasses import dataclass, field
 
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
@@ -17,7 +19,7 @@ from .capability_graph import CapabilityGraphResolver
 from .composition import GoalIntelligenceCoordinator
 from .information import InformationResolver
 from .interpretation import GoalInterpreter, build_goal_interpreter
-from .models import WorldEntityRefV1
+from .models import GoalState, WorldEntityRefV1
 from .phase9 import Phase9GoalBridge
 from .planning import GoalPlanner
 from .requirements import RequirementDeriver
@@ -25,13 +27,72 @@ from .store import GoalStore, build_default_goal_store
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 from .world import EntityResolver, WorldRegistry
 
+LOGGER = logging.getLogger(__name__)
 
-@dataclass(frozen=True, slots=True)
+
+@dataclass(slots=True)
 class GiccApplyRuntime:
     store: GoalStore
     world: WorldRegistry
     coordinator: GoalIntelligenceCoordinator
     telemetry: GiccTelemetrySink
+    capability_runtime: CapabilityRuntime
+    reconcile_interval_seconds: float = 1.0
+    _task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
+
+    def start(self) -> None:
+        if self._task is not None and not self._task.done():
+            return
+        self._task = asyncio.create_task(
+            self._reconcile_loop(),
+            name="jarvis-gicc-capability-continuation",
+        )
+
+    async def close(self) -> None:
+        task = self._task
+        self._task = None
+        if task is None:
+            return
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+    async def reconcile_once(self) -> int:
+        waiting = tuple(
+            goal
+            for goal in self.store.list_active_goals(limit=100)
+            if goal.state is GoalState.WAITING_CAPABILITY
+        )
+        if not waiting:
+            return 0
+        self.capability_runtime.refresh_catalog()
+        advanced = 0
+        for goal in waiting:
+            before = goal.state
+            result = await self.coordinator.continue_goal(goal.goal_id)
+            if result.goal is not None and result.goal.state is not before:
+                advanced += 1
+                LOGGER.info(
+                    "GICC capability continuation advanced | goal_id=%s "
+                    "from_state=%s to_state=%s disposition=%s",
+                    goal.goal_id,
+                    before.value,
+                    result.goal.state.value,
+                    result.disposition.value,
+                )
+        return advanced
+
+    async def _reconcile_loop(self) -> None:
+        while True:
+            try:
+                await self.reconcile_once()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                LOGGER.exception(
+                    "GICC capability continuation reconciliation failed; "
+                    "durable goal state remains authoritative"
+                )
+            await asyncio.sleep(self.reconcile_interval_seconds)
 
 
 def _reasoning_client(config: JarvisConfig):
@@ -124,4 +185,5 @@ def build_gicc_apply_runtime(
         world=world,
         coordinator=coordinator,
         telemetry=telemetry,
+        capability_runtime=capability_runtime,
     )
