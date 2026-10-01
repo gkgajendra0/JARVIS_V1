@@ -60,10 +60,23 @@ class FakeMonitorWorkStore:
         self.deliveries = []
 
     def add(self, work_id: str) -> None:
-        self.works[work_id] = SimpleNamespace(work_id=work_id)
+        self.works[work_id] = WorkItem(
+            work_id=work_id,
+            request="Monitor synthetic predicate.",
+            work_type=WorkType.MONITORING,
+            source_session_id="monitor-session",
+            source_turn_id="monitor-turn",
+            state=WorkState.WAITING_RESOURCE,
+        )
 
     def require(self, work_id: str):
         return self.works[work_id]
+
+    def save(self, work, *, expected_version: int):
+        current = self.works[work.work_id]
+        assert current.version == expected_version
+        self.works[work.work_id] = work
+        return work
 
     def enqueue_delivery(self, *, work, kind, message, event_key):
         self.deliveries.append(
