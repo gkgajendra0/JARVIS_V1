@@ -63,9 +63,7 @@ def configured_gicc_mode(
     value = _environment_value(GICC_MODE_ENV, environment)
     if value is None:
         return (
-            GiccMode.SHADOW
-            if runtime_lane is RuntimeLane.DEVELOPMENT
-            else GiccMode.OFF
+            GiccMode.SHADOW if runtime_lane is RuntimeLane.DEVELOPMENT else GiccMode.OFF
         )
     try:
         return GiccMode(value)
