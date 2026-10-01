@@ -584,10 +584,7 @@ def test_failed_change_work_retry_reopens_same_governing_stage(
         and event["detail"]["work_id"] == work.work_id
         for event in changes.list_events(change.change_id)
     )
-    assert any(
-        step.kind == "owner_retry"
-        for step in store.list_steps(work.work_id)
-    )
+    assert any(step.kind == "owner_retry" for step in store.list_steps(work.work_id))
 
 
 def test_failed_change_retry_submission_failure_restores_failed_change(
@@ -611,7 +608,9 @@ def test_failed_change_retry_submission_failure_restores_failed_change(
     change = coordinator.start("Acquire TV control", "session-tv", "turn-tv")
     stage = changes.list_stages(change.change_id)[0]
     work = store.require(stage.work_id)
-    failed = work.transition(WorkState.FAILED, status_detail="temporary provider failure")
+    failed = work.transition(
+        WorkState.FAILED, status_detail="temporary provider failure"
+    )
     store.save(failed, expected_version=work.version)
     coordinator.reconcile_for_work(work.work_id)
     assert changes.require(change.change_id).state is ChangeState.FAILED
