@@ -28,6 +28,7 @@ from jarvis.ai_provider import require_provider_api_key
 from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.memory.live_context import LiveContext
+from jarvis.runtime_lane import GiccMode
 from jarvis.voice.agent import build_instructions
 
 LOGGER = logging.getLogger(__name__)
@@ -81,7 +82,8 @@ def _create_realtime_model(config: JarvisConfig):
             voice=config.gemini_realtime_voice,
             api_key=api_key,
             instructions=build_instructions(
-                default_media_target=config.default_media_target
+                default_media_target=config.default_media_target,
+                gicc_apply=config.gicc_mode is GiccMode.APPLY,
             ),
             input_audio_transcription={},
             output_audio_transcription={},
