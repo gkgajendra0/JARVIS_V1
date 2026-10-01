@@ -56,6 +56,7 @@ from jarvis.self_repair.windows_job import (
     WindowsJobObjectError,
     WindowsRuntimeJob,
 )
+from jarvis.runtime_lane import RUNTIME_LANE_ENV, RuntimeLane
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
@@ -80,6 +81,7 @@ class DevSupervisorConfig:
     liveness_failure_threshold: int = 3
     git_fetch_timeout_seconds: float = 10.0
     git_updates_enabled: bool = True
+    runtime_lane: RuntimeLane = RuntimeLane.DEVELOPMENT
 
     def __post_init__(self) -> None:
         if not self.remote.strip():
@@ -120,6 +122,8 @@ class DevSupervisorConfig:
             raise ValueError("liveness_failure_threshold must be a positive integer")
         if self.git_fetch_timeout_seconds <= 0:
             raise ValueError("git_fetch_timeout_seconds must be positive")
+        if not isinstance(self.runtime_lane, RuntimeLane):
+            raise TypeError("runtime_lane must be RuntimeLane")
 
 
 class GitRepo:
@@ -258,7 +262,14 @@ class RemoteUpdatePoller:
 class VoiceControlServer:
     """Loopback-only supervisor endpoint used by the running voice child."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        runtime_lane: RuntimeLane = RuntimeLane.PRODUCTION,
+    ) -> None:
+        if not isinstance(runtime_lane, RuntimeLane):
+            raise TypeError("runtime_lane must be RuntimeLane")
+        self._runtime_lane = runtime_lane
         self._listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._listener.bind(("127.0.0.1", 0))
@@ -275,6 +286,7 @@ class VoiceControlServer:
             DEV_CONTROL_HOST_ENV: str(self._host),
             DEV_CONTROL_PORT_ENV: str(self._port),
             DEV_CONTROL_TOKEN_ENV: self._token,
+            RUNTIME_LANE_ENV: self._runtime_lane.value,
         }
 
     def _next_request_id(self) -> str:
@@ -517,7 +529,11 @@ def _config_from_environment() -> DevSupervisorConfig:
 
 def _runtime_supervisor_config_from_environment() -> DevSupervisorConfig:
     branch = os.environ.get(_BRANCH_ENV, "main").strip() or "main"
-    return DevSupervisorConfig(branch=branch, git_updates_enabled=False)
+    return DevSupervisorConfig(
+        branch=branch,
+        git_updates_enabled=False,
+        runtime_lane=RuntimeLane.PRODUCTION,
+    )
 
 
 def _find_repo_root() -> Path:
@@ -1485,7 +1501,7 @@ def run_supervisor(config: DevSupervisorConfig | None = None) -> int:
                 f"{release_identity.release_sha[:10]} from {runtime_root}."
             )
 
-    control = VoiceControlServer()
+    control = VoiceControlServer(runtime_lane=config.runtime_lane)
     repair, repair_store = _build_supervisor_repair_controller(config)
     process: subprocess.Popen[bytes] | None = None
     if not config.git_updates_enabled:
