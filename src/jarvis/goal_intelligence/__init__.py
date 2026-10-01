@@ -1,5 +1,15 @@
 """Goal Intelligence & Capability Composition (GICC) domain."""
 
+from .information import (
+    BoundInformationInteraction,
+    InformationProbeResult,
+    InformationResolutionResult,
+    InformationResolutionState,
+    InformationResolutionStrategy,
+    InformationResolver,
+    restore_bound_information_interaction,
+)
+
 from .interpretation import (
     GoalInterpretationError,
     GoalInterpretationResult,
@@ -10,15 +20,6 @@ from .interpretation import (
     ShadowGoalInterpretationOutput,
     ShadowInformationNeedCandidate,
     build_goal_interpreter,
-)
-from .information import (
-    BoundInformationInteraction,
-    InformationProbeResult,
-    InformationResolutionResult,
-    InformationResolutionState,
-    InformationResolutionStrategy,
-    InformationResolver,
-    restore_bound_information_interaction,
 )
 from .models import (
     CapabilityGapState,
