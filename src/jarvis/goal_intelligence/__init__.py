@@ -1,5 +1,16 @@
 """Goal Intelligence & Capability Composition (GICC) domain."""
 
+from .interpretation import (
+    GoalInterpretationError,
+    GoalInterpretationResult,
+    GoalInterpretationShadowRuntime,
+    GoalInterpreter,
+    ShadowCapabilityRequirement,
+    ShadowEntityCandidate,
+    ShadowGoalInterpretationOutput,
+    ShadowInformationNeedCandidate,
+    build_goal_interpreter,
+)
 from .models import (
     CapabilityGapState,
     CapabilityGapV1,
@@ -33,6 +44,15 @@ from .store import (
 )
 
 __all__ = [
+    "GoalInterpretationError",
+    "GoalInterpretationResult",
+    "GoalInterpretationShadowRuntime",
+    "GoalInterpreter",
+    "ShadowCapabilityRequirement",
+    "ShadowEntityCandidate",
+    "ShadowGoalInterpretationOutput",
+    "ShadowInformationNeedCandidate",
+    "build_goal_interpreter",
     "CapabilityGapState",
     "CapabilityGapV1",
     "CapabilityRequirementGraphV1",
