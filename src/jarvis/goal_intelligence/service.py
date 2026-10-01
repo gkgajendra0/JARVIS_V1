@@ -6,13 +6,13 @@ validated PlanNode at a time to the canonical subsystem that already owns that w
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
 from jarvis.authority.types import ActionOrigin
 from jarvis.capabilities.models import CapabilityRequest, CapabilityResult
-from jarvis.capabilities.runtime import CapabilityRuntime
 
 from .information import InformationResolutionState, InformationResolver
 from .models import (
@@ -41,11 +41,18 @@ class VerificationOutcome:
     evidence_refs: tuple[str, ...] = ()
 
 
+class GovernedCapabilityRuntime(Protocol):
+    def execute(self, request: CapabilityRequest) -> CapabilityResult: ...
+
+
 class VerificationRegistry:
     """Release-owned deterministic/bounded verification callbacks."""
 
     def __init__(self) -> None:
-        self._evaluators: dict[str, callable] = {}
+        self._evaluators: dict[
+            str,
+            Callable[[dict[str, object]], bool | VerificationOutcome],
+        ] = {}
 
     def register(self, predicate_ref: str, evaluator) -> None:
         key = str(predicate_ref).strip()
@@ -146,7 +153,7 @@ class GoalOrchestrator:
         self,
         *,
         goal_store: GoalStore,
-        capability_runtime: CapabilityRuntime,
+        capability_runtime: GovernedCapabilityRuntime,
         information_resolver: InformationResolver | None = None,
         phase9_bridge: Phase9GoalBridge | None = None,
         verification_registry: VerificationRegistry | None = None,
@@ -157,8 +164,8 @@ class GoalOrchestrator:
     ) -> None:
         if not isinstance(goal_store, GoalStore):
             raise TypeError("goal_store must be GoalStore")
-        if not isinstance(capability_runtime, CapabilityRuntime):
-            raise TypeError("capability_runtime must be CapabilityRuntime")
+        if not callable(getattr(capability_runtime, "execute", None)):
+            raise TypeError("capability_runtime must provide execute()")
         self._store = goal_store
         self._capabilities = capability_runtime
         self._information = information_resolver
