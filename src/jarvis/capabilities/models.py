@@ -62,6 +62,69 @@ def _metadata_json(value: dict[str, Any] | None) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class CapabilitySemanticMetadata:
+    """Optional normalized semantic metadata layered over legacy descriptors."""
+
+    semantic_capability_family: str | None = None
+    target_entity_types: tuple[str, ...] = ()
+    operation_effects: tuple[tuple[str, str], ...] = ()
+    observation_operations: tuple[str, ...] = ()
+    idempotent_operations: tuple[str, ...] = ()
+    reversible_operations: tuple[str, ...] = ()
+    acquisition_target_hints: tuple[str, ...] = ()
+
+    @classmethod
+    def from_metadata(cls, metadata: dict[str, Any]) -> CapabilitySemanticMetadata:
+        def text(value: object) -> str | None:
+            normalized = str(value or "").strip().casefold()
+            return normalized or None
+
+        def strings(value: object) -> tuple[str, ...]:
+            raw = (value,) if isinstance(value, str) else value
+            if not isinstance(raw, (list, tuple, set)):
+                return ()
+            return tuple(
+                sorted(
+                    {
+                        str(item).strip().casefold()
+                        for item in raw
+                        if str(item).strip()
+                    }
+                )
+            )
+
+        family = text(metadata.get("semantic_capability_family"))
+        raw_effects = metadata.get("operation_effects", {})
+        effects: tuple[tuple[str, str], ...] = ()
+        if isinstance(raw_effects, dict):
+            effects = tuple(
+                sorted(
+                    (
+                        str(operation).strip().casefold(),
+                        str(effect).strip().casefold(),
+                    )
+                    for operation, effect in raw_effects.items()
+                    if str(operation).strip() and str(effect).strip()
+                )
+            )
+        return cls(
+            semantic_capability_family=family,
+            target_entity_types=strings(metadata.get("target_entity_types", ())),
+            operation_effects=effects,
+            observation_operations=strings(
+                metadata.get("observation_operations", ())
+            ),
+            idempotent_operations=strings(metadata.get("idempotent_operations", ())),
+            reversible_operations=strings(
+                metadata.get("reversible_operations", ())
+            ),
+            acquisition_target_hints=strings(
+                metadata.get("acquisition_target_hints", ())
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class CapabilityDescriptor:
     """Normalized metadata describing one available or built-in capability."""
 
@@ -122,6 +185,9 @@ class CapabilityDescriptor:
     def metadata(self) -> dict[str, Any]:
         decoded = json.loads(self.metadata_json)
         return decoded if isinstance(decoded, dict) else {}
+
+    def semantic_metadata(self) -> CapabilitySemanticMetadata:
+        return CapabilitySemanticMetadata.from_metadata(self.metadata())
 
     def search_text(self) -> str:
         return " ".join(
