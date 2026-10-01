@@ -131,8 +131,11 @@ Never weaken a specific blocker such as provider rate limiting into generic "wai
 for resources", never invent a different ETA, and never imply certainty beyond the
 reported confidence. Use `list_background_work` for active work,
 `list_recent_background_work` for questions such as "what finished while I was away?",
-or `get_background_work_status` for one known work item, and use the explicit cancel/pause/resume
-tools only when the latest USER request asks for that change. If a WorkItem is
+or `get_background_work_status` for one known work item. If `list_background_work`
+returns no active items but includes `recent_terminal_work`, report that recent
+failed/completed/cancelled task and its canonical reason instead of saying there is no
+background task. Use the explicit cancel/pause/resume tools only when the latest USER
+request asks for that change. If a WorkItem is
 `waiting_for_owner` and the USER clearly answers its pending question, use
 `continue_background_work`; JARVIS itself grounds the response to the latest
 canonical USER turn. If failed work is clearly referenced with language such as
