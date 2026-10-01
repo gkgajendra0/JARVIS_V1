@@ -167,6 +167,7 @@ def test_live_binding_requirement_rejects_unbound_or_stale_resource(
     )
     assert result.state is EntityResolutionState.MISSING
 
+
 def _computer_catalog(*capability_ids: str) -> CapabilityCatalog:
     descriptors = tuple(
         CapabilityDescriptor.create(
@@ -195,9 +196,7 @@ def test_current_computer_projection_is_restart_safe_and_revisioned(
     tmp_path: Path,
 ) -> None:
     first = _registry(tmp_path)
-    entity, initial = first.project_current_computer(
-        _computer_catalog("app")
-    )
+    entity, initial = first.project_current_computer(_computer_catalog("app"))
 
     restarted = _registry(tmp_path)
     same_entity, refreshed = restarted.project_current_computer(
@@ -209,4 +208,3 @@ def test_current_computer_projection_is_restart_safe_and_revisioned(
     assert refreshed.binding_revision == initial.binding_revision + 1
     assert refreshed.capability_keys == ("computer:app", "computer:browser")
     assert restarted.bindings(entity_id=entity.entity_id) == (refreshed,)
-
