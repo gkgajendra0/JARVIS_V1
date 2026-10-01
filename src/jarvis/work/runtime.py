@@ -490,15 +490,21 @@ class WorkRuntime:
             name="jarvis-work-status-updates",
         )
 
-    def close(self) -> None:
+    async def aclose(self) -> None:
+        """Gracefully park durable work before tearing down DBOS.
+
+        DBOS destroy does not interrupt workflows that outlive its completion
+        timeout. Because DBOS steps call back onto JARVIS's asyncio loop, running
+        destroy synchronously on that same loop prevents those steps from reaching
+        a checkpoint. Shutdown therefore preempts provider reasoning, stops local
+        schedulers, durably parks exact DBOS executions, and performs the blocking
+        DBOS drain on a worker thread while the canonical event loop remains alive.
+        """
+
         if self._closed:
             return
         self._closed = True
 
-        # A jarvis-dev restart must not tear DBOS down while a provider reasoning
-        # cycle is still using the canonical event loop. Preempt background
-        # reasoning first, then give already-running DBOS workflow code a bounded
-        # window to checkpoint before database connections are closed.
         shutdown_preempt = getattr(
             self._interactive_brain_gate,
             "preempt_background_for_shutdown",
@@ -508,16 +514,70 @@ class WorkRuntime:
             shutdown_preempt()
         else:
             self._interactive_brain_gate.set_interactive_active(True)
+
         status_task = getattr(self, "_status_update_task", None)
         if status_task is not None and not status_task.done():
             status_task.cancel()
+
         autonomy = getattr(self, "_autonomy_periodic_reconciler", None)
         if autonomy is not None:
             autonomy.stop()
-        task = getattr(self, "_release_bridge_task", None)
-        if task is not None and not task.done():
-            task.cancel()
-        shutdown_dbos_work_runtime(workflow_completion_timeout_sec=5)
+
+        release_task = getattr(self, "_release_bridge_task", None)
+        if release_task is not None and not release_task.done():
+            release_task.cancel()
+
+        pending_tasks = tuple(
+            task
+            for task in (status_task, release_task)
+            if task is not None and not task.done()
+        )
+        if pending_tasks:
+            await asyncio.gather(*pending_tasks, return_exceptions=True)
+
+        # Let the provider cancellation scheduled by the interactive-brain gate
+        # run before DBOS begins waiting for active workflow steps to checkpoint.
+        await asyncio.sleep(0)
+
+        execution_ids = tuple(
+            sorted(
+                {
+                    self.store.get_execution_id(work.work_id) or work.work_id
+                    for work in self.orchestrator.list_active(limit=10_000)
+                }
+            )
+        )
+        park_for_shutdown = getattr(self.backend, "park_for_shutdown", None)
+        if execution_ids and callable(park_for_shutdown):
+            parked = await asyncio.to_thread(
+                park_for_shutdown,
+                execution_ids,
+            )
+            LOGGER.info(
+                "Durably parked active DBOS executions for shutdown: %s",
+                ", ".join(parked),
+            )
+
+        # Keep the canonical event loop free while DBOS waits. _advance_work()
+        # uses run_coroutine_threadsafe() into this loop, so blocking here would
+        # recreate the owner-machine teardown race.
+        await asyncio.to_thread(
+            shutdown_dbos_work_runtime,
+            workflow_completion_timeout_sec=10,
+        )
+
+    def close(self) -> None:
+        """Synchronous compatibility wrapper for non-async callers only."""
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(self.aclose())
+            return
+        raise RuntimeError(
+            "WorkRuntime.close() cannot block an active event loop; "
+            "use 'await WorkRuntime.aclose()'"
+        )
 
 
 def build_work_runtime(
