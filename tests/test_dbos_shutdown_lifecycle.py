@@ -67,7 +67,6 @@ class _FakeShutdownBackend:
         self.quiesced = True
         return len(self.parked)
 
-
 @pytest.mark.asyncio
 async def test_work_runtime_shutdown_keeps_event_loop_alive_during_dbos_drain(
     monkeypatch,
