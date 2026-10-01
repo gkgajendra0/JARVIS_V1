@@ -107,15 +107,37 @@ class WorkAgentTools:
 
         Use when the latest accepted USER turn clearly refers back to failed work with
         language such as "try that again", "retry it", or "continue from the failure".
-        If exactly one failed WorkItem exists, work_id may be omitted. JARVIS preserves
-        the original canonical request, EngineeringChange linkage, steps and evidence,
-        while recording the latest USER retry instruction as new durable evidence.
+        If a prior canonical status lookup established one owner-focused WorkItem,
+        that focus survives wake-session boundaries and is authoritative for deictic
+        requests such as "retry that" or "same task". In that case omit work_id; a
+        conflicting model-supplied ID fails closed. If no focus exists and exactly one
+        failed WorkItem exists, work_id may be omitted. JARVIS preserves the original
+        canonical request, EngineeringChange linkage, steps and evidence, while recording
+        the latest USER retry instruction as new durable evidence.
         """
         del context
         turn = self._latest_user_turn()
+        requested_work_id = str(work_id or "").strip()
+        focused_work_id = self._runtime.owner_work_focus_id
+        if (
+            focused_work_id is not None
+            and requested_work_id
+            and requested_work_id != focused_work_id
+        ):
+            return {
+                "ok": False,
+                "status": "work_reference_target_mismatch",
+                "work_id": requested_work_id,
+                "focused_work_id": focused_work_id,
+                "reason": (
+                    "the requested retry target conflicts with the canonical task "
+                    "most recently surfaced to the owner"
+                ),
+            }
+        target_work_id = focused_work_id or requested_work_id or None
         try:
             item = self._runtime.retry_failed_work(
-                work_id or None,
+                target_work_id,
                 owner_request=turn.text,
                 source_session_id=self._conversation.session_id,
                 source_turn_id=turn.turn_id,
@@ -128,6 +150,7 @@ class WorkAgentTools:
                 "status": "retry_target_unresolved",
                 "reason": str(exc),
             }
+        self._runtime.set_owner_work_focus(item.work_id)
         return {
             "ok": True,
             "status": "retrying",
@@ -676,9 +699,14 @@ class WorkAgentTools:
             "status": "listed",
             "work": [_public_work(item, self._runtime) for item in items],
         }
-        if not items:
+        if len(items) == 1:
+            self._runtime.set_owner_work_focus(items[0].work_id)
+        elif items:
+            self._runtime.set_owner_work_focus(None)
+        else:
             recent = self._runtime.store.list_recent(limit=1)
             if recent and recent[0].state.terminal:
+                self._runtime.set_owner_work_focus(recent[0].work_id)
                 payload["recent_terminal_work"] = _public_work(
                     recent[0],
                     self._runtime,
@@ -687,6 +715,8 @@ class WorkAgentTools:
                     "no work is currently active; report the recent terminal work "
                     "instead of saying no background task existed"
                 )
+            else:
+                self._runtime.set_owner_work_focus(None)
         return payload
 
     @function_tool()
@@ -701,6 +731,10 @@ class WorkAgentTools:
         """
         del context
         items = self._runtime.store.list_recent(limit=50)
+        if len(items) == 1:
+            self._runtime.set_owner_work_focus(items[0].work_id)
+        else:
+            self._runtime.set_owner_work_focus(None)
         return {
             "ok": True,
             "status": "listed",
@@ -726,6 +760,7 @@ class WorkAgentTools:
             item = self._runtime.orchestrator.get(work_id)
         except WorkStoreError:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
+        self._runtime.set_owner_work_focus(item.work_id)
         return {"ok": True, "status": "found", **_public_work(item, self._runtime)}
 
     @function_tool()
