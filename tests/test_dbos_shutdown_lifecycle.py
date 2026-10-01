@@ -289,9 +289,7 @@ async def test_active_engine_advance_finishes_before_dbos_teardown(
     await asyncio.wait_for(started.wait(), timeout=1.0)
 
     backend.begin_shutdown()
-    quiesce = asyncio.create_task(
-        backend.quiesce_active_advances(timeout_seconds=1.0)
-    )
+    quiesce = asyncio.create_task(backend.quiesce_active_advances(timeout_seconds=1.0))
     await asyncio.sleep(0.02)
     assert quiesce.done() is False
     assert finished.is_set() is False
