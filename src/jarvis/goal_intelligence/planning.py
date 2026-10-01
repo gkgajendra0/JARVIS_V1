@@ -93,6 +93,7 @@ class PlanValidationContext:
     information_needs: tuple[InformationNeedV1, ...] = ()
     monitor_predicates: tuple[MonitorPredicateV1, ...] = ()
     subgoal_ids: tuple[str, ...] = ()
+    allowed_postcondition_refs: tuple[str, ...] = ()
 
 
 _SYSTEM_PROMPT = """
@@ -165,6 +166,7 @@ class PlanValidator:
         needs = {item.information_need_id for item in context.information_needs}
         monitors = {item.predicate_id for item in context.monitor_predicates}
         subgoals = set(context.subgoal_ids)
+        postconditions = set(context.allowed_postcondition_refs)
         plan_identity = f"{goal.goal_id}:{goal.goal_revision}:{plan_revision}"
         nodes: list[PlanNodeV1] = []
 
@@ -189,6 +191,13 @@ class PlanValidator:
                     and candidate.postcondition_ref is None
                 ):
                     raise PlanValidationError("ACTION requires a postcondition_ref")
+                if (
+                    candidate.postcondition_ref is not None
+                    and candidate.postcondition_ref not in postconditions
+                ):
+                    raise PlanValidationError(
+                        "ACTION/OBSERVE references an unregistered postcondition"
+                    )
                 if candidate.node_type is PlanNodeType.OBSERVE:
                     semantic = descriptor.semantic_metadata()
                     declared = set(semantic.observation_operations)
@@ -223,11 +232,13 @@ class PlanValidator:
                     raise PlanValidationError(
                         "SUBGOAL references unknown canonical child goal"
                     )
-            elif (
-                candidate.node_type is PlanNodeType.VERIFY
-                and candidate.postcondition_ref is None
-            ):
-                raise PlanValidationError("VERIFY requires postcondition_ref")
+            elif candidate.node_type is PlanNodeType.VERIFY:
+                if candidate.postcondition_ref is None:
+                    raise PlanValidationError("VERIFY requires postcondition_ref")
+                if candidate.postcondition_ref not in postconditions:
+                    raise PlanValidationError(
+                        "VERIFY references an unregistered postcondition"
+                    )
 
             nodes.append(
                 PlanNodeV1.create(
@@ -352,6 +363,7 @@ class GoalPlanner:
                 item.predicate_id for item in context.monitor_predicates
             ],
             "subgoal_ids": list(context.subgoal_ids),
+            "allowed_postcondition_refs": list(context.allowed_postcondition_refs),
             "prior_result_evidence": list(prior_evidence)[-20:],
         }
         telemetry = await self._client.parse_with_telemetry(
