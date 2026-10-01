@@ -65,9 +65,7 @@ class _SessionToolBundle:
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
         self._gicc_tool_factory = gicc_tool_factory
-        self._allow_direct_capability_acquisition = (
-            allow_direct_capability_acquisition
-        )
+        self._allow_direct_capability_acquisition = allow_direct_capability_acquisition
 
     @property
     def tools(self) -> list:
