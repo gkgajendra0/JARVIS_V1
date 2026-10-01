@@ -110,7 +110,9 @@ def test_phase9_voice_instructions_support_outcome_driven_acquisition() -> None:
     assert "ask one concise clarification" in NORMALIZED_INSTRUCTIONS
 
 
-def test_phase9_voice_instructions_never_outsource_missing_automation_to_owner() -> None:
+def test_phase9_voice_instructions_never_outsource_missing_automation_to_owner() -> (
+    None
+):
     assert "Owner input is not an execution fallback" in NORMALIZED_INSTRUCTIONS
     assert "open, click, search, inspect, run, test" in NORMALIZED_INSTRUCTIONS
     assert "treat that as a capability gap" in NORMALIZED_INSTRUCTIONS
