@@ -254,6 +254,7 @@ class WorkOrchestrator:
             if item.paused_from_state
             in {
                 WorkState.QUEUED,
+                WorkState.WAITING_RESOURCE,
                 WorkState.WAITING_DEPENDENCY,
                 WorkState.WAITING_UNTIL,
                 WorkState.WAITING_FOR_OWNER,
