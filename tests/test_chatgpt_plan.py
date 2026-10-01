@@ -419,11 +419,18 @@ def test_chatgpt_plan_invoke_structured_sends_normalized_strict_schema(
             return False
 
         def __iter__(self):
+            delta = {
+                "type": "response.output_text.delta",
+                "delta": json.dumps(
+                    {"required_name": "ok", "optional_type": None},
+                    separators=(",", ":"),
+                ),
+            }
             completed = {
                 "type": "response.completed",
                 "response": {"usage": {"input_tokens": 1, "output_tokens": 1}},
             }
-            yield b'data: {"type":"response.output_text.delta","delta":"{\"required_name\":\"ok\",\"optional_type\":null}"}\n'
+            yield f"data: {json.dumps(delta)}\\n".encode()
             yield f"data: {json.dumps(completed)}\\n".encode()
 
     def _urlopen(req, timeout):
