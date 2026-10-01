@@ -8,7 +8,6 @@ from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.goal_intelligence.execution import (
     GoalPlanDispatcher,
     PlanDispatchDisposition,
-    VerificationRegistry,
 )
 from jarvis.goal_intelligence.models import (
     GoalKind,
@@ -19,6 +18,7 @@ from jarvis.goal_intelligence.planning import (
     PlanValidationContext,
     PlanValidator,
 )
+from jarvis.goal_intelligence.service import GoalOrchestrator, VerificationRegistry
 from jarvis.goal_intelligence.store import GoalStore
 from jarvis.work.privacy import ProtectedWorkPayloadCodec
 from jarvis.work.store import SQLiteWorkStore
@@ -78,16 +78,21 @@ def _plan(store: GoalStore, goal: OwnerGoalV2, revision: int = 1):
 
 
 def _verification_registry(pass_value: bool) -> VerificationRegistry:
+    registry = VerificationRegistry()
+
     def app_open(evidence):
         if not pass_value:
             return False
+        results = evidence.get("results", ())
         return any(
-            isinstance(item.get("payload"), dict)
+            isinstance(item, dict)
+            and isinstance(item.get("payload"), dict)
             and item["payload"].get("data", {}).get("opened") is True
-            for item in evidence
+            for item in results
         )
 
-    return VerificationRegistry({"app_open": app_open})
+    registry.register("app_open", app_open)
+    return registry
 
 
 def test_action_then_registered_verify_completes_plan(tmp_path: Path) -> None:
@@ -96,8 +101,11 @@ def test_action_then_registered_verify_completes_plan(tmp_path: Path) -> None:
     runtime = FakeRuntime(opened=True)
     dispatcher = GoalPlanDispatcher(
         store=store,
-        capability_runtime=runtime,
-        verification_registry=_verification_registry(True),
+        orchestrator=GoalOrchestrator(
+            goal_store=store,
+            capability_runtime=runtime,
+            verification_registry=_verification_registry(True),
+        ),
     )
 
     action = dispatcher.ready_nodes(plan)[0]
@@ -121,6 +129,49 @@ def test_action_then_registered_verify_completes_plan(tmp_path: Path) -> None:
     assert verified.plan.state is PlanState.SUCCEEDED
 
 
+def test_default_verifier_accepts_only_bound_verified_executor_evidence(
+    tmp_path: Path,
+) -> None:
+    store, goal = _store(tmp_path)
+    plan = _plan(store, goal)
+    runtime = FakeRuntime(opened=True)
+    dispatcher = GoalPlanDispatcher(
+        store=store,
+        orchestrator=GoalOrchestrator(
+            goal_store=store,
+            capability_runtime=runtime,
+        ),
+    )
+
+    action = dispatcher.ready_nodes(plan)[0]
+    action_result = dispatcher.dispatch(
+        plan_id=plan.plan_id,
+        node_id=action.node_id,
+        session_id="runtime-session",
+        state_fingerprint="desktop-before",
+    )
+    action_evidence = store.list_plan_node_results(
+        plan_id=plan.plan_id,
+        node_id=action.node_id,
+    )
+    assert action_evidence[-1]["payload"]["postcondition_ref"] == "app_open"
+
+    runtime_result = runtime.requests
+    assert runtime_result
+    evidence_payload = action_evidence[-1]["payload"]
+    evidence_payload["data"]["verification_passed"] = True
+
+    verify = dispatcher.ready_nodes(action_result.plan)[0]
+    verified = dispatcher.dispatch(
+        plan_id=plan.plan_id,
+        node_id=verify.node_id,
+        session_id="runtime-session",
+    )
+
+    assert verified.disposition is PlanDispatchDisposition.SUCCEEDED
+    assert verified.plan.state is PlanState.SUCCEEDED
+
+
 def test_failed_verification_blocks_same_action_after_replan(
     tmp_path: Path,
 ) -> None:
@@ -129,8 +180,11 @@ def test_failed_verification_blocks_same_action_after_replan(
     runtime = FakeRuntime(opened=False)
     dispatcher = GoalPlanDispatcher(
         store=store,
-        capability_runtime=runtime,
-        verification_registry=_verification_registry(False),
+        orchestrator=GoalOrchestrator(
+            goal_store=store,
+            capability_runtime=runtime,
+            verification_registry=_verification_registry(False),
+        ),
     )
     action = dispatcher.ready_nodes(first_plan)[0]
     action_result = dispatcher.dispatch(
