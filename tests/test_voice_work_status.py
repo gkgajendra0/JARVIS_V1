@@ -16,6 +16,22 @@ async def test_active_work_status_surfaces_recent_failure_when_none_remains_acti
     tmp_path,
 ) -> None:
     store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    older = WorkItem(
+        request="Older completed task",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-old",
+        source_turn_id="turn-old",
+    )
+    store.create(older)
+    older_running = older.transition(WorkState.RUNNING, status_detail="working")
+    older_running = store.save(older_running, expected_version=older.version)
+    older_completed = older_running.transition(
+        WorkState.COMPLETED,
+        status_detail="done",
+        result={"ok": True},
+    )
+    store.save(older_completed, expected_version=older_running.version)
+
     item = WorkItem(
         request="Acquire TV media control",
         work_type=WorkType.RESEARCH,
