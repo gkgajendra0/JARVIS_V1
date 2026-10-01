@@ -5,11 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Callable
+from typing import Callable, Protocol
 
 from jarvis.authority.types import ActionOrigin
 from jarvis.capabilities.models import CapabilityRequest, CapabilityStatus
-from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.engineering_substrate.canonical import canonical_digest
 
 from .models import (
@@ -20,6 +19,10 @@ from .models import (
     PlanState,
 )
 from .store import GoalStore, GoalStoreConflict, GoalStoreError
+
+
+class GovernedCapabilityRuntime(Protocol):
+    def execute(self, request: CapabilityRequest): ...
 
 
 class PlanDispatchDisposition(str, Enum):
@@ -91,7 +94,7 @@ class GoalPlanDispatcher:
         self,
         *,
         store: GoalStore,
-        capability_runtime: CapabilityRuntime,
+        capability_runtime: GovernedCapabilityRuntime,
         verification_registry: VerificationRegistry,
         acquire_capability: Callable[[PlanNodeV1], dict[str, object]] | None = None,
         clarify: Callable[[PlanNodeV1], dict[str, object]] | None = None,
@@ -100,8 +103,8 @@ class GoalPlanDispatcher:
     ) -> None:
         if not isinstance(store, GoalStore):
             raise TypeError("store must be GoalStore")
-        if not isinstance(capability_runtime, CapabilityRuntime):
-            raise TypeError("capability_runtime must be CapabilityRuntime")
+        if not callable(getattr(capability_runtime, "execute", None)):
+            raise TypeError("capability_runtime must provide execute()")
         if not isinstance(verification_registry, VerificationRegistry):
             raise TypeError("verification_registry must be VerificationRegistry")
         self._store = store
@@ -273,8 +276,7 @@ class GoalPlanDispatcher:
             if (
                 node.node_type is PlanNodeType.ACTION
                 and self._store.has_no_progress(
-                    plan_id=running.plan_id,
-                    node_id=node.node_id,
+                    goal_id=running.goal_id,
                     action_fingerprint=action_fingerprint,
                     state_fingerprint=state_key,
                 )
@@ -379,6 +381,7 @@ class GoalPlanDispatcher:
                     state_fp = str(payload.get("state_fingerprint") or "")
                     if action_fp and state_fp:
                         self._store.record_no_progress(
+                            goal_id=running.goal_id,
                             plan_id=running.plan_id,
                             node_id=predecessor.node_id,
                             action_fingerprint=action_fp,
