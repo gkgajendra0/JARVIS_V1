@@ -101,10 +101,10 @@ from jarvis.vision.native_owner_tracking import (
     build_default_native_owner_tracking_observer,
 )
 from jarvis.vision.service import build_default_vision_service
-from jarvis.voice.gicc_tools import GiccAgentTools
 from jarvis.voice.canonical_active_speaker_runtime import (
     CanonicalActiveSpeakerRuntimeController,
 )
+from jarvis.voice.gicc_tools import GiccAgentTools
 from jarvis.voice.livekit_session import create_voice_session
 from jarvis.voice.local_status_speech import build_local_status_speech
 from jarvis.voice.media_devices_audio import (
