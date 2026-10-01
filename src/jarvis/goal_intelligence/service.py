@@ -25,6 +25,7 @@ from .models import (
 from .phase9 import Phase9GapAdmission, Phase9GoalBridge
 from .planning import PlanProgressGuard
 from .store import GoalStore, GoalStoreError
+from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 
 
 class GoalDispatchStatus(str, Enum):
@@ -163,6 +164,7 @@ class GoalOrchestrator:
         monitor_dispatcher: MonitorNodeDispatcher | None = None,
         subgoal_dispatcher: SubgoalNodeDispatcher | None = None,
         progress_guard: PlanProgressGuard | None = None,
+        telemetry: GiccTelemetrySink = DEFAULT_GICC_TELEMETRY,
     ) -> None:
         if not isinstance(goal_store, GoalStore):
             raise TypeError("goal_store must be GoalStore")
@@ -177,6 +179,9 @@ class GoalOrchestrator:
         self._monitor = monitor_dispatcher
         self._subgoal = subgoal_dispatcher
         self._progress = progress_guard
+        if not callable(getattr(telemetry, "emit", None)):
+            raise TypeError("telemetry must provide emit()")
+        self._telemetry = telemetry
 
     @staticmethod
     def ready_nodes(
@@ -219,6 +224,14 @@ class GoalOrchestrator:
             raise ValueError("plan does not belong to owner goal")
         if node.node_id not in {item.node_id for item in plan.nodes}:
             raise ValueError("node does not belong to plan")
+        self._telemetry.emit(
+            "gicc_plan_node_dispatched",
+            goal_id=goal.goal_id,
+            plan_id=plan.plan_id,
+            plan_revision=plan.plan_revision,
+            node_id=node.node_id,
+            node_type=node.node_type.value,
+        )
 
         if node.node_type in {PlanNodeType.ACTION, PlanNodeType.OBSERVE}:
             if self._progress is not None:
@@ -329,6 +342,30 @@ class GoalOrchestrator:
                 node.postcondition_ref,
                 verification_evidence or {},
             )
+            self._telemetry.emit(
+                "gicc_postcondition_verified",
+                goal_id=goal.goal_id,
+                plan_id=plan.plan_id,
+                node_id=node.node_id,
+                predicate_ref=node.postcondition_ref,
+                verified=outcome.verified,
+                evidence_count=len(outcome.evidence_refs),
+                reason_code=(
+                    "verified" if outcome.verified else "verification_failed"
+                ),
+            )
+            if (
+                outcome.verified
+                and len(plan.completion_node_ids) == 1
+                and node.node_id == plan.completion_node_ids[0]
+            ):
+                self._telemetry.emit(
+                    "gicc_goal_completed",
+                    goal_id=goal.goal_id,
+                    plan_id=plan.plan_id,
+                    plan_revision=plan.plan_revision,
+                    completion_node_id=node.node_id,
+                )
             return PlanDispatchResult(
                 node_id=node.node_id,
                 node_type=node.node_type,
