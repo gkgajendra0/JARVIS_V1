@@ -60,7 +60,6 @@ class _SessionToolBundle:
         research_service: CurrentResearchService | None,
         capability_runtime: CapabilityRuntime | None,
         work_runtime: WorkRuntime | None = None,
-        gicc_runtime: _ManagedBackgroundRuntime | None = None,
         gicc_tool_factory: Callable[[ConversationSession], list] | None = None,
         allow_direct_capability_acquisition: bool = True,
     ) -> None:
@@ -71,7 +70,6 @@ class _SessionToolBundle:
         self._research_service = research_service
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
-        self._gicc_runtime = gicc_runtime
         self._gicc_tool_factory = gicc_tool_factory
         self._allow_direct_capability_acquisition = allow_direct_capability_acquisition
 
@@ -122,6 +120,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         research_service: CurrentResearchService | None = None,
         capability_runtime: CapabilityRuntime | None = None,
         work_runtime: WorkRuntime | None = None,
+        gicc_runtime: _ManagedBackgroundRuntime | None = None,
         gicc_tool_factory: Callable[[ConversationSession], list] | None = None,
         allow_direct_capability_acquisition: bool = True,
         **kwargs: Any,
@@ -227,6 +226,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._research_service = research_service
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
+        self._gicc_runtime = gicc_runtime
         if (
             memory_runtime is not None
             or research_service is not None
