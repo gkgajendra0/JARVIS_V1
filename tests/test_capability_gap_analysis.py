@@ -8,13 +8,13 @@ from jarvis.capabilities.models import (
     DiscoveryState,
 )
 from jarvis.capability_acquisition.source import AcquisitionContextV1
+from jarvis.capability_registry.models import DesiredActivationState
 from jarvis.capability_registry.projection import (
     CapabilityEffectiveSnapshot,
     CapabilityInventoryEntry,
     CapabilityManagementMode,
     EffectiveCapabilityState,
 )
-from jarvis.capability_registry.models import DesiredActivationState
 from jarvis.goal_intelligence.capability_graph import CapabilityGraphResolver
 from jarvis.goal_intelligence.models import (
     CapabilityRequirementGraphV1,
