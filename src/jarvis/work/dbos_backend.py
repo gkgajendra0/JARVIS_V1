@@ -332,9 +332,7 @@ class DBOSWorkExecutionBackend:
         )
         while True:
             incomplete = [
-                completion
-                for _future, completion in active
-                if not completion.is_set()
+                completion for _future, completion in active if not completion.is_set()
             ]
             if not incomplete:
                 return len(active)
