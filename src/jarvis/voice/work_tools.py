@@ -666,15 +666,28 @@ class WorkAgentTools:
         milestone/completed_work/remaining_work are semantic identifiers, not sentences to
         quote. Preserve the approximate qualifier, specific blocker, remaining work, ETA
         confidence, and completion-notification expectation instead of weakening or omitting
-        them.
+        them. If no work is active, surface the most recent terminal WorkItem so a just-failed
+        or just-completed background task is not incorrectly described as if no task existed.
         """
         del context
         items = self._runtime.orchestrator.list_active(limit=50)
-        return {
+        payload: dict[str, object] = {
             "ok": True,
             "status": "listed",
             "work": [_public_work(item, self._runtime) for item in items],
         }
+        if not items:
+            recent = self._runtime.store.list(limit=1)
+            if recent and recent[0].state.terminal:
+                payload["recent_terminal_work"] = _public_work(
+                    recent[0],
+                    self._runtime,
+                )
+                payload["truth_note"] = (
+                    "no work is currently active; report the recent terminal work "
+                    "instead of saying no background task existed"
+                )
+        return payload
 
     @function_tool()
     async def list_recent_background_work(
