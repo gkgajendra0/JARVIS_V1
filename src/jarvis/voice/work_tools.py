@@ -677,7 +677,7 @@ class WorkAgentTools:
             "work": [_public_work(item, self._runtime) for item in items],
         }
         if not items:
-            recent = self._runtime.store.list(limit=1)
+            recent = self._runtime.store.list_recent(limit=1)
             if recent and recent[0].state.terminal:
                 payload["recent_terminal_work"] = _public_work(
                     recent[0],
@@ -700,7 +700,7 @@ class WorkAgentTools:
         wants both active and recently terminal work.
         """
         del context
-        items = self._runtime.store.list(limit=50)
+        items = self._runtime.store.list_recent(limit=50)
         return {
             "ok": True,
             "status": "listed",
