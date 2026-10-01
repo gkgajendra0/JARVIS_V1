@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -62,6 +63,10 @@ class StaticCoordinator:
         del goal_id
         return self.result
 
+    def current_plan_validation_context(self, goal_id: str):
+        del goal_id
+        return object()
+
 
 class CapabilityContinuationCoordinator:
     def __init__(self, store: GoalStore) -> None:
@@ -113,7 +118,12 @@ def _goal(store: GoalStore, *, state: GoalState) -> OwnerGoalV2:
     )
 
 
-def _put_plan(store: GoalStore, goal: OwnerGoalV2) -> PlanGraphV1:
+def _put_plan(
+    store: GoalStore,
+    goal: OwnerGoalV2,
+    *,
+    plan_revision: int = 1,
+) -> PlanGraphV1:
     action = PlanNodeV1.create(
         plan_identity=f"{goal.goal_id}:{goal.goal_revision}",
         ordinal=0,
@@ -135,7 +145,7 @@ def _put_plan(store: GoalStore, goal: OwnerGoalV2) -> PlanGraphV1:
         PlanGraphV1.create(
             goal_id=goal.goal_id,
             goal_revision=goal.goal_revision,
-            plan_revision=1,
+            plan_revision=plan_revision,
             nodes=(action, verify),
             edges=((action.node_id, verify.node_id),),
             root_node_ids=(action.node_id,),
@@ -149,6 +159,8 @@ def _runtime(
     store: GoalStore,
     coordinator,
     capability_runtime: FakeCapabilityRuntime,
+    *,
+    replan_controller=None,
 ) -> GiccApplyRuntime:
     dispatcher = GoalPlanDispatcher(
         store=store,
@@ -163,6 +175,7 @@ def _runtime(
         coordinator=coordinator,  # type: ignore[arg-type]
         dispatcher=dispatcher,
         telemetry=CapturingGiccTelemetry(),
+        replan_controller=replan_controller,
         capability_runtime=capability_runtime,  # type: ignore[arg-type]
     )
 
@@ -194,6 +207,86 @@ async def test_foreground_plan_ready_goal_reaches_verified_completion(
     assert result.plan is not None
     assert result.plan.state is PlanState.SUCCEEDED
     assert len(capability_runtime.requests) == 1
+
+
+class SequencedVerificationRuntime(FakeCapabilityRuntime):
+    def __init__(self, values: list[bool]) -> None:
+        super().__init__()
+        self.values = list(values)
+
+    def execute(self, request):
+        self.requests.append(request)
+        verified = self.values.pop(0)
+        return CapabilityResult(
+            status=CapabilityStatus.SUCCEEDED,
+            capability_key=request.capability_key,
+            operation=request.operation,
+            data={
+                "opened": verified,
+                "verification_passed": verified,
+            },
+            provenance=("fake-runtime",),
+        )
+
+
+class FakeVerificationReplanController:
+    def __init__(self, store: GoalStore) -> None:
+        self.store = store
+        self.calls = 0
+
+    async def replan(
+        self,
+        *,
+        goal,
+        failed_plan,
+        context,
+        prior_evidence,
+    ):
+        del context
+        assert prior_evidence
+        self.calls += 1
+        current = self.store.get_goal(goal.goal_id)
+        assert current is not None
+        replacement = _put_plan(
+            self.store,
+            current,
+            plan_revision=failed_plan.plan_revision + 1,
+        )
+        return SimpleNamespace(replacement=replacement)
+
+
+@pytest.mark.asyncio
+async def test_failed_verification_replans_once_and_completes(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store, state=GoalState.PLANNED)
+    plan = _put_plan(store, goal)
+    capability_runtime = SequencedVerificationRuntime([False, True])
+    coordinator = StaticCoordinator(
+        GoalIntakeResult(
+            disposition=GoalIntakeDisposition.PLAN_READY,
+            goal=goal,
+            plan=plan,
+        )
+    )
+    replan = FakeVerificationReplanController(store)
+    runtime = _runtime(
+        store,
+        coordinator,
+        capability_runtime,
+        replan_controller=replan,
+    )
+
+    result = await runtime.pursue(conversation=object(), turn=object())
+
+    assert result.goal is not None
+    assert result.goal.state is GoalState.COMPLETED
+    assert result.plan is not None
+    assert result.plan.state is PlanState.SUCCEEDED
+    assert result.plan.plan_revision == 2
+    assert replan.calls == 1
+    assert len(capability_runtime.requests) == 2
 
 
 @pytest.mark.asyncio
