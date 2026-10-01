@@ -81,9 +81,7 @@ class VerificationRegistry:
     ) -> bool:
         predicate = self._predicates.get(str(predicate_id).strip())
         if predicate is None:
-            raise GoalStoreError(
-                f"unregistered verification predicate: {predicate_id}"
-            )
+            raise GoalStoreError(f"unregistered verification predicate: {predicate_id}")
         return bool(predicate(evidence))
 
 
@@ -273,13 +271,10 @@ class GoalPlanDispatcher:
                     disposition=PlanDispatchDisposition.FAILED,
                     reason="ACTION requires a pre-action state fingerprint",
                 )
-            if (
-                node.node_type is PlanNodeType.ACTION
-                and self._store.has_no_progress(
-                    goal_id=running.goal_id,
-                    action_fingerprint=action_fingerprint,
-                    state_fingerprint=state_key,
-                )
+            if node.node_type is PlanNodeType.ACTION and self._store.has_no_progress(
+                goal_id=running.goal_id,
+                action_fingerprint=action_fingerprint,
+                state_fingerprint=state_key,
             ):
                 failed = self._update_node(
                     running,
