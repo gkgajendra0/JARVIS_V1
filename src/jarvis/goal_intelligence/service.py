@@ -75,9 +75,7 @@ class VerificationRegistry:
         if evaluator is None:
             raw_results = evidence.get("results", ())
             results = (
-                tuple(raw_results)
-                if isinstance(raw_results, (list, tuple))
-                else ()
+                tuple(raw_results) if isinstance(raw_results, (list, tuple)) else ()
             )
             matching = []
             for item in results:
