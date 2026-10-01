@@ -300,6 +300,7 @@ def test_goal_store_restart_reopens_protected_canonical_state(tmp_path: Path) ->
     assert reopened.get_information_need(need.information_need_id) == resolved
     assert goal.exact_owner_request.encode("utf-8") not in _raw_storage(path)
 
+
 def test_resource_binding_refreshes_same_identity_across_restart(
     tmp_path: Path,
 ) -> None:
@@ -370,4 +371,3 @@ def test_resource_binding_rejects_stale_refresh(goal_store: GoalStore) -> None:
         )
 
     assert goal_store.get_resource_binding(current.binding_id) == current
-
