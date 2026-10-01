@@ -30,11 +30,7 @@ def _constructor_keywords_used_by_production_builder() -> set[str]:
         )
     ]
     assert len(calls) == 1
-    return {
-        keyword.arg
-        for keyword in calls[0].keywords
-        if keyword.arg is not None
-    }
+    return {keyword.arg for keyword in calls[0].keywords if keyword.arg is not None}
 
 
 def _explicit_keyword_parameters(callable_object) -> set[str]:
