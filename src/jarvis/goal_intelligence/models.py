@@ -1151,6 +1151,7 @@ class PlanNodeV1:
     subgoal_id: str | None = None
     monitor_predicate_id: str | None = None
     postcondition_ref: str | None = None
+    parameters: dict[str, object] = field(default_factory=dict)
     digest: str = "pending"
 
     @classmethod
@@ -1171,6 +1172,7 @@ class PlanNodeV1:
         subgoal_id: str | None = None,
         monitor_predicate_id: str | None = None,
         postcondition_ref: str | None = None,
+        parameters: dict[str, object] | None = None,
     ) -> PlanNodeV1:
         if not isinstance(node_type, PlanNodeType):
             raise TypeError("node_type must be PlanNodeType")
@@ -1204,6 +1206,7 @@ class PlanNodeV1:
             postcondition_ref=_optional_text(
                 postcondition_ref, field="postcondition_ref"
             ),
+            parameters=_mapping(parameters, field="parameters"),
             digest="pending",
         )
         return replace(item, digest=canonical_digest(item.canonical_payload()))
@@ -1279,6 +1282,7 @@ class PlanNodeV1:
             subgoal_id=payload["subgoal_id"],
             monitor_predicate_id=payload.get("monitor_predicate_id"),
             postcondition_ref=payload["postcondition_ref"],
+            parameters=dict(payload.get("parameters", {})),
             digest=digest,
         )
 
