@@ -76,11 +76,7 @@ class HandsPlanActionDispatcher:
         reason_value = payload.get("reason") or payload.get("clarification_question")
         reason = None if ok else str(reason_value or "Hands goal execution failed")
         result = CapabilityResult(
-            status=(
-                CapabilityStatus.SUCCEEDED
-                if ok
-                else CapabilityStatus.FAILED
-            ),
+            status=(CapabilityStatus.SUCCEEDED if ok else CapabilityStatus.FAILED),
             capability_key=str(node.capability_key or "hands"),
             operation=str(node.operation or "hands_goal"),
             data={
