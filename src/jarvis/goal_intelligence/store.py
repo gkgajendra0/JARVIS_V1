@@ -1341,6 +1341,29 @@ class GoalStore:
         )
         return result if isinstance(result, CapabilityRequirementGraphV1) else None
 
+    def latest_requirement_graph(
+        self,
+        *,
+        goal_id: str,
+    ) -> CapabilityRequirementGraphV1 | None:
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM capability_requirement_graphs_v1
+                WHERE goal_id=?
+                ORDER BY rowid DESC
+                LIMIT 1
+                """,
+                (str(goal_id).strip(),),
+            ).fetchone()
+        if row is None:
+            return None
+        return CapabilityRequirementGraphV1.from_payload(
+            self._decode(row["payload"]),
+            row["digest"],
+        )
+
     def put_gap(self, gap: CapabilityGapV1) -> CapabilityGapV1:
         if not isinstance(gap, CapabilityGapV1):
             raise TypeError("gap must be CapabilityGapV1")
@@ -1391,6 +1414,30 @@ class GoalStore:
         if row is None:
             return None
         return CapabilityGapV1.from_payload(self._decode(row["payload"]), row["digest"])
+
+    def list_gaps(
+        self,
+        *,
+        goal_id: str,
+        limit: int = 100,
+    ) -> tuple[CapabilityGapV1, ...]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+            raise ValueError("limit must be a positive integer")
+        with self.work.extension_transaction() as db:
+            rows = db.execute(
+                """
+                SELECT payload, digest
+                FROM capability_gaps_v1
+                WHERE goal_id=?
+                ORDER BY rowid ASC
+                LIMIT ?
+                """,
+                (str(goal_id).strip(), limit),
+            ).fetchall()
+        return tuple(
+            CapabilityGapV1.from_payload(self._decode(row["payload"]), row["digest"])
+            for row in rows
+        )
 
     def update_gap_state(
         self,
@@ -1985,6 +2032,33 @@ class GoalStore:
                 ),
             )
         return continuation
+
+    def list_continuations(
+        self,
+        *,
+        goal_id: str,
+        limit: int = 100,
+    ) -> tuple[GoalContinuationV1, ...]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+            raise ValueError("limit must be a positive integer")
+        with self.work.extension_transaction() as db:
+            rows = db.execute(
+                """
+                SELECT payload, digest
+                FROM goal_continuations_v1
+                WHERE goal_id=?
+                ORDER BY rowid ASC
+                LIMIT ?
+                """,
+                (str(goal_id).strip(), limit),
+            ).fetchall()
+        return tuple(
+            GoalContinuationV1.from_payload(
+                self._decode(row["payload"]),
+                row["digest"],
+            )
+            for row in rows
+        )
 
     def get_continuation(self, continuation_id: str) -> GoalContinuationV1 | None:
         with self.work.extension_transaction() as db:
