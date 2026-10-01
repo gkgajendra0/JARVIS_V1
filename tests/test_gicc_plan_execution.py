@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from tests.test_gicc_planning import _catalog, _valid_proposal
 
 from jarvis.authority.types import ActionOrigin
@@ -98,7 +100,8 @@ def _verification_registry(pass_value: bool) -> VerificationRegistry:
     return registry
 
 
-def test_action_then_registered_verify_completes_plan(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_action_then_registered_verify_completes_plan(tmp_path: Path) -> None:
     store, goal = _store(tmp_path)
     plan = _plan(store, goal)
     runtime = FakeRuntime(opened=True)
@@ -112,7 +115,7 @@ def test_action_then_registered_verify_completes_plan(tmp_path: Path) -> None:
     )
 
     action = dispatcher.ready_nodes(plan)[0]
-    action_result = dispatcher.dispatch(
+    action_result = await dispatcher.dispatch(
         plan_id=plan.plan_id,
         node_id=action.node_id,
         session_id="runtime-session",
@@ -122,7 +125,7 @@ def test_action_then_registered_verify_completes_plan(tmp_path: Path) -> None:
     assert runtime.requests[0].origin is ActionOrigin.MODEL_SUGGESTED
 
     verify = dispatcher.ready_nodes(action_result.plan)[0]
-    verified = dispatcher.dispatch(
+    verified = await dispatcher.dispatch(
         plan_id=plan.plan_id,
         node_id=verify.node_id,
         session_id="runtime-session",
@@ -132,7 +135,8 @@ def test_action_then_registered_verify_completes_plan(tmp_path: Path) -> None:
     assert verified.plan.state is PlanState.SUCCEEDED
 
 
-def test_default_verifier_accepts_only_bound_verified_executor_evidence(
+@pytest.mark.asyncio
+async def test_default_verifier_accepts_only_bound_verified_executor_evidence(
     tmp_path: Path,
 ) -> None:
     store, goal = _store(tmp_path)
@@ -147,7 +151,7 @@ def test_default_verifier_accepts_only_bound_verified_executor_evidence(
     )
 
     action = dispatcher.ready_nodes(plan)[0]
-    action_result = dispatcher.dispatch(
+    action_result = await dispatcher.dispatch(
         plan_id=plan.plan_id,
         node_id=action.node_id,
         session_id="runtime-session",
@@ -162,7 +166,7 @@ def test_default_verifier_accepts_only_bound_verified_executor_evidence(
     assert runtime.requests
 
     verify = dispatcher.ready_nodes(action_result.plan)[0]
-    verified = dispatcher.dispatch(
+    verified = await dispatcher.dispatch(
         plan_id=plan.plan_id,
         node_id=verify.node_id,
         session_id="runtime-session",
@@ -172,7 +176,8 @@ def test_default_verifier_accepts_only_bound_verified_executor_evidence(
     assert verified.plan.state is PlanState.SUCCEEDED
 
 
-def test_failed_verification_blocks_same_action_after_replan(
+@pytest.mark.asyncio
+async def test_failed_verification_blocks_same_action_after_replan(
     tmp_path: Path,
 ) -> None:
     store, goal = _store(tmp_path)
@@ -187,14 +192,14 @@ def test_failed_verification_blocks_same_action_after_replan(
         ),
     )
     action = dispatcher.ready_nodes(first_plan)[0]
-    action_result = dispatcher.dispatch(
+    action_result = await dispatcher.dispatch(
         plan_id=first_plan.plan_id,
         node_id=action.node_id,
         session_id="runtime-session",
         state_fingerprint="desktop-unchanged",
     )
     verify = dispatcher.ready_nodes(action_result.plan)[0]
-    failed = dispatcher.dispatch(
+    failed = await dispatcher.dispatch(
         plan_id=first_plan.plan_id,
         node_id=verify.node_id,
         session_id="runtime-session",
@@ -203,7 +208,7 @@ def test_failed_verification_blocks_same_action_after_replan(
 
     second_plan = _plan(store, goal, revision=2)
     second_action = dispatcher.ready_nodes(second_plan)[0]
-    blocked = dispatcher.dispatch(
+    blocked = await dispatcher.dispatch(
         plan_id=second_plan.plan_id,
         node_id=second_action.node_id,
         session_id="runtime-session",
@@ -212,6 +217,32 @@ def test_failed_verification_blocks_same_action_after_replan(
 
     assert blocked.disposition is PlanDispatchDisposition.BLOCKED
     assert blocked.reason == "identical action/state previously made no progress"
+    assert len(runtime.requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_action_can_execute_without_fabricated_state_fingerprint(
+    tmp_path: Path,
+) -> None:
+    store, goal = _store(tmp_path)
+    plan = _plan(store, goal)
+    runtime = FakeRuntime(opened=True)
+    dispatcher = GoalPlanDispatcher(
+        store=store,
+        orchestrator=GoalOrchestrator(
+            goal_store=store,
+            capability_runtime=runtime,
+        ),
+    )
+
+    action = dispatcher.ready_nodes(plan)[0]
+    result = await dispatcher.dispatch(
+        plan_id=plan.plan_id,
+        node_id=action.node_id,
+        session_id="runtime-session",
+    )
+
+    assert result.disposition is PlanDispatchDisposition.SUCCEEDED
     assert len(runtime.requests) == 1
 
 
