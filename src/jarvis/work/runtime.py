@@ -334,12 +334,30 @@ class WorkRuntime:
         source_turn_id: str,
     ) -> WorkItem:
         work = self.resolve_retryable_work(work_id)
-        return self.orchestrator.retry_failed(
-            work.work_id,
-            owner_request=owner_request,
-            source_session_id=source_session_id,
-            source_turn_id=source_turn_id,
+        reopened_change = (
+            None
+            if self.changes is None
+            else self.changes.prepare_failed_work_retry(work.work_id)
         )
+        try:
+            return self.orchestrator.retry_failed(
+                work.work_id,
+                owner_request=owner_request,
+                source_session_id=source_session_id,
+                source_turn_id=source_turn_id,
+            )
+        except Exception:
+            if reopened_change is not None and self.changes is not None:
+                try:
+                    self.changes.reconcile_for_work(work.work_id)
+                except Exception:
+                    LOGGER.exception(
+                        "Failed to restore EngineeringChange after Work retry "
+                        "submission failure | work_id=%s | change_id=%s",
+                        work.work_id,
+                        reopened_change.change_id,
+                    )
+            raise
 
     def resolve_status_target(self, work_id: str | None = None) -> WorkItem:
         normalized = str(work_id or "").strip()
