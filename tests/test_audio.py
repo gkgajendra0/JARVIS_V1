@@ -73,6 +73,9 @@ async def test_media_devices_ingress_absorbs_thread_burst_without_queuefull() ->
     assert np.frombuffer(first.data, dtype=np.int16)[0] == 2
     assert np.frombuffer(second.data, dtype=np.int16)[0] == 3
     assert ingress.dropped_frames == 1
+    assert ingress.pending_dropped_frames == 1
+    assert ingress.queue_dropped_frames == 0
+    assert ingress.max_drain_schedule_lag_ms >= 0.0
 
 
 @pytest.mark.asyncio
