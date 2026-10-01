@@ -128,6 +128,23 @@ def build_default_self_model() -> SelfModelRegistry:
             ),
         ),
         C(
+            "goal_intelligence",
+            "Goal Intelligence & Capability Composition canonical contracts and "
+            "protected orchestration state.",
+            ("src/jarvis/goal_intelligence",),
+            parent_component_id="jarvis",
+            tests=(
+                "tests/test_goal_intelligence_models.py",
+                "tests/test_goal_intelligence_store.py",
+                "tests/test_gicc_runtime_lane.py",
+            ),
+            logger_prefixes=("jarvis.goal_intelligence",),
+            docs=(
+                "docs/GICC_GOAL_INTELLIGENCE_ARCHITECTURE.md",
+                "docs/GICC_IMPLEMENTATION_AND_MIGRATION_PLAN.md",
+            ),
+        ),
+        C(
             "runtime.core",
             "Process bootstrap, configuration, preflight and core conversation lifecycle.",
             (
@@ -136,6 +153,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 "src/jarvis/app.py",
                 "src/jarvis/config.py",
                 "src/jarvis/conversation.py",
+                "src/jarvis/runtime_lane.py",
                 "src/jarvis/dev_control.py",
                 "src/jarvis/dev_supervisor.py",
                 "src/jarvis/runtime_supervisor.py",
