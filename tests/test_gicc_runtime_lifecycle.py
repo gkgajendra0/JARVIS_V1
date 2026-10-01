@@ -23,9 +23,7 @@ async def test_gicc_continuation_runtime_matches_voice_runtime_lifecycle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
-    controller = object.__new__(
-        active_runtime.CanonicalActiveSpeakerRuntimeController
-    )
+    controller = object.__new__(active_runtime.CanonicalActiveSpeakerRuntimeController)
     controller._memory_runtime = None
     controller._memory_query_coordinator = None
     controller._research_service = None
