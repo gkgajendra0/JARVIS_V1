@@ -349,17 +349,22 @@ class GoalIntelligenceCoordinator:
                 else tuple(self._phase9.admit_gap(gap, goal) for gap in analysis.gaps)
             )
             for admission in admissions:
+                admission_change = getattr(admission.admission, "change", None)
                 self._telemetry.emit(
                     "gicc_phase9_linked",
                     goal_id=goal.goal_id,
                     gap_id=admission.request.gap_id,
-                    request_id=admission.request.request_id,
-                    request_digest=admission.request.digest,
-                    acquisition_work_id=admission.admission.acquisition_work_id,
+                    request_id=getattr(admission.request, "request_id", None),
+                    request_digest=getattr(admission.request, "digest", None),
+                    acquisition_work_id=getattr(
+                        admission.admission,
+                        "acquisition_work_id",
+                        None,
+                    ),
                     change_id=(
                         None
-                        if admission.admission.change is None
-                        else admission.admission.change.change_id
+                        if admission_change is None
+                        else admission_change.change_id
                     ),
                 )
             plan = self._build_acquisition_plan(goal, analysis)
