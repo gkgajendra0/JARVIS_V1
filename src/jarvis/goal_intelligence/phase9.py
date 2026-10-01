@@ -97,8 +97,17 @@ class Phase9AcquisitionRequestV2:
         digest = canonical_digest(payload)
         return cls(
             request_id=f"phase9_gicc_{digest[:20]}",
+            motivating_goal_id=goal.goal_id,
+            gap_id=gap.gap_id,
+            reusable_capability_family=gap.reusable_capability_family,
+            minimum_required_operations=tuple(gap.minimum_required_operations),
+            target_entity_type=gap.target_entity_type,
+            target_entity_id=gap.target_entity_id,
+            owner_source_session_id=goal.source_session_id,
+            owner_source_turn_id=goal.source_turn_id,
+            bridge_source_session_id=f"gicc:{goal.goal_id}",
+            bridge_source_turn_id=f"gap:{gap.gap_id}",
             digest=digest,
-            **payload,
         )
 
     def canonical_payload(self) -> dict[str, object]:
