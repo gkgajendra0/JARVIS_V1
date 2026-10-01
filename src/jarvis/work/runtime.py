@@ -347,6 +347,14 @@ class WorkRuntime:
                 raise ValueError("work is not failed and cannot be retried")
             return work
 
+        focused = self.focused_work()
+        if focused is not None:
+            if focused.state is not WorkState.FAILED:
+                raise ValueError(
+                    "owner-focused background work is not failed and cannot be retried"
+                )
+            return focused
+
         failed = self.store.list(states=(WorkState.FAILED,), limit=10)
         if len(failed) == 1:
             return failed[0]
