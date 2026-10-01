@@ -342,7 +342,9 @@ def test_resource_binding_refreshes_same_identity_across_restart(
     assert reopened.get_resource_binding(initial.binding_id) == refreshed
 
 
-def test_resource_binding_rejects_stale_refresh(goal_store: GoalStore) -> None:
+def test_resource_binding_clock_skew_does_not_regress_verification_time(
+    goal_store: GoalStore,
+) -> None:
     entity = goal_store.put_entity(
         WorldEntityRefV1.create(
             entity_type="computer",
@@ -359,15 +361,16 @@ def test_resource_binding_rejects_stale_refresh(goal_store: GoalStore) -> None:
         )
     )
 
-    with pytest.raises(GoalStoreConflict, match="older than canonical"):
-        goal_store.put_resource_binding(
-            ResourceBindingV1.create(
-                entity_id=entity.entity_id,
-                provider_id="capability_runtime",
-                provider_resource_id="local_machine",
-                capability_keys=("app:lifecycle", "browser:web"),
-                last_verified_at="2026-10-01T10:01:00+00:00",
-            )
+    refreshed = goal_store.put_resource_binding(
+        ResourceBindingV1.create(
+            entity_id=entity.entity_id,
+            provider_id="capability_runtime",
+            provider_resource_id="local_machine",
+            capability_keys=("app:lifecycle", "browser:web"),
+            last_verified_at="2026-10-01T10:01:00+00:00",
         )
+    )
 
-    assert goal_store.get_resource_binding(current.binding_id) == current
+    assert refreshed.binding_revision == current.binding_revision + 1
+    assert refreshed.capability_keys == ("app:lifecycle", "browser:web")
+    assert refreshed.last_verified_at == current.last_verified_at
