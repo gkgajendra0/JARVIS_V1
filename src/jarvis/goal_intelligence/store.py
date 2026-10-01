@@ -899,9 +899,7 @@ class GoalStore:
                         (need_key,),
                     ).fetchone()
                     if need_row is None:
-                        raise GoalStoreError(
-                            f"unknown information_need_id: {need_key}"
-                        )
+                        raise GoalStoreError(f"unknown information_need_id: {need_key}")
                     return InformationNeedV1.from_payload(
                         self._decode(need_row["payload"]),
                         need_row["digest"],
