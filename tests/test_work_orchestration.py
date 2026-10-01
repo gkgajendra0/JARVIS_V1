@@ -1952,6 +1952,26 @@ def test_work_runtime_close_preempts_reasoning_before_bounded_dbos_drain(
         def set_interactive_active(self, active: bool) -> None:
             self.calls.append(active)
 
+    class Backend:
+        def __init__(self) -> None:
+            self.shutdown_started = False
+
+        def begin_shutdown(self) -> None:
+            self.shutdown_started = True
+
+        async def quiesce_active_advances(
+            self,
+            *,
+            timeout_seconds: float = 5.0,
+        ) -> int:
+            assert timeout_seconds == 5.0
+            return 0
+
+    class Orchestrator:
+        def list_active(self, *, limit: int = 100):
+            assert limit == 10_000
+            return ()
+
     drain_timeouts: list[int] = []
 
     def fake_shutdown(*, workflow_completion_timeout_sec: int = 0) -> None:
@@ -1962,9 +1982,15 @@ def test_work_runtime_close_preempts_reasoning_before_bounded_dbos_drain(
     runtime = object.__new__(WorkRuntime)
     runtime._closed = False
     runtime._interactive_brain_gate = Gate()
+    runtime._status_update_task = None
+    runtime._release_bridge_task = None
+    runtime._autonomy_periodic_reconciler = None
+    runtime.backend = Backend()
+    runtime.orchestrator = Orchestrator()
 
     runtime.close()
     runtime.close()
 
+    assert runtime.backend.shutdown_started is True
     assert runtime._interactive_brain_gate.calls == [True]
-    assert drain_timeouts == [5]
+    assert drain_timeouts == [10]
