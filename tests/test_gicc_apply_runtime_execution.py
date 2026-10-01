@@ -3,7 +3,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
+from jarvis.capabilities.models import (
+    CapabilityCatalog,
+    CapabilityDescriptor,
+    CapabilityKind,
+    CapabilityResult,
+    CapabilityStatus,
+    DiscoverySnapshot,
+    DiscoveryState,
+)
 from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
 )
@@ -12,13 +20,21 @@ from jarvis.goal_intelligence.composition import (
     GoalIntakeResult,
 )
 from jarvis.goal_intelligence.execution import GoalPlanDispatcher
+from jarvis.goal_intelligence.monitoring import (
+    GICC_MONITOR_EVENT_CONTRACT,
+    MonitorEventProcessor,
+    MonitorObservationBus,
+    VerifiedMonitorObservationV1,
+)
 from jarvis.goal_intelligence.models import (
     ContinuationBlockerType,
     GoalContinuationV1,
     GoalKind,
     GoalState,
+    MonitorPredicateV1,
     OwnerGoalV2,
     PlanGraphV1,
+    PlanNodeState,
     PlanNodeType,
     PlanNodeV1,
     PlanState,
@@ -212,6 +228,190 @@ async def test_foreground_plan_ready_goal_reaches_verified_completion(
     assert result.plan is not None
     assert result.plan.state is PlanState.SUCCEEDED
     assert len(capability_runtime.requests) == 1
+
+
+class FakeMonitorCapabilityRuntime(FakeCapabilityRuntime):
+    def __init__(self) -> None:
+        super().__init__()
+        descriptor = CapabilityDescriptor.create(
+            capability_id="scene",
+            source_id="vision",
+            kind=CapabilityKind.LOCAL_READ,
+            name="Verified scene observer",
+            description="Publishes verified monitor observations.",
+            operations=("verify_scene_condition",),
+            metadata={
+                "semantic_capability_family": "vision.perceive",
+                "target_entity_types": ["camera"],
+                "observation_operations": ["verify_scene_condition"],
+                "monitor_event_contract": GICC_MONITOR_EVENT_CONTRACT,
+            },
+            execution_enabled=True,
+        )
+        self._catalog = CapabilityCatalog(
+            sources=(
+                DiscoverySnapshot(
+                    source_id="vision",
+                    state=DiscoveryState.AVAILABLE,
+                    capabilities=(descriptor,),
+                ),
+            ),
+            capabilities=(descriptor,),
+        )
+
+    @property
+    def catalog(self):
+        return self._catalog
+
+
+@pytest.mark.asyncio
+async def test_verified_monitor_event_completes_goal_and_notifies_once(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = store.create_goal(
+        OwnerGoalV2.create(
+            source_session_id="monitor-session",
+            source_turn_id="monitor-turn",
+            exact_owner_request="Tell me when a delivery agent is at the main gate.",
+            goal_kind=GoalKind.MONITORING,
+            desired_outcome="A delivery agent is verified at the main gate.",
+            completion_predicates=("delivery_agent_verified",),
+            state=GoalState.MONITORING,
+            created_at="2026-10-01T18:20:00+00:00",
+        )
+    )
+    predicate = store.put_monitor_predicate(
+        MonitorPredicateV1.create(
+            goal_id=goal.goal_id,
+            source_entity_ids=("main_gate_camera",),
+            observation_capabilities=("vision.perceive",),
+            semantic_condition="delivery agent is verified at the main gate",
+            candidate_trigger_strategy="event_first",
+            stability_window=0.0,
+            cooldown=60.0,
+            timeout=None,
+            completion_policy="complete_once",
+            notification_policy="owner",
+            verification_requirement="delivery_agent_verified",
+        )
+    )
+    node = PlanNodeV1.create(
+        plan_identity=f"{goal.goal_id}:{goal.goal_revision}",
+        ordinal=0,
+        node_type=PlanNodeType.MONITOR,
+        summary="Monitor the verified gate condition.",
+        monitor_predicate_id=predicate.predicate_id,
+    )
+    proposed = PlanGraphV1.create(
+        goal_id=goal.goal_id,
+        goal_revision=goal.goal_revision,
+        nodes=(node,),
+        edges=(),
+        root_node_ids=(node.node_id,),
+        completion_node_ids=(node.node_id,),
+        created_at="2026-10-01T18:21:00+00:00",
+    )
+    waiting = proposed.with_node_state(
+        node.node_id,
+        PlanNodeState.WAITING,
+        plan_state=PlanState.WAITING,
+    )
+    waiting = store.put_plan(waiting)
+    work = store.work.create(
+        WorkItem(
+            request="Monitor verified gate condition.",
+            work_type=WorkType.MONITORING,
+            source_session_id=f"gicc-monitor:{goal.goal_id}",
+            source_turn_id=f"predicate:{predicate.predicate_id}",
+            state=WorkState.WAITING_RESOURCE,
+            status_detail="waiting for monitored event",
+        )
+    )
+    store.create_monitor_runtime_state(
+        predicate_id=predicate.predicate_id,
+        goal_id=goal.goal_id,
+        work_id=work.work_id,
+        payload={
+            "strategy": "native_event",
+            "continuation_id": None,
+            "plan_id": waiting.plan_id,
+            "node_id": node.node_id,
+            "source_entity_ids": list(predicate.source_entity_ids),
+            "started_at_epoch": 100.0,
+            "last_observation_digest": None,
+            "stable_since_epoch": None,
+            "last_trigger_epoch": None,
+            "notification_event_key": None,
+            "notified": False,
+        },
+        updated_at="2026-10-01T18:22:00+00:00",
+    )
+
+    capability_runtime = FakeMonitorCapabilityRuntime()
+    bus = MonitorObservationBus()
+    telemetry = CapturingGiccTelemetry()
+    dispatcher = GoalPlanDispatcher(
+        store=store,
+        orchestrator=GoalOrchestrator(
+            goal_store=store,
+            capability_runtime=capability_runtime,
+        ),
+    )
+    runtime = GiccApplyRuntime(
+        store=store,
+        world=object(),  # type: ignore[arg-type]
+        coordinator=StaticCoordinator(
+            GoalIntakeResult(
+                disposition=GoalIntakeDisposition.PLAN_READY,
+                goal=goal,
+                plan=waiting,
+            )
+        ),  # type: ignore[arg-type]
+        dispatcher=dispatcher,
+        telemetry=telemetry,
+        capability_runtime=capability_runtime,  # type: ignore[arg-type]
+        monitor_processor=MonitorEventProcessor(
+            goal_store=store,
+            work_store=store.work,
+            telemetry=telemetry,
+        ),
+        monitor_bus=bus,
+        reconcile_interval_seconds=60.0,
+    )
+    runtime.start()
+    try:
+        event = VerifiedMonitorObservationV1(
+            predicate_id=predicate.predicate_id,
+            source_capability_key="vision:scene",
+            source_operation="verify_scene_condition",
+            observation_digest="observation-1",
+            condition_met=True,
+            observed_at_epoch=101.0,
+            evidence_refs=("verifier:gate:1",),
+        )
+        bus.publish(event)
+        await asyncio.sleep(0.1)
+        bus.publish(event)
+        await asyncio.sleep(0.1)
+    finally:
+        await runtime.close()
+
+    latest_goal = store.get_goal(goal.goal_id)
+    latest_plan = store.get_plan(waiting.plan_id)
+    latest_work = store.work.require(work.work_id)
+    assert latest_goal is not None
+    assert latest_goal.state is GoalState.COMPLETED
+    assert latest_plan is not None
+    assert latest_plan.state is PlanState.SUCCEEDED
+    assert latest_work.state is WorkState.COMPLETED
+    assert latest_work.result["evidence_refs"] == ["verifier:gate:1"]
+    deliveries = [
+        item
+        for item in store.work.list_pending_deliveries(limit=20)
+        if item.event_key == f"gicc-monitor:{predicate.predicate_id}:complete"
+    ]
+    assert len(deliveries) == 1
 
 
 class SequencedVerificationRuntime(FakeCapabilityRuntime):
