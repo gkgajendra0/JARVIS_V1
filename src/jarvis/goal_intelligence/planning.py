@@ -44,7 +44,9 @@ class PlanNodeCandidate(BaseModel):
 
     node_type: PlanNodeType
     summary: str = Field(min_length=1, max_length=320)
-    parameters_json: str = Field(default="{}", min_length=2, max_length=_MAX_PARAMETERS_JSON)
+    parameters_json: str = Field(
+        default="{}", min_length=2, max_length=_MAX_PARAMETERS_JSON
+    )
     capability_key: str | None = Field(default=None, max_length=180)
     operation: str | None = Field(default=None, max_length=120)
     information_need_id: str | None = Field(default=None, max_length=180)
