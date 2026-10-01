@@ -175,6 +175,19 @@ class GoalStore:
                     digest TEXT NOT NULL,
                     FOREIGN KEY(goal_id) REFERENCES owner_goals_v2(goal_id)
                 );
+
+                CREATE TABLE IF NOT EXISTS goal_interpretation_shadow_evidence_v1 (
+                    evidence_id TEXT PRIMARY KEY,
+                    source_session_id TEXT NOT NULL,
+                    source_turn_id TEXT NOT NULL,
+                    provider_name TEXT NOT NULL,
+                    model_name TEXT NOT NULL,
+                    actionable INTEGER NOT NULL,
+                    payload TEXT NOT NULL,
+                    digest TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(source_session_id, source_turn_id)
+                );
                 """
             )
 
@@ -285,6 +298,140 @@ class GoalStore:
             if result.rowcount != 1:
                 raise GoalStoreConflict("goal compare-and-swap update lost")
         return updated
+
+    def list_active_goals(self, *, limit: int = 20) -> tuple[OwnerGoalV2, ...]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+            raise ValueError("limit must be a positive integer")
+        terminal = (
+            GoalState.COMPLETED.value,
+            GoalState.FAILED.value,
+            GoalState.CANCELLED.value,
+        )
+        with self.work.extension_transaction() as db:
+            rows = db.execute(
+                """
+                SELECT payload, digest
+                FROM owner_goals_v2
+                WHERE state NOT IN (?, ?, ?)
+                ORDER BY updated_at DESC, goal_id ASC
+                LIMIT ?
+                """,
+                (*terminal, limit),
+            ).fetchall()
+        return tuple(
+            OwnerGoalV2.from_payload(self._decode(row["payload"]), row["digest"])
+            for row in rows
+        )
+
+    def list_entities(self, *, limit: int = 50) -> tuple[WorldEntityRefV1, ...]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+            raise ValueError("limit must be a positive integer")
+        with self.work.extension_transaction() as db:
+            rows = db.execute(
+                """
+                SELECT payload, digest
+                FROM world_entities_v1
+                ORDER BY lifecycle_state ASC, entity_type ASC, entity_id ASC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return tuple(
+            WorldEntityRefV1.from_payload(self._decode(row["payload"]), row["digest"])
+            for row in rows
+        )
+
+    def put_shadow_interpretation(
+        self,
+        *,
+        source_session_id: str,
+        source_turn_id: str,
+        provider_name: str,
+        model_name: str,
+        actionable: bool,
+        payload: dict[str, object],
+        created_at: str,
+    ) -> dict[str, object]:
+        if not isinstance(actionable, bool):
+            raise TypeError("actionable must be a bool")
+        session_id = str(source_session_id).strip()
+        turn_id = str(source_turn_id).strip()
+        provider = str(provider_name).strip().casefold()
+        model = str(model_name).strip()
+        timestamp = str(created_at).strip()
+        if not session_id or not turn_id or not provider or not model or not timestamp:
+            raise ValueError("shadow interpretation metadata must not be empty")
+        if not isinstance(payload, dict):
+            raise TypeError("payload must be a dict")
+        canonical = {
+            "source_session_id": session_id,
+            "source_turn_id": turn_id,
+            "provider_name": provider,
+            "model_name": model,
+            "actionable": actionable,
+            "payload": payload,
+            "created_at": timestamp,
+        }
+        digest = canonical_digest(canonical)
+        evidence_id = f"gicc_shadow_{canonical_digest({'session': session_id, 'turn': turn_id})[:20]}"
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM goal_interpretation_shadow_evidence_v1
+                WHERE evidence_id=?
+                """,
+                (evidence_id,),
+            ).fetchone()
+            if row is not None:
+                existing_payload = self._decode(row["payload"])
+                if row["digest"] != digest or existing_payload != canonical:
+                    raise GoalStoreConflict(
+                        "shadow interpretation already exists with different evidence"
+                    )
+                return canonical | {"evidence_id": evidence_id, "digest": digest}
+            db.execute(
+                """
+                INSERT INTO goal_interpretation_shadow_evidence_v1 (
+                    evidence_id, source_session_id, source_turn_id,
+                    provider_name, model_name, actionable, payload, digest, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    evidence_id,
+                    session_id,
+                    turn_id,
+                    provider,
+                    model,
+                    1 if actionable else 0,
+                    self._encode(canonical),
+                    digest,
+                    timestamp,
+                ),
+            )
+        return canonical | {"evidence_id": evidence_id, "digest": digest}
+
+    def get_shadow_interpretation(
+        self,
+        *,
+        source_session_id: str,
+        source_turn_id: str,
+    ) -> dict[str, object] | None:
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT evidence_id, payload, digest
+                FROM goal_interpretation_shadow_evidence_v1
+                WHERE source_session_id=? AND source_turn_id=?
+                """,
+                (source_session_id, source_turn_id),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = self._decode(row["payload"])
+        if canonical_digest(payload) != row["digest"]:
+            raise GoalStoreError("shadow interpretation digest mismatch")
+        return payload | {"evidence_id": row["evidence_id"], "digest": row["digest"]}
 
     def put_entity(self, entity: WorldEntityRefV1) -> WorldEntityRefV1:
         if not isinstance(entity, WorldEntityRefV1):
