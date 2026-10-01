@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import math
+import threading
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -26,6 +29,99 @@ from .models import (
 )
 from .store import GoalStore, GoalStoreError
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
+
+LOGGER = logging.getLogger("jarvis.gicc.monitoring")
+
+GICC_MONITOR_EVENT_CONTRACT = "gicc.monitor_observation.v1"
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedMonitorObservationV1:
+    predicate_id: str
+    source_capability_key: str
+    source_operation: str
+    observation_digest: str
+    condition_met: bool
+    observed_at_epoch: float
+    evidence_refs: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "predicate_id",
+            "source_capability_key",
+            "source_operation",
+            "observation_digest",
+        ):
+            value = str(getattr(self, field_name)).strip()
+            if not value:
+                raise ValueError(f"{field_name} must not be empty")
+            object.__setattr__(self, field_name, value.casefold())
+        if not isinstance(self.condition_met, bool):
+            raise TypeError("condition_met must be bool")
+        observed = float(self.observed_at_epoch)
+        if not math.isfinite(observed) or observed < 0:
+            raise ValueError("observed_at_epoch must be finite and non-negative")
+        object.__setattr__(self, "observed_at_epoch", observed)
+        refs = tuple(
+            sorted(
+                {
+                    str(item).strip()
+                    for item in self.evidence_refs
+                    if str(item).strip()
+                }
+            )
+        )
+        object.__setattr__(self, "evidence_refs", refs)
+
+
+MonitorObservationSubscriber = Callable[[VerifiedMonitorObservationV1], None]
+
+
+class MonitorObservationBus:
+    """Process-local transport for verified capability observations.
+
+    Publishers provide only typed verdict/evidence references. Raw frames, prompts,
+    secrets and owner-facing notification text are deliberately outside this contract.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._subscribers: dict[str, MonitorObservationSubscriber] = {}
+
+    def subscribe(self, callback: MonitorObservationSubscriber) -> str:
+        if not callable(callback):
+            raise TypeError("monitor observation subscriber must be callable")
+        subscription_id = f"monitor_sub_{uuid.uuid4().hex}"
+        with self._lock:
+            self._subscribers[subscription_id] = callback
+        return subscription_id
+
+    def unsubscribe(self, subscription_id: str) -> None:
+        key = str(subscription_id).strip()
+        if not key:
+            return
+        with self._lock:
+            self._subscribers.pop(key, None)
+
+    def publish(self, observation: VerifiedMonitorObservationV1) -> None:
+        if not isinstance(observation, VerifiedMonitorObservationV1):
+            raise TypeError("observation must be VerifiedMonitorObservationV1")
+        with self._lock:
+            subscribers = tuple(self._subscribers.values())
+        for callback in subscribers:
+            try:
+                callback(observation)
+            except Exception:  # noqa: BLE001 - one consumer must not break publishers
+                LOGGER.exception("GICC monitor observation subscriber failed")
+
+
+DEFAULT_MONITOR_OBSERVATION_BUS = MonitorObservationBus()
+
+
+def publish_verified_monitor_observation(
+    observation: VerifiedMonitorObservationV1,
+) -> None:
+    DEFAULT_MONITOR_OBSERVATION_BUS.publish(observation)
 
 
 class MonitoringStrategy(str, Enum):
