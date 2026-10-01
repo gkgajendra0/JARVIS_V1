@@ -19,6 +19,7 @@ from jarvis.work.models import (
 
 from .models import MonitorPredicateV1
 from .store import GoalStore, GoalStoreError
+from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 
 
 class MonitoringStrategy(str, Enum):
@@ -200,6 +201,7 @@ class MonitorEventProcessor:
         *,
         goal_store: GoalStore,
         work_store: MonitorWorkStore,
+        telemetry: GiccTelemetrySink = DEFAULT_GICC_TELEMETRY,
     ) -> None:
         if not isinstance(goal_store, GoalStore):
             raise TypeError("goal_store must be GoalStore")
@@ -209,6 +211,9 @@ class MonitorEventProcessor:
             raise TypeError("work_store must provide require/enqueue_delivery")
         self._goals = goal_store
         self._work = work_store
+        if not callable(getattr(telemetry, "emit", None)):
+            raise TypeError("telemetry must provide emit()")
+        self._telemetry = telemetry
 
     def process(
         self,
@@ -386,6 +391,15 @@ class MonitorEventProcessor:
                 "notified": True,
             },
             updated_at=datetime.now(UTC).isoformat(),
+        )
+        self._telemetry.emit(
+            "gicc_monitor_triggered",
+            goal_id=predicate.goal_id,
+            predicate_id=predicate.predicate_id,
+            work_id=str(state["work_id"]),
+            observation_digest=digest,
+            notification_event_key=event_key,
+            strategy=str(payload.get("strategy") or "unknown"),
         )
         return MonitorObservationResult(
             disposition=MonitorObservationDisposition.TRIGGERED,
