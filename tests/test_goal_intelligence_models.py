@@ -58,7 +58,9 @@ def test_digest_tampering_is_rejected() -> None:
         replace(goal, desired_outcome="tampered")
 
 
-def test_information_need_identity_is_task_bound_and_secret_value_is_not_stored() -> None:
+def test_information_need_identity_is_task_bound_and_secret_value_is_not_stored() -> (
+    None
+):
     goal = _goal()
     need = InformationNeedV1.create(
         goal_id=goal.goal_id,
@@ -82,7 +84,9 @@ def test_information_need_identity_is_task_bound_and_secret_value_is_not_stored(
     assert "1234" not in str(resolved.canonical_payload())
 
 
-def test_requirement_graph_persists_semantic_requirements_not_task_specific_skill() -> None:
+def test_requirement_graph_persists_semantic_requirements_not_task_specific_skill() -> (
+    None
+):
     goal = _goal()
     launch = CapabilityRequirementV1.create(
         goal_id=goal.goal_id,
