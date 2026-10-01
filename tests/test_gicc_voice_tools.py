@@ -1,6 +1,13 @@
 from pathlib import Path
 
 import pytest
+from tests.test_gicc_composition import (
+    FakePhase9Bridge,
+    QueueStructuredClient,
+    StaticContext,
+    _conversation,
+    _store,
+)
 
 from jarvis.conversation import ConversationRole
 from jarvis.goal_intelligence.capability_graph import CapabilityGraphResolver
@@ -20,13 +27,6 @@ from jarvis.goal_intelligence.telemetry import CapturingGiccTelemetry
 from jarvis.goal_intelligence.world import EntityResolver, WorldRegistry
 from jarvis.voice.gicc_tools import GiccAgentTools
 
-from tests.test_gicc_composition import (
-    FakePhase9Bridge,
-    QueueStructuredClient,
-    StaticContext,
-    _conversation,
-    _store,
-)
 
 
 @pytest.mark.asyncio
