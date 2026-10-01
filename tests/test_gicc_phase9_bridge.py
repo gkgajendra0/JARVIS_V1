@@ -208,7 +208,10 @@ def test_multiple_gaps_get_unique_phase9_bridge_sources(tmp_path: Path) -> None:
     first_request = Phase9AcquisitionRequestV2.create(gap=first, goal=goal)
     second_request = Phase9AcquisitionRequestV2.create(gap=second, goal=goal)
 
-    assert first_request.bridge_source_session_id == second_request.bridge_source_session_id
+    assert (
+        first_request.bridge_source_session_id
+        == second_request.bridge_source_session_id
+    )
     assert first_request.bridge_source_turn_id != second_request.bridge_source_turn_id
 
 
