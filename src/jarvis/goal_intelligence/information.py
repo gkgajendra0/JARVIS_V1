@@ -226,9 +226,7 @@ class BoundInformationInteraction:
         self.interaction_id = str(interaction_id).strip()
         self.goal_id = str(goal_id).strip()
         self.information_need_id = str(information_need_id).strip()
-        if not all(
-            (self.interaction_id, self.goal_id, self.information_need_id)
-        ):
+        if not all((self.interaction_id, self.goal_id, self.information_need_id)):
             raise ValueError("bound interaction identifiers must not be empty")
         interaction = self._store.get_information_interaction(self.interaction_id)
         if interaction is None:
