@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from .models import OwnerGoalV2, PlanGraphV1
 from .planning import GoalPlanner, PlanValidationContext
 from .store import GoalStore, GoalStoreConflict
+from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +28,7 @@ class ReplanController:
         store: GoalStore,
         planner: GoalPlanner,
         max_replans: int = 3,
+        telemetry: GiccTelemetrySink = DEFAULT_GICC_TELEMETRY,
     ) -> None:
         if not isinstance(store, GoalStore):
             raise TypeError("store must be GoalStore")
@@ -39,6 +41,9 @@ class ReplanController:
         self._store = store
         self._planner = planner
         self._max_replans = max_replans
+        if not callable(getattr(telemetry, "emit", None)):
+            raise TypeError("telemetry must provide emit()")
+        self._telemetry = telemetry
 
     async def replan(
         self,
@@ -64,6 +69,15 @@ class ReplanController:
         if replacement.plan_id == failed_plan.plan_id:
             raise GoalStoreConflict("replan must create a new plan revision")
         replacement = self._store.put_plan(replacement)
+        self._telemetry.emit(
+            "gicc_replan",
+            goal_id=goal.goal_id,
+            previous_plan_id=failed_plan.plan_id,
+            previous_plan_revision=failed_plan.plan_revision,
+            replacement_plan_id=replacement.plan_id,
+            replacement_plan_revision=replacement.plan_revision,
+            attempt=attempt,
+        )
         return ReplanResult(
             previous_plan_id=failed_plan.plan_id,
             previous_plan_revision=failed_plan.plan_revision,
