@@ -4,6 +4,9 @@ from types import SimpleNamespace
 import pytest
 
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
+from jarvis.capability_acquisition.external_contract import (
+    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+)
 from jarvis.goal_intelligence.composition import (
     GoalIntakeDisposition,
     GoalIntakeResult,
@@ -161,6 +164,7 @@ def _runtime(
     capability_runtime: FakeCapabilityRuntime,
     *,
     replan_controller=None,
+    change_store=None,
 ) -> GiccApplyRuntime:
     dispatcher = GoalPlanDispatcher(
         store=store,
@@ -176,6 +180,7 @@ def _runtime(
         dispatcher=dispatcher,
         telemetry=CapturingGiccTelemetry(),
         replan_controller=replan_controller,
+        change_store=change_store,
         capability_runtime=capability_runtime,  # type: ignore[arg-type]
     )
 
@@ -287,6 +292,96 @@ async def test_failed_verification_replans_once_and_completes(
     assert result.plan.plan_revision == 2
     assert replan.calls == 1
     assert len(capability_runtime.requests) == 2
+
+
+class FakePhase9ChangeStore:
+    def __init__(self) -> None:
+        self.acceptance = None
+        self.candidate = SimpleNamespace(
+            artifact_id="candidate-tv",
+            digest="c" * 64,
+        )
+        self.activation = SimpleNamespace(
+            artifact_id="activation-tv",
+            digest="a" * 64,
+        )
+        self.architecture = SimpleNamespace(
+            payload={
+                "owner_acceptance_contract_ids": [
+                    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
+                ]
+            }
+        )
+
+    def stage_for_work(self, work_id: str):
+        if work_id != "phase9-work":
+            return None
+        return SimpleNamespace(change_id="change-tv")
+
+    def latest_artifact(self, change_id: str, kind: str):
+        assert change_id == "change-tv"
+        return {
+            "architecture": self.architecture,
+            "capability_candidate": self.candidate,
+            "capability_lifecycle_activation": self.activation,
+            "capability_external_acceptance": self.acceptance,
+        }.get(kind)
+
+    def pass_current_acceptance(self) -> None:
+        self.acceptance = SimpleNamespace(
+            payload={
+                "schema": "capability_external_acceptance.v1",
+                "verdict": "pass",
+                "candidate_artifact_id": self.candidate.artifact_id,
+                "candidate_artifact_digest": self.candidate.digest,
+                "activation_artifact_id": self.activation.artifact_id,
+                "activation_artifact_digest": self.activation.digest,
+            }
+        )
+
+
+@pytest.mark.asyncio
+async def test_external_acceptance_fences_capability_continuation(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store, state=GoalState.WAITING_CAPABILITY)
+    store.put_continuation(
+        GoalContinuationV1.create(
+            goal_id=goal.goal_id,
+            plan_id="phase9-acquisition-plan",
+            blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+            blocked_by_id="gap-tv-control",
+            resume_node_id="resume-tv-control",
+            work_ids=("phase9-work",),
+            goal_revision=goal.goal_revision,
+            created_at="2026-10-01T18:13:00+00:00",
+        )
+    )
+    capability_runtime = FakeCapabilityRuntime()
+    coordinator = CapabilityContinuationCoordinator(store)
+    changes = FakePhase9ChangeStore()
+    runtime = _runtime(
+        store,
+        coordinator,
+        capability_runtime,
+        change_store=changes,
+    )
+
+    blocked = await runtime.reconcile_once()
+
+    assert blocked == 0
+    assert coordinator.calls == 0
+    assert store.get_goal(goal.goal_id).state is GoalState.WAITING_CAPABILITY
+
+    changes.pass_current_acceptance()
+    advanced = await runtime.reconcile_once()
+
+    latest = store.get_goal(goal.goal_id)
+    assert advanced == 1
+    assert coordinator.calls == 1
+    assert latest is not None
+    assert latest.state is GoalState.COMPLETED
 
 
 @pytest.mark.asyncio
