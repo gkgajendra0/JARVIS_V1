@@ -184,6 +184,7 @@ async def test_gicc_voice_rejects_candidate_not_bound_to_interaction(
     assert need is not None
     assert need.state.value == "waiting_for_owner"
 
+
 class FailingGoalCoordinator(GoalIntelligenceCoordinator):
     def __init__(self) -> None:
         pass
@@ -216,7 +217,5 @@ async def test_gicc_voice_internal_failure_does_not_invent_device_problem(
     assert "internally" in truth_note
     assert "Do not claim a device connectivity failure" in truth_note
     assert any(
-        event["event"] == "gicc_goal_processing_error"
-        for event in telemetry.events
+        event["event"] == "gicc_goal_processing_error" for event in telemetry.events
     )
-
