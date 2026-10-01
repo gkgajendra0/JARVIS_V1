@@ -579,24 +579,12 @@ class GoalIntelligenceCoordinator:
                 capability_analysis=analysis,
             )
 
-        monitor_predicates = self._monitor_predicates(goal, graph)
-        allowed_postconditions = set(goal.completion_predicates)
-        for requirement in graph.requirements:
-            allowed_postconditions.update(requirement.expected_postconditions)
-            allowed_postconditions.update(requirement.observation_requirements)
-        context = self._capability_context.current()
         plan = await self._planner.plan(
             goal=goal,
-            context=PlanValidationContext(
-                catalog=context.catalog,
-                allowed_capability_operations=tuple(
-                    sorted(
-                        (match.capability_key, match.operation)
-                        for match in analysis.matches
-                    )
-                ),
-                monitor_predicates=monitor_predicates,
-                allowed_postcondition_refs=tuple(sorted(allowed_postconditions)),
+            context=self._plan_validation_context(
+                goal=goal,
+                graph=graph,
+                analysis=analysis,
             ),
         )
         plan = self._store.put_plan(plan)
@@ -625,6 +613,58 @@ class GoalIntelligenceCoordinator:
             requirement_result=requirement_result,
             capability_analysis=analysis,
             plan=plan,
+        )
+
+    def _plan_validation_context(
+        self,
+        *,
+        goal: OwnerGoalV2,
+        graph,
+        analysis: CapabilityGapAnalysis,
+    ) -> PlanValidationContext:
+        monitor_predicates = self._monitor_predicates(goal, graph)
+        allowed_postconditions = set(goal.completion_predicates)
+        for requirement in graph.requirements:
+            allowed_postconditions.update(requirement.expected_postconditions)
+            allowed_postconditions.update(requirement.observation_requirements)
+        context = self._capability_context.current()
+        return PlanValidationContext(
+            catalog=context.catalog,
+            allowed_capability_operations=tuple(
+                sorted(
+                    (match.capability_key, match.operation)
+                    for match in analysis.matches
+                )
+            ),
+            monitor_predicates=monitor_predicates,
+            allowed_postcondition_refs=tuple(sorted(allowed_postconditions)),
+        )
+
+    def current_plan_validation_context(
+        self,
+        goal_id: str,
+    ) -> PlanValidationContext:
+        goal = self._store.get_goal(str(goal_id).strip())
+        if goal is None:
+            raise ValueError(f"unknown GICC goal: {goal_id}")
+        graph = self._store.latest_requirement_graph(goal_id=goal.goal_id)
+        if graph is None:
+            raise ValueError(
+                "GICC goal has no durable requirement graph for replanning"
+            )
+        analysis = self._capability_graph.analyze(
+            graph,
+            self._capability_context.current(),
+            persist_gaps=False,
+        )
+        if analysis.gaps:
+            raise ValueError(
+                "GICC replanning requires all current capability gaps to be satisfied"
+            )
+        return self._plan_validation_context(
+            goal=goal,
+            graph=graph,
+            analysis=analysis,
         )
 
     def _build_acquisition_plan(
