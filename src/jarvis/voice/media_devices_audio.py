@@ -247,6 +247,13 @@ class MediaDevicesAudioOutput(io.AudioOutput):
                     return
                 await player.remove_track(track)
                 self._track_attached = False
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            LOGGER.exception(
+                "MediaDevices output track could not detach while idle; "
+                "keeping the current output path active"
+            )
         finally:
             if self._detach_task is asyncio.current_task():
                 self._detach_task = None
