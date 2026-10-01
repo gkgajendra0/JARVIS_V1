@@ -548,6 +548,7 @@ class WorkRuntime:
                 {
                     self.store.get_execution_id(work.work_id) or work.work_id
                     for work in self.orchestrator.list_active(limit=10_000)
+                    if work.work_type is not WorkType.MONITORING
                 }
             )
         )
