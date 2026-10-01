@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Protocol
 
 from livekit.agents import AgentStateChangedEvent, UserStateChangedEvent
 
@@ -41,6 +41,12 @@ from jarvis.work.runtime import WorkRuntime
 LOGGER = logging.getLogger(__name__)
 
 
+class _ManagedBackgroundRuntime(Protocol):
+    def start(self) -> None: ...
+
+    async def close(self) -> None: ...
+
+
 class _SessionToolBundle:
     """Combine vision with per-session memory, research, and governed capabilities."""
 
@@ -54,6 +60,7 @@ class _SessionToolBundle:
         research_service: CurrentResearchService | None,
         capability_runtime: CapabilityRuntime | None,
         work_runtime: WorkRuntime | None = None,
+        gicc_runtime: _ManagedBackgroundRuntime | None = None,
         gicc_tool_factory: Callable[[ConversationSession], list] | None = None,
         allow_direct_capability_acquisition: bool = True,
     ) -> None:
@@ -64,6 +71,7 @@ class _SessionToolBundle:
         self._research_service = research_service
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
+        self._gicc_runtime = gicc_runtime
         self._gicc_tool_factory = gicc_tool_factory
         self._allow_direct_capability_acquisition = allow_direct_capability_acquisition
 
@@ -640,6 +648,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 "browser_control=%s | raw_shell=False",
                 bool(browser_hands and browser_hands.execution_enabled),
             )
+        gicc_runtime = self._gicc_runtime
+        if gicc_runtime is not None:
+            gicc_runtime.start()
+            LOGGER.info(
+                "GICC durable continuation reconciliation is active"
+            )
         if self._work_runtime is not None:
             delivery_task = asyncio.create_task(
                 self._deliver_pending_work(),
@@ -651,6 +665,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             if delivery_task is not None:
                 delivery_task.cancel()
                 await asyncio.gather(delivery_task, return_exceptions=True)
+            if gicc_runtime is not None:
+                await gicc_runtime.close()
             self._session_ready_for_inactivity = False
             self._user_is_speaking = False
             self._session_conversation = None
