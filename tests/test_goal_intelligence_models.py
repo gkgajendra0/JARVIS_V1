@@ -83,6 +83,12 @@ def test_information_need_identity_is_task_bound_and_secret_value_is_not_stored(
     assert resolved.resolution_ref == "secret://tv-pairing"
     assert "1234" not in str(resolved.canonical_payload())
 
+    with pytest.raises(ValueError, match="must reference the secret store"):
+        need.with_resolution(
+            resolution_ref="1234",
+            resolved_at="2026-10-01T10:03:00+00:00",
+        )
+
 
 def test_requirement_graph_persists_semantic_requirements_not_task_specific_skill() -> (
     None
