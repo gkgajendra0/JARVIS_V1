@@ -223,8 +223,7 @@ class GiccAgentTools:
                 "interaction_id": interaction_key,
             }
         allowed = tuple(
-            str(item)
-            for item in interaction.get("allowed_candidate_values", ())
+            str(item) for item in interaction.get("allowed_candidate_values", ())
         )
         if selected not in allowed:
             return {
