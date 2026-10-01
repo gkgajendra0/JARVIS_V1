@@ -27,6 +27,7 @@ GICC_EVENTS = frozenset(
         "gicc_replan",
         "gicc_monitor_triggered",
         "gicc_goal_completed",
+        "gicc_goal_owner_delivery_enqueued",
         "gicc_goal_processing_error",
     }
 )
