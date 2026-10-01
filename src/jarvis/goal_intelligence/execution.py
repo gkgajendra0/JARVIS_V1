@@ -264,7 +264,7 @@ class GoalPlanDispatcher:
                     created_at=datetime.now(UTC).isoformat(),
                 )
 
-    def dispatch(
+    async def dispatch(
         self,
         *,
         plan_id: str,
@@ -292,14 +292,7 @@ class GoalPlanDispatcher:
         state_key = str(state_fingerprint or "").strip().casefold()
         if node.node_type is PlanNodeType.ACTION:
             action_fingerprint = self._action_fingerprint(node)
-            if not state_key:
-                return PlanDispatchResult(
-                    plan=plan,
-                    node=node,
-                    disposition=PlanDispatchDisposition.FAILED,
-                    reason="ACTION requires a pre-action state fingerprint",
-                )
-            if self._store.has_no_progress(
+            if state_key and self._store.has_no_progress(
                 goal_id=plan.goal_id,
                 action_fingerprint=action_fingerprint,
                 state_fingerprint=state_key,
@@ -323,7 +316,7 @@ class GoalPlanDispatcher:
             if node.node_type is PlanNodeType.VERIFY
             else None
         )
-        routed = self._orchestrator.dispatch_node(
+        routed = await self._orchestrator.dispatch_node(
             goal=goal,
             plan=running,
             node=node,
