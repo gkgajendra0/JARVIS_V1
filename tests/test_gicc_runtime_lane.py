@@ -31,10 +31,7 @@ def _isolate_runtime_configuration(
 
 def test_direct_voice_defaults_fail_closed_to_production_off() -> None:
     assert configured_runtime_lane({}) is RuntimeLane.PRODUCTION
-    assert (
-        configured_gicc_mode(RuntimeLane.PRODUCTION, {})
-        is GiccMode.OFF
-    )
+    assert configured_gicc_mode(RuntimeLane.PRODUCTION, {}) is GiccMode.OFF
 
     config = JarvisConfig.from_environment()
 
