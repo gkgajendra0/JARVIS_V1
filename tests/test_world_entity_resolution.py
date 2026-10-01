@@ -1,5 +1,12 @@
 from pathlib import Path
 
+from jarvis.capabilities.models import (
+    CapabilityCatalog,
+    CapabilityDescriptor,
+    CapabilityKind,
+    DiscoverySnapshot,
+    DiscoveryState,
+)
 from jarvis.goal_intelligence.models import (
     EntityLifecycleState,
     ResourceBindingV1,
@@ -159,3 +166,47 @@ def test_live_binding_requirement_rejects_unbound_or_stale_resource(
         require_live_binding=True,
     )
     assert result.state is EntityResolutionState.MISSING
+
+def _computer_catalog(*capability_ids: str) -> CapabilityCatalog:
+    descriptors = tuple(
+        CapabilityDescriptor.create(
+            capability_id=capability_id,
+            source_id="computer",
+            kind=CapabilityKind.NATIVE_API,
+            name=f"Local {capability_id}",
+            description="Current computer capability.",
+            operations=("execute",),
+            execution_enabled=True,
+        )
+        for capability_id in capability_ids
+    )
+    snapshot = DiscoverySnapshot(
+        source_id="computer",
+        state=DiscoveryState.AVAILABLE,
+        capabilities=descriptors,
+    )
+    return CapabilityCatalog(
+        sources=(snapshot,),
+        capabilities=descriptors,
+    )
+
+
+def test_current_computer_projection_is_restart_safe_and_revisioned(
+    tmp_path: Path,
+) -> None:
+    first = _registry(tmp_path)
+    entity, initial = first.project_current_computer(
+        _computer_catalog("app")
+    )
+
+    restarted = _registry(tmp_path)
+    same_entity, refreshed = restarted.project_current_computer(
+        _computer_catalog("app", "browser")
+    )
+
+    assert same_entity.entity_id == entity.entity_id
+    assert refreshed.binding_id == initial.binding_id
+    assert refreshed.binding_revision == initial.binding_revision + 1
+    assert refreshed.capability_keys == ("computer:app", "computer:browser")
+    assert restarted.bindings(entity_id=entity.entity_id) == (refreshed,)
+
