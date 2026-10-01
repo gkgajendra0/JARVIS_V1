@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
 
 from dbos import DBOS, DBOSConfig, SetEnqueueOptions, SetWorkflowID
@@ -31,6 +32,9 @@ _WAITING_STATES = frozenset(
 _ENGINE: WorkEngine | None = None
 _JARVIS_EVENT_LOOP: asyncio.AbstractEventLoop | None = None
 _ON_WORK_TERMINAL: Callable[[str], object] | None = None
+_ACTIVE_ADVANCE_LOCK = threading.Lock()
+_ACTIVE_ADVANCES: dict[Future[Any], threading.Event] = {}
+_ADVANCE_QUIESCING = False
 
 
 def configure_terminal_reconciliation(callback: Callable[[str], object]) -> None:
@@ -54,6 +58,11 @@ def configure_work_engine(
         raise RuntimeError("JARVIS work event loop is already configured")
     if event_loop.is_closed():
         raise RuntimeError("JARVIS work event loop is closed")
+    global _ADVANCE_QUIESCING
+    with _ACTIVE_ADVANCE_LOCK:
+        if _ACTIVE_ADVANCES:
+            raise RuntimeError("JARVIS work runtime still has active engine advances")
+        _ADVANCE_QUIESCING = False
     _ENGINE = engine
     _JARVIS_EVENT_LOOP = event_loop
 
@@ -111,15 +120,37 @@ def _waiting_resource_delay(payload: dict[str, Any]) -> float:
     return min(delay, 60.0)
 
 
-@DBOS.step(retries_allowed=True, max_attempts=3, interval_seconds=1.0)
-def _advance_work(work_id: str) -> dict[str, Any]:
-    """Run one async JARVIS cycle on the canonical production event loop."""
+async def _advance_on_jarvis_loop(
+    work_id: str,
+    completion: threading.Event,
+):
+    try:
+        return await _engine().advance(work_id)
+    finally:
+        # This event is stronger than concurrent Future.done(): it is set only
+        # after the canonical asyncio coroutine has actually unwound.
+        completion.set()
 
-    future = asyncio.run_coroutine_threadsafe(
-        _engine().advance(work_id),
-        _jarvis_loop(),
-    )
-    result = future.result()
+
+def _run_advance_work(work_id: str) -> dict[str, Any]:
+    """Run one engine advance while exposing a shutdown completion barrier."""
+
+    completion = threading.Event()
+    with _ACTIVE_ADVANCE_LOCK:
+        if _ADVANCE_QUIESCING:
+            raise RuntimeError("JARVIS work runtime is quiescing")
+        future = asyncio.run_coroutine_threadsafe(
+            _advance_on_jarvis_loop(work_id, completion),
+            _jarvis_loop(),
+        )
+        _ACTIVE_ADVANCES[future] = completion
+
+    try:
+        result = future.result()
+    finally:
+        with _ACTIVE_ADVANCE_LOCK:
+            _ACTIVE_ADVANCES.pop(future, None)
+
     return {
         "work_id": result.work_id,
         "state": result.state.value,
@@ -127,6 +158,13 @@ def _advance_work(work_id: str) -> dict[str, Any]:
         "owner_question": result.owner_question,
         "retry_after_seconds": result.retry_after_seconds,
     }
+
+
+@DBOS.step(retries_allowed=True, max_attempts=3, interval_seconds=1.0)
+def _advance_work(work_id: str) -> dict[str, Any]:
+    """Run one async JARVIS cycle on the canonical production event loop."""
+
+    return _run_advance_work(work_id)
 
 
 @DBOS.step(retries_allowed=True, max_attempts=3, interval_seconds=1.0)
@@ -231,6 +269,48 @@ class DBOSWorkExecutionBackend:
         if isinstance(max_reasoning_cycles, bool) or max_reasoning_cycles <= 0:
             raise ValueError("max reasoning cycles must be positive")
         self._max_reasoning_cycles = int(max_reasoning_cycles)
+        self._accepting_work = True
+
+    def begin_shutdown(self) -> None:
+        """Stop new work and prevent DBOS from starting another engine advance."""
+
+        global _ADVANCE_QUIESCING
+        self._accepting_work = False
+        with _ACTIVE_ADVANCE_LOCK:
+            _ADVANCE_QUIESCING = True
+
+    async def quiesce_active_advances(self, *, timeout_seconds: float = 5.0) -> int:
+        """Cancel and await canonical asyncio work before DBOS database teardown."""
+
+        if timeout_seconds <= 0:
+            raise ValueError("advance quiesce timeout must be positive")
+
+        with _ACTIVE_ADVANCE_LOCK:
+            active = tuple(_ACTIVE_ADVANCES.items())
+
+        for future, _completion in active:
+            future.cancel()
+
+        deadline = asyncio.get_running_loop().time() + timeout_seconds
+        while True:
+            incomplete = [
+                completion
+                for _future, completion in active
+                if not completion.is_set()
+            ]
+            if not incomplete:
+                return len(active)
+            if asyncio.get_running_loop().time() >= deadline:
+                raise RuntimeError(
+                    "active JARVIS work did not quiesce before DBOS shutdown"
+                )
+            # The completion barriers are set by coroutines on this same event loop.
+            # Yield here instead of blocking on threading.Event.wait().
+            await asyncio.sleep(0.01)
+
+    def _require_accepting_work(self) -> None:
+        if not self._accepting_work:
+            raise RuntimeError("JARVIS work runtime is shutting down")
 
     @classmethod
     def _classify_existing_status(cls, status: object | None) -> str | None:
@@ -253,6 +333,7 @@ class DBOSWorkExecutionBackend:
         return workflow_id
 
     def reconcile_execution(self, execution_id: str) -> str:
+        self._require_accepting_work()
         """Ensure a known durable execution is runnable after restart.
 
         Shutdown parking deliberately uses DBOS cancellation without changing the
@@ -295,6 +376,7 @@ class DBOSWorkExecutionBackend:
         return normalized
 
     def submit(self, work_id: str, *, priority: WorkPriority) -> str:
+        self._require_accepting_work()
         existing = _run_dbos_sync(DBOS.get_workflow_status, work_id)
         state = self._classify_existing_status(existing)
         if state is not None:
@@ -338,6 +420,7 @@ class DBOSWorkExecutionBackend:
     ) -> str:
         """Start a fresh durable execution attempt for the same canonical WorkItem."""
 
+        self._require_accepting_work()
         token = str(retry_token).strip().replace(" ", "_")
         if not token:
             raise ValueError("retry token must not be empty")
