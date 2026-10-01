@@ -264,6 +264,45 @@ class GoalPlanDispatcher:
                     created_at=datetime.now(UTC).isoformat(),
                 )
 
+    def recover_interrupted(self, plan_id: str) -> PlanGraphV1:
+        plan = self._store.get_plan(plan_id)
+        if plan is None:
+            raise GoalStoreError(f"unknown plan_id: {plan_id}")
+
+        running_nodes = tuple(
+            node for node in plan.nodes if node.state is PlanNodeState.RUNNING
+        )
+        for running_node in running_nodes:
+            results = self._store.list_plan_node_results(
+                plan_id=plan.plan_id,
+                node_id=running_node.node_id,
+                limit=1000,
+            )
+            if results:
+                status = str(results[-1].get("status") or "").strip().casefold()
+                if status == GoalDispatchStatus.SUCCEEDED.value:
+                    plan = self._finalize_success(plan, running_node.node_id)
+                    continue
+                if status in {
+                    GoalDispatchStatus.WAITING.value,
+                    GoalDispatchStatus.BLOCKED.value,
+                }:
+                    plan = self._update_node(
+                        plan,
+                        running_node.node_id,
+                        PlanNodeState.WAITING,
+                        plan_state=PlanState.WAITING,
+                    )
+                    continue
+
+            plan = self._update_node(
+                plan,
+                running_node.node_id,
+                PlanNodeState.FAILED,
+                plan_state=PlanState.FAILED,
+            )
+        return plan
+
     async def dispatch(
         self,
         *,
