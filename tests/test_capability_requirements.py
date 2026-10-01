@@ -121,6 +121,7 @@ def test_requirement_without_observable_completion_is_rejected() -> None:
             ),
         )
 
+
 def _schema_nodes(value: object):
     if isinstance(value, dict):
         yield value
