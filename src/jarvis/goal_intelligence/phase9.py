@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable, Protocol
+from typing import Protocol
 
 from jarvis.capability_acquisition.admission import CapabilityAcquisitionAdmission
 from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
