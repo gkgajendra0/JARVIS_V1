@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
@@ -1142,12 +1142,14 @@ class PlanNodeV1:
     node_type: PlanNodeType
     state: PlanNodeState
     summary: str
+    parameters: dict[str, object] = field(default_factory=dict)
     capability_key: str | None = None
     operation: str | None = None
     work_id: str | None = None
     information_need_id: str | None = None
     gap_id: str | None = None
     subgoal_id: str | None = None
+    monitor_predicate_id: str | None = None
     postcondition_ref: str | None = None
     digest: str = "pending"
 
@@ -1160,12 +1162,14 @@ class PlanNodeV1:
         node_type: PlanNodeType,
         summary: str,
         state: PlanNodeState = PlanNodeState.PENDING,
+        parameters: dict[str, object] | None = None,
         capability_key: str | None = None,
         operation: str | None = None,
         work_id: str | None = None,
         information_need_id: str | None = None,
         gap_id: str | None = None,
         subgoal_id: str | None = None,
+        monitor_predicate_id: str | None = None,
         postcondition_ref: str | None = None,
     ) -> PlanNodeV1:
         if not isinstance(node_type, PlanNodeType):
@@ -1185,6 +1189,7 @@ class PlanNodeV1:
             node_type=node_type,
             state=state,
             summary=_text(summary, field="summary"),
+            parameters=_mapping(parameters, field="parameters"),
             capability_key=_optional_text(capability_key, field="capability_key"),
             operation=_optional_text(operation, field="operation"),
             work_id=_optional_text(work_id, field="work_id"),
@@ -1193,6 +1198,9 @@ class PlanNodeV1:
             ),
             gap_id=_optional_text(gap_id, field="gap_id"),
             subgoal_id=_optional_text(subgoal_id, field="subgoal_id"),
+            monitor_predicate_id=_optional_text(
+                monitor_predicate_id, field="monitor_predicate_id"
+            ),
             postcondition_ref=_optional_text(
                 postcondition_ref, field="postcondition_ref"
             ),
@@ -1206,12 +1214,14 @@ class PlanNodeV1:
             "node_type": self.node_type.value,
             "state": self.state.value,
             "summary": self.summary,
+            "parameters": self.parameters,
             "capability_key": self.capability_key,
             "operation": self.operation,
             "work_id": self.work_id,
             "information_need_id": self.information_need_id,
             "gap_id": self.gap_id,
             "subgoal_id": self.subgoal_id,
+            "monitor_predicate_id": self.monitor_predicate_id,
             "postcondition_ref": self.postcondition_ref,
         }
 
@@ -1220,20 +1230,38 @@ class PlanNodeV1:
             raise TypeError("node_type must be PlanNodeType")
         if not isinstance(self.state, PlanNodeState):
             raise TypeError("state must be PlanNodeState")
-        if self.node_type is PlanNodeType.ACTION and (
+        if self.node_type in {PlanNodeType.ACTION, PlanNodeType.OBSERVE} and (
             self.capability_key is None or self.operation is None
         ):
-            raise ValueError("ACTION node requires capability_key and operation")
+            raise ValueError(
+                "ACTION/OBSERVE node requires capability_key and operation"
+            )
         if self.node_type is PlanNodeType.CLARIFY and self.information_need_id is None:
             raise ValueError("CLARIFY node requires information_need_id")
         if self.node_type is PlanNodeType.ACQUIRE_CAPABILITY and self.gap_id is None:
             raise ValueError("ACQUIRE_CAPABILITY node requires gap_id")
         if self.node_type is PlanNodeType.SUBGOAL and self.subgoal_id is None:
             raise ValueError("SUBGOAL node requires subgoal_id")
+        if self.node_type is PlanNodeType.VERIFY and self.postcondition_ref is None:
+            raise ValueError("VERIFY node requires postcondition_ref")
+        if (
+            self.node_type is PlanNodeType.MONITOR
+            and self.monitor_predicate_id is None
+        ):
+            raise ValueError("MONITOR node requires monitor_predicate_id")
         if self.digest != "pending":
             _assert_digest(
                 self.canonical_payload(), self.digest, field="plan node digest"
             )
+
+    def with_state(self, state: PlanNodeState) -> PlanNodeV1:
+        if not isinstance(state, PlanNodeState):
+            raise TypeError("state must be PlanNodeState")
+        candidate = replace(self, state=state, digest="pending")
+        return replace(
+            candidate,
+            digest=canonical_digest(candidate.canonical_payload()),
+        )
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any], digest: str) -> PlanNodeV1:
@@ -1242,12 +1270,14 @@ class PlanNodeV1:
             node_type=PlanNodeType(payload["node_type"]),
             state=PlanNodeState(payload["state"]),
             summary=payload["summary"],
+            parameters=dict(payload.get("parameters", {})),
             capability_key=payload["capability_key"],
             operation=payload["operation"],
             work_id=payload["work_id"],
             information_need_id=payload["information_need_id"],
             gap_id=payload["gap_id"],
             subgoal_id=payload["subgoal_id"],
+            monitor_predicate_id=payload.get("monitor_predicate_id"),
             postcondition_ref=payload["postcondition_ref"],
             digest=digest,
         )
@@ -1374,6 +1404,37 @@ class PlanGraphV1:
         _timestamp(self.updated_at, field="updated_at")
         if self.digest != "pending":
             _assert_digest(self.canonical_payload(), self.digest, field="plan digest")
+
+    def with_node_state(
+        self,
+        node_id: str,
+        state: PlanNodeState,
+        *,
+        plan_state: PlanState | None = None,
+        updated_at: str | None = None,
+    ) -> PlanGraphV1:
+        target = _text(node_id, field="node_id")
+        found = False
+        nodes: list[PlanNodeV1] = []
+        for node in self.nodes:
+            if node.node_id == target:
+                nodes.append(node.with_state(state))
+                found = True
+            else:
+                nodes.append(node)
+        if not found:
+            raise ValueError(f"unknown plan node: {target}")
+        candidate = replace(
+            self,
+            nodes=tuple(nodes),
+            state=self.state if plan_state is None else plan_state,
+            updated_at=_timestamp(updated_at, field="updated_at"),
+            digest="pending",
+        )
+        return replace(
+            candidate,
+            digest=canonical_digest(candidate.canonical_payload()),
+        )
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any], digest: str) -> PlanGraphV1:
