@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 from types import SimpleNamespace
 
@@ -69,3 +70,39 @@ def test_playback_diagnostic_reads_livekit_player_state() -> None:
     )
 
     assert MediaDevicesAudioOutput._player_state(player) == (960, True, False)
+
+
+class _FakeOutputPlayer:
+    def __init__(self) -> None:
+        self.added: list[object] = []
+        self.removed: list[object] = []
+
+    async def add_track(self, track: object) -> None:
+        self.added.append(track)
+
+    async def remove_track(self, track: object) -> None:
+        self.removed.append(track)
+
+
+@pytest.mark.asyncio
+async def test_media_devices_output_detaches_silent_track_between_playback() -> None:
+    player = _FakeOutputPlayer()
+    output = MediaDevicesAudioOutput(object(), output_device=None)
+    track = object()
+    output._player = player
+    output._track = track  # type: ignore[assignment]
+    output._loop = asyncio.get_running_loop()
+
+    await output._ensure_track_attached()
+    assert player.added == [track]
+    assert output._track_attached is True
+
+    output._schedule_detach_if_idle()
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    assert player.removed == [track]
+    assert output._track_attached is False
+
+    await output._ensure_track_attached()
+    assert player.added == [track, track]
+    assert output._track_attached is True
