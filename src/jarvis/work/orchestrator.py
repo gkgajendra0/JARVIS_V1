@@ -87,19 +87,11 @@ class WorkOrchestrator:
             work_type=work_type,
             source_session_id=source_session_id,
             source_turn_id=source_turn_id,
-            state=(
-                WorkState.WAITING_RESOURCE
-                if event_driven
-                else WorkState.QUEUED
-            ),
+            state=(WorkState.WAITING_RESOURCE if event_driven else WorkState.QUEUED),
             priority=priority,
             delivery_policy=delivery_policy,
             dependencies=dependencies,
-            status_detail=(
-                "waiting for monitored event"
-                if event_driven
-                else None
-            ),
+            status_detail=("waiting for monitored event" if event_driven else None),
         )
         self._store.create(item)
         if event_driven:
