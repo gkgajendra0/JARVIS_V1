@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from concurrent.futures import CancelledError as FutureCancelledError
 from types import SimpleNamespace
 
 import pytest
@@ -55,8 +54,12 @@ class _FakeShutdownBackend:
         self.parked = execution_ids
         return execution_ids
 
-    async def quiesce_active_advances(self, *, timeout_seconds: float = 5.0) -> int:
-        assert timeout_seconds == 5.0
+    async def quiesce_active_advances(
+        self,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> int:
+        assert timeout_seconds is None
         self.quiesced = True
         return len(self.parked)
 
@@ -104,7 +107,7 @@ async def test_work_runtime_shutdown_keeps_event_loop_alive_during_dbos_drain(
     assert runtime.backend.parked == ("work-a", "work-b__retry_v3")
     assert runtime.backend.quiesced is True
     assert observed == ["event-loop-alive"]
-    assert shutdown_timeouts == [10]
+    assert shutdown_timeouts == [70]
 
 
 def test_dbos_backend_resumes_exact_cancelled_execution(monkeypatch) -> None:
@@ -151,6 +154,7 @@ def test_dbos_backend_resumes_exact_cancelled_execution(monkeypatch) -> None:
 def test_dbos_backend_parks_exact_execution_ids(monkeypatch) -> None:
     backend = DBOSWorkExecutionBackend()
     cancelled: list[tuple[str, ...]] = []
+    wake_messages: list[tuple[str, str, str, str | None]] = []
 
     monkeypatch.setattr(
         dbos_backend,
@@ -161,10 +165,24 @@ def test_dbos_backend_parks_exact_execution_ids(monkeypatch) -> None:
     def cancel_workflows(workflow_ids: list[str]) -> None:
         cancelled.append(tuple(workflow_ids))
 
+    def send(
+        execution_id: str,
+        message: str,
+        *,
+        topic: str,
+        idempotency_key: str | None = None,
+    ) -> None:
+        wake_messages.append((execution_id, message, topic, idempotency_key))
+
     monkeypatch.setattr(
         dbos_backend.DBOS,
         "cancel_workflows",
         staticmethod(cancel_workflows),
+    )
+    monkeypatch.setattr(
+        dbos_backend.DBOS,
+        "send",
+        staticmethod(send),
     )
 
     parked = backend.park_for_shutdown(
@@ -173,6 +191,10 @@ def test_dbos_backend_parks_exact_execution_ids(monkeypatch) -> None:
 
     assert parked == ("work-a", "work-b__retry_v3")
     assert cancelled == [("work-a", "work-b__retry_v3")]
+    assert [item[:3] for item in wake_messages] == [
+        ("work-a", dbos_backend._SHUTDOWN_WAKE_COMMAND, "work-control"),
+        ("work-b__retry_v3", dbos_backend._SHUTDOWN_WAKE_COMMAND, "work-control"),
+    ]
 
 
 class _RetryStore:
@@ -225,20 +247,28 @@ def test_orchestrator_reconciles_parked_retry_without_duplicate_submission() -> 
 
 
 @pytest.mark.asyncio
-async def test_active_engine_advance_unwinds_before_dbos_teardown(
+async def test_active_engine_advance_finishes_before_dbos_teardown(
     monkeypatch,
 ) -> None:
     started = asyncio.Event()
-    released = asyncio.Event()
+    release = asyncio.Event()
+    finished = asyncio.Event()
 
     class _BlockingEngine:
         async def advance(self, work_id: str):
             assert work_id == "work-active"
             started.set()
             try:
-                await asyncio.Event().wait()
+                await release.wait()
+                return SimpleNamespace(
+                    work_id=work_id,
+                    state=WorkState.WAITING_RESOURCE,
+                    progressed=True,
+                    owner_question=None,
+                    retry_after_seconds=1.0,
+                )
             finally:
-                released.set()
+                finished.set()
 
     monkeypatch.setattr(dbos_backend, "_ENGINE", _BlockingEngine())
     monkeypatch.setattr(
@@ -257,9 +287,57 @@ async def test_active_engine_advance_unwinds_before_dbos_teardown(
     await asyncio.wait_for(started.wait(), timeout=1.0)
 
     backend.begin_shutdown()
-    quiesced = await backend.quiesce_active_advances(timeout_seconds=1.0)
+    quiesce = asyncio.create_task(
+        backend.quiesce_active_advances(timeout_seconds=1.0)
+    )
+    await asyncio.sleep(0.02)
+    assert quiesce.done() is False
+    assert finished.is_set() is False
 
-    assert quiesced == 1
-    assert released.is_set()
-    with pytest.raises(FutureCancelledError):
-        await worker
+    release.set()
+    assert await quiesce == 1
+    assert finished.is_set() is True
+    result = await worker
+    assert result["state"] == WorkState.WAITING_RESOURCE.value
+
+
+def test_interruptible_durable_sleep_chunks_new_history(monkeypatch) -> None:
+    sleeps: list[float] = []
+    monkeypatch.setattr(
+        dbos_backend.DBOS,
+        "patch",
+        staticmethod(lambda _name: True),
+    )
+    monkeypatch.setattr(
+        dbos_backend.DBOS,
+        "sleep",
+        staticmethod(lambda seconds: sleeps.append(float(seconds))),
+    )
+
+    dbos_backend._durable_interruptible_sleep(
+        2.25,
+        patch_name="test-bounded-sleep",
+    )
+
+    assert sleeps == [1.0, 1.0, 0.25]
+
+
+def test_interruptible_durable_sleep_preserves_legacy_checkpoint(monkeypatch) -> None:
+    sleeps: list[float] = []
+    monkeypatch.setattr(
+        dbos_backend.DBOS,
+        "patch",
+        staticmethod(lambda _name: False),
+    )
+    monkeypatch.setattr(
+        dbos_backend.DBOS,
+        "sleep",
+        staticmethod(lambda seconds: sleeps.append(float(seconds))),
+    )
+
+    dbos_backend._durable_interruptible_sleep(
+        12.5,
+        patch_name="test-legacy-sleep",
+    )
+
+    assert sleeps == [12.5]
