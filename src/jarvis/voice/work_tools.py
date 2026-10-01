@@ -59,6 +59,7 @@ class WorkAgentTools:
         *,
         bound_owner_input_work_id: str | None = None,
         on_bound_owner_input_submitted: Callable[[WorkItem], None] | None = None,
+        allow_capability_acquisition: bool = True,
     ) -> None:
         if not isinstance(runtime, WorkRuntime):
             raise TypeError("runtime must be a WorkRuntime")
@@ -69,10 +70,13 @@ class WorkAgentTools:
         self._conversation = conversation
         self._bound_owner_input_work_id = normalized_bound_work_id
         self._on_bound_owner_input_submitted = on_bound_owner_input_submitted
+        if not isinstance(allow_capability_acquisition, bool):
+            raise TypeError("allow_capability_acquisition must be bool")
+        self._allow_capability_acquisition = allow_capability_acquisition
 
     @property
     def tools(self) -> list:
-        return [
+        tools = [
             self.start_background_work,
             self.list_background_work,
             self.list_recent_background_work,
@@ -84,7 +88,6 @@ class WorkAgentTools:
             self.continue_background_work,
             self.retry_failed_background_work,
             self.set_background_work_update_interval,
-            self.start_capability_acquisition,
             self.activate_acquired_capability,
             self.disable_acquired_capability,
             self.start_engineering_change,
@@ -96,6 +99,10 @@ class WorkAgentTools:
             self.decide_change_gate,
             self.get_engineering_change_status,
         ]
+        if self._allow_capability_acquisition:
+            insert_at = tools.index(self.activate_acquired_capability)
+            tools.insert(insert_at, self.start_capability_acquisition)
+        return tools
 
     @function_tool()
     async def retry_failed_background_work(
