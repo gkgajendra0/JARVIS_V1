@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
@@ -19,11 +19,23 @@ from jarvis.voice.hands_fast_path import FAST_PATH_OPERATIONS, execute_fast_hint
 from jarvis.work.runtime import WorkRuntime
 
 from .capability_graph import CapabilityGraphResolver
-from .composition import GoalIntelligenceCoordinator
-from .execution import GoalPlanDispatcher
+from .composition import (
+    GoalIntakeDisposition,
+    GoalIntakeResult,
+    GoalIntelligenceCoordinator,
+)
+from .execution import GoalPlanDispatcher, PlanDispatchDisposition
 from .information import InformationResolver
 from .interpretation import GoalInterpreter, build_goal_interpreter
-from .models import GoalState, OwnerGoalV2, PlanGraphV1, PlanNodeV1, WorldEntityRefV1
+from .models import (
+    GoalState,
+    OwnerGoalV2,
+    PlanGraphV1,
+    PlanNodeType,
+    PlanNodeV1,
+    PlanState,
+    WorldEntityRefV1,
+)
 from .phase9 import Phase9GoalBridge
 from .planning import GoalPlanner
 from .requirements import RequirementDeriver
@@ -137,13 +149,18 @@ class GiccApplyRuntime:
     capability_runtime: CapabilityRuntime
     reconcile_interval_seconds: float = 1.0
     _task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
+    _advance_lock: asyncio.Lock = field(
+        default_factory=asyncio.Lock,
+        init=False,
+        repr=False,
+    )
 
     def start(self) -> None:
         if self._task is not None and not self._task.done():
             return
         self._task = asyncio.create_task(
             self._reconcile_loop(),
-            name="jarvis-gicc-capability-continuation",
+            name="jarvis-gicc-runtime-reconciler",
         )
 
     async def close(self) -> None:
@@ -154,28 +171,175 @@ class GiccApplyRuntime:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
 
-    async def reconcile_once(self) -> int:
-        waiting = tuple(
-            goal
-            for goal in self.store.list_active_goals(limit=100)
-            if goal.state is GoalState.WAITING_CAPABILITY
+    @staticmethod
+    def _terminal_goal_state(state: GoalState) -> bool:
+        return state in {
+            GoalState.COMPLETED,
+            GoalState.FAILED,
+            GoalState.CANCELLED,
+        }
+
+    def _set_goal_state(self, goal_id: str, state: GoalState) -> OwnerGoalV2:
+        goal = self.store.get_goal(goal_id)
+        if goal is None:
+            raise ValueError(f"unknown GICC goal: {goal_id}")
+        if self._terminal_goal_state(goal.state) or goal.state is state:
+            return goal
+        return self.store.update_goal_state(
+            goal.goal_id,
+            state,
+            expected_revision=goal.goal_revision,
         )
-        if not waiting:
+
+    async def _advance_plan_to_blocker(
+        self,
+        goal_id: str,
+        *,
+        max_steps: int = 16,
+    ) -> tuple[OwnerGoalV2, PlanGraphV1 | None]:
+        if max_steps <= 0:
+            raise ValueError("max_steps must be positive")
+
+        async with self._advance_lock:
+            goal = self.store.get_goal(goal_id)
+            if goal is None:
+                raise ValueError(f"unknown GICC goal: {goal_id}")
+            plan = self.store.latest_plan_for_goal(goal.goal_id)
+            if plan is None:
+                return goal, None
+
+            plan = self.dispatcher.recover_interrupted(plan.plan_id)
+            if plan.state is PlanState.FAILED:
+                return self._set_goal_state(goal.goal_id, GoalState.FAILED), plan
+            if plan.state is PlanState.SUCCEEDED:
+                return self._set_goal_state(goal.goal_id, GoalState.COMPLETED), plan
+
+            for _ in range(max_steps):
+                goal = self.store.get_goal(goal.goal_id)
+                if goal is None:
+                    raise ValueError(f"unknown GICC goal: {goal_id}")
+                plan = self.store.latest_plan_for_goal(goal.goal_id)
+                if plan is None:
+                    return goal, None
+                if plan.state is PlanState.SUCCEEDED:
+                    return self._set_goal_state(
+                        goal.goal_id,
+                        GoalState.COMPLETED,
+                    ), plan
+                if plan.state is PlanState.FAILED:
+                    return self._set_goal_state(goal.goal_id, GoalState.FAILED), plan
+
+                ready = self.dispatcher.ready_nodes(plan)
+                if not ready:
+                    return goal, plan
+                node = ready[0]
+
+                if goal.goal_kind.value == "monitoring":
+                    target_state = GoalState.MONITORING
+                elif node.node_type is PlanNodeType.VERIFY:
+                    target_state = GoalState.VERIFYING
+                else:
+                    target_state = GoalState.EXECUTING
+                goal = self._set_goal_state(goal.goal_id, target_state)
+
+                dispatched = await self.dispatcher.dispatch(
+                    plan_id=plan.plan_id,
+                    node_id=node.node_id,
+                    session_id=goal.source_session_id,
+                )
+                plan = dispatched.plan
+
+                if dispatched.disposition is PlanDispatchDisposition.SUCCEEDED:
+                    if plan.state is PlanState.SUCCEEDED:
+                        return self._set_goal_state(
+                            goal.goal_id,
+                            GoalState.COMPLETED,
+                        ), plan
+                    continue
+                if dispatched.disposition is PlanDispatchDisposition.FAILED:
+                    return self._set_goal_state(goal.goal_id, GoalState.FAILED), plan
+                return goal, plan
+
+            LOGGER.warning(
+                "GICC bounded plan advancement reached max_steps | goal_id=%s "
+                "max_steps=%s",
+                goal_id,
+                max_steps,
+            )
+            latest_goal = self.store.get_goal(goal_id)
+            latest_plan = self.store.latest_plan_for_goal(goal_id)
+            assert latest_goal is not None
+            return latest_goal, latest_plan
+
+    async def _advance_intake_result(
+        self,
+        result: GoalIntakeResult,
+    ) -> GoalIntakeResult:
+        if (
+            result.disposition is not GoalIntakeDisposition.PLAN_READY
+            or result.goal is None
+            or result.plan is None
+        ):
+            return result
+        goal, plan = await self._advance_plan_to_blocker(result.goal.goal_id)
+        return replace(result, goal=goal, plan=plan)
+
+    async def pursue(self, *, conversation, turn) -> GoalIntakeResult:
+        result = await self.coordinator.pursue(
+            conversation=conversation,
+            turn=turn,
+        )
+        return await self._advance_intake_result(result)
+
+    async def continue_goal(self, goal_id: str) -> GoalIntakeResult:
+        result = await self.coordinator.continue_goal(goal_id)
+        return await self._advance_intake_result(result)
+
+    async def reconcile_once(self) -> int:
+        active = self.store.list_active_goals(limit=100)
+        if not active:
             return 0
-        self.capability_runtime.refresh_catalog()
+
+        if any(goal.state is GoalState.WAITING_CAPABILITY for goal in active):
+            self.capability_runtime.refresh_catalog()
+
         advanced = 0
-        for goal in waiting:
-            before = goal.state
-            result = await self.coordinator.continue_goal(goal.goal_id)
-            if result.goal is not None and result.goal.state is not before:
+        for goal in active:
+            before_goal = self.store.get_goal(goal.goal_id)
+            before_plan = self.store.latest_plan_for_goal(goal.goal_id)
+            if goal.state is GoalState.WAITING_CAPABILITY:
+                await self.continue_goal(goal.goal_id)
+            elif goal.state in {
+                GoalState.PLANNED,
+                GoalState.EXECUTING,
+                GoalState.VERIFYING,
+            }:
+                await self._advance_plan_to_blocker(goal.goal_id)
+            else:
+                continue
+
+            after_goal = self.store.get_goal(goal.goal_id)
+            after_plan = self.store.latest_plan_for_goal(goal.goal_id)
+            if (
+                before_goal is not None
+                and after_goal is not None
+                and (
+                    before_goal.digest != after_goal.digest
+                    or (
+                        before_plan is not None
+                        and after_plan is not None
+                        and before_plan.digest != after_plan.digest
+                    )
+                )
+            ):
                 advanced += 1
                 LOGGER.info(
-                    "GICC capability continuation advanced | goal_id=%s "
-                    "from_state=%s to_state=%s disposition=%s",
+                    "GICC runtime advanced | goal_id=%s from_state=%s "
+                    "to_state=%s plan_state=%s",
                     goal.goal_id,
-                    before.value,
-                    result.goal.state.value,
-                    result.disposition.value,
+                    before_goal.state.value,
+                    after_goal.state.value,
+                    None if after_plan is None else after_plan.state.value,
                 )
         return advanced
 
