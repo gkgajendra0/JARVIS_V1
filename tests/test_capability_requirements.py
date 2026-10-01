@@ -171,4 +171,3 @@ def test_required_parameters_json_decodes_to_canonical_object() -> None:
             expected_postconditions=["playback started"],
             reason="Bad contract.",
         )
-
