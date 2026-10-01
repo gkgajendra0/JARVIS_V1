@@ -22,6 +22,7 @@ from jarvis.work.context import (
 )
 from jarvis.work.models import (
     WorkDeliveryKind,
+    WorkDeliveryState,
     WorkItem,
     WorkState,
     WorkStep,
@@ -677,6 +678,34 @@ class WorkEngine:
             )
             self._store.save(resumed, expected_version=work.version)
         return None
+
+    def reconcile_waiting_owner_deliveries(self) -> tuple[str, ...]:
+        """Restore a pending OWNER_INPUT for every waiting non-silent WorkItem.
+
+        A waiting WorkItem is canonical truth that owner input is still unresolved.
+        Therefore its current owner-input delivery cannot legitimately remain
+        DELIVERED. Older voice runtimes marked the spoken question delivered before
+        collecting the answer; reopen that exact event idempotently during startup.
+        """
+
+        reconciled: list[str] = []
+        waiting = self._store.list(
+            states=(WorkState.WAITING_FOR_OWNER,),
+            limit=10_000,
+        )
+        for work in waiting:
+            delivery = self._store.enqueue_delivery(
+                work=work,
+                kind=WorkDeliveryKind.OWNER_INPUT,
+                message=work.status_detail or "This work needs your input.",
+                event_key=f"owner:{work.version}",
+            )
+            if delivery is None:
+                continue
+            if delivery.state is WorkDeliveryState.DELIVERED:
+                self._store.requeue_delivered_owner_input(delivery.delivery_id)
+                reconciled.append(work.work_id)
+        return tuple(reconciled)
 
     def _ensure_state_delivery(self, work: WorkItem) -> None:
         if work.state is WorkState.COMPLETED:
