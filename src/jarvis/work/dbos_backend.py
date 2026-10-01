@@ -256,9 +256,7 @@ class DBOSWorkExecutionBackend:
     """Queue/recovery mechanics only; canonical work truth remains in JARVIS store."""
 
     _ACTIVE_DBOS_STATES = frozenset({"PENDING", "ENQUEUED", "DELAYED"})
-    _RESUMABLE_DBOS_STATES = frozenset(
-        {"CANCELLED", "MAX_RECOVERY_ATTEMPTS_EXCEEDED"}
-    )
+    _RESUMABLE_DBOS_STATES = frozenset({"CANCELLED", "MAX_RECOVERY_ATTEMPTS_EXCEEDED"})
     _TERMINAL_DBOS_STATES = frozenset({"SUCCESS", "ERROR"})
 
     def __init__(
@@ -348,9 +346,7 @@ class DBOSWorkExecutionBackend:
         status = _run_dbos_sync(DBOS.get_workflow_status, normalized)
         state = self._classify_existing_status(status)
         if state is None:
-            raise RuntimeError(
-                f"durable execution is missing from DBOS: {normalized}"
-            )
+            raise RuntimeError(f"durable execution is missing from DBOS: {normalized}")
         if state in self._ACTIVE_DBOS_STATES:
             return normalized
         if state in self._RESUMABLE_DBOS_STATES:
@@ -360,9 +356,7 @@ class DBOSWorkExecutionBackend:
                 "canonical JARVIS work is active but its DBOS execution is "
                 f"terminal: {normalized} ({state})"
             )
-        raise RuntimeError(
-            f"unsupported DBOS workflow state for {normalized}: {state}"
-        )
+        raise RuntimeError(f"unsupported DBOS workflow state for {normalized}: {state}")
 
     def park_for_shutdown(self, execution_ids: tuple[str, ...]) -> tuple[str, ...]:
         """Durably park active executions so process shutdown can drain safely."""
