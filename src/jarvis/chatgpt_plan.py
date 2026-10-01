@@ -791,7 +791,7 @@ class ChatGPTPlanSessionManager:
                         "type": "json_schema",
                         "name": _schema_name(schema_name),
                         "strict": True,
-                        "schema": schema,
+                        "schema": _strict_json_schema(schema),
                     }
                 },
                 "store": False,
