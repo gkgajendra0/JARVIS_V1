@@ -196,7 +196,9 @@ def test_dbos_backend_parks_exact_execution_ids(monkeypatch) -> None:
     assert cancelled == [("work-a", "work-b__retry_v3")]
     assert [item[:3] for item in wake_messages] == [
         ("work-a", dbos_backend._SHUTDOWN_WAKE_COMMAND, "work-control"),
+        ("work-a", dbos_backend._SHUTDOWN_WAKE_COMMAND, "runtime-wake"),
         ("work-b__retry_v3", dbos_backend._SHUTDOWN_WAKE_COMMAND, "work-control"),
+        ("work-b__retry_v3", dbos_backend._SHUTDOWN_WAKE_COMMAND, "runtime-wake"),
     ]
 
 
@@ -301,8 +303,11 @@ async def test_active_engine_advance_finishes_before_dbos_teardown(
     assert result["state"] == WorkState.WAITING_RESOURCE.value
 
 
-def test_interruptible_durable_sleep_chunks_new_history(monkeypatch) -> None:
+def test_interruptible_durable_wait_uses_wakeable_absolute_timeout(
+    monkeypatch,
+) -> None:
     sleeps: list[float] = []
+    receives: list[tuple[str | None, float]] = []
     monkeypatch.setattr(
         dbos_backend.DBOS,
         "patch",
@@ -314,15 +319,24 @@ def test_interruptible_durable_sleep_chunks_new_history(monkeypatch) -> None:
         staticmethod(lambda seconds: sleeps.append(float(seconds))),
     )
 
-    dbos_backend._durable_interruptible_sleep(
-        2.25,
-        patch_name="test-bounded-sleep",
+    def recv(*, topic: str | None = None, timeout_seconds: float = 60):
+        receives.append((topic, float(timeout_seconds)))
+        return None
+
+    monkeypatch.setattr(dbos_backend.DBOS, "recv", staticmethod(recv))
+
+    dbos_backend._durable_interruptible_wait(
+        12.5,
+        patch_name="test-wakeable-wait",
     )
 
-    assert sleeps == [1.0, 1.0, 0.25]
+    assert sleeps == []
+    assert receives == [("runtime-wake", 12.5)]
 
 
-def test_interruptible_durable_sleep_preserves_legacy_checkpoint(monkeypatch) -> None:
+def test_interruptible_durable_wait_preserves_legacy_sleep_checkpoint(
+    monkeypatch,
+) -> None:
     sleeps: list[float] = []
     monkeypatch.setattr(
         dbos_backend.DBOS,
@@ -335,7 +349,7 @@ def test_interruptible_durable_sleep_preserves_legacy_checkpoint(monkeypatch) ->
         staticmethod(lambda seconds: sleeps.append(float(seconds))),
     )
 
-    dbos_backend._durable_interruptible_sleep(
+    dbos_backend._durable_interruptible_wait(
         12.5,
         patch_name="test-legacy-sleep",
     )
