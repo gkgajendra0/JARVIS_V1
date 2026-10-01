@@ -1218,6 +1218,57 @@ class GoalStore:
             return None
         return PlanGraphV1.from_payload(self._decode(row["payload"]), row["digest"])
 
+    def update_plan_execution(
+        self,
+        plan: PlanGraphV1,
+        *,
+        expected_digest: str,
+    ) -> PlanGraphV1:
+        if not isinstance(plan, PlanGraphV1):
+            raise TypeError("plan must be PlanGraphV1")
+        expected = str(expected_digest).strip().casefold()
+        if not expected:
+            raise ValueError("expected_digest must not be empty")
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                "SELECT payload, digest FROM plan_graphs_v1 WHERE plan_id=?",
+                (plan.plan_id,),
+            ).fetchone()
+            if row is None:
+                raise GoalStoreError(f"unknown plan_id: {plan.plan_id}")
+            current = PlanGraphV1.from_payload(
+                self._decode(row["payload"]),
+                row["digest"],
+            )
+            if current.digest != expected:
+                raise GoalStoreConflict("plan execution digest changed before update")
+            if (
+                current.goal_id != plan.goal_id
+                or current.goal_revision != plan.goal_revision
+                or current.plan_revision != plan.plan_revision
+            ):
+                raise GoalStoreConflict(
+                    "plan execution update cannot change plan identity/revision"
+                )
+            result = db.execute(
+                """
+                UPDATE plan_graphs_v1
+                SET state=?, payload=?, digest=?, updated_at=?
+                WHERE plan_id=? AND digest=?
+                """,
+                (
+                    plan.state.value,
+                    self._encode(plan.canonical_payload()),
+                    plan.digest,
+                    plan.updated_at,
+                    plan.plan_id,
+                    expected,
+                ),
+            )
+            if result.rowcount != 1:
+                raise GoalStoreConflict("plan execution compare-and-swap update lost")
+        return plan
+
     def put_continuation(self, continuation: GoalContinuationV1) -> GoalContinuationV1:
         if not isinstance(continuation, GoalContinuationV1):
             raise TypeError("continuation must be GoalContinuationV1")
