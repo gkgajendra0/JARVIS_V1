@@ -695,16 +695,11 @@ class InformationNeedV1:
             and self.resolution_ref
             and self.resolution_ref.startswith(("plain:", "value:"))
         ):
-            raise ValueError(
-                "OWNER_SECRET resolution must reference the secret store"
-            )
-        if (
-            self.state is InformationNeedState.RESOLVED
-            and (self.resolved_at is None or self.resolution_ref is None)
+            raise ValueError("OWNER_SECRET resolution must reference the secret store")
+        if self.state is InformationNeedState.RESOLVED and (
+            self.resolved_at is None or self.resolution_ref is None
         ):
-            raise ValueError(
-                "resolved information need requires resolution metadata"
-            )
+            raise ValueError("resolved information need requires resolution metadata")
         if self.digest != "pending":
             _assert_digest(
                 self.canonical_payload(), self.digest, field="information need digest"
