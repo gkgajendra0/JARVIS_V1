@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 import jarvis.work.store as work_store_module
+from jarvis.engineering_change import ChangeState, ChangeStore
+from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.voice.work_tools import _public_work
 from jarvis.work.brain import (
     BrainAction,
@@ -539,6 +541,96 @@ def test_failed_work_retry_preserves_canonical_identity_and_history(
     steps = store.list_steps(item.work_id)
     assert [step.kind for step in steps] == ["research_web", "owner_retry"]
     assert steps[-1].observation["response"].startswith("Try that again")
+
+
+def test_failed_change_work_retry_reopens_same_governing_stage(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    changes = ChangeStore(store)
+    coordinator = ChangeCoordinator(changes, backend)
+    change = coordinator.start("Acquire TV control", "session-tv", "turn-tv")
+    stage = changes.list_stages(change.change_id)[0]
+    work = store.require(stage.work_id)
+    failed = work.transition(
+        WorkState.FAILED,
+        status_detail="ChatGPT Plan allowance exhausted",
+    )
+    store.save(failed, expected_version=work.version)
+    coordinator.reconcile_for_work(work.work_id)
+    assert changes.require(change.change_id).state is ChangeState.FAILED
+
+    runtime = object.__new__(WorkRuntime)
+    runtime.store = store
+    runtime.orchestrator = WorkOrchestrator(store, backend)
+    runtime.changes = coordinator
+
+    retried = runtime.retry_failed_work(
+        work.work_id,
+        owner_request="Retry the same TV capability task.",
+        source_session_id="session-retry",
+        source_turn_id="turn-retry",
+    )
+
+    assert retried.work_id == work.work_id
+    assert retried.state is WorkState.RETRYING
+    reopened = changes.require(change.change_id)
+    assert reopened.state is ChangeState.RESEARCHING
+    assert changes.stage_for_work(work.work_id) == stage
+    assert backend.restarted == [(work.work_id, f"v{retried.version}")]
+    assert any(
+        event["kind"] == "failed_stage_reopened"
+        and event["detail"]["work_id"] == work.work_id
+        for event in changes.list_events(change.change_id)
+    )
+    assert any(
+        step.kind == "owner_retry"
+        for step in store.list_steps(work.work_id)
+    )
+
+
+def test_failed_change_retry_submission_failure_restores_failed_change(
+    tmp_path: Path,
+) -> None:
+    class FailingRestartBackend(FakeBackend):
+        def restart(
+            self,
+            work_id: str,
+            *,
+            priority: WorkPriority,
+            retry_token: str,
+        ) -> str:
+            del work_id, priority, retry_token
+            raise RuntimeError("restart unavailable")
+
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FailingRestartBackend()
+    changes = ChangeStore(store)
+    coordinator = ChangeCoordinator(changes, backend)
+    change = coordinator.start("Acquire TV control", "session-tv", "turn-tv")
+    stage = changes.list_stages(change.change_id)[0]
+    work = store.require(stage.work_id)
+    failed = work.transition(WorkState.FAILED, status_detail="temporary provider failure")
+    store.save(failed, expected_version=work.version)
+    coordinator.reconcile_for_work(work.work_id)
+    assert changes.require(change.change_id).state is ChangeState.FAILED
+
+    runtime = object.__new__(WorkRuntime)
+    runtime.store = store
+    runtime.orchestrator = WorkOrchestrator(store, backend)
+    runtime.changes = coordinator
+
+    with pytest.raises(RuntimeError, match="restart unavailable"):
+        runtime.retry_failed_work(
+            work.work_id,
+            owner_request="Retry it.",
+            source_session_id="session-retry",
+            source_turn_id="turn-retry",
+        )
+
+    assert store.require(work.work_id).state is WorkState.FAILED
+    assert changes.require(change.change_id).state is ChangeState.FAILED
 
 
 def test_owner_input_routes_to_active_retry_execution(tmp_path: Path) -> None:
