@@ -9,7 +9,6 @@ from .information import (
     InformationResolver,
     restore_bound_information_interaction,
 )
-
 from .interpretation import (
     GoalInterpretationError,
     GoalInterpretationResult,
