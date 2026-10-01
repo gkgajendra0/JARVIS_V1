@@ -30,6 +30,7 @@ from .phase9 import Phase9GapAdmission, Phase9GoalBridge
 from .planning import GoalPlanner, PlanValidationContext
 from .requirements import RequirementDerivationResult, RequirementDeriver
 from .store import GoalStore
+from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 from .world import EntityResolutionState, EntityResolver
 
 _WORLD_RESOURCE_TYPES = frozenset(
@@ -106,6 +107,7 @@ class GoalIntelligenceCoordinator:
         phase9_bridge: Phase9GoalBridge | None = None,
         planner: GoalPlanner | None = None,
         continuation_coordinator: ContinuationCoordinator | None = None,
+        telemetry: GiccTelemetrySink = DEFAULT_GICC_TELEMETRY,
     ) -> None:
         if not isinstance(store, GoalStore):
             raise TypeError("store must be GoalStore")
@@ -129,6 +131,9 @@ class GoalIntelligenceCoordinator:
         self._phase9 = phase9_bridge
         self._planner = planner
         self._continuations = continuation_coordinator or ContinuationCoordinator(store)
+        if not callable(getattr(telemetry, "emit", None)):
+            raise TypeError("telemetry must provide emit()")
+        self._telemetry = telemetry
 
     async def pursue(
         self,
@@ -178,6 +183,14 @@ class GoalIntelligenceCoordinator:
                 expected_entity_types=(proposed_type,),
                 require_live_binding=False,
             )
+            self._telemetry.emit(
+                "gicc_entity_resolved",
+                source_turn_id=turn.turn_id,
+                entity_type=proposed_type,
+                resolution_state=resolution.state.value,
+                entity_id=resolution.entity_id,
+                candidate_count=len(resolution.candidate_entity_ids),
+            )
             if resolution.state is EntityResolutionState.RESOLVED:
                 assert resolution.entity_id is not None
                 resolved_entity_ids.append(resolution.entity_id)
@@ -209,6 +222,15 @@ class GoalIntelligenceCoordinator:
                     f"interpretation:{interpretation.candidate.digest}",
                 ),
             )
+        )
+        self._telemetry.emit(
+            "gicc_goal_admitted",
+            goal_id=goal.goal_id,
+            goal_digest=goal.digest,
+            goal_kind=goal.goal_kind.value,
+            goal_state=goal.state.value,
+            source_session_id=goal.source_session_id,
+            source_turn_id=goal.source_turn_id,
         )
 
         if unresolved:
@@ -247,10 +269,25 @@ class GoalIntelligenceCoordinator:
                         answer_schema={"type": "entity_id"},
                     )
                 )
+                self._telemetry.emit(
+                    "gicc_information_need_created",
+                    goal_id=goal.goal_id,
+                    information_need_id=need.information_need_id,
+                    category=need.category.value,
+                    state=need.state.value,
+                    candidate_count=len(need.candidate_values),
+                )
                 resolution = self._information.resolve(
                     need,
                     owner_question=need.owner_question,
                 )
+                if resolution.state.value == "resolved":
+                    self._telemetry.emit(
+                        "gicc_information_need_resolved",
+                        goal_id=goal.goal_id,
+                        information_need_id=resolution.need.information_need_id,
+                        state=resolution.need.state.value,
+                    )
                 needs.append(resolution.need)
                 if resolution.interaction is not None:
                     interactions.append(resolution.interaction)
@@ -269,6 +306,14 @@ class GoalIntelligenceCoordinator:
             task_specific_terms=_task_terms(task_specific_values),
         )
         graph = self._store.put_requirement_graph(requirement_result.graph)
+        self._telemetry.emit(
+            "gicc_requirement_graph_created",
+            goal_id=goal.goal_id,
+            graph_id=graph.graph_id,
+            graph_digest=graph.digest,
+            requirement_count=len(graph.requirements),
+            edge_count=len(graph.edges),
+        )
         goal = self._store.update_goal_state(
             goal.goal_id,
             GoalState.REQUIREMENTS_READY,
@@ -279,6 +324,18 @@ class GoalIntelligenceCoordinator:
             self._capability_context.current(),
             persist_gaps=True,
         )
+
+        for gap in analysis.gaps:
+            self._telemetry.emit(
+                "gicc_capability_gap_created",
+                goal_id=goal.goal_id,
+                gap_id=gap.gap_id,
+                gap_digest=gap.digest,
+                capability_family=gap.reusable_capability_family,
+                operation_count=len(gap.minimum_required_operations),
+                target_entity_type=gap.target_entity_type,
+                target_entity_id=gap.target_entity_id,
+            )
 
         if analysis.gaps:
             goal = self._store.update_goal_state(
@@ -291,7 +348,30 @@ class GoalIntelligenceCoordinator:
                 if self._phase9 is None
                 else tuple(self._phase9.admit_gap(gap, goal) for gap in analysis.gaps)
             )
+            for admission in admissions:
+                self._telemetry.emit(
+                    "gicc_phase9_linked",
+                    goal_id=goal.goal_id,
+                    gap_id=admission.request.gap_id,
+                    request_id=admission.request.request_id,
+                    request_digest=admission.request.digest,
+                    acquisition_work_id=admission.admission.acquisition_work_id,
+                    change_id=(
+                        None
+                        if admission.admission.change is None
+                        else admission.admission.change.change_id
+                    ),
+                )
             plan = self._build_acquisition_plan(goal, analysis)
+            self._telemetry.emit(
+                "gicc_plan_created",
+                goal_id=goal.goal_id,
+                plan_id=plan.plan_id,
+                plan_digest=plan.digest,
+                plan_revision=plan.plan_revision,
+                node_count=len(plan.nodes),
+                edge_count=len(plan.edges),
+            )
             for node in plan.nodes:
                 assert node.gap_id is not None
                 admission = next(
@@ -352,6 +432,15 @@ class GoalIntelligenceCoordinator:
             ),
         )
         plan = self._store.put_plan(plan)
+        self._telemetry.emit(
+            "gicc_plan_created",
+            goal_id=goal.goal_id,
+            plan_id=plan.plan_id,
+            plan_digest=plan.digest,
+            plan_revision=plan.plan_revision,
+            node_count=len(plan.nodes),
+            edge_count=len(plan.edges),
+        )
         goal = self._store.update_goal_state(
             goal.goal_id,
             (
