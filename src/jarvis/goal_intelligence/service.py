@@ -86,7 +86,9 @@ class VerificationRegistry:
                 if result
                 else "deterministic verifier returned false",
             )
-        raise TypeError("verification evaluator must return bool or VerificationOutcome")
+        raise TypeError(
+            "verification evaluator must return bool or VerificationOutcome"
+        )
 
 
 @dataclass(frozen=True, slots=True)
