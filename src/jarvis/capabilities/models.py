@@ -85,11 +85,7 @@ class CapabilitySemanticMetadata:
                 return ()
             return tuple(
                 sorted(
-                    {
-                        str(item).strip().casefold()
-                        for item in raw
-                        if str(item).strip()
-                    }
+                    {str(item).strip().casefold() for item in raw if str(item).strip()}
                 )
             )
 
@@ -111,13 +107,9 @@ class CapabilitySemanticMetadata:
             semantic_capability_family=family,
             target_entity_types=strings(metadata.get("target_entity_types", ())),
             operation_effects=effects,
-            observation_operations=strings(
-                metadata.get("observation_operations", ())
-            ),
+            observation_operations=strings(metadata.get("observation_operations", ())),
             idempotent_operations=strings(metadata.get("idempotent_operations", ())),
-            reversible_operations=strings(
-                metadata.get("reversible_operations", ())
-            ),
+            reversible_operations=strings(metadata.get("reversible_operations", ())),
             acquisition_target_hints=strings(
                 metadata.get("acquisition_target_hints", ())
             ),
