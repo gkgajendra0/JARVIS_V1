@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Protocol
 
 from livekit.agents import RunContext, function_tool
 
@@ -13,6 +14,7 @@ from jarvis.goal_intelligence.composition import (
     GoalIntelligenceCoordinator,
 )
 from jarvis.goal_intelligence.information import BoundInformationInteraction
+from jarvis.goal_intelligence.models import GoalState
 from jarvis.goal_intelligence.store import GoalStore, GoalStoreConflict
 from jarvis.goal_intelligence.telemetry import (
     DEFAULT_GICC_TELEMETRY,
@@ -26,6 +28,17 @@ class GiccToolGroundingError(ValueError):
     pass
 
 
+class GiccExecutionRuntime(Protocol):
+    async def pursue(
+        self,
+        *,
+        conversation: ConversationSession,
+        turn: ConversationTurn,
+    ) -> GoalIntakeResult: ...
+
+    async def continue_goal(self, goal_id: str) -> GoalIntakeResult: ...
+
+
 class GiccAgentTools:
     """Expose only high-level goal pursuit and exact clarification continuation."""
 
@@ -35,6 +48,7 @@ class GiccAgentTools:
         conversation: ConversationSession,
         store: GoalStore,
         *,
+        execution_runtime: GiccExecutionRuntime | None = None,
         telemetry: GiccTelemetrySink = DEFAULT_GICC_TELEMETRY,
     ) -> None:
         if not isinstance(coordinator, GoalIntelligenceCoordinator):
@@ -45,7 +59,15 @@ class GiccAgentTools:
             raise TypeError("store must be GoalStore")
         if not callable(getattr(telemetry, "emit", None)):
             raise TypeError("telemetry must provide emit()")
+        if execution_runtime is not None and (
+            not callable(getattr(execution_runtime, "pursue", None))
+            or not callable(getattr(execution_runtime, "continue_goal", None))
+        ):
+            raise TypeError(
+                "execution_runtime must provide pursue() and continue_goal()"
+            )
         self._coordinator = coordinator
+        self._execution_runtime = execution_runtime
         self._conversation = conversation
         self._store = store
         self._telemetry = telemetry
@@ -112,6 +134,26 @@ class GiccAgentTools:
             "goal_id": None if goal is None else goal.goal_id,
             "goal_state": None if goal is None else goal.state.value,
         }
+
+        if goal is not None and goal.state is GoalState.COMPLETED:
+            payload["status"] = "completed"
+            payload["plan_id"] = None if result.plan is None else result.plan.plan_id
+            payload["verified_completion"] = True
+            payload["truth_note"] = (
+                "The durable goal and plan reached verified completion. "
+                "You may acknowledge that the requested outcome completed."
+            )
+            return payload
+
+        if goal is not None and goal.state is GoalState.FAILED:
+            payload["status"] = "failed"
+            payload["plan_id"] = None if result.plan is None else result.plan.plan_id
+            payload["verified_completion"] = False
+            payload["truth_note"] = (
+                "Durable goal execution failed before verified completion. "
+                "Do not claim the requested outcome completed."
+            )
+            return payload
 
         if result.disposition is GoalIntakeDisposition.CONVERSATION_ONLY:
             payload["handled"] = False
@@ -221,9 +263,17 @@ class GiccAgentTools:
         del context
         turn = self._latest_user_turn()
         try:
-            result = await self._coordinator.pursue(
-                conversation=self._conversation,
-                turn=turn,
+            runtime = self._execution_runtime
+            result = (
+                await self._coordinator.pursue(
+                    conversation=self._conversation,
+                    turn=turn,
+                )
+                if runtime is None
+                else await runtime.pursue(
+                    conversation=self._conversation,
+                    turn=turn,
+                )
             )
         except Exception as exc:  # noqa: BLE001 - voice boundary must stay truthful
             return self._internal_failure(
@@ -303,7 +353,12 @@ class GiccAgentTools:
             source_turn_id=turn.turn_id,
         )
         try:
-            continued = await self._coordinator.continue_goal(goal_id)
+            runtime = self._execution_runtime
+            continued = (
+                await self._coordinator.continue_goal(goal_id)
+                if runtime is None
+                else await runtime.continue_goal(goal_id)
+            )
         except Exception as exc:  # noqa: BLE001 - voice boundary must stay truthful
             return self._internal_failure(
                 turn=turn,
