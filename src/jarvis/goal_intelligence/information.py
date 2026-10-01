@@ -62,9 +62,11 @@ class InformationResolutionResult:
             raise TypeError("state must be InformationResolutionState")
         if not isinstance(self.need, InformationNeedV1):
             raise TypeError("need must be InformationNeedV1")
-        if self.state is InformationResolutionState.NEEDS_OWNER:
-            if self.interaction is None:
-                raise ValueError("NEEDS_OWNER requires an exact interaction binding")
+        if (
+            self.state is InformationResolutionState.NEEDS_OWNER
+            and self.interaction is None
+        ):
+            raise ValueError("NEEDS_OWNER requires an exact interaction binding")
 
 
 _DEFAULT_ORDER = (
