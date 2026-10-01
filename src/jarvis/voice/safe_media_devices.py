@@ -138,7 +138,7 @@ class SafeInputCapture:
         try:
             self.input_stream.stop()
             self.input_stream.close()
-        except Exception:  # noqa: BLE001 - best-effort native stream cleanup
+        except Exception:
             LOGGER.debug("Safe microphone input cleanup failed", exc_info=True)
         if self.task and not self.task.done():
             self.task.cancel()
