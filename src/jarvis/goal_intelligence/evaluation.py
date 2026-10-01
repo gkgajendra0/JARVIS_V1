@@ -81,7 +81,4 @@ def stagnation_reason(
     state = str(state_fingerprint).strip().casefold()
     if not action or not state:
         raise ValueError("stagnation fingerprints must not be empty")
-    return (
-        "repeated_action_without_progress:"
-        f"action={action[:16]}:state={state[:16]}"
-    )
+    return f"repeated_action_without_progress:action={action[:16]}:state={state[:16]}"
