@@ -204,6 +204,68 @@ def test_semantic_metadata_prevents_same_verb_from_wrong_family() -> None:
     assert result.gaps[0].reusable_capability_family == "notification.owner"
 
 
+def test_package_managed_capability_requires_explicit_semantic_identity() -> None:
+    goal = _goal()
+    requirement = CapabilityRequirementV1.create(
+        goal_id=goal.goal_id,
+        semantic_capability="media_player.control",
+        operation="play",
+        target_entity_type="media_player",
+        expected_postconditions=("playback_started",),
+        reason="Play media on the requested media player.",
+    )
+    graph = CapabilityRequirementGraphV1.create(
+        goal_id=goal.goal_id,
+        requirements=(requirement,),
+    )
+    descriptor = CapabilityDescriptor.create(
+        capability_id="control",
+        source_id="package",
+        kind=CapabilityKind.NATIVE_API,
+        name="Generic external control",
+        description="A package-managed capability exposing a colliding play verb.",
+        operations=("play",),
+        execution_enabled=True,
+    )
+    state = EffectiveCapabilityState(
+        capability_id=descriptor.capability_id,
+        capability_key=descriptor.key,
+        component_id="capability.package:control",
+        management_mode=CapabilityManagementMode.PACKAGE_MANAGED,
+        registry_generation=1,
+        applied_generation=1,
+        desired_state=DesiredActivationState.ENABLED,
+        selected_package_id="pkg-control",
+        selected_package_version="1.0.0",
+        selected_package_digest="c" * 64,
+        package_disposition=None,
+        compatibility_verdict=None,
+        compatibility_digest=None,
+        health_state=HealthState.HEALTHY,
+        transition_fenced=False,
+        effective_enabled=True,
+        reason_codes=(),
+    )
+    snapshot = CapabilityEffectiveSnapshot(
+        release_sha="d" * 40,
+        states=(state,),
+        reconciled_at_epoch=1.0,
+        trigger="test",
+    )
+
+    result = CapabilityGraphResolver().analyze(
+        graph,
+        _context(
+            (descriptor,),
+            managed_keys=(descriptor.key,),
+            snapshot=snapshot,
+        ),
+    )
+
+    assert result.satisfied is False
+    assert result.gaps[0].reusable_capability_family == "media_player.control"
+
+
 def test_package_managed_capability_must_be_effectively_enabled() -> None:
     goal = _goal()
     requirement = CapabilityRequirementV1.create(
