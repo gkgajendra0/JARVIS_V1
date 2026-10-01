@@ -250,7 +250,9 @@ class OwnerGoalV2:
                 tuple(completion_predicates), field="completion_predicate"
             ),
             referenced_entity_ids=_tokens(
-                tuple(referenced_entity_ids), field="referenced_entity_id", normalized=True
+                tuple(referenced_entity_ids),
+                field="referenced_entity_id",
+                normalized=True,
             ),
             state=state,
             priority=priority_value,
@@ -288,7 +290,9 @@ class OwnerGoalV2:
         _text(self.source_turn_id, field="source_turn_id")
         _text(self.exact_owner_request, field="exact_owner_request")
         _text(self.desired_outcome, field="desired_outcome")
-        if not isinstance(self.goal_kind, GoalKind) or not isinstance(self.state, GoalState):
+        if not isinstance(self.goal_kind, GoalKind) or not isinstance(
+            self.state, GoalState
+        ):
             raise TypeError("goal_kind/state must use GICC enums")
         _non_negative_int(self.priority, field="priority")
         _timestamp(self.created_at, field="created_at")
@@ -311,7 +315,9 @@ class OwnerGoalV2:
             updated_at=_timestamp(updated_at, field="updated_at"),
             digest="pending",
         )
-        return replace(candidate, digest=canonical_digest(candidate.canonical_payload()))
+        return replace(
+            candidate, digest=canonical_digest(candidate.canonical_payload())
+        )
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any], digest: str) -> "OwnerGoalV2":
@@ -435,7 +441,9 @@ class WorldEntityRefV1:
             entity_type=kind,
             canonical_name=name,
             aliases=_tokens(tuple(aliases), field="alias"),
-            relation_ids=_tokens(tuple(relation_ids), field="relation_id", normalized=True),
+            relation_ids=_tokens(
+                tuple(relation_ids), field="relation_id", normalized=True
+            ),
             provenance_refs=_tokens(tuple(provenance_refs), field="provenance_ref"),
             lifecycle_state=lifecycle_state,
             digest="pending",
@@ -523,9 +531,7 @@ class ResourceBindingV1:
             last_verified_at=_timestamp(last_verified_at, field="last_verified_at"),
             binding_digest="pending",
         )
-        return replace(
-            item, binding_digest=canonical_digest(item.canonical_payload())
-        )
+        return replace(item, binding_digest=canonical_digest(item.canonical_payload()))
 
     def canonical_payload(self) -> dict[str, object]:
         return {
@@ -550,9 +556,7 @@ class ResourceBindingV1:
             )
 
     @classmethod
-    def from_payload(
-        cls, payload: dict[str, Any], digest: str
-    ) -> "ResourceBindingV1":
+    def from_payload(cls, payload: dict[str, Any], digest: str) -> "ResourceBindingV1":
         return cls(
             binding_id=payload["binding_id"],
             binding_revision=int(payload["binding_revision"]),
@@ -686,12 +690,19 @@ class InformationNeedV1:
             raise TypeError("state must be InformationNeedState")
         _timestamp(self.created_at, field="created_at")
         _optional_timestamp(self.resolved_at, field="resolved_at")
-        if self.category is InformationNeedCategory.OWNER_SECRET and self.resolution_ref:
+        if (
+            self.category is InformationNeedCategory.OWNER_SECRET
+            and self.resolution_ref
+        ):
             if self.resolution_ref.startswith(("plain:", "value:")):
-                raise ValueError("OWNER_SECRET resolution must reference the secret store")
+                raise ValueError(
+                    "OWNER_SECRET resolution must reference the secret store"
+                )
         if self.state is InformationNeedState.RESOLVED:
             if self.resolved_at is None or self.resolution_ref is None:
-                raise ValueError("resolved information need requires resolution metadata")
+                raise ValueError(
+                    "resolved information need requires resolution metadata"
+                )
         if self.digest != "pending":
             _assert_digest(
                 self.canonical_payload(), self.digest, field="information need digest"
@@ -717,12 +728,12 @@ class InformationNeedV1:
             evidence_refs=combined,
             digest="pending",
         )
-        return replace(candidate, digest=canonical_digest(candidate.canonical_payload()))
+        return replace(
+            candidate, digest=canonical_digest(candidate.canonical_payload())
+        )
 
     @classmethod
-    def from_payload(
-        cls, payload: dict[str, Any], digest: str
-    ) -> "InformationNeedV1":
+    def from_payload(cls, payload: dict[str, Any], digest: str) -> "InformationNeedV1":
         return cls(
             information_need_id=payload["information_need_id"],
             revision=int(payload["revision"]),
@@ -777,9 +788,7 @@ class CapabilityRequirementV1:
         reason: str,
     ) -> "CapabilityRequirementV1":
         goal = _text(goal_id, field="goal_id").casefold()
-        semantic = _text(
-            semantic_capability, field="semantic_capability"
-        ).casefold()
+        semantic = _text(semantic_capability, field="semantic_capability").casefold()
         operation_value = _text(operation, field="operation").casefold()
         target_id = _optional_text(target_entity_id, field="target_entity_id")
         target_type = _optional_text(target_entity_type, field="target_entity_type")
@@ -929,7 +938,9 @@ class CapabilityRequirementGraphV1:
 
     @property
     def requirement_ids(self) -> tuple[str, ...]:
-        return tuple(sorted(requirement.requirement_id for requirement in self.requirements))
+        return tuple(
+            sorted(requirement.requirement_id for requirement in self.requirements)
+        )
 
     def _validate_acyclic(self) -> None:
         nodes = set(self.requirement_ids) | set(self.information_need_ids)
@@ -1074,7 +1085,9 @@ class CapabilityGapV1:
                 normalized=True,
             ),
             missing_reason_codes=_tokens(
-                tuple(missing_reason_codes), field="missing_reason_code", normalized=True
+                tuple(missing_reason_codes),
+                field="missing_reason_code",
+                normalized=True,
             ),
             motivating_goal_id=_text(
                 motivating_goal_id or goal, field="motivating_goal_id"
@@ -1165,7 +1178,10 @@ class PlanNodeV1:
         ordinal_value = _non_negative_int(ordinal, field="ordinal")
         node_id = _stable_id(
             "plan_node",
-            {"plan_identity": _text(plan_identity, field="plan_identity"), "ordinal": ordinal_value},
+            {
+                "plan_identity": _text(plan_identity, field="plan_identity"),
+                "ordinal": ordinal_value,
+            },
         )
         item = cls(
             node_id=node_id,
@@ -1213,15 +1229,14 @@ class PlanNodeV1:
             raise ValueError("ACTION node requires capability_key and operation")
         if self.node_type is PlanNodeType.CLARIFY and self.information_need_id is None:
             raise ValueError("CLARIFY node requires information_need_id")
-        if (
-            self.node_type is PlanNodeType.ACQUIRE_CAPABILITY
-            and self.gap_id is None
-        ):
+        if self.node_type is PlanNodeType.ACQUIRE_CAPABILITY and self.gap_id is None:
             raise ValueError("ACQUIRE_CAPABILITY node requires gap_id")
         if self.node_type is PlanNodeType.SUBGOAL and self.subgoal_id is None:
             raise ValueError("SUBGOAL node requires subgoal_id")
         if self.digest != "pending":
-            _assert_digest(self.canonical_payload(), self.digest, field="plan node digest")
+            _assert_digest(
+                self.canonical_payload(), self.digest, field="plan node digest"
+            )
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any], digest: str) -> "PlanNodeV1":
@@ -1276,7 +1291,9 @@ class PlanGraphV1:
         goal_rev = _positive_int(goal_revision, field="goal_revision")
         plan_rev = _positive_int(plan_revision, field="plan_revision")
         node_values = tuple(nodes)
-        if not node_values or any(not isinstance(node, PlanNodeV1) for node in node_values):
+        if not node_values or any(
+            not isinstance(node, PlanNodeV1) for node in node_values
+        ):
             raise ValueError("nodes must contain at least one PlanNodeV1")
         plan_id = _stable_id(
             "plan",
@@ -1340,7 +1357,10 @@ class PlanGraphV1:
             "goal_id": self.goal_id,
             "goal_revision": self.goal_revision,
             "plan_revision": self.plan_revision,
-            "nodes": [node.canonical_payload() | {"digest": node.digest} for node in self.nodes],
+            "nodes": [
+                node.canonical_payload() | {"digest": node.digest}
+                for node in self.nodes
+            ],
             "edges": [list(edge) for edge in self.edges],
             "root_node_ids": list(self.root_node_ids),
             "completion_node_ids": list(self.completion_node_ids),
@@ -1489,12 +1509,12 @@ class GoalContinuationV1:
             resumed_at=_timestamp(resumed_at, field="resumed_at"),
             digest="pending",
         )
-        return replace(candidate, digest=canonical_digest(candidate.canonical_payload()))
+        return replace(
+            candidate, digest=canonical_digest(candidate.canonical_payload())
+        )
 
     @classmethod
-    def from_payload(
-        cls, payload: dict[str, Any], digest: str
-    ) -> "GoalContinuationV1":
+    def from_payload(cls, payload: dict[str, Any], digest: str) -> "GoalContinuationV1":
         return cls(
             continuation_id=payload["continuation_id"],
             revision=int(payload["revision"]),
@@ -1579,9 +1599,7 @@ class MonitorPredicateV1:
             cooldown=_finite_non_negative(cooldown, field="cooldown"),
             timeout=timeout_value,
             completion_policy=_text(completion_policy, field="completion_policy"),
-            notification_policy=_text(
-                notification_policy, field="notification_policy"
-            ),
+            notification_policy=_text(notification_policy, field="notification_policy"),
             verification_requirement=_text(
                 verification_requirement, field="verification_requirement"
             ),
@@ -1616,9 +1634,7 @@ class MonitorPredicateV1:
             )
 
     @classmethod
-    def from_payload(
-        cls, payload: dict[str, Any], digest: str
-    ) -> "MonitorPredicateV1":
+    def from_payload(cls, payload: dict[str, Any], digest: str) -> "MonitorPredicateV1":
         return cls(
             predicate_id=payload["predicate_id"],
             goal_id=payload["goal_id"],
