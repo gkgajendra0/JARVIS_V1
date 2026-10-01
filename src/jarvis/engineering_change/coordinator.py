@@ -168,6 +168,14 @@ class ChangeCoordinator:
                 )
         return stage
 
+    def prepare_failed_work_retry(
+        self,
+        work_id: str,
+    ) -> EngineeringChange | None:
+        """Reopen only the governing failed stage for an explicit Work retry."""
+
+        return self.store.reopen_failed_stage_for_retry(work_id)
+
     def reconcile_for_work(self, work_id: str) -> EngineeringChange | None:
         stage = self.store.stage_for_work(work_id)
         return None if stage is None else self.reconcile(stage.change_id)

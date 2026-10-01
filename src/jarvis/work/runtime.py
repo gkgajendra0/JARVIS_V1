@@ -147,7 +147,7 @@ from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.reasoner import RoutedWorkReasoner
 from jarvis.work.resources import ResourceLeaseManager, engineering_resource_capacities
-from jarvis.work.store import SQLiteWorkStore, default_work_store_path
+from jarvis.work.store import SQLiteWorkStore, WorkStoreError, default_work_store_path
 
 LOGGER = logging.getLogger(__name__)
 
@@ -227,6 +227,7 @@ class WorkRuntime:
             )
         self._autonomy_periodic_reconciler = autonomy_periodic_reconciler
         self._status_update_task: asyncio.Task[None] | None = None
+        self._owner_work_focus_id: str | None = None
         self._closed = False
 
     @property
@@ -269,6 +270,36 @@ class WorkRuntime:
 
     def set_interactive_brain_active(self, active: bool) -> None:
         self._interactive_brain_gate.set_interactive_active(active)
+
+    @property
+    def owner_work_focus_id(self) -> str | None:
+        """Return the latest canonical WorkItem explicitly surfaced to the owner."""
+
+        return getattr(self, "_owner_work_focus_id", None)
+
+    def set_owner_work_focus(self, work_id: str | None) -> None:
+        """Keep a volatile owner task focus across wake sessions.
+
+        The focus is intentionally runtime-local rather than persisted. A JARVIS
+        restart clears it, avoiding stale cross-process references.
+        """
+
+        normalized = str(work_id or "").strip()
+        if not normalized:
+            self._owner_work_focus_id = None
+            return
+        self.store.require(normalized)
+        self._owner_work_focus_id = normalized
+
+    def focused_work(self) -> WorkItem | None:
+        work_id = self.owner_work_focus_id
+        if work_id is None:
+            return None
+        try:
+            return self.store.require(work_id)
+        except WorkStoreError:
+            self._owner_work_focus_id = None
+            return None
 
     def resolve_waiting_owner_work(
         self,
@@ -316,6 +347,14 @@ class WorkRuntime:
                 raise ValueError("work is not failed and cannot be retried")
             return work
 
+        focused = self.focused_work()
+        if focused is not None:
+            if focused.state is not WorkState.FAILED:
+                raise ValueError(
+                    "owner-focused background work is not failed and cannot be retried"
+                )
+            return focused
+
         failed = self.store.list(states=(WorkState.FAILED,), limit=10)
         if len(failed) == 1:
             return failed[0]
@@ -334,12 +373,34 @@ class WorkRuntime:
         source_turn_id: str,
     ) -> WorkItem:
         work = self.resolve_retryable_work(work_id)
-        return self.orchestrator.retry_failed(
-            work.work_id,
-            owner_request=owner_request,
-            source_session_id=source_session_id,
-            source_turn_id=source_turn_id,
+        reopened_change = (
+            None
+            if self.changes is None
+            else self.changes.prepare_failed_work_retry(work.work_id)
         )
+        try:
+            return self.orchestrator.retry_failed(
+                work.work_id,
+                owner_request=owner_request,
+                source_session_id=source_session_id,
+                source_turn_id=source_turn_id,
+            )
+        except Exception:
+            if self.changes is not None:
+                try:
+                    self.changes.reconcile_for_work(work.work_id)
+                except Exception:
+                    LOGGER.exception(
+                        "Failed to reconcile EngineeringChange after Work retry "
+                        "submission failure | work_id=%s | change_id=%s",
+                        work.work_id,
+                        (
+                            reopened_change.change_id
+                            if reopened_change is not None
+                            else "unknown"
+                        ),
+                    )
+            raise
 
     def resolve_status_target(self, work_id: str | None = None) -> WorkItem:
         normalized = str(work_id or "").strip()

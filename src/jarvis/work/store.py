@@ -1013,3 +1013,26 @@ class SQLiteWorkStore:
         with self._lock, self._connect() as connection:
             rows = connection.execute(query, parameters).fetchall()
         return tuple(self._item_from_row(row) for row in rows)
+
+    def list_recent(
+        self,
+        *,
+        states: Iterable[WorkState] | None = None,
+        limit: int = 100,
+    ) -> tuple[WorkItem, ...]:
+        """List WorkItems by most recent canonical update, newest first."""
+
+        if limit <= 0:
+            raise ValueError("work list limit must be positive")
+        state_values = tuple(state.value for state in states or ())
+        query = "SELECT * FROM work_items"
+        parameters: list[object] = []
+        if state_values:
+            marks = ",".join("?" for _ in state_values)
+            query += f" WHERE state IN ({marks})"
+            parameters.extend(state_values)
+        query += " ORDER BY updated_at DESC, created_at DESC LIMIT ?"
+        parameters.append(limit)
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(query, parameters).fetchall()
+        return tuple(self._item_from_row(row) for row in rows)

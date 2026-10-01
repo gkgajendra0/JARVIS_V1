@@ -879,6 +879,16 @@ class ChatGPTPlanSessionManager:
                             if isinstance(error_payload, dict)
                             else ""
                         )
+                        if code in {
+                            "subscription_sharing_usage_limit_exceeded",
+                            "subscription_sharing_usage_unavailable",
+                        }:
+                            raise ChatGPTPlanUsageUnavailable(
+                                message or code,
+                                status_code=429,
+                                code=code,
+                                retryable=True,
+                            )
                         raise ChatGPTPlanHTTPError(
                             message
                             or f"ChatGPT plan stream error: {code or 'unknown'}",
