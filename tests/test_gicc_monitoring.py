@@ -202,7 +202,9 @@ def test_duplicate_events_and_notifications_are_idempotent(tmp_path: Path) -> No
     )
 
 
-def test_monitor_dispatcher_links_validated_monitor_node_to_work(tmp_path: Path) -> None:
+def test_monitor_dispatcher_links_validated_monitor_node_to_work(
+    tmp_path: Path,
+) -> None:
     store, goal = _store(tmp_path)
     predicate = store.put_monitor_predicate(_predicate(goal))
     node = PlanNodeV1.create(
