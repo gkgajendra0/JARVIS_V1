@@ -213,8 +213,10 @@ class MediaDevicesAudioOutput(io.AudioOutput):
             and detach_task is not current
             and not detach_task.done()
         ):
-            detach_task.cancel()
-            await asyncio.gather(detach_task, return_exceptions=True)
+            # Do not cancel remove_track() halfway through. Let the exact detach
+            # operation finish, then reattach under the same lock if new speech
+            # arrived at the idle boundary.
+            await asyncio.shield(detach_task)
 
         async with self._track_lock:
             if self._closed or self._track_attached:
