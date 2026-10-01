@@ -32,7 +32,6 @@ class FakeCapabilityRuntime:
 
     def refresh_catalog(self):
         self.refreshes += 1
-        return None
 
     def execute(self, request):
         self.requests.append(request)
