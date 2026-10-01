@@ -544,7 +544,6 @@ class GoalIntelligenceCoordinator:
             plan=plan,
         )
 
-
     def _build_acquisition_plan(
         self,
         goal: OwnerGoalV2,
