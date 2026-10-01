@@ -270,9 +270,10 @@ def test_interrupted_running_node_without_durable_outcome_fails_closed(
     recovered = dispatcher.recover_interrupted(running.plan_id)
 
     assert recovered.state is PlanState.FAILED
-    assert next(
-        node for node in recovered.nodes if node.node_id == action.node_id
-    ).state is PlanNodeState.FAILED
+    assert (
+        next(node for node in recovered.nodes if node.node_id == action.node_id).state
+        is PlanNodeState.FAILED
+    )
 
 
 def test_interrupted_running_node_with_durable_success_is_finalized(
@@ -306,9 +307,10 @@ def test_interrupted_running_node_with_durable_success_is_finalized(
     recovered = dispatcher.recover_interrupted(running.plan_id)
 
     assert recovered.state is PlanState.ACTIVE
-    assert next(
-        node for node in recovered.nodes if node.node_id == action.node_id
-    ).state is PlanNodeState.SUCCEEDED
+    assert (
+        next(node for node in recovered.nodes if node.node_id == action.node_id).state
+        is PlanNodeState.SUCCEEDED
+    )
     assert dispatcher.ready_nodes(recovered)[0].node_type.value == "verify"
 
 
