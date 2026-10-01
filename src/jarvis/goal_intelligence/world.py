@@ -291,24 +291,6 @@ class EntityResolver:
                 evidence_prefix="world_alias",
             )
 
-        inferred_types = set(expected or _generic_reference_types(query))
-        if inferred_types:
-            typed = tuple(
-                entity
-                for entity in candidates
-                if entity.entity_type in inferred_types
-            )
-            if typed:
-                return self._result(
-                    typed,
-                    reason=(
-                        "unique trusted entity by requested type"
-                        if len(typed) == 1
-                        else "multiple trusted entities match requested type"
-                    ),
-                    evidence_prefix="world_type",
-                )
-
         # Relation traversal is allowed only from an exactly named/aliased anchor.
         all_entities = self._registry.entities()
         anchors = tuple(
@@ -340,6 +322,24 @@ class EntityResolver:
                 ),
                 evidence_prefix="world_relation",
             )
+
+        inferred_types = set(expected or _generic_reference_types(query))
+        if inferred_types:
+            typed = tuple(
+                entity
+                for entity in candidates
+                if entity.entity_type in inferred_types
+            )
+            if typed:
+                return self._result(
+                    typed,
+                    reason=(
+                        "unique trusted entity by requested type"
+                        if len(typed) == 1
+                        else "multiple trusted entities match requested type"
+                    ),
+                    evidence_prefix="world_type",
+                )
 
         if allow_discovery:
             discovered: list[WorldEntityRefV1] = []
