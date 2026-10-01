@@ -8,6 +8,7 @@ from jarvis.capabilities.models import CapabilityDescriptor
 from jarvis.capability_acquisition.source import AcquisitionContextV1
 from jarvis.capability_registry.projection import CapabilityManagementMode
 
+from .monitoring import GICC_MONITOR_EVENT_CONTRACT
 from .models import (
     CapabilityGapState,
     CapabilityGapV1,
@@ -110,16 +111,50 @@ class CapabilityGraphResolver:
             and requirement.target_entity_type not in semantic.target_entity_types
         )
 
+    @staticmethod
+    def _monitor_event_compatible(
+        requirement: CapabilityRequirementV1,
+        descriptor: CapabilityDescriptor,
+        *,
+        monitoring_goal: bool,
+    ) -> bool:
+        if not monitoring_goal:
+            return True
+        family = requirement.semantic_capability
+        observation_family = (
+            ".observe" in family
+            or ".perceive" in family
+            or family.startswith("vision.")
+            or family.startswith("camera.")
+        )
+        if not observation_family:
+            return True
+        semantic = descriptor.semantic_metadata()
+        metadata = descriptor.metadata()
+        return bool(
+            requirement.operation in semantic.observation_operations
+            and metadata.get("monitor_event_contract")
+            == GICC_MONITOR_EVENT_CONTRACT
+        )
+
     @classmethod
     def _matches(
         cls,
         requirement: CapabilityRequirementV1,
         descriptor: CapabilityDescriptor,
         context: AcquisitionContextV1,
+        *,
+        monitoring_goal: bool,
     ) -> bool:
         if not cls._effectively_enabled(descriptor, context):
             return False
         if not cls._family_target_compatible(requirement, descriptor, context):
+            return False
+        if not cls._monitor_event_compatible(
+            requirement,
+            descriptor,
+            monitoring_goal=monitoring_goal,
+        ):
             return False
         return requirement.operation in _normalized_operations(descriptor)
 
@@ -160,6 +195,7 @@ class CapabilityGraphResolver:
         context: AcquisitionContextV1,
         *,
         persist_gaps: bool = False,
+        monitoring_goal: bool = False,
     ) -> CapabilityGapAnalysis:
         if not isinstance(graph, CapabilityRequirementGraphV1):
             raise TypeError("graph must be CapabilityRequirementGraphV1")
@@ -174,7 +210,12 @@ class CapabilityGraphResolver:
             candidates = tuple(
                 descriptor
                 for descriptor in context.catalog.capabilities
-                if self._matches(requirement, descriptor, context)
+                if self._matches(
+                    requirement,
+                    descriptor,
+                    context,
+                    monitoring_goal=monitoring_goal,
+                )
             )
             if candidates:
                 selected = min(candidates, key=lambda item: item.key)
