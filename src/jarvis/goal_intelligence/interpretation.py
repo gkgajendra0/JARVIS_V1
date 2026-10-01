@@ -337,15 +337,11 @@ class GoalInterpreter:
             raise GoalInterpretationError(
                 "GICC interpretation cited conversation evidence not supplied to it"
             )
-        evidence_ids = tuple(
-            sorted(cited_ids or {turn.turn_id})
-        )
+        evidence_ids = tuple(sorted(cited_ids or {turn.turn_id}))
 
         entity_strings = tuple(
             sorted(
-                (
-                    f"{entity.proposed_type or 'unresolved'}::{entity.mention.strip()}"
-                )
+                (f"{entity.proposed_type or 'unresolved'}::{entity.mention.strip()}")
                 for entity in parsed.candidate_entities
             )
         )
