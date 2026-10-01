@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import sqlite3
+from dataclasses import replace
 from pathlib import Path
 
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
@@ -603,8 +604,6 @@ class GoalStore:
                 raise GoalStoreConflict("gap revision changed before update")
             if current.state is state:
                 return current
-            from dataclasses import replace
-
             candidate = replace(
                 current,
                 revision=current.revision + 1,
@@ -613,10 +612,7 @@ class GoalStore:
             )
             updated = replace(
                 candidate,
-                digest=__import__(
-                    "jarvis.engineering_substrate.canonical",
-                    fromlist=["canonical_digest"],
-                ).canonical_digest(candidate.canonical_payload()),
+                digest=canonical_digest(candidate.canonical_payload()),
             )
             result = db.execute(
                 """
