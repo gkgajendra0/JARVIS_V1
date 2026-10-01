@@ -4,6 +4,7 @@ import pytest
 
 from jarvis.authority.types import ActionOrigin
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
+from jarvis.capability_acquisition.external_contract import pairing_pin_request
 from jarvis.goal_intelligence.models import (
     GoalKind,
     OwnerGoalV2,
@@ -112,6 +113,81 @@ async def test_action_dispatch_preserves_authority_boundary(tmp_path: Path) -> N
     request = runtime.requests[0]
     assert request.origin is ActionOrigin.MODEL_SUGGESTED
     assert request.parameters == {"app": "calculator"}
+
+
+@pytest.mark.asyncio
+async def test_partial_external_owner_input_waits_instead_of_claiming_success(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store)
+    plan = _plan(goal)
+
+    class PartialRuntime:
+        def execute(self, request):
+            return CapabilityResult(
+                status=CapabilityStatus.PARTIAL,
+                capability_key=request.capability_key,
+                operation=request.operation,
+                data={
+                    "owner_input_request": pairing_pin_request(
+                        "Enter the TV pairing PIN."
+                    )
+                },
+                provenance=("fake-external-runtime",),
+            )
+
+    orchestrator = GoalOrchestrator(
+        goal_store=store,
+        capability_runtime=PartialRuntime(),
+    )
+
+    result = await orchestrator.dispatch_node(
+        goal=goal,
+        plan=plan,
+        node=plan.nodes[0],
+    )
+
+    assert result.status is GoalDispatchStatus.WAITING
+    assert result.route == "capability_runtime:owner_input"
+    assert result.interaction == {
+        "kind": "external_owner_input",
+        "input_kind": "pin",
+        "prompt": "Enter the TV pairing PIN.",
+        "parameter": "pin",
+        "sensitive": True,
+    }
+
+
+@pytest.mark.asyncio
+async def test_unexplained_partial_result_is_blocked(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store)
+    plan = _plan(goal)
+
+    class PartialRuntime:
+        def execute(self, request):
+            return CapabilityResult(
+                status=CapabilityStatus.PARTIAL,
+                capability_key=request.capability_key,
+                operation=request.operation,
+                data={},
+                provenance=("fake-external-runtime",),
+            )
+
+    result = await GoalOrchestrator(
+        goal_store=store,
+        capability_runtime=PartialRuntime(),
+    ).dispatch_node(
+        goal=goal,
+        plan=plan,
+        node=plan.nodes[0],
+    )
+
+    assert result.status is GoalDispatchStatus.BLOCKED
+    assert result.route == "capability_runtime:partial_unresolved"
 
 
 @pytest.mark.asyncio
