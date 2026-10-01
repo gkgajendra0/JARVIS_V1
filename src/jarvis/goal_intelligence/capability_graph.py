@@ -80,8 +80,23 @@ class CapabilityGraphResolver:
     def _family_target_compatible(
         requirement: CapabilityRequirementV1,
         descriptor: CapabilityDescriptor,
+        context: AcquisitionContextV1,
     ) -> bool:
         semantic = descriptor.semantic_metadata()
+        inventory = context.inventory_entry(descriptor.key)
+        if inventory is None:
+            return False
+
+        if inventory.management_mode is CapabilityManagementMode.PACKAGE_MANAGED:
+            if semantic.semantic_capability_family != requirement.semantic_capability:
+                return False
+            if requirement.target_entity_type and (
+                not semantic.target_entity_types
+                or requirement.target_entity_type not in semantic.target_entity_types
+            ):
+                return False
+            return True
+
         if (
             semantic.semantic_capability_family is not None
             and semantic.semantic_capability_family != requirement.semantic_capability
@@ -102,7 +117,7 @@ class CapabilityGraphResolver:
     ) -> bool:
         if not cls._effectively_enabled(descriptor, context):
             return False
-        if not cls._family_target_compatible(requirement, descriptor):
+        if not cls._family_target_compatible(requirement, descriptor, context):
             return False
         return requirement.operation in _normalized_operations(descriptor)
 
@@ -117,7 +132,7 @@ class CapabilityGraphResolver:
             for descriptor in context.catalog.capabilities
             if cls._effectively_enabled(descriptor, context)
             and any(
-                cls._family_target_compatible(requirement, descriptor)
+                cls._family_target_compatible(requirement, descriptor, context)
                 for requirement in requirements
             )
         }
