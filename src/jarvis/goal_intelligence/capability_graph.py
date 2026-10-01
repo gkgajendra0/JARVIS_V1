@@ -84,8 +84,7 @@ class CapabilityGraphResolver:
         semantic = descriptor.semantic_metadata()
         if (
             semantic.semantic_capability_family is not None
-            and semantic.semantic_capability_family
-            != requirement.semantic_capability
+            and semantic.semantic_capability_family != requirement.semantic_capability
         ):
             return False
         if requirement.target_entity_type and semantic.target_entity_types:
