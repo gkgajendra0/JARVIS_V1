@@ -28,7 +28,6 @@ from jarvis.goal_intelligence.world import EntityResolver, WorldRegistry
 from jarvis.voice.gicc_tools import GiccAgentTools
 
 
-
 @pytest.mark.asyncio
 async def test_gicc_voice_clarification_resumes_exact_goal(
     tmp_path: Path,
