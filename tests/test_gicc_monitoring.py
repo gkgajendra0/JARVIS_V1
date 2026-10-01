@@ -18,6 +18,7 @@ from jarvis.goal_intelligence.monitoring import (
     MonitorObservationDisposition,
 )
 from jarvis.goal_intelligence.store import GoalStore
+from jarvis.work.models import WorkItem, WorkState, WorkType
 from jarvis.work.privacy import ProtectedWorkPayloadCodec
 from jarvis.work.store import SQLiteWorkStore
 
