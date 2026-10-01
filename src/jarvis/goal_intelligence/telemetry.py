@@ -32,8 +32,9 @@ GICC_EVENTS = frozenset(
 
 _SENSITIVE_FIELD = re.compile(
     r"(?i)(?:^|_)(?:"
-    r"request|utterance|text|prompt|password|passwd|secret|token|api_key|"
-    r"authorization|credential|pin|otp|parameters|payload|data"
+    r"utterance|text|prompt|password|passwd|secret|token|api_key|"
+    r"authorization|credential|pin|otp|parameters|payload|data|"
+    r"owner_request|exact_owner_request|raw_request"
     r")(?:$|_)"
 )
 _SAFE_FIELD = re.compile(r"^[a-z][a-z0-9_]{0,79}$")
