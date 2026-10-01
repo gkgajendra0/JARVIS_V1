@@ -14,6 +14,7 @@ from jarvis.capability_registry.projection import (
     CapabilityManagementMode,
 )
 from jarvis.goal_intelligence.capability_graph import CapabilityGraphResolver
+from jarvis.goal_intelligence.monitoring import GICC_MONITOR_EVENT_CONTRACT
 from jarvis.goal_intelligence.models import (
     CapabilityGapV1,
     CapabilityRequirementGraphV1,
@@ -183,6 +184,40 @@ def test_phase9_v2_request_excludes_task_only_movie_parameter(tmp_path: Path) ->
     assert "transporter" not in " ".join(v1.target_hints).casefold()
     assert v1.source_session_id == f"gicc:{goal.goal_id}"
     assert v1.source_turn_id == f"gap:{gap.gap_id}"
+
+
+def test_monitoring_observer_gap_requires_verified_event_contract(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = store.create_goal(
+        OwnerGoalV2.create(
+            source_session_id="owner-monitor-session",
+            source_turn_id="owner-monitor-turn",
+            exact_owner_request="Tell me when a delivery agent is at the gate.",
+            goal_kind=GoalKind.MONITORING,
+            desired_outcome="Delivery agent is verified at the gate.",
+            created_at="2026-10-01T14:05:00+00:00",
+        )
+    )
+    gap = CapabilityGapV1.create(
+        goal_id=goal.goal_id,
+        requirement_ids=("req-perception",),
+        reusable_capability_family="vision.perceive",
+        target_entity_type="camera",
+        minimum_required_operations=("verify_scene_condition",),
+        motivating_goal_id=goal.goal_id,
+    )
+
+    request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
+    phase9_goal = request.to_v1(owner_goal_created_at=goal.created_at)
+
+    assert request.monitor_event_contract_required is True
+    assert (
+        f"monitor_event_contract:{GICC_MONITOR_EVENT_CONTRACT}"
+        in phase9_goal.target_hints
+    )
+    assert request.canonical_payload()["monitor_event_contract_required"] is True
 
 
 def test_multiple_gaps_get_unique_phase9_bridge_sources(tmp_path: Path) -> None:
