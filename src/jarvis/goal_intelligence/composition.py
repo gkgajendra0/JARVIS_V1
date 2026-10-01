@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
-from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
+from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 
 from .capability_graph import CapabilityGapAnalysis, CapabilityGraphResolver
 from .continuation import ContinuationCoordinator
