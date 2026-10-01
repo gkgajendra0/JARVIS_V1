@@ -123,9 +123,9 @@ def test_action_without_downstream_verify_is_rejected() -> None:
 
 def test_plan_cannot_embed_arbitrary_executable_payload() -> None:
     proposal = _valid_proposal()
-    proposal.nodes[0].parameters_json = (
-        '{"shell":"powershell -EncodedCommand deadbeef"}'
-    )
+    proposal.nodes[
+        0
+    ].parameters_json = '{"shell":"powershell -EncodedCommand deadbeef"}'
 
     with pytest.raises(PlanValidationError, match="executable field"):
         PlanValidator().validate(
@@ -213,6 +213,7 @@ def test_progress_guard_rejects_exact_repeat_and_bounds_replan() -> None:
     with pytest.raises(PlanValidationError, match="budget exhausted"):
         guard.admit_replan()
 
+
 def _schema_nodes(value: object):
     if isinstance(value, dict):
         yield value
@@ -254,4 +255,3 @@ def test_plan_parameters_json_decodes_to_bounded_object() -> None:
             summary="Wait",
             parameters_json='["not","an","object"]',
         )
-
