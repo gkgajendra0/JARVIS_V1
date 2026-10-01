@@ -35,7 +35,10 @@ class FakeRuntime:
             status=CapabilityStatus.SUCCEEDED,
             capability_key=request.capability_key,
             operation=request.operation,
-            data={"opened": self.opened},
+            data={
+                "opened": self.opened,
+                "verification_passed": self.opened,
+            },
             provenance=("fake-runtime",),
         )
 
@@ -156,10 +159,7 @@ def test_default_verifier_accepts_only_bound_verified_executor_evidence(
     )
     assert action_evidence[-1]["payload"]["postcondition_ref"] == "app_open"
 
-    runtime_result = runtime.requests
-    assert runtime_result
-    evidence_payload = action_evidence[-1]["payload"]
-    evidence_payload["data"]["verification_passed"] = True
+    assert runtime.requests
 
     verify = dispatcher.ready_nodes(action_result.plan)[0]
     verified = dispatcher.dispatch(
