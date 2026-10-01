@@ -553,9 +553,7 @@ async def test_chatgpt_plan_subscription_limit_falls_back_to_paid_provider(
         request,
         primary_target_id="work.chatgpt_plan.default",
     )
-    persisted = routing_store.find_decision_by_request(
-        route_request.routing_request_id
-    )
+    persisted = routing_store.find_decision_by_request(route_request.routing_request_id)
     assert persisted is not None
     attempts = routing_store.list_attempts(persisted.decision.decision_id)
     assert [attempt.target_id for attempt in attempts] == [
