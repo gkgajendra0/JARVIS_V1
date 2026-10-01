@@ -29,6 +29,7 @@ from jarvis.voice.audio import (
     FRAME_SAMPLES,
     LocalAudioRuntime,
 )
+from jarvis.voice.safe_media_devices import SafeMediaDevices
 
 LOGGER = logging.getLogger(__name__)
 
@@ -481,7 +482,7 @@ class MediaDevicesConversationRuntime(LocalAudioRuntime):
         if self._router_task is not None:
             raise RuntimeError("local audio runtime is already started")
 
-        self._media_devices = rtc.MediaDevices(
+        self._media_devices = SafeMediaDevices(
             input_sample_rate=DEVICE_SAMPLE_RATE,
             output_sample_rate=DEVICE_SAMPLE_RATE,
             num_channels=DEVICE_CHANNELS,
