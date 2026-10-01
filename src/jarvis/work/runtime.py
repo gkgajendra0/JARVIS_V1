@@ -562,25 +562,26 @@ class WorkRuntime:
                 ", ".join(parked),
             )
 
-        # DBOS cancellation prevents the workflow from starting another durable
-        # step, but it does not interrupt a step already blocked inside
-        # _advance_work(). Cancel those canonical asyncio advances and wait until
-        # their coroutines have actually unwound before database teardown.
+        # DBOS cancellation prevents another durable step from starting, while
+        # InteractiveBrainGate separately preempts provider reasoning. Do not
+        # cancel an already-admitted action: it may have produced an external
+        # side effect that still needs its canonical JARVIS evidence checkpoint.
         quiesce_advances = getattr(self.backend, "quiesce_active_advances", None)
         if callable(quiesce_advances):
-            quiesced = await quiesce_advances(timeout_seconds=5.0)
+            quiesced = await quiesce_advances()
             if quiesced:
                 LOGGER.info(
                     "Quiesced active JARVIS engine advances before DBOS shutdown: %s",
                     quiesced,
                 )
 
-        # Keep the canonical event loop free while DBOS waits. _advance_work()
-        # uses run_coroutine_threadsafe() into this loop, so blocking here would
-        # recreate the owner-machine teardown race.
+        # Keep the canonical event loop free while DBOS drains. New workflow
+        # history uses <=1s durable wait chunks. The longer bound also covers one
+        # legacy WAITING_RESOURCE sleep (historically capped at 60s) while old
+        # PAUSED recv calls are explicitly woken by park_for_shutdown().
         await asyncio.to_thread(
             shutdown_dbos_work_runtime,
-            workflow_completion_timeout_sec=10,
+            workflow_completion_timeout_sec=70,
         )
 
     def close(self) -> None:
