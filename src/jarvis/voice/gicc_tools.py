@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from livekit.agents import RunContext, function_tool
 
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
@@ -16,6 +18,8 @@ from jarvis.goal_intelligence.telemetry import (
     DEFAULT_GICC_TELEMETRY,
     GiccTelemetrySink,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 class GiccToolGroundingError(ValueError):
@@ -67,6 +71,38 @@ class GiccAgentTools:
                 "GICC requires a latest accepted USER utterance"
             )
         return turn
+
+    def _internal_failure(
+        self,
+        *,
+        turn: ConversationTurn,
+        stage: str,
+        error: Exception,
+    ) -> dict[str, object]:
+        LOGGER.exception(
+            "GICC voice tool failed internally before verified target completion | "
+            "stage=%s turn_id=%s",
+            stage,
+            turn.turn_id,
+            exc_info=error,
+        )
+        self._telemetry.emit(
+            "gicc_goal_processing_error",
+            source_turn_id=turn.turn_id,
+            stage=stage,
+            error_type=type(error).__name__,
+        )
+        return {
+            "ok": False,
+            "status": "internal_goal_processing_error",
+            "canonical_user_turn_id": turn.turn_id,
+            "retryable": True,
+            "truth_note": (
+                "Goal processing failed internally before any target device or "
+                "service action was verified. Do not claim a device connectivity "
+                "failure, execution, or completion."
+            ),
+        }
 
     def _public_result(self, result: GoalIntakeResult) -> dict[str, object]:
         goal = result.goal
@@ -184,10 +220,17 @@ class GiccAgentTools:
 
         del context
         turn = self._latest_user_turn()
-        result = await self._coordinator.pursue(
-            conversation=self._conversation,
-            turn=turn,
-        )
+        try:
+            result = await self._coordinator.pursue(
+                conversation=self._conversation,
+                turn=turn,
+            )
+        except Exception as exc:  # noqa: BLE001 - voice boundary must stay truthful
+            return self._internal_failure(
+                turn=turn,
+                stage="pursue_owner_goal",
+                error=exc,
+            )
         payload = self._public_result(result)
         payload["canonical_user_turn_id"] = turn.turn_id
         return payload
@@ -259,7 +302,14 @@ class GiccAgentTools:
             state=resolved.state.value,
             source_turn_id=turn.turn_id,
         )
-        continued = await self._coordinator.continue_goal(goal_id)
+        try:
+            continued = await self._coordinator.continue_goal(goal_id)
+        except Exception as exc:  # noqa: BLE001 - voice boundary must stay truthful
+            return self._internal_failure(
+                turn=turn,
+                stage="continue_goal",
+                error=exc,
+            )
         payload = self._public_result(continued)
         payload.update(
             {
