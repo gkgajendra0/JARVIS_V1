@@ -327,9 +327,7 @@ class DBOSWorkExecutionBackend:
             active = tuple(_ACTIVE_ADVANCES.items())
 
         loop = asyncio.get_running_loop()
-        deadline = (
-            None if timeout_seconds is None else loop.time() + timeout_seconds
-        )
+        deadline = None if timeout_seconds is None else loop.time() + timeout_seconds
         while True:
             incomplete = [
                 completion for _future, completion in active if not completion.is_set()
