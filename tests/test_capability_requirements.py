@@ -1,8 +1,10 @@
 import pytest
 
+from jarvis.chatgpt_plan import _strict_json_schema
 from jarvis.goal_intelligence.models import GoalKind, OwnerGoalV2
 from jarvis.goal_intelligence.requirements import (
     CapabilityRequirementProposal,
+    CapabilityRequirementProposalSet,
     RequirementDerivationError,
     RequirementValidator,
 )
@@ -118,3 +120,51 @@ def test_requirement_without_observable_completion_is_rejected() -> None:
                 ),
             ),
         )
+
+def _schema_nodes(value: object):
+    if isinstance(value, dict):
+        yield value
+        for nested in value.values():
+            yield from _schema_nodes(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            yield from _schema_nodes(nested)
+
+
+def test_requirement_proposal_is_openai_strict_schema_safe() -> None:
+    schema = _strict_json_schema(CapabilityRequirementProposalSet.model_json_schema())
+
+    assert isinstance(schema, dict)
+    for node in _schema_nodes(schema):
+        if node.get("type") != "object":
+            continue
+        assert node.get("additionalProperties") is False
+        properties = node.get("properties")
+        assert isinstance(properties, dict)
+        assert set(node.get("required", ())) == set(properties)
+
+
+def test_required_parameters_json_decodes_to_canonical_object() -> None:
+    proposal = CapabilityRequirementProposal(
+        semantic_capability="media_player.control",
+        operation="play",
+        required_parameters_json=' { "query": "Interstellar", "retry": 1 } ',
+        expected_postconditions=["playback started"],
+        reason="Play selected media.",
+    )
+
+    assert proposal.required_parameters_json == '{"query":"Interstellar","retry":1}'
+    assert proposal.required_parameters_schema == {
+        "query": "Interstellar",
+        "retry": 1,
+    }
+
+    with pytest.raises(ValueError, match="JSON object"):
+        CapabilityRequirementProposal(
+            semantic_capability="media_player.control",
+            operation="play",
+            required_parameters_json='["Interstellar"]',
+            expected_postconditions=["playback started"],
+            reason="Bad contract.",
+        )
+
