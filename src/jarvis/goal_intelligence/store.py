@@ -238,6 +238,19 @@ class GoalStore:
                     updated_at TEXT NOT NULL,
                     FOREIGN KEY(goal_id) REFERENCES owner_goals_v2(goal_id)
                 );
+
+                CREATE TABLE IF NOT EXISTS monitor_runtime_state_v1 (
+                    predicate_id TEXT PRIMARY KEY,
+                    revision INTEGER NOT NULL,
+                    goal_id TEXT NOT NULL,
+                    work_id TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    digest TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(goal_id) REFERENCES owner_goals_v2(goal_id),
+                    FOREIGN KEY(predicate_id)
+                        REFERENCES monitor_predicates_v1(predicate_id)
+                );
                 """
             )
 
@@ -1564,6 +1577,147 @@ class GoalStore:
                 (count, timestamp, goal_key),
             )
         return count
+
+    def create_monitor_runtime_state(
+        self,
+        *,
+        predicate_id: str,
+        goal_id: str,
+        work_id: str,
+        payload: dict[str, object],
+        updated_at: str,
+    ) -> dict[str, object]:
+        predicate_key = str(predicate_id).strip()
+        goal_key = str(goal_id).strip()
+        work_key = str(work_id).strip()
+        timestamp = str(updated_at).strip()
+        if not all((predicate_key, goal_key, work_key, timestamp)):
+            raise ValueError("monitor runtime identifiers must not be empty")
+        if not isinstance(payload, dict):
+            raise TypeError("payload must be a dict")
+        canonical = {
+            "predicate_id": predicate_key,
+            "revision": 1,
+            "goal_id": goal_key,
+            "work_id": work_key,
+            "payload": payload,
+            "updated_at": timestamp,
+        }
+        digest = canonical_digest(canonical)
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM monitor_runtime_state_v1
+                WHERE predicate_id=?
+                """,
+                (predicate_key,),
+            ).fetchone()
+            if row is not None:
+                existing = self._decode(row["payload"])
+                if canonical_digest(existing) != row["digest"]:
+                    raise GoalStoreError("monitor runtime state digest mismatch")
+                return existing | {"digest": row["digest"]}
+            db.execute(
+                """
+                INSERT INTO monitor_runtime_state_v1 (
+                    predicate_id, revision, goal_id, work_id,
+                    payload, digest, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    predicate_key,
+                    1,
+                    goal_key,
+                    work_key,
+                    self._encode(canonical),
+                    digest,
+                    timestamp,
+                ),
+            )
+        return canonical | {"digest": digest}
+
+    def get_monitor_runtime_state(
+        self,
+        predicate_id: str,
+    ) -> dict[str, object] | None:
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM monitor_runtime_state_v1
+                WHERE predicate_id=?
+                """,
+                (str(predicate_id).strip(),),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = self._decode(row["payload"])
+        if canonical_digest(payload) != row["digest"]:
+            raise GoalStoreError("monitor runtime state digest mismatch")
+        return payload | {"digest": row["digest"]}
+
+    def update_monitor_runtime_state(
+        self,
+        *,
+        predicate_id: str,
+        expected_revision: int,
+        runtime_payload: dict[str, object],
+        updated_at: str,
+    ) -> dict[str, object]:
+        if (
+            isinstance(expected_revision, bool)
+            or not isinstance(expected_revision, int)
+            or expected_revision < 1
+        ):
+            raise ValueError("expected_revision must be positive")
+        predicate_key = str(predicate_id).strip()
+        timestamp = str(updated_at).strip()
+        if not isinstance(runtime_payload, dict):
+            raise TypeError("runtime_payload must be a dict")
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM monitor_runtime_state_v1
+                WHERE predicate_id=?
+                """,
+                (predicate_key,),
+            ).fetchone()
+            if row is None:
+                raise GoalStoreError(
+                    f"unknown monitor runtime predicate: {predicate_key}"
+                )
+            current = self._decode(row["payload"])
+            if int(current["revision"]) != expected_revision:
+                raise GoalStoreConflict("monitor runtime revision changed")
+            canonical = {
+                "predicate_id": current["predicate_id"],
+                "revision": expected_revision + 1,
+                "goal_id": current["goal_id"],
+                "work_id": current["work_id"],
+                "payload": dict(runtime_payload),
+                "updated_at": timestamp,
+            }
+            digest = canonical_digest(canonical)
+            result = db.execute(
+                """
+                UPDATE monitor_runtime_state_v1
+                SET revision=?, payload=?, digest=?, updated_at=?
+                WHERE predicate_id=? AND revision=?
+                """,
+                (
+                    canonical["revision"],
+                    self._encode(canonical),
+                    digest,
+                    timestamp,
+                    predicate_key,
+                    expected_revision,
+                ),
+            )
+            if result.rowcount != 1:
+                raise GoalStoreConflict("monitor runtime compare-and-swap lost")
+        return canonical | {"digest": digest}
 
     def put_continuation(self, continuation: GoalContinuationV1) -> GoalContinuationV1:
         if not isinstance(continuation, GoalContinuationV1):
