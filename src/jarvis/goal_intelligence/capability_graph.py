@@ -87,13 +87,11 @@ class CapabilityGraphResolver:
             and semantic.semantic_capability_family != requirement.semantic_capability
         ):
             return False
-        if (
+        return not (
             requirement.target_entity_type
             and semantic.target_entity_types
             and requirement.target_entity_type not in semantic.target_entity_types
-        ):
-            return False
-        return True
+        )
 
     @classmethod
     def _matches(
