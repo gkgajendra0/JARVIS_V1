@@ -336,7 +336,9 @@ def build_instructions(
 
     instructions = INSTRUCTIONS
     if gicc_apply:
-        instructions += "\n\n" + """
+        instructions += (
+            "\n\n"
+            + """
 GICC APPLY mode is active for this development runtime. For an owner request whose
 outcome involves an external device/service, conditional monitoring, or multi-step
 goal pursuit where target/resource/capability resolution may be required, call
@@ -358,6 +360,7 @@ started; do not claim the capability is built, active, verified, or ready. If it
 plan_ready, do not claim the requested outcome completed merely because a plan exists.
 If it returns conversation_only, answer conversationally without inventing a task.
 """.strip()
+        )
 
     if default_media_target is None:
         return instructions
