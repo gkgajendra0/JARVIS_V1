@@ -269,8 +269,7 @@ class GiccApplyRuntime:
             condition_met=observation.condition_met,
             observed_at_epoch=observation.observed_at_epoch,
             notification_message=(
-                "Monitoring condition verified: "
-                f"{goal.exact_owner_request}"
+                f"Monitoring condition verified: {goal.exact_owner_request}"
             ),
             evidence_refs=observation.evidence_refs,
         )
