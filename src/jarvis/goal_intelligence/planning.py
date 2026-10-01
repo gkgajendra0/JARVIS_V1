@@ -44,7 +44,7 @@ class PlanNodeCandidate(BaseModel):
 
     node_type: PlanNodeType
     summary: str = Field(min_length=1, max_length=320)
-    parameters: dict[str, object] = Field(default_factory=dict)
+    parameters_json: str = Field(default="{}", min_length=2, max_length=_MAX_PARAMETERS_JSON)
     capability_key: str | None = Field(default=None, max_length=180)
     operation: str | None = Field(default=None, max_length=120)
     information_need_id: str | None = Field(default=None, max_length=180)
@@ -53,6 +53,33 @@ class PlanNodeCandidate(BaseModel):
     monitor_predicate_id: str | None = Field(default=None, max_length=180)
     postcondition_ref: str | None = Field(default=None, max_length=320)
     depends_on_indexes: list[int] = Field(default_factory=list, max_length=32)
+
+    @field_validator("parameters_json")
+    @classmethod
+    def _parameters_json(cls, value: str) -> str:
+        raw = str(value).strip()
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("parameters_json must be valid JSON") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError("parameters_json must encode a JSON object")
+        encoded = json.dumps(
+            parsed,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        if len(encoded) > _MAX_PARAMETERS_JSON:
+            raise ValueError("parameters_json exceeds bounded size")
+        return encoded
+
+    @property
+    def parameters(self) -> dict[str, object]:
+        parsed = json.loads(self.parameters_json)
+        if not isinstance(parsed, dict):
+            raise PlanValidationError("plan parameters are not a JSON object")
+        return parsed
 
     @field_validator(
         "capability_key",
@@ -112,7 +139,9 @@ Rules:
 - MONITOR references only supplied monitor predicate IDs;
 - SUBGOAL references only supplied child goal IDs;
 - WAIT has no executable payload;
-- parameters are data for an existing capability, never shell/code/scripts/executables;
+- parameters_json is a compact JSON object string containing data for an existing
+  capability; use "{}" when no parameters are needed;
+- parameters_json must never contain shell/code/scripts/executables;
 - keep the graph small and acyclic;
 - do not grant Authority. Existing runtime authorization remains mandatory.
 """.strip()
