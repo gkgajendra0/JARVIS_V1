@@ -2,10 +2,10 @@
 
 ## Status
 
-PROPOSED / READY FOR OWNER APPROVAL - 2026-10-01
+OWNER APPROVED / READY FOR IMPLEMENTATION - 2026-10-01
 
 This architecture is based on INTELLIGENT_GOAL_CAPABILITY_ORCHESTRATION_RESEARCH.md.
-It does not authorize implementation until the owner approves this document.
+Owner approved this architecture on 2026-10-01. Implementation may begin only through the documented dev-first lifecycle; production jarvis-voice remains protected until owner-machine acceptance and governed promotion.
 
 ## 1. Objective
 
