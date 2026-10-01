@@ -144,6 +144,34 @@ The model may use that context to understand the conversational meaning, but the
 durable response sent into Work remains the accepted canonical USER utterance. The
 model cannot invent hidden owner text.
 
+## Startup reconciliation for legacy/stale owner-input deliveries
+
+The first owner-machine acceptance after this change reused a WorkItem created by the
+older one-way notification runtime. Canonical Work was still
+`WAITING_FOR_OWNER`, but its original `OWNER_INPUT` delivery had already been marked
+`DELIVERED` when the question was spoken. Because delivery event identity is
+deduplicated by `(work_id, event_key)`, the new interactive transport correctly had no
+pending record to consume on restart.
+
+That state is inconsistent under the new contract: an owner-input interaction is not
+delivered until the owner's response is durably submitted.
+
+Work-runtime startup therefore now reconciles this invariant:
+
+```text
+WorkItem == WAITING_FOR_OWNER
+        +
+current OWNER_INPUT delivery == DELIVERED
+        ↓
+reopen the same delivery_id/event_key as PENDING
+        ↓
+interactive voice transport can ask again
+```
+
+The repair is idempotent, does not create duplicate WorkItems or duplicate delivery
+identities, and does not affect already-pending owner prompts. It also provides
+self-healing if the same inconsistent state is ever produced again.
+
 ## Required invariants
 
 - exactly one JARVIS speech producer owns the physical speaker;
