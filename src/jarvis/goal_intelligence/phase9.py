@@ -14,12 +14,14 @@ from jarvis.engineering_change import ChangeArtifact
 from jarvis.engineering_substrate.canonical import canonical_digest
 
 from .capability_graph import CapabilityGapAnalysis, CapabilityGraphResolver
+from .monitoring import GICC_MONITOR_EVENT_CONTRACT
 from .models import (
     CapabilityGapState,
     CapabilityGapV1,
     CapabilityRequirementGraphV1,
     ContinuationState,
     GoalContinuationV1,
+    GoalKind,
     OwnerGoalV2,
 )
 from .store import GoalStore, GoalStoreConflict, GoalStoreError
@@ -67,6 +69,7 @@ class Phase9AcquisitionRequestV2:
     owner_source_turn_id: str
     bridge_source_session_id: str
     bridge_source_turn_id: str
+    monitor_event_contract_required: bool
     digest: str
 
     @classmethod
@@ -82,6 +85,16 @@ class Phase9AcquisitionRequestV2:
             raise TypeError("goal must be OwnerGoalV2")
         if gap.goal_id != goal.goal_id or gap.motivating_goal_id != goal.goal_id:
             raise ValueError("gap does not belong to the motivating owner goal")
+        family = gap.reusable_capability_family
+        observation_family = (
+            ".observe" in family
+            or ".perceive" in family
+            or family.startswith("vision.")
+            or family.startswith("camera.")
+        )
+        monitor_event_required = bool(
+            goal.goal_kind is GoalKind.MONITORING and observation_family
+        )
         payload = {
             "motivating_goal_id": goal.goal_id,
             "gap_id": gap.gap_id,
@@ -93,6 +106,7 @@ class Phase9AcquisitionRequestV2:
             "owner_source_turn_id": goal.source_turn_id,
             "bridge_source_session_id": f"gicc:{goal.goal_id}",
             "bridge_source_turn_id": f"gap:{gap.gap_id}",
+            "monitor_event_contract_required": monitor_event_required,
         }
         digest = canonical_digest(payload)
         return cls(
@@ -107,6 +121,7 @@ class Phase9AcquisitionRequestV2:
             owner_source_turn_id=goal.source_turn_id,
             bridge_source_session_id=f"gicc:{goal.goal_id}",
             bridge_source_turn_id=f"gap:{gap.gap_id}",
+            monitor_event_contract_required=monitor_event_required,
             digest=digest,
         )
 
@@ -122,6 +137,7 @@ class Phase9AcquisitionRequestV2:
             "owner_source_turn_id": self.owner_source_turn_id,
             "bridge_source_session_id": self.bridge_source_session_id,
             "bridge_source_turn_id": self.bridge_source_turn_id,
+            "monitor_event_contract_required": self.monitor_event_contract_required,
         }
 
     def __post_init__(self) -> None:
@@ -137,6 +153,8 @@ class Phase9AcquisitionRequestV2:
         hints = [f"entity_type:{self.target_entity_type}"]
         if self.target_entity_id is not None:
             hints.append(f"entity_id:{self.target_entity_id}")
+        if self.monitor_event_contract_required:
+            hints.append(f"monitor_event_contract:{GICC_MONITOR_EVENT_CONTRACT}")
         operation_text = ", ".join(self.minimum_required_operations)
         request = (
             f"Acquire reusable capability {self.reusable_capability_family}; "
@@ -221,6 +239,14 @@ class Phase9GoalBridge:
                 "target_entity_id": request.target_entity_id,
                 "owner_source_session_id": request.owner_source_session_id,
                 "owner_source_turn_id": request.owner_source_turn_id,
+                "monitor_event_contract_required": (
+                    request.monitor_event_contract_required
+                ),
+                "monitor_event_contract": (
+                    GICC_MONITOR_EVENT_CONTRACT
+                    if request.monitor_event_contract_required
+                    else None
+                ),
             }
             latest = self._changes.latest_artifact(
                 admission.change.change_id,
@@ -287,10 +313,14 @@ class Phase9GoalContinuationVerifier:
             raise GoalStoreConflict("Phase-9 completion does not match exact GICC gap")
 
         self._refresh()
+        goal = self._store.get_goal(request.motivating_goal_id)
         analysis = self._resolver.analyze(
             graph,
             self._context.current(),
             persist_gaps=False,
+            monitoring_goal=bool(
+                goal is not None and goal.goal_kind is GoalKind.MONITORING
+            ),
         )
         still_missing = {gap.gap_id: gap for gap in analysis.gaps}
         if request.gap_id in still_missing:
