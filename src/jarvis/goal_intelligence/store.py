@@ -218,6 +218,7 @@ class GoalStore:
 
                 CREATE TABLE IF NOT EXISTS plan_no_progress_v1 (
                     fingerprint_id TEXT PRIMARY KEY,
+                    goal_id TEXT NOT NULL,
                     plan_id TEXT NOT NULL,
                     node_id TEXT NOT NULL,
                     action_fingerprint TEXT NOT NULL,
@@ -225,12 +226,8 @@ class GoalStore:
                     payload TEXT NOT NULL,
                     digest TEXT NOT NULL,
                     created_at TEXT NOT NULL,
-                    UNIQUE(
-                        plan_id,
-                        node_id,
-                        action_fingerprint,
-                        state_fingerprint
-                    ),
+                    UNIQUE(goal_id, action_fingerprint, state_fingerprint),
+                    FOREIGN KEY(goal_id) REFERENCES owner_goals_v2(goal_id),
                     FOREIGN KEY(plan_id) REFERENCES plan_graphs_v1(plan_id)
                 );
 
@@ -1419,6 +1416,7 @@ class GoalStore:
     def record_no_progress(
         self,
         *,
+        goal_id: str,
         plan_id: str,
         node_id: str,
         action_fingerprint: str,
@@ -1427,6 +1425,7 @@ class GoalStore:
         created_at: str,
     ) -> dict[str, object]:
         canonical = {
+            "goal_id": str(goal_id).strip(),
             "plan_id": str(plan_id).strip(),
             "node_id": str(node_id).strip(),
             "action_fingerprint": str(action_fingerprint).strip().casefold(),
@@ -1440,8 +1439,7 @@ class GoalStore:
             "no_progress_"
             + canonical_digest(
                 {
-                    "plan_id": canonical["plan_id"],
-                    "node_id": canonical["node_id"],
+                    "goal_id": canonical["goal_id"],
                     "action_fingerprint": canonical["action_fingerprint"],
                     "state_fingerprint": canonical["state_fingerprint"],
                 }
@@ -1470,12 +1468,13 @@ class GoalStore:
             db.execute(
                 """
                 INSERT INTO plan_no_progress_v1 (
-                    fingerprint_id, plan_id, node_id, action_fingerprint,
+                    fingerprint_id, goal_id, plan_id, node_id, action_fingerprint,
                     state_fingerprint, payload, digest, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     fingerprint_id,
+                    canonical["goal_id"],
                     canonical["plan_id"],
                     canonical["node_id"],
                     canonical["action_fingerprint"],
@@ -1490,8 +1489,7 @@ class GoalStore:
     def has_no_progress(
         self,
         *,
-        plan_id: str,
-        node_id: str,
+        goal_id: str,
         action_fingerprint: str,
         state_fingerprint: str,
     ) -> bool:
@@ -1500,12 +1498,11 @@ class GoalStore:
                 """
                 SELECT 1
                 FROM plan_no_progress_v1
-                WHERE plan_id=? AND node_id=?
+                WHERE goal_id=?
                   AND action_fingerprint=? AND state_fingerprint=?
                 """,
                 (
-                    str(plan_id).strip(),
-                    str(node_id).strip(),
+                    str(goal_id).strip(),
                     str(action_fingerprint).strip().casefold(),
                     str(state_fingerprint).strip().casefold(),
                 ),
