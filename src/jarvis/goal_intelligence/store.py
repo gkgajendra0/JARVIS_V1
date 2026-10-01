@@ -781,6 +781,14 @@ class GoalStore:
         )
 
     def put_resource_binding(self, binding: ResourceBindingV1) -> ResourceBindingV1:
+        """Insert or refresh one stable provider-resource binding.
+
+        A binding ID identifies the stable relationship between an entity and one
+        provider resource. Capability keys, evidence, and verification time are
+        live observations and therefore advance the binding revision instead of
+        turning a normal refresh into an identity conflict.
+        """
+
         if not isinstance(binding, ResourceBindingV1):
             raise TypeError("binding must be ResourceBindingV1")
         with self.work.extension_transaction() as db:
@@ -792,34 +800,79 @@ class GoalStore:
                 """,
                 (binding.binding_id,),
             ).fetchone()
-            if row is not None:
-                current = ResourceBindingV1.from_payload(
-                    self._decode(row["payload"]), row["binding_digest"]
+            if row is None:
+                db.execute(
+                    """
+                    INSERT INTO resource_bindings_v1 (
+                        binding_id, binding_revision, entity_id, provider_id,
+                        provider_resource_id, payload, binding_digest,
+                        last_verified_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        binding.binding_id,
+                        binding.binding_revision,
+                        binding.entity_id,
+                        binding.provider_id,
+                        binding.provider_resource_id,
+                        self._encode(binding.canonical_payload()),
+                        binding.binding_digest,
+                        binding.last_verified_at,
+                    ),
                 )
-                if current.binding_digest != binding.binding_digest:
-                    raise GoalStoreConflict(
-                        "binding_id already exists with different canonical payload"
-                    )
+                return binding
+
+            current = ResourceBindingV1.from_payload(
+                self._decode(row["payload"]), row["binding_digest"]
+            )
+            if (
+                current.entity_id != binding.entity_id
+                or current.provider_id != binding.provider_id
+                or current.provider_resource_id != binding.provider_resource_id
+            ):
+                raise GoalStoreConflict(
+                    "binding_id collision changed stable resource identity"
+                )
+            if current.binding_digest == binding.binding_digest:
                 return current
-            db.execute(
+            if binding.last_verified_at < current.last_verified_at:
+                raise GoalStoreConflict(
+                    "resource binding refresh is older than canonical observation"
+                )
+
+            candidate = replace(
+                current,
+                binding_revision=current.binding_revision + 1,
+                capability_keys=binding.capability_keys,
+                evidence_refs=binding.evidence_refs,
+                last_verified_at=binding.last_verified_at,
+                binding_digest="pending",
+            )
+            updated = replace(
+                candidate,
+                binding_digest=canonical_digest(candidate.canonical_payload()),
+            )
+            result = db.execute(
                 """
-                INSERT INTO resource_bindings_v1 (
-                    binding_id, binding_revision, entity_id, provider_id,
-                    provider_resource_id, payload, binding_digest, last_verified_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                UPDATE resource_bindings_v1
+                SET binding_revision=?, payload=?, binding_digest=?,
+                    last_verified_at=?
+                WHERE binding_id=? AND binding_revision=?
                 """,
                 (
-                    binding.binding_id,
-                    binding.binding_revision,
-                    binding.entity_id,
-                    binding.provider_id,
-                    binding.provider_resource_id,
-                    self._encode(binding.canonical_payload()),
-                    binding.binding_digest,
-                    binding.last_verified_at,
+                    updated.binding_revision,
+                    self._encode(updated.canonical_payload()),
+                    updated.binding_digest,
+                    updated.last_verified_at,
+                    updated.binding_id,
+                    current.binding_revision,
                 ),
             )
-        return binding
+            if result.rowcount != 1:
+                raise GoalStoreConflict(
+                    "resource binding compare-and-swap refresh lost"
+                )
+        return updated
 
     def get_resource_binding(self, binding_id: str) -> ResourceBindingV1 | None:
         with self.work.extension_transaction() as db:
