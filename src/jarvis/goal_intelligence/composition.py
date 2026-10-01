@@ -379,6 +379,7 @@ class GoalIntelligenceCoordinator:
                 graph,
                 self._capability_context.current(),
                 persist_gaps=False,
+                monitoring_goal=goal.goal_kind is GoalKind.MONITORING,
             )
             still_missing = {gap.gap_id for gap in analysis.gaps}
             for gap in self._store.list_gaps(goal_id=goal.goal_id):
@@ -471,6 +472,7 @@ class GoalIntelligenceCoordinator:
             graph,
             self._capability_context.current(),
             persist_gaps=True,
+            monitoring_goal=goal.goal_kind is GoalKind.MONITORING,
         )
 
         for gap in analysis.gaps:
@@ -656,6 +658,7 @@ class GoalIntelligenceCoordinator:
             graph,
             self._capability_context.current(),
             persist_gaps=False,
+            monitoring_goal=goal.goal_kind is GoalKind.MONITORING,
         )
         if analysis.gaps:
             raise ValueError(
