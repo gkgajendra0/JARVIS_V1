@@ -11,6 +11,15 @@ from .interpretation import (
     ShadowInformationNeedCandidate,
     build_goal_interpreter,
 )
+from .information import (
+    BoundInformationInteraction,
+    InformationProbeResult,
+    InformationResolutionResult,
+    InformationResolutionState,
+    InformationResolutionStrategy,
+    InformationResolver,
+    restore_bound_information_interaction,
+)
 from .models import (
     CapabilityGapState,
     CapabilityGapV1,
@@ -42,8 +51,17 @@ from .store import (
     GoalStoreError,
     build_default_goal_store,
 )
+from .world import (
+    BoundedEntityDiscovery,
+    EntityResolution,
+    EntityResolutionState,
+    EntityResolver,
+    WorldRegistry,
+)
 
 __all__ = [
+    "BoundInformationInteraction",
+    "BoundedEntityDiscovery",
     "CapabilityGapState",
     "CapabilityGapV1",
     "CapabilityRequirementGraphV1",
@@ -51,6 +69,9 @@ __all__ = [
     "ContinuationBlockerType",
     "ContinuationState",
     "EntityLifecycleState",
+    "EntityResolution",
+    "EntityResolutionState",
+    "EntityResolver",
     "GoalContinuationV1",
     "GoalInterpretationCandidateV1",
     "GoalInterpretationError",
@@ -65,6 +86,11 @@ __all__ = [
     "InformationNeedCategory",
     "InformationNeedState",
     "InformationNeedV1",
+    "InformationProbeResult",
+    "InformationResolutionResult",
+    "InformationResolutionState",
+    "InformationResolutionStrategy",
+    "InformationResolver",
     "MonitorPredicateV1",
     "OwnerGoalV2",
     "PlanGraphV1",
@@ -78,6 +104,8 @@ __all__ = [
     "ShadowGoalInterpretationOutput",
     "ShadowInformationNeedCandidate",
     "WorldEntityRefV1",
+    "WorldRegistry",
     "build_default_goal_store",
     "build_goal_interpreter",
+    "restore_bound_information_interaction",
 ]
