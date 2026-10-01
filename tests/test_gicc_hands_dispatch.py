@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.test_capability_runtime import FakeAuthority
 
 from jarvis.capabilities.discovery import CapabilityResolver
 from jarvis.capabilities.runtime import CapabilityRuntime
@@ -13,7 +14,6 @@ from jarvis.goal_intelligence.models import (
     PlanNodeV1,
 )
 from jarvis.goal_intelligence.runtime import HandsPlanActionDispatcher
-from tests.test_capability_runtime import FakeAuthority
 
 
 class FakeAudioBackend:
