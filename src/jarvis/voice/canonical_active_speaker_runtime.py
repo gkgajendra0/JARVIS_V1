@@ -651,9 +651,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         gicc_runtime = self._gicc_runtime
         if gicc_runtime is not None:
             gicc_runtime.start()
-            LOGGER.info(
-                "GICC durable continuation reconciliation is active"
-            )
+            LOGGER.info("GICC durable continuation reconciliation is active")
         if self._work_runtime is not None:
             delivery_task = asyncio.create_task(
                 self._deliver_pending_work(),
