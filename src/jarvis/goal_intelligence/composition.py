@@ -572,62 +572,62 @@ class GoalIntelligenceCoordinator:
         interpretation_result: GoalInterpretationResult | None,
         requirement_result: RequirementDerivationResult | None,
     ) -> GoalIntakeResult:
-    if self._planner is None:
+        if self._planner is None:
+            return GoalIntakeResult(
+                disposition=GoalIntakeDisposition.PLAN_READY,
+                goal=goal,
+                interpretation=interpretation_result,
+                requirement_result=requirement_result,
+                capability_analysis=analysis,
+            )
+
+        monitor_predicates = self._monitor_predicates(goal, graph)
+        allowed_postconditions = set(goal.completion_predicates)
+        for requirement in graph.requirements:
+            allowed_postconditions.update(requirement.expected_postconditions)
+            allowed_postconditions.update(requirement.observation_requirements)
+        context = self._capability_context.current()
+        plan = await self._planner.plan(
+            goal=goal,
+            context=PlanValidationContext(
+                catalog=context.catalog,
+                allowed_capability_operations=tuple(
+                    sorted(
+                        (match.capability_key, match.operation)
+                        for match in analysis.matches
+                    )
+                ),
+                monitor_predicates=monitor_predicates,
+                allowed_postcondition_refs=tuple(sorted(allowed_postconditions)),
+            ),
+        )
+        plan = self._store.put_plan(plan)
+        self._telemetry.emit(
+            "gicc_plan_created",
+            goal_id=goal.goal_id,
+            plan_id=plan.plan_id,
+            plan_digest=plan.digest,
+            plan_revision=plan.plan_revision,
+            node_count=len(plan.nodes),
+            edge_count=len(plan.edges),
+        )
+        goal = self._store.update_goal_state(
+            goal.goal_id,
+            (
+                GoalState.MONITORING
+                if goal.goal_kind is GoalKind.MONITORING
+                else GoalState.PLANNED
+            ),
+            expected_revision=goal.goal_revision,
+        )
         return GoalIntakeResult(
             disposition=GoalIntakeDisposition.PLAN_READY,
             goal=goal,
             interpretation=interpretation_result,
             requirement_result=requirement_result,
             capability_analysis=analysis,
+            plan=plan,
         )
-
-    monitor_predicates = self._monitor_predicates(goal, graph)
-    allowed_postconditions = set(goal.completion_predicates)
-    for requirement in graph.requirements:
-        allowed_postconditions.update(requirement.expected_postconditions)
-        allowed_postconditions.update(requirement.observation_requirements)
-    context = self._capability_context.current()
-    plan = await self._planner.plan(
-        goal=goal,
-        context=PlanValidationContext(
-            catalog=context.catalog,
-            allowed_capability_operations=tuple(
-                sorted(
-                    (match.capability_key, match.operation)
-                    for match in analysis.matches
-                )
-            ),
-            monitor_predicates=monitor_predicates,
-            allowed_postcondition_refs=tuple(sorted(allowed_postconditions)),
-        ),
-    )
-    plan = self._store.put_plan(plan)
-    self._telemetry.emit(
-        "gicc_plan_created",
-        goal_id=goal.goal_id,
-        plan_id=plan.plan_id,
-        plan_digest=plan.digest,
-        plan_revision=plan.plan_revision,
-        node_count=len(plan.nodes),
-        edge_count=len(plan.edges),
-    )
-    goal = self._store.update_goal_state(
-        goal.goal_id,
-        (
-            GoalState.MONITORING
-            if goal.goal_kind is GoalKind.MONITORING
-            else GoalState.PLANNED
-        ),
-        expected_revision=goal.goal_revision,
-    )
-    return GoalIntakeResult(
-        disposition=GoalIntakeDisposition.PLAN_READY,
-        goal=goal,
-        interpretation=interpretation_result,
-        requirement_result=requirement_result,
-        capability_analysis=analysis,
-        plan=plan,
-    )
 
     def _build_acquisition_plan(
         self,
