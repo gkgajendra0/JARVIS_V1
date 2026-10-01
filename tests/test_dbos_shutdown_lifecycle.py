@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import os
+from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -340,3 +344,152 @@ def test_interruptible_durable_sleep_preserves_legacy_checkpoint(monkeypatch) ->
     )
 
     assert sleeps == [12.5]
+
+
+def test_real_dbos_shutdown_and_restart_recovers_two_active_workflows(
+    tmp_path: Path,
+) -> None:
+    system_db = (tmp_path / "dbos-lifecycle.sqlite3").resolve()
+    db_url = f"sqlite:///{system_db.as_posix()}"
+    script = f"""
+import asyncio
+from types import SimpleNamespace
+
+from dbos import DBOS
+
+from jarvis.work.dbos_backend import (
+    initialize_dbos_work_runtime,
+    shutdown_dbos_work_runtime,
+)
+from jarvis.work.models import WorkPriority, WorkState
+
+
+class FirstEngine:
+    def __init__(self):
+        self.started = {{
+            "work-a": asyncio.Event(),
+            "work-b": asyncio.Event(),
+        }}
+        self.release = asyncio.Event()
+
+    async def advance(self, work_id):
+        self.started[work_id].set()
+        await self.release.wait()
+        return SimpleNamespace(
+            work_id=work_id,
+            state=WorkState.WAITING_RESOURCE,
+            progressed=True,
+            owner_question=None,
+            retry_after_seconds=30.0,
+        )
+
+
+class RecoveryEngine:
+    def __init__(self):
+        self.completed = set()
+
+    async def advance(self, work_id):
+        self.completed.add(work_id)
+        return SimpleNamespace(
+            work_id=work_id,
+            state=WorkState.COMPLETED,
+            progressed=True,
+            owner_question=None,
+            retry_after_seconds=None,
+        )
+
+
+async def wait_for_success(workflow_ids):
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + 10.0
+    while True:
+        states = {{
+            workflow_id: (
+                await asyncio.to_thread(DBOS.get_workflow_status, workflow_id)
+            ).status
+            for workflow_id in workflow_ids
+        }}
+        if all(state == "SUCCESS" for state in states.values()):
+            return
+        if loop.time() >= deadline:
+            raise RuntimeError(f"recovered workflows did not complete: {{states}}")
+        await asyncio.sleep(0.05)
+
+
+async def main():
+    loop = asyncio.get_running_loop()
+    first = FirstEngine()
+    backend = initialize_dbos_work_runtime(
+        engine=first,
+        event_loop=loop,
+        application_version="shutdown-regression-v1",
+        system_database_url={db_url!r},
+        max_reasoning_cycles=8,
+    )
+    for work_id in ("work-a", "work-b"):
+        backend.submit(work_id, priority=WorkPriority.NORMAL)
+
+    await asyncio.wait_for(
+        asyncio.gather(*(event.wait() for event in first.started.values())),
+        timeout=10.0,
+    )
+
+    backend.begin_shutdown()
+    parked = await asyncio.to_thread(
+        backend.park_for_shutdown,
+        ("work-a", "work-b"),
+    )
+    assert parked == ("work-a", "work-b")
+    first.release.set()
+    assert await backend.quiesce_active_advances(timeout_seconds=10.0) == 2
+
+    await asyncio.to_thread(
+        shutdown_dbos_work_runtime,
+        workflow_completion_timeout_sec=70,
+    )
+
+    recovery = RecoveryEngine()
+    backend2 = initialize_dbos_work_runtime(
+        engine=recovery,
+        event_loop=loop,
+        application_version="shutdown-regression-v1",
+        system_database_url={db_url!r},
+        max_reasoning_cycles=8,
+    )
+    assert backend2.reconcile_execution("work-a") == "work-a"
+    assert backend2.reconcile_execution("work-b") == "work-b"
+
+    await wait_for_success(("work-a", "work-b"))
+    assert recovery.completed == {{"work-a", "work-b"}}
+
+    backend2.begin_shutdown()
+    assert await backend2.quiesce_active_advances(timeout_seconds=10.0) == 0
+    await asyncio.to_thread(
+        shutdown_dbos_work_runtime,
+        workflow_completion_timeout_sec=70,
+    )
+
+
+asyncio.run(main())
+"""
+    env = dict(os.environ)
+    source_root = str(Path(__file__).resolve().parents[1] / "src")
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = (
+        source_root if not existing else os.pathsep.join((source_root, existing))
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    assert completed.returncode == 0, (
+        "real DBOS shutdown/restart regression failed\n"
+        f"stdout:\n{completed.stdout}\n"
+        f"stderr:\n{completed.stderr}"
+    )
