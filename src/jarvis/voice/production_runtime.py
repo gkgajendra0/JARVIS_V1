@@ -668,12 +668,14 @@ def build_production_voice_runtime(
         gicc_tool_factory=(
             None
             if gicc_apply_runtime is None
-            else lambda conversation: GiccAgentTools(
-                gicc_apply_runtime.coordinator,
-                conversation,
-                gicc_apply_runtime.store,
-                telemetry=gicc_apply_runtime.telemetry,
-            ).tools
+            else lambda conversation: (
+                GiccAgentTools(
+                    gicc_apply_runtime.coordinator,
+                    conversation,
+                    gicc_apply_runtime.store,
+                    telemetry=gicc_apply_runtime.telemetry,
+                ).tools
+            )
         ),
         allow_direct_capability_acquisition=gicc_apply_runtime is None,
         session_factory=production_session_factory,
