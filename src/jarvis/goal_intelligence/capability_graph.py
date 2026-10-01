@@ -90,12 +90,14 @@ class CapabilityGraphResolver:
         if inventory.management_mode is CapabilityManagementMode.PACKAGE_MANAGED:
             if semantic.semantic_capability_family != requirement.semantic_capability:
                 return False
-            if requirement.target_entity_type and (
-                not semantic.target_entity_types
-                or requirement.target_entity_type not in semantic.target_entity_types
-            ):
-                return False
-            return True
+            return not (
+                requirement.target_entity_type
+                and (
+                    not semantic.target_entity_types
+                    or requirement.target_entity_type
+                    not in semantic.target_entity_types
+                )
+            )
 
         if (
             semantic.semantic_capability_family is not None
