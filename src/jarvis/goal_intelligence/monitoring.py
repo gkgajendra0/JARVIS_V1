@@ -14,10 +14,16 @@ from jarvis.work.models import (
     DeliveryPolicy,
     WorkDeliveryKind,
     WorkPriority,
+    WorkState,
     WorkType,
 )
 
-from .models import MonitorPredicateV1
+from .models import (
+    GoalState,
+    MonitorPredicateV1,
+    PlanNodeState,
+    PlanState,
+)
 from .store import GoalStore, GoalStoreError
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 
@@ -55,6 +61,8 @@ class WorkStarter(Protocol):
 
 class MonitorWorkStore(Protocol):
     def require(self, work_id: str): ...
+
+    def save(self, work, *, expected_version: int): ...
 
     def enqueue_delivery(
         self,
@@ -135,6 +143,8 @@ class MonitoringWorkCoordinator:
         *,
         strategy: MonitoringStrategy,
         continuation_id: str | None = None,
+        plan_id: str | None = None,
+        node_id: str | None = None,
         delivery_policy: DeliveryPolicy = DeliveryPolicy.WHEN_IDLE,
         now_epoch: float,
     ) -> MonitorStartResult:
@@ -163,6 +173,8 @@ class MonitoringWorkCoordinator:
                 payload={
                     "strategy": strategy.value,
                     "continuation_id": continuation_id,
+                    "plan_id": None if plan_id is None else str(plan_id).strip(),
+                    "node_id": None if node_id is None else str(node_id).strip(),
                     "source_entity_ids": list(predicate.source_entity_ids),
                     "started_at_epoch": timestamp,
                     "last_observation_digest": None,
@@ -181,6 +193,10 @@ class MonitoringWorkCoordinator:
                 existing["work_id"] != work_id
                 or payload.get("strategy") != strategy.value
                 or payload.get("continuation_id") != continuation_id
+                or payload.get("plan_id")
+                != (None if plan_id is None else str(plan_id).strip())
+                or payload.get("node_id")
+                != (None if node_id is None else str(node_id).strip())
             ):
                 raise GoalStoreError(
                     "existing monitor runtime binding differs from requested monitor"
@@ -205,15 +221,99 @@ class MonitorEventProcessor:
     ) -> None:
         if not isinstance(goal_store, GoalStore):
             raise TypeError("goal_store must be GoalStore")
-        if not callable(getattr(work_store, "require", None)) or not callable(
-            getattr(work_store, "enqueue_delivery", None)
+        if (
+            not callable(getattr(work_store, "require", None))
+            or not callable(getattr(work_store, "save", None))
+            or not callable(getattr(work_store, "enqueue_delivery", None))
         ):
-            raise TypeError("work_store must provide require/enqueue_delivery")
+            raise TypeError("work_store must provide require/save/enqueue_delivery")
         self._goals = goal_store
         self._work = work_store
         if not callable(getattr(telemetry, "emit", None)):
             raise TypeError("telemetry must provide emit()")
         self._telemetry = telemetry
+
+    def _advance_bound_plan(
+        self,
+        *,
+        predicate: MonitorPredicateV1,
+        runtime_payload: dict[str, object],
+        succeeded: bool,
+    ) -> None:
+        plan_id = str(runtime_payload.get("plan_id") or "").strip()
+        node_id = str(runtime_payload.get("node_id") or "").strip()
+        if not plan_id or not node_id:
+            return
+        plan = self._goals.get_plan(plan_id)
+        if plan is None:
+            raise GoalStoreError(f"monitor plan is missing: {plan_id}")
+        node = next((item for item in plan.nodes if item.node_id == node_id), None)
+        if node is None:
+            raise GoalStoreError(f"monitor node is missing from plan: {node_id}")
+
+        if succeeded:
+            tentative = plan.with_node_state(
+                node_id,
+                PlanNodeState.SUCCEEDED,
+                plan_state=PlanState.ACTIVE,
+            )
+            by_id = {item.node_id: item for item in tentative.nodes}
+            complete = all(
+                by_id[completion_id].state is PlanNodeState.SUCCEEDED
+                for completion_id in tentative.completion_node_ids
+            )
+            updated = (
+                tentative.with_node_state(
+                    node_id,
+                    PlanNodeState.SUCCEEDED,
+                    plan_state=PlanState.SUCCEEDED,
+                )
+                if complete
+                else tentative
+            )
+        else:
+            updated = plan.with_node_state(
+                node_id,
+                PlanNodeState.FAILED,
+                plan_state=PlanState.FAILED,
+            )
+        saved = self._goals.update_plan_execution(
+            updated,
+            expected_digest=plan.digest,
+        )
+
+        goal = self._goals.get_goal(predicate.goal_id)
+        if goal is None:
+            raise GoalStoreError(f"monitor goal is missing: {predicate.goal_id}")
+        next_state = (
+            GoalState.COMPLETED
+            if saved.state is PlanState.SUCCEEDED
+            else (GoalState.PLANNED if succeeded else GoalState.FAILED)
+        )
+        if goal.state is not next_state:
+            self._goals.update_goal_state(
+                goal.goal_id,
+                next_state,
+                expected_revision=goal.goal_revision,
+            )
+
+    def _finish_work(
+        self,
+        *,
+        work_id: str,
+        state: WorkState,
+        status_detail: str,
+        result: dict[str, object],
+    ):
+        work = self._work.require(work_id)
+        if work.state.terminal:
+            return work
+        updated = work.transition(
+            state,
+            status_detail=status_detail,
+            result=result,
+        )
+        return self._work.save(updated, expected_version=work.version)
 
     def process(
         self,
@@ -267,6 +367,27 @@ class MonitorEventProcessor:
                 expected_revision=int(state["revision"]),
                 runtime_payload=updated_payload,
                 updated_at=datetime.now(UTC).isoformat(),
+            )
+            work = self._finish_work(
+                work_id=str(state["work_id"]),
+                state=WorkState.FAILED,
+                status_detail="monitor timed out before condition verification",
+                result={
+                    "predicate_id": predicate.predicate_id,
+                    "outcome": "timed_out",
+                    "observation_digest": digest,
+                },
+            )
+            self._work.enqueue_delivery(
+                work=work,
+                kind=WorkDeliveryKind.FAILURE,
+                message="Monitoring stopped because the condition was not verified in time.",
+                event_key=f"gicc-monitor:{predicate.predicate_id}:timeout",
+            )
+            self._advance_bound_plan(
+                predicate=predicate,
+                runtime_payload=updated_payload,
+                succeeded=False,
             )
             return MonitorObservationResult(
                 disposition=MonitorObservationDisposition.TIMED_OUT,
@@ -392,6 +513,23 @@ class MonitorEventProcessor:
             },
             updated_at=datetime.now(UTC).isoformat(),
         )
+        if predicate.completion_policy == "complete_once":
+            self._finish_work(
+                work_id=str(state["work_id"]),
+                state=WorkState.COMPLETED,
+                status_detail="monitor condition verified",
+                result={
+                    "predicate_id": predicate.predicate_id,
+                    "outcome": "triggered",
+                    "observation_digest": digest,
+                    "notification_event_key": event_key,
+                },
+            )
+            self._advance_bound_plan(
+                predicate=predicate,
+                runtime_payload=updated["payload"],
+                succeeded=True,
+            )
         self._telemetry.emit(
             "gicc_monitor_triggered",
             goal_id=predicate.goal_id,
@@ -457,6 +595,8 @@ class GoalMonitoringDispatcher:
         started = self._coordinator.start(
             predicate,
             strategy=strategy,
+            plan_id=plan.plan_id,
+            node_id=node.node_id,
             now_epoch=float(self._now_epoch()),
         )
         return MonitoringDispatchReceipt(work_id=started.work_id)
