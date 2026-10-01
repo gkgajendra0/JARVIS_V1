@@ -171,13 +171,14 @@ def test_voice_instructions_preserve_referential_retry_context() -> None:
 
 
 def test_gicc_apply_instructions_override_direct_phase9_entry() -> None:
-    instructions = " ".join(
-        build_instructions(gicc_apply=True).split()
-    )
+    instructions = " ".join(build_instructions(gicc_apply=True).split())
 
     assert "GICC APPLY mode is active" in instructions
     assert "call pursue_owner_goal" in instructions
-    assert "Direct start_capability_acquisition is intentionally unavailable" in instructions
+    assert (
+        "Direct start_capability_acquisition is intentionally unavailable"
+        in instructions
+    )
     assert "Ordinary immediate local computer actions" in instructions
     assert "resolve_goal_information" in instructions
     assert "Never treat unrelated ambient speech as the answer" in instructions
