@@ -202,6 +202,45 @@ class GoalStore:
                     FOREIGN KEY(information_need_id)
                         REFERENCES information_needs_v1(information_need_id)
                 );
+
+                CREATE TABLE IF NOT EXISTS plan_node_results_v1 (
+                    result_id TEXT PRIMARY KEY,
+                    plan_id TEXT NOT NULL,
+                    node_id TEXT NOT NULL,
+                    attempt INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    digest TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(plan_id, node_id, attempt),
+                    FOREIGN KEY(plan_id) REFERENCES plan_graphs_v1(plan_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS plan_no_progress_v1 (
+                    fingerprint_id TEXT PRIMARY KEY,
+                    plan_id TEXT NOT NULL,
+                    node_id TEXT NOT NULL,
+                    action_fingerprint TEXT NOT NULL,
+                    state_fingerprint TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    digest TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(
+                        plan_id,
+                        node_id,
+                        action_fingerprint,
+                        state_fingerprint
+                    ),
+                    FOREIGN KEY(plan_id) REFERENCES plan_graphs_v1(plan_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS goal_replan_budget_v1 (
+                    goal_id TEXT PRIMARY KEY,
+                    attempt_count INTEGER NOT NULL,
+                    max_attempts INTEGER NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(goal_id) REFERENCES owner_goals_v2(goal_id)
+                );
                 """
             )
 
@@ -1268,6 +1307,266 @@ class GoalStore:
             if result.rowcount != 1:
                 raise GoalStoreConflict("plan execution compare-and-swap update lost")
         return plan
+
+    def put_plan_node_result(
+        self,
+        *,
+        plan_id: str,
+        node_id: str,
+        attempt: int,
+        status: str,
+        payload: dict[str, object],
+        created_at: str,
+    ) -> dict[str, object]:
+        if isinstance(attempt, bool) or not isinstance(attempt, int) or attempt < 1:
+            raise ValueError("attempt must be a positive integer")
+        plan_key = str(plan_id).strip()
+        node_key = str(node_id).strip()
+        status_value = str(status).strip().casefold()
+        timestamp = str(created_at).strip()
+        if not all((plan_key, node_key, status_value, timestamp)):
+            raise ValueError("plan result metadata must not be empty")
+        if not isinstance(payload, dict):
+            raise TypeError("payload must be a dict")
+        canonical = {
+            "plan_id": plan_key,
+            "node_id": node_key,
+            "attempt": attempt,
+            "status": status_value,
+            "payload": payload,
+            "created_at": timestamp,
+        }
+        digest = canonical_digest(canonical)
+        result_id = f"plan_result_{canonical_digest({'plan': plan_key, 'node': node_key, 'attempt': attempt})[:20]}"
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM plan_node_results_v1
+                WHERE result_id=?
+                """,
+                (result_id,),
+            ).fetchone()
+            if row is not None:
+                existing = self._decode(row["payload"])
+                if existing != canonical or row["digest"] != digest:
+                    raise GoalStoreConflict(
+                        "plan node attempt already has different result evidence"
+                    )
+                return canonical | {"result_id": result_id, "digest": digest}
+            db.execute(
+                """
+                INSERT INTO plan_node_results_v1 (
+                    result_id, plan_id, node_id, attempt, status,
+                    payload, digest, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    result_id,
+                    plan_key,
+                    node_key,
+                    attempt,
+                    status_value,
+                    self._encode(canonical),
+                    digest,
+                    timestamp,
+                ),
+            )
+        return canonical | {"result_id": result_id, "digest": digest}
+
+    def list_plan_node_results(
+        self,
+        *,
+        plan_id: str,
+        node_id: str | None = None,
+        limit: int = 100,
+    ) -> tuple[dict[str, object], ...]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+            raise ValueError("limit must be a positive integer")
+        with self.work.extension_transaction() as db:
+            if node_id is None:
+                rows = db.execute(
+                    """
+                    SELECT result_id, payload, digest
+                    FROM plan_node_results_v1
+                    WHERE plan_id=?
+                    ORDER BY attempt ASC, result_id ASC
+                    LIMIT ?
+                    """,
+                    (plan_id, limit),
+                ).fetchall()
+            else:
+                rows = db.execute(
+                    """
+                    SELECT result_id, payload, digest
+                    FROM plan_node_results_v1
+                    WHERE plan_id=? AND node_id=?
+                    ORDER BY attempt ASC, result_id ASC
+                    LIMIT ?
+                    """,
+                    (plan_id, node_id, limit),
+                ).fetchall()
+        results: list[dict[str, object]] = []
+        for row in rows:
+            payload = self._decode(row["payload"])
+            if canonical_digest(payload) != row["digest"]:
+                raise GoalStoreError("plan node result digest mismatch")
+            results.append(
+                payload | {"result_id": row["result_id"], "digest": row["digest"]}
+            )
+        return tuple(results)
+
+    def record_no_progress(
+        self,
+        *,
+        plan_id: str,
+        node_id: str,
+        action_fingerprint: str,
+        state_fingerprint: str,
+        reason: str,
+        created_at: str,
+    ) -> dict[str, object]:
+        canonical = {
+            "plan_id": str(plan_id).strip(),
+            "node_id": str(node_id).strip(),
+            "action_fingerprint": str(action_fingerprint).strip().casefold(),
+            "state_fingerprint": str(state_fingerprint).strip().casefold(),
+            "reason": str(reason).strip(),
+            "created_at": str(created_at).strip(),
+        }
+        if any(not value for value in canonical.values()):
+            raise ValueError("no-progress evidence fields must not be empty")
+        fingerprint_id = (
+            "no_progress_"
+            + canonical_digest(
+                {
+                    "plan_id": canonical["plan_id"],
+                    "node_id": canonical["node_id"],
+                    "action_fingerprint": canonical["action_fingerprint"],
+                    "state_fingerprint": canonical["state_fingerprint"],
+                }
+            )[:20]
+        )
+        digest = canonical_digest(canonical)
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT payload, digest
+                FROM plan_no_progress_v1
+                WHERE fingerprint_id=?
+                """,
+                (fingerprint_id,),
+            ).fetchone()
+            if row is not None:
+                existing = self._decode(row["payload"])
+                if existing != canonical or row["digest"] != digest:
+                    raise GoalStoreConflict(
+                        "no-progress fingerprint already has different evidence"
+                    )
+                return canonical | {
+                    "fingerprint_id": fingerprint_id,
+                    "digest": digest,
+                }
+            db.execute(
+                """
+                INSERT INTO plan_no_progress_v1 (
+                    fingerprint_id, plan_id, node_id, action_fingerprint,
+                    state_fingerprint, payload, digest, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    fingerprint_id,
+                    canonical["plan_id"],
+                    canonical["node_id"],
+                    canonical["action_fingerprint"],
+                    canonical["state_fingerprint"],
+                    self._encode(canonical),
+                    digest,
+                    canonical["created_at"],
+                ),
+            )
+        return canonical | {"fingerprint_id": fingerprint_id, "digest": digest}
+
+    def has_no_progress(
+        self,
+        *,
+        plan_id: str,
+        node_id: str,
+        action_fingerprint: str,
+        state_fingerprint: str,
+    ) -> bool:
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT 1
+                FROM plan_no_progress_v1
+                WHERE plan_id=? AND node_id=?
+                  AND action_fingerprint=? AND state_fingerprint=?
+                """,
+                (
+                    str(plan_id).strip(),
+                    str(node_id).strip(),
+                    str(action_fingerprint).strip().casefold(),
+                    str(state_fingerprint).strip().casefold(),
+                ),
+            ).fetchone()
+        return row is not None
+
+    def consume_replan_budget(
+        self,
+        *,
+        goal_id: str,
+        max_attempts: int,
+        updated_at: str,
+    ) -> int:
+        if (
+            isinstance(max_attempts, bool)
+            or not isinstance(max_attempts, int)
+            or max_attempts < 1
+        ):
+            raise ValueError("max_attempts must be a positive integer")
+        goal_key = str(goal_id).strip()
+        timestamp = str(updated_at).strip()
+        if not goal_key or not timestamp:
+            raise ValueError("replan budget metadata must not be empty")
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                """
+                SELECT attempt_count, max_attempts
+                FROM goal_replan_budget_v1
+                WHERE goal_id=?
+                """,
+                (goal_key,),
+            ).fetchone()
+            if row is None:
+                count = 1
+                db.execute(
+                    """
+                    INSERT INTO goal_replan_budget_v1 (
+                        goal_id, attempt_count, max_attempts, updated_at
+                    ) VALUES (?, ?, ?, ?)
+                    """,
+                    (goal_key, count, max_attempts, timestamp),
+                )
+                return count
+            configured_max = int(row["max_attempts"])
+            if configured_max != max_attempts:
+                raise GoalStoreConflict(
+                    "replan budget maximum changed for active goal"
+                )
+            count = int(row["attempt_count"])
+            if count >= max_attempts:
+                raise GoalStoreConflict("replan budget exhausted")
+            count += 1
+            db.execute(
+                """
+                UPDATE goal_replan_budget_v1
+                SET attempt_count=?, updated_at=?
+                WHERE goal_id=?
+                """,
+                (count, timestamp, goal_key),
+            )
+        return count
 
     def put_continuation(self, continuation: GoalContinuationV1) -> GoalContinuationV1:
         if not isinstance(continuation, GoalContinuationV1):
