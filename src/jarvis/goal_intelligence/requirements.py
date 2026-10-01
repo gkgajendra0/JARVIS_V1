@@ -48,7 +48,9 @@ class CapabilityRequirementProposal(BaseModel):
         except json.JSONDecodeError as exc:
             raise ValueError("required_parameters_json must be valid JSON") from exc
         if not isinstance(parsed, dict):
-            raise ValueError("required_parameters_json must encode a JSON object")
+            raise ValueError(  # noqa: TRY004 - Pydantic validator contract
+                "required_parameters_json must encode a JSON object"
+            )
         encoded = json.dumps(
             parsed,
             ensure_ascii=True,
