@@ -1911,6 +1911,68 @@ def test_orchestrator_reconciles_active_execution_idempotently(
     assert store.require(item.work_id).state is WorkState.QUEUED
 
 
+def test_monitoring_work_is_event_driven_without_dbos_execution(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+
+    submission = orchestrator.start(
+        request="Monitor the main gate for a delivery agent.",
+        work_type=WorkType.MONITORING,
+        source_session_id="gicc-monitor:goal-gate",
+        source_turn_id="predicate:delivery-agent",
+    )
+
+    assert submission.work.state is WorkState.WAITING_RESOURCE
+    assert submission.work.status_detail == "waiting for monitored event"
+    assert submission.execution_id == submission.work.work_id
+    assert store.get_execution_id(submission.work.work_id) is None
+    assert backend.submitted == []
+
+    assert orchestrator.reconcile_active() == (submission.work.work_id,)
+    assert backend.submitted == []
+
+    paused = orchestrator.pause(submission.work.work_id)
+    assert paused.state is WorkState.PAUSED
+    assert backend.paused == []
+
+    resumed = orchestrator.resume(submission.work.work_id)
+    assert resumed.state is WorkState.WAITING_RESOURCE
+    assert backend.resumed == []
+
+    cancelled = orchestrator.cancel(submission.work.work_id)
+    assert cancelled.state is WorkState.CANCELLED
+    assert backend.cancelled == []
+
+
+def test_failed_event_driven_monitor_requires_goal_rearm_for_retry(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+    failed = WorkItem(
+        request="Monitor the main gate.",
+        work_type=WorkType.MONITORING,
+        source_session_id="gicc-monitor:goal-gate",
+        source_turn_id="predicate:delivery-agent",
+        state=WorkState.FAILED,
+    )
+    store.create(failed)
+
+    with pytest.raises(ValueError, match="goal to be re-armed"):
+        orchestrator.retry_failed(
+            failed.work_id,
+            owner_request="try that monitor again",
+            source_session_id="owner-session",
+            source_turn_id="owner-retry",
+        )
+
+    assert backend.restarted == []
+
+
 def test_apply_owner_input_is_idempotent_after_canonical_save(
     tmp_path: Path,
 ) -> None:
