@@ -1244,10 +1244,7 @@ class PlanNodeV1:
             raise ValueError("SUBGOAL node requires subgoal_id")
         if self.node_type is PlanNodeType.VERIFY and self.postcondition_ref is None:
             raise ValueError("VERIFY node requires postcondition_ref")
-        if (
-            self.node_type is PlanNodeType.MONITOR
-            and self.monitor_predicate_id is None
-        ):
+        if self.node_type is PlanNodeType.MONITOR and self.monitor_predicate_id is None:
             raise ValueError("MONITOR node requires monitor_predicate_id")
         if self.digest != "pending":
             _assert_digest(
