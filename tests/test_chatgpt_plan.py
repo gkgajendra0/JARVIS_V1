@@ -377,6 +377,16 @@ def _schema_nodes(value: object):
             yield from _schema_nodes(nested)
 
 
+def test_chatgpt_plan_strict_schema_rejects_dynamic_object_maps() -> None:
+    with pytest.raises(ValueError, match="dynamic object maps"):
+        _strict_json_schema(
+            {
+                "type": "object",
+                "additionalProperties": {"type": "string"},
+            }
+        )
+
+
 def test_chatgpt_plan_strict_schema_normalizes_dynamic_hands_contract() -> None:
     response_model = build_action_response_model(("open_app", "set_master_volume"))
     schema = _strict_json_schema(response_model.model_json_schema())
