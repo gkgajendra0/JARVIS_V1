@@ -15,7 +15,9 @@ from .continuation import ContinuationCoordinator
 from .information import InformationResolver
 from .interpretation import GoalInterpretationResult, GoalInterpreter
 from .models import (
+    CapabilityGapState,
     ContinuationBlockerType,
+    ContinuationState,
     GoalInterpretationCandidateV1,
     GoalKind,
     GoalState,
@@ -367,6 +369,72 @@ class GoalIntelligenceCoordinator:
                 interpretation_result=None,
             )
 
+        if goal.state is GoalState.WAITING_CAPABILITY:
+            graph = self._store.latest_requirement_graph(goal_id=goal.goal_id)
+            if graph is None:
+                raise ValueError(
+                    "WAITING_CAPABILITY goal has no durable requirement graph"
+                )
+            analysis = self._capability_graph.analyze(
+                graph,
+                self._capability_context.current(),
+                persist_gaps=False,
+            )
+            still_missing = {gap.gap_id for gap in analysis.gaps}
+            for gap in self._store.list_gaps(goal_id=goal.goal_id):
+                if (
+                    gap.state is CapabilityGapState.OPEN
+                    and gap.gap_id not in still_missing
+                ):
+                    self._store.update_gap_state(
+                        gap.gap_id,
+                        CapabilityGapState.SATISFIED,
+                        expected_revision=gap.revision,
+                    )
+            if analysis.gaps:
+                return GoalIntakeResult(
+                    disposition=GoalIntakeDisposition.WAITING_CAPABILITY,
+                    goal=goal,
+                    capability_analysis=analysis,
+                )
+
+            satisfied_ids = {
+                gap.gap_id
+                for gap in self._store.list_gaps(goal_id=goal.goal_id)
+                if gap.state is CapabilityGapState.SATISFIED
+            }
+            for continuation in self._store.list_continuations(goal_id=goal.goal_id):
+                if (
+                    continuation.state is ContinuationState.BLOCKED
+                    and continuation.blocked_by_type
+                    is ContinuationBlockerType.CAPABILITY_ACQUISITION
+                    and continuation.blocked_by_id in satisfied_ids
+                ):
+                    self._continuations.resume_verified_blocker(
+                        continuation_id=continuation.continuation_id,
+                        blocker_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+                        blocker_id=continuation.blocked_by_id,
+                        verifier=(
+                            lambda blocker_type, blocker_id: (
+                                blocker_type
+                                is ContinuationBlockerType.CAPABILITY_ACQUISITION
+                                and blocker_id in satisfied_ids
+                            )
+                        ),
+                    )
+            goal = self._store.update_goal_state(
+                goal.goal_id,
+                GoalState.REQUIREMENTS_READY,
+                expected_revision=goal.goal_revision,
+            )
+            return await self._finish_ready_goal(
+                goal=goal,
+                graph=graph,
+                analysis=analysis,
+                interpretation_result=None,
+                requirement_result=None,
+            )
+
         return GoalIntakeResult(
             disposition=GoalIntakeDisposition.EXISTING_GOAL,
             goal=goal,
@@ -487,62 +555,79 @@ class GoalIntelligenceCoordinator:
                 plan=plan,
             )
 
-        if self._planner is None:
-            return GoalIntakeResult(
-                disposition=GoalIntakeDisposition.PLAN_READY,
-                goal=goal,
-                interpretation=interpretation_result,
-                requirement_result=requirement_result,
-                capability_analysis=analysis,
-            )
-
-        monitor_predicates = self._monitor_predicates(goal, graph)
-        allowed_postconditions = set(goal.completion_predicates)
-        for requirement in graph.requirements:
-            allowed_postconditions.update(requirement.expected_postconditions)
-            allowed_postconditions.update(requirement.observation_requirements)
-        context = self._capability_context.current()
-        plan = await self._planner.plan(
+        return await self._finish_ready_goal(
             goal=goal,
-            context=PlanValidationContext(
-                catalog=context.catalog,
-                allowed_capability_operations=tuple(
-                    sorted(
-                        (match.capability_key, match.operation)
-                        for match in analysis.matches
-                    )
-                ),
-                monitor_predicates=monitor_predicates,
-                allowed_postcondition_refs=tuple(sorted(allowed_postconditions)),
-            ),
+            graph=graph,
+            analysis=analysis,
+            interpretation_result=interpretation_result,
+            requirement_result=requirement_result,
         )
-        plan = self._store.put_plan(plan)
-        self._telemetry.emit(
-            "gicc_plan_created",
-            goal_id=goal.goal_id,
-            plan_id=plan.plan_id,
-            plan_digest=plan.digest,
-            plan_revision=plan.plan_revision,
-            node_count=len(plan.nodes),
-            edge_count=len(plan.edges),
-        )
-        goal = self._store.update_goal_state(
-            goal.goal_id,
-            (
-                GoalState.MONITORING
-                if goal.goal_kind is GoalKind.MONITORING
-                else GoalState.PLANNED
-            ),
-            expected_revision=goal.goal_revision,
-        )
+
+    async def _finish_ready_goal(
+        self,
+        *,
+        goal: OwnerGoalV2,
+        graph,
+        analysis: CapabilityGapAnalysis,
+        interpretation_result: GoalInterpretationResult | None,
+        requirement_result: RequirementDerivationResult | None,
+    ) -> GoalIntakeResult:
+    if self._planner is None:
         return GoalIntakeResult(
             disposition=GoalIntakeDisposition.PLAN_READY,
             goal=goal,
             interpretation=interpretation_result,
             requirement_result=requirement_result,
             capability_analysis=analysis,
-            plan=plan,
         )
+
+    monitor_predicates = self._monitor_predicates(goal, graph)
+    allowed_postconditions = set(goal.completion_predicates)
+    for requirement in graph.requirements:
+        allowed_postconditions.update(requirement.expected_postconditions)
+        allowed_postconditions.update(requirement.observation_requirements)
+    context = self._capability_context.current()
+    plan = await self._planner.plan(
+        goal=goal,
+        context=PlanValidationContext(
+            catalog=context.catalog,
+            allowed_capability_operations=tuple(
+                sorted(
+                    (match.capability_key, match.operation)
+                    for match in analysis.matches
+                )
+            ),
+            monitor_predicates=monitor_predicates,
+            allowed_postcondition_refs=tuple(sorted(allowed_postconditions)),
+        ),
+    )
+    plan = self._store.put_plan(plan)
+    self._telemetry.emit(
+        "gicc_plan_created",
+        goal_id=goal.goal_id,
+        plan_id=plan.plan_id,
+        plan_digest=plan.digest,
+        plan_revision=plan.plan_revision,
+        node_count=len(plan.nodes),
+        edge_count=len(plan.edges),
+    )
+    goal = self._store.update_goal_state(
+        goal.goal_id,
+        (
+            GoalState.MONITORING
+            if goal.goal_kind is GoalKind.MONITORING
+            else GoalState.PLANNED
+        ),
+        expected_revision=goal.goal_revision,
+    )
+    return GoalIntakeResult(
+        disposition=GoalIntakeDisposition.PLAN_READY,
+        goal=goal,
+        interpretation=interpretation_result,
+        requirement_result=requirement_result,
+        capability_analysis=analysis,
+        plan=plan,
+    )
 
     def _build_acquisition_plan(
         self,
