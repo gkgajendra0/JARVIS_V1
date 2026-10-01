@@ -510,9 +510,7 @@ class GoalIntelligenceCoordinator:
                         None,
                     ),
                     change_id=(
-                        None
-                        if admission_change is None
-                        else admission_change.change_id
+                        None if admission_change is None else admission_change.change_id
                     ),
                 )
             plan = self._build_acquisition_plan(goal, analysis)
