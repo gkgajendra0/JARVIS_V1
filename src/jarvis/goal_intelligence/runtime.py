@@ -94,9 +94,7 @@ def build_gicc_apply_runtime(
         provider=config.ai_provider,
         chatgpt_plan_enabled=config.chatgpt_plan_enabled,
         chatgpt_plan_model=config.chatgpt_plan_model,
-        reasoning_model=(
-            config.hands_planner_model or config.work_orchestration_model
-        ),
+        reasoning_model=(config.hands_planner_model or config.work_orchestration_model),
     )
     if interpreter is None:
         raise RuntimeError("GICC APPLY could not build GoalInterpreter")
