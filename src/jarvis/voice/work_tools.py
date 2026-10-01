@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 
 from livekit.agents import RunContext, function_tool
 
@@ -51,13 +52,23 @@ def _public_work(item: WorkItem, runtime: WorkRuntime) -> dict[str, object]:
 class WorkAgentTools:
     """Ground background-work commands to canonical accepted USER turns."""
 
-    def __init__(self, runtime: WorkRuntime, conversation: ConversationSession) -> None:
+    def __init__(
+        self,
+        runtime: WorkRuntime,
+        conversation: ConversationSession,
+        *,
+        bound_owner_input_work_id: str | None = None,
+        on_bound_owner_input_submitted: Callable[[WorkItem], None] | None = None,
+    ) -> None:
         if not isinstance(runtime, WorkRuntime):
             raise TypeError("runtime must be a WorkRuntime")
         if not isinstance(conversation, ConversationSession):
             raise TypeError("conversation must be a ConversationSession")
+        normalized_bound_work_id = str(bound_owner_input_work_id or "").strip() or None
         self._runtime = runtime
         self._conversation = conversation
+        self._bound_owner_input_work_id = normalized_bound_work_id
+        self._on_bound_owner_input_submitted = on_bound_owner_input_submitted
 
     @property
     def tools(self) -> list:
@@ -599,9 +610,12 @@ class WorkAgentTools:
         independently of the current voice turn, such as long-running research or an
         isolated JARVIS repository implementation request, and expects to continue talking
         or be told later when it is ready. Use research for web/current-information work
-        and development for repository implementation/testing. The canonical
-        request text comes from JARVIS's latest accepted USER turn; never invent or
-        paraphrase a hidden task prompt.
+        and development for repository implementation/testing. This generic background-work
+        tool is not a fallback for a missing external-device/service capability: when the
+        latest owner outcome requires unavailable control, use `start_capability_acquisition`
+        instead of creating research work or asking the owner to perform the missing operation.
+        The canonical request text comes from JARVIS's latest accepted USER turn; never invent
+        or paraphrase a hidden task prompt.
 
         Currently only work types explicitly reported as supported by JARVIS may start.
         A successful result means the work was durably accepted, not that it completed.
@@ -705,14 +719,52 @@ class WorkAgentTools:
     async def cancel_background_work(
         self,
         context: RunContext,
-        work_id: str,
+        work_id: str = "",
     ) -> dict[str, object]:
-        """Cancel one JARVIS WorkItem without affecting independent work."""
+        """Cancel one JARVIS WorkItem without affecting independent work.
+
+        In an ordinary voice session, pass the exact work_id resolved from canonical
+        Work state. In a proactive owner-input interaction, work_id may be omitted
+        because the tool is already bound to one exact WAITING_FOR_OWNER WorkItem.
+        A bound interaction cannot cancel a different WorkItem.
+        """
         del context
+        requested_work_id = str(work_id or "").strip()
+        bound_work_id = self._bound_owner_input_work_id
+        if (
+            bound_work_id is not None
+            and requested_work_id
+            and requested_work_id != bound_work_id
+        ):
+            return {
+                "ok": False,
+                "status": "owner_input_target_mismatch",
+                "work_id": requested_work_id,
+                "bound_work_id": bound_work_id,
+            }
+        target_work_id = requested_work_id or bound_work_id
+        if target_work_id is None:
+            return {
+                "ok": False,
+                "status": "cancel_target_unresolved",
+                "reason": "cancel requires an exact work_id outside bound owner input",
+            }
         try:
-            item = self._runtime.orchestrator.cancel(work_id)
+            item = self._runtime.orchestrator.cancel(target_work_id)
         except WorkStoreError:
-            return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
+            return {
+                "ok": False,
+                "status": "unknown_work_id",
+                "work_id": target_work_id,
+            }
+        if (
+            bound_work_id is not None
+            and self._on_bound_owner_input_submitted is not None
+        ):
+            # The callback closes the bounded proactive interaction. Cancellation
+            # resolves the pending owner-attention dependency just as definitively
+            # as supplying an answer, without submitting fake owner input to DBOS.
+            self._on_bound_owner_input_submitted(item)
         return {"ok": True, "status": "cancelled", **_public_work(item, self._runtime)}
 
     @function_tool()
@@ -799,23 +851,48 @@ class WorkAgentTools:
     ) -> dict[str, object]:
         """Supply the latest accepted USER utterance to owner-waiting background work.
 
-        If exactly one WorkItem is WAITING_FOR_OWNER, work_id may be omitted so a natural
-        reply such as "yes" can continue it. If multiple tasks are waiting, JARVIS must
-        identify/clarify the target instead of guessing. The actual response is grounded
-        from the canonical USER turn, never from model-generated hidden text.
+        Normal conversation may omit work_id only when JARVIS can resolve a unique
+        WAITING_FOR_OWNER WorkItem. A proactive owner-input voice interaction can bind
+        this tool to one exact WorkItem; in that mode an omitted work_id resolves to the
+        bound item and any attempt to target a different item fails closed. The actual
+        response is always grounded from the canonical USER turn, never from
+        model-generated hidden text.
         """
         del context
         turn = self._latest_user_turn()
+        requested_work_id = str(work_id or "").strip()
+        bound_work_id = self._bound_owner_input_work_id
+        if (
+            bound_work_id is not None
+            and requested_work_id
+            and requested_work_id != bound_work_id
+        ):
+            return {
+                "ok": False,
+                "status": "owner_input_target_mismatch",
+                "work_id": requested_work_id,
+                "bound_work_id": bound_work_id,
+            }
+        target_work_id = requested_work_id or bound_work_id
         try:
-            waiting = self._runtime.submit_owner_input(work_id or None, turn.text)
+            waiting = self._runtime.submit_owner_input(target_work_id, turn.text)
         except WorkStoreError:
-            return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
+            return {
+                "ok": False,
+                "status": "unknown_work_id",
+                "work_id": target_work_id or "",
+            }
         except ValueError as exc:
             return {
                 "ok": False,
                 "status": "owner_input_target_unresolved",
                 "reason": str(exc),
             }
+        if (
+            bound_work_id is not None
+            and self._on_bound_owner_input_submitted is not None
+        ):
+            self._on_bound_owner_input_submitted(waiting)
         return {
             "ok": True,
             "status": "owner_input_submitted",

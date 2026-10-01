@@ -716,6 +716,12 @@ def build_work_runtime(
         completion_guard=_completion_guard,
     )
     engine.reconcile_interrupted_steps()
+    reconciled_owner_deliveries = engine.reconcile_waiting_owner_deliveries()
+    if reconciled_owner_deliveries:
+        LOGGER.info(
+            "Reopened stale owner-input deliveries for waiting WorkItems: %s",
+            ", ".join(reconciled_owner_deliveries),
+        )
     backend = initialize_dbos_work_runtime(
         engine=engine,
         event_loop=loop,

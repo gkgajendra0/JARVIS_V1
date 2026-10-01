@@ -552,6 +552,42 @@ def test_zero_turn_streak_resets_before_degradation() -> None:
 
 
 @pytest.mark.asyncio
+async def test_proactive_prompt_suspends_initial_request_timeout_until_playout() -> (
+    None
+):
+    session = FakeSession(auto_finish_replies=False)
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
+    audio = FakeAudio()
+    runtime = VoiceRuntimeController(
+        JarvisConfig(initial_request_timeout_seconds=0.03),
+        audio,  # type: ignore[arg-type]
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+    )
+
+    task = asyncio.create_task(
+        runtime._run_one_session(
+            initial_instructions=(
+                "Ask the owner which TV platform is in use and wait for the answer."
+            ),
+            initial_prompt_label="owner input prompt",
+        )
+    )
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+
+    # The proactive question itself may be longer than the normal wake-flow
+    # first-request timeout. It must not close the interaction while JARVIS is
+    # still speaking the question.
+    await asyncio.sleep(0.08)
+    assert task.done() is False
+
+    session.reply_release.set()
+    await asyncio.sleep(0)
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
 async def test_wake_only_pause_gets_one_brief_realtime_acknowledgement(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
