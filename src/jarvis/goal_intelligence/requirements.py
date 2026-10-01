@@ -6,7 +6,7 @@ import json
 import re
 from dataclasses import dataclass
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from jarvis.hands.provider_adapters import StructuredOutputClient
 
@@ -38,6 +38,26 @@ class CapabilityRequirementProposal(BaseModel):
     observation_requirements: list[str] = Field(default_factory=list, max_length=16)
     reason: str = Field(min_length=1, max_length=480)
     depends_on_indexes: list[int] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_parameter_schema_input(cls, value):
+        if not isinstance(value, dict):
+            return value
+        if (
+            "required_parameters_schema" not in value
+            or "required_parameters_json" in value
+        ):
+            return value
+        normalized = dict(value)
+        legacy = normalized.pop("required_parameters_schema")
+        normalized["required_parameters_json"] = json.dumps(
+            legacy,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return normalized
 
     @field_validator("required_parameters_json")
     @classmethod
