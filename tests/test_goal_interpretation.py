@@ -252,6 +252,60 @@ async def test_secret_bearing_turn_never_reaches_provider(tmp_path: Path) -> Non
 
 
 @pytest.mark.asyncio
+async def test_shadow_runtime_skips_followup_turn_during_provider_cooldown(
+    tmp_path: Path,
+) -> None:
+    conversation = ConversationSession(session_id="session-gicc-pressure")
+    conversation.start()
+    first = conversation.accept_turn(ConversationRole.USER, "Open Calculator.")
+
+    output = ShadowGoalInterpretationOutput(
+        actionable=True,
+        desired_outcome="Open Calculator.",
+        goal_kind=GoalKind.ONE_SHOT,
+        evidence_turn_ids=[first.turn_id],
+    )
+
+    class RateLimitedClient(FakeStructuredClient):
+        async def parse_with_telemetry(
+            self,
+            *,
+            system_prompt: str,
+            input_payload: dict[str, object],
+            response_model,
+        ) -> StructuredOutputTelemetry:
+            self.calls.append(
+                {
+                    "system_prompt": system_prompt,
+                    "input_payload": input_payload,
+                    "response_model": response_model,
+                }
+            )
+            raise RuntimeError("HTTP 429 Too Many Requests")
+
+    client = RateLimitedClient(output)
+    runtime = GoalInterpretationShadowRuntime(
+        conversation=conversation,
+        interpreter=GoalInterpreter(client=client),
+        store=_store(tmp_path),
+    )
+
+    runtime.observe_turn(first)
+    for _ in range(50):
+        if runtime.pending_task_count == 0:
+            break
+        await asyncio.sleep(0)
+
+    second = conversation.accept_turn(ConversationRole.USER, "Open Notepad too.")
+    runtime.observe_turn(second)
+    await asyncio.sleep(0)
+
+    assert len(client.calls) == 1
+    assert runtime.pending_task_count == 0
+    runtime.close()
+
+
+@pytest.mark.asyncio
 async def test_shadow_runtime_persists_evidence_without_creating_goal(
     tmp_path: Path,
 ) -> None:
