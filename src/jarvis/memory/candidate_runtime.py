@@ -84,13 +84,28 @@ class MemoryCandidateSessionRuntime:
                 self._conversation,
                 turn,
             )
+            self._provider_circuit.record_success()
         except asyncio.CancelledError:
             raise
-        except Exception:
-            LOGGER.exception(
-                "Memory candidate shadow failed for turn %s; conversation is unaffected",
-                turn.turn_id,
-            )
+        except Exception as exc:
+            trip = self._provider_circuit.record_failure(exc)
+            if trip is not None:
+                LOGGER.warning(
+                    "Memory candidate shadow paused for provider pressure | turn_id=%s "
+                    "reason=%s status=%s retry_in=%.1fs attempts=%s "
+                    "conversation_unaffected=True",
+                    turn.turn_id,
+                    trip.reason,
+                    trip.status_code,
+                    trip.delay_seconds,
+                    trip.failed_attempts,
+                )
+            else:
+                LOGGER.exception(
+                    "Memory candidate shadow failed for turn %s; "
+                    "conversation is unaffected",
+                    turn.turn_id,
+                )
             return
         LOGGER.info(
             "Memory candidate shadow turn %s | outcome=%s | reason=%s | "
