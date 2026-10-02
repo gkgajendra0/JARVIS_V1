@@ -118,7 +118,9 @@ def _select_admitted_threshold(report: dict[str, Any]) -> float:
             continue
         if int(summary.get("unsafe_downgrades") or 0) != 0:
             continue
-        if int(summary.get("covered") or 0) <= 0:
+        if float(summary.get("coverage") or 0.0) != 1.0:
+            continue
+        if float(summary.get("accuracy_over_covered") or 0.0) != 1.0:
             continue
         threshold = summary.get("confidence_threshold")
         if not isinstance(threshold, (int, float)):
@@ -128,8 +130,8 @@ def _select_admitted_threshold(report: dict[str, Any]) -> float:
     if not eligible:
         raise RuntimeError(
             "JEV Phase-9 admission failed: no tested confidence threshold had "
-            "zero unsafe downgrades, zero structured-output failures, and "
-            "non-zero decision coverage"
+            "zero unsafe downgrades, zero structured-output failures, "
+            "full coverage, and perfect covered accuracy"
         )
 
     # Prefer maximum decision coverage first.  If several tested thresholds cover
