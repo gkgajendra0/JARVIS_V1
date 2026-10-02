@@ -10,6 +10,7 @@ import argparse
 import json
 from pathlib import Path
 
+from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change import ChangeStore
 from jarvis.goal_intelligence.store import GoalStore
 from jarvis.work.privacy import build_default_work_payload_codec
@@ -119,7 +120,10 @@ def probe_live_mission(
     codec = build_default_work_payload_codec(path)
     work_store = SQLiteWorkStore(path, payload_codec=codec)
     goals = GoalStore(work_store)
-    changes = ChangeStore(work_store)
+    changes = ChangeStore(
+        work_store,
+        processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,),
+    )
 
     goal = goals.get_goal(goal_id)
     if goal is None:
