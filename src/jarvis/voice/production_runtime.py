@@ -445,6 +445,7 @@ def build_production_voice_runtime(
             minimum_confidence=config.jev_min_confidence,
             model=config.jev_model,
             endpoint=config.jev_endpoint,
+            benchmark_report_path=config.jev_benchmark_report_path or "",
         )
         work_runtime = build_work_runtime(
             provider=config.ai_provider,
