@@ -30,10 +30,13 @@ _BOUND_REJECT = re.compile(
     re.IGNORECASE,
 )
 _BOUND_NEGATED_APPROVE = re.compile(
-    r"\b(?:do\s+not|don't|dont|not)\s+approve(?:d)?\b",
+    r"\b(?:do\s+not|don't|dont|not)\s+(?:approve|approved|aprove|aproved)\b",
     re.IGNORECASE,
 )
-_BOUND_APPROVE = re.compile(r"\bapprove(?:d)?\b", re.IGNORECASE)
+_BOUND_APPROVE = re.compile(
+    r"\b(?:approve|approved|aprove|aproved)\b",
+    re.IGNORECASE,
+)
 
 
 def _bound_spoken_decision(text: str) -> bool | None:
