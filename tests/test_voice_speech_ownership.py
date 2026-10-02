@@ -8,6 +8,8 @@ import pytest
 from jarvis.config import JarvisConfig
 from jarvis.voice.canonical_active_speaker_runtime import (
     CanonicalActiveSpeakerRuntimeController,
+    _owner_interaction_retry_seconds,
+    _spoken_subject,
 )
 from jarvis.voice.runtime import VoiceRuntimeState
 from jarvis.work.models import DeliveryPolicy, WorkDeliveryKind, WorkState
@@ -294,13 +296,28 @@ async def test_unanswered_owner_input_stays_durable_and_retries() -> None:
     assert work.store.delivered is False
     assert work.store.retry is not None
     delay_seconds, reason = work.store.retry
-    assert delay_seconds >= 30.0
+    assert delay_seconds >= 30.0 * 60.0
     assert reason == "owner_input_unanswered"
     assert audio.resume_calls == 1
     assert audio.detector.enabled is True
 
     runtime.request_shutdown()
     await asyncio.wait_for(delivery_task, timeout=1)
+
+
+def test_owner_interaction_retry_uses_long_exponential_backoff() -> None:
+    assert _owner_interaction_retry_seconds(0) == pytest.approx(30.0 * 60.0)
+    assert _owner_interaction_retry_seconds(1) == pytest.approx(60.0 * 60.0)
+    assert _owner_interaction_retry_seconds(2) == pytest.approx(2.0 * 60.0 * 60.0)
+    assert _owner_interaction_retry_seconds(3) == pytest.approx(4.0 * 60.0 * 60.0)
+    assert _owner_interaction_retry_seconds(4) == pytest.approx(6.0 * 60.0 * 60.0)
+    assert _owner_interaction_retry_seconds(99) == pytest.approx(6.0 * 60.0 * 60.0)
+
+
+def test_spoken_subject_hides_internal_identifier_formatting() -> None:
+    assert _spoken_subject("media_catalog.search") == "media catalog search"
+    assert _spoken_subject("change_deadbeef") is None
+    assert _spoken_subject("gate_deadbeef") is None
 
 
 @pytest.mark.asyncio
