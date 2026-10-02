@@ -46,7 +46,6 @@ def _bound_spoken_decision(text: str) -> bool | None:
     return None
 
 
-
 class ChangeService:
     """Only accepted USER turns from this session can produce gate decisions."""
 
