@@ -29,6 +29,7 @@ from jarvis.capability_acquisition.models import (
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.resolver import (
     AcquisitionCandidateAdvisor,
+    AcquisitionResolutionResult,
     CapabilityAcquisitionResolver,
 )
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
@@ -400,7 +401,7 @@ class AcquisitionResolveExecutor:
     def _resolve_and_persist(
         self,
         work_id: str,
-    ) -> tuple[ChangeArtifact, object]:
+    ) -> tuple[ChangeArtifact, AcquisitionResolutionResult]:
         context = self._resolver.context_for(work_id)
         acquisition_context = self._context_provider.current()
         registered = self._acquisition.resolve(
