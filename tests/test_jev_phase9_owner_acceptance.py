@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -20,6 +21,58 @@ def _load_module():
     spec.loader.exec_module(module)
     return module
 
+
+
+def _write_valid_report(path: Path) -> Path:
+    case_ids = [f"phase9-candidate-{index:03d}" for index in range(1, 9)]
+    results = [
+        {
+            "case_id": case_id,
+            "repetition": repetition,
+            "runner": "jev",
+            "model": "jev-latest",
+            "latency_ms": 1.0,
+            "usage": {"input_tokens": 1, "output_tokens": 0, "total_tokens": 1},
+            "api_cost_usd": None,
+            "predictions": {
+                "candidate": {
+                    "value": "candidate_a",
+                    "confidence": 0.99,
+                    "probabilities": {"candidate_a": 0.99, "candidate_b": 0.01},
+                }
+            },
+            "raw_metadata": {},
+        }
+        for repetition in range(1, 4)
+        for case_id in case_ids
+    ]
+    path.write_text(
+        json.dumps(
+            {
+                "suite": "jarvis-jev-phase9-candidate-selection-v1",
+                "runner": "jev",
+                "requested_model": "jev-latest",
+                "case_count": 8,
+                "repeat": 3,
+                "summaries": [
+                    {
+                        "confidence_threshold": 0.95,
+                        "questions": 24,
+                        "covered": 24,
+                        "coverage": 1.0,
+                        "abstained": 0,
+                        "structured_output_failures": 0,
+                        "exact": 24,
+                        "accuracy_over_covered": 1.0,
+                        "unsafe_downgrades": 0,
+                    }
+                ],
+                "results": results,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
 
 def test_phase9_owner_acceptance_uses_dedicated_corpus_and_all_thresholds(
     tmp_path: Path,
@@ -161,3 +214,77 @@ def test_phase9_owner_acceptance_apply_persists_text_settings_only(
     assert after["jev_min_confidence"] == "0.95"
     assert after["jev_model"] == "jev-latest"
     assert "JEV_API_KEY" not in machine_path.read_text(encoding="utf-8")
+
+
+
+def test_phase9_existing_report_admission_reuses_evidence_without_credential(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_module()
+    source = _write_valid_report(tmp_path / "existing.json")
+    durable = tmp_path / "JARVIS" / "acceptance" / "jev-phase9.json"
+    machine = tmp_path / "machine.json"
+
+    monkeypatch.delenv("JEV_API_KEY", raising=False)
+    monkeypatch.setenv("JARVIS_MACHINE_CONFIG", str(machine))
+
+    result = module._finalize_report_admission(
+        source_report=source,
+        durable_output=durable,
+        model="jev-latest",
+        endpoint="https://api.typesafe.ai/v1/systemone",
+        apply=True,
+    )
+
+    assert result["status"] == "PASS"
+    assert result["selected_confidence_threshold"] == pytest.approx(0.95)
+    assert result["coverage"] == pytest.approx(1.0)
+    assert result["accuracy_over_covered"] == pytest.approx(1.0)
+    assert result["unsafe_downgrades"] == 0
+    assert result["structured_output_failures"] == 0
+    assert result["machine_settings_applied"] is True
+    assert durable.read_bytes() == source.read_bytes()
+    assert result["machine_after"]["jev_min_confidence"] == "0.95"
+    assert result["machine_after"]["jev_benchmark_report_path"] == str(
+        durable.resolve()
+    )
+
+
+def test_phase9_existing_report_admission_requires_three_full_repeats(
+    tmp_path: Path,
+) -> None:
+    module = _load_module()
+    source = _write_valid_report(tmp_path / "shallow.json")
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    payload["repeat"] = 2
+    payload["results"] = payload["results"][:16]
+    source.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="at least 3 benchmark repeats"):
+        module._finalize_report_admission(
+            source_report=source,
+            durable_output=tmp_path / "durable.json",
+            model="jev-latest",
+            endpoint="https://api.typesafe.ai/v1/systemone",
+            apply=False,
+        )
+
+
+def test_phase9_existing_report_admission_requires_all_results(
+    tmp_path: Path,
+) -> None:
+    module = _load_module()
+    source = _write_valid_report(tmp_path / "incomplete.json")
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    payload["results"] = payload["results"][:-1]
+    source.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="every case/repetition result"):
+        module._finalize_report_admission(
+            source_report=source,
+            durable_output=tmp_path / "durable.json",
+            model="jev-latest",
+            endpoint="https://api.typesafe.ai/v1/systemone",
+            apply=False,
+        )
