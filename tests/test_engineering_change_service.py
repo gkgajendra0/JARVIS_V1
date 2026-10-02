@@ -469,3 +469,11 @@ def test_short_spoken_review_requires_one_pending_gate(tmp_path) -> None:
         store.require(gate.change_id).state is ChangeState.WAITING_OWNER_APPROVAL
         for gate in gates
     )
+
+    bound = service.decide_latest(
+        gates[0].gate_id,
+        bound_gate_id=gates[0].gate_id,
+    )
+    assert bound.approved
+    assert store.require(gates[0].change_id).state is ChangeState.DEVELOPING
+    assert store.require(gates[1].change_id).state is ChangeState.WAITING_OWNER_APPROVAL
