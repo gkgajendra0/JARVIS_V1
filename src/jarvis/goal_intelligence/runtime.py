@@ -9,11 +9,9 @@ from dataclasses import dataclass, field, replace
 
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
-from jarvis.capability_acquisition.external_acceptance import (
-    EXTERNAL_ACCEPTANCE_RESULT_KIND,
-)
-from jarvis.capability_acquisition.external_contract import (
-    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+from jarvis.capability_acquisition.lineage import (
+    CapabilityAcquisitionLineageError,
+    verify_capability_acquisition_completion,
 )
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
 from jarvis.config import JarvisConfig
@@ -37,6 +35,17 @@ from .evaluation import ReplanController
 from .execution import GoalPlanDispatcher, PlanDispatchDisposition
 from .information import InformationResolver
 from .interpretation import GoalInterpreter, build_goal_interpreter
+from .models import (
+    ContinuationBlockerType,
+    ContinuationState,
+    GoalState,
+    OwnerGoalV2,
+    PlanGraphV1,
+    PlanNodeType,
+    PlanNodeV1,
+    PlanState,
+    WorldEntityRefV1,
+)
 from .monitoring import (
     DEFAULT_MONITOR_OBSERVATION_BUS,
     GICC_MONITOR_EVENT_CONTRACT,
@@ -46,16 +55,6 @@ from .monitoring import (
     MonitoringWorkCoordinator,
     MonitorObservationBus,
     VerifiedMonitorObservationV1,
-)
-from .models import (
-    ContinuationBlockerType,
-    GoalState,
-    OwnerGoalV2,
-    PlanGraphV1,
-    PlanNodeType,
-    PlanNodeV1,
-    PlanState,
-    WorldEntityRefV1,
 )
 from .phase9 import Phase9GoalBridge
 from .planning import GoalPlanner
@@ -574,49 +573,32 @@ class GiccApplyRuntime:
             for continuation in self.store.list_continuations(goal_id=goal.goal_id)
             if continuation.blocked_by_type
             is ContinuationBlockerType.CAPABILITY_ACQUISITION
+            and continuation.state is ContinuationState.BLOCKED
         )
         for continuation in continuations:
+            if not continuation.work_ids:
+                # Phase-9 existing-capability reuse creates no EngineeringChange
+                # work. Let continue_goal() re-read canonical capability truth.
+                continue
+            verified = False
             for work_id in continuation.work_ids:
                 stage = changes.stage_for_work(work_id)
                 if stage is None:
                     continue
-                architecture = changes.latest_artifact(stage.change_id, "architecture")
-                if architecture is None:
-                    continue
-                contracts = {
-                    str(item).strip()
-                    for item in (
-                        architecture.payload.get("owner_acceptance_contract_ids") or ()
+                try:
+                    lineage = verify_capability_acquisition_completion(
+                        changes,
+                        change_id=stage.change_id,
+                        motivating_goal_id=goal.goal_id,
+                        gap_id=continuation.blocked_by_id,
                     )
-                    if str(item).strip()
-                }
-                if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT not in contracts:
-                    continue
-
-                candidate = changes.latest_artifact(
-                    stage.change_id,
-                    "capability_candidate",
-                )
-                activation = changes.latest_artifact(
-                    stage.change_id,
-                    "capability_lifecycle_activation",
-                )
-                acceptance = changes.latest_artifact(
-                    stage.change_id,
-                    EXTERNAL_ACCEPTANCE_RESULT_KIND,
-                )
-                if candidate is None or activation is None or acceptance is None:
+                except CapabilityAcquisitionLineageError:
                     return False
-                payload = acceptance.payload
-                if (
-                    payload.get("schema") != "capability_external_acceptance.v1"
-                    or payload.get("verdict") != "pass"
-                    or payload.get("candidate_artifact_id") != candidate.artifact_id
-                    or payload.get("candidate_artifact_digest") != candidate.digest
-                    or payload.get("activation_artifact_id") != activation.artifact_id
-                    or payload.get("activation_artifact_digest") != activation.digest
-                ):
-                    return False
+                if lineage is not None:
+                    verified = True
+                    break
+            if not verified:
+                return False
         return True
 
     async def reconcile_once(self) -> int:

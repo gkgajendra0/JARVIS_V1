@@ -8,13 +8,17 @@ from datetime import datetime
 from typing import Protocol
 
 from jarvis.capability_acquisition.admission import CapabilityAcquisitionAdmission
+from jarvis.capability_acquisition.lineage import (
+    CapabilityAcquisitionLineageError,
+    verify_capability_acquisition_completion,
+)
 from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
+from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
-from jarvis.engineering_change import ChangeArtifact
+from jarvis.engineering_change import ChangeArtifact, EngineeringChange
 from jarvis.engineering_substrate.canonical import canonical_digest
 
 from .capability_graph import CapabilityGapAnalysis, CapabilityGraphResolver
-from .monitoring import GICC_MONITOR_EVENT_CONTRACT
 from .models import (
     CapabilityGapState,
     CapabilityGapV1,
@@ -24,6 +28,7 @@ from .models import (
     GoalKind,
     OwnerGoalV2,
 )
+from .monitoring import GICC_MONITOR_EVENT_CONTRACT
 from .store import GoalStore, GoalStoreConflict, GoalStoreError
 
 
@@ -54,6 +59,13 @@ class Phase9ChangeArtifactStore(Protocol):
         kind: str,
         payload: dict[str, object],
     ) -> ChangeArtifact: ...
+
+    def find_by_source(
+        self,
+        source_session_id: str,
+        source_turn_id: str,
+        process_key: str,
+    ) -> EngineeringChange | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,8 +101,7 @@ class Phase9AcquisitionRequestV2:
         observation_family = (
             ".observe" in family
             or ".perceive" in family
-            or family.startswith("vision.")
-            or family.startswith("camera.")
+            or family.startswith(("vision.", "camera."))
         )
         monitor_event_required = bool(
             goal.goal_kind is GoalKind.MONITORING and observation_family
@@ -200,10 +211,14 @@ class Phase9GoalBridge:
     ) -> None:
         if not callable(getattr(coordinator, "admit", None)):
             raise TypeError("coordinator must provide admit()")
-        if not callable(getattr(change_store, "latest_artifact", None)) or not callable(
-            getattr(change_store, "add_artifact", None)
+        if (
+            not callable(getattr(change_store, "latest_artifact", None))
+            or not callable(getattr(change_store, "add_artifact", None))
+            or not callable(getattr(change_store, "find_by_source", None))
         ):
-            raise TypeError("change_store must provide artifact persistence")
+            raise TypeError(
+                "change_store must provide artifact persistence and source lookup"
+            )
         if not isinstance(goal_store, GoalStore):
             raise TypeError("goal_store must be GoalStore")
         if not callable(source_revision_provider):
@@ -226,11 +241,18 @@ class Phase9GoalBridge:
         )
         if admission.change is not None:
             payload = {
-                "schema": "gicc_phase9_gap_link.v1",
+                "schema": "gicc_phase9_gap_link.v2",
                 "request_id": request.request_id,
                 "request_digest": request.digest,
                 "motivating_goal_id": request.motivating_goal_id,
                 "gap_id": request.gap_id,
+                "phase9_goal_id": phase9_goal.goal_id,
+                "phase9_goal_digest": phase9_goal.digest,
+                "engineering_change_id": admission.change.change_id,
+                "acquisition_work_id": admission.acquisition_work_id,
+                "goal_artifact_id": admission.goal_artifact_id,
+                "admission_artifact_id": admission.admission_artifact_id,
+                "admission_disposition": admission.disposition.value,
                 "reusable_capability_family": request.reusable_capability_family,
                 "minimum_required_operations": list(
                     request.minimum_required_operations
@@ -239,6 +261,8 @@ class Phase9GoalBridge:
                 "target_entity_id": request.target_entity_id,
                 "owner_source_session_id": request.owner_source_session_id,
                 "owner_source_turn_id": request.owner_source_turn_id,
+                "bridge_source_session_id": request.bridge_source_session_id,
+                "bridge_source_turn_id": request.bridge_source_turn_id,
                 "monitor_event_contract_required": (
                     request.monitor_event_contract_required
                 ),
@@ -267,6 +291,39 @@ class Phase9GoalBridge:
             phase9_goal=phase9_goal,
             admission=admission,
         )
+
+    def completion_verified(
+        self,
+        *,
+        gap: CapabilityGapV1,
+        goal: OwnerGoalV2,
+    ) -> bool:
+        """Prove that this exact GICC gap produced the currently accepted capability."""
+
+        request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
+        change = self._changes.find_by_source(
+            request.bridge_source_session_id,
+            request.bridge_source_turn_id,
+            OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
+        )
+        if change is None:
+            # No EngineeringChange is the canonical Phase-9 reuse path. This method
+            # is called only after GICC has re-read capability truth and found the
+            # semantic gap absent, so there is no newly produced package generation
+            # that requires lineage binding.
+            return True
+        try:
+            lineage = verify_capability_acquisition_completion(
+                self._changes,
+                change_id=change.change_id,
+                motivating_goal_id=goal.goal_id,
+                gap_id=gap.gap_id,
+                request_id=request.request_id,
+                request_digest=request.digest,
+            )
+        except CapabilityAcquisitionLineageError:
+            return False
+        return lineage is not None
 
 
 class Phase9GoalContinuationVerifier:

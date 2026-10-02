@@ -8,13 +8,16 @@ from jarvis.capabilities.models import (
     DiscoverySnapshot,
     DiscoveryState,
 )
+from jarvis.capability_acquisition.external_contract import (
+    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+)
 from jarvis.capability_acquisition.source import AcquisitionContextV1
 from jarvis.capability_registry.projection import (
     CapabilityInventoryEntry,
     CapabilityManagementMode,
 )
+from jarvis.engineering_substrate.contracts import HardwareAcceptanceVerdict
 from jarvis.goal_intelligence.capability_graph import CapabilityGraphResolver
-from jarvis.goal_intelligence.monitoring import GICC_MONITOR_EVENT_CONTRACT
 from jarvis.goal_intelligence.models import (
     CapabilityGapV1,
     CapabilityRequirementGraphV1,
@@ -28,6 +31,7 @@ from jarvis.goal_intelligence.models import (
     PlanNodeType,
     PlanNodeV1,
 )
+from jarvis.goal_intelligence.monitoring import GICC_MONITOR_EVENT_CONTRACT
 from jarvis.goal_intelligence.phase9 import (
     Phase9AcquisitionRequestV2,
     Phase9GoalBridge,
@@ -57,6 +61,138 @@ class FakeArtifacts:
             digest="d" * 64,
             payload=payload,
         )
+
+    def find_by_source(
+        self, source_session_id: str, source_turn_id: str, process_key: str
+    ):
+        return None
+
+
+class CapturingArtifacts:
+    def __init__(self) -> None:
+        self.records = []
+
+    def latest_artifact(self, change_id: str, kind: str):
+        return None
+
+    def find_by_source(
+        self, source_session_id: str, source_turn_id: str, process_key: str
+    ):
+        return None
+
+    def add_artifact(self, change_id: str, *, kind: str, payload: dict[str, object]):
+        self.records.append((change_id, kind, payload))
+        return SimpleNamespace(
+            artifact_id="artifact-gap-link",
+            digest="e" * 64,
+            payload=payload,
+        )
+
+
+class LinkedFakeAdmitter(FakeAdmitter):
+    def admit(self, goal, *, source_revision: str):
+        self.goals.append((goal, source_revision))
+        return SimpleNamespace(
+            change=SimpleNamespace(change_id="change-phase9"),
+            acquisition_work_id="work-acquisition",
+            goal_artifact_id="artifact-goal",
+            admission_artifact_id="artifact-admission",
+            disposition=SimpleNamespace(value="engineering_change"),
+        )
+
+
+class LineageArtifacts:
+    def __init__(self) -> None:
+        self.change = SimpleNamespace(change_id="change-phase9")
+        self.artifacts = {}
+
+    def latest_artifact(self, change_id: str, kind: str):
+        assert change_id == self.change.change_id
+        return self.artifacts.get(kind)
+
+    def add_artifact(self, change_id: str, *, kind: str, payload: dict[str, object]):
+        assert change_id == self.change.change_id
+        artifact = SimpleNamespace(
+            artifact_id=f"artifact-{kind}",
+            digest=(kind[0] if kind else "a") * 64,
+            payload=payload,
+        )
+        self.artifacts[kind] = artifact
+        return artifact
+
+    def find_by_source(
+        self, source_session_id: str, source_turn_id: str, process_key: str
+    ):
+        del source_session_id, source_turn_id, process_key
+        return self.change
+
+
+def _install_current_lineage(
+    artifacts: LineageArtifacts,
+    *,
+    request: Phase9AcquisitionRequestV2,
+    goal: OwnerGoalV2,
+    gap: CapabilityGapV1,
+) -> None:
+    candidate = SimpleNamespace(
+        artifact_id="artifact-candidate",
+        digest="c" * 64,
+        payload={
+            "package_id": "tv.control.package",
+            "package_version": "1.0.0",
+            "package_digest": "p" * 64,
+        },
+    )
+    admission = SimpleNamespace(
+        artifact_id="artifact-admission",
+        digest="a" * 64,
+        payload={
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "package_id": "tv.control.package",
+            "package_version": "1.0.0",
+            "package_digest": "p" * 64,
+        },
+    )
+    activation = SimpleNamespace(
+        artifact_id="artifact-activation",
+        digest="b" * 64,
+        payload={
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "admission_artifact_id": admission.artifact_id,
+            "admission_artifact_digest": admission.digest,
+            "package_id": "tv.control.package",
+            "package_version": "1.0.0",
+            "package_digest": "p" * 64,
+            "effective_enabled": True,
+        },
+    )
+    artifacts.artifacts.update(
+        {
+            "gicc_capability_gap_link": SimpleNamespace(
+                artifact_id="artifact-link",
+                digest="l" * 64,
+                payload={
+                    "schema": "gicc_phase9_gap_link.v2",
+                    "request_id": request.request_id,
+                    "request_digest": request.digest,
+                    "motivating_goal_id": goal.goal_id,
+                    "gap_id": gap.gap_id,
+                    "engineering_change_id": artifacts.change.change_id,
+                    "acquisition_work_id": "work-acquisition",
+                },
+            ),
+            "capability_candidate": candidate,
+            "capability_package_admission": admission,
+            "capability_lifecycle_activation": activation,
+            "architecture": SimpleNamespace(
+                artifact_id="artifact-architecture",
+                digest="r" * 64,
+                payload={"owner_acceptance_contract_ids": []},
+            ),
+        }
+    )
 
 
 class MutableContext:
@@ -271,6 +407,128 @@ def test_phase9_bridge_admits_generic_v1_goal(tmp_path: Path) -> None:
     assert revision == "a" * 40
     assert phase9_goal.requested_capability == "media_player.control"
     assert "transporter" not in phase9_goal.request.casefold()
+
+
+def test_phase9_bridge_persists_exact_cross_lifecycle_lineage(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store)
+    graph = _graph(goal)
+    gap = _gap(store, goal, graph)
+    admitter = LinkedFakeAdmitter()
+    artifacts = CapturingArtifacts()
+    bridge = Phase9GoalBridge(
+        coordinator=admitter,
+        change_store=artifacts,
+        goal_store=store,
+        source_revision_provider=lambda: "a" * 40,
+    )
+
+    admitted = bridge.admit_gap(gap, goal)
+
+    assert len(artifacts.records) == 1
+    change_id, kind, payload = artifacts.records[0]
+    assert change_id == "change-phase9"
+    assert kind == "gicc_capability_gap_link"
+    assert payload["schema"] == "gicc_phase9_gap_link.v2"
+    assert payload["motivating_goal_id"] == goal.goal_id
+    assert payload["gap_id"] == gap.gap_id
+    assert payload["request_id"] == admitted.request.request_id
+    assert payload["phase9_goal_id"] == admitted.phase9_goal.goal_id
+    assert payload["phase9_goal_digest"] == admitted.phase9_goal.digest
+    assert payload["engineering_change_id"] == "change-phase9"
+    assert payload["acquisition_work_id"] == "work-acquisition"
+    assert payload["goal_artifact_id"] == "artifact-goal"
+    assert payload["admission_artifact_id"] == "artifact-admission"
+    assert payload["admission_disposition"] == "engineering_change"
+    assert payload["bridge_source_session_id"] == f"gicc:{goal.goal_id}"
+    assert payload["bridge_source_turn_id"] == f"gap:{gap.gap_id}"
+
+
+def test_phase9_completion_requires_exact_current_lineage(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store)
+    graph = _graph(goal)
+    gap = _gap(store, goal, graph)
+    request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
+    artifacts = LineageArtifacts()
+    _install_current_lineage(artifacts, request=request, goal=goal, gap=gap)
+    bridge = Phase9GoalBridge(
+        coordinator=FakeAdmitter(),
+        change_store=artifacts,
+        goal_store=store,
+        source_revision_provider=lambda: "a" * 40,
+    )
+
+    assert bridge.completion_verified(gap=gap, goal=goal) is True
+
+    artifacts.artifacts["capability_lifecycle_activation"].payload[
+        "candidate_artifact_digest"
+    ] = "0" * 64
+    assert bridge.completion_verified(gap=gap, goal=goal) is False
+
+
+def test_phase9_completion_requires_real_external_acceptance_when_declared(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store)
+    graph = _graph(goal)
+    gap = _gap(store, goal, graph)
+    request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
+    artifacts = LineageArtifacts()
+    _install_current_lineage(artifacts, request=request, goal=goal, gap=gap)
+    artifacts.artifacts["architecture"].payload["owner_acceptance_contract_ids"] = [
+        PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
+    ]
+    bridge = Phase9GoalBridge(
+        coordinator=FakeAdmitter(),
+        change_store=artifacts,
+        goal_store=store,
+        source_revision_provider=lambda: "a" * 40,
+    )
+
+    assert bridge.completion_verified(gap=gap, goal=goal) is False
+
+    candidate = artifacts.artifacts["capability_candidate"]
+    activation = artifacts.artifacts["capability_lifecycle_activation"]
+    artifacts.artifacts["capability_external_acceptance"] = SimpleNamespace(
+        artifact_id="artifact-external-acceptance",
+        digest="x" * 64,
+        payload={
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "activation_artifact_id": activation.artifact_id,
+            "activation_artifact_digest": activation.digest,
+            "verdict": HardwareAcceptanceVerdict.PASS.value,
+        },
+    )
+    assert bridge.completion_verified(gap=gap, goal=goal) is True
+
+    artifacts.artifacts["capability_external_acceptance"].payload["verdict"] = (
+        HardwareAcceptanceVerdict.FAIL.value
+    )
+    assert bridge.completion_verified(gap=gap, goal=goal) is False
+
+
+def test_phase9_completion_accepts_existing_capability_reuse_without_change(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store)
+    graph = _graph(goal)
+    gap = _gap(store, goal, graph)
+    bridge = Phase9GoalBridge(
+        coordinator=FakeAdmitter(),
+        change_store=FakeArtifacts(),
+        goal_store=store,
+        source_revision_provider=lambda: "a" * 40,
+    )
+
+    # The caller invokes completion_verified only after refreshed canonical
+    # capability truth says the semantic gap is gone. With no EngineeringChange,
+    # Phase 9 has reused an already-existing capability and there is no new package
+    # generation that needs provenance binding.
+    assert bridge.completion_verified(gap=gap, goal=goal) is True
 
 
 def test_completion_rechecks_actual_capability_truth_before_resume(

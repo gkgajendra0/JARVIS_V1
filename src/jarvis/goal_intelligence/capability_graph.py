@@ -8,13 +8,13 @@ from jarvis.capabilities.models import CapabilityDescriptor
 from jarvis.capability_acquisition.source import AcquisitionContextV1
 from jarvis.capability_registry.projection import CapabilityManagementMode
 
-from .monitoring import GICC_MONITOR_EVENT_CONTRACT
 from .models import (
     CapabilityGapState,
     CapabilityGapV1,
     CapabilityRequirementGraphV1,
     CapabilityRequirementV1,
 )
+from .monitoring import GICC_MONITOR_EVENT_CONTRACT
 from .store import GoalStore
 
 
@@ -124,8 +124,7 @@ class CapabilityGraphResolver:
         observation_family = (
             ".observe" in family
             or ".perceive" in family
-            or family.startswith("vision.")
-            or family.startswith("camera.")
+            or family.startswith(("vision.", "camera."))
         )
         if not observation_family:
             return True

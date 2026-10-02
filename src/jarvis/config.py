@@ -131,6 +131,12 @@ class JarvisConfig:
     work_orchestration_enabled: bool = False
     work_orchestration_model: str | None = None
     global_brain_router_mode: str = "shadow"
+    jev_bounded_decisions_enabled: bool = False
+    jev_benchmark_admitted: bool = False
+    jev_benchmark_report_path: str | None = None
+    jev_model: str = "jev-latest"
+    jev_endpoint: str = "https://api.typesafe.ai/v1/systemone"
+    jev_min_confidence: float = 0.0
     runtime_lane: RuntimeLane = RuntimeLane.PRODUCTION
     gicc_mode: GiccMode = GiccMode.OFF
     work_dbos_database_url: str | None = field(default=None, repr=False)
@@ -213,6 +219,35 @@ class JarvisConfig:
             "global_brain_router_mode",
             brain_router_mode,
         )
+
+        if not isinstance(self.jev_bounded_decisions_enabled, bool):
+            raise TypeError("jev_bounded_decisions_enabled must be a bool")
+        if not isinstance(self.jev_benchmark_admitted, bool):
+            raise TypeError("jev_benchmark_admitted must be a bool")
+        jev_model = str(self.jev_model).strip()
+        jev_endpoint = str(self.jev_endpoint).strip()
+        if not jev_model:
+            raise ValueError("jev_model must not be empty")
+        if not jev_endpoint:
+            raise ValueError("jev_endpoint must not be empty")
+        if not 0.0 <= float(self.jev_min_confidence) <= 1.0:
+            raise ValueError("jev_min_confidence must be between 0 and 1")
+        if self.jev_bounded_decisions_enabled:
+            if not self.jev_benchmark_admitted:
+                raise ValueError(
+                    "JEV bounded decisions require owner-machine benchmark admission"
+                )
+            if float(self.jev_min_confidence) <= 0.0:
+                raise ValueError(
+                    "JEV bounded decisions require a calibrated confidence threshold"
+                )
+            if not str(self.jev_benchmark_report_path or "").strip():
+                raise ValueError(
+                    "JEV bounded decisions require a benchmark report path"
+                )
+        object.__setattr__(self, "jev_model", jev_model)
+        object.__setattr__(self, "jev_endpoint", jev_endpoint)
+        object.__setattr__(self, "jev_min_confidence", float(self.jev_min_confidence))
 
         if not isinstance(self.runtime_lane, RuntimeLane):
             raise TypeError("runtime_lane must be RuntimeLane")
@@ -468,6 +503,35 @@ class JarvisConfig:
             global_brain_router_mode=_configured_required_text(
                 "JARVIS_GLOBAL_BRAIN_ROUTER_MODE",
                 "shadow",
+                machine,
+            ),
+            jev_bounded_decisions_enabled=_configured_bool(
+                "JARVIS_JEV_BOUNDED_DECISIONS_ENABLED",
+                False,
+                machine,
+            ),
+            jev_benchmark_admitted=_configured_bool(
+                "JARVIS_JEV_BENCHMARK_ADMITTED",
+                False,
+                machine,
+            ),
+            jev_benchmark_report_path=_configured_optional_text(
+                "JARVIS_JEV_BENCHMARK_REPORT_PATH",
+                machine,
+            ),
+            jev_model=_configured_required_text(
+                "JARVIS_JEV_MODEL",
+                "jev-latest",
+                machine,
+            ),
+            jev_endpoint=_configured_required_text(
+                "JARVIS_JEV_ENDPOINT",
+                "https://api.typesafe.ai/v1/systemone",
+                machine,
+            ),
+            jev_min_confidence=_configured_float(
+                "JARVIS_JEV_MIN_CONFIDENCE",
+                0.0,
                 machine,
             ),
             runtime_lane=runtime_lane,

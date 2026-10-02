@@ -28,6 +28,7 @@ from jarvis.goal_intelligence.interpretation import (
 )
 from jarvis.goal_intelligence.models import (
     GoalKind,
+    PlanNodeType,
     WorldEntityRefV1,
 )
 from jarvis.goal_intelligence.planning import (
@@ -74,6 +75,9 @@ class QueueStructuredClient:
 
 class StaticContext:
     def __init__(self, descriptors=()) -> None:
+        self.set_descriptors(descriptors)
+
+    def set_descriptors(self, descriptors=()) -> None:
         descriptors = tuple(descriptors)
         self._context = AcquisitionContextV1(
             catalog=CapabilityCatalog(
@@ -103,6 +107,7 @@ class StaticContext:
 class FakePhase9Bridge:
     def __init__(self) -> None:
         self.gaps = []
+        self.completion_allowed = False
 
     def admit_gap(self, gap, goal):
         self.gaps.append((gap, goal))
@@ -110,6 +115,10 @@ class FakePhase9Bridge:
             request=SimpleNamespace(gap_id=gap.gap_id),
             admission=SimpleNamespace(acquisition_work_id=f"work-{gap.gap_id}"),
         )
+
+    def completion_verified(self, *, gap, goal):
+        del gap, goal
+        return self.completion_allowed
 
 
 def _store(tmp_path: Path) -> GoalStore:
@@ -307,6 +316,120 @@ async def test_tv_goal_creates_reusable_gap_and_phase9_link(
     assert gap.minimum_required_operations == ("play",)
     assert "transporter" not in str(gap.canonical_payload()).casefold()
     assert result.plan is not None
+
+
+@pytest.mark.asyncio
+async def test_capability_goal_resumes_only_after_exact_phase9_completion(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    registry = WorldRegistry(store)
+    tv = registry.register_entity(
+        WorldEntityRefV1.create(
+            entity_type="media_player",
+            canonical_name="Living Room TV",
+            aliases=("my tv",),
+            provenance_refs=("owner-config:media-target",),
+        )
+    )
+    conversation, turn = _conversation("Play Transporter on my TV.")
+    interpretation_client = QueueStructuredClient(
+        ShadowGoalInterpretationOutput(
+            actionable=True,
+            desired_outcome="Play Transporter on the living-room TV.",
+            goal_kind=GoalKind.ONE_SHOT,
+            candidate_entities=[
+                ShadowEntityCandidate(
+                    mention="my TV",
+                    proposed_type="media_player",
+                    evidence_turn_ids=[turn.turn_id],
+                )
+            ],
+            candidate_completion_predicates=["playback_started"],
+            evidence_turn_ids=[turn.turn_id],
+        )
+    )
+    requirement_client = QueueStructuredClient(
+        CapabilityRequirementProposalSet(
+            requirements=[
+                CapabilityRequirementProposal(
+                    semantic_capability="media_player.control",
+                    operation="play",
+                    target_entity_id=tv.entity_id,
+                    target_entity_type="media_player",
+                    expected_postconditions=["playback_started"],
+                    reason="Start selected media playback.",
+                )
+            ]
+        )
+    )
+    planner_client = QueueStructuredClient(
+        PlanProposalV1(
+            nodes=[
+                PlanNodeCandidate(
+                    node_type="action",
+                    summary="Play Transporter.",
+                    capability_key="test:media_player",
+                    operation="play",
+                    parameters={"title": "Transporter"},
+                    postcondition_ref="playback_started",
+                ),
+                PlanNodeCandidate(
+                    node_type="verify",
+                    summary="Verify playback started.",
+                    postcondition_ref="playback_started",
+                    depends_on_indexes=[0],
+                ),
+            ]
+        )
+    )
+    context = StaticContext()
+    phase9 = FakePhase9Bridge()
+    coordinator = GoalIntelligenceCoordinator(
+        store=store,
+        interpreter=GoalInterpreter(client=interpretation_client),
+        entity_resolver=EntityResolver(registry),
+        requirement_deriver=RequirementDeriver(client=requirement_client),
+        capability_context=context,
+        capability_graph_resolver=CapabilityGraphResolver(store=store),
+        phase9_bridge=phase9,
+        planner=GoalPlanner(client=planner_client),
+    )
+
+    waiting = await coordinator.pursue(conversation=conversation, turn=turn)
+    assert waiting.disposition is GoalIntakeDisposition.WAITING_CAPABILITY
+    assert waiting.goal is not None
+
+    context.set_descriptors(
+        (
+            CapabilityDescriptor.create(
+                capability_id="media_player",
+                source_id="test",
+                kind=CapabilityKind.NATIVE_API,
+                name="Living room media player",
+                description="Play content on the configured television.",
+                operations=("play",),
+                metadata={
+                    "semantic_capability_family": "media_player.control",
+                    "target_entity_types": ["media_player"],
+                },
+                execution_enabled=True,
+            ),
+        )
+    )
+
+    still_blocked = await coordinator.continue_goal(waiting.goal.goal_id)
+    assert still_blocked.disposition is GoalIntakeDisposition.WAITING_CAPABILITY
+
+    phase9.completion_allowed = True
+    resumed = await coordinator.continue_goal(waiting.goal.goal_id)
+
+    assert resumed.disposition is GoalIntakeDisposition.PLAN_READY
+    assert resumed.plan is not None
+    assert tuple(node.node_type for node in resumed.plan.nodes) == (
+        PlanNodeType.ACTION,
+        PlanNodeType.VERIFY,
+    )
 
 
 @pytest.mark.asyncio

@@ -32,6 +32,7 @@ from jarvis.goal_intelligence.models import (
     PlanNodeType,
     WorldEntityRefV1,
 )
+from jarvis.goal_intelligence.monitoring import GICC_MONITOR_EVENT_CONTRACT
 from jarvis.goal_intelligence.planning import (
     GoalPlanner,
     PlanNodeCandidate,
@@ -250,6 +251,7 @@ async def test_owner_acceptance_scenario_2_gate_becomes_monitor_plan_without_que
                 "semantic_capability_family": "camera.observe",
                 "target_entity_types": ["camera"],
                 "observation_operations": ["read_live_stream"],
+                "monitor_event_contract": GICC_MONITOR_EVENT_CONTRACT,
             },
             execution_enabled=True,
         ),
@@ -260,7 +262,11 @@ async def test_owner_acceptance_scenario_2_gate_becomes_monitor_plan_without_que
             name="Local perception",
             description="Detect delivery-agent candidates.",
             operations=("detect_delivery_agent",),
-            metadata={"semantic_capability_family": "vision.perceive"},
+            metadata={
+                "semantic_capability_family": "vision.perceive",
+                "observation_operations": ["detect_delivery_agent"],
+                "monitor_event_contract": GICC_MONITOR_EVENT_CONTRACT,
+            },
             execution_enabled=True,
         ),
         CapabilityDescriptor.create(

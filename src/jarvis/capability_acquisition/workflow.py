@@ -26,7 +26,10 @@ from jarvis.capability_acquisition.models import (
     OwnerCapabilityGoalV1,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
-from jarvis.capability_acquisition.resolver import CapabilityAcquisitionResolver
+from jarvis.capability_acquisition.resolver import (
+    AcquisitionCandidateAdvisor,
+    CapabilityAcquisitionResolver,
+)
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
 from jarvis.capability_acquisition.source import CapabilitySourceRegistry
 from jarvis.engineering_change import ChangeArtifact, ChangeStore
@@ -360,10 +363,14 @@ class AcquisitionResolveExecutor:
         *,
         context_provider: AcquisitionContextProvider,
         sources: CapabilitySourceRegistry,
+        advisor: AcquisitionCandidateAdvisor | None = None,
     ) -> None:
         self._resolver = resolver
         self._context_provider = context_provider
-        self._acquisition = CapabilityAcquisitionResolver(sources)
+        self._acquisition = CapabilityAcquisitionResolver(
+            sources,
+            advisor=advisor,
+        )
 
     def resource_keys(
         self,
@@ -770,6 +777,7 @@ def build_acquisition_protocol_executors(
     *,
     context_provider: AcquisitionContextProvider,
     sources: CapabilitySourceRegistry,
+    advisor: AcquisitionCandidateAdvisor | None = None,
 ) -> tuple[object, ...]:
     return (
         AcquisitionInspectGoalExecutor(resolver),
@@ -778,6 +786,7 @@ def build_acquisition_protocol_executors(
             resolver,
             context_provider=context_provider,
             sources=sources,
+            advisor=advisor,
         ),
         AcquisitionFinalizeExecutor(resolver),
     )

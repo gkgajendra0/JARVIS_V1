@@ -71,11 +71,12 @@ StartupReadinessWaiter = Callable[[float], bool]
 VoiceBehaviorObserver = Callable[[str, str, str, dict[str, object]], None]
 ConversationSuccessObserver = Callable[[], None]
 
+
 _UPDATE_APPROVAL_PROMPT = (
     "A JARVIS software update is available. Shall I install it and restart now? "
     "Please answer yes or no."
 )
-_REALTIME_LIFECYCLE_TIMEOUT_SECONDS = 12.0
+_REALTIME_LIFECYCLE_TIMEOUT_SECONDS = 30.0
 _STANDBY_ACK_TIMEOUT_SECONDS = 8.0
 _WAKE_ACK_GRACE_SECONDS = 0.85
 _WAKE_ZERO_TURN_DEGRADED_THRESHOLD = 3

@@ -16,13 +16,13 @@ from jarvis.capability_registry.projection import (
     EffectiveCapabilityState,
 )
 from jarvis.goal_intelligence.capability_graph import CapabilityGraphResolver
-from jarvis.goal_intelligence.monitoring import GICC_MONITOR_EVENT_CONTRACT
 from jarvis.goal_intelligence.models import (
     CapabilityRequirementGraphV1,
     CapabilityRequirementV1,
     GoalKind,
     OwnerGoalV2,
 )
+from jarvis.goal_intelligence.monitoring import GICC_MONITOR_EVENT_CONTRACT
 from jarvis.goal_intelligence.store import GoalStore
 from jarvis.self_model.health import HealthState
 from jarvis.work.privacy import ProtectedWorkPayloadCodec

@@ -12,6 +12,7 @@ from jarvis.voice.media_devices_audio import (
     MediaDevicesAudioOutput,
     MediaDevicesConversationRuntime,
 )
+from jarvis.voice.safe_media_devices import SafeMediaDevices
 
 
 def test_production_output_requires_48khz(monkeypatch) -> None:
@@ -143,3 +144,50 @@ async def test_media_devices_output_does_not_cancel_inflight_track_detach() -> N
     assert player.removed == [track]
     assert player.added == [track, track]
     assert output._track_attached is True
+
+
+def test_safe_media_devices_uses_jitter_tolerant_output_mixer(monkeypatch) -> None:
+    created: dict[str, int] = {}
+    player = SimpleNamespace()
+
+    def fake_open_output(self, *, output_device=None):
+        del self
+        created["device"] = -1 if output_device is None else int(output_device)
+        return player
+
+    class FakeMixer:
+        def __init__(
+            self,
+            *,
+            sample_rate: int,
+            num_channels: int,
+            stream_timeout_ms: int,
+        ) -> None:
+            created["sample_rate"] = sample_rate
+            created["num_channels"] = num_channels
+            created["stream_timeout_ms"] = stream_timeout_ms
+
+    monkeypatch.setattr(rtc.MediaDevices, "open_output", fake_open_output)
+    monkeypatch.setattr(rtc, "AudioMixer", FakeMixer)
+
+    loop = asyncio.new_event_loop()
+    try:
+        devices = SafeMediaDevices(
+            loop=loop,
+            input_sample_rate=48_000,
+            output_sample_rate=48_000,
+            num_channels=1,
+            blocksize=480,
+        )
+        returned = devices.open_output(output_device=8)
+    finally:
+        loop.close()
+
+    assert returned is player
+    assert created == {
+        "device": 8,
+        "sample_rate": 48_000,
+        "num_channels": 1,
+        "stream_timeout_ms": 300,
+    }
+    assert isinstance(player._mixer, FakeMixer)

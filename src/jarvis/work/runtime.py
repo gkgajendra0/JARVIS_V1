@@ -36,6 +36,7 @@ from jarvis.capability_acquisition.promotion import (
     CapabilityAcquisitionReleaseBridge,
     CapabilityAcquisitionReleaseBridgeError,
 )
+from jarvis.capability_acquisition.resolver import AcquisitionCandidateAdvisor
 from jarvis.capability_acquisition.runtime_context import (
     AcquisitionContextProvider,
     StaticAcquisitionContextProvider,
@@ -70,6 +71,7 @@ from jarvis.chatgpt_plan import (
     ChatGPTPlanSessionManager,
 )
 from jarvis.engineering_change.coordinator import ChangeCoordinator
+from jarvis.engineering_change.delivery import reconcile_owner_change_gates
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.change_integration import (
     EngineeringSubstrateChangeService,
@@ -625,6 +627,7 @@ def build_work_runtime(
     promotion_runtime_config: PromotionRuntimeConfig | None = None,
     capability_catalog_refresher: Callable[[], object] | None = None,
     autonomy_periodic_reconciler: object | None = None,
+    acquisition_candidate_advisor: AcquisitionCandidateAdvisor | None = None,
 ) -> WorkRuntime:
     """Build one durable work runtime around the configured JARVIS brain provider."""
 
@@ -752,6 +755,7 @@ def build_work_runtime(
             acquisition_work_context,
             context_provider=acquisition_context,
             sources=acquisition_sources,
+            advisor=acquisition_candidate_advisor,
         ),
         *build_diagnostic_workspace_executors(diagnostic_workspace_manager),
         *build_diagnostic_code_intelligence_executors(diagnostic_code_index),
@@ -992,8 +996,18 @@ def build_work_runtime(
 
         release_bridge_task = loop.create_task(reconcile_release_bridge())
 
-    configure_terminal_reconciliation(changes.reconcile_for_work)
+    def _reconcile_terminal_change(work_id: str) -> None:
+        changes.reconcile_for_work(work_id)
+        reconcile_owner_change_gates(changes)
+
+    configure_terminal_reconciliation(_reconcile_terminal_change)
     changes.reconcile_active()
+    surfaced_change_gates = reconcile_owner_change_gates(changes)
+    if surfaced_change_gates:
+        LOGGER.info(
+            "Owner approval gates surfaced automatically: %s",
+            ", ".join(surfaced_change_gates),
+        )
     runtime = WorkRuntime(
         store=store,
         engine=engine,

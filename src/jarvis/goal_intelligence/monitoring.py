@@ -107,7 +107,7 @@ class MonitorObservationBus:
         for callback in subscribers:
             try:
                 callback(observation)
-            except Exception:  # noqa: BLE001 - one consumer must not break publishers
+            except Exception:
                 LOGGER.exception("GICC monitor observation subscriber failed")
 
 
