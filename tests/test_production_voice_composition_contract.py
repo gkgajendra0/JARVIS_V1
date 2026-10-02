@@ -67,3 +67,51 @@ def test_production_controller_composition_keywords_have_an_explicit_owner() -> 
         "build_production_voice_runtime passes constructor keywords with no explicit "
         f"owner: {sorted(unowned)}"
     )
+
+
+
+def _call_by_name(tree: ast.AST, name: str) -> ast.Call:
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and (
+            (isinstance(node.func, ast.Name) and node.func.id == name)
+            or (isinstance(node.func, ast.Attribute) and node.func.attr == name)
+        )
+    ]
+    assert len(calls) == 1
+    return calls[0]
+
+
+def test_production_runtime_wires_bounded_jev_into_work_runtime() -> None:
+    source = textwrap.dedent(inspect.getsource(build_production_voice_runtime))
+    tree = ast.parse(source)
+
+    jev_call = _call_by_name(tree, "build_jev_acquisition_candidate_advisor")
+    jev_kwargs = {
+        keyword.arg: ast.unparse(keyword.value)
+        for keyword in jev_call.keywords
+        if keyword.arg is not None
+    }
+
+    assert jev_kwargs == {
+        "enabled": "config.jev_bounded_decisions_enabled",
+        "benchmark_admitted": "config.jev_benchmark_admitted",
+        "minimum_confidence": "config.jev_min_confidence",
+        "model": "config.jev_model",
+        "endpoint": "config.jev_endpoint",
+        "benchmark_report_path": "config.jev_benchmark_report_path or ''",
+    }
+
+    work_call = _call_by_name(tree, "build_work_runtime")
+    work_kwargs = {
+        keyword.arg: ast.unparse(keyword.value)
+        for keyword in work_call.keywords
+        if keyword.arg is not None
+    }
+
+    assert (
+        work_kwargs["acquisition_candidate_advisor"]
+        == "acquisition_candidate_advisor"
+    )
