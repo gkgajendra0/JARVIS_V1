@@ -310,6 +310,7 @@ def test_jev_runtime_config_requires_calibrated_threshold() -> None:
         JarvisConfig(
             jev_bounded_decisions_enabled=True,
             jev_benchmark_admitted=True,
+            jev_benchmark_report_path="jev-benchmark.json",
             jev_min_confidence=0.0,
         )
 
@@ -318,8 +319,18 @@ def test_jev_runtime_config_accepts_benchmark_admitted_threshold() -> None:
     config = JarvisConfig(
         jev_bounded_decisions_enabled=True,
         jev_benchmark_admitted=True,
+        jev_benchmark_report_path="jev-benchmark.json",
         jev_min_confidence=0.85,
     )
     assert config.jev_bounded_decisions_enabled is True
     assert config.jev_benchmark_admitted is True
     assert config.jev_min_confidence == pytest.approx(0.85)
+
+
+def test_jev_runtime_config_requires_benchmark_report_path() -> None:
+    with pytest.raises(ValueError, match="benchmark report path"):
+        JarvisConfig(
+            jev_bounded_decisions_enabled=True,
+            jev_benchmark_admitted=True,
+            jev_min_confidence=0.85,
+        )
