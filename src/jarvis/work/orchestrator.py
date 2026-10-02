@@ -85,8 +85,7 @@ class WorkOrchestrator:
                 or existing.state.terminal
             ):
                 execution_id = (
-                    self._store.get_execution_id(existing.work_id)
-                    or existing.work_id
+                    self._store.get_execution_id(existing.work_id) or existing.work_id
                 )
             else:
                 execution_id = ensure_durable_execution(
