@@ -6,12 +6,14 @@ from types import SimpleNamespace
 import pytest
 
 from jarvis.conversation import ConversationRole, ConversationSession
+from jarvis.voice import canonical_active_speaker_runtime as canonical_runtime_module
 from jarvis.voice import work_tools as work_tools_module
 from jarvis.voice.canonical_active_speaker_runtime import (
     CanonicalActiveSpeakerRuntimeController,
 )
 from jarvis.voice.runtime import VoiceRuntimeState
 from jarvis.voice.work_tools import WorkAgentTools
+from jarvis.work.models import WorkState
 from jarvis.work.runtime import WorkRuntime
 
 
@@ -141,6 +143,80 @@ async def test_bound_owner_input_can_cancel_exact_work_and_close_interaction(
         "status": "cancelled",
         "work_id": "work-tv",
     }
+
+
+@pytest.mark.asyncio
+async def test_owner_input_resolution_closes_session_before_exact_acknowledgement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = object.__new__(WorkRuntime)
+    controller = object.__new__(CanonicalActiveSpeakerRuntimeController)
+    controller._work_runtime = runtime
+    controller._shutdown = asyncio.Event()
+    controller._timeout_handle = None
+    controller._active_end = None
+    controller._state = VoiceRuntimeState.IDLE
+    controller.audio = SimpleNamespace(output=object())
+
+    class FakeBoundTools:
+        def __init__(
+            self,
+            runtime,
+            conversation,
+            *,
+            bound_owner_input_work_id=None,
+            on_bound_owner_input_submitted=None,
+            **kwargs,
+        ) -> None:
+            del runtime, conversation, kwargs
+            assert bound_owner_input_work_id == "work-tv"
+            self._callback = on_bound_owner_input_submitted
+
+        async def continue_background_work(self, context=None):
+            del context
+            assert self._callback is not None
+            self._callback(SimpleNamespace(state=WorkState.RUNNING))
+            return {"ok": True}
+
+        async def cancel_background_work(self, context=None):
+            del context
+            return {"ok": True}
+
+    monkeypatch.setattr(
+        canonical_runtime_module,
+        "WorkAgentTools",
+        FakeBoundTools,
+    )
+
+    async def fake_run_one_session_owned(**kwargs) -> None:
+        conversation = ConversationSession()
+        conversation.start()
+        tools = kwargs["session_tool_factory"](conversation)
+        await tools[0](None)
+        assert kwargs["completion_event"].is_set() is True
+
+    spoken: list[str] = []
+
+    async def fake_speak(output, *, instructions: str, label: str) -> None:
+        del output
+        spoken.append(f"{label}:{instructions}")
+
+    controller._run_one_session_owned = fake_run_one_session_owned
+    controller._speak_ephemeral_realtime_message = fake_speak
+
+    answered = await controller._run_owner_input_interaction(
+        work_id="work-tv",
+        question="May I revise the capability architecture?",
+    )
+
+    assert answered is True
+    assert spoken == [
+        (
+            "owner input acknowledgement:Say exactly: Your response was recorded. "
+            "I will continue the waiting work and ask separately if another approval "
+            "is required."
+        )
+    ]
 
 
 @pytest.mark.asyncio
