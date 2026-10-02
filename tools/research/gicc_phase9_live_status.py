@@ -15,7 +15,6 @@ from jarvis.goal_intelligence.store import GoalStore
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
-
 _ARTIFACT_KINDS = (
     "gicc_capability_gap_link",
     "owner_capability_goal",
