@@ -225,11 +225,18 @@ class Phase9GoalBridge:
         )
         if admission.change is not None:
             payload = {
-                "schema": "gicc_phase9_gap_link.v1",
+                "schema": "gicc_phase9_gap_link.v2",
                 "request_id": request.request_id,
                 "request_digest": request.digest,
                 "motivating_goal_id": request.motivating_goal_id,
                 "gap_id": request.gap_id,
+                "phase9_goal_id": phase9_goal.goal_id,
+                "phase9_goal_digest": phase9_goal.digest,
+                "engineering_change_id": admission.change.change_id,
+                "acquisition_work_id": admission.acquisition_work_id,
+                "goal_artifact_id": admission.goal_artifact_id,
+                "admission_artifact_id": admission.admission_artifact_id,
+                "admission_disposition": admission.disposition.value,
                 "reusable_capability_family": request.reusable_capability_family,
                 "minimum_required_operations": list(
                     request.minimum_required_operations
@@ -238,6 +245,8 @@ class Phase9GoalBridge:
                 "target_entity_id": request.target_entity_id,
                 "owner_source_session_id": request.owner_source_session_id,
                 "owner_source_turn_id": request.owner_source_turn_id,
+                "bridge_source_session_id": request.bridge_source_session_id,
+                "bridge_source_turn_id": request.bridge_source_turn_id,
                 "monitor_event_contract_required": (
                     request.monitor_event_contract_required
                 ),
