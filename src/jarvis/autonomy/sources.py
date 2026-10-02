@@ -507,9 +507,7 @@ class EngineeringChangeSource:
                     "engineering_change_id": gap_link.payload.get(
                         "engineering_change_id"
                     ),
-                    "acquisition_work_id": gap_link.payload.get(
-                        "acquisition_work_id"
-                    ),
+                    "acquisition_work_id": gap_link.payload.get("acquisition_work_id"),
                 }
             payload = {
                 "state": change.state.value,
