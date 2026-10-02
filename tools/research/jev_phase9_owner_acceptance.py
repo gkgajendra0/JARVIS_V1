@@ -15,6 +15,7 @@ import argparse
 import importlib.util
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -190,6 +191,96 @@ def _apply_machine_settings(
     }
 
 
+def _validate_owner_benchmark_depth(report: dict[str, Any]) -> None:
+    repeat = report.get("repeat")
+    case_count = report.get("case_count")
+    results = report.get("results")
+    if not isinstance(repeat, int) or isinstance(repeat, bool) or repeat < 3:
+        raise RuntimeError("JEV owner admission requires at least 3 benchmark repeats")
+    if case_count != 8:
+        raise RuntimeError("JEV owner admission requires all 8 Phase-9 cases")
+    if not isinstance(results, list) or len(results) != case_count * repeat:
+        raise RuntimeError(
+            "JEV owner admission report does not contain every case/repetition result"
+        )
+
+
+def _finalize_report_admission(
+    *,
+    source_report: Path,
+    durable_output: Path,
+    model: str,
+    endpoint: str,
+    apply: bool,
+) -> dict[str, Any]:
+    source = source_report.expanduser().resolve()
+    report = _load_report(source)
+    _validate_owner_benchmark_depth(report)
+    threshold = _select_admitted_threshold(report)
+    _validate_jev_benchmark_report(
+        report_path=str(source),
+        minimum_confidence=threshold,
+        model=model,
+    )
+
+    durable = durable_output.expanduser().resolve()
+    if source != durable:
+        durable.parent.mkdir(parents=True, exist_ok=True)
+        temporary = durable.with_suffix(durable.suffix + ".tmp")
+        shutil.copyfile(source, temporary)
+        os.replace(temporary, durable)
+    else:
+        durable.parent.mkdir(parents=True, exist_ok=True)
+
+    # Re-read and revalidate the exact durable bytes before machine admission.
+    durable_report = _load_report(durable)
+    _validate_owner_benchmark_depth(durable_report)
+    durable_threshold = _select_admitted_threshold(durable_report)
+    if durable_threshold != threshold:
+        raise RuntimeError("durable JEV benchmark threshold changed during persistence")
+    _validate_jev_benchmark_report(
+        report_path=str(durable),
+        minimum_confidence=durable_threshold,
+        model=model,
+    )
+
+    before = _machine_before()
+    after = before
+    if apply:
+        after = _apply_machine_settings(
+            report_path=durable,
+            model=model,
+            endpoint=endpoint,
+            threshold=durable_threshold,
+        )
+
+    selected = next(
+        item
+        for item in durable_report["summaries"]
+        if float(item["confidence_threshold"]) == durable_threshold
+    )
+    return {
+        "status": "PASS",
+        "decision_family": "capability_acquisition.candidate_selection",
+        "suite": durable_report.get("suite"),
+        "model": model,
+        "case_count": durable_report.get("case_count"),
+        "repeat": durable_report.get("repeat"),
+        "selected_confidence_threshold": durable_threshold,
+        "coverage": selected.get("coverage"),
+        "accuracy_over_covered": selected.get("accuracy_over_covered"),
+        "covered": selected.get("covered"),
+        "abstained": selected.get("abstained"),
+        "unsafe_downgrades": selected.get("unsafe_downgrades"),
+        "structured_output_failures": selected.get("structured_output_failures"),
+        "benchmark_report_path": str(durable),
+        "machine_before": before,
+        "machine_after": after,
+        "machine_settings_applied": apply,
+        "credential_persisted": False,
+    }
+
+
 def _run(
     *,
     model: str,
@@ -209,7 +300,6 @@ def _run(
             f"JEV credential missing from environment variable {key_name}"
         )
 
-    before = _machine_before()
     output = output.expanduser().resolve()
     module = _load_benchmark_module()
     rc = module.main(
@@ -226,46 +316,13 @@ def _run(
     if rc != 0:
         raise RuntimeError(f"JEV benchmark runner exited with status {rc}")
 
-    report = _load_report(output)
-    threshold = _select_admitted_threshold(report)
-    _validate_jev_benchmark_report(
-        report_path=str(output),
-        minimum_confidence=threshold,
+    return _finalize_report_admission(
+        source_report=output,
+        durable_output=output,
         model=model,
+        endpoint=endpoint,
+        apply=apply,
     )
-
-    after = before
-    if apply:
-        after = _apply_machine_settings(
-            report_path=output,
-            model=model,
-            endpoint=endpoint,
-            threshold=threshold,
-        )
-
-    selected = next(
-        item
-        for item in report["summaries"]
-        if float(item["confidence_threshold"]) == threshold
-    )
-    return {
-        "status": "PASS",
-        "decision_family": "capability_acquisition.candidate_selection",
-        "suite": report.get("suite"),
-        "model": model,
-        "case_count": report.get("case_count"),
-        "repeat": report.get("repeat"),
-        "selected_confidence_threshold": threshold,
-        "covered": selected.get("covered"),
-        "abstained": selected.get("abstained"),
-        "unsafe_downgrades": selected.get("unsafe_downgrades"),
-        "structured_output_failures": selected.get("structured_output_failures"),
-        "benchmark_report_path": str(output),
-        "machine_before": before,
-        "machine_after": after,
-        "machine_settings_applied": apply,
-        "credential_persisted": False,
-    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -279,6 +336,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--jev-endpoint", default=_DEFAULT_ENDPOINT)
     parser.add_argument("--jev-api-key-env", default="JEV_API_KEY")
     parser.add_argument("--output", type=Path, default=_DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--existing-report",
+        type=Path,
+        help=(
+            "reuse an already-produced Phase-9 JEV benchmark report instead of "
+            "calling JEV again; the report is revalidated and copied to --output"
+        ),
+    )
     parser.add_argument("--repeat", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument(
@@ -308,16 +373,25 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--confidence-threshold must be in (0, 1]")
 
     try:
-        report = _run(
-            model=args.model.strip(),
-            endpoint=args.jev_endpoint.strip(),
-            api_key_env=args.jev_api_key_env,
-            output=args.output,
-            repeat=args.repeat,
-            timeout=args.timeout,
-            thresholds=thresholds,
-            apply=args.apply,
-        )
+        if args.existing_report is not None:
+            report = _finalize_report_admission(
+                source_report=args.existing_report,
+                durable_output=args.output,
+                model=args.model.strip(),
+                endpoint=args.jev_endpoint.strip(),
+                apply=args.apply,
+            )
+        else:
+            report = _run(
+                model=args.model.strip(),
+                endpoint=args.jev_endpoint.strip(),
+                api_key_env=args.jev_api_key_env,
+                output=args.output,
+                repeat=args.repeat,
+                timeout=args.timeout,
+                thresholds=thresholds,
+                apply=args.apply,
+            )
     except KeyboardInterrupt:
         return 130
     except Exception as exc:  # noqa: BLE001 - owner acceptance boundary
