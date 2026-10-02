@@ -202,10 +202,14 @@ class SafeMediaDevices(rtc.MediaDevices):
         # slightly wider scheduling jitter, producing audible micro-gaps even
         # while the physical player still has buffered PCM. Pre-create the same
         # mixer with a wider bounded timeout; OutputPlayer.start() reuses it.
-        player._mixer = rtc.AudioMixer(
-            sample_rate=self._out_sr,
-            num_channels=self._channels,
-            stream_timeout_ms=_OUTPUT_MIXER_STREAM_TIMEOUT_MS,
+        setattr(
+            player,
+            "_mixer",
+            rtc.AudioMixer(
+                sample_rate=self._out_sr,
+                num_channels=self._channels,
+                stream_timeout_ms=_OUTPUT_MIXER_STREAM_TIMEOUT_MS,
+            ),
         )
         return player
 
