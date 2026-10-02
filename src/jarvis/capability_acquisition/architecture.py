@@ -103,7 +103,10 @@ def _gicc_semantic_contract(
     if link is None:
         return None
     payload = link.payload
-    if payload.get("schema") != "gicc_phase9_gap_link.v1":
+    if payload.get("schema") not in {
+        "gicc_phase9_gap_link.v1",
+        "gicc_phase9_gap_link.v2",
+    }:
         raise CapabilityAcquisitionArchitectureError(
             "GICC capability-gap link uses an unsupported contract"
         )
