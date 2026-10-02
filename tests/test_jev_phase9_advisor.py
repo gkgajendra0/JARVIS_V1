@@ -10,7 +10,10 @@ from jarvis.brain_routing.jev import (
     JevDecisionResult,
 )
 from jarvis.capabilities.models import CapabilityCatalog
-from jarvis.capability_acquisition.jev import JevAcquisitionCandidateAdvisor
+from jarvis.capability_acquisition.jev import (
+    JevAcquisitionCandidateAdvisor,
+    build_jev_acquisition_candidate_advisor,
+)
 from jarvis.capability_acquisition.models import (
     AcquisitionCandidateV1,
     AcquisitionSourceKind,
@@ -182,3 +185,60 @@ def test_advisor_cannot_select_outside_deterministic_safe_tier() -> None:
             (first, second, outsider),
             _context(),
         )
+
+
+def test_live_jev_factory_is_disabled_without_side_effects(monkeypatch) -> None:
+    monkeypatch.delenv("JEV_API_KEY", raising=False)
+    assert build_jev_acquisition_candidate_advisor(
+        enabled=False,
+        benchmark_admitted=False,
+        minimum_confidence=0.0,
+        model="jev-latest",
+        endpoint="https://api.typesafe.ai/v1/systemone",
+    ) is None
+
+
+def test_live_jev_factory_requires_benchmark_admission(monkeypatch) -> None:
+    monkeypatch.setenv("JEV_API_KEY", "secret")
+    with pytest.raises(RuntimeError, match="benchmark admission"):
+        build_jev_acquisition_candidate_advisor(
+            enabled=True,
+            benchmark_admitted=False,
+            minimum_confidence=0.85,
+            model="jev-latest",
+            endpoint="https://api.typesafe.ai/v1/systemone",
+        )
+
+
+def test_live_jev_factory_requires_calibrated_threshold_and_secret(monkeypatch) -> None:
+    monkeypatch.setenv("JEV_API_KEY", "secret")
+    with pytest.raises(RuntimeError, match="calibrated confidence"):
+        build_jev_acquisition_candidate_advisor(
+            enabled=True,
+            benchmark_admitted=True,
+            minimum_confidence=0.0,
+            model="jev-latest",
+            endpoint="https://api.typesafe.ai/v1/systemone",
+        )
+
+    monkeypatch.delenv("JEV_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="credential missing"):
+        build_jev_acquisition_candidate_advisor(
+            enabled=True,
+            benchmark_admitted=True,
+            minimum_confidence=0.85,
+            model="jev-latest",
+            endpoint="https://api.typesafe.ai/v1/systemone",
+        )
+
+
+def test_live_jev_factory_builds_only_after_all_gates(monkeypatch) -> None:
+    monkeypatch.setenv("JEV_API_KEY", "secret")
+    advisor = build_jev_acquisition_candidate_advisor(
+        enabled=True,
+        benchmark_admitted=True,
+        minimum_confidence=0.85,
+        model="jev-latest",
+        endpoint="https://api.typesafe.ai/v1/systemone",
+    )
+    assert isinstance(advisor, JevAcquisitionCandidateAdvisor)
