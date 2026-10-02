@@ -264,14 +264,23 @@ class VoiceRuntimeController:
         handle,
         *,
         label: str,
-        timeout_seconds: float = _REALTIME_LIFECYCLE_TIMEOUT_SECONDS,
+        timeout_seconds: float | None = _REALTIME_LIFECYCLE_TIMEOUT_SECONDS,
     ) -> None:
-        """Wait for one realtime-model utterance and surface provider failure."""
+        """Wait for one realtime-model utterance and surface provider failure.
 
-        await asyncio.wait_for(
-            handle.wait_for_playout(),
-            timeout=timeout_seconds,
-        )
+        Interactive proactive sessions may pass None so LiveKit owns the full
+        turn lifetime. SpeechHandle.wait_for_playout() already waits for complete
+        playback and exposes realtime generation failures via handle.exception().
+        A wall-clock cap is retained only for short noninteractive lifecycle speech.
+        """
+
+        if timeout_seconds is None:
+            await handle.wait_for_playout()
+        else:
+            await asyncio.wait_for(
+                handle.wait_for_playout(),
+                timeout=timeout_seconds,
+            )
         error = handle.exception()
         if error is not None:
             raise error
@@ -1205,6 +1214,7 @@ class VoiceRuntimeController:
                 await self._wait_for_realtime_speech(
                     prompt_handle,
                     label=initial_prompt_label,
+                    timeout_seconds=None,
                 )
             if pre_roll_after_monotonic is not None:
                 wake_ack_task = asyncio.create_task(
