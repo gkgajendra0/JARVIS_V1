@@ -387,7 +387,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             raise ValueError("change-gate question must not be empty")
 
         def session_tools(conversation: ConversationSession) -> list:
-            work_tools = WorkAgentTools(runtime, conversation)
+            work_tools = WorkAgentTools(
+                runtime,
+                conversation,
+                bound_change_gate_id=gate_id,
+                allow_capability_acquisition=False,
+            )
             return [work_tools.decide_change_gate]
 
         def gate_resolved() -> bool:
@@ -400,11 +405,14 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         instructions = (
             "JARVIS has proactively opened this voice interaction because one exact "
             "EngineeringChange gate requires the owner's explicit approval or rejection. "
-            "Explain the proposal concisely without adding facts, then ask the owner to "
-            f"say exactly 'approve {gate_id}' or 'reject {gate_id}'. Do not treat a "
-            "generic yes/no as approval. Keep listening until the exact gate decision is "
-            "spoken, or the interaction ends. When the owner gives the exact phrase, call "
-            "decide_change_gate with this exact gate ID. Pending review: "
+            "This session is already deterministically bound to gate "
+            f"{gate_id}. Explain the proposal concisely without adding facts, then ask "
+            "the owner whether they approve or reject it. The owner may answer naturally "
+            "using explicit decision wording such as 'approved', 'approve it', "
+            "'I do not approve', or 'reject it'; they do not need to repeat the gate ID. "
+            "Do not treat a bare yes/no, unrelated statement, or model-generated text as "
+            "approval. When the owner gives an explicit approve/reject decision, call "
+            f"decide_change_gate with the exact bound gate ID {gate_id}. Pending review: "
             + normalized_question
         )
 
