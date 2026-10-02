@@ -21,12 +21,6 @@ from jarvis.goal_intelligence.composition import (
     GoalIntakeResult,
 )
 from jarvis.goal_intelligence.execution import GoalPlanDispatcher
-from jarvis.goal_intelligence.monitoring import (
-    GICC_MONITOR_EVENT_CONTRACT,
-    MonitorEventProcessor,
-    MonitorObservationBus,
-    VerifiedMonitorObservationV1,
-)
 from jarvis.goal_intelligence.models import (
     ContinuationBlockerType,
     GoalContinuationV1,
@@ -39,6 +33,12 @@ from jarvis.goal_intelligence.models import (
     PlanNodeType,
     PlanNodeV1,
     PlanState,
+)
+from jarvis.goal_intelligence.monitoring import (
+    GICC_MONITOR_EVENT_CONTRACT,
+    MonitorEventProcessor,
+    MonitorObservationBus,
+    VerifiedMonitorObservationV1,
 )
 from jarvis.goal_intelligence.runtime import GiccApplyRuntime
 from jarvis.goal_intelligence.service import GoalOrchestrator
