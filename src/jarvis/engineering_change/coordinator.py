@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from jarvis.work.execution import ensure_durable_execution
 from jarvis.work.models import WorkItem, WorkPriority, WorkState
 
 from .models import (
@@ -161,11 +162,18 @@ class ChangeCoordinator:
                 )
 
         if not item.state.terminal:
-            execution_id = self.backend.submit(item.work_id, priority=item.priority)
-            if execution_id != item.work_id:
-                raise ChangeConflict(
-                    "durable backend returned mismatched work identity"
+            try:
+                ensure_durable_execution(
+                    store=self.store.work,
+                    backend=self.backend,
+                    item=item,
                 )
+            except RuntimeError as exc:
+                if "durable backend must use work_id as execution_id" in str(exc):
+                    raise ChangeConflict(
+                        "durable backend returned mismatched work identity"
+                    ) from exc
+                raise
         return stage
 
     def prepare_failed_work_retry(
