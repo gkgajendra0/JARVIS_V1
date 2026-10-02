@@ -392,9 +392,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             verify_owner=lambda *_: False,
         ).get(gate_id)
         if not isinstance(challenge, GateChallenge):
-            raise TypeError(
-                "change-gate prompt requires one pending exact challenge"
-            )
+            raise TypeError("change-gate prompt requires one pending exact challenge")
 
         architecture = store.latest_artifact(challenge.change_id, "architecture")
         label = None
