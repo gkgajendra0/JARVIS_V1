@@ -408,7 +408,7 @@ _OWNER_GATE_BY_STATE = {
 
 class EngineeringChangeSource:
     source_key = "engineering_change"
-    source_version = 1
+    source_version = 2
     namespaces = ("engineering_change",)
 
     def __init__(
