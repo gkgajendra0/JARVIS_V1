@@ -255,7 +255,10 @@ class ChangeService:
             raise ChangeConflict("owner named a different gate")
         if typed is not None and (
             typed.group(2).casefold() != challenge.kind.value
-            or gates.pending_gate_ids() != (gate_id,)
+            or (
+                bound_gate_id is None
+                and gates.pending_gate_ids() != (gate_id,)
+            )
         ):
             raise ChangeConflict("spoken review is ambiguous; identify the gate ID")
         approved = (
