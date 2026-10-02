@@ -71,6 +71,7 @@ from jarvis.chatgpt_plan import (
     ChatGPTPlanSessionManager,
 )
 from jarvis.engineering_change.coordinator import ChangeCoordinator
+from jarvis.engineering_change.delivery import reconcile_owner_change_gates
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.change_integration import (
     EngineeringSubstrateChangeService,
@@ -995,8 +996,18 @@ def build_work_runtime(
 
         release_bridge_task = loop.create_task(reconcile_release_bridge())
 
-    configure_terminal_reconciliation(changes.reconcile_for_work)
+    def _reconcile_terminal_change(work_id: str) -> None:
+        changes.reconcile_for_work(work_id)
+        reconcile_owner_change_gates(changes)
+
+    configure_terminal_reconciliation(_reconcile_terminal_change)
     changes.reconcile_active()
+    surfaced_change_gates = reconcile_owner_change_gates(changes)
+    if surfaced_change_gates:
+        LOGGER.info(
+            "Owner approval gates surfaced automatically: %s",
+            ", ".join(surfaced_change_gates),
+        )
     runtime = WorkRuntime(
         store=store,
         engine=engine,
