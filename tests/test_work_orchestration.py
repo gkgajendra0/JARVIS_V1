@@ -11,7 +11,6 @@ import jarvis.work.store as work_store_module
 from jarvis.engineering_change import ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.voice.work_tools import _public_work
-from jarvis.work.dbos_backend import DBOSWorkExecutionBackend
 from jarvis.work.brain import (
     BrainAction,
     BrainCoordinator,
@@ -21,6 +20,7 @@ from jarvis.work.brain import (
     InteractiveBrainGate,
     ProviderPressure,
 )
+from jarvis.work.dbos_backend import DBOSWorkExecutionBackend
 from jarvis.work.engine import (
     WorkActionRegistry,
     WorkEngine,
