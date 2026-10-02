@@ -26,6 +26,7 @@ from jarvis.goal_intelligence.interpretation import (
     ShadowEntityCandidate,
     ShadowGoalInterpretationOutput,
 )
+from jarvis.goal_intelligence.monitoring import GICC_MONITOR_EVENT_CONTRACT
 from jarvis.goal_intelligence.models import (
     GoalKind,
     InformationNeedState,
