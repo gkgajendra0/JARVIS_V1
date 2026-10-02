@@ -631,6 +631,42 @@ async def test_external_acceptance_fences_capability_continuation(
 
 
 @pytest.mark.asyncio
+async def test_background_existing_capability_reuse_needs_no_engineering_work(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store, state=GoalState.WAITING_CAPABILITY)
+    store.put_continuation(
+        GoalContinuationV1.create(
+            goal_id=goal.goal_id,
+            plan_id="phase9-reuse-plan",
+            blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+            blocked_by_id="gap-existing-capability",
+            resume_node_id="resume-existing-capability",
+            work_ids=(),
+            goal_revision=goal.goal_revision,
+            created_at="2026-10-01T18:11:30+00:00",
+        )
+    )
+    capability_runtime = FakeCapabilityRuntime()
+    coordinator = CapabilityContinuationCoordinator(store)
+    runtime = _runtime(
+        store,
+        coordinator,
+        capability_runtime,
+        change_store=FakePhase9ChangeStore(),
+    )
+
+    advanced = await runtime.reconcile_once()
+
+    latest = store.get_goal(goal.goal_id)
+    assert advanced == 1
+    assert coordinator.calls == 1
+    assert latest is not None
+    assert latest.state is GoalState.COMPLETED
+
+
+@pytest.mark.asyncio
 async def test_background_capability_continuation_uses_same_dispatcher(
     tmp_path: Path,
 ) -> None:
