@@ -87,6 +87,7 @@ class WorkAgentTools:
         bound_owner_input_work_id: str | None = None,
         on_bound_owner_input_submitted: Callable[[WorkItem], None] | None = None,
         bound_change_gate_id: str | None = None,
+        on_bound_change_gate_decided: Callable[[bool], None] | None = None,
         allow_capability_acquisition: bool = True,
     ) -> None:
         if not isinstance(runtime, WorkRuntime):
@@ -105,6 +106,7 @@ class WorkAgentTools:
         ):
             raise ValueError("bound_change_gate_id must be an exact gate ID")
         self._bound_change_gate_id = normalized_bound_gate_id
+        self._on_bound_change_gate_decided = on_bound_change_gate_decided
         if not isinstance(allow_capability_acquisition, bool):
             raise TypeError("allow_capability_acquisition must be bool")
         self._allow_capability_acquisition = allow_capability_acquisition
@@ -606,6 +608,11 @@ class WorkAgentTools:
             if payload is not None:
                 return payload
             raise
+        if (
+            bound_gate_id is not None
+            and self._on_bound_change_gate_decided is not None
+        ):
+            self._on_bound_change_gate_decided(decision.approved)
         return {
             "ok": True,
             "change_id": decision.challenge.change_id,
