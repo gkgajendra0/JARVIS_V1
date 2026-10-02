@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable
 from typing import Any, Protocol
 
@@ -22,7 +23,7 @@ from jarvis.conversation import (
     ConversationSession,
     ConversationStatus,
 )
-from jarvis.engineering_change.gates import GateService
+from jarvis.engineering_change.gates import GateChallenge, GateKind, GateService
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_shadow import EnrolledSpeakerShadowObserver
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
@@ -40,6 +41,26 @@ from jarvis.work.provider_retry import delivery_retry_delay_seconds, provider_re
 from jarvis.work.runtime import WorkRuntime
 
 LOGGER = logging.getLogger(__name__)
+
+_OWNER_INTERACTION_RETRY_BASE_SECONDS = 30.0 * 60.0
+_OWNER_INTERACTION_RETRY_MAX_SECONDS = 6.0 * 60.0 * 60.0
+
+
+def _owner_interaction_retry_seconds(failed_attempts: int) -> float:
+    attempts = max(0, int(failed_attempts))
+    delay = _OWNER_INTERACTION_RETRY_BASE_SECONDS * (2 ** min(attempts, 4))
+    return min(_OWNER_INTERACTION_RETRY_MAX_SECONDS, delay)
+
+
+def _spoken_subject(value: object) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    normalized = re.sub(r"[_./:-]+", " ", raw)
+    normalized = " ".join(normalized.split())
+    if not normalized or normalized.startswith("change ") or normalized.startswith("gate "):
+        return None
+    return normalized[:80].rstrip()
 
 
 class _ManagedBackgroundRuntime(Protocol):
