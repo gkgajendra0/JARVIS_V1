@@ -41,6 +41,7 @@ from jarvis.goal_intelligence.store import GoalStore
 from jarvis.work.privacy import ProtectedWorkPayloadCodec
 from jarvis.work.store import SQLiteWorkStore
 
+
 class FakeAdmitter:
     def __init__(self) -> None:
         self.goals = []
@@ -48,6 +49,7 @@ class FakeAdmitter:
     def admit(self, goal, *, source_revision: str):
         self.goals.append((goal, source_revision))
         return SimpleNamespace(change=None)
+
 
 class FakeArtifacts:
     def latest_artifact(self, change_id: str, kind: str):
@@ -64,6 +66,7 @@ class FakeArtifacts:
         self, source_session_id: str, source_turn_id: str, process_key: str
     ):
         return None
+
 
 class CapturingArtifacts:
     def __init__(self) -> None:
@@ -85,6 +88,7 @@ class CapturingArtifacts:
             payload=payload,
         )
 
+
 class LinkedFakeAdmitter(FakeAdmitter):
     def admit(self, goal, *, source_revision: str):
         self.goals.append((goal, source_revision))
@@ -95,6 +99,7 @@ class LinkedFakeAdmitter(FakeAdmitter):
             admission_artifact_id="artifact-admission",
             disposition=SimpleNamespace(value="engineering_change"),
         )
+
 
 class LineageArtifacts:
     def __init__(self) -> None:
@@ -120,6 +125,7 @@ class LineageArtifacts:
     ):
         del source_session_id, source_turn_id, process_key
         return self.change
+
 
 def _install_current_lineage(
     artifacts: LineageArtifacts,
@@ -187,12 +193,14 @@ def _install_current_lineage(
         }
     )
 
+
 class MutableContext:
     def __init__(self, context: AcquisitionContextV1) -> None:
         self.context = context
 
     def current(self) -> AcquisitionContextV1:
         return self.context
+
 
 def _store(tmp_path: Path) -> GoalStore:
     return GoalStore(
@@ -201,6 +209,7 @@ def _store(tmp_path: Path) -> GoalStore:
             payload_codec=ProtectedWorkPayloadCodec(b"p" * 32),
         )
     )
+
 
 def _goal(store: GoalStore) -> OwnerGoalV2:
     return store.create_goal(
@@ -213,6 +222,7 @@ def _goal(store: GoalStore) -> OwnerGoalV2:
             created_at="2026-10-01T14:00:00+00:00",
         )
     )
+
 
 def _graph(goal: OwnerGoalV2) -> CapabilityRequirementGraphV1:
     requirement = CapabilityRequirementV1.create(
@@ -228,6 +238,7 @@ def _graph(goal: OwnerGoalV2) -> CapabilityRequirementGraphV1:
         requirements=(requirement,),
     )
 
+
 def _empty_context() -> AcquisitionContextV1:
     return AcquisitionContextV1(
         catalog=CapabilityCatalog(
@@ -241,6 +252,7 @@ def _empty_context() -> AcquisitionContextV1:
         ),
         inventory=(),
     )
+
 
 def _ready_context() -> AcquisitionContextV1:
     descriptor = CapabilityDescriptor.create(
@@ -276,6 +288,7 @@ def _ready_context() -> AcquisitionContextV1:
         ),
     )
 
+
 def _gap(
     store: GoalStore,
     goal: OwnerGoalV2,
@@ -287,6 +300,7 @@ def _gap(
         persist_gaps=True,
     )
     return analysis.gaps[0]
+
 
 def test_phase9_v2_request_excludes_task_only_movie_parameter(tmp_path: Path) -> None:
     store = _store(tmp_path)
@@ -305,6 +319,7 @@ def test_phase9_v2_request_excludes_task_only_movie_parameter(tmp_path: Path) ->
     assert "transporter" not in " ".join(v1.target_hints).casefold()
     assert v1.source_session_id == f"gicc:{goal.goal_id}"
     assert v1.source_turn_id == f"gap:{gap.gap_id}"
+
 
 def test_monitoring_observer_gap_requires_verified_event_contract(
     tmp_path: Path,
@@ -339,6 +354,7 @@ def test_monitoring_observer_gap_requires_verified_event_contract(
     )
     assert request.canonical_payload()["monitor_event_contract_required"] is True
 
+
 def test_multiple_gaps_get_unique_phase9_bridge_sources(tmp_path: Path) -> None:
     store = _store(tmp_path)
     goal = _goal(store)
@@ -368,6 +384,7 @@ def test_multiple_gaps_get_unique_phase9_bridge_sources(tmp_path: Path) -> None:
     )
     assert first_request.bridge_source_turn_id != second_request.bridge_source_turn_id
 
+
 def test_phase9_bridge_admits_generic_v1_goal(tmp_path: Path) -> None:
     store = _store(tmp_path)
     goal = _goal(store)
@@ -389,6 +406,7 @@ def test_phase9_bridge_admits_generic_v1_goal(tmp_path: Path) -> None:
     assert revision == "a" * 40
     assert phase9_goal.requested_capability == "media_player.control"
     assert "transporter" not in phase9_goal.request.casefold()
+
 
 def test_phase9_bridge_persists_exact_cross_lifecycle_lineage(tmp_path: Path) -> None:
     store = _store(tmp_path)
@@ -424,6 +442,7 @@ def test_phase9_bridge_persists_exact_cross_lifecycle_lineage(tmp_path: Path) ->
     assert payload["bridge_source_session_id"] == f"gicc:{goal.goal_id}"
     assert payload["bridge_source_turn_id"] == f"gap:{gap.gap_id}"
 
+
 def test_phase9_completion_requires_exact_current_lineage(tmp_path: Path) -> None:
     store = _store(tmp_path)
     goal = _goal(store)
@@ -445,6 +464,7 @@ def test_phase9_completion_requires_exact_current_lineage(tmp_path: Path) -> Non
         "candidate_artifact_digest"
     ] = "0" * 64
     assert bridge.completion_verified(gap=gap, goal=goal) is False
+
 
 def test_phase9_completion_requires_real_external_acceptance_when_declared(
     tmp_path: Path,
@@ -488,6 +508,7 @@ def test_phase9_completion_requires_real_external_acceptance_when_declared(
     )
     assert bridge.completion_verified(gap=gap, goal=goal) is False
 
+
 def test_phase9_completion_does_not_accept_semantic_match_without_lineage(
     tmp_path: Path,
 ) -> None:
@@ -503,6 +524,7 @@ def test_phase9_completion_does_not_accept_semantic_match_without_lineage(
     )
 
     assert bridge.completion_verified(gap=gap, goal=goal) is False
+
 
 def test_completion_rechecks_actual_capability_truth_before_resume(
     tmp_path: Path,
