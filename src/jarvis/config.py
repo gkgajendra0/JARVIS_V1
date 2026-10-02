@@ -133,6 +133,7 @@ class JarvisConfig:
     global_brain_router_mode: str = "shadow"
     jev_bounded_decisions_enabled: bool = False
     jev_benchmark_admitted: bool = False
+    jev_benchmark_report_path: str | None = None
     jev_model: str = "jev-latest"
     jev_endpoint: str = "https://api.typesafe.ai/v1/systemone"
     jev_min_confidence: float = 0.0
@@ -239,6 +240,10 @@ class JarvisConfig:
             if float(self.jev_min_confidence) <= 0.0:
                 raise ValueError(
                     "JEV bounded decisions require a calibrated confidence threshold"
+                )
+            if not str(self.jev_benchmark_report_path or "").strip():
+                raise ValueError(
+                    "JEV bounded decisions require a benchmark report path"
                 )
         object.__setattr__(self, "jev_model", jev_model)
         object.__setattr__(self, "jev_endpoint", jev_endpoint)
@@ -508,6 +513,10 @@ class JarvisConfig:
             jev_benchmark_admitted=_configured_bool(
                 "JARVIS_JEV_BENCHMARK_ADMITTED",
                 False,
+                machine,
+            ),
+            jev_benchmark_report_path=_configured_optional_text(
+                "JARVIS_JEV_BENCHMARK_REPORT_PATH",
                 machine,
             ),
             jev_model=_configured_required_text(
