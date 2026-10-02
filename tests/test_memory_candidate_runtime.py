@@ -148,6 +148,32 @@ async def test_closed_runtime_never_schedules_new_extraction() -> None:
     assert runtime.quarantine.snapshot() == ()
 
 
+@pytest.mark.asyncio
+async def test_provider_pressure_opens_shadow_circuit_and_skips_next_turn() -> None:
+    class RateLimitedExtractor(FakeExtractor):
+        async def extract(self, *, text: str) -> MemoryExtractionProposal:
+            self.calls.append(text)
+            raise RuntimeError("HTTP 429 Too Many Requests")
+
+    conversation = _conversation()
+    extractor = RateLimitedExtractor()
+    runtime = _runtime(conversation, extractor)
+
+    first = conversation.accept_turn(ConversationRole.USER, "Remember this later.")
+    runtime.observe_turn(first)
+    for _ in range(20):
+        if runtime.pending_task_count == 0:
+            break
+        await asyncio.sleep(0)
+
+    second = conversation.accept_turn(ConversationRole.USER, "And this too.")
+    runtime.observe_turn(second)
+    await asyncio.sleep(0)
+
+    assert extractor.calls == ["Remember this later."]
+    assert runtime.pending_task_count == 0
+
+
 def test_runtime_defaults_to_deferred_background_extraction() -> None:
     conversation = _conversation()
     extractor = FakeExtractor()
