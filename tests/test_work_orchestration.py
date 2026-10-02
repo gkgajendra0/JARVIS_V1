@@ -1913,6 +1913,48 @@ def test_orchestrator_reconciles_active_execution_idempotently(
     assert store.require(item.work_id).state is WorkState.QUEUED
 
 
+def test_orchestrator_recovers_legacy_unbound_canonical_error(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Recover legacy unbound durable execution")
+
+    class RecoveringBackend(FakeBackend):
+        def __init__(self) -> None:
+            super().__init__()
+            self.recovered: list[tuple[str, str, WorkPriority, str]] = []
+
+        def recover_execution(
+            self,
+            execution_id: str,
+            *,
+            work_id: str,
+            priority: WorkPriority,
+            recovery_token: str,
+        ) -> str:
+            self.recovered.append(
+                (execution_id, work_id, priority, recovery_token)
+            )
+            return f"{work_id}__retry_{recovery_token}"
+
+    backend = RecoveringBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+
+    reconciled = orchestrator.reconcile_active()
+
+    assert reconciled == (item.work_id,)
+    assert backend.submitted == []
+    assert len(backend.recovered) == 1
+    source_execution, work_id, priority, recovery_token = backend.recovered[0]
+    assert source_execution == item.work_id
+    assert work_id == item.work_id
+    assert priority is item.priority
+    assert recovery_token.startswith("startup_recovery_")
+    assert store.get_execution_id(item.work_id) == (
+        f"{item.work_id}__retry_{recovery_token}"
+    )
+
+
 def test_orchestrator_rebinds_fresh_recovery_execution_after_terminal_error(
     tmp_path: Path,
 ) -> None:
