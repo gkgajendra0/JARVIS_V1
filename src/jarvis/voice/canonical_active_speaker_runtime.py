@@ -36,7 +36,7 @@ from jarvis.voice.memory_tools import MemoryAgentTools
 from jarvis.voice.research_tools import ResearchAgentTools
 from jarvis.voice.runtime import VoiceRuntimeController, VoiceRuntimeState
 from jarvis.voice.work_tools import WorkAgentTools
-from jarvis.work.models import WorkDeliveryKind, WorkState
+from jarvis.work.models import WorkDeliveryKind, WorkItem, WorkState
 from jarvis.work.provider_retry import delivery_retry_delay_seconds, provider_retry_hint
 from jarvis.work.runtime import WorkRuntime
 
@@ -329,15 +329,19 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             raise ValueError("owner-input question must not be empty")
 
         owner_input_submitted = asyncio.Event()
+        resolved_item: WorkItem | None = None
+
+        def on_owner_input_resolved(item: WorkItem) -> None:
+            nonlocal resolved_item
+            resolved_item = item
+            owner_input_submitted.set()
 
         def session_tools(conversation: ConversationSession) -> list:
             work_tools = WorkAgentTools(
                 runtime,
                 conversation,
                 bound_owner_input_work_id=work_id,
-                on_bound_owner_input_submitted=lambda _work: (
-                    owner_input_submitted.set()
-                ),
+                on_bound_owner_input_submitted=on_owner_input_resolved,
             )
             return [
                 work_tools.continue_background_work,
@@ -364,6 +368,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 initial_prompt_label="owner input prompt",
                 session_tool_factory=session_tools,
                 completion_predicate=owner_input_resolved,
+                completion_event=owner_input_submitted,
                 completion_label=f"owner input for {work_id}",
             )
         finally:
@@ -371,6 +376,32 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             self._active_end = None
             if not self._shutdown.is_set():
                 self._state = VoiceRuntimeState.IDLE
+
+        if owner_input_submitted.is_set() and resolved_item is not None:
+            output = self.audio.output
+            if output is not None:
+                acknowledgement = (
+                    "Say exactly: The pending task has been cancelled."
+                    if resolved_item.state is WorkState.CANCELLED
+                    else (
+                        "Say exactly: Your response was recorded. I will continue "
+                        "the waiting work and ask separately if another approval "
+                        "is required."
+                    )
+                )
+                try:
+                    await self._speak_ephemeral_realtime_message(
+                        output,
+                        instructions=acknowledgement,
+                        label="owner input acknowledgement",
+                    )
+                except Exception as exc:
+                    LOGGER.warning(
+                        "Owner-input acknowledgement unavailable after canonical "
+                        "resolution | work_id=%s | error=%s",
+                        work_id,
+                        type(exc).__name__,
+                    )
 
         return owner_input_submitted.is_set()
 
