@@ -58,6 +58,9 @@ class FakeArtifacts:
             payload=payload,
         )
 
+    def find_by_source(self, source_session_id: str, source_turn_id: str, process_key: str):
+        return None
+
 
 
 
@@ -66,6 +69,9 @@ class CapturingArtifacts:
         self.records = []
 
     def latest_artifact(self, change_id: str, kind: str):
+        return None
+
+    def find_by_source(self, source_session_id: str, source_turn_id: str, process_key: str):
         return None
 
     def add_artifact(self, change_id: str, *, kind: str, payload: dict[str, object]):
@@ -87,6 +93,99 @@ class LinkedFakeAdmitter(FakeAdmitter):
             admission_artifact_id="artifact-admission",
             disposition=SimpleNamespace(value="engineering_change"),
         )
+
+
+
+
+class LineageArtifacts:
+    def __init__(self) -> None:
+        self.change = SimpleNamespace(change_id="change-phase9")
+        self.artifacts = {}
+
+    def latest_artifact(self, change_id: str, kind: str):
+        assert change_id == self.change.change_id
+        return self.artifacts.get(kind)
+
+    def add_artifact(self, change_id: str, *, kind: str, payload: dict[str, object]):
+        assert change_id == self.change.change_id
+        artifact = SimpleNamespace(
+            artifact_id=f"artifact-{kind}",
+            digest=(kind[0] if kind else "a") * 64,
+            payload=payload,
+        )
+        self.artifacts[kind] = artifact
+        return artifact
+
+    def find_by_source(self, source_session_id: str, source_turn_id: str, process_key: str):
+        del source_session_id, source_turn_id, process_key
+        return self.change
+
+
+def _install_current_lineage(
+    artifacts: LineageArtifacts,
+    *,
+    request: Phase9AcquisitionRequestV2,
+    goal: OwnerGoalV2,
+    gap: CapabilityGapV1,
+) -> None:
+    candidate = SimpleNamespace(
+        artifact_id="artifact-candidate",
+        digest="c" * 64,
+        payload={
+            "package_id": "tv.control.package",
+            "package_version": "1.0.0",
+            "package_digest": "p" * 64,
+        },
+    )
+    admission = SimpleNamespace(
+        artifact_id="artifact-admission",
+        digest="a" * 64,
+        payload={
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "package_id": "tv.control.package",
+            "package_version": "1.0.0",
+            "package_digest": "p" * 64,
+        },
+    )
+    activation = SimpleNamespace(
+        artifact_id="artifact-activation",
+        digest="b" * 64,
+        payload={
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "admission_artifact_id": admission.artifact_id,
+            "admission_artifact_digest": admission.digest,
+            "package_id": "tv.control.package",
+            "package_version": "1.0.0",
+            "package_digest": "p" * 64,
+            "effective_enabled": True,
+        },
+    )
+    artifacts.artifacts.update(
+        {
+            "gicc_capability_gap_link": SimpleNamespace(
+                artifact_id="artifact-link",
+                digest="l" * 64,
+                payload={
+                    "schema": "gicc_phase9_gap_link.v2",
+                    "request_id": request.request_id,
+                    "request_digest": request.digest,
+                    "motivating_goal_id": goal.goal_id,
+                    "gap_id": gap.gap_id,
+                    "engineering_change_id": artifacts.change.change_id,
+                },
+            ),
+            "capability_candidate": candidate,
+            "capability_package_admission": admission,
+            "capability_lifecycle_activation": activation,
+            "architecture": SimpleNamespace(
+                artifact_id="artifact-architecture",
+                digest="r" * 64,
+                payload={"owner_acceptance_contract_ids": []},
+            ),
+        }
+    )
 
 
 class MutableContext:
@@ -338,6 +437,48 @@ def test_phase9_bridge_persists_exact_cross_lifecycle_lineage(tmp_path: Path) ->
     assert payload["admission_disposition"] == "engineering_change"
     assert payload["bridge_source_session_id"] == f"gicc:{goal.goal_id}"
     assert payload["bridge_source_turn_id"] == f"gap:{gap.gap_id}"
+
+
+
+
+def test_phase9_completion_requires_exact_current_lineage(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store)
+    graph = _graph(goal)
+    gap = _gap(store, goal, graph)
+    request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
+    artifacts = LineageArtifacts()
+    _install_current_lineage(artifacts, request=request, goal=goal, gap=gap)
+    bridge = Phase9GoalBridge(
+        coordinator=FakeAdmitter(),
+        change_store=artifacts,
+        goal_store=store,
+        source_revision_provider=lambda: "a" * 40,
+    )
+
+    assert bridge.completion_verified(gap=gap, goal=goal) is True
+
+    artifacts.artifacts["capability_lifecycle_activation"].payload[
+        "candidate_artifact_digest"
+    ] = "0" * 64
+    assert bridge.completion_verified(gap=gap, goal=goal) is False
+
+
+def test_phase9_completion_does_not_accept_semantic_match_without_lineage(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store)
+    graph = _graph(goal)
+    gap = _gap(store, goal, graph)
+    bridge = Phase9GoalBridge(
+        coordinator=FakeAdmitter(),
+        change_store=FakeArtifacts(),
+        goal_store=store,
+        source_revision_provider=lambda: "a" * 40,
+    )
+
+    assert bridge.completion_verified(gap=gap, goal=goal) is False
 
 
 def test_completion_rechecks_actual_capability_truth_before_resume(
