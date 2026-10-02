@@ -411,6 +411,12 @@ class DBOSWorkExecutionBackend:
             raise ValueError("execution id must not be empty")
         status = _run_dbos_sync(DBOS.get_workflow_status, normalized)
         state = self._classify_existing_status(status)
+        if state is None:
+            if normalized != work_id:
+                raise RuntimeError(
+                    f"durable execution is missing from DBOS: {normalized}"
+                )
+            return self.submit(work_id, priority=priority)
         if state in self._RECOVERABLE_TERMINAL_DBOS_STATES:
             return self.restart(
                 work_id,
