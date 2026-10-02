@@ -98,7 +98,6 @@ def _write_benchmark_report(
 
 
 @dataclass
-
 class FakeJevClient:
     selected: str
     confidence: float
