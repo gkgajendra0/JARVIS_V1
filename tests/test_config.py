@@ -287,3 +287,39 @@ def test_default_media_target_is_optional_and_bounded() -> None:
 
     with pytest.raises(ValueError, match="control characters"):
         JarvisConfig(default_media_target="Hisense\x00TV")
+
+
+def test_jev_runtime_config_is_disabled_by_default() -> None:
+    config = JarvisConfig()
+    assert config.jev_bounded_decisions_enabled is False
+    assert config.jev_benchmark_admitted is False
+    assert config.jev_min_confidence == 0.0
+
+
+def test_jev_runtime_config_requires_benchmark_admission() -> None:
+    with pytest.raises(ValueError, match="benchmark admission"):
+        JarvisConfig(
+            jev_bounded_decisions_enabled=True,
+            jev_benchmark_admitted=False,
+            jev_min_confidence=0.85,
+        )
+
+
+def test_jev_runtime_config_requires_calibrated_threshold() -> None:
+    with pytest.raises(ValueError, match="calibrated confidence threshold"):
+        JarvisConfig(
+            jev_bounded_decisions_enabled=True,
+            jev_benchmark_admitted=True,
+            jev_min_confidence=0.0,
+        )
+
+
+def test_jev_runtime_config_accepts_benchmark_admitted_threshold() -> None:
+    config = JarvisConfig(
+        jev_bounded_decisions_enabled=True,
+        jev_benchmark_admitted=True,
+        jev_min_confidence=0.85,
+    )
+    assert config.jev_bounded_decisions_enabled is True
+    assert config.jev_benchmark_admitted is True
+    assert config.jev_min_confidence == pytest.approx(0.85)
