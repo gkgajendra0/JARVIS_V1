@@ -125,3 +125,25 @@ def test_phase9_owner_acceptance_requires_environment_credential(
             thresholds=(0.85,),
             apply=False,
         )
+
+
+def test_phase9_owner_acceptance_apply_persists_text_settings_only(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_module()
+    machine_path = tmp_path / "machine.json"
+    monkeypatch.setenv("JARVIS_MACHINE_CONFIG", str(machine_path))
+
+    after = module._apply_machine_settings(
+        report_path=tmp_path / "report.json",
+        model="jev-latest",
+        endpoint="https://api.typesafe.ai/v1/systemone",
+        threshold=0.95,
+    )
+
+    assert after["jev_bounded_decisions_enabled"] == "true"
+    assert after["jev_benchmark_admitted"] == "true"
+    assert after["jev_min_confidence"] == "0.95"
+    assert after["jev_model"] == "jev-latest"
+    assert "JEV_API_KEY" not in machine_path.read_text(encoding="utf-8")
