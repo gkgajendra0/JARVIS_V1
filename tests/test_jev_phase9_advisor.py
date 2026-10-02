@@ -72,10 +72,10 @@ def _write_benchmark_report(
     path.write_text(
         json.dumps(
             {
-                "suite": "jarvis-c4-c5-bounded-decision-v1",
+                "suite": "jarvis-jev-phase9-candidate-selection-v1",
                 "runner": "jev",
                 "requested_model": model,
-                "case_count": 18,
+                "case_count": 8,
                 "repeat": 1,
                 "summaries": [
                     {
