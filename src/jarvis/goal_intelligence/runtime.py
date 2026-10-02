@@ -577,7 +577,9 @@ class GiccApplyRuntime:
         )
         for continuation in continuations:
             if not continuation.work_ids:
-                return False
+                # Phase-9 existing-capability reuse creates no EngineeringChange
+                # work. Let continue_goal() re-read canonical capability truth.
+                continue
             verified = False
             for work_id in continuation.work_ids:
                 stage = changes.stage_for_work(work_id)
