@@ -49,6 +49,47 @@ def test_restart_reconciles_submission_without_duplicate_stage(tmp_path) -> None
     coordinator.reconcile(change.change_id)
     assert changes.list_stages(change.change_id) == stages
     assert backend.submissions == [stages[0].work_id, stages[0].work_id]
+    assert work.get_execution_id(stages[0].work_id) == stages[0].work_id
+
+
+def test_change_stage_uses_shared_terminal_recovery_and_persists_binding(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+
+    class RecoveringBackend(RecordingBackend):
+        def __init__(self) -> None:
+            super().__init__()
+            self.recoveries: list[tuple[str, str, str]] = []
+
+        def recover_execution(
+            self,
+            execution_id: str,
+            *,
+            work_id: str,
+            priority,
+            recovery_token: str,
+        ) -> str:
+            del priority
+            self.recoveries.append((execution_id, work_id, recovery_token))
+            return f"{work_id}__retry_{recovery_token}"
+
+    backend = RecoveringBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+
+    change = coordinator.start("Recover camera stage", "session", "turn")
+    stage = changes.list_stages(change.change_id)[0]
+
+    assert backend.submissions == []
+    assert len(backend.recoveries) == 1
+    source_execution, work_id, recovery_token = backend.recoveries[0]
+    assert source_execution == stage.work_id
+    assert work_id == stage.work_id
+    assert recovery_token.startswith("startup_recovery_")
+    assert work.get_execution_id(stage.work_id) == (
+        f"{stage.work_id}__retry_{recovery_token}"
+    )
 
 
 def test_independent_changes_can_have_ready_research_workitems_in_parallel(
