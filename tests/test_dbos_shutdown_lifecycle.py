@@ -211,6 +211,7 @@ class _RetryStore:
             state=WorkState.RETRYING,
             priority=WorkPriority.HIGH,
             work_type=WorkType.GENERIC,
+            version=4,
         )
         self.execution_id = "work-retry__retry_v4"
 
@@ -233,7 +234,17 @@ class _RetryBackend:
         self.reconciled: list[str] = []
         self.submitted: list[str] = []
 
-    def reconcile_execution(self, execution_id: str) -> str:
+    def reconcile_execution(
+        self,
+        execution_id: str,
+        *,
+        work_id: str,
+        priority: WorkPriority,
+        recovery_token: str,
+    ) -> str:
+        assert work_id == "work-retry"
+        assert priority is WorkPriority.HIGH
+        assert recovery_token.startswith("startup_recovery_v4_")
         self.reconciled.append(execution_id)
         return execution_id
 
