@@ -1,0 +1,186 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import pytest
+
+from jarvis.brain_routing.jev import (
+    JevAdmissionPolicy,
+    JevChoiceDecision,
+    JevDecisionResult,
+)
+from jarvis.capabilities.models import CapabilityCatalog
+from jarvis.capability_acquisition.jev import JevAcquisitionCandidateAdvisor
+from jarvis.capability_acquisition.models import (
+    AcquisitionCandidateV1,
+    AcquisitionSourceKind,
+    AcquisitionStrategy,
+    AcquisitionTrustClass,
+    OwnerCapabilityGoalV1,
+)
+from jarvis.capability_acquisition.resolver import (
+    AcquisitionResolutionError,
+    CapabilityAcquisitionResolver,
+)
+from jarvis.capability_acquisition.source import (
+    AcquisitionContextV1,
+    CapabilitySourceRegistry,
+)
+
+
+def _goal() -> OwnerCapabilityGoalV1:
+    return OwnerCapabilityGoalV1.create(
+        request="Get TV control capability",
+        requested_capability="TV control",
+        required_operations=("power", "volume"),
+        source_session_id="session-jev",
+        source_turn_id="turn-jev",
+        now_epoch=100.0,
+    )
+
+
+def _context() -> AcquisitionContextV1:
+    return AcquisitionContextV1(
+        catalog=CapabilityCatalog(sources=(), capabilities=()),
+        inventory=(),
+    )
+
+
+def _candidate(
+    identity: str,
+    digest_char: str,
+    *,
+    strategy: AcquisitionStrategy = AcquisitionStrategy.WRAP,
+) -> AcquisitionCandidateV1:
+    return AcquisitionCandidateV1.create(
+        source_kind=AcquisitionSourceKind.MCP,
+        source_identity=identity,
+        source_digest=digest_char * 64,
+        trust_class=AcquisitionTrustClass.VERIFIED_OFFICIAL_REMOTE,
+        supported_operations=("power", "volume"),
+        strategy=strategy,
+        evidence_refs=(f"evidence:{identity}",),
+        verification_requirements=("contract-test",),
+        external_acceptance_requirements=("owner-observe-tv",),
+    )
+
+
+@dataclass
+class FakeJevClient:
+    selected: str
+    confidence: float
+    calls: int = 0
+
+    def decide(self, request):
+        self.calls += 1
+        choices = request.questions[0].choices
+        probabilities = {
+            key: (
+                self.confidence
+                if key == self.selected
+                else (1.0 - self.confidence) / (len(choices) - 1)
+            )
+            for key in choices
+        }
+        return JevDecisionResult(
+            decision_family=request.decision_family,
+            requested_model="jev-latest",
+            resolved_model="jev-test",
+            answers=(
+                JevChoiceDecision(
+                    question_name="candidate",
+                    choice=self.selected,
+                    confidence=self.confidence,
+                    probabilities=probabilities,
+                ),
+            ),
+        )
+
+
+def _advisor(client: FakeJevClient, *, threshold: float = 0.8):
+    return JevAcquisitionCandidateAdvisor(
+        client,
+        admission=JevAdmissionPolicy(
+            admitted_families=frozenset(
+                {"capability_acquisition.candidate_selection"}
+            ),
+            minimum_confidence=threshold,
+        ),
+    )
+
+
+def test_jev_selects_only_within_equivalent_safe_tier() -> None:
+    first = _candidate("mcp:vendor-a", "a")
+    second = _candidate("mcp:vendor-b", "b")
+    client = FakeJevClient(selected=second.candidate_id, confidence=0.93)
+
+    resolver = CapabilityAcquisitionResolver(
+        CapabilitySourceRegistry(),
+        advisor=_advisor(client),
+    )
+    result = resolver.resolve_candidates(_goal(), (first, second), _context())
+
+    assert client.calls == 1
+    assert result.selected_candidate_id == second.candidate_id
+
+
+def test_low_confidence_jev_abstains_to_deterministic_fallback() -> None:
+    first = _candidate("mcp:vendor-a", "a")
+    second = _candidate("mcp:vendor-b", "b")
+    client = FakeJevClient(selected=second.candidate_id, confidence=0.6)
+
+    resolver = CapabilityAcquisitionResolver(
+        CapabilitySourceRegistry(),
+        advisor=_advisor(client, threshold=0.8),
+    )
+    result = resolver.resolve_candidates(_goal(), (first, second), _context())
+
+    expected = min(first.candidate_id, second.candidate_id)
+    assert client.calls == 1
+    assert result.selected_candidate_id == expected
+
+
+def test_jev_is_not_called_when_deterministic_strategy_rank_has_a_winner() -> None:
+    wrap = _candidate("mcp:wrap", "a", strategy=AcquisitionStrategy.WRAP)
+    build = _candidate(
+        "mcp:build",
+        "b",
+        strategy=AcquisitionStrategy.BUILD_CUSTOM,
+    )
+    client = FakeJevClient(selected=build.candidate_id, confidence=0.99)
+
+    resolver = CapabilityAcquisitionResolver(
+        CapabilitySourceRegistry(),
+        advisor=_advisor(client),
+    )
+    result = resolver.resolve_candidates(_goal(), (build, wrap), _context())
+
+    assert client.calls == 0
+    assert result.selected_candidate_id == wrap.candidate_id
+
+
+def test_advisor_cannot_select_outside_deterministic_safe_tier() -> None:
+    first = _candidate("mcp:vendor-a", "a")
+    second = _candidate("mcp:vendor-b", "b")
+    outsider = _candidate(
+        "mcp:custom",
+        "c",
+        strategy=AcquisitionStrategy.BUILD_CUSTOM,
+    )
+
+    class BadAdvisor:
+        def select(self, **kwargs):
+            del kwargs
+            return outsider.candidate_id
+
+    resolver = CapabilityAcquisitionResolver(
+        CapabilitySourceRegistry(),
+        advisor=BadAdvisor(),
+    )
+
+    with pytest.raises(AcquisitionResolutionError, match="outside deterministic"):
+        resolver.resolve_candidates(
+            _goal(),
+            (first, second, outsider),
+            _context(),
+        )
