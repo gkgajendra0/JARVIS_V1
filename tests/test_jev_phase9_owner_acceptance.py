@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _TOOL = _REPO_ROOT / "tools" / "research" / "jev_phase9_owner_acceptance.py"
 
