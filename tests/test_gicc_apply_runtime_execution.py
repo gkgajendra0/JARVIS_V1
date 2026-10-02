@@ -501,10 +501,36 @@ class FakePhase9ChangeStore:
         self.candidate = SimpleNamespace(
             artifact_id="candidate-tv",
             digest="c" * 64,
+            payload={
+                "package_id": "tv.control.package",
+                "package_version": "1.0.0",
+                "package_digest": "p" * 64,
+            },
+        )
+        self.admission = SimpleNamespace(
+            artifact_id="admission-tv",
+            digest="d" * 64,
+            payload={
+                "candidate_artifact_id": self.candidate.artifact_id,
+                "candidate_artifact_digest": self.candidate.digest,
+                "package_id": "tv.control.package",
+                "package_version": "1.0.0",
+                "package_digest": "p" * 64,
+            },
         )
         self.activation = SimpleNamespace(
             artifact_id="activation-tv",
             digest="a" * 64,
+            payload={
+                "candidate_artifact_id": self.candidate.artifact_id,
+                "candidate_artifact_digest": self.candidate.digest,
+                "admission_artifact_id": self.admission.artifact_id,
+                "admission_artifact_digest": self.admission.digest,
+                "package_id": "tv.control.package",
+                "package_version": "1.0.0",
+                "package_digest": "p" * 64,
+                "effective_enabled": True,
+            },
         )
         self.architecture = SimpleNamespace(
             payload={
@@ -513,6 +539,20 @@ class FakePhase9ChangeStore:
                 ]
             }
         )
+        self.link = SimpleNamespace(
+            payload={
+                "schema": "gicc_phase9_gap_link.v2",
+                "motivating_goal_id": None,
+                "gap_id": "gap-tv-control",
+                "engineering_change_id": "change-tv",
+                "request_id": "phase9-test",
+                "request_digest": "r" * 64,
+                "acquisition_work_id": "phase9-work",
+            }
+        )
+
+    def bind_goal(self, goal_id: str) -> None:
+        self.link.payload["motivating_goal_id"] = goal_id
 
     def stage_for_work(self, work_id: str):
         if work_id != "phase9-work":
@@ -522,14 +562,18 @@ class FakePhase9ChangeStore:
     def latest_artifact(self, change_id: str, kind: str):
         assert change_id == "change-tv"
         return {
+            "gicc_capability_gap_link": self.link,
             "architecture": self.architecture,
             "capability_candidate": self.candidate,
+            "capability_package_admission": self.admission,
             "capability_lifecycle_activation": self.activation,
             "capability_external_acceptance": self.acceptance,
         }.get(kind)
 
     def pass_current_acceptance(self) -> None:
         self.acceptance = SimpleNamespace(
+            artifact_id="external-acceptance-tv",
+            digest="e" * 64,
             payload={
                 "schema": "capability_external_acceptance.v1",
                 "verdict": "pass",
@@ -537,7 +581,7 @@ class FakePhase9ChangeStore:
                 "candidate_artifact_digest": self.candidate.digest,
                 "activation_artifact_id": self.activation.artifact_id,
                 "activation_artifact_digest": self.activation.digest,
-            }
+            },
         )
 
 
@@ -562,6 +606,7 @@ async def test_external_acceptance_fences_capability_continuation(
     capability_runtime = FakeCapabilityRuntime()
     coordinator = CapabilityContinuationCoordinator(store)
     changes = FakePhase9ChangeStore()
+    changes.bind_goal(goal.goal_id)
     runtime = _runtime(
         store,
         coordinator,
