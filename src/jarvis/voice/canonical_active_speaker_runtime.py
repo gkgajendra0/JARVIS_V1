@@ -351,6 +351,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             "Speak exactly the following owner question and nothing else. Do not add "
             "internal identifiers, explanations, meta commentary, or instructions. "
             "After speaking the question, stop and wait for the owner's response. "
+            "The owner does not need to say the wake word when responding. "
             "Owner question: " + normalized_question
         )
 
