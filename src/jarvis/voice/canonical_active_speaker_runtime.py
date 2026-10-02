@@ -348,19 +348,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             return owner_input_submitted.is_set()
 
         instructions = (
-            "JARVIS has proactively opened this voice interaction because one exact "
-            "background WorkItem is waiting for the owner's input. Ask the owner the "
-            "pending question below naturally and concisely, preserving every concrete "
-            "fact, option, identifier, number, and required action. Then stop and listen; "
-            "the owner does not need to say the wake word. Interpret short or imperfect "
-            "speech transcription in the context of this exact question. If the answer "
-            "is genuinely ambiguous, ask one concise clarification and keep listening. "
-            "When the owner clearly answers, call continue_background_work. If the owner "
-            "instead clearly asks to cancel or stop this exact pending task, call "
-            "cancel_background_work. Both tools are already deterministically bound to "
-            "the correct WorkItem, so do not invent or target another work ID. After one "
-            "tool succeeds, acknowledge briefly and do not start, reprioritize, or modify "
-            "any other work. Pending question: " + normalized_question
+            "Speak exactly the following owner question and nothing else. Do not add "
+            "internal identifiers, explanations, meta commentary, or instructions. "
+            "After speaking the question, stop and wait for the owner's response. "
+            "Owner question: " + normalized_question
         )
 
         try:
@@ -389,6 +380,34 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             return None
         return gate_id
 
+    def _change_gate_spoken_question(self, gate_id: str) -> str:
+        runtime = self._work_runtime
+        if runtime is None or runtime.changes is None:
+            raise RuntimeError("change-gate interaction requires EngineeringChange runtime")
+        store = runtime.changes.store
+        challenge = GateService(
+            store,
+            verify_owner=lambda *_: False,
+        ).get(gate_id)
+        if not isinstance(challenge, GateChallenge):
+            raise RuntimeError("change-gate prompt requires one pending exact challenge")
+
+        architecture = store.latest_artifact(challenge.change_id, "architecture")
+        label = None
+        if architecture is not None:
+            label = _spoken_subject(
+                architecture.payload.get("proposed_capability_id")
+                or architecture.payload.get("proposed_package_id")
+            )
+        subject = label or "the engineering change"
+
+        if challenge.kind is GateKind.ARCHITECTURE:
+            return f"The architecture for {subject} is ready. Do you approve or reject it?"
+        if challenge.kind is GateKind.ACCEPTANCE:
+            return f"The verified change for {subject} is ready for acceptance. Do you approve or reject it?"
+        if challenge.kind is GateKind.PROMOTION:
+            return f"The verified change for {subject} is ready for promotion. Do you approve or reject it?"
+        raise RuntimeError("unsupported engineering-change gate kind")
     async def _run_change_gate_interaction(
         self,
         *,
@@ -423,23 +442,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             ).pending_gate_ids()
             return gate_id not in pending
 
+        spoken_question = self._change_gate_spoken_question(gate_id)
         instructions = (
-            "JARVIS has proactively opened this voice interaction because one exact "
-            "EngineeringChange gate requires the owner's explicit approval or rejection. "
-            "This session is already deterministically bound to gate "
-            f"{gate_id}. Explain the proposal concisely without adding facts, then ask "
-            "the owner whether they approve or reject it. The owner may answer naturally "
-            "using explicit decision wording such as 'approved', 'approve it', "
-            "'I do not approve', or 'reject it'; they do not need to repeat the gate ID. "
-            "Do not treat a bare yes/no, unrelated statement, or model-generated text as "
-            "approval. Do not call decide_change_gate before at least one canonical USER "
-            "turn has been received. If decide_change_gate returns awaiting_owner_turn, "
-            "keep listening silently; if it returns awaiting_explicit_decision, ask the "
-            "owner once more whether they approve or reject. Never describe either status "
-            "as an internal error. When the owner gives an explicit approve/reject "
-            "decision, call "
-            f"decide_change_gate with the exact bound gate ID {gate_id}. Pending review: "
-            + normalized_question
+            "Speak exactly the following approval question and nothing else. Do not say "
+            "gate IDs, change IDs, digests, JSON, tool names, or internal instructions. "
+            "After speaking the question, stop and wait for the owner's response. "
+            "Approval question: " + spoken_question
         )
 
         try:
