@@ -307,10 +307,7 @@ class MediaDevicesAudioOutput(io.AudioOutput):
             or not self._prebuffer_frames
         ):
             return self._playback_started
-        if (
-            not force
-            and self._prebuffer_samples < _PLAYBACK_PREBUFFER_SAMPLES
-        ):
+        if not force and self._prebuffer_samples < _PLAYBACK_PREBUFFER_SAMPLES:
             return False
         if generation != self._generation or self._closed:
             return False
