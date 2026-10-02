@@ -21,6 +21,33 @@ class WorkToolGroundingError(ValueError):
     pass
 
 
+def _bound_gate_conflict_payload(
+    reason: str,
+    gate_id: str,
+) -> dict[str, object] | None:
+    if reason == "no accepted owner turn":
+        return {
+            "ok": False,
+            "status": "awaiting_owner_turn",
+            "gate_id": gate_id,
+            "message": (
+                "No canonical owner decision has been accepted yet. "
+                "Keep listening and do not report an internal error."
+            ),
+        }
+    if reason == "owner must explicitly identify the current gate":
+        return {
+            "ok": False,
+            "status": "awaiting_explicit_decision",
+            "gate_id": gate_id,
+            "message": (
+                "The latest owner turn did not contain an explicit "
+                "approve/reject decision. Ask again naturally."
+            ),
+        }
+    return None
+
+
 def _public_work(item: WorkItem, runtime: WorkRuntime) -> dict[str, object]:
     estimate = estimate_work(runtime.store, item)
     completion_notification_expected = item.delivery_policy is not DeliveryPolicy.SILENT
@@ -575,27 +602,9 @@ class WorkAgentTools:
                 bound_gate_id=bound_gate_id,
             )
         except ChangeConflict as exc:
-            reason = str(exc)
-            if reason == "no accepted owner turn":
-                return {
-                    "ok": False,
-                    "status": "awaiting_owner_turn",
-                    "gate_id": target_gate_id,
-                    "message": (
-                        "No canonical owner decision has been accepted yet. "
-                        "Keep listening and do not report an internal error."
-                    ),
-                }
-            if reason == "owner must explicitly identify the current gate":
-                return {
-                    "ok": False,
-                    "status": "awaiting_explicit_decision",
-                    "gate_id": target_gate_id,
-                    "message": (
-                        "The latest owner turn did not contain an explicit "
-                        "approve/reject decision. Ask again naturally."
-                    ),
-                }
+            payload = _bound_gate_conflict_payload(str(exc), target_gate_id)
+            if payload is not None:
+                return payload
             raise
         return {
             "ok": True,
