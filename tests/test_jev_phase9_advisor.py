@@ -31,7 +31,6 @@ from jarvis.capability_acquisition.source import (
     CapabilitySourceRegistry,
 )
 
-
 def _goal() -> OwnerCapabilityGoalV1:
     return OwnerCapabilityGoalV1.create(
         request="Get TV control capability",
@@ -42,13 +41,11 @@ def _goal() -> OwnerCapabilityGoalV1:
         now_epoch=100.0,
     )
 
-
 def _context() -> AcquisitionContextV1:
     return AcquisitionContextV1(
         catalog=CapabilityCatalog(sources=(), capabilities=()),
         inventory=(),
     )
-
 
 def _candidate(
     identity: str,
@@ -68,10 +65,9 @@ def _candidate(
         external_acceptance_requirements=("owner-observe-tv",),
     )
 
-
-
-
-def _write_benchmark_report(tmp_path, *, threshold: float = 0.85, model: str = "jev-latest"):
+def _write_benchmark_report(
+    tmp_path, *, threshold: float = 0.85, model: str = "jev-latest"
+):
     path = tmp_path / "jev-benchmark.json"
     path.write_text(
         json.dumps(
@@ -95,7 +91,6 @@ def _write_benchmark_report(tmp_path, *, threshold: float = 0.85, model: str = "
         encoding="utf-8",
     )
     return path
-
 
 @dataclass
 class FakeJevClient:
@@ -128,7 +123,6 @@ class FakeJevClient:
             ),
         )
 
-
 def _advisor(client: FakeJevClient, *, threshold: float = 0.8):
     return JevAcquisitionCandidateAdvisor(
         client,
@@ -137,7 +131,6 @@ def _advisor(client: FakeJevClient, *, threshold: float = 0.8):
             minimum_confidence=threshold,
         ),
     )
-
 
 def test_jev_selects_only_within_equivalent_safe_tier() -> None:
     first = _candidate("mcp:vendor-a", "a")
@@ -153,7 +146,6 @@ def test_jev_selects_only_within_equivalent_safe_tier() -> None:
     assert client.calls == 1
     assert result.selected_candidate_id == second.candidate_id
 
-
 def test_low_confidence_jev_abstains_to_deterministic_fallback() -> None:
     first = _candidate("mcp:vendor-a", "a")
     second = _candidate("mcp:vendor-b", "b")
@@ -168,7 +160,6 @@ def test_low_confidence_jev_abstains_to_deterministic_fallback() -> None:
     expected = min(first.candidate_id, second.candidate_id)
     assert client.calls == 1
     assert result.selected_candidate_id == expected
-
 
 def test_jev_is_not_called_when_deterministic_strategy_rank_has_a_winner() -> None:
     wrap = _candidate("mcp:wrap", "a", strategy=AcquisitionStrategy.WRAP)
@@ -187,7 +178,6 @@ def test_jev_is_not_called_when_deterministic_strategy_rank_has_a_winner() -> No
 
     assert client.calls == 0
     assert result.selected_candidate_id == wrap.candidate_id
-
 
 def test_advisor_cannot_select_outside_deterministic_safe_tier() -> None:
     first = _candidate("mcp:vendor-a", "a")
@@ -215,7 +205,6 @@ def test_advisor_cannot_select_outside_deterministic_safe_tier() -> None:
             _context(),
         )
 
-
 def test_live_jev_factory_is_disabled_without_side_effects(monkeypatch) -> None:
     monkeypatch.delenv("JEV_API_KEY", raising=False)
     assert (
@@ -229,7 +218,6 @@ def test_live_jev_factory_is_disabled_without_side_effects(monkeypatch) -> None:
         is None
     )
 
-
 def test_live_jev_factory_requires_benchmark_admission(monkeypatch) -> None:
     monkeypatch.setenv("JEV_API_KEY", "secret")
     with pytest.raises(RuntimeError, match="benchmark admission"):
@@ -240,7 +228,6 @@ def test_live_jev_factory_requires_benchmark_admission(monkeypatch) -> None:
             model="jev-latest",
             endpoint="https://api.typesafe.ai/v1/systemone",
         )
-
 
 def test_live_jev_factory_requires_calibrated_threshold_and_secret(
     monkeypatch, tmp_path
@@ -265,7 +252,6 @@ def test_live_jev_factory_requires_calibrated_threshold_and_secret(
             endpoint="https://api.typesafe.ai/v1/systemone",
         )
 
-
 def test_live_jev_factory_builds_only_after_all_gates(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("JEV_API_KEY", "secret")
     advisor = build_jev_acquisition_candidate_advisor(
@@ -278,8 +264,9 @@ def test_live_jev_factory_builds_only_after_all_gates(monkeypatch, tmp_path) -> 
     )
     assert isinstance(advisor, JevAcquisitionCandidateAdvisor)
 
-
-def test_live_jev_factory_rejects_unsafe_benchmark_evidence(monkeypatch, tmp_path) -> None:
+def test_live_jev_factory_rejects_unsafe_benchmark_evidence(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.setenv("JEV_API_KEY", "secret")
     path = _write_benchmark_report(tmp_path)
     payload = json.loads(path.read_text(encoding="utf-8"))
