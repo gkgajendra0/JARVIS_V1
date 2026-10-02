@@ -22,7 +22,6 @@ def _load_module():
     return module
 
 
-
 def _write_valid_report(path: Path) -> Path:
     case_ids = [f"phase9-candidate-{index:03d}" for index in range(1, 9)]
     results = [
@@ -73,6 +72,7 @@ def _write_valid_report(path: Path) -> Path:
         encoding="utf-8",
     )
     return path
+
 
 def test_phase9_owner_acceptance_uses_dedicated_corpus_and_all_thresholds(
     tmp_path: Path,
@@ -214,7 +214,6 @@ def test_phase9_owner_acceptance_apply_persists_text_settings_only(
     assert after["jev_min_confidence"] == "0.95"
     assert after["jev_model"] == "jev-latest"
     assert "JEV_API_KEY" not in machine_path.read_text(encoding="utf-8")
-
 
 
 def test_phase9_existing_report_admission_reuses_evidence_without_credential(
