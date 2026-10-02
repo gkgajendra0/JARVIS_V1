@@ -61,9 +61,9 @@ def ensure_durable_execution(
             raise RuntimeError("durable backend changed retry execution identity")
         return execution_id
 
-    if bound_execution is not None and bound_execution != item.work_id:
-        # A non-canonical retry execution is already authoritative. A backend
-        # without restart reconciliation support must never create a duplicate.
+    if bound_execution is not None:
+        # A persisted execution binding is authoritative. Backends without
+        # restart reconciliation hooks must never create a duplicate execution.
         return bound_execution
 
     execution_id = backend.submit(item.work_id, priority=item.priority)
