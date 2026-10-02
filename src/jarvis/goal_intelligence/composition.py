@@ -382,17 +382,25 @@ class GoalIntelligenceCoordinator:
                 monitoring_goal=goal.goal_kind is GoalKind.MONITORING,
             )
             still_missing = {gap.gap_id for gap in analysis.gaps}
+            lineage_pending: set[str] = set()
             for gap in self._store.list_gaps(goal_id=goal.goal_id):
                 if (
                     gap.state is CapabilityGapState.OPEN
                     and gap.gap_id not in still_missing
                 ):
+                    completion_verified = (
+                        self._phase9 is None
+                        or self._phase9.completion_verified(gap=gap, goal=goal)
+                    )
+                    if not completion_verified:
+                        lineage_pending.add(gap.gap_id)
+                        continue
                     self._store.update_gap_state(
                         gap.gap_id,
                         CapabilityGapState.SATISFIED,
                         expected_revision=gap.revision,
                     )
-            if analysis.gaps:
+            if analysis.gaps or lineage_pending:
                 return GoalIntakeResult(
                     disposition=GoalIntakeDisposition.WAITING_CAPABILITY,
                     goal=goal,
