@@ -80,7 +80,21 @@ class WorkOrchestrator:
             work_type=work_type,
         )
         if existing is not None:
-            return WorkSubmission(work=existing, execution_id=existing.work_id)
+            if (
+                existing.work_type in self._EVENT_DRIVEN_WORK_TYPES
+                or existing.state.terminal
+            ):
+                execution_id = (
+                    self._store.get_execution_id(existing.work_id)
+                    or existing.work_id
+                )
+            else:
+                execution_id = ensure_durable_execution(
+                    store=self._store,
+                    backend=self._backend,
+                    item=existing,
+                )
+            return WorkSubmission(work=existing, execution_id=execution_id)
 
         event_driven = work_type in self._EVENT_DRIVEN_WORK_TYPES
         item = WorkItem(
@@ -98,7 +112,11 @@ class WorkOrchestrator:
         if event_driven:
             return WorkSubmission(work=item, execution_id=item.work_id)
         try:
-            execution_id = self._backend.submit(item.work_id, priority=priority)
+            execution_id = ensure_durable_execution(
+                store=self._store,
+                backend=self._backend,
+                item=item,
+            )
         except Exception as exc:
             detail = " ".join(str(exc).split())[:400]
             reason = f"durable execution could not be submitted: {type(exc).__name__}"
@@ -116,21 +134,6 @@ class WorkOrchestrator:
                 event_key=f"failure:{failed.version}",
             )
             raise
-        if execution_id != item.work_id:
-            reason = "durable backend returned a mismatched execution id"
-            failed = item.transition(
-                WorkState.FAILED,
-                status_detail=reason,
-            )
-            failed = self._store.save(failed, expected_version=item.version)
-            self._store.enqueue_delivery(
-                work=failed,
-                kind=WorkDeliveryKind.FAILURE,
-                message=reason,
-                event_key=f"failure:{failed.version}",
-            )
-            raise RuntimeError("durable backend must use work_id as execution_id")
-        self._store.set_execution_id(item.work_id, execution_id)
         return WorkSubmission(work=item, execution_id=execution_id)
 
     def get(self, work_id: str) -> WorkItem:
