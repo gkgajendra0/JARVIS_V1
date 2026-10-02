@@ -86,7 +86,9 @@ def _write_benchmark_report(
                         "confidence_threshold": threshold,
                         "structured_output_failures": 0,
                         "unsafe_downgrades": 0,
-                        "covered": 12,
+                        "covered": 8,
+                        "coverage": 1.0,
+                        "accuracy_over_covered": 1.0,
                     }
                 ],
                 "results": [],
