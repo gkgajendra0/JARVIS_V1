@@ -45,7 +45,7 @@ def test_live_mission_probe_reads_phase9_engineering_change(tmp_path: Path) -> N
             source_session_id="session-live-probe",
             source_turn_id="turn-live-probe",
             exact_owner_request="Play Interstellar on my TV.",
-            goal_kind=GoalKind.ACTION,
+            goal_kind=GoalKind.ONE_SHOT,
             desired_outcome="Interstellar is playing on the intended TV.",
             completion_predicates=("movie_playing_verified",),
         )
