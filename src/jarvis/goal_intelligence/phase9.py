@@ -14,7 +14,6 @@ from jarvis.engineering_change import ChangeArtifact
 from jarvis.engineering_substrate.canonical import canonical_digest
 
 from .capability_graph import CapabilityGapAnalysis, CapabilityGraphResolver
-from .monitoring import GICC_MONITOR_EVENT_CONTRACT
 from .models import (
     CapabilityGapState,
     CapabilityGapV1,
@@ -24,6 +23,7 @@ from .models import (
     GoalKind,
     OwnerGoalV2,
 )
+from .monitoring import GICC_MONITOR_EVENT_CONTRACT
 from .store import GoalStore, GoalStoreConflict, GoalStoreError
 
 
@@ -89,8 +89,7 @@ class Phase9AcquisitionRequestV2:
         observation_family = (
             ".observe" in family
             or ".perceive" in family
-            or family.startswith("vision.")
-            or family.startswith("camera.")
+            or family.startswith(("vision.", "camera."))
         )
         monitor_event_required = bool(
             goal.goal_kind is GoalKind.MONITORING and observation_family
