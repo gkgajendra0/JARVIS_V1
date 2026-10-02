@@ -191,8 +191,7 @@ def probe_live_mission(
             for continuation in continuations
         ],
         "works": [
-            _work_summary(work_store, work_id)
-            for work_id in sorted(resolved_work_ids)
+            _work_summary(work_store, work_id) for work_id in sorted(resolved_work_ids)
         ],
         "changes": [
             _change_summary(changes, change_id)
