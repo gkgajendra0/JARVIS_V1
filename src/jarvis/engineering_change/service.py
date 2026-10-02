@@ -25,6 +25,27 @@ _SINGLE_REVIEW = re.compile(
     re.IGNORECASE,
 )
 
+_BOUND_REJECT = re.compile(
+    r"\b(?:reject(?:ed)?|decline(?:d)?|deny|denied)\b|"
+    r"\b(?:do\s+not|don't|dont|not)\s+approve\b",
+    re.IGNORECASE,
+)
+_BOUND_APPROVE = re.compile(r"\bapprove(?:d)?\b", re.IGNORECASE)
+
+
+def _bound_spoken_decision(text: str) -> bool | None:
+    """Parse only explicit approve/reject intent inside an exact bound gate session."""
+
+    normalized = " ".join(str(text or "").split())
+    if not normalized:
+        return None
+    if _BOUND_REJECT.search(normalized):
+        return False
+    if _BOUND_APPROVE.search(normalized):
+        return True
+    return None
+
+
 
 class ChangeService:
     """Only accepted USER turns from this session can produce gate decisions."""
@@ -153,7 +174,12 @@ class ChangeService:
         store.add_artifact(change_id, kind="architecture", payload=payload)
         return self.propose_architecture(change_id, payload)
 
-    def decide_latest(self, gate_id: str) -> GateDecision:
+    def decide_latest(
+        self,
+        gate_id: str,
+        *,
+        bound_gate_id: str | None = None,
+    ) -> GateDecision:
         turn = next(
             (
                 candidate
@@ -166,7 +192,13 @@ class ChangeService:
             raise ChangeConflict("no accepted owner turn")
         match = _DECISION.fullmatch(turn.text)
         typed = _SINGLE_REVIEW.fullmatch(turn.text)
-        if match is None and typed is None:
+        bound_decision: bool | None = None
+        if bound_gate_id is not None:
+            if bound_gate_id != gate_id:
+                raise ChangeConflict("bound owner interaction targets a different gate")
+            if match is None and typed is None:
+                bound_decision = _bound_spoken_decision(turn.text)
+        if match is None and typed is None and bound_decision is None:
             raise ChangeConflict("owner must explicitly identify the current gate")
         store = self.coordinator.store
         verification = lambda actor, source_session, source_turn, gate, digest: (
@@ -200,7 +232,12 @@ class ChangeService:
             and gate.verification_id is not None
             and gate.source_session_id == self.session.session_id
             and gate.source_turn_id == turn.turn_id
-            and gate.approved == ((match or typed).group(1).casefold() == "approve")
+            and gate.approved
+            == (
+                bound_decision
+                if bound_decision is not None
+                else (match or typed).group(1).casefold() == "approve"
+            )
             and (match is None or match.group(2) == gate_id)
             and (typed is None or typed.group(2).casefold() == challenge.kind.value)
         ):
@@ -213,7 +250,11 @@ class ChangeService:
             or gates.pending_gate_ids() != (gate_id,)
         ):
             raise ChangeConflict("spoken review is ambiguous; identify the gate ID")
-        approved = (match or typed).group(1).casefold() == "approve"
+        approved = (
+            bound_decision
+            if bound_decision is not None
+            else (match or typed).group(1).casefold() == "approve"
+        )
         proposal = ActionProposal.create(
             session_id=self.session.session_id,
             capability="engineering_change",
