@@ -145,7 +145,7 @@ def build_jev_acquisition_candidate_advisor(
         raise ValueError("api_key_env must not be empty")
     api_key = os.getenv(key_name, "").strip()
     if not api_key:
-        raise RuntimeError(f"JEV credential missing from environment variable {key_name}")
+        raise RuntimeError(\n            f"JEV credential missing from environment variable {key_name}"\n        )
 
     client = TypeSafeJevClient(
         api_key=api_key,
