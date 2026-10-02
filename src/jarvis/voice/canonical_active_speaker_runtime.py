@@ -22,6 +22,7 @@ from jarvis.conversation import (
     ConversationSession,
     ConversationStatus,
 )
+from jarvis.engineering_change.gates import GateService
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_shadow import EnrolledSpeakerShadowObserver
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
@@ -253,6 +254,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         normalized = " ".join(message.split())
         if kind is WorkDeliveryKind.OWNER_INPUT:
             return f"Sir, I need your input on a background task. {normalized}"
+        if kind is WorkDeliveryKind.CHANGE_GATE:
+            return f"Sir, an engineering change is waiting for your approval. {normalized}"
         if kind is WorkDeliveryKind.FAILURE:
             return f"Sir, a background task failed. {normalized}"
         return f"Sir, {normalized}"
@@ -263,6 +266,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
         if kind is WorkDeliveryKind.OWNER_INPUT:
             return state is WorkState.WAITING_FOR_OWNER
+        if kind is WorkDeliveryKind.CHANGE_GATE:
+            return True
         if kind is WorkDeliveryKind.RESOURCE_BLOCKER:
             return state in {
                 WorkState.WAITING_RESOURCE,
@@ -351,6 +356,70 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
         return owner_input_submitted.is_set()
 
+    @staticmethod
+    def _delivery_gate_id(event_key: str) -> str | None:
+        parts = str(event_key).split(":")
+        if len(parts) != 4 or parts[0] != "change-gate":
+            return None
+        gate_id = parts[2].strip()
+        if not gate_id.startswith("gate_"):
+            return None
+        return gate_id
+
+    async def _run_change_gate_interaction(
+        self,
+        *,
+        gate_id: str,
+        question: str,
+    ) -> bool:
+        """Open one bounded proactive conversation for an exact change gate."""
+
+        runtime = self._work_runtime
+        if runtime is None or runtime.changes is None:
+            raise RuntimeError("change-gate interaction requires EngineeringChange runtime")
+
+        normalized_question = " ".join(question.split())
+        if not normalized_question:
+            raise ValueError("change-gate question must not be empty")
+
+        def session_tools(conversation: ConversationSession) -> list:
+            work_tools = WorkAgentTools(runtime, conversation)
+            return [work_tools.decide_change_gate]
+
+        def gate_resolved() -> bool:
+            pending = GateService(
+                runtime.changes.store,
+                verify_owner=lambda *_: False,
+            ).pending_gate_ids()
+            return gate_id not in pending
+
+        instructions = (
+            "JARVIS has proactively opened this voice interaction because one exact "
+            "EngineeringChange gate requires the owner's explicit approval or rejection. "
+            "Explain the proposal concisely without adding facts, then ask the owner to "
+            f"say exactly 'approve {gate_id}' or 'reject {gate_id}'. Do not treat a "
+            "generic yes/no as approval. Keep listening until the exact gate decision is "
+            "spoken, or the interaction ends. When the owner gives the exact phrase, call "
+            "decide_change_gate with this exact gate ID. Pending review: "
+            + normalized_question
+        )
+
+        try:
+            await self._run_one_session_owned(
+                initial_instructions=instructions,
+                initial_prompt_label="engineering change approval prompt",
+                session_tool_factory=session_tools,
+                completion_predicate=gate_resolved,
+                completion_label=f"engineering change gate {gate_id}",
+            )
+        finally:
+            self._cancel_timeout()
+            self._active_end = None
+            if not self._shutdown.is_set():
+                self._state = VoiceRuntimeState.IDLE
+
+        return gate_resolved()
+
     async def _deliver_pending_work(self) -> None:
         """Speak durable Work notifications only at an exclusive idle boundary.
 
@@ -382,6 +451,27 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
             delivery = due[0]
             work = runtime.store.require(delivery.work_id)
+            if delivery.kind is WorkDeliveryKind.CHANGE_GATE:
+                gate_id = self._delivery_gate_id(delivery.event_key)
+                pending = (
+                    ()
+                    if runtime.changes is None
+                    else GateService(
+                        runtime.changes.store,
+                        verify_owner=lambda *_: False,
+                    ).pending_gate_ids()
+                )
+                if gate_id is None or gate_id not in pending:
+                    runtime.store.mark_delivery_delivered(delivery.delivery_id)
+                    LOGGER.info(
+                        "Obsolete engineering-change gate notification discarded | "
+                        "delivery_id=%s | work_id=%s | gate_id=%s",
+                        delivery.delivery_id,
+                        delivery.work_id,
+                        gate_id or "invalid",
+                    )
+                    await asyncio.sleep(0)
+                    continue
             if not self._work_delivery_is_current(delivery.kind, work.state):
                 runtime.store.mark_delivery_delivered(delivery.delivery_id)
                 LOGGER.info(
@@ -440,6 +530,40 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                                 "failed_attempts=%s | retry_in=%.1fs",
                                 delivery.delivery_id,
                                 delivery.work_id,
+                                deferred.failed_attempts,
+                                retry_seconds,
+                            )
+                        else:
+                            spoken = True
+                    elif delivery.kind is WorkDeliveryKind.CHANGE_GATE:
+                        gate_id = self._delivery_gate_id(delivery.event_key)
+                        if gate_id is None:
+                            raise RuntimeError(
+                                "engineering-change delivery has no exact gate identity"
+                            )
+                        answered = await self._run_change_gate_interaction(
+                            gate_id=gate_id,
+                            question=delivery.message,
+                        )
+                        if not answered:
+                            retry_seconds = max(
+                                30.0,
+                                delivery_retry_delay_seconds(
+                                    failed_attempts=delivery.failed_attempts,
+                                    provider_hint=None,
+                                ),
+                            )
+                            deferred = runtime.store.schedule_delivery_retry(
+                                delivery.delivery_id,
+                                delay_seconds=retry_seconds,
+                                reason="change_gate_unanswered",
+                            )
+                            LOGGER.info(
+                                "Engineering-change gate interaction ended without a "
+                                "decision; durable retry scheduled | delivery_id=%s | "
+                                "gate_id=%s | failed_attempts=%s | retry_in=%.1fs",
+                                delivery.delivery_id,
+                                gate_id,
                                 deferred.failed_attempts,
                                 retry_seconds,
                             )
