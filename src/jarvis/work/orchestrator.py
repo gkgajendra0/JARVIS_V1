@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hashlib import sha256
 from typing import Protocol
 
+from jarvis.work.execution import ensure_durable_execution
 from jarvis.work.models import (
     DeliveryPolicy,
     WorkDeliveryKind,
@@ -144,55 +144,11 @@ class WorkOrchestrator:
             if item.work_type in self._EVENT_DRIVEN_WORK_TYPES:
                 reconciled.append(item.work_id)
                 continue
-            bound_execution = self._store.get_execution_id(item.work_id)
-            recover_execution = getattr(
-                self._backend,
-                "recover_execution",
-                None,
+            ensure_durable_execution(
+                store=self._store,
+                backend=self._backend,
+                item=item,
             )
-            reconcile_execution = getattr(
-                self._backend,
-                "reconcile_execution",
-                None,
-            )
-            if callable(recover_execution):
-                recovery_source = bound_execution or item.work_id
-                predecessor_digest = sha256(recovery_source.encode()).hexdigest()[:12]
-                recovery_token = f"startup_recovery_{predecessor_digest}"
-                resumed_id = recover_execution(
-                    recovery_source,
-                    work_id=item.work_id,
-                    priority=item.priority,
-                    recovery_token=recovery_token,
-                )
-                retry_prefix = f"{item.work_id}__retry_"
-                if resumed_id != item.work_id and not resumed_id.startswith(
-                    retry_prefix
-                ):
-                    raise RuntimeError(
-                        "durable backend returned an invalid recovery execution id"
-                    )
-                if bound_execution != resumed_id:
-                    self._store.set_execution_id(item.work_id, resumed_id)
-                reconciled.append(item.work_id)
-                continue
-            if bound_execution is not None and callable(reconcile_execution):
-                resumed_id = reconcile_execution(bound_execution)
-                if resumed_id != bound_execution:
-                    raise RuntimeError(
-                        "durable backend changed retry execution identity"
-                    )
-                reconciled.append(item.work_id)
-                continue
-            if bound_execution is not None and bound_execution != item.work_id:
-                # A non-canonical retry execution is already authoritative. Backends
-                # without restart reconciliation support must not create a duplicate.
-                reconciled.append(item.work_id)
-                continue
-            execution_id = self._backend.submit(item.work_id, priority=item.priority)
-            if execution_id != item.work_id:
-                raise RuntimeError("durable backend must use work_id as execution_id")
-            self._store.set_execution_id(item.work_id, execution_id)
             reconciled.append(item.work_id)
         return tuple(reconciled)
 
