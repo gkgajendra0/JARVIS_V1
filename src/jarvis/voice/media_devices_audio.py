@@ -554,16 +554,23 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         LOGGER.info(
             "Playback diagnostic | event=clear_buffer generation=%s current_segment=%s "
             "current_samples=%s pending_segments=%s queued_before=%.3fs "
-            "player_buffer=%sB stream_active=%s stream_stopped=%s",
+            "prebuffer=%.3fs player_buffer=%sB stream_active=%s stream_stopped=%s",
             self._generation,
             self._current_segment_sequence or "none",
             self._current_samples,
             len(pending),
             queued_before_clear,
+            self._prebuffer_samples / DEVICE_SAMPLE_RATE,
             player_buffered,
             player_active,
             player_stopped,
         )
+
+        flush_task = self._flush_task
+        if flush_task is not None and not flush_task.done():
+            flush_task.cancel()
+        self._flush_task = None
+
         if source is not None:
             source.clear_queue()
 
@@ -571,12 +578,13 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         current_sequence = self._current_segment_sequence
         current_samples = self._current_samples
         current_peak_abs = self._current_peak_abs
+        current_playback_started = self._playback_started
         current_rms_dbfs = self._rms_dbfs(
             self._current_sum_squares,
             self._current_energy_samples,
         )
         current_position = 0.0
-        if had_current:
+        if had_current and current_playback_started:
             duration = current_samples / DEVICE_SAMPLE_RATE
             elapsed = max(0.0, time.monotonic() - self._current_started_at_monotonic)
             current_position = min(duration, elapsed)
@@ -587,6 +595,9 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         self._current_started_at_wall = 0.0
         self._current_started_at_monotonic = 0.0
         self._current_segment_sequence = 0
+        self._prebuffer_frames.clear()
+        self._prebuffer_samples = 0
+        self._playback_started = False
         self._reset_current_diagnostics()
 
         if had_current:
@@ -637,8 +648,11 @@ class MediaDevicesAudioOutput(io.AudioOutput):
     async def aclose(self) -> None:
         if self._closed:
             return
+        flush_task = self._flush_task
         self.clear_buffer()
         self._closed = True
+        if flush_task is not None and not flush_task.done():
+            await asyncio.gather(flush_task, return_exceptions=True)
         detach_task = self._detach_task
         self._detach_task = None
         if detach_task is not None and not detach_task.done():
