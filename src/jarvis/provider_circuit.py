@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
-from jarvis.work.provider_retry import ProviderRetryHint, provider_retry_hint
+from jarvis.work.provider_retry import provider_retry_hint
 
 _RATE_LIMIT_BASE_SECONDS = 60.0
 _RATE_LIMIT_MAX_SECONDS = 30.0 * 60.0
