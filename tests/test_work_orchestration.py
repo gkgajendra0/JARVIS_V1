@@ -6,10 +6,12 @@ from pathlib import Path
 
 import pytest
 
+import jarvis.work.dbos_backend as dbos_backend_module
 import jarvis.work.store as work_store_module
 from jarvis.engineering_change import ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.voice.work_tools import _public_work
+from jarvis.work.dbos_backend import DBOSWorkExecutionBackend
 from jarvis.work.brain import (
     BrainAction,
     BrainCoordinator,
@@ -1909,6 +1911,173 @@ def test_orchestrator_reconciles_active_execution_idempotently(
     assert reconciled == (item.work_id,)
     assert backend.submitted == [item.work_id]
     assert store.require(item.work_id).state is WorkState.QUEUED
+
+
+def test_orchestrator_rebinds_fresh_recovery_execution_after_terminal_error(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Recover durable execution")
+    store.set_execution_id(item.work_id, item.work_id)
+
+    class RecoveringBackend(FakeBackend):
+        def __init__(self) -> None:
+            super().__init__()
+            self.reconciled: list[tuple[str, str, WorkPriority, str]] = []
+
+        def reconcile_execution(
+            self,
+            execution_id: str,
+            *,
+            work_id: str,
+            priority: WorkPriority,
+            recovery_token: str,
+        ) -> str:
+            self.reconciled.append(
+                (execution_id, work_id, priority, recovery_token)
+            )
+            return f"{work_id}__retry_{recovery_token}"
+
+    backend = RecoveringBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+
+    reconciled = orchestrator.reconcile_active()
+
+    assert reconciled == (item.work_id,)
+    assert backend.submitted == []
+    assert len(backend.reconciled) == 1
+    old_execution, work_id, priority, recovery_token = backend.reconciled[0]
+    assert old_execution == item.work_id
+    assert work_id == item.work_id
+    assert priority is item.priority
+    assert recovery_token.startswith(f"startup_recovery_v{item.version}_")
+    recovered_execution = store.get_execution_id(item.work_id)
+    assert recovered_execution == f"{item.work_id}__retry_{recovery_token}"
+
+
+def test_interrupted_side_effect_stays_owner_gated_when_execution_is_rebound(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Recover interrupted executor safely")
+    running = item.transition(WorkState.RUNNING, status_detail="executing")
+    running = store.save(running, expected_version=item.version)
+    step = WorkStep(
+        work_id=item.work_id,
+        kind="do_step",
+        summary="Potential side effect",
+    )
+    store.add_step(step)
+    running_step = step.start()
+    store.save_step(running_step)
+    running = store.save(
+        running.with_progress(
+            current_step_id=step.step_id,
+            status_detail="Potential side effect",
+        ),
+        expected_version=running.version,
+    )
+    store.set_execution_id(item.work_id, item.work_id)
+
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(ScriptedReasoner()),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+    )
+    assert engine.reconcile_interrupted_steps() == (item.work_id,)
+    waiting = store.require(item.work_id)
+    assert waiting.state is WorkState.WAITING_FOR_OWNER
+
+    class RecoveringBackend(FakeBackend):
+        def reconcile_execution(
+            self,
+            execution_id: str,
+            *,
+            work_id: str,
+            priority: WorkPriority,
+            recovery_token: str,
+        ) -> str:
+            del execution_id, priority
+            return f"{work_id}__retry_{recovery_token}"
+
+    orchestrator = WorkOrchestrator(store, RecoveringBackend())
+
+    assert orchestrator.reconcile_active() == (item.work_id,)
+    recovered = store.require(item.work_id)
+    recovered_step = store.list_steps(item.work_id)[-1]
+    assert recovered.state is WorkState.WAITING_FOR_OWNER
+    assert "outcome is unverified" in (recovered.status_detail or "")
+    assert recovered_step.state.value == "interrupted"
+    assert store.get_execution_id(item.work_id).startswith(
+        f"{item.work_id}__retry_startup_recovery_"
+    )
+
+
+def test_dbos_terminal_error_reconciliation_uses_fresh_recovery_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Status:
+        status = "ERROR"
+
+    backend = DBOSWorkExecutionBackend()
+    restart_calls: list[tuple[str, WorkPriority, str]] = []
+
+    monkeypatch.setattr(
+        dbos_backend_module,
+        "_run_dbos_sync",
+        lambda *_args, **_kwargs: Status(),
+    )
+
+    def fake_restart(
+        work_id: str,
+        *,
+        priority: WorkPriority,
+        retry_token: str,
+    ) -> str:
+        restart_calls.append((work_id, priority, retry_token))
+        return f"{work_id}__retry_{retry_token}"
+
+    monkeypatch.setattr(backend, "restart", fake_restart)
+
+    recovered = backend.reconcile_execution(
+        "work_0123456789abcdef",
+        work_id="work_0123456789abcdef",
+        priority=WorkPriority.NORMAL,
+        recovery_token="startup_recovery_v4_deadbeef1234",
+    )
+
+    assert recovered == (
+        "work_0123456789abcdef__retry_startup_recovery_v4_deadbeef1234"
+    )
+    assert restart_calls == [
+        (
+            "work_0123456789abcdef",
+            WorkPriority.NORMAL,
+            "startup_recovery_v4_deadbeef1234",
+        )
+    ]
+
+
+def test_dbos_terminal_success_never_replays_active_canonical_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Status:
+        status = "SUCCESS"
+
+    backend = DBOSWorkExecutionBackend()
+    monkeypatch.setattr(
+        dbos_backend_module,
+        "_run_dbos_sync",
+        lambda *_args, **_kwargs: Status(),
+    )
+
+    with pytest.raises(RuntimeError, match=r"terminal: .* \(SUCCESS\)"):
+        backend.reconcile_execution(
+            "work_0123456789abcdef",
+            work_id="work_0123456789abcdef",
+            priority=WorkPriority.NORMAL,
+            recovery_token="startup_recovery_v4_deadbeef1234",
+        )
 
 
 def test_monitoring_work_is_event_driven_without_dbos_execution(
