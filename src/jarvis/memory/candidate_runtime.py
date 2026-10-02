@@ -6,12 +6,12 @@ import asyncio
 import logging
 
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
-from jarvis.provider_circuit import BackgroundProviderCircuit
 from jarvis.memory.candidates import (
     MemoryCandidateCoordinator,
     MemoryCandidateExtractor,
     MemoryCandidateQuarantine,
 )
+from jarvis.provider_circuit import BackgroundProviderCircuit
 
 LOGGER = logging.getLogger(__name__)
 _DEFAULT_DEFER_SECONDS = 5.0
