@@ -240,6 +240,7 @@ def test_live_jev_factory_requires_benchmark_admission(monkeypatch) -> None:
             minimum_confidence=0.85,
             model="jev-latest",
             endpoint="https://api.typesafe.ai/v1/systemone",
+            benchmark_report_path="unused.json",
         )
 
 
