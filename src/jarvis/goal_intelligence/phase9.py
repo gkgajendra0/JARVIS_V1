@@ -307,7 +307,11 @@ class Phase9GoalBridge:
             OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
         )
         if change is None:
-            return False
+            # No EngineeringChange is the canonical Phase-9 reuse path. This method
+            # is called only after GICC has re-read capability truth and found the
+            # semantic gap absent, so there is no newly produced package generation
+            # that requires lineage binding.
+            return True
         try:
             lineage = verify_capability_acquisition_completion(
                 self._changes,
