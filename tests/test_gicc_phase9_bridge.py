@@ -59,6 +59,36 @@ class FakeArtifacts:
         )
 
 
+
+
+class CapturingArtifacts:
+    def __init__(self) -> None:
+        self.records = []
+
+    def latest_artifact(self, change_id: str, kind: str):
+        return None
+
+    def add_artifact(self, change_id: str, *, kind: str, payload: dict[str, object]):
+        self.records.append((change_id, kind, payload))
+        return SimpleNamespace(
+            artifact_id="artifact-gap-link",
+            digest="e" * 64,
+            payload=payload,
+        )
+
+
+class LinkedFakeAdmitter(FakeAdmitter):
+    def admit(self, goal, *, source_revision: str):
+        self.goals.append((goal, source_revision))
+        return SimpleNamespace(
+            change=SimpleNamespace(change_id="change-phase9"),
+            acquisition_work_id="work-acquisition",
+            goal_artifact_id="artifact-goal",
+            admission_artifact_id="artifact-admission",
+            disposition=SimpleNamespace(value="engineering_change"),
+        )
+
+
 class MutableContext:
     def __init__(self, context: AcquisitionContextV1) -> None:
         self.context = context
@@ -271,6 +301,43 @@ def test_phase9_bridge_admits_generic_v1_goal(tmp_path: Path) -> None:
     assert revision == "a" * 40
     assert phase9_goal.requested_capability == "media_player.control"
     assert "transporter" not in phase9_goal.request.casefold()
+
+
+
+
+def test_phase9_bridge_persists_exact_cross_lifecycle_lineage(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store)
+    graph = _graph(goal)
+    gap = _gap(store, goal, graph)
+    admitter = LinkedFakeAdmitter()
+    artifacts = CapturingArtifacts()
+    bridge = Phase9GoalBridge(
+        coordinator=admitter,
+        change_store=artifacts,
+        goal_store=store,
+        source_revision_provider=lambda: "a" * 40,
+    )
+
+    admitted = bridge.admit_gap(gap, goal)
+
+    assert len(artifacts.records) == 1
+    change_id, kind, payload = artifacts.records[0]
+    assert change_id == "change-phase9"
+    assert kind == "gicc_capability_gap_link"
+    assert payload["schema"] == "gicc_phase9_gap_link.v2"
+    assert payload["motivating_goal_id"] == goal.goal_id
+    assert payload["gap_id"] == gap.gap_id
+    assert payload["request_id"] == admitted.request.request_id
+    assert payload["phase9_goal_id"] == admitted.phase9_goal.goal_id
+    assert payload["phase9_goal_digest"] == admitted.phase9_goal.digest
+    assert payload["engineering_change_id"] == "change-phase9"
+    assert payload["acquisition_work_id"] == "work-acquisition"
+    assert payload["goal_artifact_id"] == "artifact-goal"
+    assert payload["admission_artifact_id"] == "artifact-admission"
+    assert payload["admission_disposition"] == "engineering_change"
+    assert payload["bridge_source_session_id"] == f"gicc:{goal.goal_id}"
+    assert payload["bridge_source_turn_id"] == f"gap:{gap.gap_id}"
 
 
 def test_completion_rechecks_actual_capability_truth_before_resume(
