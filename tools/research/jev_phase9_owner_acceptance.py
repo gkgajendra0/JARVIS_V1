@@ -204,6 +204,47 @@ def _validate_owner_benchmark_depth(report: dict[str, Any]) -> None:
             "JEV owner admission report does not contain every case/repetition result"
         )
 
+    corpus = json.loads(_CASES.read_text(encoding="utf-8"))
+    raw_cases = corpus.get("cases") if isinstance(corpus, dict) else None
+    if not isinstance(raw_cases, list) or len(raw_cases) != case_count:
+        raise RuntimeError("JEV Phase-9 frozen corpus is unreadable or incomplete")
+    expected_case_ids = {
+        str(item.get("id") or "").strip()
+        for item in raw_cases
+        if isinstance(item, dict) and str(item.get("id") or "").strip()
+    }
+    if len(expected_case_ids) != case_count:
+        raise RuntimeError("JEV Phase-9 frozen corpus case identities are invalid")
+
+    observed: set[tuple[str, int]] = set()
+    for item in results:
+        if not isinstance(item, dict):
+            raise RuntimeError("JEV owner admission result entry is invalid")
+        case_id = str(item.get("case_id") or "").strip()
+        repetition = item.get("repetition")
+        if case_id not in expected_case_ids:
+            raise RuntimeError("JEV owner admission report contains an unknown case")
+        if (
+            not isinstance(repetition, int)
+            or isinstance(repetition, bool)
+            or not 1 <= repetition <= repeat
+        ):
+            raise RuntimeError("JEV owner admission report contains an invalid repetition")
+        key = (case_id, repetition)
+        if key in observed:
+            raise RuntimeError("JEV owner admission report duplicates a case/repetition")
+        observed.add(key)
+
+    expected = {
+        (case_id, repetition)
+        for case_id in expected_case_ids
+        for repetition in range(1, repeat + 1)
+    }
+    if observed != expected:
+        raise RuntimeError(
+            "JEV owner admission report does not cover the exact case/repetition matrix"
+        )
+
 
 def _finalize_report_admission(
     *,
