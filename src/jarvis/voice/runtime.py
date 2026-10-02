@@ -1205,6 +1205,7 @@ class VoiceRuntimeController:
             self._state = VoiceRuntimeState.ACTIVE
             LOGGER.info("JARVIS realtime conversation is active")
             if completion_event is not None:
+
                 async def watch_completion_event() -> None:
                     await completion_event.wait()
                     if not active_end.is_set():
