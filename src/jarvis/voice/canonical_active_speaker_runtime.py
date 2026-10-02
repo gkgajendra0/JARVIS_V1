@@ -550,6 +550,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                                 cooldown_seconds=self.config.wake_cooldown_seconds
                             )
                         except Exception:
+                            if self._shutdown.is_set():
+                                return
                             LOGGER.exception(
                                 "Wake detection could not resume after exclusive "
                                 "background speech"
