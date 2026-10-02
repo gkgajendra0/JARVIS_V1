@@ -58,7 +58,11 @@ def _spoken_subject(value: object) -> str | None:
         return None
     normalized = re.sub(r"[_./:-]+", " ", raw)
     normalized = " ".join(normalized.split())
-    if not normalized or normalized.startswith("change ") or normalized.startswith("gate "):
+    if (
+        not normalized
+        or normalized.startswith("change ")
+        or normalized.startswith("gate ")
+    ):
         return None
     return normalized[:80].rstrip()
 
@@ -383,14 +387,18 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
     def _change_gate_spoken_question(self, gate_id: str) -> str:
         runtime = self._work_runtime
         if runtime is None or runtime.changes is None:
-            raise RuntimeError("change-gate interaction requires EngineeringChange runtime")
+            raise RuntimeError(
+                "change-gate interaction requires EngineeringChange runtime"
+            )
         store = runtime.changes.store
         challenge = GateService(
             store,
             verify_owner=lambda *_: False,
         ).get(gate_id)
         if not isinstance(challenge, GateChallenge):
-            raise RuntimeError("change-gate prompt requires one pending exact challenge")
+            raise RuntimeError(
+                "change-gate prompt requires one pending exact challenge"
+            )
 
         architecture = store.latest_artifact(challenge.change_id, "architecture")
         label = None
@@ -402,7 +410,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         subject = label or "the engineering change"
 
         if challenge.kind is GateKind.ARCHITECTURE:
-            return f"The architecture for {subject} is ready. Do you approve or reject it?"
+            return (
+                f"The architecture for {subject} is ready. Do you approve or reject it?"
+            )
         if challenge.kind is GateKind.ACCEPTANCE:
             return f"The verified change for {subject} is ready for acceptance. Do you approve or reject it?"
         if challenge.kind is GateKind.PROMOTION:
