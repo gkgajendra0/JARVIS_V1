@@ -257,9 +257,7 @@ def _run(
         "covered": selected.get("covered"),
         "abstained": selected.get("abstained"),
         "unsafe_downgrades": selected.get("unsafe_downgrades"),
-        "structured_output_failures": selected.get(
-            "structured_output_failures"
-        ),
+        "structured_output_failures": selected.get("structured_output_failures"),
         "benchmark_report_path": str(output),
         "machine_before": before,
         "machine_after": after,
