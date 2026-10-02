@@ -34,6 +34,8 @@ from jarvis.voice.safe_media_devices import SafeMediaDevices
 LOGGER = logging.getLogger(__name__)
 
 _PLAYBACK_SETTLE_SECONDS = 0.05
+_PLAYBACK_PREBUFFER_SECONDS = 0.30
+_PLAYBACK_PREBUFFER_SAMPLES = int(DEVICE_SAMPLE_RATE * _PLAYBACK_PREBUFFER_SECONDS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +105,10 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         self._current_energy_samples = 0
         self._current_player_buffer_peak_bytes = 0
         self._current_player_stream_active_seen = False
+        self._prebuffer_frames: list[rtc.AudioFrame] = []
+        self._prebuffer_samples = 0
+        self._playback_started = False
+        self._flush_task: asyncio.Task[None] | None = None
         self._generation = 0
         self._segments: list[_PlaybackSegment] = []
         self._last_completed_quality: PlaybackQualitySnapshot | None = None
