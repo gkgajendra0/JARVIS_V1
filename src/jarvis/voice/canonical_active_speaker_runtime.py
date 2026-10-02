@@ -58,11 +58,7 @@ def _spoken_subject(value: object) -> str | None:
         return None
     normalized = re.sub(r"[_./:-]+", " ", raw)
     normalized = " ".join(normalized.split())
-    if (
-        not normalized
-        or normalized.startswith("change ")
-        or normalized.startswith("gate ")
-    ):
+    if not normalized or normalized.startswith(("change ", "gate ")):
         return None
     return normalized[:80].rstrip()
 
@@ -396,7 +392,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             verify_owner=lambda *_: False,
         ).get(gate_id)
         if not isinstance(challenge, GateChallenge):
-            raise RuntimeError(
+            raise TypeError(
                 "change-gate prompt requires one pending exact challenge"
             )
 
