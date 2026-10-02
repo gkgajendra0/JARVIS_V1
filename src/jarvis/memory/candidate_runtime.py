@@ -6,6 +6,7 @@ import asyncio
 import logging
 
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
+from jarvis.provider_circuit import BackgroundProviderCircuit
 from jarvis.memory.candidates import (
     MemoryCandidateCoordinator,
     MemoryCandidateExtractor,
@@ -40,6 +41,7 @@ class MemoryCandidateSessionRuntime:
             quarantine=self._quarantine,
         )
         self._tasks: set[asyncio.Task[None]] = set()
+        self._provider_circuit = BackgroundProviderCircuit()
         self._closed = False
 
     @property
@@ -62,6 +64,8 @@ class MemoryCandidateSessionRuntime:
         """Schedule candidate extraction without delaying the conversation callback."""
 
         if self._closed or turn.role is not ConversationRole.USER:
+            return
+        if not self._provider_circuit.allow_request():
             return
         task = asyncio.create_task(
             self._process_turn(turn),
