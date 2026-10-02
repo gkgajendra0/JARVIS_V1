@@ -142,8 +142,8 @@ def _validate_jev_benchmark_report(
         raise RuntimeError("JEV benchmark report was not produced by the Jev runner")
     if str(payload.get("requested_model") or "").strip() != str(model).strip():
         raise RuntimeError("JEV benchmark report model does not match runtime model")
-    if payload.get("case_count") != 18:
-        raise RuntimeError("JEV benchmark report does not cover all 18 frozen cases")
+    if payload.get("case_count") != 8:
+        raise RuntimeError("JEV benchmark report does not cover all 8 Phase-9 cases")
 
     summaries = payload.get("summaries")
     if not isinstance(summaries, list):
@@ -206,7 +206,9 @@ def build_jev_acquisition_candidate_advisor(
         raise ValueError("api_key_env must not be empty")
     api_key = os.getenv(key_name, "").strip()
     if not api_key:
-        raise RuntimeError(\n            f"JEV credential missing from environment variable {key_name}"\n        )
+        raise RuntimeError(
+            f"JEV credential missing from environment variable {key_name}"
+        )
 
     client = TypeSafeJevClient(
         api_key=api_key,
