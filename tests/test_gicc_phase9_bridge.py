@@ -14,7 +14,6 @@ from jarvis.capability_registry.projection import (
     CapabilityManagementMode,
 )
 from jarvis.goal_intelligence.capability_graph import CapabilityGraphResolver
-from jarvis.goal_intelligence.monitoring import GICC_MONITOR_EVENT_CONTRACT
 from jarvis.goal_intelligence.models import (
     CapabilityGapV1,
     CapabilityRequirementGraphV1,
@@ -28,6 +27,7 @@ from jarvis.goal_intelligence.models import (
     PlanNodeType,
     PlanNodeV1,
 )
+from jarvis.goal_intelligence.monitoring import GICC_MONITOR_EVENT_CONTRACT
 from jarvis.goal_intelligence.phase9 import (
     Phase9AcquisitionRequestV2,
     Phase9GoalBridge,
