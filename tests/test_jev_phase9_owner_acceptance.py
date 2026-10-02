@@ -120,6 +120,7 @@ def test_phase9_threshold_selection_rejects_imperfect_evidence() -> None:
     with pytest.raises(RuntimeError, match="admission failed"):
         module._select_admitted_threshold(report)
 
+
 def test_phase9_owner_acceptance_requires_environment_credential(
     monkeypatch,
     tmp_path: Path,
