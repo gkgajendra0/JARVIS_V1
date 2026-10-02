@@ -8,6 +8,7 @@ the resolver keeps its deterministic fallback.
 
 from __future__ import annotations
 
+import os
 from typing import Protocol
 
 from jarvis.brain_routing.jev import (
@@ -15,6 +16,7 @@ from jarvis.brain_routing.jev import (
     JevChoiceQuestion,
     JevDecisionRequest,
     JevDecisionResult,
+    TypeSafeJevClient,
 )
 from jarvis.capability_acquisition.models import (
     AcquisitionCandidateEvaluationV1,
@@ -115,3 +117,47 @@ class JevAcquisitionCandidateAdvisor:
         if not self._admission.permits(result):
             return None
         return result.answer("candidate").choice
+
+
+def build_jev_acquisition_candidate_advisor(
+    *,
+    enabled: bool,
+    benchmark_admitted: bool,
+    minimum_confidence: float,
+    model: str,
+    endpoint: str,
+    api_key_env: str = "JEV_API_KEY",
+) -> JevAcquisitionCandidateAdvisor | None:
+    """Build the live Phase-9 JEV advisor only after benchmark admission."""
+
+    if not enabled:
+        return None
+    if not benchmark_admitted:
+        raise RuntimeError(
+            "JEV runtime activation is blocked until owner-machine benchmark admission"
+        )
+    if not 0.0 < float(minimum_confidence) <= 1.0:
+        raise RuntimeError(
+            "JEV runtime activation requires a calibrated confidence threshold"
+        )
+    key_name = str(api_key_env).strip()
+    if not key_name:
+        raise ValueError("api_key_env must not be empty")
+    api_key = os.getenv(key_name, "").strip()
+    if not api_key:
+        raise RuntimeError(f"JEV credential missing from environment variable {key_name}")
+
+    client = TypeSafeJevClient(
+        api_key=api_key,
+        endpoint=endpoint,
+        model=model,
+    )
+    return JevAcquisitionCandidateAdvisor(
+        client,
+        admission=JevAdmissionPolicy(
+            admitted_families=frozenset(
+                {JevAcquisitionCandidateAdvisor.decision_family}
+            ),
+            minimum_confidence=float(minimum_confidence),
+        ),
+    )
