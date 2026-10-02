@@ -225,6 +225,7 @@ def test_live_jev_factory_is_disabled_without_side_effects(monkeypatch) -> None:
             minimum_confidence=0.0,
             model="jev-latest",
             endpoint="https://api.typesafe.ai/v1/systemone",
+            benchmark_report_path="unused.json",
         )
         is None
     )
@@ -253,6 +254,7 @@ def test_live_jev_factory_requires_calibrated_threshold_and_secret(
             minimum_confidence=0.0,
             model="jev-latest",
             endpoint="https://api.typesafe.ai/v1/systemone",
+            benchmark_report_path="unused.json",
         )
 
     monkeypatch.delenv("JEV_API_KEY", raising=False)
