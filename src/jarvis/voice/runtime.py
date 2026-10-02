@@ -879,6 +879,7 @@ class VoiceRuntimeController:
         initial_prompt_label: str = "proactive prompt",
         session_tool_factory: Callable[[ConversationSession], list] | None = None,
         completion_predicate: Callable[[], bool] | None = None,
+        completion_event: asyncio.Event | None = None,
         completion_label: str = "proactive interaction",
     ) -> None:
         async with self._speech_ownership:
@@ -888,6 +889,7 @@ class VoiceRuntimeController:
                 initial_prompt_label=initial_prompt_label,
                 session_tool_factory=session_tool_factory,
                 completion_predicate=completion_predicate,
+                completion_event=completion_event,
                 completion_label=completion_label,
             )
 
@@ -899,6 +901,7 @@ class VoiceRuntimeController:
         initial_prompt_label: str = "proactive prompt",
         session_tool_factory: Callable[[ConversationSession], list] | None = None,
         completion_predicate: Callable[[], bool] | None = None,
+        completion_event: asyncio.Event | None = None,
         completion_label: str = "proactive interaction",
     ) -> None:
         output = self.audio.output
@@ -920,6 +923,7 @@ class VoiceRuntimeController:
         if paired_turn_capture is not None:
             paired_turn_capture.clear()
         shadow_tasks: set[asyncio.Task[None]] = set()
+        completion_watch_task: asyncio.Task[None] | None = None
         exit_in_progress = False
 
         def on_audio_frame(
@@ -1200,6 +1204,21 @@ class VoiceRuntimeController:
                 raise
             self._state = VoiceRuntimeState.ACTIVE
             LOGGER.info("JARVIS realtime conversation is active")
+            if completion_event is not None:
+                async def watch_completion_event() -> None:
+                    await completion_event.wait()
+                    if not active_end.is_set():
+                        LOGGER.info(
+                            "JARVIS %s completion event resolved; closing interactive "
+                            "voice session",
+                            completion_label,
+                        )
+                        active_end.set()
+
+                completion_watch_task = asyncio.create_task(
+                    watch_completion_event(),
+                    name="jarvis-proactive-completion",
+                )
             if initial_instructions is not None:
                 # A proactive question can itself take longer than the normal
                 # initial-request window. Do not let the wake-flow timer expire
@@ -1255,6 +1274,12 @@ class VoiceRuntimeController:
             if wake_ack_task is not None and not wake_ack_task.done():
                 wake_ack_task.cancel()
                 await asyncio.gather(wake_ack_task, return_exceptions=True)
+            if completion_watch_task is not None and not completion_watch_task.done():
+                completion_watch_task.cancel()
+                await asyncio.gather(
+                    completion_watch_task,
+                    return_exceptions=True,
+                )
             output.off("playback_finished", on_playback_finished)
             self.audio.deactivate_session()
             await session.aclose()
