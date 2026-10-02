@@ -285,6 +285,7 @@ class DBOSWorkExecutionBackend:
     _ACTIVE_DBOS_STATES = frozenset({"PENDING", "ENQUEUED", "DELAYED"})
     _RESUMABLE_DBOS_STATES = frozenset({"CANCELLED", "MAX_RECOVERY_ATTEMPTS_EXCEEDED"})
     _TERMINAL_DBOS_STATES = frozenset({"SUCCESS", "ERROR"})
+    _RECOVERABLE_TERMINAL_DBOS_STATES = frozenset({"ERROR"})
 
     def __init__(
         self,
@@ -359,13 +360,26 @@ class DBOSWorkExecutionBackend:
             raise RuntimeError("DBOS did not preserve resumed workflow identity")
         return workflow_id
 
-    def reconcile_execution(self, execution_id: str) -> str:
+    def reconcile_execution(
+        self,
+        execution_id: str,
+        *,
+        work_id: str | None = None,
+        priority: WorkPriority | None = None,
+        recovery_token: str | None = None,
+    ) -> str:
         """Ensure a known durable execution is runnable after restart.
 
         Shutdown parking deliberately uses DBOS cancellation without changing the
         canonical JARVIS WorkItem state. On restart, CANCELLED DBOS executions are
         resumed from their last durable checkpoint instead of creating duplicate
         WorkItems or workflow identities.
+
+        If a prior execution is terminal ERROR but canonical work remains active,
+        startup may bind a fresh DBOS execution for the same WorkItem. This is safe
+        only after WorkEngine startup reconciliation has already marked any
+        in-flight executor step as INTERRUPTED/WAITING_FOR_OWNER, so an unverified
+        external side effect cannot be replayed automatically.
         """
 
         self._require_accepting_work()
@@ -380,6 +394,19 @@ class DBOSWorkExecutionBackend:
             return normalized
         if state in self._RESUMABLE_DBOS_STATES:
             return self._resume_existing(normalized)
+        if state in self._RECOVERABLE_TERMINAL_DBOS_STATES:
+            normalized_work_id = str(work_id or "").strip()
+            normalized_token = str(recovery_token or "").strip()
+            if (
+                normalized_work_id
+                and isinstance(priority, WorkPriority)
+                and normalized_token
+            ):
+                return self.restart(
+                    normalized_work_id,
+                    priority=priority,
+                    retry_token=normalized_token,
+                )
         if state in self._TERMINAL_DBOS_STATES:
             raise RuntimeError(
                 "canonical JARVIS work is active but its DBOS execution is "
