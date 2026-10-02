@@ -26,8 +26,11 @@ _SINGLE_REVIEW = re.compile(
 )
 
 _BOUND_REJECT = re.compile(
-    r"\b(?:reject(?:ed)?|decline(?:d)?|deny|denied)\b|"
-    r"\b(?:do\s+not|don't|dont|not)\s+approve\b",
+    r"\b(?:reject(?:ed)?|decline(?:d)?|deny|denied)\b",
+    re.IGNORECASE,
+)
+_BOUND_NEGATED_APPROVE = re.compile(
+    r"\b(?:do\s+not|don't|dont|not)\s+approve(?:d)?\b",
     re.IGNORECASE,
 )
 _BOUND_APPROVE = re.compile(r"\bapprove(?:d)?\b", re.IGNORECASE)
@@ -39,9 +42,15 @@ def _bound_spoken_decision(text: str) -> bool | None:
     normalized = " ".join(str(text or "").split())
     if not normalized:
         return None
-    if _BOUND_REJECT.search(normalized):
+    if _BOUND_NEGATED_APPROVE.search(normalized):
         return False
-    if _BOUND_APPROVE.search(normalized):
+    rejected = _BOUND_REJECT.search(normalized) is not None
+    approved = _BOUND_APPROVE.search(normalized) is not None
+    if rejected and approved:
+        return None
+    if rejected:
+        return False
+    if approved:
         return True
     return None
 
