@@ -189,13 +189,16 @@ def test_advisor_cannot_select_outside_deterministic_safe_tier() -> None:
 
 def test_live_jev_factory_is_disabled_without_side_effects(monkeypatch) -> None:
     monkeypatch.delenv("JEV_API_KEY", raising=False)
-    assert build_jev_acquisition_candidate_advisor(
-        enabled=False,
-        benchmark_admitted=False,
-        minimum_confidence=0.0,
-        model="jev-latest",
-        endpoint="https://api.typesafe.ai/v1/systemone",
-    ) is None
+    assert (
+        build_jev_acquisition_candidate_advisor(
+            enabled=False,
+            benchmark_admitted=False,
+            minimum_confidence=0.0,
+            model="jev-latest",
+            endpoint="https://api.typesafe.ai/v1/systemone",
+        )
+        is None
+    )
 
 
 def test_live_jev_factory_requires_benchmark_admission(monkeypatch) -> None:
