@@ -133,11 +133,11 @@ def _validate_jev_benchmark_report(
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError("JEV benchmark report is unreadable or invalid JSON") from exc
+        raise RuntimeError(\n            "JEV benchmark report is unreadable or invalid JSON"\n        ) from exc
     if not isinstance(payload, dict):
         raise RuntimeError("JEV benchmark report must be a JSON object")
     if payload.get("suite") != "jarvis-jev-phase9-candidate-selection-v1":
-        raise RuntimeError("JEV benchmark report uses the wrong Phase-9 decision corpus")
+        raise RuntimeError(\n            "JEV benchmark report uses the wrong Phase-9 decision corpus"\n        )
     if payload.get("runner") != "jev":
         raise RuntimeError("JEV benchmark report was not produced by the Jev runner")
     if str(payload.get("requested_model") or "").strip() != str(model).strip():
@@ -154,9 +154,7 @@ def _validate_jev_benchmark_report(
             for item in summaries
             if isinstance(item, dict)
             and isinstance(item.get("confidence_threshold"), (int, float))
-            and abs(
-                float(item["confidence_threshold"]) - float(minimum_confidence)
-            )
+            and abs(float(item["confidence_threshold"]) - float(minimum_confidence))
             <= 1e-9
         ),
         None,
@@ -166,11 +164,11 @@ def _validate_jev_benchmark_report(
             "JEV benchmark report does not contain the configured confidence threshold"
         )
     if int(selected.get("structured_output_failures") or 0) != 0:
-        raise RuntimeError("JEV benchmark admission requires zero structured-output failures")
+        raise RuntimeError(\n            "JEV benchmark admission requires zero structured-output failures"\n        )
     if int(selected.get("unsafe_downgrades") or 0) != 0:
         raise RuntimeError("JEV benchmark admission requires zero unsafe downgrades")
     if int(selected.get("covered") or 0) <= 0:
-        raise RuntimeError("JEV benchmark admission requires non-zero covered decisions")
+        raise RuntimeError(\n            "JEV benchmark admission requires non-zero covered decisions"\n        )
 
 
 def build_jev_acquisition_candidate_advisor(
