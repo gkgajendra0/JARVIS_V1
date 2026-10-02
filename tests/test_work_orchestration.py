@@ -1933,9 +1933,7 @@ def test_orchestrator_rebinds_fresh_recovery_execution_after_terminal_error(
             priority: WorkPriority,
             recovery_token: str,
         ) -> str:
-            self.reconciled.append(
-                (execution_id, work_id, priority, recovery_token)
-            )
+            self.reconciled.append((execution_id, work_id, priority, recovery_token))
             return f"{work_id}__retry_{recovery_token}"
 
     backend = RecoveringBackend()
