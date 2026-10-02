@@ -96,7 +96,7 @@ class ChangeService:
         )
         store.work.enqueue_delivery(
             work=store.work.require(research.work_id),
-            kind=WorkDeliveryKind.OWNER_INPUT,
+            kind=WorkDeliveryKind.CHANGE_GATE,
             message=(
                 f"Review EngineeringChange {change_id} architecture revision "
                 f"{artifact.revision}: {rendered}. Digest: {artifact.digest}. "
@@ -104,7 +104,7 @@ class ChangeService:
                 f"review, or 'approve {gate.gate_id}' to identify it exactly. "
                 f"Say 'reject architecture' or 'reject {gate.gate_id}' to decline."
             ),
-            event_key=f"change:{change_id}:{gate.gate_id}:{artifact.digest}",
+            event_key=f"change-gate:{change_id}:{gate.gate_id}:{artifact.digest}",
         )
         return gate
 
@@ -297,7 +297,7 @@ class ChangeService:
         )
         store.work.enqueue_delivery(
             work=store.work.require(work_id),
-            kind=WorkDeliveryKind.OWNER_INPUT,
+            kind=WorkDeliveryKind.CHANGE_GATE,
             message=(
                 f"Review EngineeringChange {change_id} exact Phase-7 promotion "
                 f"evidence for PR #{evidence.pr_number}, candidate "
@@ -308,7 +308,7 @@ class ChangeService:
                 f"execution permit. Say 'approve promotion' for a single pending "
                 f"promotion, or 'approve {gate.gate_id}'."
             ),
-            event_key=f"phase7-review:{gate.gate_id}:{promotion.digest}",
+            event_key=f"change-gate:{change_id}:{gate.gate_id}:{promotion.digest}",
         )
         return gate
 
@@ -345,7 +345,7 @@ class ChangeService:
         )
         store.work.enqueue_delivery(
             work=work,
-            kind=WorkDeliveryKind.OWNER_INPUT,
+            kind=WorkDeliveryKind.CHANGE_GATE,
             message=(
                 f"Review EngineeringChange {change_id} acceptance: branch "
                 f"{result['branch']}, commit {result['commit']}, tests passed in "
@@ -354,6 +354,6 @@ class ChangeService:
                 f"'approve {gate.gate_id}' to identify it exactly. "
                 f"Use 'reject acceptance' or 'reject {gate.gate_id}' to decline."
             ),
-            event_key=f"change:{change_id}:{gate.gate_id}:{artifact.digest}",
+            event_key=f"change-gate:{change_id}:{gate.gate_id}:{artifact.digest}",
         )
         return gate
