@@ -606,16 +606,22 @@ class GiccApplyRuntime:
         if not active:
             return 0
 
-        if any(goal.state is GoalState.WAITING_CAPABILITY for goal in active):
-            self.capability_runtime.refresh_catalog()
-
         advanced = 0
+        catalog_refreshed = False
         for goal in active:
             before_goal = self.store.get_goal(goal.goal_id)
             before_plan = self.store.latest_plan_for_goal(goal.goal_id)
             if goal.state is GoalState.WAITING_CAPABILITY:
                 if not self._capability_continuation_acceptance_ready(goal):
                     continue
+                if not catalog_refreshed:
+                    # Capability discovery can execute bounded external probes
+                    # (for example WinApp/ODR subprocesses). Never run those
+                    # synchronous probes on the realtime asyncio loop. Refresh
+                    # only when exact acquisition lineage says a continuation is
+                    # actually eligible to resume.
+                    await asyncio.to_thread(self.capability_runtime.refresh_catalog)
+                    catalog_refreshed = True
                 await self.continue_goal(goal.goal_id)
             elif goal.state in {
                 GoalState.PLANNED,
