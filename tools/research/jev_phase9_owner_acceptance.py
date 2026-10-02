@@ -219,7 +219,7 @@ def _validate_owner_benchmark_depth(report: dict[str, Any]) -> None:
     observed: set[tuple[str, int]] = set()
     for item in results:
         if not isinstance(item, dict):
-            raise RuntimeError("JEV owner admission result entry is invalid")
+            raise TypeError("JEV owner admission result entry is invalid")
         case_id = str(item.get("case_id") or "").strip()
         repetition = item.get("repetition")
         if case_id not in expected_case_ids:
