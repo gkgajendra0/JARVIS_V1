@@ -8,7 +8,9 @@ the resolver keeps its deterministic fallback.
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 from typing import Protocol
 
 from jarvis.brain_routing.jev import (
@@ -119,6 +121,58 @@ class JevAcquisitionCandidateAdvisor:
         return result.answer("candidate").choice
 
 
+def _validate_jev_benchmark_report(
+    *,
+    report_path: str,
+    minimum_confidence: float,
+    model: str,
+) -> None:
+    path = Path(str(report_path).strip()).expanduser()
+    if not path.is_file():
+        raise RuntimeError(f"JEV benchmark report is missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("JEV benchmark report is unreadable or invalid JSON") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError("JEV benchmark report must be a JSON object")
+    if payload.get("suite") != "jarvis-c4-c5-bounded-decision-v1":
+        raise RuntimeError("JEV benchmark report uses the wrong frozen corpus")
+    if payload.get("runner") != "jev":
+        raise RuntimeError("JEV benchmark report was not produced by the Jev runner")
+    if str(payload.get("requested_model") or "").strip() != str(model).strip():
+        raise RuntimeError("JEV benchmark report model does not match runtime model")
+    if payload.get("case_count") != 18:
+        raise RuntimeError("JEV benchmark report does not cover all 18 frozen cases")
+
+    summaries = payload.get("summaries")
+    if not isinstance(summaries, list):
+        raise RuntimeError("JEV benchmark report is missing summaries")
+    selected = next(
+        (
+            item
+            for item in summaries
+            if isinstance(item, dict)
+            and isinstance(item.get("confidence_threshold"), (int, float))
+            and abs(
+                float(item["confidence_threshold"]) - float(minimum_confidence)
+            )
+            <= 1e-9
+        ),
+        None,
+    )
+    if selected is None:
+        raise RuntimeError(
+            "JEV benchmark report does not contain the configured confidence threshold"
+        )
+    if int(selected.get("structured_output_failures") or 0) != 0:
+        raise RuntimeError("JEV benchmark admission requires zero structured-output failures")
+    if int(selected.get("unsafe_downgrades") or 0) != 0:
+        raise RuntimeError("JEV benchmark admission requires zero unsafe downgrades")
+    if int(selected.get("covered") or 0) <= 0:
+        raise RuntimeError("JEV benchmark admission requires non-zero covered decisions")
+
+
 def build_jev_acquisition_candidate_advisor(
     *,
     enabled: bool,
@@ -126,6 +180,7 @@ def build_jev_acquisition_candidate_advisor(
     minimum_confidence: float,
     model: str,
     endpoint: str,
+    benchmark_report_path: str,
     api_key_env: str = "JEV_API_KEY",
 ) -> JevAcquisitionCandidateAdvisor | None:
     """Build the live Phase-9 JEV advisor only after benchmark admission."""
@@ -140,6 +195,12 @@ def build_jev_acquisition_candidate_advisor(
         raise RuntimeError(
             "JEV runtime activation requires a calibrated confidence threshold"
         )
+    _validate_jev_benchmark_report(
+        report_path=benchmark_report_path,
+        minimum_confidence=minimum_confidence,
+        model=model,
+    )
+
     key_name = str(api_key_env).strip()
     if not key_name:
         raise ValueError("api_key_env must not be empty")
