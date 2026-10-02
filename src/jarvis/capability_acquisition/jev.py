@@ -137,7 +137,7 @@ def _validate_jev_benchmark_report(
             "JEV benchmark report is unreadable or invalid JSON"
         ) from exc
     if not isinstance(payload, dict):
-        raise RuntimeError("JEV benchmark report must be a JSON object")
+        raise TypeError("JEV benchmark report must be a JSON object")
     if payload.get("suite") != "jarvis-jev-phase9-candidate-selection-v1":
         raise RuntimeError(
             "JEV benchmark report uses the wrong Phase-9 decision corpus"
@@ -151,7 +151,7 @@ def _validate_jev_benchmark_report(
 
     summaries = payload.get("summaries")
     if not isinstance(summaries, list):
-        raise RuntimeError("JEV benchmark report is missing summaries")
+        raise TypeError("JEV benchmark report summaries must be a list")
     selected = next(
         (
             item
