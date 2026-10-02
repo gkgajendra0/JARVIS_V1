@@ -115,6 +115,34 @@ def test_bound_change_gate_accepts_explicit_natural_owner_approval(tmp_path) -> 
     assert store.require(change.change_id).state is ChangeState.DEVELOPING
 
 
+def test_bound_change_gate_accepts_observed_asr_approval_variant(tmp_path) -> None:
+    session = ConversationSession(session_id="owner-session")
+    session.start()
+    initial = session.accept_turn(ConversationRole.USER, "Build camera support")
+    store = ChangeStore(SQLiteWorkStore(tmp_path / "work.sqlite3"))
+    service = _service(store, session)
+    change = service.start(initial)
+    research = store.list_stages(change.change_id)[0]
+    work = store.work.require(research.work_id)
+    running = store.work.save(
+        work.transition(WorkState.RUNNING), expected_version=work.version
+    )
+    store.work.save(
+        running.transition(WorkState.COMPLETED), expected_version=running.version
+    )
+    gate = service.propose_architecture(change.change_id, {"plan": "typed adapter"})
+
+    session.accept_turn(ConversationRole.USER, "aprove")
+    decision = service.decide_latest(
+        gate.gate_id,
+        bound_gate_id=gate.gate_id,
+    )
+
+    assert decision.approved
+    assert decision.verification_id is not None
+    assert store.require(change.change_id).state is ChangeState.DEVELOPING
+
+
 def test_bound_change_gate_rejects_bare_yes_and_mismatched_gate(tmp_path) -> None:
     session = ConversationSession(session_id="owner-session")
     session.start()
