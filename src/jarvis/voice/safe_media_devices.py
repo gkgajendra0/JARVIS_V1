@@ -23,8 +23,6 @@ from livekit import rtc
 
 LOGGER = logging.getLogger(__name__)
 
-_OUTPUT_MIXER_STREAM_TIMEOUT_MS = 300
-
 
 class BoundedAudioIngress:
     """Bound cross-thread PCM backlog without ever leaking QueueFull callbacks."""
@@ -191,23 +189,13 @@ class SafeInputCapture:
 
 
 class SafeMediaDevices(rtc.MediaDevices):
-    """MediaDevices with race-safe capture ingress and jitter-tolerant output."""
+    """MediaDevices with race-safe capture ingress.
 
-    def open_output(self, *, output_device: int | None = None):
-        """Keep LiveKit's AEC output path while tolerating realtime frame jitter."""
-
-        player = super().open_output(output_device=output_device)
-        # LiveKit's default AudioMixer waits only 100 ms for the next stream
-        # frame and zero-pads on timeout. Realtime-model audio can arrive with
-        # slightly wider scheduling jitter, producing audible micro-gaps even
-        # while the physical player still has buffered PCM. Pre-create the same
-        # mixer with a wider bounded timeout; OutputPlayer.start() reuses it.
-        player._mixer = rtc.AudioMixer(
-            sample_rate=self._out_sr,
-            num_channels=self._channels,
-            stream_timeout_ms=_OUTPUT_MIXER_STREAM_TIMEOUT_MS,
-        )
-        return player
+    Speaker playback deliberately uses LiveKit's normal MediaDevices
+    open_output() implementation. JARVIS protects realtime playout by
+    prebuffering Gemini PCM before it enters the unchanged OutputPlayer/AEC
+    path instead of overriding LiveKit's private AudioMixer internals.
+    """
 
     def open_input(
         self,
