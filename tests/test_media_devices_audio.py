@@ -234,7 +234,9 @@ async def test_media_devices_output_flush_releases_short_primed_segment() -> Non
 
 
 @pytest.mark.asyncio
-async def test_media_devices_output_interrupt_before_prebuffer_plays_no_stale_audio() -> None:
+async def test_media_devices_output_interrupt_before_prebuffer_plays_no_stale_audio() -> (
+    None
+):
     output, source, player, _ = _prebuffer_test_output()
 
     await output.capture_frame(_pcm_frame(100))
@@ -251,4 +253,3 @@ async def test_media_devices_output_interrupt_before_prebuffer_plays_no_stale_au
 
 def test_safe_media_devices_keeps_upstream_output_player() -> None:
     assert SafeMediaDevices.open_output is rtc.MediaDevices.open_output
-
