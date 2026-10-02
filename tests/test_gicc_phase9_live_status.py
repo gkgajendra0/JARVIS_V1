@@ -1,13 +1,13 @@
 from pathlib import Path
 
+from tools.research.gicc_phase9_live_status import probe_live_mission
+
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change import ChangeStore
 from jarvis.goal_intelligence.models import GoalKind, OwnerGoalV2
 from jarvis.goal_intelligence.store import GoalStore
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore
-from tools.research.gicc_phase9_live_status import probe_live_mission
-
 
 def test_live_mission_probe_reports_missing_goal_without_mutation(
     tmp_path: Path,
