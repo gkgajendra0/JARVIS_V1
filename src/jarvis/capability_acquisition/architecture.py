@@ -107,9 +107,10 @@ def _gicc_semantic_contract(
         raise CapabilityAcquisitionArchitectureError(
             "GICC capability-gap link uses an unsupported contract"
         )
-    if payload.get("monitor_event_contract_required") is True and not str(
-        payload.get("monitor_event_contract") or ""
-    ).strip():
+    if (
+        payload.get("monitor_event_contract_required") is True
+        and not str(payload.get("monitor_event_contract") or "").strip()
+    ):
         raise CapabilityAcquisitionArchitectureError(
             "GICC monitoring gap requires an explicit monitor event contract"
         )
