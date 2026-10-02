@@ -466,16 +466,27 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         if not normalized_question:
             raise ValueError("change-gate question must not be empty")
 
+        gate_decided = asyncio.Event()
+        gate_approved: bool | None = None
+
+        def on_gate_decided(approved: bool) -> None:
+            nonlocal gate_approved
+            gate_approved = bool(approved)
+            gate_decided.set()
+
         def session_tools(conversation: ConversationSession) -> list:
             work_tools = WorkAgentTools(
                 runtime,
                 conversation,
                 bound_change_gate_id=gate_id,
+                on_bound_change_gate_decided=on_gate_decided,
                 allow_capability_acquisition=False,
             )
             return [work_tools.decide_change_gate]
 
         def gate_resolved() -> bool:
+            if gate_decided.is_set():
+                return True
             pending = GateService(
                 runtime.changes.store,
                 verify_owner=lambda *_: False,
@@ -496,6 +507,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 initial_prompt_label="engineering change approval prompt",
                 session_tool_factory=session_tools,
                 completion_predicate=gate_resolved,
+                completion_event=gate_decided,
                 completion_label=f"engineering change gate {gate_id}",
             )
         finally:
@@ -504,7 +516,29 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             if not self._shutdown.is_set():
                 self._state = VoiceRuntimeState.IDLE
 
-        return gate_resolved()
+        resolved = gate_resolved()
+        if resolved and gate_decided.is_set():
+            output = self.audio.output
+            if output is not None:
+                acknowledgement = (
+                    "Say exactly: Your approval was recorded."
+                    if gate_approved is True
+                    else "Say exactly: Your rejection was recorded."
+                )
+                try:
+                    await self._speak_ephemeral_realtime_message(
+                        output,
+                        instructions=acknowledgement,
+                        label="engineering change decision acknowledgement",
+                    )
+                except Exception as exc:
+                    LOGGER.warning(
+                        "Engineering-change acknowledgement unavailable after "
+                        "canonical decision | gate_id=%s | error=%s",
+                        gate_id,
+                        type(exc).__name__,
+                    )
+        return resolved
 
     async def _deliver_pending_work(self) -> None:
         """Speak durable Work notifications only at an exclusive idle boundary.
