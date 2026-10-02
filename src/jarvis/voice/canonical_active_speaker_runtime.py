@@ -351,7 +351,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             "Speak exactly the following owner question and nothing else. Do not add "
             "internal identifiers, explanations, meta commentary, or instructions. "
             "After speaking the question, stop and wait for the owner's response. "
-            "The owner does not need to say the wake word when responding. "
+            "The owner does not need to say the wake word when responding. If the owner "
+            "clearly asks to cancel or stop this exact pending task, call "
+            "cancel_background_work. Otherwise, when the owner clearly answers the "
+            "question, call continue_background_work. "
             "Owner question: " + normalized_question
         )
 
