@@ -101,7 +101,7 @@ def _load_report(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError) as exc:
         raise RuntimeError("JEV Phase-9 benchmark report is unreadable") from exc
     if not isinstance(payload, dict):
-        raise RuntimeError("JEV Phase-9 benchmark report must be a JSON object")
+        raise TypeError("JEV Phase-9 benchmark report must be a JSON object")
     return payload
 
 
