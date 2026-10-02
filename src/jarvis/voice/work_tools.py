@@ -568,11 +568,35 @@ class WorkAgentTools:
                 "bound_gate_id": bound_gate_id,
             }
         target_gate_id = bound_gate_id or requested_gate_id
-        decision = await asyncio.to_thread(
-            self._change_service().decide_latest,
-            target_gate_id,
-            bound_gate_id=bound_gate_id,
-        )
+        try:
+            decision = await asyncio.to_thread(
+                self._change_service().decide_latest,
+                target_gate_id,
+                bound_gate_id=bound_gate_id,
+            )
+        except ChangeConflict as exc:
+            reason = str(exc)
+            if reason == "no accepted owner turn":
+                return {
+                    "ok": False,
+                    "status": "awaiting_owner_turn",
+                    "gate_id": target_gate_id,
+                    "message": (
+                        "No canonical owner decision has been accepted yet. "
+                        "Keep listening and do not report an internal error."
+                    ),
+                }
+            if reason == "owner must explicitly identify the current gate":
+                return {
+                    "ok": False,
+                    "status": "awaiting_explicit_decision",
+                    "gate_id": target_gate_id,
+                    "message": (
+                        "The latest owner turn did not contain an explicit "
+                        "approve/reject decision. Ask again naturally."
+                    ),
+                }
+            raise
         return {
             "ok": True,
             "change_id": decision.challenge.change_id,
