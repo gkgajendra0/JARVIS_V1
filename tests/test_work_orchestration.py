@@ -2044,9 +2044,7 @@ def test_dbos_terminal_error_reconciliation_uses_fresh_recovery_execution(
         recovery_token="startup_recovery_deadbeef1234",
     )
 
-    assert recovered == (
-        "work_0123456789abcdef__retry_startup_recovery_deadbeef1234"
-    )
+    assert recovered == ("work_0123456789abcdef__retry_startup_recovery_deadbeef1234")
     assert restart_calls == [
         (
             "work_0123456789abcdef",
