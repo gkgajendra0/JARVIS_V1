@@ -16,6 +16,7 @@ from pathlib import Path
 from jarvis.ai_provider import require_provider_api_key
 from jarvis.capabilities.runtime import build_default_capability_runtime
 from jarvis.capabilities.self_awareness_reads import SelfAwarenessReadExecutor
+from jarvis.capability_acquisition.jev import build_jev_acquisition_candidate_advisor
 from jarvis.capability_acquisition.runtime_context import (
     CapabilityRuntimeAcquisitionContextProvider,
 )
@@ -438,6 +439,13 @@ def build_production_voice_runtime(
     work_runtime = None
     if config.work_orchestration_enabled:
         deployment_metadata = DeploymentMetadataStore(default_deployment_root())
+        acquisition_candidate_advisor = build_jev_acquisition_candidate_advisor(
+            enabled=config.jev_bounded_decisions_enabled,
+            benchmark_admitted=config.jev_benchmark_admitted,
+            minimum_confidence=config.jev_min_confidence,
+            model=config.jev_model,
+            endpoint=config.jev_endpoint,
+        )
         work_runtime = build_work_runtime(
             provider=config.ai_provider,
             research_service=research_service,
@@ -446,6 +454,7 @@ def build_production_voice_runtime(
             chatgpt_plan_model=config.chatgpt_plan_model,
             global_brain_router_mode=config.global_brain_router_mode,
             global_concurrency=config.work_global_concurrency,
+            acquisition_candidate_advisor=acquisition_candidate_advisor,
             development_test_image=config.development_test_docker_image,
             dbos_database_url=config.work_dbos_database_url,
             event_loop=asyncio.get_running_loop(),
