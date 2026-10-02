@@ -297,7 +297,6 @@ def test_phase9_existing_report_admission_requires_all_results(
         )
 
 
-
 def test_phase9_existing_report_rejects_duplicate_case_repetition(
     tmp_path: Path,
 ) -> None:
