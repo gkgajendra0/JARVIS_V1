@@ -83,6 +83,102 @@ def test_only_explicit_canonical_owner_turn_can_decide_current_gate(tmp_path) ->
     assert len(store.list_stages(change.change_id)) == 2
 
 
+
+def test_bound_change_gate_accepts_explicit_natural_owner_approval(tmp_path) -> None:
+    session = ConversationSession(session_id="owner-session")
+    session.start()
+    initial = session.accept_turn(ConversationRole.USER, "Build camera support")
+    store = ChangeStore(SQLiteWorkStore(tmp_path / "work.sqlite3"))
+    service = _service(store, session)
+    change = service.start(initial)
+    research = store.list_stages(change.change_id)[0]
+    work = store.work.require(research.work_id)
+    running = store.work.save(
+        work.transition(WorkState.RUNNING), expected_version=work.version
+    )
+    store.work.save(
+        running.transition(WorkState.COMPLETED), expected_version=running.version
+    )
+    gate = service.propose_architecture(change.change_id, {"plan": "typed adapter"})
+
+    session.accept_turn(ConversationRole.USER, "Jarves it is approved.")
+    with pytest.raises(ChangeConflict):
+        service.decide_latest(gate.gate_id)
+
+    decision = service.decide_latest(
+        gate.gate_id,
+        bound_gate_id=gate.gate_id,
+    )
+
+    assert decision.approved
+    assert decision.verification_id is not None
+    assert decision.verifier_id == "fixture"
+    assert store.require(change.change_id).state is ChangeState.DEVELOPING
+
+
+def test_bound_change_gate_rejects_bare_yes_and_mismatched_gate(tmp_path) -> None:
+    session = ConversationSession(session_id="owner-session")
+    session.start()
+    initial = session.accept_turn(ConversationRole.USER, "Build camera support")
+    store = ChangeStore(SQLiteWorkStore(tmp_path / "work.sqlite3"))
+    service = _service(store, session)
+    change = service.start(initial)
+    research = store.list_stages(change.change_id)[0]
+    work = store.work.require(research.work_id)
+    running = store.work.save(
+        work.transition(WorkState.RUNNING), expected_version=work.version
+    )
+    store.work.save(
+        running.transition(WorkState.COMPLETED), expected_version=running.version
+    )
+    gate = service.propose_architecture(change.change_id, {"plan": "typed adapter"})
+
+    session.accept_turn(ConversationRole.USER, "yes")
+    with pytest.raises(ChangeConflict):
+        service.decide_latest(gate.gate_id, bound_gate_id=gate.gate_id)
+
+    session.accept_turn(ConversationRole.USER, "approved")
+    with pytest.raises(ChangeConflict, match="different gate"):
+        service.decide_latest(
+            gate.gate_id,
+            bound_gate_id="gate_0000000000000000",
+        )
+
+    assert store.require(change.change_id).state is ChangeState.WAITING_OWNER_APPROVAL
+
+
+def test_bound_change_gate_natural_decision_still_requires_strong_owner_verification(
+    tmp_path,
+) -> None:
+    session = ConversationSession(session_id="owner-session")
+    session.start()
+    initial = session.accept_turn(ConversationRole.USER, "Build camera support")
+    store = ChangeStore(SQLiteWorkStore(tmp_path / "work.sqlite3"))
+    service = ChangeService(
+        ChangeCoordinator(store, Backend()),
+        session,
+        strong_approval=StrongApprovalService(
+            approvals=ApprovalService(), verifier=UnavailableOwner()
+        ),
+    )
+    change = service.start(initial)
+    research = store.list_stages(change.change_id)[0]
+    work = store.work.require(research.work_id)
+    running = store.work.save(
+        work.transition(WorkState.RUNNING), expected_version=work.version
+    )
+    store.work.save(
+        running.transition(WorkState.COMPLETED), expected_version=running.version
+    )
+    gate = service.propose_architecture(change.change_id, {"plan": "typed adapter"})
+    session.accept_turn(ConversationRole.USER, "Approved.")
+
+    with pytest.raises(ChangeConflict, match="strong owner verification"):
+        service.decide_latest(gate.gate_id, bound_gate_id=gate.gate_id)
+
+    assert store.require(change.change_id).state is ChangeState.WAITING_OWNER_APPROVAL
+
+
 def test_model_cannot_use_an_older_matching_turn_for_a_new_gate(tmp_path) -> None:
     session = ConversationSession(session_id="owner-session")
     session.start()
