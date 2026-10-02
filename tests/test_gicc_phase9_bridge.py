@@ -8,11 +8,15 @@ from jarvis.capabilities.models import (
     DiscoverySnapshot,
     DiscoveryState,
 )
+from jarvis.capability_acquisition.external_contract import (
+    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+)
 from jarvis.capability_acquisition.source import AcquisitionContextV1
 from jarvis.capability_registry.projection import (
     CapabilityInventoryEntry,
     CapabilityManagementMode,
 )
+from jarvis.engineering_substrate.contracts import HardwareAcceptanceVerdict
 from jarvis.goal_intelligence.capability_graph import CapabilityGraphResolver
 from jarvis.goal_intelligence.models import (
     CapabilityGapV1,
@@ -461,6 +465,51 @@ def test_phase9_completion_requires_exact_current_lineage(tmp_path: Path) -> Non
     artifacts.artifacts["capability_lifecycle_activation"].payload[
         "candidate_artifact_digest"
     ] = "0" * 64
+    assert bridge.completion_verified(gap=gap, goal=goal) is False
+
+
+
+
+def test_phase9_completion_requires_real_external_acceptance_when_declared(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store)
+    graph = _graph(goal)
+    gap = _gap(store, goal, graph)
+    request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
+    artifacts = LineageArtifacts()
+    _install_current_lineage(artifacts, request=request, goal=goal, gap=gap)
+    artifacts.artifacts["architecture"].payload["owner_acceptance_contract_ids"] = [
+        PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
+    ]
+    bridge = Phase9GoalBridge(
+        coordinator=FakeAdmitter(),
+        change_store=artifacts,
+        goal_store=store,
+        source_revision_provider=lambda: "a" * 40,
+    )
+
+    assert bridge.completion_verified(gap=gap, goal=goal) is False
+
+    candidate = artifacts.artifacts["capability_candidate"]
+    activation = artifacts.artifacts["capability_lifecycle_activation"]
+    artifacts.artifacts["capability_external_acceptance"] = SimpleNamespace(
+        artifact_id="artifact-external-acceptance",
+        digest="x" * 64,
+        payload={
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "activation_artifact_id": activation.artifact_id,
+            "activation_artifact_digest": activation.digest,
+            "verdict": HardwareAcceptanceVerdict.PASS.value,
+        },
+    )
+    assert bridge.completion_verified(gap=gap, goal=goal) is True
+
+    artifacts.artifacts["capability_external_acceptance"].payload["verdict"] = (
+        HardwareAcceptanceVerdict.FAIL.value
+    )
     assert bridge.completion_verified(gap=gap, goal=goal) is False
 
 
