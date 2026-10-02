@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 import pytest
@@ -66,6 +67,34 @@ def _candidate(
         verification_requirements=("contract-test",),
         external_acceptance_requirements=("owner-observe-tv",),
     )
+
+
+
+
+def _write_benchmark_report(tmp_path, *, threshold: float = 0.85, model: str = "jev-latest"):
+    path = tmp_path / "jev-benchmark.json"
+    path.write_text(
+        json.dumps(
+            {
+                "suite": "jarvis-c4-c5-bounded-decision-v1",
+                "runner": "jev",
+                "requested_model": model,
+                "case_count": 18,
+                "repeat": 1,
+                "summaries": [
+                    {
+                        "confidence_threshold": threshold,
+                        "structured_output_failures": 0,
+                        "unsafe_downgrades": 0,
+                        "covered": 12,
+                    }
+                ],
+                "results": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
 
 
 @dataclass
@@ -213,7 +242,9 @@ def test_live_jev_factory_requires_benchmark_admission(monkeypatch) -> None:
         )
 
 
-def test_live_jev_factory_requires_calibrated_threshold_and_secret(monkeypatch) -> None:
+def test_live_jev_factory_requires_calibrated_threshold_and_secret(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.setenv("JEV_API_KEY", "secret")
     with pytest.raises(RuntimeError, match="calibrated confidence"):
         build_jev_acquisition_candidate_advisor(
@@ -235,7 +266,7 @@ def test_live_jev_factory_requires_calibrated_threshold_and_secret(monkeypatch) 
         )
 
 
-def test_live_jev_factory_builds_only_after_all_gates(monkeypatch) -> None:
+def test_live_jev_factory_builds_only_after_all_gates(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("JEV_API_KEY", "secret")
     advisor = build_jev_acquisition_candidate_advisor(
         enabled=True,
@@ -243,5 +274,24 @@ def test_live_jev_factory_builds_only_after_all_gates(monkeypatch) -> None:
         minimum_confidence=0.85,
         model="jev-latest",
         endpoint="https://api.typesafe.ai/v1/systemone",
+        benchmark_report_path=str(_write_benchmark_report(tmp_path)),
     )
     assert isinstance(advisor, JevAcquisitionCandidateAdvisor)
+
+
+def test_live_jev_factory_rejects_unsafe_benchmark_evidence(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("JEV_API_KEY", "secret")
+    path = _write_benchmark_report(tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["summaries"][0]["unsafe_downgrades"] = 1
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="zero unsafe downgrades"):
+        build_jev_acquisition_candidate_advisor(
+            enabled=True,
+            benchmark_admitted=True,
+            minimum_confidence=0.85,
+            model="jev-latest",
+            endpoint="https://api.typesafe.ai/v1/systemone",
+            benchmark_report_path=str(path),
+        )
