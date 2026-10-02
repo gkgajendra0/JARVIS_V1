@@ -59,6 +59,7 @@ class WorkAgentTools:
         *,
         bound_owner_input_work_id: str | None = None,
         on_bound_owner_input_submitted: Callable[[WorkItem], None] | None = None,
+        bound_change_gate_id: str | None = None,
         allow_capability_acquisition: bool = True,
     ) -> None:
         if not isinstance(runtime, WorkRuntime):
@@ -70,6 +71,12 @@ class WorkAgentTools:
         self._conversation = conversation
         self._bound_owner_input_work_id = normalized_bound_work_id
         self._on_bound_owner_input_submitted = on_bound_owner_input_submitted
+        normalized_bound_gate_id = str(bound_change_gate_id or "").strip() or None
+        if normalized_bound_gate_id is not None and not normalized_bound_gate_id.startswith(
+            "gate_"
+        ):
+            raise ValueError("bound_change_gate_id must be an exact gate ID")
+        self._bound_change_gate_id = normalized_bound_gate_id
         if not isinstance(allow_capability_acquisition, bool):
             raise TypeError("allow_capability_acquisition must be bool")
         self._allow_capability_acquisition = allow_capability_acquisition
@@ -540,19 +547,35 @@ class WorkAgentTools:
     async def decide_change_gate(
         self, context: RunContext, gate_id: str
     ) -> dict[str, object]:
-        """Record the latest canonical owner's explicit 'approve gate_ID' or 'reject gate_ID'.
+        """Record the latest canonical owner's explicit change-gate decision.
 
-        Never call this from a generic yes, model-generated reply, WorkItem input,
-        or an earlier USER turn. The service independently checks the accepted turn.
+        Outside a proactive bound gate interaction, the owner must identify the
+        gate using the canonical decision grammar. Inside a session already bound
+        to one exact gate, natural wording is allowed only when the latest USER
+        turn still contains an explicit approve/reject decision. Bare yes/no and
+        unrelated language remain invalid. Strong owner verification and exact
+        artifact-digest binding are enforced independently by ChangeService.
         """
         del context
+        requested_gate_id = str(gate_id or "").strip()
+        bound_gate_id = self._bound_change_gate_id
+        if bound_gate_id is not None and requested_gate_id != bound_gate_id:
+            return {
+                "ok": False,
+                "status": "change_gate_target_mismatch",
+                "requested_gate_id": requested_gate_id,
+                "bound_gate_id": bound_gate_id,
+            }
+        target_gate_id = bound_gate_id or requested_gate_id
         decision = await asyncio.to_thread(
-            self._change_service().decide_latest, gate_id
+            self._change_service().decide_latest,
+            target_gate_id,
+            bound_gate_id=bound_gate_id,
         )
         return {
             "ok": True,
             "change_id": decision.challenge.change_id,
-            "gate_id": gate_id,
+            "gate_id": target_gate_id,
             "approved": decision.approved,
             "state": self._runtime.changes.store.require(
                 decision.challenge.change_id
