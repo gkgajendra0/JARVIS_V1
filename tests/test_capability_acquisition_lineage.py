@@ -119,9 +119,9 @@ def test_lineage_verifier_returns_exact_current_chain() -> None:
 
 def test_lineage_verifier_returns_none_until_activation_is_effective() -> None:
     store = _current_store()
-    store.artifacts["capability_lifecycle_activation"].payload[
-        "effective_enabled"
-    ] = False
+    store.artifacts["capability_lifecycle_activation"].payload["effective_enabled"] = (
+        False
+    )
 
     assert (
         verify_capability_acquisition_completion(
