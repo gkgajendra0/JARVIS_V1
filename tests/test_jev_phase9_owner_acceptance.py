@@ -44,59 +44,73 @@ def test_phase9_owner_acceptance_uses_dedicated_corpus_and_all_thresholds(
     assert "--quiet" in argv
 
 
-def test_phase9_threshold_selection_maximizes_safe_coverage_then_confidence() -> None:
+def test_phase9_threshold_selection_requires_perfect_evidence_then_confidence() -> None:
     module = _load_module()
     report = {
         "summaries": [
             {
-                "confidence_threshold": 0.70,
-                "covered": 8,
-                "unsafe_downgrades": 1,
-                "structured_output_failures": 0,
-            },
-            {
                 "confidence_threshold": 0.80,
-                "covered": 7,
-                "unsafe_downgrades": 0,
+                "covered": 8,
+                "coverage": 1.0,
+                "accuracy_over_covered": 1.0,
+                "unsafe_downgrades": 1,
                 "structured_output_failures": 0,
             },
             {
                 "confidence_threshold": 0.85,
                 "covered": 7,
+                "coverage": 0.875,
+                "accuracy_over_covered": 1.0,
                 "unsafe_downgrades": 0,
                 "structured_output_failures": 0,
             },
             {
                 "confidence_threshold": 0.90,
-                "covered": 5,
+                "covered": 8,
+                "coverage": 1.0,
+                "accuracy_over_covered": 1.0,
+                "unsafe_downgrades": 0,
+                "structured_output_failures": 0,
+            },
+            {
+                "confidence_threshold": 0.95,
+                "covered": 8,
+                "coverage": 1.0,
+                "accuracy_over_covered": 1.0,
                 "unsafe_downgrades": 0,
                 "structured_output_failures": 0,
             },
         ]
     }
 
-    assert module._select_admitted_threshold(report) == pytest.approx(0.85)
+    assert module._select_admitted_threshold(report) == pytest.approx(0.95)
 
 
-def test_phase9_threshold_selection_rejects_no_safe_coverage() -> None:
+def test_phase9_threshold_selection_rejects_imperfect_evidence() -> None:
     module = _load_module()
     report = {
         "summaries": [
             {
-                "confidence_threshold": 0.80,
+                "confidence_threshold": 0.85,
                 "covered": 8,
-                "unsafe_downgrades": 1,
+                "coverage": 1.0,
+                "accuracy_over_covered": 0.875,
+                "unsafe_downgrades": 0,
                 "structured_output_failures": 0,
             },
             {
                 "confidence_threshold": 0.90,
-                "covered": 0,
+                "covered": 7,
+                "coverage": 0.875,
+                "accuracy_over_covered": 1.0,
                 "unsafe_downgrades": 0,
                 "structured_output_failures": 0,
             },
             {
                 "confidence_threshold": 0.95,
-                "covered": 4,
+                "covered": 8,
+                "coverage": 1.0,
+                "accuracy_over_covered": 1.0,
                 "unsafe_downgrades": 0,
                 "structured_output_failures": 1,
             },
@@ -105,7 +119,6 @@ def test_phase9_threshold_selection_rejects_no_safe_coverage() -> None:
 
     with pytest.raises(RuntimeError, match="admission failed"):
         module._select_admitted_threshold(report)
-
 
 def test_phase9_owner_acceptance_requires_environment_credential(
     monkeypatch,
