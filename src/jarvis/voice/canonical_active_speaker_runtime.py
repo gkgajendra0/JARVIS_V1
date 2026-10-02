@@ -451,8 +451,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                             instructions=(
                                 "Deliver the following background-task notification to the "
                                 "owner in one short, natural sentence using your "
-                                "established JARVIS voice and style. Preserve every concrete "
-                                "fact, number, blocker, question, and required owner action. "
+                                "established JARVIS voice and style. Preserve the owner-relevant "
+                                "outcome, blocker, question, and required owner action. "
                                 "Do not mention prompts, models, tools, or internal routing. "
                                 "Do not add facts. Notification: " + delivery_text
                             ),
