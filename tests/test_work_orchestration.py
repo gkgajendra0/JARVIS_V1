@@ -1925,7 +1925,7 @@ def test_orchestrator_rebinds_fresh_recovery_execution_after_terminal_error(
             super().__init__()
             self.reconciled: list[tuple[str, str, WorkPriority, str]] = []
 
-        def reconcile_execution(
+        def recover_execution(
             self,
             execution_id: str,
             *,
@@ -1987,7 +1987,7 @@ def test_interrupted_side_effect_stays_owner_gated_when_execution_is_rebound(
     assert waiting.state is WorkState.WAITING_FOR_OWNER
 
     class RecoveringBackend(FakeBackend):
-        def reconcile_execution(
+        def recover_execution(
             self,
             execution_id: str,
             *,
@@ -2037,7 +2037,7 @@ def test_dbos_terminal_error_reconciliation_uses_fresh_recovery_execution(
 
     monkeypatch.setattr(backend, "restart", fake_restart)
 
-    recovered = backend.reconcile_execution(
+    recovered = backend.recover_execution(
         "work_0123456789abcdef",
         work_id="work_0123456789abcdef",
         priority=WorkPriority.NORMAL,
@@ -2070,7 +2070,7 @@ def test_dbos_terminal_success_never_replays_active_canonical_work(
     )
 
     with pytest.raises(RuntimeError, match=r"terminal: .* \(SUCCESS\)"):
-        backend.reconcile_execution(
+        backend.recover_execution(
             "work_0123456789abcdef",
             work_id="work_0123456789abcdef",
             priority=WorkPriority.NORMAL,
