@@ -48,7 +48,7 @@ def test_restart_reconciles_submission_without_duplicate_stage(tmp_path) -> None
     coordinator.reconcile(change.change_id)
     coordinator.reconcile(change.change_id)
     assert changes.list_stages(change.change_id) == stages
-    assert backend.submissions == [stages[0].work_id, stages[0].work_id]
+    assert backend.submissions == [stages[0].work_id]
     assert work.get_execution_id(stages[0].work_id) == stages[0].work_id
 
 
