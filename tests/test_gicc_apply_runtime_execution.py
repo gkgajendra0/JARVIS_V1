@@ -632,7 +632,7 @@ async def test_external_acceptance_fences_capability_continuation(
     assert advanced == 1
     assert coordinator.calls == 1
     assert capability_runtime.refreshes == 1
-    assert capability_runtime.refresh_thread_ids == [capability_runtime.refresh_thread_ids[0]]
+    assert len(capability_runtime.refresh_thread_ids) == 1
     assert capability_runtime.refresh_thread_ids[0] != event_loop_thread
     assert latest is not None
     assert latest.state is GoalState.COMPLETED
