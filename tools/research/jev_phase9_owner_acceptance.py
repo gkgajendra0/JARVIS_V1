@@ -168,12 +168,12 @@ def _apply_machine_settings(
 ) -> dict[str, Any]:
     path = default_machine_config_path()
     settings = load_machine_settings(path)
-    settings[_SETTING_ENABLED] = True
-    settings[_SETTING_ADMITTED] = True
+    settings[_SETTING_ENABLED] = "true"
+    settings[_SETTING_ADMITTED] = "true"
     settings[_SETTING_REPORT] = str(report_path.resolve())
     settings[_SETTING_MODEL] = model
     settings[_SETTING_ENDPOINT] = endpoint
-    settings[_SETTING_THRESHOLD] = threshold
+    settings[_SETTING_THRESHOLD] = f"{threshold:.2f}"
     save_machine_settings(settings, path)
 
     reloaded = load_machine_settings(path)
