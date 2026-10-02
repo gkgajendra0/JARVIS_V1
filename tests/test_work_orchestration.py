@@ -1948,7 +1948,7 @@ def test_orchestrator_rebinds_fresh_recovery_execution_after_terminal_error(
     assert old_execution == item.work_id
     assert work_id == item.work_id
     assert priority is item.priority
-    assert recovery_token.startswith(f"startup_recovery_v{item.version}_")
+    assert recovery_token.startswith("startup_recovery_")
     recovered_execution = store.get_execution_id(item.work_id)
     assert recovered_execution == f"{item.work_id}__retry_{recovery_token}"
 
@@ -2041,17 +2041,17 @@ def test_dbos_terminal_error_reconciliation_uses_fresh_recovery_execution(
         "work_0123456789abcdef",
         work_id="work_0123456789abcdef",
         priority=WorkPriority.NORMAL,
-        recovery_token="startup_recovery_v4_deadbeef1234",
+        recovery_token="startup_recovery_deadbeef1234",
     )
 
     assert recovered == (
-        "work_0123456789abcdef__retry_startup_recovery_v4_deadbeef1234"
+        "work_0123456789abcdef__retry_startup_recovery_deadbeef1234"
     )
     assert restart_calls == [
         (
             "work_0123456789abcdef",
             WorkPriority.NORMAL,
-            "startup_recovery_v4_deadbeef1234",
+            "startup_recovery_deadbeef1234",
         )
     ]
 
@@ -2074,7 +2074,7 @@ def test_dbos_terminal_success_never_replays_active_canonical_work(
             "work_0123456789abcdef",
             work_id="work_0123456789abcdef",
             priority=WorkPriority.NORMAL,
-            recovery_token="startup_recovery_v4_deadbeef1234",
+            recovery_token="startup_recovery_deadbeef1234",
         )
 
 
