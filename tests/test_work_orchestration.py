@@ -940,6 +940,8 @@ def test_work_submission_is_idempotent_for_same_canonical_turn(tmp_path: Path) -
     )
 
     assert first.work.work_id == second.work.work_id
+    assert first.execution_id == second.execution_id == first.work.work_id
+    assert store.get_execution_id(first.work.work_id) == first.work.work_id
     assert backend.submitted == [first.work.work_id]
 
 
