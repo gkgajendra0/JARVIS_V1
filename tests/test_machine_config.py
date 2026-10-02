@@ -204,3 +204,30 @@ def test_default_media_target_is_persistable_non_secret_setting(tmp_path: Path) 
 
     settings = load_machine_settings(path)
     assert settings["JARVIS_DEFAULT_MEDIA_TARGET"] == "Hisense TV"
+
+
+def test_jev_admission_settings_are_persistable_but_key_is_not(tmp_path: Path) -> None:
+    path = tmp_path / "machine.json"
+    save_machine_settings(
+        {
+            "JARVIS_JEV_BOUNDED_DECISIONS_ENABLED": "true",
+            "JARVIS_JEV_BENCHMARK_ADMITTED": "true",
+            "JARVIS_JEV_BENCHMARK_REPORT_PATH": "C:\\JARVIS\\acceptance\\jev.json",
+            "JARVIS_JEV_MODEL": "jev-latest",
+            "JARVIS_JEV_ENDPOINT": "https://api.typesafe.ai/v1/systemone",
+            "JARVIS_JEV_MIN_CONFIDENCE": "0.95",
+        },
+        path,
+    )
+
+    settings = load_machine_settings(path)
+    assert settings["JARVIS_JEV_BOUNDED_DECISIONS_ENABLED"] == "true"
+    assert settings["JARVIS_JEV_BENCHMARK_ADMITTED"] == "true"
+    assert settings["JARVIS_JEV_MIN_CONFIDENCE"] == "0.95"
+    assert settings["JARVIS_JEV_MODEL"] == "jev-latest"
+
+    with pytest.raises(ValueError, match="may not be persisted"):
+        save_machine_settings(
+            {"JEV_API_KEY": "secret"},
+            tmp_path / "jev-secret.json",
+        )
