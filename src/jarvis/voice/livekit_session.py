@@ -336,7 +336,7 @@ def create_voice_session(
         vad=None,
         turn_handling=TurnHandlingOptions(
             turn_detection=None,
-            interruption={"enabled": True, "min_duration": 0.75, "resume_false_interruption": False},
+            interruption={"enabled": True, "resume_false_interruption": False},
             preemptive_generation={"enabled": False},
         ),
     )
