@@ -59,6 +59,7 @@ class DeliveryPolicy(str, Enum):
 
 class WorkDeliveryKind(str, Enum):
     OWNER_INPUT = "owner_input"
+    CHANGE_GATE = "change_gate"
     RESOURCE_BLOCKER = "resource_blocker"
     PROGRESS = "progress"
     COMPLETION = "completion"
