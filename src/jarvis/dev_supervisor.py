@@ -58,6 +58,10 @@ from jarvis.self_repair.windows_job import (
     WindowsRuntimeJob,
 )
 from jarvis.work.privacy import build_default_work_payload_codec
+from jarvis.work.shutdown import (
+    SUPERVISOR_GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS,
+    SUPERVISOR_SIGNAL_SHUTDOWN_TIMEOUT_SECONDS,
+)
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
 _BRANCH_ENV = "JARVIS_DEV_BRANCH"
@@ -68,7 +72,7 @@ class DevSupervisorConfig:
     remote: str = "origin"
     branch: str = "main"
     poll_seconds: float = 5.0
-    shutdown_timeout_seconds: float = 10.0
+    shutdown_timeout_seconds: float = SUPERVISOR_GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS
     approval_timeout_seconds: float = 45.0
     startup_timeout_seconds: float = 120.0
     crash_restart_max_attempts: int = 3
@@ -949,12 +953,16 @@ def _stop_jarvis(
         except subprocess.TimeoutExpired:
             pass
 
+    signal_timeout = min(
+        float(timeout_seconds),
+        float(SUPERVISOR_SIGNAL_SHUTDOWN_TIMEOUT_SECONDS),
+    )
     try:
         if os.name == "nt":
             process.send_signal(signal.CTRL_BREAK_EVENT)
         else:
             process.send_signal(signal.SIGINT)
-        process.wait(timeout=timeout_seconds)
+        process.wait(timeout=signal_timeout)
         finish_cleanup()
         return
     except (OSError, subprocess.TimeoutExpired):
