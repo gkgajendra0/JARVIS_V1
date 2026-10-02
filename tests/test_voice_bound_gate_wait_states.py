@@ -53,7 +53,6 @@ def test_bound_gate_unexpected_conflict_is_not_hidden() -> None:
     )
 
 
-
 @pytest.mark.asyncio
 async def test_bound_gate_success_signals_deterministic_completion_callback() -> None:
     runtime = object.__new__(WorkRuntime)
