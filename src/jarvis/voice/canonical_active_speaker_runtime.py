@@ -418,6 +418,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         if challenge.kind is GateKind.PROMOTION:
             return f"The verified change for {subject} is ready for promotion. Do you approve or reject it?"
         raise RuntimeError("unsupported engineering-change gate kind")
+
     async def _run_change_gate_interaction(
         self,
         *,
