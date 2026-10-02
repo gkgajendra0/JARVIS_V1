@@ -249,6 +249,7 @@ def build_default_self_model() -> SelfModelRegistry:
             (
                 "src/jarvis/ai_provider.py",
                 "src/jarvis/provider_cli.py",
+                "src/jarvis/provider_circuit.py",
                 "src/jarvis/provider_resilience.py",
                 "src/jarvis/voice/provider_resilience.py",
             ),
