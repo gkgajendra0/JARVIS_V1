@@ -83,7 +83,6 @@ def test_only_explicit_canonical_owner_turn_can_decide_current_gate(tmp_path) ->
     assert len(store.list_stages(change.change_id)) == 2
 
 
-
 def test_bound_change_gate_accepts_explicit_natural_owner_approval(tmp_path) -> None:
     session = ConversationSession(session_id="owner-session")
     session.start()
