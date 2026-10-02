@@ -166,7 +166,9 @@ class WorkOrchestrator:
                     recovery_token=recovery_token,
                 )
                 retry_prefix = f"{item.work_id}__retry_"
-                if resumed_id != item.work_id and not resumed_id.startswith(retry_prefix):
+                if resumed_id != item.work_id and not resumed_id.startswith(
+                    retry_prefix
+                ):
                     raise RuntimeError(
                         "durable backend returned an invalid recovery execution id"
                     )
