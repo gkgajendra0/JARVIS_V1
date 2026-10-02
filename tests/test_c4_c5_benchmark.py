@@ -388,4 +388,7 @@ def test_phase9_jev_candidate_corpus_is_frozen_and_complete() -> None:
     assert suite == "jarvis-jev-phase9-candidate-selection-v1"
     assert len(cases) == 8
     assert len({case.case_id for case in cases}) == 8
-    assert all(tuple(question.name for question in case.questions) == ("candidate",) for case in cases)
+    assert all(
+        tuple(question.name for question in case.questions) == ("candidate",)
+        for case in cases
+    )
