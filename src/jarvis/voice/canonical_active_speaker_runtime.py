@@ -255,7 +255,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         if kind is WorkDeliveryKind.OWNER_INPUT:
             return f"Sir, I need your input on a background task. {normalized}"
         if kind is WorkDeliveryKind.CHANGE_GATE:
-            return (\n                f"Sir, an engineering change is waiting for your approval. {normalized}"\n            )
+            return (
+                f"Sir, an engineering change is waiting for your approval. {normalized}"
+            )
         if kind is WorkDeliveryKind.FAILURE:
             return f"Sir, a background task failed. {normalized}"
         return f"Sir, {normalized}"
@@ -376,7 +378,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
         runtime = self._work_runtime
         if runtime is None or runtime.changes is None:
-            raise RuntimeError(\n                "change-gate interaction requires EngineeringChange runtime"\n            )
+            raise RuntimeError(
+                "change-gate interaction requires EngineeringChange runtime"
+            )
 
         normalized_question = " ".join(question.split())
         if not normalized_question:
