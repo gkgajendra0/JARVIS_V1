@@ -173,9 +173,7 @@ def _default_json_transport(
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(
-            f"Jev HTTP {exc.code}: {detail[:1000]}"
-        ) from exc
+        raise RuntimeError(f"Jev HTTP {exc.code}: {detail[:1000]}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"Jev unavailable: {exc.reason}") from exc
 
@@ -245,9 +243,7 @@ class TypeSafeJevClient:
         for question in request.questions:
             raw = raw_answers.get(question.name)
             if not isinstance(raw, dict) or raw.get("type") != "choice":
-                raise JevProtocolError(
-                    f"{question.name}: expected a Choice answer"
-                )
+                raise JevProtocolError(f"{question.name}: expected a Choice answer")
             choice = str(raw.get("choice") or "").strip().casefold()
             if choice not in question.choices:
                 raise JevProtocolError(
@@ -255,14 +251,10 @@ class TypeSafeJevClient:
                 )
             confidence = raw.get("confidence")
             if confidence is None:
-                raise JevProtocolError(
-                    f"{question.name}: confidence is required"
-                )
+                raise JevProtocolError(f"{question.name}: confidence is required")
             probabilities_raw = raw.get("probabilities")
             if not isinstance(probabilities_raw, dict):
-                raise JevProtocolError(
-                    f"{question.name}: probabilities are required"
-                )
+                raise JevProtocolError(f"{question.name}: probabilities are required")
             probabilities = {
                 str(key).strip().casefold(): value
                 for key, value in probabilities_raw.items()
@@ -286,13 +278,8 @@ class TypeSafeJevClient:
         if isinstance(usage, dict):
             for key in ("input_tokens", "output_tokens"):
                 raw = usage.get(key)
-                if (
-                    raw is not None
-                    and (
-                        isinstance(raw, bool)
-                        or not isinstance(raw, int)
-                        or raw < 0
-                    )
+                if raw is not None and (
+                    isinstance(raw, bool) or not isinstance(raw, int) or raw < 0
                 ):
                     raise JevProtocolError(f"invalid usage field: {key}")
             input_tokens = usage.get("input_tokens")
