@@ -1932,9 +1932,7 @@ def test_orchestrator_recovers_legacy_unbound_canonical_error(
             priority: WorkPriority,
             recovery_token: str,
         ) -> str:
-            self.recovered.append(
-                (execution_id, work_id, priority, recovery_token)
-            )
+            self.recovered.append((execution_id, work_id, priority, recovery_token))
             return f"{work_id}__retry_{recovery_token}"
 
     backend = RecoveringBackend()
@@ -2079,9 +2077,7 @@ def test_dbos_missing_canonical_execution_submits_fresh_canonical_work(
     )
 
     assert recovered == "work_0123456789abcdef"
-    assert submissions == [
-        ("work_0123456789abcdef", WorkPriority.NORMAL)
-    ]
+    assert submissions == [("work_0123456789abcdef", WorkPriority.NORMAL)]
 
 
 def test_dbos_missing_noncanonical_bound_execution_fails_closed(
