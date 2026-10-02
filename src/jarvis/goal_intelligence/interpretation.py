@@ -25,6 +25,7 @@ from jarvis.hands.provider_adapters import (
     build_structured_output_client,
 )
 from jarvis.observability.redaction import redact_data
+from jarvis.provider_circuit import BackgroundProviderCircuit
 
 from .models import GoalInterpretationCandidateV1, GoalKind
 from .store import GoalStore
@@ -419,6 +420,7 @@ class GoalInterpretationShadowRuntime:
         self._interpreter = interpreter
         self._store = store
         self._tasks: set[asyncio.Task[None]] = set()
+        self._provider_circuit = BackgroundProviderCircuit()
         self._closed = False
 
     @property
@@ -431,6 +433,8 @@ class GoalInterpretationShadowRuntime:
 
     def observe_turn(self, turn: ConversationTurn) -> None:
         if self._closed or turn.role is not ConversationRole.USER:
+            return
+        if not self._provider_circuit.allow_request():
             return
         if _contains_secret_assignment(turn.text):
             LOGGER.info(
@@ -453,6 +457,7 @@ class GoalInterpretationShadowRuntime:
                 turn=turn,
                 store=self._store,
             )
+            self._provider_circuit.record_success()
             capability_payload = [
                 {
                     "family": item.family,
@@ -485,12 +490,25 @@ class GoalInterpretationShadowRuntime:
             )
         except asyncio.CancelledError:
             raise
-        except Exception:
-            LOGGER.exception(
-                "GICC shadow interpretation failed for turn %s; "
-                "authoritative conversation behavior is unchanged",
-                turn.turn_id,
-            )
+        except Exception as exc:
+            trip = self._provider_circuit.record_failure(exc)
+            if trip is not None:
+                LOGGER.warning(
+                    "GICC shadow paused for provider pressure | turn_id=%s "
+                    "reason=%s status=%s retry_in=%.1fs attempts=%s "
+                    "authoritative_behavior_unchanged=True",
+                    turn.turn_id,
+                    trip.reason,
+                    trip.status_code,
+                    trip.delay_seconds,
+                    trip.failed_attempts,
+                )
+            else:
+                LOGGER.exception(
+                    "GICC shadow interpretation failed for turn %s; "
+                    "authoritative conversation behavior is unchanged",
+                    turn.turn_id,
+                )
             return
 
         candidate = result.candidate
