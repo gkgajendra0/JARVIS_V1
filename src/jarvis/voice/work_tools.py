@@ -967,7 +967,10 @@ class WorkAgentTools:
         this tool to one exact WorkItem; in that mode an omitted work_id resolves to the
         bound item and any attempt to target a different item fails closed. The actual
         response is always grounded from the canonical USER turn, never from
-        model-generated hidden text.
+        model-generated hidden text. After success, only confirm that the owner's
+        response was recorded and the waiting work will continue. Never claim that a
+        downstream architecture, acceptance, promotion, or other approval gate was
+        approved unless that separate exact gate was actually decided.
         """
         del context
         turn = self._latest_user_turn()
@@ -1009,4 +1012,8 @@ class WorkAgentTools:
             "status": "owner_input_submitted",
             **_public_work(waiting, self._runtime),
             "canonical_user_turn_id": turn.turn_id,
+            "acknowledgement_constraint": (
+                "Confirm only that the owner response was recorded and the waiting "
+                "work will continue. Do not claim any downstream approval gate passed."
+            ),
         }
