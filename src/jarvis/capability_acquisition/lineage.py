@@ -102,9 +102,10 @@ def verify_capability_acquisition_completion(
     )
     if request_id is not None and linked_request_id != str(request_id).strip():
         raise CapabilityAcquisitionLineageError("Phase-9 request identity drift")
-    if request_digest is not None and linked_request_digest != str(
-        request_digest
-    ).strip():
+    if (
+        request_digest is not None
+        and linked_request_digest != str(request_digest).strip()
+    ):
         raise CapabilityAcquisitionLineageError("Phase-9 request digest drift")
 
     acquisition_work_id = _text(
