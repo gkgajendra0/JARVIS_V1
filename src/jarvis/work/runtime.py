@@ -36,6 +36,7 @@ from jarvis.capability_acquisition.promotion import (
     CapabilityAcquisitionReleaseBridge,
     CapabilityAcquisitionReleaseBridgeError,
 )
+from jarvis.capability_acquisition.resolver import AcquisitionCandidateAdvisor
 from jarvis.capability_acquisition.runtime_context import (
     AcquisitionContextProvider,
     StaticAcquisitionContextProvider,
@@ -625,6 +626,7 @@ def build_work_runtime(
     promotion_runtime_config: PromotionRuntimeConfig | None = None,
     capability_catalog_refresher: Callable[[], object] | None = None,
     autonomy_periodic_reconciler: object | None = None,
+    acquisition_candidate_advisor: AcquisitionCandidateAdvisor | None = None,
 ) -> WorkRuntime:
     """Build one durable work runtime around the configured JARVIS brain provider."""
 
@@ -752,6 +754,7 @@ def build_work_runtime(
             acquisition_work_context,
             context_provider=acquisition_context,
             sources=acquisition_sources,
+            advisor=acquisition_candidate_advisor,
         ),
         *build_diagnostic_workspace_executors(diagnostic_workspace_manager),
         *build_diagnostic_code_intelligence_executors(diagnostic_code_index),
