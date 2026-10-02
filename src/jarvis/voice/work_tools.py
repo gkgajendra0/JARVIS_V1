@@ -72,8 +72,9 @@ class WorkAgentTools:
         self._bound_owner_input_work_id = normalized_bound_work_id
         self._on_bound_owner_input_submitted = on_bound_owner_input_submitted
         normalized_bound_gate_id = str(bound_change_gate_id or "").strip() or None
-        if normalized_bound_gate_id is not None and not normalized_bound_gate_id.startswith(
-            "gate_"
+        if (
+            normalized_bound_gate_id is not None
+            and not normalized_bound_gate_id.startswith("gate_")
         ):
             raise ValueError("bound_change_gate_id must be an exact gate ID")
         self._bound_change_gate_id = normalized_bound_gate_id
