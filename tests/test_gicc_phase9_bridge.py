@@ -180,6 +180,7 @@ def _install_current_lineage(
                     "motivating_goal_id": goal.goal_id,
                     "gap_id": gap.gap_id,
                     "engineering_change_id": artifacts.change.change_id,
+                    "acquisition_work_id": "work-acquisition",
                 },
             ),
             "capability_candidate": candidate,
