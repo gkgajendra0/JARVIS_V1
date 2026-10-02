@@ -234,17 +234,7 @@ class _RetryBackend:
         self.reconciled: list[str] = []
         self.submitted: list[str] = []
 
-    def reconcile_execution(
-        self,
-        execution_id: str,
-        *,
-        work_id: str,
-        priority: WorkPriority,
-        recovery_token: str,
-    ) -> str:
-        assert work_id == "work-retry"
-        assert priority is WorkPriority.HIGH
-        assert recovery_token.startswith("startup_recovery_v4_")
+    def reconcile_execution(self, execution_id: str) -> str:
         self.reconciled.append(execution_id)
         return execution_id
 
