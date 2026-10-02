@@ -136,6 +136,10 @@ def test_bound_change_gate_rejects_bare_yes_and_mismatched_gate(tmp_path) -> Non
     with pytest.raises(ChangeConflict):
         service.decide_latest(gate.gate_id, bound_gate_id=gate.gate_id)
 
+    session.accept_turn(ConversationRole.USER, "reject it but approve it")
+    with pytest.raises(ChangeConflict):
+        service.decide_latest(gate.gate_id, bound_gate_id=gate.gate_id)
+
     session.accept_turn(ConversationRole.USER, "approved")
     with pytest.raises(ChangeConflict, match="different gate"):
         service.decide_latest(
@@ -144,6 +148,33 @@ def test_bound_change_gate_rejects_bare_yes_and_mismatched_gate(tmp_path) -> Non
         )
 
     assert store.require(change.change_id).state is ChangeState.WAITING_OWNER_APPROVAL
+
+
+def test_bound_change_gate_understands_negated_approval_as_rejection(tmp_path) -> None:
+    session = ConversationSession(session_id="owner-session")
+    session.start()
+    initial = session.accept_turn(ConversationRole.USER, "Build camera support")
+    store = ChangeStore(SQLiteWorkStore(tmp_path / "work.sqlite3"))
+    service = _service(store, session)
+    change = service.start(initial)
+    research = store.list_stages(change.change_id)[0]
+    work = store.work.require(research.work_id)
+    running = store.work.save(
+        work.transition(WorkState.RUNNING), expected_version=work.version
+    )
+    store.work.save(
+        running.transition(WorkState.COMPLETED), expected_version=running.version
+    )
+    gate = service.propose_architecture(change.change_id, {"plan": "typed adapter"})
+    session.accept_turn(ConversationRole.USER, "Jarvis, it is not approved.")
+
+    decision = service.decide_latest(
+        gate.gate_id,
+        bound_gate_id=gate.gate_id,
+    )
+
+    assert decision.approved is False
+    assert store.require(change.change_id).state is ChangeState.REJECTED
 
 
 def test_bound_change_gate_natural_decision_still_requires_strong_owner_verification(
