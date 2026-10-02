@@ -462,6 +462,19 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
+                    if isinstance(exc, TimeoutError) and delivery.kind in {
+                        WorkDeliveryKind.PROGRESS,
+                        WorkDeliveryKind.COMPLETION,
+                    }:
+                        spoken = True
+                        LOGGER.warning(
+                            "Background progress/completion speech timed out; "
+                            "consuming once without replay | delivery_id=%s | "
+                            "work_id=%s | kind=%s",
+                            delivery.delivery_id,
+                            delivery.work_id,
+                            delivery.kind.value,
+                        )
                     critical = delivery.kind in {
                         WorkDeliveryKind.RESOURCE_BLOCKER,
                         WorkDeliveryKind.FAILURE,
