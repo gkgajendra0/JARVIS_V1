@@ -69,7 +69,6 @@ def test_production_controller_composition_keywords_have_an_explicit_owner() -> 
     )
 
 
-
 def _call_by_name(tree: ast.AST, name: str) -> ast.Call:
     calls = [
         node
@@ -112,6 +111,5 @@ def test_production_runtime_wires_bounded_jev_into_work_runtime() -> None:
     }
 
     assert (
-        work_kwargs["acquisition_candidate_advisor"]
-        == "acquisition_candidate_advisor"
+        work_kwargs["acquisition_candidate_advisor"] == "acquisition_candidate_advisor"
     )
