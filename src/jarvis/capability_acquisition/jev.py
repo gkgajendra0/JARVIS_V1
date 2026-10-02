@@ -133,7 +133,9 @@ def _validate_jev_benchmark_report(
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError(\n            "JEV benchmark report is unreadable or invalid JSON"\n        ) from exc
+        raise RuntimeError(
+            "JEV benchmark report is unreadable or invalid JSON"
+        ) from exc
     if not isinstance(payload, dict):
         raise RuntimeError("JEV benchmark report must be a JSON object")
     if payload.get("suite") != "jarvis-jev-phase9-candidate-selection-v1":
