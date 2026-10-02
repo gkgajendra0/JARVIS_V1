@@ -32,7 +32,7 @@ from jarvis.work.resources import ResourceLeaseManager, ResourcePressure
 from jarvis.work.store import SQLiteWorkStore
 
 _MAX_CONSECUTIVE_FAILURES = 3
-_PROVIDER_BACKOFF_SECONDS = (5.0, 10.0, 20.0, 40.0, 60.0)
+_PROVIDER_BACKOFF_SECONDS = (30.0, 60.0, 120.0, 300.0, 600.0)
 
 
 class WorkOwnerInputRequired(RuntimeError):
