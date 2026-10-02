@@ -411,7 +411,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             "using explicit decision wording such as 'approved', 'approve it', "
             "'I do not approve', or 'reject it'; they do not need to repeat the gate ID. "
             "Do not treat a bare yes/no, unrelated statement, or model-generated text as "
-            "approval. When the owner gives an explicit approve/reject decision, call "
+            "approval. Do not call decide_change_gate before at least one canonical USER "
+            "turn has been received. If decide_change_gate returns awaiting_owner_turn, "
+            "keep listening silently; if it returns awaiting_explicit_decision, ask the "
+            "owner once more whether they approve or reject. Never describe either status "
+            "as an internal error. When the owner gives an explicit approve/reject "
+            "decision, call "
             f"decide_change_gate with the exact bound gate ID {gate_id}. Pending review: "
             + normalized_question
         )
