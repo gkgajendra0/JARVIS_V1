@@ -229,10 +229,14 @@ def _validate_owner_benchmark_depth(report: dict[str, Any]) -> None:
             or isinstance(repetition, bool)
             or not 1 <= repetition <= repeat
         ):
-            raise RuntimeError("JEV owner admission report contains an invalid repetition")
+            raise RuntimeError(
+                "JEV owner admission report contains an invalid repetition"
+            )
         key = (case_id, repetition)
         if key in observed:
-            raise RuntimeError("JEV owner admission report duplicates a case/repetition")
+            raise RuntimeError(
+                "JEV owner admission report duplicates a case/repetition"
+            )
         observed.add(key)
 
     expected = {
