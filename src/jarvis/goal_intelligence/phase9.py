@@ -8,18 +8,15 @@ from datetime import datetime
 from typing import Protocol
 
 from jarvis.capability_acquisition.admission import CapabilityAcquisitionAdmission
-from jarvis.capability_acquisition.external_acceptance import (
-    EXTERNAL_ACCEPTANCE_RESULT_KIND,
-)
-from jarvis.capability_acquisition.external_contract import (
-    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+from jarvis.capability_acquisition.lineage import (
+    CapabilityAcquisitionLineageError,
+    verify_capability_acquisition_completion,
 )
 from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
 from jarvis.engineering_change import ChangeArtifact, EngineeringChange
 from jarvis.engineering_substrate.canonical import canonical_digest
-from jarvis.engineering_substrate.contracts import HardwareAcceptanceVerdict
 
 from .capability_graph import CapabilityGapAnalysis, CapabilityGraphResolver
 from .models import (
@@ -311,98 +308,18 @@ class Phase9GoalBridge:
         )
         if change is None:
             return False
-
-        link = self._changes.latest_artifact(
-            change.change_id,
-            "gicc_capability_gap_link",
-        )
-        candidate = self._changes.latest_artifact(
-            change.change_id,
-            "capability_candidate",
-        )
-        admission = self._changes.latest_artifact(
-            change.change_id,
-            "capability_package_admission",
-        )
-        activation = self._changes.latest_artifact(
-            change.change_id,
-            "capability_lifecycle_activation",
-        )
-        architecture = self._changes.latest_artifact(
-            change.change_id,
-            "architecture",
-        )
-        if any(
-            artifact is None
-            for artifact in (link, candidate, admission, activation, architecture)
-        ):
+        try:
+            lineage = verify_capability_acquisition_completion(
+                self._changes,
+                change_id=change.change_id,
+                motivating_goal_id=goal.goal_id,
+                gap_id=gap.gap_id,
+                request_id=request.request_id,
+                request_digest=request.digest,
+            )
+        except CapabilityAcquisitionLineageError:
             return False
-
-        assert link is not None
-        assert candidate is not None
-        assert admission is not None
-        assert activation is not None
-        assert architecture is not None
-
-        if (
-            link.payload.get("schema") != "gicc_phase9_gap_link.v2"
-            or link.payload.get("request_id") != request.request_id
-            or link.payload.get("request_digest") != request.digest
-            or link.payload.get("motivating_goal_id") != goal.goal_id
-            or link.payload.get("gap_id") != gap.gap_id
-            or link.payload.get("engineering_change_id") != change.change_id
-        ):
-            return False
-
-        if (
-            admission.payload.get("candidate_artifact_id") != candidate.artifact_id
-            or admission.payload.get("candidate_artifact_digest") != candidate.digest
-            or activation.payload.get("candidate_artifact_id") != candidate.artifact_id
-            or activation.payload.get("candidate_artifact_digest") != candidate.digest
-            or activation.payload.get("admission_artifact_id") != admission.artifact_id
-            or activation.payload.get("admission_artifact_digest") != admission.digest
-            or activation.payload.get("effective_enabled") is not True
-        ):
-            return False
-
-        package_identity = (
-            candidate.payload.get("package_id"),
-            candidate.payload.get("package_version"),
-            candidate.payload.get("package_digest"),
-        )
-        if package_identity != (
-            admission.payload.get("package_id"),
-            admission.payload.get("package_version"),
-            admission.payload.get("package_digest"),
-        ):
-            return False
-        if package_identity != (
-            activation.payload.get("package_id"),
-            activation.payload.get("package_version"),
-            activation.payload.get("package_digest"),
-        ):
-            return False
-
-        contracts = {
-            str(item).strip()
-            for item in architecture.payload.get("owner_acceptance_contract_ids", ())
-            if str(item).strip()
-        }
-        if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT not in contracts:
-            return True
-
-        external = self._changes.latest_artifact(
-            change.change_id,
-            EXTERNAL_ACCEPTANCE_RESULT_KIND,
-        )
-        return bool(
-            external is not None
-            and external.payload.get("candidate_artifact_id") == candidate.artifact_id
-            and external.payload.get("candidate_artifact_digest") == candidate.digest
-            and external.payload.get("activation_artifact_id") == activation.artifact_id
-            and external.payload.get("activation_artifact_digest") == activation.digest
-            and external.payload.get("verdict") == HardwareAcceptanceVerdict.PASS.value
-        )
+        return lineage is not None
 
 
 class Phase9GoalContinuationVerifier:
