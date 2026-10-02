@@ -190,4 +190,4 @@ def test_safe_media_devices_uses_jitter_tolerant_output_mixer(monkeypatch) -> No
         "num_channels": 1,
         "stream_timeout_ms": 300,
     }
-    assert isinstance(getattr(player, "_mixer"), FakeMixer)
+    assert isinstance(player._mixer, FakeMixer)
