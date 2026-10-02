@@ -101,9 +101,7 @@ def _advisor(client: FakeJevClient, *, threshold: float = 0.8):
     return JevAcquisitionCandidateAdvisor(
         client,
         admission=JevAdmissionPolicy(
-            admitted_families=frozenset(
-                {"capability_acquisition.candidate_selection"}
-            ),
+            admitted_families=frozenset({"capability_acquisition.candidate_selection"}),
             minimum_confidence=threshold,
         ),
     )
