@@ -554,9 +554,9 @@ def test_zero_turn_streak_resets_before_degradation() -> None:
 
 
 @pytest.mark.asyncio
-async def test_proactive_prompt_suspends_initial_request_timeout_until_playout() -> (
-    None
-):
+async def test_proactive_prompt_suspends_initial_request_timeout_until_playout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     session = FakeSession(auto_finish_replies=False)
     conversation = ConversationSession()
     bridge = _bridge(session, conversation)
@@ -565,6 +565,11 @@ async def test_proactive_prompt_suspends_initial_request_timeout_until_playout()
         JarvisConfig(initial_request_timeout_seconds=0.03),
         audio,  # type: ignore[arg-type]
         session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+    )
+
+    monkeypatch.setattr(
+        "jarvis.voice.runtime._REALTIME_LIFECYCLE_TIMEOUT_SECONDS",
+        0.01,
     )
 
     task = asyncio.create_task(
