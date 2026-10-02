@@ -146,7 +146,6 @@ async def test_media_devices_output_does_not_cancel_inflight_track_detach() -> N
     assert output._track_attached is True
 
 
-
 def test_safe_media_devices_uses_jitter_tolerant_output_mixer(monkeypatch) -> None:
     created: dict[str, int] = {}
     player = SimpleNamespace()
