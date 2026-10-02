@@ -155,21 +155,22 @@ class WorkOrchestrator:
                 "reconcile_execution",
                 None,
             )
-            if bound_execution is not None and callable(recover_execution):
-                predecessor_digest = sha256(bound_execution.encode()).hexdigest()[:12]
+            if callable(recover_execution):
+                recovery_source = bound_execution or item.work_id
+                predecessor_digest = sha256(recovery_source.encode()).hexdigest()[:12]
                 recovery_token = f"startup_recovery_{predecessor_digest}"
                 resumed_id = recover_execution(
-                    bound_execution,
+                    recovery_source,
                     work_id=item.work_id,
                     priority=item.priority,
                     recovery_token=recovery_token,
                 )
-                if resumed_id != bound_execution:
-                    retry_prefix = f"{item.work_id}__retry_"
-                    if not resumed_id.startswith(retry_prefix):
-                        raise RuntimeError(
-                            "durable backend returned an invalid recovery execution id"
-                        )
+                retry_prefix = f"{item.work_id}__retry_"
+                if resumed_id != item.work_id and not resumed_id.startswith(retry_prefix):
+                    raise RuntimeError(
+                        "durable backend returned an invalid recovery execution id"
+                    )
+                if bound_execution != resumed_id:
                     self._store.set_execution_id(item.work_id, resumed_id)
                 reconciled.append(item.work_id)
                 continue
