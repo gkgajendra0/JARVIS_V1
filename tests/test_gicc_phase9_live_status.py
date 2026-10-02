@@ -9,6 +9,7 @@ from jarvis.goal_intelligence.store import GoalStore
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore
 
+
 def test_live_mission_probe_reports_missing_goal_without_mutation(
     tmp_path: Path,
 ) -> None:
