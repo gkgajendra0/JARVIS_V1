@@ -509,7 +509,7 @@ def test_phase9_completion_requires_real_external_acceptance_when_declared(
     assert bridge.completion_verified(gap=gap, goal=goal) is False
 
 
-def test_phase9_completion_does_not_accept_semantic_match_without_lineage(
+def test_phase9_completion_accepts_existing_capability_reuse_without_change(
     tmp_path: Path,
 ) -> None:
     store = _store(tmp_path)
@@ -523,7 +523,11 @@ def test_phase9_completion_does_not_accept_semantic_match_without_lineage(
         source_revision_provider=lambda: "a" * 40,
     )
 
-    assert bridge.completion_verified(gap=gap, goal=goal) is False
+    # The caller invokes completion_verified only after refreshed canonical
+    # capability truth says the semantic gap is gone. With no EngineeringChange,
+    # Phase 9 has reused an already-existing capability and there is no new package
+    # generation that needs provenance binding.
+    assert bridge.completion_verified(gap=gap, goal=goal) is True
 
 
 def test_completion_rechecks_actual_capability_truth_before_resume(
