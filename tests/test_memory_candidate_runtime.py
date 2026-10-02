@@ -159,18 +159,24 @@ async def test_provider_pressure_opens_shadow_circuit_and_skips_next_turn() -> N
     extractor = RateLimitedExtractor()
     runtime = _runtime(conversation, extractor)
 
-    first = conversation.accept_turn(ConversationRole.USER, "Remember this later.")
+    first = conversation.accept_turn(
+        ConversationRole.USER,
+        "My preferred editor theme is dark.",
+    )
     runtime.observe_turn(first)
     for _ in range(20):
         if runtime.pending_task_count == 0:
             break
         await asyncio.sleep(0)
 
-    second = conversation.accept_turn(ConversationRole.USER, "And this too.")
+    second = conversation.accept_turn(
+        ConversationRole.USER,
+        "My preferred terminal font is Consolas.",
+    )
     runtime.observe_turn(second)
     await asyncio.sleep(0)
 
-    assert extractor.calls == ["Remember this later."]
+    assert extractor.calls == ["My preferred editor theme is dark."]
     assert runtime.pending_task_count == 0
 
 
