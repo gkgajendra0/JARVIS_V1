@@ -608,10 +608,7 @@ class WorkAgentTools:
             if payload is not None:
                 return payload
             raise
-        if (
-            bound_gate_id is not None
-            and self._on_bound_change_gate_decided is not None
-        ):
+        if bound_gate_id is not None and self._on_bound_change_gate_decided is not None:
             self._on_bound_change_gate_decided(decision.approved)
         return {
             "ok": True,
