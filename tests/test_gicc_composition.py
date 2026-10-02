@@ -28,6 +28,7 @@ from jarvis.goal_intelligence.interpretation import (
 )
 from jarvis.goal_intelligence.models import (
     GoalKind,
+    PlanNodeType,
     WorldEntityRefV1,
 )
 from jarvis.goal_intelligence.planning import (
