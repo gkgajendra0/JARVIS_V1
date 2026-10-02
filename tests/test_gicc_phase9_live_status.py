@@ -30,7 +30,6 @@ def test_live_mission_probe_reports_missing_goal_without_mutation(
     }
 
 
-
 def test_live_mission_probe_reads_phase9_engineering_change(tmp_path: Path) -> None:
     store_path = tmp_path / "work.sqlite3"
     codec = build_default_work_payload_codec(store_path)
