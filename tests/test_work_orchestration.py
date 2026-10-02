@@ -2053,6 +2053,56 @@ def test_interrupted_side_effect_stays_owner_gated_when_execution_is_rebound(
     )
 
 
+def test_dbos_missing_canonical_execution_submits_fresh_canonical_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = DBOSWorkExecutionBackend()
+    submissions: list[tuple[str, WorkPriority]] = []
+
+    monkeypatch.setattr(
+        dbos_backend_module,
+        "_run_dbos_sync",
+        lambda *_args, **_kwargs: None,
+    )
+
+    def fake_submit(work_id: str, *, priority: WorkPriority) -> str:
+        submissions.append((work_id, priority))
+        return work_id
+
+    monkeypatch.setattr(backend, "submit", fake_submit)
+
+    recovered = backend.recover_execution(
+        "work_0123456789abcdef",
+        work_id="work_0123456789abcdef",
+        priority=WorkPriority.NORMAL,
+        recovery_token="startup_recovery_deadbeef1234",
+    )
+
+    assert recovered == "work_0123456789abcdef"
+    assert submissions == [
+        ("work_0123456789abcdef", WorkPriority.NORMAL)
+    ]
+
+
+def test_dbos_missing_noncanonical_bound_execution_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = DBOSWorkExecutionBackend()
+    monkeypatch.setattr(
+        dbos_backend_module,
+        "_run_dbos_sync",
+        lambda *_args, **_kwargs: None,
+    )
+
+    with pytest.raises(RuntimeError, match="durable execution is missing from DBOS"):
+        backend.recover_execution(
+            "work_0123456789abcdef__retry_v4",
+            work_id="work_0123456789abcdef",
+            priority=WorkPriority.NORMAL,
+            recovery_token="startup_recovery_deadbeef1234",
+        )
+
+
 def test_dbos_terminal_error_reconciliation_uses_fresh_recovery_execution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
