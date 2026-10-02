@@ -173,10 +173,10 @@ def _validate_jev_benchmark_report(
         )
     if int(selected.get("unsafe_downgrades") or 0) != 0:
         raise RuntimeError("JEV benchmark admission requires zero unsafe downgrades")
-    if int(selected.get("covered") or 0) <= 0:
-        raise RuntimeError(
-            "JEV benchmark admission requires non-zero covered decisions"
-        )
+    if float(selected.get("coverage") or 0.0) != 1.0:
+        raise RuntimeError("JEV benchmark admission requires full decision coverage")
+    if float(selected.get("accuracy_over_covered") or 0.0) != 1.0:
+        raise RuntimeError("JEV benchmark admission requires perfect covered accuracy")
 
 
 def build_jev_acquisition_candidate_advisor(
