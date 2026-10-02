@@ -71,6 +71,23 @@ StartupReadinessWaiter = Callable[[float], bool]
 VoiceBehaviorObserver = Callable[[str, str, str, dict[str, object]], None]
 ConversationSuccessObserver = Callable[[], None]
 
+
+class RealtimeSpeechPlayoutUncertain(RuntimeError):
+    """Realtime speech became audible but did not produce a final playout result."""
+
+    def __init__(
+        self,
+        *,
+        played_seconds: float,
+        peak_abs: int,
+        interrupted: bool,
+    ) -> None:
+        super().__init__("realtime speech playout completion is uncertain")
+        self.played_seconds = float(played_seconds)
+        self.peak_abs = int(peak_abs)
+        self.interrupted = bool(interrupted)
+
+
 _UPDATE_APPROVAL_PROMPT = (
     "A JARVIS software update is available. Shall I install it and restart now? "
     "Please answer yes or no."
