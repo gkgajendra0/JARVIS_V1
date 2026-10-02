@@ -37,6 +37,7 @@ from .information import InformationResolver
 from .interpretation import GoalInterpreter, build_goal_interpreter
 from .models import (
     ContinuationBlockerType,
+    ContinuationState,
     GoalState,
     OwnerGoalV2,
     PlanGraphV1,
