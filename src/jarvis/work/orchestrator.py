@@ -152,9 +152,7 @@ class WorkOrchestrator:
             )
             if bound_execution is not None and callable(reconcile_execution):
                 predecessor_digest = sha256(bound_execution.encode()).hexdigest()[:12]
-                recovery_token = (
-                    f"startup_recovery_v{item.version}_{predecessor_digest}"
-                )
+                recovery_token = f"startup_recovery_{predecessor_digest}"
                 resumed_id = reconcile_execution(
                     bound_execution,
                     work_id=item.work_id,
