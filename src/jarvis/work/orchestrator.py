@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import Protocol
 
 from jarvis.work.models import (
@@ -144,22 +145,34 @@ class WorkOrchestrator:
                 reconciled.append(item.work_id)
                 continue
             bound_execution = self._store.get_execution_id(item.work_id)
-            if bound_execution is not None and bound_execution != item.work_id:
-                # Retry executions intentionally use a non-canonical DBOS ID. After
-                # graceful shutdown they may be durably parked as CANCELLED, so let
-                # production backends resume that exact execution instead of creating
-                # a second canonical executor for the same WorkItem.
-                reconcile_execution = getattr(
-                    self._backend,
-                    "reconcile_execution",
-                    None,
+            reconcile_execution = getattr(
+                self._backend,
+                "reconcile_execution",
+                None,
+            )
+            if bound_execution is not None and callable(reconcile_execution):
+                predecessor_digest = sha256(bound_execution.encode()).hexdigest()[:12]
+                recovery_token = (
+                    f"startup_recovery_v{item.version}_{predecessor_digest}"
                 )
-                if callable(reconcile_execution):
-                    resumed_id = reconcile_execution(bound_execution)
-                    if resumed_id != bound_execution:
+                resumed_id = reconcile_execution(
+                    bound_execution,
+                    work_id=item.work_id,
+                    priority=item.priority,
+                    recovery_token=recovery_token,
+                )
+                if resumed_id != bound_execution:
+                    retry_prefix = f"{item.work_id}__retry_"
+                    if not resumed_id.startswith(retry_prefix):
                         raise RuntimeError(
-                            "durable backend changed retry execution identity"
+                            "durable backend returned an invalid recovery execution id"
                         )
+                    self._store.set_execution_id(item.work_id, resumed_id)
+                reconciled.append(item.work_id)
+                continue
+            if bound_execution is not None and bound_execution != item.work_id:
+                # A non-canonical retry execution is already authoritative. Backends
+                # without restart reconciliation support must not create a duplicate.
                 reconciled.append(item.work_id)
                 continue
             execution_id = self._backend.submit(item.work_id, priority=item.priority)
