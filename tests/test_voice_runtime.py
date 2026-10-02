@@ -427,7 +427,9 @@ async def test_startup_greeting_uses_realtime_conversation_voice() -> None:
 
 
 @pytest.mark.asyncio
-async def test_gemini_lifecycle_reply_allows_server_turn_semantics_with_input_disabled() -> None:
+async def test_gemini_lifecycle_reply_allows_server_turn_semantics_with_input_disabled() -> (
+    None
+):
     session = FakeSession()
     conversation = ConversationSession()
     bridge = _bridge(session, conversation)
