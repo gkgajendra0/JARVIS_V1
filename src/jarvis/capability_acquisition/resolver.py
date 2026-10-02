@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
 
 from jarvis.capability_acquisition.models import (
     AcquisitionCandidateEvaluationV1,
@@ -24,6 +25,18 @@ from jarvis.capability_registry.projection import CapabilityManagementMode
 
 class AcquisitionResolutionError(RuntimeError):
     """Candidate evidence is contradictory or cannot be resolved safely."""
+
+
+class AcquisitionCandidateAdvisor(Protocol):
+    """Optional bounded advisor for equivalent already-safe candidates."""
+
+    def select(
+        self,
+        *,
+        goal: OwnerCapabilityGoalV1,
+        candidates: tuple[AcquisitionCandidateV1, ...],
+        evaluations: tuple[AcquisitionCandidateEvaluationV1, ...],
+    ) -> str | None: ...
 
 
 _STRATEGY_RANK = {
@@ -98,10 +111,16 @@ class AcquisitionResolutionResult:
 class CapabilityAcquisitionResolver:
     """Discover, evaluate and choose candidates without creating execution Authority."""
 
-    def __init__(self, sources: CapabilitySourceRegistry) -> None:
+    def __init__(
+        self,
+        sources: CapabilitySourceRegistry,
+        *,
+        advisor: AcquisitionCandidateAdvisor | None = None,
+    ) -> None:
         if not isinstance(sources, CapabilitySourceRegistry):
             raise TypeError("sources must be CapabilitySourceRegistry")
         self.sources = sources
+        self.advisor = advisor
 
     @staticmethod
     def _deduplicate(
@@ -245,10 +264,9 @@ class CapabilityAcquisitionResolver:
             for candidate, evaluation in zip(normalized, evaluations, strict=True)
             if evaluation.disposition is AcquisitionDisposition.SELECTABLE
         ]
-        selected = (
-            None
-            if not selectable
-            else min(
+        selected = None
+        if selectable:
+            ranked = sorted(
                 selectable,
                 key=lambda pair: (
                     _STRATEGY_RANK[pair[0].strategy],
@@ -256,8 +274,37 @@ class CapabilityAcquisitionResolver:
                     _SOURCE_RANK[pair[0].source_kind],
                     pair[0].candidate_id,
                 ),
-            )[0].candidate_id
-        )
+            )
+            best = ranked[0]
+            best_hard_rank = (
+                _STRATEGY_RANK[best[0].strategy],
+                _TRUST_RANK[best[0].trust_class],
+                _SOURCE_RANK[best[0].source_kind],
+            )
+            equivalent = tuple(
+                pair
+                for pair in ranked
+                if (
+                    _STRATEGY_RANK[pair[0].strategy],
+                    _TRUST_RANK[pair[0].trust_class],
+                    _SOURCE_RANK[pair[0].source_kind],
+                )
+                == best_hard_rank
+            )
+            selected = best[0].candidate_id
+            if self.advisor is not None and len(equivalent) > 1:
+                advised = self.advisor.select(
+                    goal=goal,
+                    candidates=tuple(pair[0] for pair in equivalent),
+                    evaluations=tuple(pair[1] for pair in equivalent),
+                )
+                if advised is not None:
+                    allowed = {pair[0].candidate_id for pair in equivalent}
+                    if advised not in allowed:
+                        raise AcquisitionResolutionError(
+                            "candidate advisor selected outside deterministic safe tier"
+                        )
+                    selected = advised
         return AcquisitionResolutionResult(
             candidates=normalized,
             evaluations=evaluations,
