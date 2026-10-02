@@ -360,26 +360,13 @@ class DBOSWorkExecutionBackend:
             raise RuntimeError("DBOS did not preserve resumed workflow identity")
         return workflow_id
 
-    def reconcile_execution(
-        self,
-        execution_id: str,
-        *,
-        work_id: str | None = None,
-        priority: WorkPriority | None = None,
-        recovery_token: str | None = None,
-    ) -> str:
+    def reconcile_execution(self, execution_id: str) -> str:
         """Ensure a known durable execution is runnable after restart.
 
         Shutdown parking deliberately uses DBOS cancellation without changing the
         canonical JARVIS WorkItem state. On restart, CANCELLED DBOS executions are
         resumed from their last durable checkpoint instead of creating duplicate
         WorkItems or workflow identities.
-
-        If a prior execution is terminal ERROR but canonical work remains active,
-        startup may bind a fresh DBOS execution for the same WorkItem. This is safe
-        only after WorkEngine startup reconciliation has already marked any
-        in-flight executor step as INTERRUPTED/WAITING_FOR_OWNER, so an unverified
-        external side effect cannot be replayed automatically.
         """
 
         self._require_accepting_work()
@@ -394,25 +381,43 @@ class DBOSWorkExecutionBackend:
             return normalized
         if state in self._RESUMABLE_DBOS_STATES:
             return self._resume_existing(normalized)
-        if state in self._RECOVERABLE_TERMINAL_DBOS_STATES:
-            normalized_work_id = str(work_id or "").strip()
-            normalized_token = str(recovery_token or "").strip()
-            if (
-                normalized_work_id
-                and isinstance(priority, WorkPriority)
-                and normalized_token
-            ):
-                return self.restart(
-                    normalized_work_id,
-                    priority=priority,
-                    retry_token=normalized_token,
-                )
         if state in self._TERMINAL_DBOS_STATES:
             raise RuntimeError(
                 "canonical JARVIS work is active but its DBOS execution is "
                 f"terminal: {normalized} ({state})"
             )
         raise RuntimeError(f"unsupported DBOS workflow state for {normalized}: {state}")
+
+    def recover_execution(
+        self,
+        execution_id: str,
+        *,
+        work_id: str,
+        priority: WorkPriority,
+        recovery_token: str,
+    ) -> str:
+        """Recover one canonical-active execution without replaying side effects.
+
+        This hook is called only after WorkEngine startup reconciliation. Any
+        executor step that was in-flight at process loss has therefore already
+        been marked INTERRUPTED and moved to WAITING_FOR_OWNER. A terminal ERROR
+        can then be rebound to a fresh DBOS workflow ID for the same canonical
+        WorkItem without silently replaying the unverified step.
+        """
+
+        self._require_accepting_work()
+        normalized = str(execution_id).strip()
+        if not normalized:
+            raise ValueError("execution id must not be empty")
+        status = _run_dbos_sync(DBOS.get_workflow_status, normalized)
+        state = self._classify_existing_status(status)
+        if state in self._RECOVERABLE_TERMINAL_DBOS_STATES:
+            return self.restart(
+                work_id,
+                priority=priority,
+                retry_token=recovery_token,
+            )
+        return self.reconcile_execution(normalized)
 
     def park_for_shutdown(self, execution_ids: tuple[str, ...]) -> tuple[str, ...]:
         """Durably park active executions so process shutdown can drain safely."""
