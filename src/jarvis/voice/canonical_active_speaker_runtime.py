@@ -395,7 +395,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         instructions=acknowledgement,
                         label="owner input acknowledgement",
                     )
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - acknowledgement is best effort
                     LOGGER.warning(
                         "Owner-input acknowledgement unavailable after canonical "
                         "resolution | work_id=%s | error=%s",
@@ -531,7 +531,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         instructions=acknowledgement,
                         label="engineering change decision acknowledgement",
                     )
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - acknowledgement is best effort
                     LOGGER.warning(
                         "Engineering-change acknowledgement unavailable after "
                         "canonical decision | gate_id=%s | error=%s",
