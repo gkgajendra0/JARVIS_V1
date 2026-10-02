@@ -92,7 +92,7 @@ class JevAcquisitionCandidateAdvisor:
                 state={
                     "requested_capability": goal.requested_capability,
                     "required_operations": list(goal.required_operations),
-                    "constraints": list(goal.constraints),
+                    "target_hints": list(goal.target_hints),
                     "decision_rule": (
                         "All supplied candidates already passed deterministic hard "
                         "eligibility and have equal strategy/trust/source rank. Choose "
