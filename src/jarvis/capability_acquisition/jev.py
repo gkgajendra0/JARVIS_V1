@@ -136,8 +136,8 @@ def _validate_jev_benchmark_report(
         raise RuntimeError("JEV benchmark report is unreadable or invalid JSON") from exc
     if not isinstance(payload, dict):
         raise RuntimeError("JEV benchmark report must be a JSON object")
-    if payload.get("suite") != "jarvis-c4-c5-bounded-decision-v1":
-        raise RuntimeError("JEV benchmark report uses the wrong frozen corpus")
+    if payload.get("suite") != "jarvis-jev-phase9-candidate-selection-v1":
+        raise RuntimeError("JEV benchmark report uses the wrong Phase-9 decision corpus")
     if payload.get("runner") != "jev":
         raise RuntimeError("JEV benchmark report was not produced by the Jev runner")
     if str(payload.get("requested_model") or "").strip() != str(model).strip():
