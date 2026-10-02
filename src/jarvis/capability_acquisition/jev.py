@@ -139,7 +139,9 @@ def _validate_jev_benchmark_report(
     if not isinstance(payload, dict):
         raise RuntimeError("JEV benchmark report must be a JSON object")
     if payload.get("suite") != "jarvis-jev-phase9-candidate-selection-v1":
-        raise RuntimeError(\n            "JEV benchmark report uses the wrong Phase-9 decision corpus"\n        )
+        raise RuntimeError(
+            "JEV benchmark report uses the wrong Phase-9 decision corpus"
+        )
     if payload.get("runner") != "jev":
         raise RuntimeError("JEV benchmark report was not produced by the Jev runner")
     if str(payload.get("requested_model") or "").strip() != str(model).strip():
@@ -166,11 +168,15 @@ def _validate_jev_benchmark_report(
             "JEV benchmark report does not contain the configured confidence threshold"
         )
     if int(selected.get("structured_output_failures") or 0) != 0:
-        raise RuntimeError(\n            "JEV benchmark admission requires zero structured-output failures"\n        )
+        raise RuntimeError(
+            "JEV benchmark admission requires zero structured-output failures"
+        )
     if int(selected.get("unsafe_downgrades") or 0) != 0:
         raise RuntimeError("JEV benchmark admission requires zero unsafe downgrades")
     if int(selected.get("covered") or 0) <= 0:
-        raise RuntimeError(\n            "JEV benchmark admission requires non-zero covered decisions"\n        )
+        raise RuntimeError(
+            "JEV benchmark admission requires non-zero covered decisions"
+        )
 
 
 def build_jev_acquisition_candidate_advisor(
