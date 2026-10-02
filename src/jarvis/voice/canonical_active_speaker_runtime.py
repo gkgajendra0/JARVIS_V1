@@ -559,7 +559,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         )
                         if not answered:
                             retry_seconds = max(
-                                30.0,
+                                _owner_interaction_retry_seconds(
+                                    delivery.failed_attempts
+                                ),
                                 delivery_retry_delay_seconds(
                                     failed_attempts=delivery.failed_attempts,
                                     provider_hint=None,
@@ -593,7 +595,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         )
                         if not answered:
                             retry_seconds = max(
-                                30.0,
+                                _owner_interaction_retry_seconds(
+                                    delivery.failed_attempts
+                                ),
                                 delivery_retry_delay_seconds(
                                     failed_attempts=delivery.failed_attempts,
                                     provider_hint=None,
