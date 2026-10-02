@@ -9,8 +9,6 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any
-
 from jarvis.engineering_change import ChangeStore
 from jarvis.goal_intelligence.store import GoalStore
 from jarvis.work.privacy import build_default_work_payload_codec
@@ -32,7 +30,7 @@ _ARTIFACT_KINDS = (
 )
 
 
-def _work_summary(store: SQLiteWorkStore, work_id: str) -> dict[str, Any]:
+def _work_summary(store: SQLiteWorkStore, work_id: str) -> dict[str, object]:
     work = store.get(work_id)
     if work is None:
         return {"work_id": work_id, "found": False}
@@ -68,7 +66,7 @@ def _work_summary(store: SQLiteWorkStore, work_id: str) -> dict[str, Any]:
     }
 
 
-def _change_summary(store: ChangeStore, change_id: str) -> dict[str, Any]:
+def _change_summary(store: ChangeStore, change_id: str) -> dict[str, object]:
     change = store.get(change_id)
     if change is None:
         return {"change_id": change_id, "found": False}
@@ -116,7 +114,7 @@ def probe_live_mission(
     work_ids: tuple[str, ...] = (),
     change_ids: tuple[str, ...] = (),
     store_path: Path | None = None,
-) -> dict[str, Any]:
+) -> dict[str, object]:
     path = Path(store_path or default_work_store_path()).expanduser().resolve()
     codec = build_default_work_payload_codec(path)
     work_store = SQLiteWorkStore(path, payload_codec=codec)
