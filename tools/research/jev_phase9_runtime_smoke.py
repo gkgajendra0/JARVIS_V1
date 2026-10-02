@@ -57,7 +57,7 @@ def probe_jev_runtime_admission() -> dict[str, object]:
         benchmark_report_path=str(report_path),
     )
     if not isinstance(advisor, JevAcquisitionCandidateAdvisor):
-        raise RuntimeError("production JEV advisor was not constructed")
+        raise TypeError("production JEV advisor was not constructed")
 
     return {
         "status": "PASS",
