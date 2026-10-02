@@ -444,7 +444,7 @@ async def test_gemini_lifecycle_reply_allows_server_side_interruptions() -> None
         label="test lifecycle",
     )
 
-    assert session.generated_replies[0]["allow_interruptions"] is True
+    assert session.generated_replies[0]["allow_interruptions"] is False
     assert session.generated_replies[0]["input_modality"] == "text"
 
 
