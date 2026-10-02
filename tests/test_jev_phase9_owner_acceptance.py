@@ -23,7 +23,15 @@ def _load_module():
 
 
 def _write_valid_report(path: Path) -> Path:
-    case_ids = [f"phase9-candidate-{index:03d}" for index in range(1, 9)]
+    corpus = json.loads(
+        (
+            _REPO_ROOT
+            / "tools"
+            / "research"
+            / "jev_phase9_candidate_benchmark_cases.json"
+        ).read_text(encoding="utf-8")
+    )
+    case_ids = [str(item["id"]) for item in corpus["cases"]]
     results = [
         {
             "case_id": case_id,
@@ -280,6 +288,26 @@ def test_phase9_existing_report_admission_requires_all_results(
     source.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(RuntimeError, match="every case/repetition result"):
+        module._finalize_report_admission(
+            source_report=source,
+            durable_output=tmp_path / "durable.json",
+            model="jev-latest",
+            endpoint="https://api.typesafe.ai/v1/systemone",
+            apply=False,
+        )
+
+
+
+def test_phase9_existing_report_rejects_duplicate_case_repetition(
+    tmp_path: Path,
+) -> None:
+    module = _load_module()
+    source = _write_valid_report(tmp_path / "duplicate.json")
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    payload["results"][-1] = dict(payload["results"][0])
+    source.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="duplicates a case/repetition"):
         module._finalize_report_admission(
             source_report=source,
             durable_output=tmp_path / "durable.json",
