@@ -277,7 +277,6 @@ def test_work_prompt_compression_defaults_off_and_validates_mode() -> None:
     with pytest.raises(ValueError, match="work_prompt_compression_mode"):
         JarvisConfig(work_prompt_compression_mode="automatic")
 
-
     with pytest.raises(ValueError, match="combined-context acceptance"):
         JarvisConfig(
             work_context_mode="apply",
