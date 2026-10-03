@@ -41,6 +41,7 @@ from jarvis.provider_circuit import (
 from jarvis.provider_resilience import classify_provider_failure
 from jarvis.work.brain import BrainDecision, BrainRequest, ProviderPressure
 from jarvis.work.context import WorkContextMode, build_context_shadow_report
+from jarvis.work.resources import ResourceLeaseManager
 
 LOGGER = logging.getLogger(__name__)
 
@@ -345,6 +346,8 @@ class RoutedWorkReasoner:
         primary_target_id: str,
         clock: Callable[[], float] = time.time,
         provider_circuit_registry: BackgroundProviderCircuitRegistry | None = None,
+        resources: ResourceLeaseManager | None = None,
+        resource_keys: tuple[str, ...] = (),
     ) -> None:
         self._router = router
         self._invoker = invoker
@@ -353,6 +356,12 @@ class RoutedWorkReasoner:
             raise ValueError("primary_target_id must not be empty")
         self._clock = clock
         self._provider_circuit_registry = provider_circuit_registry
+        self._resources = resources
+        self._resource_keys = (
+            ()
+            if resources is None
+            else resources.normalize(resource_keys)
+        )
 
     def _provider_circuit(self, target):
         registry = self._provider_circuit_registry
@@ -575,13 +584,25 @@ class RoutedWorkReasoner:
             started = float(self._clock())
             new_attempts += 1
             try:
-                invocation = await self._invoker.invoke_structured_with_telemetry(
-                    target=target,
-                    system_prompt=_SYSTEM_PROMPT,
-                    input_payload=_work_input_payload(request),
-                    response_model=_WorkDecisionModel,
-                    request_context=context,
-                )
+                if self._resources is not None and self._resource_keys:
+                    async with self._resources.lease(self._resource_keys):
+                        invocation = (
+                            await self._invoker.invoke_structured_with_telemetry(
+                                target=target,
+                                system_prompt=_SYSTEM_PROMPT,
+                                input_payload=_work_input_payload(request),
+                                response_model=_WorkDecisionModel,
+                                request_context=context,
+                            )
+                        )
+                else:
+                    invocation = await self._invoker.invoke_structured_with_telemetry(
+                        target=target,
+                        system_prompt=_SYSTEM_PROMPT,
+                        input_payload=_work_input_payload(request),
+                        response_model=_WorkDecisionModel,
+                        request_context=context,
+                    )
                 parsed = invocation.parsed
             except Exception as exc:
                 ended = float(self._clock())
