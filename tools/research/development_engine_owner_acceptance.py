@@ -359,6 +359,51 @@ async def _run_proof(
             evidence_refs=("owner-machine-proof",),
         )
 
+        class _NoCloudAfterRestartFactory:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def create(self, *, access_token, codex_home, cwd):
+                del access_token, codex_home, cwd
+                self.calls += 1
+                raise AssertionError(
+                    "durable restart reuse unexpectedly reached Codex runtime creation"
+                )
+
+        restart_store = SQLiteWorkStore(root / "work.sqlite3")
+        restart_sessions = DevelopmentSessionStore(restart_store)
+        restart_factory = _NoCloudAfterRestartFactory()
+        restart_engine = CodexPlanDevelopmentEngine(
+            chatgpt_plan=plan,
+            model=model,
+            sessions=restart_sessions,
+            runtime_factory=restart_factory,
+            state_dir=root / "codex",
+            provider_circuit=subscription_circuit,
+        )
+        restart_tools = WorkExecutorDevelopmentToolPort(
+            ticket=ticket,
+            store=restart_store,
+            actions=actions,
+            resources=tool_resources,
+        )
+        restart_coordinator = DevelopmentEngineCoordinator(
+            engine=restart_engine,
+            sessions=restart_sessions,
+            resources=ResourceLeaseManager(
+                {
+                    "development_intelligence": 1,
+                    "provider_api": 1,
+                }
+            ),
+            resource_keys=("development_intelligence", "provider_api"),
+        )
+        restarted = await restart_coordinator.execute(
+            ticket,
+            tools=restart_tools,
+            evidence_refs=("owner-machine-proof",),
+        )
+
         session = sessions.get(ticket.digest)
         thread_id = None if session is None else session.thread_id
         thread_resumed_after_runtime_restart = False
@@ -398,6 +443,12 @@ async def _run_proof(
             ),
             "identical_reasoning_reused": second.reused is True,
             "identical_result_reused": second.result.digest == result.digest,
+            "restart_reused_durable_result": restarted.reused is True,
+            "restart_result_digest_equal": restarted.result.digest == result.digest,
+            "restart_reasoning_fingerprint_equal": (
+                restarted.reasoning_fingerprint == first.reasoning_fingerprint
+            ),
+            "restart_codex_runtime_not_created": restart_factory.calls == 0,
             "thread_recorded": bool(thread_id),
             "thread_resumed_after_runtime_restart": (
                 thread_resumed_after_runtime_restart
@@ -420,6 +471,8 @@ async def _run_proof(
                 0.0 if input_tokens == 0 else round(cached_tokens / input_tokens, 4)
             ),
             "identical_second_execution_reused_without_cloud_turn": second.reused,
+            "restart_execution_reused_without_cloud_turn": restarted.reused,
+            "restart_codex_runtime_factory_calls": restart_factory.calls,
         }
 
         report: dict[str, object] = {
@@ -441,6 +494,9 @@ async def _run_proof(
             "efficiency": efficiency,
             "reasoning_fingerprint": first.reasoning_fingerprint,
             "second_execution_reused": second.reused,
+            "restart_execution_reused": restarted.reused,
+            "restart_reasoning_fingerprint": restarted.reasoning_fingerprint,
+            "restart_codex_runtime_factory_calls": restart_factory.calls,
             "provider_thread_id": thread_id,
             "provider_runtime_restart_resume_verified": (
                 thread_resumed_after_runtime_restart
