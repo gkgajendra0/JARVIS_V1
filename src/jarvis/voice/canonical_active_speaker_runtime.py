@@ -642,7 +642,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
             due = await asyncio.to_thread(
                 runtime.store.list_due_deliveries,
-                limit=50,
+                limit=5,
             )
             if not due:
                 await asyncio.sleep(0.5)
