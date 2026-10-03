@@ -744,9 +744,7 @@ def build_work_runtime(
     )
     compression_mode = str(work_prompt_compression_mode).strip().casefold()
     prompt_compressor = (
-        None
-        if compression_mode == "off"
-        else LLMLingua2WorkPayloadCompressor()
+        None if compression_mode == "off" else LLMLingua2WorkPayloadCompressor()
     )
     model_reasoner = RoutedWorkReasoner(
         router=model_router,
