@@ -73,6 +73,15 @@ secret or discovery substrate requirements, satisfy the supplied Phase-5 substra
 actions rather than using shell/package-manager shortcuts. Resolve exact approved Python
 dependencies through dev_resolve_python_dependency, bind the capability manifest, and
 after passing sandbox tests record current substrate verification before completion.
+For governed capability-development work, never ask the owner to approve, reopen,
+revise, or review architecture through ordinary owner input. Architecture approval is
+owned by the EngineeringChange gate. If recorded evidence proves the approved
+architecture itself cannot safely continue, set needs_owner only as a lifecycle
+escalation signal and make owner_question a concise factual revision reason, not an
+approval request; JARVIS will return the change to research and surface a canonical gate
+only after a replacement architecture exists. Factual pairing/credential input must come
+from the typed executor boundary rather than free-form model approval.
+
 If an acquired executor needs owner pairing input at runtime, return CapabilityResult
 status=partial with data.owner_input_request containing kind=pin or confirmation, a
 bounded human prompt, and an optional safe parameter name. Never persist the supplied
