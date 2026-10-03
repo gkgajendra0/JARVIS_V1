@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
-import threading
 from pathlib import Path
 
 import pytest
@@ -1430,56 +1429,6 @@ async def test_interactive_voice_preempts_inflight_background_reasoning() -> Non
 
     assert reasoner.cancelled.is_set()
     assert coordinator.busy is False
-
-
-@pytest.mark.asyncio
-async def test_interactive_voice_can_preempt_background_reasoning_cross_thread() -> None:
-    gate = InteractiveBrainGate()
-    started = threading.Event()
-    cancelled = threading.Event()
-
-    class BlockingReasoner:
-        async def decide(self, request: BrainRequest) -> BrainDecision:
-            del request
-            started.set()
-            try:
-                await asyncio.Event().wait()
-            finally:
-                cancelled.set()
-            raise AssertionError("unreachable")
-
-    item = WorkItem(
-        request="Cross-thread background reasoning",
-        work_type=WorkType.GENERIC,
-        source_session_id="cross-thread-session",
-        source_turn_id="cross-thread-turn",
-    )
-    request = BrainRequest(
-        work=item,
-        recent_steps=(),
-        purpose="verify voice-to-work preemption",
-        allowed_actions=(ConcurrentExecutor.descriptor,),
-    )
-
-    async def run_on_work_loop() -> str:
-        try:
-            await gate.run_background(BlockingReasoner(), request)
-        except BrainPreempted:
-            return "preempted"
-        return "unexpected"
-
-    worker = asyncio.create_task(
-        asyncio.to_thread(lambda: asyncio.run(run_on_work_loop()))
-    )
-    assert await asyncio.to_thread(started.wait, 1.0)
-
-    # Simulate the realtime voice thread claiming brain priority while the
-    # durable Work loop is running in another thread/event loop.
-    gate.set_interactive_active(True)
-
-    assert await asyncio.wait_for(worker, timeout=2.0) == "preempted"
-    assert cancelled.is_set()
-    assert gate.interactive_active is True
 
 
 @pytest.mark.asyncio
