@@ -187,18 +187,18 @@ class WorkExecutorDevelopmentToolPort:
         )
         candidate_revision = None
         candidate_branch = None
-        if (
-            last_commit > last_diff > last_passing_test > last_write >= 0
-        ):
+        if last_commit > last_diff > last_passing_test > last_write >= 0:
             commit_step = steps[last_commit]
-            raw_commit = str(commit_step.observation.get("commit") or "").strip().casefold()
+            raw_commit = (
+                str(commit_step.observation.get("commit") or "").strip().casefold()
+            )
             if len(raw_commit) == 40 and all(
                 char in "0123456789abcdef" for char in raw_commit
             ):
                 candidate_revision = raw_commit
-                candidate_branch = str(
-                    commit_step.observation.get("branch") or ""
-                ).strip() or None
+                candidate_branch = (
+                    str(commit_step.observation.get("branch") or "").strip() or None
+                )
 
         recent = [
             {
