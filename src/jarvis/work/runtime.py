@@ -70,8 +70,6 @@ from jarvis.chatgpt_plan import (
     CHATGPT_PLAN_PROVIDER_ID,
     ChatGPTPlanSessionManager,
 )
-from jarvis.engineering_change.coordinator import ChangeCoordinator
-from jarvis.engineering_change.delivery import reconcile_owner_change_gates
 from jarvis.development_engine.codex import CodexPlanDevelopmentEngine
 from jarvis.development_engine.coordinator import DevelopmentEngineCoordinator
 from jarvis.development_engine.phase9 import (
@@ -84,6 +82,8 @@ from jarvis.development_engine.phase9 import (
     phase9_development_completion_guard,
 )
 from jarvis.development_engine.session_store import DevelopmentSessionStore
+from jarvis.engineering_change.coordinator import ChangeCoordinator
+from jarvis.engineering_change.delivery import reconcile_owner_change_gates
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.change_integration import (
     EngineeringSubstrateChangeService,
