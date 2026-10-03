@@ -43,6 +43,7 @@ from jarvis.work.reasoner import (
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
 _MAX_DECISION_REPLAY_CASES = 5
+_MAX_PAIRED_BENCHMARK_CASES = 3
 _MAX_REPLAY_CANDIDATE_SCAN = 25
 
 
@@ -839,6 +840,18 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
+    if (
+        (args.paired_decision_preflight or args.paired_decision_benchmark)
+        and args.max_cases > _MAX_PAIRED_BENCHMARK_CASES
+    ):
+        print(
+            "ERROR: paired benchmark --max-cases cannot exceed "
+            f"{_MAX_PAIRED_BENCHMARK_CASES} ({_MAX_PAIRED_BENCHMARK_CASES * 2} "
+            "maximum model calls).",
+            file=sys.stderr,
+        )
+        return 2
+
     if args.min_equivalent_cases <= 0:
         print("ERROR: --min-equivalent-cases must be positive.", file=sys.stderr)
         return 2
