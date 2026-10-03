@@ -473,7 +473,12 @@ class DevelopmentResultV1:
                 raise ValueError("completed development requires candidate_revision")
             if not tests:
                 raise ValueError("completed development requires test evidence")
-            if reason_text is not None or blocker is not None or dependencies:
+            if (
+                reason_text is not None
+                or blocker is not None
+                or dependencies
+                or retry_after is not None
+            ):
                 raise ValueError(
                     "completed development cannot carry blocker/dependency fields"
                 )
