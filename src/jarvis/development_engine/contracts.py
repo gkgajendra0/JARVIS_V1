@@ -417,6 +417,7 @@ class DevelopmentResultV1:
     evidence_refs: tuple[str, ...]
     requested_dependencies: tuple[str, ...]
     blocker_code: str | None
+    retry_after_seconds: float | None
     usage: DevelopmentUsageV1 | None
     contract_version: int
     digest: str
@@ -438,6 +439,7 @@ class DevelopmentResultV1:
         evidence_refs: tuple[str, ...] | list[str] = (),
         requested_dependencies: tuple[str, ...] | list[str] = (),
         blocker_code: str | None = None,
+        retry_after_seconds: float | None = None,
         usage: DevelopmentUsageV1 | None = None,
     ) -> DevelopmentResultV1:
         if not isinstance(ticket, DevelopmentTicketV1):
@@ -456,6 +458,13 @@ class DevelopmentResultV1:
             field="requested_dependency",
         )
         blocker = _optional_text(blocker_code, field="blocker_code")
+        retry_after = None
+        if retry_after_seconds is not None:
+            if isinstance(retry_after_seconds, bool):
+                raise TypeError("retry_after_seconds must be numeric")
+            retry_after = float(retry_after_seconds)
+            if retry_after <= 0:
+                raise ValueError("retry_after_seconds must be positive")
         if usage is not None and not isinstance(usage, DevelopmentUsageV1):
             raise TypeError("usage must be DevelopmentUsageV1")
 
@@ -485,11 +494,15 @@ class DevelopmentResultV1:
                 raise ValueError(
                     "dependency disposition requires requested_dependencies"
                 )
-            if (
-                disposition is DevelopmentDisposition.BLOCKED_RESOURCE
-                and blocker is None
-            ):
-                raise ValueError("blocked-resource disposition requires blocker_code")
+            if disposition is DevelopmentDisposition.BLOCKED_RESOURCE:
+                if blocker is None:
+                    raise ValueError(
+                        "blocked-resource disposition requires blocker_code"
+                    )
+            elif retry_after is not None:
+                raise ValueError(
+                    "retry_after_seconds is only valid for blocked-resource results"
+                )
 
         payload: dict[str, object] = {
             "ticket_id": ticket.ticket_id,
@@ -506,6 +519,7 @@ class DevelopmentResultV1:
             "evidence_refs": list(evidence),
             "requested_dependencies": list(dependencies),
             "blocker_code": blocker,
+            "retry_after_seconds": retry_after,
             "usage": None if usage is None else usage.canonical_payload(),
             "contract_version": DEVELOPMENT_ENGINE_CONTRACT_VERSION,
         }
@@ -528,6 +542,7 @@ class DevelopmentResultV1:
             evidence_refs=evidence,
             requested_dependencies=dependencies,
             blocker_code=blocker,
+            retry_after_seconds=retry_after,
             usage=usage,
             contract_version=DEVELOPMENT_ENGINE_CONTRACT_VERSION,
             digest=digest,
@@ -587,6 +602,11 @@ class DevelopmentResultV1:
                 if payload.get("blocker_code") is None
                 else str(payload["blocker_code"])
             ),
+            retry_after_seconds=(
+                None
+                if payload.get("retry_after_seconds") is None
+                else float(payload["retry_after_seconds"])
+            ),
             usage=usage,
         )
         if str(payload.get("ticket_id") or "") != ticket.ticket_id:
@@ -618,6 +638,7 @@ class DevelopmentResultV1:
             "evidence_refs": list(self.evidence_refs),
             "requested_dependencies": list(self.requested_dependencies),
             "blocker_code": self.blocker_code,
+            "retry_after_seconds": self.retry_after_seconds,
             "usage": None if self.usage is None else self.usage.canonical_payload(),
             "contract_version": self.contract_version,
         }
