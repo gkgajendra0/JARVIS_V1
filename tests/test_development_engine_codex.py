@@ -425,7 +425,7 @@ async def test_codex_engine_maps_plan_capacity_to_resource_blocker(tmp_path) -> 
     result = await engine.execute(ticket, tools=FakeTools(ticket.allowed_tools))
 
     assert result.disposition is DevelopmentDisposition.BLOCKED_RESOURCE
-    assert result.blocker_code == "rate_limited"
+    assert result.blocker_code == "quota_exhausted"
     assert runtime.closed is True
 
 
