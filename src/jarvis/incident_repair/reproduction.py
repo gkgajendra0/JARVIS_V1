@@ -563,5 +563,8 @@ class DiagnosticRunReproductionExecutor:
             targets=targets,
             timeout_seconds=float(parameters.get("timeout_seconds", 120.0)),
         )
-        self._manager.assert_pristine(work.work_id)
+        await asyncio.to_thread(
+            self._manager.assert_pristine,
+            work.work_id,
+        )
         return result.to_payload()
