@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import pathlib
+import subprocess
+import sys
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -24,6 +27,22 @@ def _chars(value: object) -> int:
             default=str,
         )
     )
+
+
+def test_c6_owner_harness_supports_direct_script_execution() -> None:
+    repo_root = pathlib.Path(__file__).resolve().parents[1]
+    script = repo_root / "tools" / "research" / "c6_context_owner_acceptance.py"
+    completed = subprocess.run(
+        [sys.executable, str(script), "--help"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "--fixture-decision-preflight" in completed.stdout
 
 
 def test_c6_fixture_corpus_is_fixed_representative_and_reducing() -> None:
