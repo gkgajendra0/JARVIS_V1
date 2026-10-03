@@ -144,6 +144,50 @@ def test_owner_preflight_checks_model_after_subscription_cooldown(
     assert state["remaining_seconds"] == 0.0
 
 
+def test_owner_main_accepts_legacy_development_test_image_setting(
+    monkeypatch,
+    capsys,
+) -> None:
+    module = _load_module()
+    args = SimpleNamespace(
+        model=None,
+        test_image=None,
+        output=None,
+        preflight_only=True,
+    )
+    parser = SimpleNamespace(parse_args=lambda: args)
+    observed: dict[str, str] = {}
+
+    monkeypatch.setattr(module, "_parser", lambda: parser)
+    monkeypatch.setattr(
+        module,
+        "load_machine_settings",
+        lambda: {
+            "JARVIS_DEVELOPMENT_ENGINE_MODEL": "gpt-reviewed",
+            "JARVIS_DEV_TEST_DOCKER_IMAGE": "jarvis-dev-tests:local",
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "configured_text",
+        lambda name, settings: settings.get(name),
+    )
+
+    def _preflight(*, model: str, test_image: str):
+        observed["model"] = model
+        observed["test_image"] = test_image
+        return {"passed": True}
+
+    monkeypatch.setattr(module, "_preflight", _preflight)
+
+    assert module.main() == 0
+    assert observed == {
+        "model": "gpt-reviewed",
+        "test_image": "jarvis-dev-tests:local",
+    }
+    assert '"passed": true' in capsys.readouterr().out.casefold()
+
+
 def test_owner_main_resolves_persisted_production_configuration(
     monkeypatch,
     capsys,
