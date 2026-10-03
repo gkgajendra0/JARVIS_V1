@@ -361,10 +361,7 @@ class Phase9ResearchEvidenceExecutor:
         stage = self._store.stage_for_work(work.work_id)
         assert stage is not None
         architecture = self._store.get_artifact(ticket.architecture_artifact_id)
-        if (
-            architecture is None
-            or architecture.digest != ticket.architecture_digest
-        ):
+        if architecture is None or architecture.digest != ticket.architecture_digest:
             raise ChangeConflict(
                 "research evidence architecture differs from the immutable ticket"
             )
