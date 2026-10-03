@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tools.research import c6_context_owner_acceptance as c6
 
 from jarvis.brain_routing.store import BrainRouteStore
 from jarvis.model_routing.models import (
@@ -11,7 +12,6 @@ from jarvis.model_routing.models import (
     RoutingAttemptKind,
 )
 from jarvis.work.store import SQLiteWorkStore
-from tools.research import c6_context_owner_acceptance as c6
 
 
 class _AttemptStore:
