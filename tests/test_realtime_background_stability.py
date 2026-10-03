@@ -12,6 +12,7 @@ from jarvis.voice.canonical_active_speaker_runtime import (
     CanonicalActiveSpeakerRuntimeController,
 )
 from jarvis.work.models import WorkDeliveryKind
+from jarvis.work.runtime import WorkRuntime
 
 
 @pytest.mark.asyncio
@@ -100,6 +101,33 @@ async def test_bound_gate_spoken_question_is_short_and_hides_internal_ids(
     assert "gate_" not in question
     assert "change_" not in question
     assert "digest" not in question.casefold()
+
+
+@pytest.mark.asyncio
+async def test_work_status_scheduler_persistence_does_not_block_event_loop() -> None:
+    runtime = object.__new__(WorkRuntime)
+    runtime._closed = False
+    started = threading.Event()
+    release = threading.Event()
+
+    def blocking_status_tick() -> None:
+        started.set()
+        assert release.wait(timeout=2.0)
+
+    runtime._process_due_status_updates = blocking_status_tick  # type: ignore[method-assign]
+
+    task = asyncio.create_task(runtime._status_update_loop())
+
+    assert await asyncio.to_thread(started.wait, 1.0)
+    heartbeat = asyncio.Event()
+    asyncio.get_running_loop().call_soon(heartbeat.set)
+    await asyncio.wait_for(heartbeat.wait(), timeout=0.1)
+    assert task.done() is False
+
+    runtime._closed = True
+    release.set()
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
 
 
 @pytest.mark.asyncio
