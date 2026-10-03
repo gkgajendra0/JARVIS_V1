@@ -98,9 +98,7 @@ class WorkExecutorDevelopmentToolPort:
         self._base_resource_keys = self._resources.normalize(base_resource_keys)
         self._action_admission = action_admission
 
-        unknown = [
-            name for name in ticket.allowed_tools if name not in _TOOL_TO_ACTION
-        ]
+        unknown = [name for name in ticket.allowed_tools if name not in _TOOL_TO_ACTION]
         if unknown:
             raise ValueError(
                 "development ticket contains unregistered tools: "
@@ -157,8 +155,7 @@ class WorkExecutorDevelopmentToolPort:
             (
                 index
                 for index, step in enumerate(steps)
-                if step.kind == "dev_write_file"
-                and step.state.value == "completed"
+                if step.kind == "dev_write_file" and step.state.value == "completed"
             ),
             default=-1,
         )
@@ -176,8 +173,7 @@ class WorkExecutorDevelopmentToolPort:
             (
                 index
                 for index, step in enumerate(steps)
-                if step.kind == "dev_diff"
-                and step.state.value == "completed"
+                if step.kind == "dev_diff" and step.state.value == "completed"
             ),
             default=-1,
         )
@@ -272,9 +268,7 @@ class WorkExecutorDevelopmentToolPort:
         if not callable(execute):
             failed = running.fail("TypeError: development executor is not callable")
             self._store.save_step(failed)
-            raise DevelopmentToolExecutionError(
-                "development executor is not callable"
-            )
+            raise DevelopmentToolExecutionError("development executor is not callable")
 
         try:
             observation = await execute(
@@ -300,9 +294,7 @@ class WorkExecutorDevelopmentToolPort:
                 resume_context=exc.resume_context,
             ) from exc
         except Exception as exc:
-            self._store.save_step(
-                running.fail(f"{type(exc).__name__}: {exc}")
-            )
+            self._store.save_step(running.fail(f"{type(exc).__name__}: {exc}"))
             raise DevelopmentToolExecutionError(
                 f"{action} failed: {type(exc).__name__}: {exc}"
             ) from exc
