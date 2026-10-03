@@ -50,6 +50,8 @@ def test_c6_owner_harness_supports_direct_script_execution() -> None:
     assert "--fixture-first-pair-benchmark" in completed.stdout
     assert "--fixture-remaining-preflight" in completed.stdout
     assert "--fixture-remaining-benchmark" in completed.stdout
+    assert "--llmlingua-fixture-preflight" in completed.stdout
+    assert "--llmlingua-fixture-benchmark" in completed.stdout
 
 
 def test_c6_fixture_corpus_is_fixed_representative_and_reducing() -> None:
@@ -713,3 +715,148 @@ async def test_c6_fixture_remaining_pairs_stop_on_first_mismatch(
     assert result["mismatch_cases"] == 1
     assert result["cases"][0]["parameters_equal"] is False
     assert result["c6_apply_decision_equivalence_proven"] is False
+
+
+
+class _FakeCompressionResult:
+    def __init__(self, payload):
+        import copy
+
+        self.payload = copy.deepcopy(payload)
+        changed = False
+        for step in self.payload.get("recent_steps", []):
+            observation = step.get("observation")
+            if not isinstance(observation, dict):
+                continue
+            summary = observation.get("summary")
+            if isinstance(summary, str) and len(summary) > 200:
+                observation["summary"] = "compressed authoritative evidence"
+                changed = True
+        self.provider = "llmlingua2"
+        self.model = "fake-compressor"
+        self.rate = 0.5
+        self.candidate_strings = 1 if changed else 0
+        self.compressed_strings = 1 if changed else 0
+        self.original_chars = _chars(payload)
+        self.compressed_chars = _chars(self.payload)
+        self.estimated_original_tokens = max(1, self.original_chars // 4)
+        self.estimated_compressed_tokens = max(1, self.compressed_chars // 4)
+        self.llmlingua_origin_tokens = 100
+        self.llmlingua_compressed_tokens = 40
+        self.latency_ms = 2.0
+        self.changed_paths = (
+            ("recent_steps[0].observation.summary",) if changed else ()
+        )
+
+    @property
+    def reduced(self):
+        return self.compressed_chars < self.original_chars
+
+
+class _FakeCompressor:
+    def compress_payload(self, payload):
+        return _FakeCompressionResult(payload)
+
+
+@pytest.mark.asyncio
+async def test_c6_llmlingua_preflight_uses_no_chatgpt_plan_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _forbidden():
+        raise AssertionError("LLMLingua preflight must not initialize ChatGPT-plan")
+
+    monkeypatch.setattr(c6, "ChatGPTPlanSessionManager", _forbidden)
+    result = await c6._run_llmlingua_fixture_benchmark(
+        model=None,
+        compressor_model="fake-compressor",
+        compression_rate=0.5,
+        device_map="cpu",
+        case_ids=("research_requires_reresolution_after_new_evidence",),
+        preflight_only=True,
+        compressor_factory=_FakeCompressor,
+    )
+
+    assert result["preflight_ready"] is True
+    assert result["model_calls"] == 0
+    assert result["all_fixture_cases_reduced"] is True
+    assert result["c6_apply_decision_equivalence_proven"] is False
+    assert len(result["planned_cases"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_c6_llmlingua_live_pair_preserves_strict_decision_equivalence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Circuit:
+        remaining_seconds = 0.0
+
+        def allow_request(self):
+            return True
+
+    class _CircuitRegistry:
+        def circuit(self, _key):
+            return _Circuit()
+
+    class _Plan:
+        def is_connected(self):
+            return True
+
+        def list_models(self):
+            return (SimpleNamespace(slug="reviewed-model"),)
+
+    monkeypatch.setattr(c6, "BackgroundProviderCircuitRegistry", _CircuitRegistry)
+    monkeypatch.setattr(c6, "ChatGPTPlanSessionManager", _Plan)
+    monkeypatch.setattr(
+        c6,
+        "build_chatgpt_plan_structured_output_client",
+        lambda **_kwargs: object(),
+    )
+
+    calls: list[bool] = []
+
+    async def _evaluate(_client, _request, *, provider_payload_override=None):
+        calls.append(provider_payload_override is not None)
+        return (
+            BrainDecision(
+                action="acq_record_candidate",
+                summary="Equivalent research decision",
+                parameters={
+                    "source_kind": "sdk_library",
+                    "source_identity": "example-device-sdk",
+                    "source_version": "2.4.1",
+                    "supported_operations": ["pair", "launch", "key_input"],
+                    "evidence_refs": [
+                        "evidence-2",
+                        "evidence-4",
+                        "evidence-new-authoritative",
+                    ],
+                    "verification_requirements": ["verify exact artifact"],
+                },
+            ),
+            SimpleNamespace(
+                usage={"input_tokens": 100 if provider_payload_override is None else 45},
+                usage_observed=True,
+                latency_ms=10.0,
+            ),
+        )
+
+    monkeypatch.setattr(c6, "evaluate_structured_work_request", _evaluate)
+
+    result = await c6._run_llmlingua_fixture_benchmark(
+        model="reviewed-model",
+        compressor_model="fake-compressor",
+        compression_rate=0.5,
+        device_map="cpu",
+        case_ids=("research_requires_reresolution_after_new_evidence",),
+        preflight_only=False,
+        compressor_factory=_FakeCompressor,
+    )
+
+    assert calls == [False, True]
+    assert result["model_calls"] == 2
+    assert result["fixture_cases"] == 1
+    assert result["equivalent_cases"] == 1
+    assert result["mismatch_cases"] == 0
+    assert result["all_fixture_cases_equivalent"] is True
+    assert result["c6_apply_decision_equivalence_proven"] is False
+    assert result["cases"][0]["parameters_equal"] is True
