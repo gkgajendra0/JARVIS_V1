@@ -26,6 +26,10 @@ class InvalidRequestError(RuntimeError):
     pass
 
 
+class ServerBusyError(RuntimeError):
+    pass
+
+
 class FakePlan:
     def __init__(self) -> None:
         self.calls = 0
@@ -427,6 +431,29 @@ async def test_codex_engine_maps_plan_capacity_to_resource_blocker(tmp_path) -> 
 
     assert result.disposition is DevelopmentDisposition.BLOCKED_RESOURCE
     assert result.blocker_code == "quota_exhausted"
+    assert runtime.closed is True
+
+
+@pytest.mark.asyncio
+async def test_codex_app_server_overload_parks_development(tmp_path) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+    runtime = FakeRuntime(
+        FakeThread("thr_never", []),
+        fail_start=ServerBusyError("server overloaded"),
+    )
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=FakePlan(),
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=FakeRuntimeFactory(runtime),
+        state_dir=tmp_path / "codex",
+    )
+
+    result = await engine.execute(ticket, tools=FakeTools(ticket.allowed_tools))
+
+    assert result.disposition is DevelopmentDisposition.BLOCKED_RESOURCE
+    assert result.blocker_code == "service_unavailable"
     assert runtime.closed is True
 
 
