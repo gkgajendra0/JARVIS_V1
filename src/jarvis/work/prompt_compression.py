@@ -13,6 +13,7 @@ import json
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, Protocol
 
 DEFAULT_LLMLINGUA2_MODEL = (
@@ -34,6 +35,25 @@ _DEFAULT_COMPRESSIBLE_KEYS = frozenset(
     }
 )
 _PROTECTED_ROOT_KEYS = frozenset({"work", "purpose", "allowed_actions"})
+
+
+class PromptCompressionMode(StrEnum):
+    OFF = "off"
+    SHADOW = "shadow"
+    APPLY = "apply"
+
+
+def normalize_prompt_compression_mode(
+    value: PromptCompressionMode | str,
+) -> PromptCompressionMode:
+    if isinstance(value, PromptCompressionMode):
+        return value
+    try:
+        return PromptCompressionMode(str(value).strip().casefold())
+    except ValueError as exc:
+        raise ValueError(
+            "prompt compression mode must be off, shadow, or apply"
+        ) from exc
 
 
 class PromptCompressionError(RuntimeError):
@@ -81,6 +101,10 @@ class PromptCompressionResult:
             (self.original_chars - self.compressed_chars) * 100.0 / self.original_chars,
             2,
         )
+
+
+class WorkPayloadCompressor(Protocol):
+    def compress_payload(self, payload: dict[str, Any]) -> PromptCompressionResult: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -403,7 +427,10 @@ __all__ = [
     "DEFAULT_LLMLINGUA2_MODEL",
     "DEFAULT_LLMLINGUA2_REVISION",
     "LLMLingua2WorkPayloadCompressor",
+    "PromptCompressionMode",
     "PromptCompressionDependencyError",
     "PromptCompressionError",
     "PromptCompressionResult",
+    "WorkPayloadCompressor",
+    "normalize_prompt_compression_mode",
 ]
