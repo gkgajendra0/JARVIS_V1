@@ -172,7 +172,6 @@ def _replay_candidates(
     return tuple(candidates[:limit]), stats
 
 
-
 def _paired_benchmark_candidates(
     store: SQLiteWorkStore,
     route_store: BrainRouteStore,
