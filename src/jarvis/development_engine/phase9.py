@@ -167,7 +167,7 @@ class Phase9DevelopmentTicketBuilder:
         repository_context_refs = tuple(
             sorted(
                 {
-                    *(f"path:{item}" for item in allowed_paths),
+                    *allowed_paths,
                     *(f"component:{item}" for item in allowed_components),
                 }
             )
