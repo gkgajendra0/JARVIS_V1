@@ -22,6 +22,7 @@ else:
     from c6_benchmark_corpus import build_c6_benchmark_cases
 
 from jarvis.brain_routing.models import BrainRouteKind
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.brain_routing.store import BrainRouteStore
 from jarvis.chatgpt_plan import CHATGPT_PLAN_PROVIDER_ID, ChatGPTPlanSessionManager
 from jarvis.hands.provider_adapters import (
