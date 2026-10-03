@@ -132,6 +132,18 @@ def verify_capability_acquisition_completion(
     if activation.payload.get("effective_enabled") is not True:
         return None
 
+    disabled = store.latest_artifact(change_key, "capability_lifecycle_disable")
+    if (
+        disabled is not None
+        and disabled.payload.get("candidate_artifact_id") == candidate.artifact_id
+        and disabled.payload.get("candidate_artifact_digest") == candidate.digest
+        and disabled.payload.get("effective_enabled") is False
+        and disabled.created_at >= activation.created_at
+    ):
+        # A later explicit disable invalidates capability readiness even when an
+        # older activation and external-acceptance artifact still exist.
+        return None
+
     package_identity = (
         _text(candidate.payload.get("package_id"), field="package_id"),
         _text(candidate.payload.get("package_version"), field="package_version"),
