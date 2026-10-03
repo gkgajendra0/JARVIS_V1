@@ -224,8 +224,9 @@ class JarvisConfig:
             if not str(self.development_test_docker_image or "").strip():
                 raise ValueError(
                     "DevelopmentEngine requires "
-                    "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE so model-edited code is "
-                    "never executed directly on the owner host"
+                    "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE "
+                    "(or legacy JARVIS_DEV_TEST_DOCKER_IMAGE) so model-edited code "
+                    "is never executed directly on the owner host"
                 )
 
         if not isinstance(self.work_paid_fallback_enabled, bool):
@@ -592,8 +593,15 @@ class JarvisConfig:
             work_global_concurrency=_configured_int(
                 "JARVIS_WORK_GLOBAL_CONCURRENCY", 4, machine
             ),
-            development_test_docker_image=_configured_optional_text(
-                "JARVIS_DEV_TEST_DOCKER_IMAGE", machine
+            development_test_docker_image=(
+                _configured_optional_text(
+                    "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE",
+                    machine,
+                )
+                or _configured_optional_text(
+                    "JARVIS_DEV_TEST_DOCKER_IMAGE",
+                    machine,
+                )
             ),
             github_promotion_enabled=_configured_bool(
                 "JARVIS_GITHUB_PROMOTION_ENABLED", False, machine
