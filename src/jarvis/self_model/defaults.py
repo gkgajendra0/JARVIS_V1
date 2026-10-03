@@ -779,6 +779,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 "tests/test_development_engine_codex.py",
                 "tests/test_development_engine_coordinator.py",
                 "tests/test_development_engine_phase9.py",
+                "tests/test_development_engine_work_control.py",
             ),
             config_keys=(
                 "JARVIS_DEVELOPMENT_ENGINE_ENABLED",
