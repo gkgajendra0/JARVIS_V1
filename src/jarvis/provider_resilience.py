@@ -192,6 +192,9 @@ def _classification_text(chain: tuple[object, ...]) -> str:
             message = ""
         if message:
             parts.append(message)
+        code = getattr(item, "code", None)
+        if isinstance(code, str) and code:
+            parts.append(code)
         body: Any = getattr(item, "body", None)
         if body is not None:
             try:
