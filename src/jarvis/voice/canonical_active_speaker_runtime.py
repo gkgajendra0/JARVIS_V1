@@ -63,6 +63,26 @@ def _spoken_subject(value: object) -> str | None:
     return normalized[:80].rstrip()
 
 
+def _owner_spoken_question(value: object) -> str:
+    """Remove opaque implementation identities from an owner-facing question."""
+
+    normalized = " ".join(str(value or "").split()).strip()
+    if not normalized:
+        raise ValueError("owner-facing question must not be empty")
+    substitutions = (
+        (r"\bentity\s+[0-9a-f]{12,}\b", "the target device or service"),
+        (r"\bwork_[0-9a-f]{12,}\b", "this background task"),
+        (r"\bchange_[0-9a-f]{12,}\b", "the engineering change"),
+        (r"\bgate_[0-9a-f]{12,}\b", "the approval"),
+        (r"\bartifact_[0-9a-f]{12,}\b", "the reviewed architecture"),
+        (r"\b[0-9a-f]{40,64}\b", "the verified revision"),
+    )
+    spoken = normalized
+    for pattern, replacement in substitutions:
+        spoken = re.sub(pattern, replacement, spoken, flags=re.IGNORECASE)
+    return " ".join(spoken.split())
+
+
 class _ManagedBackgroundRuntime(Protocol):
     def start(self) -> None: ...
 
@@ -327,6 +347,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         normalized_question = " ".join(question.split())
         if not normalized_question:
             raise ValueError("owner-input question must not be empty")
+        spoken_question = _owner_spoken_question(normalized_question)
 
         owner_input_submitted = asyncio.Event()
         resolved_item: WorkItem | None = None
@@ -365,7 +386,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             "status of this or other background work instead of answering the pending "
             "question, use the read-only background status tools, answer naturally, and "
             "keep waiting for the pending answer. "
-            "Owner question: " + normalized_question
+            "Owner question: " + spoken_question
         )
 
         try:
