@@ -94,9 +94,7 @@ def _record(payload: dict[str, object]) -> BrainRouteRecord:
             else bool(payload["goal_complete"])
         ),
         needs_owner=(
-            None
-            if payload.get("needs_owner") is None
-            else bool(payload["needs_owner"])
+            None if payload.get("needs_owner") is None else bool(payload["needs_owner"])
         ),
         owner_question=(
             None
