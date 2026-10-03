@@ -704,6 +704,23 @@ def build_work_runtime(
     provider_cost_store = ProviderCostEventStore(store)
     strategy_registry = RoutingStrategyRegistry((EngineeringStageStrategy(),))
 
+    resource_capacities = {
+        "work": max(1, global_concurrency),
+        "cpu": max(1, min(2, global_concurrency)),
+        "git": 1,
+        "network": max(1, global_concurrency),
+        "gpu": 1,
+        "browser": 1,
+        "desktop": 1,
+        "provider_api": 1,
+        "development_intelligence": 1,
+        **engineering_resource_capacities(),
+    }
+    resources = ResourceLeaseManager(
+        resource_capacities,
+        min_available_memory_mb=min_available_memory_mb,
+    )
+
     def _credential_available(target) -> bool:
         if target.provider_id == CHATGPT_PLAN_PROVIDER_ID:
             return bool(
@@ -727,6 +744,8 @@ def build_work_runtime(
         invoker=ModelInvoker(adapter_registry),
         primary_target_id=work_targets.primary_target_id,
         provider_circuit_registry=provider_circuits,
+        resources=resources,
+        resource_keys=("provider_api",),
     )
     reasoner = GlobalBrainRouterReasoner(
         model_reasoner,
@@ -814,22 +833,6 @@ def build_work_runtime(
         ),
     )
     base_actions = WorkActionRegistry(tuple(executors))
-    resource_capacities = {
-        "work": max(1, global_concurrency),
-        "cpu": max(1, min(2, global_concurrency)),
-        "git": 1,
-        "network": max(1, global_concurrency),
-        "gpu": 1,
-        "browser": 1,
-        "desktop": 1,
-        "provider_api": 1,
-        "development_intelligence": 1,
-        **engineering_resource_capacities(),
-    }
-    resources = ResourceLeaseManager(
-        resource_capacities,
-        min_available_memory_mb=min_available_memory_mb,
-    )
 
     control_plane_decider = None
     if development_engine_enabled:
@@ -860,7 +863,7 @@ def build_work_runtime(
             engine=development_specialist,
             sessions=development_sessions,
             resources=resources,
-            resource_keys=("development_intelligence",),
+            resource_keys=("development_intelligence", "provider_api"),
         )
         phase9_engine_executor = Phase9DevelopmentEngineExecutor(
             builder=phase9_ticket_builder,
