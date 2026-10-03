@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import logging
 import pathlib
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -36,6 +37,8 @@ from .tools import (
     DevelopmentToolOwnerInputRequired,
     DevelopmentToolResourceBlocked,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 _CODEX_PROVIDER_ID = "openai_chatgpt_plan"
 _CODEX_ENGINE_ID = "codex_plan"
@@ -137,7 +140,7 @@ class _OfficialCodexThread:
 
     @property
     def id(self) -> str:
-        return str(getattr(self._thread, "id"))
+        return str(self._thread.id)
 
     @staticmethod
     def _usage(result: object) -> DevelopmentUsageV1 | None:
@@ -157,10 +160,10 @@ class _OfficialCodexThread:
         *,
         output_schema: dict[str, Any],
     ) -> CodexTurnResponse:
-        result = await getattr(self._thread, "run")(
+        result = await self._thread.run(
             value,
-            approval_mode=getattr(self._module, "ApprovalMode").deny_all,
-            sandbox=getattr(self._module, "Sandbox").read_only,
+            approval_mode=self._module.ApprovalMode.deny_all,
+            sandbox=self._module.Sandbox.read_only,
             output_schema=output_schema,
             source="jarvis_development_engine",
         )
@@ -188,7 +191,7 @@ class _OfficialCodexThread:
         *,
         output_schema: dict[str, Any],
     ) -> CodexTurnResponse:
-        external = getattr(self._module, "ExternalMessage")(
+        external = self._module.ExternalMessage(
             tool_name="jarvis_development",
             namespace="jarvis",
             content=content,
@@ -234,7 +237,7 @@ class _OfficialCodexRuntime:
             "tools.experimental_request_user_input.enabled=false",
             "tools.update_plan.enabled=false",
         )
-        config = getattr(module, "CodexConfig")(
+        config = module.CodexConfig(
             config_overrides=overrides,
             cwd=str(cwd),
             env={
@@ -245,7 +248,7 @@ class _OfficialCodexRuntime:
             client_title="JARVIS",
             client_version="1",
         )
-        self._codex = getattr(module, "AsyncCodex")(config)
+        self._codex = module.AsyncCodex(config)
 
     @property
     def version(self) -> str:
@@ -1060,4 +1063,7 @@ class CodexPlanDevelopmentEngine:
                 try:
                     await runtime.close()
                 except Exception:
-                    pass
+                    LOGGER.debug(
+                        "Codex runtime close failed during cleanup",
+                        exc_info=True,
+                    )
