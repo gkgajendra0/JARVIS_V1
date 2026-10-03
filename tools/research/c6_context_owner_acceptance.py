@@ -328,14 +328,7 @@ async def _run_decision_replay(
         legacy_chars,
         optimized_chars,
     ) in prepared:
-        try:
-            optimized, telemetry = await evaluate_structured_work_request(
-                client, replay
-            )
-        except Exception as exc:
-            circuit.record_failure(exc)
-            raise
-        circuit.record_success()
+        optimized, telemetry = await evaluate_structured_work_request(client, replay)
 
         comparison = compare_recorded_context_decision(recorded, optimized)
         if comparison is None:
@@ -367,6 +360,8 @@ async def _run_decision_replay(
                 "latency_ms": round(telemetry.latency_ms, 2),
             }
         )
+        if not comparison.equivalent:
+            break
 
     equivalent_count = sum(bool(item["equivalent"]) for item in cases)
     mismatch_count = len(cases) - equivalent_count
@@ -391,10 +386,11 @@ async def _run_decision_replay(
         "production_routing_mutated": False,
         "actions_executed": False,
         "paid_fallback_enabled": False,
-        "provider_circuit_updated": bool(cases),
+        "provider_circuit_updated": False,
         "candidate_stats": candidate_stats,
         "cases": cases,
     }
+
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
