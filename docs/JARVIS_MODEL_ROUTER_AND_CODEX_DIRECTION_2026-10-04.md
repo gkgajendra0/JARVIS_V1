@@ -262,3 +262,45 @@ Before implementation of model-tier routing changes:
 > JARVIS should not use the strongest model because it is available. It should use the weakest/cheapest route that has evidence it can satisfy the current task, then escalate deliberately.
 
 > For software development, JARVIS should increasingly act as the governed engineering manager and use an approved coding specialist such as Codex for the coherent edit/test loop instead of recreating that intelligence from scratch.
+
+
+## 14. Ephemeral local capability-development brain
+
+The owner has proposed an additional local-first development tier:
+
+- normal JARVIS continues using its ordinary resident/local routing policy;
+- when a capability-development mission begins, JARVIS may acquire an exclusive local
+  development-intelligence resource;
+- the normal resident local model may be evicted if needed;
+- a coding-specialist local model is loaded only for the development session;
+- the DevelopmentEngine uses it for repository inspection, patch generation, test/fix
+  iteration and structured completion when the model is benchmark-qualified;
+- difficult/failed cases escalate through the normal cloud ladder (for example Sol-class,
+  Codex plan-backed stronger lane, then Astra-class only when justified);
+- after the mission, the coding model is unloaded and ordinary JARVIS residency resumes.
+
+This is an extension of the existing C5 local residency controller, not a second local
+runtime manager.
+
+### First hardware-appropriate coding candidate
+
+For the owner's RTX 5060 Ti 8 GB / 16 GB RAM machine, do not start with
+`qwen3-coder:30b`; Ollama currently publishes that package at about 19 GB, so it is not a
+practical fully-resident 8 GB target.
+
+A better first coding benchmark is `qwen2.5-coder:7b` (Q4-class package about 4.7 GB,
+32K advertised context). It should be tested with bounded context and the real JARVIS GPU
+baseline before admission. Qwen3 8B (~5.2 GB) is a useful general comparator but is not as
+code-specialized.
+
+Ollama supports explicit model unloading through `keep_alive: 0` / `ollama stop`.
+Because current issue history reports edge cases around concurrent requests and immediate
+unload, JARVIS should hold an exclusive local-model lease, stop the coding model after the
+session, verify via the runtime process/model-status surface that VRAM was released, and
+only then restore normal local residency.
+
+References:
+- https://ollama.com/library/qwen2.5-coder
+- https://ollama.com/library/qwen3-coder
+- https://github.com/ollama/ollama/blob/main/docs/api.md
+- https://github.com/ollama/ollama/issues/17004
