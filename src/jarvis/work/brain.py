@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import heapq
 import itertools
-import threading
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -115,52 +114,29 @@ class ProviderPressure(RuntimeError):
 
 
 class InteractiveBrainGate:
-    """Give live owner conversation absolute priority over background reasoning.
-
-    Durable Work may execute on a dedicated asyncio loop while voice owns the main
-    realtime loop. Cross-thread callers therefore mutate only a locked boolean and
-    schedule asyncio-object changes onto the loop that owns the background task.
-    """
+    """Give live owner conversation absolute priority over background reasoning."""
 
     def __init__(self) -> None:
-        self._state_lock = threading.Lock()
         self._interactive_active = False
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._idle: asyncio.Event | None = None
+        self._idle = asyncio.Event()
+        self._idle.set()
         self._background_task: asyncio.Task[BrainDecision] | None = None
         self._interactive_preempted_task: asyncio.Task[BrainDecision] | None = None
 
     @property
     def interactive_active(self) -> bool:
-        with self._state_lock:
-            return self._interactive_active
+        return self._interactive_active
 
-    def _bind_loop(self) -> tuple[asyncio.AbstractEventLoop, asyncio.Event]:
-        loop = asyncio.get_running_loop()
-        with self._state_lock:
-            existing = self._loop
-            if existing is None:
-                self._loop = loop
-                idle = asyncio.Event()
-                if not self._interactive_active:
-                    idle.set()
-                self._idle = idle
-                return loop, idle
-            if existing is not loop:
-                raise RuntimeError(
-                    "interactive brain gate cannot span multiple background event loops"
-                )
-            idle = self._idle
-        if idle is None:
-            raise RuntimeError("interactive brain gate event is unavailable")
-        return loop, idle
+    async def wait_until_idle(self) -> None:
+        await self._idle.wait()
 
-    def _apply_interactive_state(self, active: bool) -> None:
-        idle = self._idle
-        if idle is None:
+    def set_interactive_active(self, active: bool) -> None:
+        normalized = bool(active)
+        if normalized == self._interactive_active:
             return
-        if active:
-            idle.clear()
+        self._interactive_active = normalized
+        if normalized:
+            self._idle.clear()
             task = self._background_task
             if (
                 task is not None
@@ -168,14 +144,18 @@ class InteractiveBrainGate:
                 and task.cancelling() == 0
                 and task.cancel()
             ):
+                # Record why this exact task was cancelled. Voice state can flicker
+                # back to idle before the cancellation is observed by run_background,
+                # so checking the *current* interactive flag in the exception handler
+                # is racy and can leak CancelledError into the durable DBOS step.
                 self._interactive_preempted_task = task
         else:
-            idle.set()
+            self._idle.set()
 
-    def _apply_shutdown_preempt(self) -> None:
-        idle = self._idle
-        if idle is None:
-            return
+    def preempt_background_for_shutdown(self) -> None:
+        """Cancel active reasoning and release idle waiters so DBOS can checkpoint."""
+
+        self._interactive_active = True
         task = self._background_task
         if (
             task is not None
@@ -184,49 +164,18 @@ class InteractiveBrainGate:
             and task.cancel()
         ):
             self._interactive_preempted_task = task
-        # Wake idle waiters as well. run_background() then observes the locked
-        # interactive flag and fails closed with BrainPreempted.
-        idle.set()
-
-    def _schedule_on_bound_loop(self, callback, /, *args) -> None:
-        with self._state_lock:
-            loop = self._loop
-        if loop is None or loop.is_closed():
-            return
-        try:
-            loop.call_soon_threadsafe(callback, *args)
-        except RuntimeError:
-            # Runtime shutdown owns the final state; a closed loop cannot safely
-            # accept more background work anyway.
-            return
-
-    async def wait_until_idle(self) -> None:
-        _, idle = self._bind_loop()
-        await idle.wait()
-
-    def set_interactive_active(self, active: bool) -> None:
-        normalized = bool(active)
-        with self._state_lock:
-            if normalized == self._interactive_active:
-                return
-            self._interactive_active = normalized
-        self._schedule_on_bound_loop(self._apply_interactive_state, normalized)
-
-    def preempt_background_for_shutdown(self) -> None:
-        """Cancel active reasoning and release work-loop waiters for shutdown."""
-
-        with self._state_lock:
-            self._interactive_active = True
-        self._schedule_on_bound_loop(self._apply_shutdown_preempt)
+        # Unlike normal interactive ownership, shutdown must not strand a DBOS
+        # advance inside wait_until_idle(). Wake every waiter; run_background()
+        # will see interactive_active and return BrainPreempted deterministically.
+        self._idle.set()
 
     async def run_background(
         self,
         reasoner: BrainReasoner,
         request: BrainRequest,
     ) -> BrainDecision:
-        self._bind_loop()
         await self.wait_until_idle()
-        if self.interactive_active:
+        if self._interactive_active:
             raise BrainPreempted("interactive voice brain has priority")
         task = asyncio.create_task(
             reasoner.decide(request),
