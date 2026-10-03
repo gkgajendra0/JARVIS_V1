@@ -42,8 +42,8 @@ from jarvis.work.brain import (
 from jarvis.work.models import WorkItem, WorkType
 from jarvis.work.reasoner import (
     _SYSTEM_PROMPT,
-    _WorkDecisionModel,
     RoutedWorkReasoner,
+    _WorkDecisionModel,
     evaluate_structured_work_request,
 )
 from jarvis.work.resources import ResourceLeaseManager
