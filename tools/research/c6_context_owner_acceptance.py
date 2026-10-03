@@ -809,8 +809,14 @@ async def _run_fixture_decision_benchmark(
     max_cases: int,
     min_equivalent_cases: int,
     preflight_only: bool = False,
+    case_ids: tuple[str, ...] | None = None,
 ) -> dict[str, object]:
-    prepared, candidate_stats = _prepare_fixture_benchmark(max_cases=max_cases)
+    prepare_limit = _MAX_PAIRED_BENCHMARK_CASES if case_ids else max_cases
+    prepared, candidate_stats = _prepare_fixture_benchmark(max_cases=prepare_limit)
+    subset_mode = case_ids is not None
+    if case_ids is not None:
+        by_id = {item[0].case_id: item for item in prepared}
+        prepared = [by_id[case_id] for case_id in case_ids if case_id in by_id]
     representative = bool(candidate_stats["representative_corpus_covered"])
     ready = len(prepared) >= min_equivalent_cases and representative
 
@@ -822,6 +828,8 @@ async def _run_fixture_decision_benchmark(
         "fixture_preflight_only": bool(preflight_only),
         "fixture_preflight_ready": ready,
         "representative_corpus_covered": representative,
+        "subset_mode": subset_mode,
+        "requested_case_ids": list(case_ids or ()),
         "production_routing_mutated": False,
         "actions_executed": False,
         "paid_fallback_enabled": False,
@@ -944,7 +952,10 @@ async def _run_fixture_decision_benchmark(
     equivalent_count = sum(bool(item["equivalent"]) for item in results)
     mismatch_count = len(results) - equivalent_count
     apply_equivalence_proven = (
-        len(results) >= min_equivalent_cases and mismatch_count == 0 and representative
+        not subset_mode
+        and len(results) >= min_equivalent_cases
+        and mismatch_count == 0
+        and representative
     )
     return {
         **common,
@@ -1318,6 +1329,23 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     replay_mode.add_argument(
+        "--fixture-remaining-preflight",
+        action="store_true",
+        help=(
+            "Validate only the two fixed C6 fixture pairs not covered by the accepted "
+            "first-pair run, without initializing ChatGPT-plan or consuming quota."
+        ),
+    )
+    replay_mode.add_argument(
+        "--fixture-remaining-benchmark",
+        action="store_true",
+        help=(
+            "Consume at most four ChatGPT-plan calls across only the two remaining "
+            "fixed C6 fixture pairs. Stops on the first mismatch and cannot promote "
+            "global C6 APPLY by itself."
+        ),
+    )
+    replay_mode.add_argument(
         "--fixture-decision-preflight",
         action="store_true",
         help=(
@@ -1505,6 +1533,8 @@ def main() -> int:
         or args.fixture_stability_benchmark
         or args.fixture_first_pair_preflight
         or args.fixture_first_pair_benchmark
+        or args.fixture_remaining_preflight
+        or args.fixture_remaining_benchmark
         or args.fixture_decision_preflight
         or args.fixture_decision_benchmark
     ):
@@ -1534,6 +1564,19 @@ def main() -> int:
                     _run_fixture_first_pair_benchmark(
                         model=model,
                         preflight_only=args.fixture_first_pair_preflight,
+                    )
+                )
+            elif args.fixture_remaining_preflight or args.fixture_remaining_benchmark:
+                replay = asyncio.run(
+                    _run_fixture_decision_benchmark(
+                        model=model,
+                        max_cases=2,
+                        min_equivalent_cases=2,
+                        preflight_only=args.fixture_remaining_preflight,
+                        case_ids=(
+                            "development_ready_for_local_commit",
+                            "research_requires_reresolution_after_new_evidence",
+                        ),
                     )
                 )
             elif args.fixture_decision_preflight or args.fixture_decision_benchmark:
@@ -1610,6 +1653,25 @@ def main() -> int:
                 "It cannot promote global C6 APPLY."
             )
             if replay["pair_equivalent"] is not True:
+                result["status"] = "INCOMPLETE"
+        elif args.fixture_remaining_preflight:
+            result["model_api_called"] = False
+            result["fixture_remaining_preflight"] = replay
+            result["c6_fixture_remaining_ready"] = replay["fixture_preflight_ready"]
+            result["c6_apply_note"] = (
+                "Remaining-pairs preflight only; no model call was made and global "
+                "C6 APPLY remains unproven."
+            )
+            if replay["fixture_preflight_ready"] is not True:
+                result["status"] = "INCOMPLETE"
+        elif args.fixture_remaining_benchmark:
+            result["model_api_called"] = bool(replay["fixture_cases"])
+            result["fixture_remaining_benchmark"] = replay
+            result["c6_apply_decision_equivalence_proven"] = False
+            result["c6_apply_note"] = (
+                "Remaining-pairs evidence cannot independently promote global C6 APPLY."
+            )
+            if replay["all_fixture_cases_equivalent"] is not True:
                 result["status"] = "INCOMPLETE"
         elif args.fixture_decision_preflight:
             result["model_api_called"] = False
