@@ -634,6 +634,7 @@ async def test_codex_engine_open_provider_circuit_suppresses_cloud_request(
 
     assert result.disposition is DevelopmentDisposition.BLOCKED_RESOURCE
     assert result.blocker_code == "provider_circuit_open"
+    assert result.retry_after_seconds == trip.delay_seconds
     assert plan.calls == 0
     assert factory.access_token is None
     assert runtime.started == 0
@@ -670,8 +671,10 @@ async def test_codex_engine_subscription_limit_opens_shared_circuit_and_suppress
 
     assert first.disposition is DevelopmentDisposition.BLOCKED_RESOURCE
     assert first.blocker_code == "quota_exhausted"
+    assert first.retry_after_seconds == 1800.0
     assert second.disposition is DevelopmentDisposition.BLOCKED_RESOURCE
     assert second.blocker_code == "provider_circuit_open"
+    assert second.retry_after_seconds == 1800.0
     assert circuit.allow_request() is False
     assert circuit.failed_attempts == 1
     assert plan.calls == 1
