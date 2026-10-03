@@ -153,10 +153,21 @@ def reconstruct_recorded_context_request(
     work_state = WorkState(str(snapshot.get("work_state") or ""))
     raw_status = snapshot.get("work_status_detail")
     status_detail = None if raw_status is None else str(raw_status)
+    if "work_current_step_id" not in snapshot:
+        raise ValueError("C6 replay snapshot is missing historical current_step_id")
+    raw_current_step_id = snapshot.get("work_current_step_id")
+    current_step_id = (
+        None
+        if raw_current_step_id is None
+        else str(raw_current_step_id).strip() or None
+    )
+    if current_step_id is not None and current_step_id not in step_by_id:
+        raise ValueError("C6 replay current_step_id is outside the durable history prefix")
     historical_work = replace(
         work,
         state=work_state,
         paused_from_state=None,
+        current_step_id=current_step_id,
         status_detail=status_detail,
         version=work_version,
     )
